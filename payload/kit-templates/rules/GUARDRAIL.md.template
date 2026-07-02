@@ -1,0 +1,37 @@
+---
+description: "<one sentence: what locked-in decisions this doc governs and when to read it>"
+---
+
+# <Topic>
+
+<1-2 sentences on what this document is for: the locked-in decisions on this axis plus the
+rationale, so the agent doesn't re-litigate them every task.>
+
+**Precedence:** if a change is in tension with what's below, the change is wrong, or this doc
+must be revised first. This is a living document; append as you learn, don't quietly rewrite the
+locked-in goals.
+
+## <Decision area>
+
+- **<Decision>.** <The locked-in answer.> <Why — the rationale or evidence behind it, so a future
+  agent trusts it instead of re-deriving it.>
+- **<Decision>.** <...>
+
+## <Decision area>
+
+- ...
+
+## Things that are _not_ the goal
+
+- **<Tempting-but-wrong direction>.** <Why it's explicitly not what we want.>
+
+<!--
+HOW TO USE THIS TEMPLATE (delete this comment in the real file):
+- One guardrail doc per axis the repo keeps re-deriving: architecture.md, api-conventions.md,
+  security.md, voice.md, gameplay.md, etc. Keep each well under ~10KB.
+- It is NOT auto-loaded. In CLAUDE.md, list it with a CONDITIONAL trigger:
+    "- [.claude/rules/<topic>.md] — read before any change to <X>."
+  In each subagent that needs it, cite only the doc(s) relevant to that agent's job.
+- The value collapses if it gets auto-loaded every turn, or if the team treats it as a suggestion
+  and lets it drift from real behavior. Locked decisions only.
+-->
