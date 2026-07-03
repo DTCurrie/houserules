@@ -20,6 +20,9 @@ the kit itself.
 - `pnpm test` — full suite (includes end-to-end init/update/doctor on fixtures).
 - `node cli/index.mjs init --yes --dry-run <repo>` — safe manual probe against any repo.
 - `pnpm change` — record a changeset (required for any user-visible change; dogfood).
+- `pnpm dogfood` — symlink the kit into `.claude/` (gitignored) so this repo runs its own
+  hooks/skills/agents. Idempotent; re-run after pulling. The payload stays the single source of
+  truth — edits under `payload/` are live immediately.
 
 ## Rules
 

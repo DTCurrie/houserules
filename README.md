@@ -63,9 +63,11 @@ The kit treats [changesets](https://github.com/changesets/changesets) as the sou
 for "what shipped": one `.changeset/*.md` per meaningful change, `CHANGELOG.md` generated at
 release time by `changeset version`. The module wires the agent side of that:
 
-- **`changeset-write.mjs`** — deterministic, zero-dep changeset author: validates package
-  names against the _actual_ workspace, writes the file, supports `--empty` for "no release
-  needed". Agents never hand-write `.changeset/*.md`.
+- **`changeset-write.mjs`** — deterministic changeset author: validates package names
+  against the _actual_ workspace, then writes via the repo's own `@changesets/write` (the
+  same writer `changeset add` uses) when changesets is installed, falling back to a
+  built-in zero-dep writer when it isn't. Supports `--empty` for "no release needed".
+  Agents never hand-write `.changeset/*.md`.
 - **`/changeset` skill + `changeset-writer` agent (haiku)** — inspect the diff, pick
   patch/minor/major (major always asks first), record via the script.
 - **`changeset-check.mjs`** (Stop hook) — nudges once when package source changed with no
@@ -128,6 +130,7 @@ node .claude/scripts/backlog-log.mjs list /tmp/kit-smoke-BACKLOG.md
 
 ```
 pnpm install
+pnpm dogfood                               # link the kit into .claude/ (gitignored) so this repo runs its own kit
 pnpm test                                  # node:test suite incl. end-to-end init on fixtures
 node cli/index.mjs init --dry-run --yes <some-repo>
 pnpm change                                # record a changeset for your change (dogfood)

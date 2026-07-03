@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-// Non-interactive changeset author (claude-kit). Writes .changeset/kit-<hex>.md
-// with validated package names + bump levels. Zero dependencies — a changeset is
-// just YAML-frontmatter markdown, so nothing here needs @changesets/cli (only
-// release-time `changeset version/publish` does).
+// Non-interactive changeset author (claude-kit). Validates package names + bump
+// levels, then writes the changeset with the repo's own @changesets/write when
+// changesets is installed — the same writer `changeset add` uses, so the file
+// always matches the installed changesets version. Falls back to a built-in
+// zero-dep writer (.changeset/kit-<hex>.md — a changeset is just YAML-frontmatter
+// markdown) when it isn't; release-time `changeset version/publish` reads both.
 //
 // Usage:
 //   changeset-write.mjs --pkg <name>[:patch|minor|major] [--pkg ...] --summary "..."
@@ -21,12 +23,40 @@
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
 
 import { listPublishablePackageNames } from './lib/workspaces.mjs';
 
 const LEVELS = new Set(['patch', 'minor', 'major']);
+
+// The repo's installed @changesets/write, or null. Resolved from the repo root,
+// then through @changesets/cli's own module context — package managers with a
+// strict layout (pnpm) don't expose transitive deps at the root.
+async function loadOfficialWrite(root) {
+  const req = createRequire(join(root, 'package.json'));
+  let resolved;
+  try {
+    resolved = req.resolve('@changesets/write');
+  } catch {
+    try {
+      resolved = createRequire(
+        req.resolve('@changesets/cli/package.json'),
+      ).resolve('@changesets/write');
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const mod = await import(pathToFileURL(resolved).href);
+    const write = mod.default?.default ?? mod.default;
+    return typeof write === 'function' ? write : null;
+  } catch {
+    return null;
+  }
+}
 
 function usage(message) {
   if (message) console.error(`${message}\n`);
@@ -123,14 +153,35 @@ if (!existsSync(join(dir, 'config.json'))) {
   );
 }
 
-let file;
-do {
-  file = join(dir, `kit-${randomBytes(4).toString('hex').slice(0, 6)}.md`);
-} while (existsSync(file));
+let created;
+const officialWrite = await loadOfficialWrite(root);
+if (officialWrite) {
+  try {
+    const id = await officialWrite(
+      {
+        summary,
+        releases: entries.map((e) => ({ name: e.name, type: e.level })),
+      },
+      root,
+    );
+    created = `.changeset/${id}.md`;
+  } catch {
+    created = undefined;
+  }
+}
 
-const frontmatter = entries.map((e) => `"${e.name}": ${e.level}`).join('\n');
-writeFileSync(
-  file,
-  `---\n${frontmatter ? `${frontmatter}\n` : ''}---\n\n${summary}\n`,
-);
-console.log(file.slice(root.length + 1));
+if (!created) {
+  let file;
+  do {
+    file = join(dir, `kit-${randomBytes(4).toString('hex').slice(0, 6)}.md`);
+  } while (existsSync(file));
+
+  const frontmatter = entries.map((e) => `"${e.name}": ${e.level}`).join('\n');
+  writeFileSync(
+    file,
+    `---\n${frontmatter ? `${frontmatter}\n` : ''}---\n\n${summary}\n`,
+  );
+  created = file.slice(root.length + 1);
+}
+
+console.log(created);

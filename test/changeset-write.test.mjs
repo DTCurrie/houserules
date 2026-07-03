@@ -1,7 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 
 import { makeFixture, runCli, runScript } from './fixtures.mjs';
 
@@ -112,6 +120,41 @@ test('CW3: single-package repo — --pkg optional, defaults to the root package;
     assert.equal(r.status, 0, r.stderr);
     const file = r.stdout.trim();
     assert.match(readFileSync(join(root, file), 'utf8'), /"single-app": patch/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('CW4: authors via the repo-installed @changesets/write when present', () => {
+  const root = makeFixture('npm-single');
+  try {
+    assert.equal(
+      runCli(['init', '--yes', '--modules=changesets', root]).status,
+      0,
+    );
+    // Make @changesets/cli resolvable from the fixture, as in a repo that has
+    // changesets installed. @changesets/write resolves through it (pnpm-style
+    // strict layouts don't hoist transitive deps).
+    const cliDir = dirname(
+      createRequire(import.meta.url).resolve('@changesets/cli/package.json'),
+    );
+    mkdirSync(join(root, 'node_modules/@changesets'), { recursive: true });
+    symlinkSync(cliDir, join(root, 'node_modules/@changesets/cli'));
+
+    const r = runScript(root, SCRIPT, {
+      args: ['--pkg', 'single-app:minor', '--summary', 'Official writer.'],
+    });
+    assert.equal(r.status, 0, r.stderr);
+    const file = r.stdout.trim();
+    assert.match(
+      file,
+      /^\.changeset\/(?!kit-)[a-z][a-z-]*\.md$/,
+      'human-id filename from @changesets/write, not the kit-<hex> fallback',
+    );
+    assert.match(
+      readFileSync(join(root, file), 'utf8'),
+      /^---\n['"]single-app['"]: minor\n---\n\nOfficial writer\./,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

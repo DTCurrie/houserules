@@ -19,6 +19,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "change": "changeset",
+    "dogfood": "node scripts/dogfood-link.mjs",
     "version-packages": "changeset version",
     "release": "changeset publish"
   },
