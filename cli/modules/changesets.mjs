@@ -4,9 +4,9 @@
 //
 // HARD RULE: this module never runs a package manager. Repos with pnpm
 // `catalogMode: strict` would hard-fail a bare `pnpm add -D`, and installs mean
-// network + postinstall scripts + lockfile churn mid-init. Nothing in the payload
-// needs @changesets/cli at runtime — changeset files are plain markdown; only
-// `changeset version/status` (release time) needs the CLI, so we advise instead.
+// network + postinstall scripts + lockfile churn mid-init. But changeset-write.mjs
+// authors ONLY via the repo's installed @changesets/write (no fallback), so when
+// the devDependency is missing we advise the exact install command instead.
 
 import { renderChangesetConfig } from '../render.mjs';
 import {
@@ -35,20 +35,21 @@ export function defaultEnabled(ctx) {
 function devDepAdvisory(ctx) {
   const cs = ctx.changesets;
   if (cs.invocation === 'devdep') return null;
-  if (cs.invocation === 'root-script') {
-    return `changesets is invoked via your root "${cs.rootScript}" script — works as-is for versioning/publishing.`;
-  }
   const pm = ctx.packageManager?.name ?? 'npm';
   const add =
     pm === 'pnpm'
-      ? 'pnpm add -D @changesets/cli'
+      ? `pnpm add -D ${ctx.isMonorepo ? '-w ' : ''}@changesets/cli`
       : pm === 'yarn'
         ? 'yarn add -D @changesets/cli'
         : `${pm} install -D @changesets/cli`;
   const catalogNote = ctx.pnpmCatalogModeStrict
     ? ' NOTE: this repo uses pnpm catalogMode: strict — add a catalog entry for @changesets/cli first, or the add will fail.'
     : '';
-  return `For release time (changeset version/publish), add the CLI when convenient: \`${add}\`.${catalogNote} The kit's scripts work without it.`;
+  const via =
+    cs.invocation === 'root-script'
+      ? `Your root "${cs.rootScript}" script covers versioning/publishing, but changeset `
+      : 'Changeset ';
+  return `${via}authoring (changeset-write.mjs) needs @changesets/cli installed as a root devDependency: \`${add}\`.${catalogNote}`;
 }
 
 export function plan(ctx, answers) {

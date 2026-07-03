@@ -78,6 +78,27 @@ Delete the instrumentation once fixed — the dir should only hold active invest
 - Memory index entries are auto-loaded; the linked files are not. Open a linked memory file
   only when its one-line description is load-bearing for the current task.
 
+## Cost & verification discipline
+
+- **Stage-sized work (≤ a handful of files): implement directly in-context.** No
+  implementation subagents — brief-writing + agents re-reading the same files + verbose
+  reports restating the diff costs more than the work itself. Reserve subagents for
+  genuinely parallel or unbounded work (wide mechanical sweeps, per-file migrations,
+  broad searches).
+- **Verify with static gates** (unit tests, typecheck, lint), then hand the user a short
+  falsifiable acceptance checklist (3–5 concrete checks) to confirm in the running app.
+  **Never drive browsers/screenshots for verification unless explicitly asked** — slow,
+  flaky, and image tokens re-enter context on every iteration.
+- **Derive empirical constants analytically.** When a value can be computed from the
+  artifact itself (file headers, geometry, metadata), write the small parser script
+  instead of a screenshot-and-iterate loop.
+- **An unanswered question is not an answer.** If an AskUserQuestion times out or goes
+  unanswered, stop the dependent work and re-ask when the user returns — never carry
+  tentative or partial selections forward.
+- **Before fanning out Explore/Plan agents, read the repo's own docs + targeted greps.**
+  A well-documented repo answers most planning questions in-context; fan out only for
+  what the docs don't answer.
+
 ## Tool-use efficiency
 
 This repo has <large generated files / long test suites (`<test cmd>` ≈ <N> min) / a `git status`

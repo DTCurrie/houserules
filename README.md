@@ -63,10 +63,11 @@ The kit treats [changesets](https://github.com/changesets/changesets) as the sou
 for "what shipped": one `.changeset/*.md` per meaningful change, `CHANGELOG.md` generated at
 release time by `changeset version`. The module wires the agent side of that:
 
-- **`changeset-write.mjs`** — deterministic changeset author: validates package names
-  against the _actual_ workspace, then writes via the repo's own `@changesets/write` (the
-  same writer `changeset add` uses) when changesets is installed, falling back to a
-  built-in zero-dep writer when it isn't. Supports `--empty` for "no release needed".
+- **`changeset-write.mjs`** — non-interactive changeset author for agents: validates
+  package names against the _actual_ workspace, then writes via the repo's own
+  `@changesets/write` (the same writer `changeset add` uses). The official library is
+  **required** — if it isn't resolvable from the repo root, the script exits with install
+  instructions instead of hand-rolling a file. Supports `--empty` for "no release needed".
   Agents never hand-write `.changeset/*.md`.
 - **`/changeset` skill + `changeset-writer` agent (haiku)** — inspect the diff, pick
   patch/minor/major (major always asks first), record via the script.
@@ -76,8 +77,9 @@ release time by `changeset version`. The module wires the agent side of that:
   hiccup.
 - **Respects an existing setup**: if `.changeset/config.json` exists it is never touched; if
   absent, a default is seeded (only with your consent). The kit never installs
-  `@changesets/cli` for you — it prints the right command instead (pnpm-catalog-aware),
-  because nothing in the kit needs it at runtime.
+  `@changesets/cli` for you — it prints the right command instead (pnpm-catalog-aware).
+  Authoring does require it as a root devDependency: a `pnpx`/`npx`-only root script covers
+  versioning/publishing but leaves nothing resolvable for `@changesets/write`.
 
 Want commit-granular history _too_? Enable the `ledger` module — it writes to
 `.claude/changelogs/<target>.md`, never the `CHANGELOG.md` changesets owns.

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Non-interactive changeset author (claude-kit). Validates package names + bump
-// levels, then writes the changeset with the repo's own @changesets/write when
-// changesets is installed — the same writer `changeset add` uses, so the file
-// always matches the installed changesets version. Falls back to a built-in
-// zero-dep writer (.changeset/kit-<hex>.md — a changeset is just YAML-frontmatter
-// markdown) when it isn't; release-time `changeset version/publish` reads both.
+// levels, then writes the changeset with the repo's own @changesets/write — the
+// exact writer `changeset add` uses, so files always match the installed
+// changesets version. The official library is REQUIRED: when it can't be
+// resolved from the repo root, exit 1 with install instructions. This script
+// never hand-rolls changeset files — authoring belongs to changesets itself;
+// the kit only adds workspace validation and a non-interactive interface.
 //
 // Usage:
 //   changeset-write.mjs --pkg <name>[:patch|minor|major] [--pkg ...] --summary "..."
@@ -21,20 +22,21 @@
 // members, or the root package in a single-package repo) — never against a
 // possibly-stale kit.config.json.
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
 
 import { listPublishablePackageNames } from './lib/workspaces.mjs';
 
 const LEVELS = new Set(['patch', 'minor', 'major']);
 
-// The repo's installed @changesets/write, or null. Resolved from the repo root,
-// then through @changesets/cli's own module context — package managers with a
-// strict layout (pnpm) don't expose transitive deps at the root.
+// The repo's installed @changesets/write, or null when changesets isn't
+// installed. Resolved from the repo root, then through @changesets/cli's own
+// module context — package managers with a strict layout (pnpm) don't expose
+// transitive deps at the root. Import/shape failures of a RESOLVED module are
+// not caught: that's a broken install worth a loud stack, not a missing one.
 async function loadOfficialWrite(root) {
   const req = createRequire(join(root, 'package.json'));
   let resolved;
@@ -49,13 +51,11 @@ async function loadOfficialWrite(root) {
       return null;
     }
   }
-  try {
-    const mod = await import(pathToFileURL(resolved).href);
-    const write = mod.default?.default ?? mod.default;
-    return typeof write === 'function' ? write : null;
-  } catch {
-    return null;
-  }
+  const mod = await import(pathToFileURL(resolved).href);
+  const write = mod.default?.default ?? mod.default;
+  if (typeof write !== 'function')
+    throw new Error(`@changesets/write at ${resolved} has no write function.`);
+  return write;
 }
 
 function usage(message) {
@@ -153,35 +153,32 @@ if (!existsSync(join(dir, 'config.json'))) {
   );
 }
 
-let created;
 const officialWrite = await loadOfficialWrite(root);
-if (officialWrite) {
-  try {
-    const id = await officialWrite(
-      {
-        summary,
-        releases: entries.map((e) => ({ name: e.name, type: e.level })),
-      },
-      root,
-    );
-    created = `.changeset/${id}.md`;
-  } catch {
-    created = undefined;
-  }
-}
-
-if (!created) {
-  let file;
-  do {
-    file = join(dir, `kit-${randomBytes(4).toString('hex').slice(0, 6)}.md`);
-  } while (existsSync(file));
-
-  const frontmatter = entries.map((e) => `"${e.name}": ${e.level}`).join('\n');
-  writeFileSync(
-    file,
-    `---\n${frontmatter ? `${frontmatter}\n` : ''}---\n\n${summary}\n`,
+if (!officialWrite) {
+  console.error(
+    [
+      'Cannot author a changeset: @changesets/write is not resolvable from this repo.',
+      'claude-kit writes changesets only with the official changesets library — no fallback.',
+      'Fix: install the CLI as a root devDependency, then rerun:',
+      '  pnpm add -D -w @changesets/cli   # npm: npm install -D @changesets/cli',
+      'Notes: a pnpx/npx-only root script is not enough (nothing is resolvable from',
+      'the repo root); pnpm catalogMode strict needs a catalog entry for it first.',
+    ].join('\n'),
   );
-  created = file.slice(root.length + 1);
+  process.exit(1);
 }
 
-console.log(created);
+let id;
+try {
+  id = await officialWrite(
+    {
+      summary,
+      releases: entries.map((e) => ({ name: e.name, type: e.level })),
+    },
+    root,
+  );
+} catch (e) {
+  console.error(`@changesets/write failed: ${e?.message ?? e}`);
+  process.exit(1);
+}
+console.log(`.changeset/${id}.md`);

@@ -35,6 +35,16 @@ the kit itself.
   settings.local.json.
 - The user always handles `git commit` / `push` / PR-create.
 
+## Cost & verification discipline
+
+- Stage-sized work (≤ a handful of files): implement directly in-context — no implementation
+  subagents. Reserve subagents for genuinely parallel or unbounded work (wide sweeps, migrations).
+- Verify with static gates (`pnpm test`, lint) plus a short falsifiable acceptance checklist for
+  the user; no browser/screenshot verification unless explicitly asked.
+- On AskUserQuestion timeout, stop and re-ask when the user returns — never carry tentative
+  selections forward.
+- Read this file + targeted greps before fanning out Explore/Plan agents.
+
 ## Release
 
 changesets: merge to main → release workflow opens/updates a "Version Packages" PR →
