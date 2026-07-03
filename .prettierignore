@@ -1,0 +1,4 @@
+node_modules
+pnpm-lock.yaml
+payload/kit-templates/
+CHANGELOG.md

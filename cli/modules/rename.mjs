@@ -8,7 +8,9 @@ export const title = 'TS semantic rename script';
 export const group = 'recommended';
 
 export function hint(ctx) {
-  return ctx.typescript ? 'TypeScript detected' : 'no TypeScript detected — skip';
+  return ctx.typescript
+    ? 'TypeScript detected'
+    : 'no TypeScript detected — skip';
 }
 
 export function defaultEnabled(ctx) {
@@ -16,5 +18,11 @@ export function defaultEnabled(ctx) {
 }
 
 export function plan() {
-  return [script(id, 'rename.mjs', 'project-wide symbol rename via the TS LanguageService')];
+  return [
+    script(
+      id,
+      'rename.mjs',
+      'project-wide symbol rename via the TS LanguageService',
+    ),
+  ];
 }

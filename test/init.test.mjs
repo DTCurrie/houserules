@@ -35,13 +35,28 @@ test('I1/I4/I5: init --yes on pnpm monorepo — manifest, config, settings, chan
 
     // Manifest: right modules, hashed files.
     const manifest = readJson(join(root, '.claude/kit-manifest.json'));
-    for (const m of ['core', 'lint-fix', 'backlog', 'changesets', 'session-context', 'rename']) {
+    for (const m of [
+      'core',
+      'lint-fix',
+      'backlog',
+      'changesets',
+      'session-context',
+      'rename',
+    ]) {
       assert.ok(manifest.modules.includes(m), `module ${m}`);
     }
-    for (const m of ['reviewers', 'ledger', 'terse-style', 'output-compactor']) {
+    for (const m of [
+      'reviewers',
+      'ledger',
+      'terse-style',
+      'output-compactor',
+    ]) {
       assert.ok(!manifest.modules.includes(m), `unexpected module ${m}`);
     }
-    assert.match(manifest.files['.claude/scripts/guard-bash.mjs'], /^[0-9a-f]{64}$/);
+    assert.match(
+      manifest.files['.claude/scripts/guard-bash.mjs'],
+      /^[0-9a-f]{64}$/,
+    );
 
     // kit.config.json v2 with per-target fixCommands.
     const config = readJson(join(root, '.claude/kit.config.json'));
@@ -49,7 +64,9 @@ test('I1/I4/I5: init --yes on pnpm monorepo — manifest, config, settings, chan
     assert.equal(config.changesets.enabled, true);
     assert.equal(config.changesets.stopCheck, true);
     assert.equal(config.changesets.baseBranch, 'main');
-    const cityville = config.targets.find((t) => t.packageName === '@fix/cityville');
+    const cityville = config.targets.find(
+      (t) => t.packageName === '@fix/cityville',
+    );
     assert.equal(cityville.prefix, 'CITYVILLE');
     assert.deepEqual(cityville.fixCommands, ['fix']);
     assert.equal(cityville.changelogPath, undefined); // ledger off → no ledger paths
@@ -60,10 +77,18 @@ test('I1/I4/I5: init --yes on pnpm monorepo — manifest, config, settings, chan
       .flat()
       .flatMap((g) => g.hooks.map((h) => h.command))
       .join('\n');
-    for (const s of ['guard-bash', 'lint-format-fix', 'changeset-check', 'session-context']) {
+    for (const s of [
+      'guard-bash',
+      'lint-format-fix',
+      'changeset-check',
+      'session-context',
+    ]) {
       assert.ok(allCommands.includes(s), `hook ${s} wired`);
     }
-    assert.ok(!existsSync(join(root, '.claude/settings.json.bak')), 'no .bak when settings did not pre-exist');
+    assert.ok(
+      !existsSync(join(root, '.claude/settings.json.bak')),
+      'no .bak when settings did not pre-exist',
+    );
     assert.deepEqual(readJson(join(root, '.claude/settings.local.json')), {
       permissions: { allow: ['WebFetch(domain:example.com)'] },
     });
@@ -112,20 +137,35 @@ test('I6/M3: existing CLAUDE.md and settings.json are respected (npm single)', (
   const root = makeFixture('npm-single');
   try {
     const claudeBefore = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
-    const settingsBefore = readFileSync(join(root, '.claude/settings.json'), 'utf8');
+    const settingsBefore = readFileSync(
+      join(root, '.claude/settings.json'),
+      'utf8',
+    );
     const r = runCli(['init', '--yes', root]);
     assert.equal(r.status, 0, r.stderr);
 
     // CLAUDE.md untouched; additions staged instead.
     assert.equal(readFileSync(join(root, 'CLAUDE.md'), 'utf8'), claudeBefore);
-    assert.ok(existsSync(join(root, '.claude/kit-templates/CLAUDE.additions.md')));
+    assert.ok(
+      existsSync(join(root, '.claude/kit-templates/CLAUDE.additions.md')),
+    );
 
     // Settings merged, user entries first and intact; .bak is the pre-merge original.
     const settings = readJson(join(root, '.claude/settings.json'));
     assert.equal(settings.permissions.allow[0], 'Bash(echo hi)');
-    assert.equal(settings.hooks.PreToolUse[0].hooks[0].command, 'node   ./my-hook.js   --check');
-    assert.ok(settings.hooks.PreToolUse[0].hooks.some((h) => h.command.includes('guard-bash.mjs')));
-    assert.equal(readFileSync(join(root, '.claude/settings.json.bak'), 'utf8'), settingsBefore);
+    assert.equal(
+      settings.hooks.PreToolUse[0].hooks[0].command,
+      'node   ./my-hook.js   --check',
+    );
+    assert.ok(
+      settings.hooks.PreToolUse[0].hooks.some((h) =>
+        h.command.includes('guard-bash.mjs'),
+      ),
+    );
+    assert.equal(
+      readFileSync(join(root, '.claude/settings.json.bak'), 'utf8'),
+      settingsBefore,
+    );
 
     // Single-package target in config.
     const config = readJson(join(root, '.claude/kit.config.json'));
@@ -150,8 +190,14 @@ test('I7: non-js repo defaults + --modules math', () => {
     const manifest = readJson(join(root, '.claude/kit-manifest.json'));
     assert.ok(manifest.modules.includes('core'));
     assert.ok(manifest.modules.includes('session-context'));
-    assert.ok(!manifest.modules.includes('backlog'), '--modules=-backlog removed it');
-    assert.ok(!manifest.modules.includes('changesets'), 'no changesets for non-js');
+    assert.ok(
+      !manifest.modules.includes('backlog'),
+      '--modules=-backlog removed it',
+    );
+    assert.ok(
+      !manifest.modules.includes('changesets'),
+      'no changesets for non-js',
+    );
     assert.ok(!manifest.modules.includes('lint-fix'), 'no fix scripts → off');
     assert.ok(!existsSync(join(root, '.claude/scripts/backlog-log.mjs')));
     assert.ok(!existsSync(join(root, '.claude/scripts/changeset-write.mjs')));

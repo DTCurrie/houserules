@@ -2,12 +2,22 @@
 // Everything it does was first computed by plan.computeEffects() and shown to
 // the user; apply() just executes that result and records the receipt.
 
-import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 
 export const MANIFEST_PATH = '.claude/kit-manifest.json';
 
-export function apply(root, { effects, settingsPlan }, { kitVersion, moduleIds, previousManifest = null }) {
+export function apply(
+  root,
+  { effects, settingsPlan },
+  { kitVersion, moduleIds, previousManifest = null },
+) {
   const written = [];
   const files = { ...(previousManifest?.files ?? {}) };
 
@@ -34,7 +44,10 @@ export function apply(root, { effects, settingsPlan }, { kitVersion, moduleIds, 
     }
     mkdirSync(dirname(destAbs), { recursive: true });
     writeFileSync(destAbs, settingsPlan.text);
-    written.push({ dest: settingsPlan.dest, op: settingsPlan.existedBefore ? 'merge' : 'create' });
+    written.push({
+      dest: settingsPlan.dest,
+      op: settingsPlan.existedBefore ? 'merge' : 'create',
+    });
   }
 
   // Keep the manifest byte-stable when nothing changed, so a re-run is a true
@@ -47,7 +60,12 @@ export function apply(root, { effects, settingsPlan }, { kitVersion, moduleIds, 
     JSON.stringify(previousManifest.files) === JSON.stringify(files);
   const manifest = stable
     ? previousManifest
-    : { kitVersion, installedAt: new Date().toISOString(), modules: moduleIds, files };
+    : {
+        kitVersion,
+        installedAt: new Date().toISOString(),
+        modules: moduleIds,
+        files,
+      };
   if (!stable) {
     const manifestAbs = join(root, MANIFEST_PATH);
     mkdirSync(dirname(manifestAbs), { recursive: true });

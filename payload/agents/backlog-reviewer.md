@@ -1,6 +1,6 @@
 ---
-description: "Read-only reviewer for new backlog entries. Invoke immediately after adding an entry to a BACKLOG.md to check format, dedupe against existing entries, and gut-check whether the item is worth tracking."
-name: "backlog-reviewer"
+description: 'Read-only reviewer for new backlog entries. Invoke immediately after adding an entry to a BACKLOG.md to check format, dedupe against existing entries, and gut-check whether the item is worth tracking.'
+name: 'backlog-reviewer'
 tools: Read, Grep, Glob, Bash
 model: haiku
 effort: low

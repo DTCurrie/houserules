@@ -20,16 +20,30 @@ export function defaultEnabled(ctx) {
 
 export function plan() {
   return [
-    script(id, 'lint-format-fix.mjs', 'Stop hook: run fix commands on changed packages'),
+    script(
+      id,
+      'lint-format-fix.mjs',
+      'Stop hook: run fix commands on changed packages',
+    ),
     {
       kind: 'merge-settings',
       module: id,
-      fragment: hookFragment('Stop', null, 'lint-format-fix.mjs', 'Running lint/format auto-fix'),
+      fragment: hookFragment(
+        'Stop',
+        null,
+        'lint-format-fix.mjs',
+        'Running lint/format auto-fix',
+      ),
     },
     {
       kind: 'merge-settings',
       module: id,
-      fragment: hookFragment('SubagentStop', null, 'lint-format-fix.mjs', 'Running lint/format auto-fix'),
+      fragment: hookFragment(
+        'SubagentStop',
+        null,
+        'lint-format-fix.mjs',
+        'Running lint/format auto-fix',
+      ),
     },
   ];
 }

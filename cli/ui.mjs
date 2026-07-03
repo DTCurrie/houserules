@@ -44,19 +44,30 @@ export function profileCard(ctx) {
       ? `single package: ${ctx.rootPkg.name ?? '(unnamed)'}`
       : 'no JS packages';
   const fixes = ctx.targets
-    .map((t) => `${t.name} → ${t.fixCommands ? t.fixCommands.join('+') : pc.dim('none')}`)
+    .map(
+      (t) =>
+        `${t.name} → ${t.fixCommands ? t.fixCommands.join('+') : pc.dim('none')}`,
+    )
     .join(', ');
   const cs = ctx.changesets;
   const changesets = cs.configExists
     ? `config ✓, ${cs.pendingCount} pending, CLI: ${
-        { devdep: 'devDependency', 'root-script': `root script "${cs.rootScript}"`, 'external-cli': pc.yellow('not installed (pnpx/npx works)') }[cs.invocation]
+        {
+          devdep: 'devDependency',
+          'root-script': `root script "${cs.rootScript}"`,
+          'external-cli': pc.yellow('not installed (pnpx/npx works)'),
+        }[cs.invocation]
       }, base ${cs.baseBranch}`
     : 'not set up';
   const claudeBits = [
     ctx.claude.settingsExists ? 'settings.json' : null,
-    ctx.claude.settingsLocalExists ? 'settings.local.json (never touched)' : null,
+    ctx.claude.settingsLocalExists
+      ? 'settings.local.json (never touched)'
+      : null,
     ctx.claude.claudeMdExists ? 'CLAUDE.md' : pc.dim('no CLAUDE.md'),
-    ctx.claude.manifest ? pc.yellow(`kit v${ctx.claude.manifest.kitVersion} already installed`) : null,
+    ctx.claude.manifest
+      ? pc.yellow(`kit v${ctx.claude.manifest.kitVersion} already installed`)
+      : null,
   ]
     .filter(Boolean)
     .join(', ');
@@ -91,20 +102,30 @@ export async function selectModules(modules, ctx, preselectedIds) {
 export async function confirmTargets(targets) {
   if (!targets.length) return targets;
   const rows = targets
-    .map((t) => `  ${t.name}  prefix=${t.prefix}  src=${t.sourcePath || '(root)'}  fix=${t.fixCommands?.join('+') ?? '—'}`)
+    .map(
+      (t) =>
+        `  ${t.name}  prefix=${t.prefix}  src=${t.sourcePath || '(root)'}  fix=${t.fixCommands?.join('+') ?? '—'}`,
+    )
     .join('\n');
   note(rows, 'Detected targets');
   const keep = bail(
     await p.multiselect({
       message: 'Targets the kit should track',
-      options: targets.map((t) => ({ value: t.name, label: `${t.name} (${t.packageName})` })),
+      options: targets.map((t) => ({
+        value: t.name,
+        label: `${t.name} (${t.packageName})`,
+      })),
       initialValues: targets.map((t) => t.name),
       required: false,
     }),
   );
   let kept = targets.filter((t) => keep.includes(t.name));
   const editPrefixes = bail(
-    await p.confirm({ message: 'Edit backlog prefixes now? (also editable later in kit.config.json)', initialValue: false }),
+    await p.confirm({
+      message:
+        'Edit backlog prefixes now? (also editable later in kit.config.json)',
+      initialValue: false,
+    }),
   );
   if (editPrefixes) {
     for (const t of kept) {
@@ -112,7 +133,10 @@ export async function confirmTargets(targets) {
         await p.text({
           message: `Prefix for ${t.name}`,
           initialValue: t.prefix,
-          validate: (v) => (/^[A-Z][A-Z0-9]*$/.test(v) ? undefined : 'uppercase ASCII, e.g. CORE'),
+          validate: (v) =>
+            /^[A-Z][A-Z0-9]*$/.test(v)
+              ? undefined
+              : 'uppercase ASCII, e.g. CORE',
         }),
       );
       t.prefix = value;
@@ -136,7 +160,13 @@ const OP_STYLE = {
 
 export function renderPreview({ effects, settingsPlan, advisories }) {
   const lines = [];
-  const order = ['create', 'update', 'skip-modified', 'skip-exists', 'skip-identical'];
+  const order = [
+    'create',
+    'update',
+    'skip-modified',
+    'skip-exists',
+    'skip-identical',
+  ];
   for (const op of order) {
     const matching = effects.filter((e) => e.op === op);
     if (!matching.length) continue;
@@ -178,5 +208,10 @@ export function renderPreview({ effects, settingsPlan, advisories }) {
 
 export function renderWritten(written) {
   if (!written.length) return 'Nothing to write — already up to date.';
-  return written.map((w) => `${w.op === 'create' ? '+' : w.op === 'merge' ? '±' : '~'} ${w.dest}`).join('\n');
+  return written
+    .map(
+      (w) =>
+        `${w.op === 'create' ? '+' : w.op === 'merge' ? '±' : '~'} ${w.dest}`,
+    )
+    .join('\n');
 }

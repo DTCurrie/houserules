@@ -1,5 +1,5 @@
 ---
-"claude-kit": patch
+'claude-kit': patch
 ---
 
-Fix compact tool output hook to reduce noise
+Fix compact tool output hook to reduce noise.

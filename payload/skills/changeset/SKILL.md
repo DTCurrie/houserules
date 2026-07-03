@@ -13,7 +13,7 @@ Record what this change means for the next release. Arguments (optional override
    - `patch` — fixes, internal refactors with no API change (the default)
    - `minor` — new user-facing capability, backwards-compatible
    - `major` — breaking change. **Confirm with the user before recording a major.**
-3. **Write the summary**: 1–3 sentences in changelog voice — what changed and *why*, as the
+3. **Write the summary**: 1–3 sentences in changelog voice — what changed and _why_, as the
    package's users should read it. Reference backlog IDs it resolves, if any.
 4. **Record it** (the script validates package names against the real workspace):
    ```

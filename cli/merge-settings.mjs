@@ -12,7 +12,9 @@
 const KIT_SCRIPT_RE = /([\w-]+\.mjs)\b/g;
 
 function normalizeCommand(cmd) {
-  return String(cmd ?? '').replace(/\s+/g, ' ').trim();
+  return String(cmd ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function kitBasenames(cmd) {
@@ -25,7 +27,8 @@ function hookAlreadyPresent(existingGroups, candidateCommand) {
   for (const group of existingGroups ?? []) {
     for (const hook of group?.hooks ?? []) {
       if (normalizeCommand(hook.command) === normalized) return true;
-      if (kitBasenames(hook.command).some((b) => candidateBases.has(b))) return true;
+      if (kitBasenames(hook.command).some((b) => candidateBases.has(b)))
+        return true;
     }
   }
   return false;
@@ -60,15 +63,25 @@ export function mergeSettings(existing, fragment) {
         merged.hooks[event] ??= [];
         // Reuse an existing group with the same matcher so the file stays tidy.
         const matcherOf = (g) => g.matcher ?? null;
-        let target = merged.hooks[event].find((g) => matcherOf(g) === (group.matcher ?? null));
+        let target = merged.hooks[event].find(
+          (g) => matcherOf(g) === (group.matcher ?? null),
+        );
         if (!target) {
-          target = group.matcher !== undefined ? { matcher: group.matcher, hooks: [] } : { hooks: [] };
+          target =
+            group.matcher !== undefined
+              ? { matcher: group.matcher, hooks: [] }
+              : { hooks: [] };
           merged.hooks[event].push(target);
         }
         target.hooks ??= [];
         target.hooks.push(structuredClone(hook));
-        const base = kitBasenames(hook.command)[0] ?? normalizeCommand(hook.command).slice(0, 40);
-        changes.push({ kind: 'hook', detail: `${event}${group.matcher ? `(${group.matcher})` : ''}: ${base}` });
+        const base =
+          kitBasenames(hook.command)[0] ??
+          normalizeCommand(hook.command).slice(0, 40);
+        changes.push({
+          kind: 'hook',
+          detail: `${event}${group.matcher ? `(${group.matcher})` : ''}: ${base}`,
+        });
       }
     }
   }

@@ -16,7 +16,10 @@ function installedFixture() {
 test('CC1: dirty package source with no changeset → exit 2 naming the package', () => {
   const root = installedFixture();
   try {
-    appendFileSync(join(root, 'games/cityville/src/game.ts'), 'export const more = 2;\n');
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
     const r = runScript(root, SCRIPT, { input: '{}' });
     assert.equal(r.status, 2, `expected nudge, got ${r.status}: ${r.stderr}`);
     assert.match(r.stderr, /--pkg @fix\/cityville/);
@@ -29,8 +32,14 @@ test('CC1: dirty package source with no changeset → exit 2 naming the package'
 test('CC2: an untracked changeset silences the nudge; so does one committed on the branch', () => {
   const root = installedFixture();
   try {
-    appendFileSync(join(root, 'games/cityville/src/game.ts'), 'export const more = 2;\n');
-    writeFileSync(join(root, '.changeset/kit-abc123.md'), '---\n"@fix/cityville": patch\n---\n\nMore.\n');
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+    writeFileSync(
+      join(root, '.changeset/kit-abc123.md'),
+      '---\n"@fix/cityville": patch\n---\n\nMore.\n',
+    );
     let r = runScript(root, SCRIPT, { input: '{}' });
     assert.equal(r.status, 0, r.stderr);
 
@@ -38,9 +47,16 @@ test('CC2: an untracked changeset silences the nudge; so does one committed on t
     sh(root, 'git', ['checkout', '-qb', 'feature']);
     sh(root, 'git', ['add', '-A']);
     sh(root, 'git', ['commit', '-qm', 'feat: more, with changeset']);
-    appendFileSync(join(root, 'apps/studio/src/main.ts'), 'export const two = 2;\n');
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const two = 2;\n',
+    );
     r = runScript(root, SCRIPT, { input: '{}' });
-    assert.equal(r.status, 0, `branch-committed changeset should silence: ${r.stderr}`);
+    assert.equal(
+      r.status,
+      0,
+      `branch-committed changeset should silence: ${r.stderr}`,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -49,7 +65,10 @@ test('CC2: an untracked changeset silences the nudge; so does one committed on t
 test('CC3: kill-switches and fallbacks — stop_hook_active, stopCheck:false, non-target change, bad base', () => {
   const root = installedFixture();
   try {
-    appendFileSync(join(root, 'games/cityville/src/game.ts'), 'export const more = 2;\n');
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
 
     // stop_hook_active short-circuits.
     let r = runScript(root, SCRIPT, { input: '{"stop_hook_active":true}' });

@@ -17,7 +17,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
-import { mergeSettings, parseSettingsText, renderSettings } from './merge-settings.mjs';
+import {
+  mergeSettings,
+  parseSettingsText,
+  renderSettings,
+} from './merge-settings.mjs';
 
 import * as core from './modules/core.mjs';
 import * as lintFix from './modules/lint-fix.mjs';
@@ -59,7 +63,9 @@ export function resolveModuleIds(ctx, modulesFlag) {
     const remove = token.startsWith('-');
     const id = remove ? token.slice(1) : token;
     if (!known.has(id)) {
-      throw new KitError(`Unknown module "${id}". Known modules: ${[...known].join(', ')}`);
+      throw new KitError(
+        `Unknown module "${id}". Known modules: ${[...known].join(', ')}`,
+      );
     }
     if (remove) ids.delete(id);
     else ids.add(id);
@@ -83,7 +89,8 @@ function sha256(content) {
 
 function readAction(action) {
   if (action.kind === 'copy') {
-    if (!existsSync(action.src)) throw new KitError(`Kit payload file missing: ${action.src}`);
+    if (!existsSync(action.src))
+      throw new KitError(`Kit payload file missing: ${action.src}`);
     return readFileSync(action.src);
   }
   return Buffer.from(action.content, 'utf8');
@@ -91,7 +98,11 @@ function readAction(action) {
 
 // → { effects, settingsPlan, advisories }
 //   effect: { action, op: create|update|skip-identical|skip-exists|skip-modified, content?, hash? }
-export function computeEffects(root, actions, { manifest = null, force = false } = {}) {
+export function computeEffects(
+  root,
+  actions,
+  { manifest = null, force = false } = {},
+) {
   const effects = [];
   const advisories = [];
   const fragments = [];
@@ -110,7 +121,11 @@ export function computeEffects(root, actions, { manifest = null, force = false }
     const exists = existsSync(destAbs);
 
     if (action.kind === 'seed') {
-      effects.push({ action, op: exists ? 'skip-exists' : 'create', content: exists ? null : Buffer.from(action.content, 'utf8') });
+      effects.push({
+        action,
+        op: exists ? 'skip-exists' : 'create',
+        content: exists ? null : Buffer.from(action.content, 'utf8'),
+      });
       continue;
     }
 
@@ -127,7 +142,8 @@ export function computeEffects(root, actions, { manifest = null, force = false }
       continue;
     }
     const recordedHash = manifest?.files?.[action.dest];
-    const locallyModified = recordedHash !== undefined && sha256(onDisk) !== recordedHash;
+    const locallyModified =
+      recordedHash !== undefined && sha256(onDisk) !== recordedHash;
     if (locallyModified && !force) {
       effects.push({ action, op: 'skip-modified', content, hash });
       continue;

@@ -12,7 +12,9 @@ import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 
 export function repoRoot() {
-  return execSync('git rev-parse --show-toplevel', { stdio: ['ignore', 'pipe', 'ignore'] })
+  return execSync('git rev-parse --show-toplevel', {
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
     .toString()
     .trim();
 }

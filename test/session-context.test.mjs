@@ -27,9 +27,15 @@ test('S1: prints branch + changed files + touched targets; caps output', () => {
     appendFileSync(join(root, 'games/cityville/src/game.ts'), '// tweak\n');
     r = runScript(root, SCRIPT, { input: '{}' });
     assert.equal(r.status, 0);
-    assert.match(r.stdout, /uncommitted \(1\): games\/cityville\/src\/game\.ts/);
+    assert.match(
+      r.stdout,
+      /uncommitted \(1\): games\/cityville\/src\/game\.ts/,
+    );
     assert.match(r.stdout, /targets touched: cityville/);
-    assert.ok(r.stdout.split('\n').filter(Boolean).length <= 4, 'header must stay tiny');
+    assert.ok(
+      r.stdout.split('\n').filter(Boolean).length <= 4,
+      'header must stay tiny',
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -39,11 +45,15 @@ test('S2: repo with no commits yet does not crash', () => {
   const dir = mkdtempSync(join(tmpdir(), 'kit-unborn-'));
   try {
     sh(dir, 'git', ['init', '-q']);
-    const r = spawnSync(process.execPath, [join(KIT_ROOT, 'payload/scripts/session-context.mjs')], {
-      cwd: dir,
-      input: '{}',
-      encoding: 'utf8',
-    });
+    const r = spawnSync(
+      process.execPath,
+      [join(KIT_ROOT, 'payload/scripts/session-context.mjs')],
+      {
+        cwd: dir,
+        input: '{}',
+        encoding: 'utf8',
+      },
+    );
     assert.equal(r.status, 0, r.stderr);
   } finally {
     rmSync(dir, { recursive: true, force: true });

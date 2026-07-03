@@ -17,7 +17,11 @@ test('U1: update keeps local edits, --force overwrites, stale files refresh', ()
     const edited = readFileSync(guardPath, 'utf8');
     let r = runCli(['update', root]);
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(readFileSync(guardPath, 'utf8'), edited, 'local edit clobbered without --force');
+    assert.equal(
+      readFileSync(guardPath, 'utf8'),
+      edited,
+      'local edit clobbered without --force',
+    );
 
     // --force → kit version restored.
     r = runCli(['update', '--force', root]);
@@ -35,7 +39,10 @@ test('U1: update keeps local edits, --force overwrites, stale files refresh', ()
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     r = runCli(['update', root]);
     assert.equal(r.status, 0, r.stderr);
-    assert.ok(readFileSync(lintPath, 'utf8').includes('Stop / SubagentStop hook'), 'stale file not refreshed');
+    assert.ok(
+      readFileSync(lintPath, 'utf8').includes('Stop / SubagentStop hook'),
+      'stale file not refreshed',
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

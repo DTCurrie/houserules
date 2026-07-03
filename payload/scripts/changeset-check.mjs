@@ -28,7 +28,11 @@ if (input.stop_hook_active) process.exit(0);
 
 function git(root, args) {
   try {
-    return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return execFileSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
   } catch {
     return null;
   }
@@ -46,11 +50,15 @@ try {
   if (!rootOut) process.exit(0);
   const root = rootOut.trim();
 
-  let scopes = (config.targets ?? []).map((t) => t.sourcePath).filter((s) => s !== undefined && s !== null);
+  let scopes = (config.targets ?? [])
+    .map((t) => t.sourcePath)
+    .filter((s) => s !== undefined && s !== null);
   if (!scopes.length) scopes = listWorkspacePackages(root).map((p) => p.relDir);
   if (!scopes.length) process.exit(0);
   const matchScope = (p) =>
-    scopes.some((s) => (s === '' ? !p.startsWith('.') : p === s || p.startsWith(`${s}/`)));
+    scopes.some((s) =>
+      s === '' ? !p.startsWith('.') : p === s || p.startsWith(`${s}/`),
+    );
 
   // Working tree: every dirty path counts, whatever its status code.
   const status = git(root, ['status', '--porcelain']) ?? '';
@@ -64,10 +72,23 @@ try {
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])?.trim();
   let committed = [];
   let committedNewChangesets = [];
-  if (branch && branch !== base && git(root, ['rev-parse', '--verify', '--quiet', base]) !== null) {
-    committed = (git(root, ['diff', '--name-only', `${base}...HEAD`]) ?? '').split('\n').filter(Boolean);
+  if (
+    branch &&
+    branch !== base &&
+    git(root, ['rev-parse', '--verify', '--quiet', base]) !== null
+  ) {
+    committed = (git(root, ['diff', '--name-only', `${base}...HEAD`]) ?? '')
+      .split('\n')
+      .filter(Boolean);
     committedNewChangesets = (
-      git(root, ['diff', '--name-only', '--diff-filter=A', `${base}...HEAD`, '--', '.changeset']) ?? ''
+      git(root, [
+        'diff',
+        '--name-only',
+        '--diff-filter=A',
+        `${base}...HEAD`,
+        '--',
+        '.changeset',
+      ]) ?? ''
     )
       .split('\n')
       .filter(Boolean);
@@ -80,10 +101,16 @@ try {
   if (!srcChanged.length || hasChangeset) process.exit(0);
 
   const targets = (config.targets ?? []).filter((t) =>
-    srcChanged.some((p) => (t.sourcePath === '' ? true : p === t.sourcePath || p.startsWith(`${t.sourcePath}/`))),
+    srcChanged.some((p) =>
+      t.sourcePath === ''
+        ? true
+        : p === t.sourcePath || p.startsWith(`${t.sourcePath}/`),
+    ),
   );
   const names = targets.map((t) => t.packageName).filter((n) => n && n !== '.');
-  const pkgHint = names.length ? names.map((n) => `--pkg ${n}`).join(' ') : '--pkg <package-name>';
+  const pkgHint = names.length
+    ? names.map((n) => `--pkg ${n}`).join(' ')
+    : '--pkg <package-name>';
 
   process.stderr.write(
     [

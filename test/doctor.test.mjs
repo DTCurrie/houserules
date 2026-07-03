@@ -19,7 +19,10 @@ test('DR1: healthy after init; missing file = ERROR; local edit / unwired hook /
     appendFileSync(guard, '// tweak\n');
     r = runCli(['doctor', root]);
     assert.equal(r.status, 0);
-    assert.match(r.stdout, /locally edited: \.claude\/scripts\/guard-bash\.mjs/);
+    assert.match(
+      r.stdout,
+      /locally edited: \.claude\/scripts\/guard-bash\.mjs/,
+    );
 
     // Missing kit file → ERROR, exit 1.
     const original = readFileSync(guard, 'utf8');
@@ -45,7 +48,10 @@ test('DR1: healthy after init; missing file = ERROR; local edit / unwired hook /
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
     r = runCli(['doctor', root]);
     assert.equal(r.status, 0);
-    assert.match(r.stdout, /fix script "fix" not in games\/cityville\/package\.json/);
+    assert.match(
+      r.stdout,
+      /fix script "fix" not in games\/cityville\/package\.json/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

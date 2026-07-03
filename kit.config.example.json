@@ -8,7 +8,19 @@
     "runScriptPrefix": ["run"],
     "commands": ["lint:fix", "format:fix"]
   },
-  "lintableExtensions": ["ts", "tsx", "js", "jsx", "mjs", "cjs", "svelte", "md", "json", "css", "html"],
+  "lintableExtensions": [
+    "ts",
+    "tsx",
+    "js",
+    "jsx",
+    "mjs",
+    "cjs",
+    "svelte",
+    "md",
+    "json",
+    "css",
+    "html"
+  ],
   "generatedFilePattern": "/(?:CHANGELOG|BACKLOG)\\.md$",
   "guard": {
     "gitCommit": true,
@@ -16,7 +28,10 @@
     "gitStash": true,
     "prCreate": true,
     "custom": [
-      { "pattern": "\\bdocker\\s+system\\s+prune\\b", "message": "Example custom rule — delete or replace." }
+      {
+        "pattern": "\\bdocker\\s+system\\s+prune\\b",
+        "message": "Example custom rule — delete or replace."
+      }
     ]
   },
   "changesets": {

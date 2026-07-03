@@ -18,7 +18,11 @@ export function defaultEnabled() {
 
 export function plan() {
   return [
-    script(id, 'session-context.mjs', 'SessionStart hook: branch/changes/targets header'),
+    script(
+      id,
+      'session-context.mjs',
+      'SessionStart hook: branch/changes/targets header',
+    ),
     {
       kind: 'merge-settings',
       module: id,

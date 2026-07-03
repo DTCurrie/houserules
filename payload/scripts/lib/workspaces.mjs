@@ -67,7 +67,9 @@ function expandGlob(root, glob) {
     } catch {
       return [];
     }
-    return entries.filter((e) => e.isDirectory()).map((e) => join(base, e.name));
+    return entries
+      .filter((e) => e.isDirectory())
+      .map((e) => join(base, e.name));
   }
   const dir = join(root, clean);
   try {
@@ -89,7 +91,12 @@ export function listWorkspacePackages(root) {
       seen.add(dir);
       const pkg = readJson(join(dir, 'package.json'));
       if (!pkg?.name) continue;
-      out.push({ name: pkg.name, dir, relDir: relative(root, dir).replaceAll('\\', '/'), pkg });
+      out.push({
+        name: pkg.name,
+        dir,
+        relDir: relative(root, dir).replaceAll('\\', '/'),
+        pkg,
+      });
     }
   }
   return out;

@@ -55,11 +55,16 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--empty') empty = true;
   else usage(`Unknown argument "${a}".`);
 }
-if (!LEVELS.has(defaultLevel)) usage(`Invalid --level "${defaultLevel}" (patch|minor|major).`);
+if (!LEVELS.has(defaultLevel))
+  usage(`Invalid --level "${defaultLevel}" (patch|minor|major).`);
 
 let root;
 try {
-  root = execSync('git rev-parse --show-toplevel', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  root = execSync('git rev-parse --show-toplevel', {
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
+    .toString()
+    .trim();
 } catch {
   console.error('Not inside a git work tree.');
   process.exit(1);
@@ -74,13 +79,18 @@ if (summary === undefined && !process.stdin.isTTY) {
   }
 }
 summary = (summary ?? '').trim();
-if (!summary) usage('A non-empty --summary (or piped stdin) is required — it becomes the changelog entry.');
+if (!summary)
+  usage(
+    'A non-empty --summary (or piped stdin) is required — it becomes the changelog entry.',
+  );
 
 let entries = [];
 if (!empty) {
   const valid = listPublishablePackageNames(root);
   if (!valid.length) {
-    console.error('No packages found (no workspace members and no named root package.json).');
+    console.error(
+      'No packages found (no workspace members and no named root package.json).',
+    );
     process.exit(1);
   }
   entries = pkgArgs.map((raw) => {
@@ -97,7 +107,9 @@ if (!empty) {
   }
   for (const entry of entries) {
     if (!valid.includes(entry.name)) {
-      console.error(`Unknown package "${entry.name}". Valid packages: ${valid.join(', ')}`);
+      console.error(
+        `Unknown package "${entry.name}". Valid packages: ${valid.join(', ')}`,
+      );
       process.exit(1);
     }
   }
@@ -106,7 +118,9 @@ if (!empty) {
 const dir = join(root, '.changeset');
 mkdirSync(dir, { recursive: true });
 if (!existsSync(join(dir, 'config.json'))) {
-  console.error('note: .changeset/config.json is missing — run `npx @changesets/cli init` before release time.');
+  console.error(
+    'note: .changeset/config.json is missing — run `npx @changesets/cli init` before release time.',
+  );
 }
 
 let file;
@@ -115,5 +129,8 @@ do {
 } while (existsSync(file));
 
 const frontmatter = entries.map((e) => `"${e.name}": ${e.level}`).join('\n');
-writeFileSync(file, `---\n${frontmatter ? `${frontmatter}\n` : ''}---\n\n${summary}\n`);
+writeFileSync(
+  file,
+  `---\n${frontmatter ? `${frontmatter}\n` : ''}---\n\n${summary}\n`,
+);
 console.log(file.slice(root.length + 1));

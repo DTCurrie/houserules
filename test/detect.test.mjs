@@ -15,10 +15,10 @@ test('D1/D2/D3: pnpm monorepo detection (schoolyard shape)', () => {
     assert.equal(ctx.packageManager.source, 'packageManager');
 
     // Empty workspace dirs (packages/, toolkits/) must not produce phantom packages.
-    assert.deepEqual(
-      ctx.packages.map((p) => p.name).sort(),
-      ['@fix/cityville', '@fix/studio'],
-    );
+    assert.deepEqual(ctx.packages.map((p) => p.name).sort(), [
+      '@fix/cityville',
+      '@fix/studio',
+    ]);
 
     const studio = ctx.targets.find((t) => t.packageName === '@fix/studio');
     assert.equal(studio.pathPrefix, 'apps/studio/');
@@ -80,9 +80,17 @@ test('D5: non-js repo detection does not crash', () => {
 });
 
 test('fix-command priority and prefix suggestions', () => {
-  assert.deepEqual(detectFixCommands({ fix: 'x', 'lint:fix': 'y', 'format:fix': 'z' }), ['fix']);
-  assert.deepEqual(detectFixCommands({ 'lint:fix': 'y', 'format:fix': 'z' }), ['lint:fix', 'format:fix']);
-  assert.deepEqual(detectFixCommands({ 'format:fix': 'z', format: 'check' }), ['format:fix']);
+  assert.deepEqual(
+    detectFixCommands({ fix: 'x', 'lint:fix': 'y', 'format:fix': 'z' }),
+    ['fix'],
+  );
+  assert.deepEqual(detectFixCommands({ 'lint:fix': 'y', 'format:fix': 'z' }), [
+    'lint:fix',
+    'format:fix',
+  ]);
+  assert.deepEqual(detectFixCommands({ 'format:fix': 'z', format: 'check' }), [
+    'format:fix',
+  ]);
   assert.equal(detectFixCommands({ format: 'prettier --check .' }), null); // format may be a CHECK
   assert.equal(suggestPrefix('@schoolyard/cityville'), 'CITYVILLE');
   assert.equal(suggestPrefix('single-app'), 'SINGLEAPP');
@@ -90,7 +98,16 @@ test('fix-command priority and prefix suggestions', () => {
 
 test('pnpm-workspace.yaml parse ignores catalog blocks', () => {
   const globs = parsePnpmWorkspaceGlobs(
-    ['packages:', "  - 'packages/*'", '  - apps/*', '', 'catalogMode: strict', 'catalog:', "  - 'not-a-glob'", ''].join('\n'),
+    [
+      'packages:',
+      "  - 'packages/*'",
+      '  - apps/*',
+      '',
+      'catalogMode: strict',
+      'catalog:',
+      "  - 'not-a-glob'",
+      '',
+    ].join('\n'),
   );
   assert.deepEqual(globs, ['packages/*', 'apps/*']);
 });

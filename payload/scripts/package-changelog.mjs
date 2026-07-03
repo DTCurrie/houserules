@@ -18,7 +18,13 @@
 //                                Diffs/prior file content are NOT stored — recover via
 //                                `git show <sha>` or `git show <sha>~1:<file>`.
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 
@@ -50,7 +56,10 @@ function shStr(cmd) {
 }
 function tryShStr(cmd) {
   try {
-    return execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return execSync(cmd, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
   } catch {
     return null;
   }
@@ -77,7 +86,9 @@ function parseArgs(rest) {
 function getTarget(name) {
   const t = TARGETS[name];
   if (!t) {
-    console.error(`Unknown target "${name}". Valid: ${Object.keys(TARGETS).join(', ') || '(none — check .claude/kit.config.json)'}.`);
+    console.error(
+      `Unknown target "${name}". Valid: ${Object.keys(TARGETS).join(', ') || '(none — check .claude/kit.config.json)'}.`,
+    );
     process.exit(1);
   }
   return {
@@ -111,7 +122,9 @@ function gatherCommitInfo(fullSha) {
 }
 
 function listChangedFiles(fullSha, sourcePath) {
-  const out = tryShStr(`git show --name-only --pretty= ${fullSha} -- ${sourcePath}`) || '';
+  const out =
+    tryShStr(`git show --name-only --pretty= ${fullSha} -- ${sourcePath}`) ||
+    '';
   return out.split('\n').filter((f) => f && f.startsWith(sourcePath));
 }
 
@@ -159,9 +172,19 @@ function entryExistsInChangelog(target, shortSha) {
   return new RegExp(`^## \\[${shortSha}\\] `, 'm').test(text);
 }
 
-function renderChangelogEntry({ shortSha, date, subject, files, backlog, reason, changes }) {
+function renderChangelogEntry({
+  shortSha,
+  date,
+  subject,
+  files,
+  backlog,
+  reason,
+  changes,
+}) {
   const filesLine =
-    files.length <= 6 ? files.map((f) => `\`${f}\``).join(', ') : `${files.length} files`;
+    files.length <= 6
+      ? files.map((f) => `\`${f}\``).join(', ')
+      : `${files.length} files`;
   const backlogLine = backlog.length ? backlog.join(', ') : '_none_';
   const reasonBlock = reason.trim() ? reason.trim() : '_no reason recorded_';
   const changesBlock = changes.trim() || '_(no changes recorded)_';
@@ -184,7 +207,10 @@ function renderChangelogEntry({ shortSha, date, subject, files, backlog, reason,
 
 function appendToChangelog(target, entry) {
   ensureChangelogHeader(target);
-  const padded = readFileSync(target.changelogFile, 'utf8').replace(/\s*$/, '\n\n');
+  const padded = readFileSync(target.changelogFile, 'utf8').replace(
+    /\s*$/,
+    '\n\n',
+  );
   writeFileSync(target.changelogFile, padded + entry);
 }
 
@@ -196,21 +222,34 @@ function appendEvent(target, record) {
 function recordCommit(
   target,
   ref,
-  { reason: reasonOverride, backlog: backlogOverride, changes: changesInput, quiet } = {},
+  {
+    reason: reasonOverride,
+    backlog: backlogOverride,
+    changes: changesInput,
+    quiet,
+  } = {},
 ) {
   const fullSha = resolveSha(ref);
   const info = gatherCommitInfo(fullSha);
   const files = listChangedFiles(fullSha, target.sourcePath);
   if (!files.length) {
-    if (!quiet) console.error(`Commit ${info.shortSha} does not touch ${target.sourcePath}/. Nothing recorded.`);
+    if (!quiet)
+      console.error(
+        `Commit ${info.shortSha} does not touch ${target.sourcePath}/. Nothing recorded.`,
+      );
     return { skipped: true, reason: 'no-target-files' };
   }
   if (entryExistsInChangelog(target, info.shortSha)) {
-    if (!quiet) console.error(`Entry for ${info.shortSha} already in ${target.changelogPath}. Skipping.`);
+    if (!quiet)
+      console.error(
+        `Entry for ${info.shortSha} already in ${target.changelogPath}. Skipping.`,
+      );
     return { skipped: true, reason: 'duplicate' };
   }
   if (!changesInput || !changesInput.trim()) {
-    console.error('Missing required --changes "<bullet list>". The archivist agent must summarise what shipped.');
+    console.error(
+      'Missing required --changes "<bullet list>". The archivist agent must summarise what shipped.',
+    );
     process.exit(1);
   }
 
@@ -263,7 +302,9 @@ function show(target, ref) {
     console.error(`No ${target.label.toLowerCase()} changelog log yet.`);
     process.exit(1);
   }
-  const lines = readFileSync(target.logFile, 'utf8').split('\n').filter(Boolean);
+  const lines = readFileSync(target.logFile, 'utf8')
+    .split('\n')
+    .filter(Boolean);
   let found = 0;
   for (const line of lines) {
     let r;
@@ -272,13 +313,18 @@ function show(target, ref) {
     } catch {
       continue;
     }
-    const matches = r.sha === ref || r.fullSha === ref || (ref.length >= 7 && r.fullSha.startsWith(ref));
+    const matches =
+      r.sha === ref ||
+      r.fullSha === ref ||
+      (ref.length >= 7 && r.fullSha.startsWith(ref));
     if (!matches) continue;
     found++;
     console.log(`[${r.ts}] ${r.action} ${r.sha} — ${r.subject}`);
     console.log(`date: ${r.date}`);
     console.log(`files: ${r.files.join(', ')}`);
-    console.log(`backlog: ${r.backlog.length ? r.backlog.join(', ') : '(none)'}`);
+    console.log(
+      `backlog: ${r.backlog.length ? r.backlog.join(', ') : '(none)'}`,
+    );
     console.log(`reason: ${r.reason || '(none)'}`);
     console.log('--- changes ---');
     console.log(r.changes || '(none)');
@@ -292,7 +338,9 @@ function show(target, ref) {
 
 function list(target) {
   if (!existsSync(target.logFile)) return;
-  const lines = readFileSync(target.logFile, 'utf8').split('\n').filter(Boolean);
+  const lines = readFileSync(target.logFile, 'utf8')
+    .split('\n')
+    .filter(Boolean);
   for (const line of lines) {
     let r;
     try {
@@ -317,7 +365,7 @@ function usage() {
       '',
       '--changes is required and should be a markdown bullet list of what shipped.',
       'Pass via heredoc for multiline:',
-      '  ... record <target> HEAD --changes "$(cat <<\'EOF\'',
+      "  ... record <target> HEAD --changes \"$(cat <<'EOF'",
       '  - one thing',
       '  - another thing',
       '  EOF',

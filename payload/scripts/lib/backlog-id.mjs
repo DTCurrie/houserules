@@ -11,6 +11,9 @@ export const ENTRY_HEAD = /^## \[([A-Z][A-Z0-9]*-[0-9a-f]{6})\] (.+)$/;
 // Content-hashed: the same (prefix, title) at a given instant is stable, but re-adds
 // get a fresh id via the timestamp.
 export function makeId(prefix, title, iso) {
-  const h = createHash('sha256').update(`${prefix}|${title}|${iso}`).digest('hex').slice(0, 6);
+  const h = createHash('sha256')
+    .update(`${prefix}|${title}|${iso}`)
+    .digest('hex')
+    .slice(0, 6);
   return `${prefix}-${h}`;
 }

@@ -11,13 +11,23 @@
 // F3 non-js — git repo, no package.json.
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 export function sh(cwd, cmd, args) {
-  return execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  return execFileSync(cmd, args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
 
 function write(root, rel, content) {
@@ -91,28 +101,65 @@ export function makeFixture(kind) {
     write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
     write(root, 'packages/.gitkeep', '');
     write(root, 'toolkits/.gitkeep', '');
-    write(root, 'apps/studio/package.json', json({ name: '@fix/studio', private: true, scripts: PKG_SCRIPTS }));
+    write(
+      root,
+      'apps/studio/package.json',
+      json({ name: '@fix/studio', private: true, scripts: PKG_SCRIPTS }),
+    );
     write(root, 'apps/studio/src/main.ts', 'export const app = 1;\n');
-    write(root, 'games/cityville/package.json', json({ name: '@fix/cityville', private: true, scripts: PKG_SCRIPTS }));
+    write(
+      root,
+      'games/cityville/package.json',
+      json({ name: '@fix/cityville', private: true, scripts: PKG_SCRIPTS }),
+    );
     write(root, 'games/cityville/src/game.ts', 'export const game = 1;\n');
     write(
       root,
       '.changeset/config.json',
-      json({ changelog: '@changesets/cli/changelog', commit: false, access: 'restricted', baseBranch: 'main' }),
+      json({
+        changelog: '@changesets/cli/changelog',
+        commit: false,
+        access: 'restricted',
+        baseBranch: 'main',
+      }),
     );
     write(root, '.changeset/README.md', '# Changesets\n');
-    write(root, '.changeset/fuzzy-pandas-smile.md', '---\n"@fix/studio": patch\n---\n\nPending one.\n');
-    write(root, '.changeset/brave-lions-jump.md', '---\n"@fix/cityville": minor\n---\n\nPending two.\n');
-    write(root, '.claude/settings.local.json', json({ permissions: { allow: ['WebFetch(domain:example.com)'] } }));
+    write(
+      root,
+      '.changeset/fuzzy-pandas-smile.md',
+      '---\n"@fix/studio": patch\n---\n\nPending one.\n',
+    );
+    write(
+      root,
+      '.changeset/brave-lions-jump.md',
+      '---\n"@fix/cityville": minor\n---\n\nPending two.\n',
+    );
+    write(
+      root,
+      '.claude/settings.local.json',
+      json({ permissions: { allow: ['WebFetch(domain:example.com)'] } }),
+    );
   } else if (kind === 'npm-single') {
     write(
       root,
       'package.json',
-      json({ name: 'single-app', version: '1.0.0', scripts: { 'lint:fix': 'eslint . --fix', test: 'node --test' } }),
+      json({
+        name: 'single-app',
+        version: '1.0.0',
+        scripts: { 'lint:fix': 'eslint . --fix', test: 'node --test' },
+      }),
     );
-    write(root, 'package-lock.json', json({ name: 'single-app', lockfileVersion: 3 }));
+    write(
+      root,
+      'package-lock.json',
+      json({ name: 'single-app', lockfileVersion: 3 }),
+    );
     write(root, 'src/index.js', 'module.exports = 1;\n');
-    write(root, 'CLAUDE.md', '# single-app\n\nPre-existing user CLAUDE.md — the kit must never edit this.\n');
+    write(
+      root,
+      'CLAUDE.md',
+      '# single-app\n\nPre-existing user CLAUDE.md — the kit must never edit this.\n',
+    );
     write(
       root,
       '.claude/settings.json',
@@ -121,7 +168,12 @@ export function makeFixture(kind) {
           permissions: { allow: ['Bash(echo hi)'] },
           hooks: {
             PreToolUse: [
-              { matcher: 'Bash', hooks: [{ type: 'command', command: 'node   ./my-hook.js   --check' }] },
+              {
+                matcher: 'Bash',
+                hooks: [
+                  { type: 'command', command: 'node   ./my-hook.js   --check' },
+                ],
+              },
             ],
           },
         },
@@ -139,11 +191,19 @@ export function makeFixture(kind) {
   return root;
 }
 
-const KIT_CLI = join(dirname(new URL(import.meta.url).pathname), '..', 'cli', 'index.mjs');
+const KIT_CLI = join(
+  dirname(new URL(import.meta.url).pathname),
+  '..',
+  'cli',
+  'index.mjs',
+);
 
 // Run the kit CLI as a subprocess. → { status, stdout, stderr }
 export function runCli(args, opts = {}) {
-  return spawnSync(process.execPath, [KIT_CLI, ...args], { encoding: 'utf8', ...opts });
+  return spawnSync(process.execPath, [KIT_CLI, ...args], {
+    encoding: 'utf8',
+    ...opts,
+  });
 }
 
 // Run an installed payload script inside a target repo, hook-style (JSON on stdin).
@@ -159,7 +219,9 @@ export function runScript(root, rel, { input = '', args = [] } = {}) {
 export function treeHash(root) {
   const hash = createHash('sha256');
   const walk = (dir) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )) {
       if (entry.name === '.git') continue;
       const abs = join(dir, entry.name);
       if (entry.isDirectory()) walk(abs);

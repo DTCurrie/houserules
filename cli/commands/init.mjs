@@ -4,17 +4,29 @@ import { resolve } from 'node:path';
 
 import { detect } from '../detect.mjs';
 import { KIT_ROOT } from '../paths.mjs';
-import { MODULES, KitError, buildPlan, computeEffects, resolveModuleIds } from '../plan.mjs';
+import {
+  MODULES,
+  KitError,
+  buildPlan,
+  computeEffects,
+  resolveModuleIds,
+} from '../plan.mjs';
 import { apply } from '../apply.mjs';
 import * as ui from '../ui.mjs';
 
 function preflight(root, ctx) {
   const [major] = process.versions.node.split('.').map(Number);
-  if (major < 20) throw new KitError(`Node ${process.versions.node} is too old — the kit needs >= 20.`);
+  if (major < 20)
+    throw new KitError(
+      `Node ${process.versions.node} is too old — the kit needs >= 20.`,
+    );
   if (!ctx.git.isRepo) {
-    throw new KitError(`${root} is not a git work tree. Kit scripts resolve paths from the git root — run git init first.`);
+    throw new KitError(
+      `${root} is not a git work tree. Kit scripts resolve paths from the git root — run git init first.`,
+    );
   }
-  if (resolve(root) === KIT_ROOT) throw new KitError('Refusing to install the kit into itself.');
+  if (resolve(root) === KIT_ROOT)
+    throw new KitError('Refusing to install the kit into itself.');
   if (ctx.claude.settingsParseError) {
     throw new KitError(
       `.claude/settings.json is not valid JSON (${ctx.claude.settingsParseError}). Fix it by hand first.`,
@@ -44,7 +56,10 @@ export async function init(dir, flags) {
   let moduleIds;
   try {
     moduleIds = installed?.modules?.length
-      ? resolveModuleIds(ctx, flags.modules ? flags.modules : installed.modules.join(','))
+      ? resolveModuleIds(
+          ctx,
+          flags.modules ? flags.modules : installed.modules.join(','),
+        )
       : resolveModuleIds(ctx, flags.modules);
   } catch (e) {
     console.error(e.message);
@@ -64,13 +79,21 @@ export async function init(dir, flags) {
   }
 
   const answers = { moduleIds, targets, seedChangesetConfig: true };
-  if (!flags.yes && moduleIds.includes('changesets') && !ctx.changesets.configExists) {
-    answers.seedChangesetConfig = await ui.confirm('No .changeset/config.json — seed a default one?');
+  if (
+    !flags.yes &&
+    moduleIds.includes('changesets') &&
+    !ctx.changesets.configExists
+  ) {
+    answers.seedChangesetConfig = await ui.confirm(
+      'No .changeset/config.json — seed a default one?',
+    );
   }
 
   let planResult;
   try {
-    planResult = computeEffects(root, buildPlan(ctx, answers), { manifest: installed });
+    planResult = computeEffects(root, buildPlan(ctx, answers), {
+      manifest: installed,
+    });
   } catch (e) {
     if (e instanceof KitError) {
       console.error(e.message);
@@ -79,7 +102,10 @@ export async function init(dir, flags) {
     throw e;
   }
 
-  ui.note(ui.renderPreview(planResult), flags.dryRun ? 'Plan (dry run)' : 'Plan');
+  ui.note(
+    ui.renderPreview(planResult),
+    flags.dryRun ? 'Plan (dry run)' : 'Plan',
+  );
 
   if (flags.dryRun) {
     ui.outro('Dry run — nothing written.');

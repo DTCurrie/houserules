@@ -9,7 +9,13 @@
 // `changeset version/status` (release time) needs the CLI, so we advise instead.
 
 import { renderChangesetConfig } from '../render.mjs';
-import { agent, hookFragment, script, scriptPermission, skill } from './shared.mjs';
+import {
+  agent,
+  hookFragment,
+  script,
+  scriptPermission,
+  skill,
+} from './shared.mjs';
 
 export const id = 'changesets';
 export const title = 'Changesets integration (canonical changelog)';
@@ -33,7 +39,12 @@ function devDepAdvisory(ctx) {
     return `changesets is invoked via your root "${cs.rootScript}" script — works as-is for versioning/publishing.`;
   }
   const pm = ctx.packageManager?.name ?? 'npm';
-  const add = pm === 'pnpm' ? 'pnpm add -D @changesets/cli' : pm === 'yarn' ? 'yarn add -D @changesets/cli' : `${pm} install -D @changesets/cli`;
+  const add =
+    pm === 'pnpm'
+      ? 'pnpm add -D @changesets/cli'
+      : pm === 'yarn'
+        ? 'yarn add -D @changesets/cli'
+        : `${pm} install -D @changesets/cli`;
   const catalogNote = ctx.pnpmCatalogModeStrict
     ? ' NOTE: this repo uses pnpm catalogMode: strict — add a catalog entry for @changesets/cli first, or the add will fail.'
     : '';
@@ -42,10 +53,26 @@ function devDepAdvisory(ctx) {
 
 export function plan(ctx, answers) {
   const actions = [
-    script(id, 'changeset-write.mjs', 'non-interactive, workspace-validated changeset author'),
-    script(id, 'changeset-check.mjs', 'Stop hook: nudge when package source changed with no changeset'),
-    skill(id, 'changeset', 'record a changeset for the packages a change touched'),
-    agent(id, 'changeset-writer', 'writes the changeset for a completed change (haiku)'),
+    script(
+      id,
+      'changeset-write.mjs',
+      'non-interactive, workspace-validated changeset author',
+    ),
+    script(
+      id,
+      'changeset-check.mjs',
+      'Stop hook: nudge when package source changed with no changeset',
+    ),
+    skill(
+      id,
+      'changeset',
+      'record a changeset for the packages a change touched',
+    ),
+    agent(
+      id,
+      'changeset-writer',
+      'writes the changeset for a completed change (haiku)',
+    ),
     {
       kind: 'merge-settings',
       module: id,

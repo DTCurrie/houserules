@@ -5,13 +5,21 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { listWorkspacePackages, readJson } from '../payload/scripts/lib/workspaces.mjs';
+import {
+  listWorkspacePackages,
+  readJson,
+} from '../payload/scripts/lib/workspaces.mjs';
 
 // Fix-script detection priority. A unified `fix` script wins (repos like wireit
 // monorepos wire lint:fix+format:fix underneath it — running the parts as well
 // would duplicate work). `format` alone is deliberately NOT considered: in the
 // wild it is as often a check as a write.
-const FIX_PRIORITY = [['fix'], ['lint:fix', 'format:fix'], ['lint:fix'], ['format:fix']];
+const FIX_PRIORITY = [
+  ['fix'],
+  ['lint:fix', 'format:fix'],
+  ['lint:fix'],
+  ['format:fix'],
+];
 
 export function detectFixCommands(scripts = {}) {
   for (const combo of FIX_PRIORITY) {
@@ -28,7 +36,10 @@ export function suggestPrefix(name) {
 }
 
 function titleCase(s) {
-  return s.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+  return s
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
 }
 
 function shortName(pkgName, dir) {
@@ -38,7 +49,11 @@ function shortName(pkgName, dir) {
 
 function git(root, args) {
   try {
-    return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return execFileSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return null;
   }
@@ -48,12 +63,20 @@ function detectPackageManager(root, rootPkg) {
   const pmField = rootPkg?.packageManager;
   if (typeof pmField === 'string' && pmField.includes('@')) {
     const at = pmField.lastIndexOf('@');
-    return { name: pmField.slice(0, at), version: pmField.slice(at + 1), source: 'packageManager' };
+    return {
+      name: pmField.slice(0, at),
+      version: pmField.slice(at + 1),
+      source: 'packageManager',
+    };
   }
-  if (existsSync(join(root, 'pnpm-lock.yaml'))) return { name: 'pnpm', source: 'lockfile' };
-  if (existsSync(join(root, 'yarn.lock'))) return { name: 'yarn', source: 'lockfile' };
-  if (existsSync(join(root, 'bun.lock')) || existsSync(join(root, 'bun.lockb'))) return { name: 'bun', source: 'lockfile' };
-  if (existsSync(join(root, 'package-lock.json'))) return { name: 'npm', source: 'lockfile' };
+  if (existsSync(join(root, 'pnpm-lock.yaml')))
+    return { name: 'pnpm', source: 'lockfile' };
+  if (existsSync(join(root, 'yarn.lock')))
+    return { name: 'yarn', source: 'lockfile' };
+  if (existsSync(join(root, 'bun.lock')) || existsSync(join(root, 'bun.lockb')))
+    return { name: 'bun', source: 'lockfile' };
+  if (existsSync(join(root, 'package-lock.json')))
+    return { name: 'npm', source: 'lockfile' };
   return rootPkg ? { name: 'npm', source: 'default' } : null;
 }
 
@@ -100,7 +123,10 @@ function detectChangesets(root, rootPkg) {
 function detectTypescript(root, rootPkg, packages) {
   if (hasDep(rootPkg, 'typescript')) return true;
   if (existsSync(join(root, 'tsconfig.json'))) return true;
-  return packages.some((p) => hasDep(p.pkg, 'typescript') || existsSync(join(p.dir, 'tsconfig.json')));
+  return packages.some(
+    (p) =>
+      hasDep(p.pkg, 'typescript') || existsSync(join(p.dir, 'tsconfig.json')),
+  );
 }
 
 function buildTargets(root, rootPkg, packages) {
@@ -112,7 +138,9 @@ function buildTargets(root, rootPkg, packages) {
         prefix: suggestPrefix(p.name),
         packageName: p.name,
         pathPrefix: `${p.relDir}/`,
-        sourcePath: existsSync(join(p.dir, 'src')) ? `${p.relDir}/src` : p.relDir,
+        sourcePath: existsSync(join(p.dir, 'src'))
+          ? `${p.relDir}/src`
+          : p.relDir,
         label: titleCase(name),
         fixCommands: detectFixCommands(p.pkg.scripts),
       };
@@ -170,7 +198,9 @@ function detectClaudeState(root) {
 
 function detectPnpmCatalogModeStrict(root) {
   try {
-    return /^catalogMode:\s*strict\b/m.test(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'));
+    return /^catalogMode:\s*strict\b/m.test(
+      readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'),
+    );
   } catch {
     return false;
   }

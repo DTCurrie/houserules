@@ -26,11 +26,25 @@ import { loadConfigSafe } from './lib/kit-config.mjs';
 // every stop. No config or no targets → nothing to do.
 const config = loadConfigSafe();
 
-const exts = (config.lintableExtensions ?? ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'svelte', 'md', 'json', 'css', 'html']).map(
-  (e) => e.replace(/^\./, ''),
-);
+const exts = (
+  config.lintableExtensions ?? [
+    'ts',
+    'tsx',
+    'js',
+    'jsx',
+    'mjs',
+    'cjs',
+    'svelte',
+    'md',
+    'json',
+    'css',
+    'html',
+  ]
+).map((e) => e.replace(/^\./, ''));
 const LINTABLE_EXT = new RegExp(`\\.(?:${exts.join('|')})$`);
-const GENERATED_FILE_RE = new RegExp(config.generatedFilePattern ?? '/(?:CHANGELOG|BACKLOG)\\.md$');
+const GENERATED_FILE_RE = new RegExp(
+  config.generatedFilePattern ?? '/(?:CHANGELOG|BACKLOG)\\.md$',
+);
 
 const fix = config.fix ?? {};
 const RUNNER = fix.runner ?? config.packageManager ?? 'pnpm';
@@ -43,7 +57,11 @@ const COMMANDS = fix.commands ?? ['lint:fix', 'format:fix'];
 // diverge (a wireit root exposes `fix`, packages expose `lint:fix`/`format:fix`).
 const PACKAGE_BY_PATH = config.targets
   .filter((t) => t.packageName !== undefined && t.pathPrefix !== undefined)
-  .map((t) => ({ prefix: t.pathPrefix, name: t.packageName, commands: t.fixCommands ?? COMMANDS }));
+  .map((t) => ({
+    prefix: t.pathPrefix,
+    name: t.packageName,
+    commands: t.fixCommands ?? COMMANDS,
+  }));
 
 // Monorepo: <runner> <filterFlag> <pkg> <script>. Single-package: <runner> <runScriptPrefix...> <script>.
 function fixArgs(pkg, script) {
@@ -60,12 +78,17 @@ function readInput() {
 }
 
 function repoRootCwd() {
-  const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf-8' });
+  const r = spawnSync('git', ['rev-parse', '--show-toplevel'], {
+    encoding: 'utf-8',
+  });
   return r.status === 0 ? r.stdout.trim() : process.cwd();
 }
 
 function changedPaths(cwd) {
-  const r = spawnSync('git', ['status', '--porcelain'], { encoding: 'utf-8', cwd });
+  const r = spawnSync('git', ['status', '--porcelain'], {
+    encoding: 'utf-8',
+    cwd,
+  });
   if (r.status !== 0 || !r.stdout) return [];
   return r.stdout
     .split('\n')
@@ -120,7 +143,9 @@ function main() {
   }
 
   if (errors.length > 0) {
-    process.stderr.write('Auto-fix left residual issues that need manual attention.\n');
+    process.stderr.write(
+      'Auto-fix left residual issues that need manual attention.\n',
+    );
     process.stderr.write('Fix the items below, then return control.\n\n');
     for (const e of errors) {
       process.stderr.write(`--- ${e.pkg} :: ${e.step} ---\n`);

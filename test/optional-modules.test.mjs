@@ -10,7 +10,12 @@ const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'));
 test('OM1: ledger + reviewers + terse-style opt-ins land correctly', () => {
   const root = makeFixture('pnpm-monorepo');
   try {
-    const r = runCli(['init', '--yes', '--modules=ledger,reviewers,terse-style', root]);
+    const r = runCli([
+      'init',
+      '--yes',
+      '--modules=ledger,reviewers,terse-style',
+      root,
+    ]);
     assert.equal(r.status, 0, r.stderr);
 
     // Ledger: script installed, config retargets to .claude/changelogs/ (never CHANGELOG.md).
@@ -24,15 +29,26 @@ test('OM1: ledger + reviewers + terse-style opt-ins land correctly', () => {
     // Reviewers: DRAFT-marked seeds per target.
     for (const name of ['cityville-reviewer.md', 'studio-reviewer.md']) {
       const text = readFileSync(join(root, '.claude/agents', name), 'utf8');
-      assert.match(text, /^description: "DRAFT/m, `${name} must be marked DRAFT`);
+      assert.match(
+        text,
+        /^description: "DRAFT/m,
+        `${name} must be marked DRAFT`,
+      );
     }
 
     // Terse style: installed with attribution, not activated anywhere.
-    const style = readFileSync(join(root, '.claude/output-styles/kit-terse.md'), 'utf8');
+    const style = readFileSync(
+      join(root, '.claude/output-styles/kit-terse.md'),
+      'utf8',
+    );
     assert.match(style, /caveman/i);
     assert.match(style, /MIT license/);
     const settings = readJson(join(root, '.claude/settings.json'));
-    assert.equal(settings.outputStyle, undefined, 'kit must never set outputStyle');
+    assert.equal(
+      settings.outputStyle,
+      undefined,
+      'kit must never set outputStyle',
+    );
 
     // Doctor flags the DRAFT reviewers but stays exit 0.
     const doc = runCli(['doctor', root]);
@@ -40,7 +56,10 @@ test('OM1: ledger + reviewers + terse-style opt-ins land correctly', () => {
     assert.match(doc.stdout, /DRAFT/);
 
     // Ledger integration: record HEAD into the retargeted changelog path.
-    writeFileSync(join(root, 'games/cityville/src/extra.ts'), 'export const extra = 1;\n');
+    writeFileSync(
+      join(root, 'games/cityville/src/extra.ts'),
+      'export const extra = 1;\n',
+    );
     sh(root, 'git', ['add', '-A']);
     sh(root, 'git', ['commit', '-qm', 'feat: cityville change']);
     const rec = runScript(root, '.claude/scripts/package-changelog.mjs', {

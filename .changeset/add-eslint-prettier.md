@@ -2,4 +2,4 @@
 'claude-kit': patch
 ---
 
-Add initial kit.
+Add ESLint and Prettier.

@@ -5,7 +5,11 @@ import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 import { payloadPath } from '../paths.mjs';
-import { renderClaudeAdditions, renderClaudeMd, renderKitConfig } from '../render.mjs';
+import {
+  renderClaudeAdditions,
+  renderClaudeMd,
+  renderKitConfig,
+} from '../render.mjs';
 import { hookFragment, lib, script } from './shared.mjs';
 
 export const id = 'core';
@@ -35,7 +39,13 @@ export function plan(ctx, answers) {
   for (const name of ['kit-config.mjs', 'backlog-id.mjs', 'workspaces.mjs']) {
     actions.push(lib(id, name));
   }
-  actions.push(script(id, 'guard-bash.mjs', 'PreToolUse guard: git commit/push/stash, gh pr create'));
+  actions.push(
+    script(
+      id,
+      'guard-bash.mjs',
+      'PreToolUse guard: git commit/push/stash, gh pr create',
+    ),
+  );
 
   // Stage the raw templates for hand-instantiation, whatever modules are chosen.
   const templatesRoot = payloadPath('kit-templates');

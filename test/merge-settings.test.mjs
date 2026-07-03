@@ -7,16 +7,44 @@ const KIT_FRAGMENT = {
   permissions: { allow: ['Bash(git status:*)', 'Bash(git diff:*)'] },
   hooks: {
     PreToolUse: [
-      { matcher: 'Bash', hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs"' }] },
+      {
+        matcher: 'Bash',
+        hooks: [
+          {
+            type: 'command',
+            command:
+              'node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs"',
+          },
+        ],
+      },
     ],
-    Stop: [{ hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/scripts/lint-format-fix.mjs"' }] }],
+    Stop: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command:
+              'node "$CLAUDE_PROJECT_DIR/.claude/scripts/lint-format-fix.mjs"',
+          },
+        ],
+      },
+    ],
   },
 };
 
 test('M1: user entries preserved verbatim; kit entries appended', () => {
   const existing = {
     permissions: { allow: ['Bash(echo hi)'] },
-    hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'node   ./my-hook.js   --check' }] }] },
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks: [
+            { type: 'command', command: 'node   ./my-hook.js   --check' },
+          ],
+        },
+      ],
+    },
     otherKey: { untouched: true },
   };
   const { merged, changes } = mergeSettings(existing, KIT_FRAGMENT);
@@ -41,12 +69,27 @@ test('M2: merge is idempotent (double-merge → zero changes, byte-identical)', 
 test("M2b: a user's EDITED variant of a kit hook wins (script-identity dedupe)", () => {
   const existing = {
     hooks: {
-      Stop: [{ hooks: [{ type: 'command', command: 'node .claude/scripts/lint-format-fix.mjs --my-extra-flag' }] }],
+      Stop: [
+        {
+          hooks: [
+            {
+              type: 'command',
+              command:
+                'node .claude/scripts/lint-format-fix.mjs --my-extra-flag',
+            },
+          ],
+        },
+      ],
     },
   };
   const { merged, changes } = mergeSettings(existing, KIT_FRAGMENT);
-  const stopCommands = merged.hooks.Stop.flatMap((g) => g.hooks.map((h) => h.command));
-  assert.equal(stopCommands.filter((c) => c.includes('lint-format-fix.mjs')).length, 1);
+  const stopCommands = merged.hooks.Stop.flatMap((g) =>
+    g.hooks.map((h) => h.command),
+  );
+  assert.equal(
+    stopCommands.filter((c) => c.includes('lint-format-fix.mjs')).length,
+    1,
+  );
   assert.ok(stopCommands[0].includes('--my-extra-flag'));
   assert.ok(!changes.some((c) => c.detail.includes('lint-format-fix')));
 });

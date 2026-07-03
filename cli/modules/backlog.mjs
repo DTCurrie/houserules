@@ -17,13 +17,23 @@ export function defaultEnabled() {
 
 export function plan() {
   return [
-    script(id, 'backlog-log.mjs', 'backlog ledger CLI (add/remove/update/show/list)'),
-    skill(id, 'backlog-add', 'log an out-of-scope discovery, then gut-check it'),
+    script(
+      id,
+      'backlog-log.mjs',
+      'backlog ledger CLI (add/remove/update/show/list)',
+    ),
+    skill(
+      id,
+      'backlog-add',
+      'log an out-of-scope discovery, then gut-check it',
+    ),
     agent(id, 'backlog-reviewer', 'validates fresh backlog entries (haiku)'),
     {
       kind: 'merge-settings',
       module: id,
-      fragment: { permissions: { allow: [scriptPermission('backlog-log.mjs')] } },
+      fragment: {
+        permissions: { allow: [scriptPermission('backlog-log.mjs')] },
+      },
     },
   ];
 }

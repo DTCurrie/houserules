@@ -32,11 +32,17 @@ const guard = { ...GUARD_DEFAULTS, ...(loadConfigSafe().guard ?? {}) };
 
 const DENY = [];
 if (guard.gitCommit) {
-  DENY.push({ re: /\bgit\s+commit\b/, msg: "git commit is the user's to run. Describe what's staged and stop." });
+  DENY.push({
+    re: /\bgit\s+commit\b/,
+    msg: "git commit is the user's to run. Describe what's staged and stop.",
+  });
 }
 if (guard.gitPush) {
   // Tolerates flag arguments before the subcommand: `git -C /path push`, `git -c k=v push`.
-  DENY.push({ re: /\bgit\s+(?:-[A-Za-z]\s+\S+\s+|--?\S+\s+)*push\b/, msg: "git push is the user's to run." });
+  DENY.push({
+    re: /\bgit\s+(?:-[A-Za-z]\s+\S+\s+|--?\S+\s+)*push\b/,
+    msg: "git push is the user's to run.",
+  });
 }
 if (guard.gitStash) {
   DENY.push({
@@ -45,11 +51,19 @@ if (guard.gitStash) {
   });
 }
 if (guard.prCreate) {
-  DENY.push({ re: /\bgh\s+(?:pr|issue)\s+create\b/, msg: "Opening PRs/issues is the user's call. Describe what's ready and stop." });
+  DENY.push({
+    re: /\bgh\s+(?:pr|issue)\s+create\b/,
+    msg: "Opening PRs/issues is the user's call. Describe what's ready and stop.",
+  });
 }
 for (const rule of guard.custom ?? []) {
   try {
-    DENY.push({ re: new RegExp(rule.pattern), msg: rule.message ?? `Blocked by kit.config.json guard rule: ${rule.pattern}` });
+    DENY.push({
+      re: new RegExp(rule.pattern),
+      msg:
+        rule.message ??
+        `Blocked by kit.config.json guard rule: ${rule.pattern}`,
+    });
   } catch {
     // Invalid user regex: skip the rule rather than break every Bash call.
   }

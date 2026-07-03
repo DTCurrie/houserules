@@ -42,7 +42,8 @@ const SEPARATOR = '---';
 
 const nowIso = () => new Date().toISOString();
 const todayDate = () => nowIso().slice(0, 10);
-const encodeBody = (s) => gzipSync(Buffer.from(s ?? '', 'utf8')).toString('base64');
+const encodeBody = (s) =>
+  gzipSync(Buffer.from(s ?? '', 'utf8')).toString('base64');
 const decodeBody = (s) => gunzipSync(Buffer.from(s, 'base64')).toString('utf8');
 
 // --- Chat (Claude Code session) detection -----------------------------------
@@ -225,7 +226,14 @@ function parseEntries(text) {
 }
 
 function findBacklogFiles(root = REPO_ROOT) {
-  const skip = new Set(['node_modules', '.git', '.svelte-kit', 'dist', 'build', '.turbo']);
+  const skip = new Set([
+    'node_modules',
+    '.git',
+    '.svelte-kit',
+    'dist',
+    'build',
+    '.turbo',
+  ]);
   const out = [];
   const walk = (dir) => {
     let entries;
@@ -278,12 +286,16 @@ switch (action) {
       process.exit(1);
     }
     if (!/^[A-Z][A-Z0-9]*$/.test(prefix)) {
-      console.error(`Invalid prefix "${prefix}" — must be uppercase ASCII (e.g. SIM, DATA, RULES).`);
+      console.error(
+        `Invalid prefix "${prefix}" — must be uppercase ASCII (e.g. SIM, DATA, RULES).`,
+      );
       process.exit(1);
     }
     const body = readContentArg(content);
     if (!body) {
-      console.error('Empty body. Pass content as the 4th arg or pipe via stdin.');
+      console.error(
+        'Empty body. Pass content as the 4th arg or pipe via stdin.',
+      );
       process.exit(1);
     }
     const id = makeId(prefix, title, nowIso());
@@ -303,7 +315,10 @@ switch (action) {
     });
     console.log(id);
     if (chat) console.log(`chat: ${chat}`);
-    else if (chatFlag !== 'none') console.error('warning: no active Claude session detected; entry written without chat ID.');
+    else if (chatFlag !== 'none')
+      console.error(
+        'warning: no active Claude session detected; entry written without chat ID.',
+      );
     break;
   }
 
@@ -321,8 +336,12 @@ switch (action) {
     }
     const { start, end, lines } = range;
     const removed = lines.slice(0, start).concat(lines.slice(end)).join('\n');
-    writeFileSync(file, removed.replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n'));
-    const removeChat = chatFlag === 'none' ? null : (chatFlag ?? detectChatId());
+    writeFileSync(
+      file,
+      removed.replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n'),
+    );
+    const removeChat =
+      chatFlag === 'none' ? null : (chatFlag ?? detectChatId());
     appendEvent({
       ts: nowIso(),
       id,
@@ -351,10 +370,15 @@ switch (action) {
     const replacement = renderEntry(id, newTitle, body, date, chat).split('\n');
     // renderEntry ends with two blank lines; splitting yields a trailing "" — drop it
     // so the join below doesn't introduce an extra blank.
-    while (replacement.length && replacement[replacement.length - 1] === '') replacement.pop();
-    const next = lines.slice(0, start).concat(replacement, '', lines.slice(end)).join('\n');
+    while (replacement.length && replacement[replacement.length - 1] === '')
+      replacement.pop();
+    const next = lines
+      .slice(0, start)
+      .concat(replacement, '', lines.slice(end))
+      .join('\n');
     writeFileSync(file, next.replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n'));
-    const updateChat = chatFlag === 'none' ? null : (chatFlag ?? detectChatId());
+    const updateChat =
+      chatFlag === 'none' ? null : (chatFlag ?? detectChatId());
     appendEvent({
       ts: nowIso(),
       id,

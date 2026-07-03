@@ -19,11 +19,17 @@ export function defaultEnabled() {
 
 export function plan() {
   return [
-    script(id, 'package-changelog.mjs', 'per-commit ledger (writes .claude/changelogs/)'),
+    script(
+      id,
+      'package-changelog.mjs',
+      'per-commit ledger (writes .claude/changelogs/)',
+    ),
     {
       kind: 'merge-settings',
       module: id,
-      fragment: { permissions: { allow: [scriptPermission('package-changelog.mjs')] } },
+      fragment: {
+        permissions: { allow: [scriptPermission('package-changelog.mjs')] },
+      },
     },
     {
       kind: 'advise',

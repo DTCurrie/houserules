@@ -28,8 +28,8 @@ the highest-multiplier edit available.
 
 ### `@-import` vs markdown link
 
-- **Markdown link** `[doc](path)` = *pull-when-relevant*. The agent reads it on a trigger.
-- **`@-import`** `@path` = *inline-always*. The body expands into context every turn.
+- **Markdown link** `[doc](path)` = _pull-when-relevant_. The agent reads it on a trigger.
+- **`@-import`** `@path` = _inline-always_. The body expands into context every turn.
 
 Use `@-import` only for small, genuinely always-needed content. The trap: an `@-import` looks cheap
 in the source file but expands to the full body in context — never `@-import` a big reference "for
@@ -49,8 +49,8 @@ it to keep package-specific conventions out of the always-loaded root.
   CLAUDE.md with an imperative ("When writing code here, follow STYLE.md"); never inlined, so it loads
   only when actually authoring.
 
-**The load-bearing guard:** *"Would an otherwise-competent contributor produce wrong output here
-without these specific local rules?"* If no, **don't add the file** — an empty-calorie `CLAUDE.md` is
+**The load-bearing guard:** _"Would an otherwise-competent contributor produce wrong output here
+without these specific local rules?"_ If no, **don't add the file** — an empty-calorie `CLAUDE.md` is
 pure context cost. Don't cargo-cult "every package gets a CLAUDE.md."
 
 ## 3. Subagent model tiering (cost-not-count)
@@ -76,7 +76,7 @@ Reviewers and personas must get **only** `Read, Grep, Glob` so they're structura
 effects — the orchestrator never has to supervise them. Archivists need `Bash` (git + the script), so
 keep their "never edit src/, never hand-edit the changelog" constraints in the body; the tool grant
 alone won't stop them. Every agent body should carry a tool-call budget (`≤ 6-8 tool calls`,
-"grep -n then Read with offset+limit") — that bounds the *subagent's* context, not just the orchestrator's.
+"grep -n then Read with offset+limit") — that bounds the _subagent's_ context, not just the orchestrator's.
 
 When fanning out from a workflow, pin the read-only subagent type so review agents can't write — and
 because parallel writers race a package-wide lint Stop-hook.
@@ -117,7 +117,7 @@ If the source of truth is scattered across many files (docs/, a split spec, a sc
 deterministic generator can stitch them into one grep-able `.claude/reference/<name>.md` with a stable
 heading skeleton and a "GENERATED — do not edit; regenerate with <cmd>" header. Wire a PostToolUse
 hook to re-run the generator when a source file is edited. The transform logic is bespoke per corpus;
-the *wrapper* (header, canonical ordering, regen hook, "grep-don't-read-whole" access rule) is the
+the _wrapper_ (header, canonical ordering, regen hook, "grep-don't-read-whole" access rule) is the
 reusable part. Only worth it when one search angle genuinely can't find things across the corpus —
 and only ever pull-loaded, never auto-loaded.
 

@@ -12,7 +12,7 @@ preview only: add `--dry-run`.)
 
 ## The one idea
 
-**Context out, not context in.** Every piece pushes work *off* the main agent's context
+**Context out, not context in.** Every piece pushes work _off_ the main agent's context
 window — into disposable subagents, onto disk (ledgers, changesets), into deterministic
 scripts, or behind grep-able snapshots. The main thread holds verdicts and pointers, not the
 reading that produced them. Four levers:
@@ -44,18 +44,18 @@ Non-destructive guarantees: it never runs package-manager installs, never edits 
 
 ## Modules
 
-| Module | Default | What you get |
-|---|---|---|
-| `core` | always | shared libs, config-driven Bash guard (blocks `git commit/push/stash`, `gh pr create`), `kit.config.json`, read-only git permissions, CLAUDE.md seed (filled from detection) or staged additions |
-| `lint-fix` | on when fix scripts found | Stop/SubagentStop hook: auto-fix changed packages, surface only unfixable residue |
-| `backlog` | on | append-only backlog ledger + `/backlog-add` skill + `backlog-reviewer` agent (haiku) |
-| `changesets` | on when `.changeset/` or monorepo | see below |
-| `session-context` | on | SessionStart hook: 3-line branch/changes/targets header |
-| `rename` | on when TypeScript | semantic TS rename via the LanguageService |
-| `reviewers` | off | per-target read-only reviewer agent **drafts** (marked DRAFT until you fill the authoritative source) |
-| `ledger` | off | per-commit JSONL ledger in `.claude/changelogs/` (in *addition* to changesets) + archivist template |
-| `terse-style` | off | token-lean output style (caveman-derived, MIT-attributed); activate via `/config` |
-| `output-compactor` | off, experimental | PostToolUse hook: spills >10k-char Bash output to `.claude/tool-output/`, injects head+tail+pointer |
+| Module             | Default                           | What you get                                                                                                                                                                                     |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `core`             | always                            | shared libs, config-driven Bash guard (blocks `git commit/push/stash`, `gh pr create`), `kit.config.json`, read-only git permissions, CLAUDE.md seed (filled from detection) or staged additions |
+| `lint-fix`         | on when fix scripts found         | Stop/SubagentStop hook: auto-fix changed packages, surface only unfixable residue                                                                                                                |
+| `backlog`          | on                                | append-only backlog ledger + `/backlog-add` skill + `backlog-reviewer` agent (haiku)                                                                                                             |
+| `changesets`       | on when `.changeset/` or monorepo | see below                                                                                                                                                                                        |
+| `session-context`  | on                                | SessionStart hook: 3-line branch/changes/targets header                                                                                                                                          |
+| `rename`           | on when TypeScript                | semantic TS rename via the LanguageService                                                                                                                                                       |
+| `reviewers`        | off                               | per-target read-only reviewer agent **drafts** (marked DRAFT until you fill the authoritative source)                                                                                            |
+| `ledger`           | off                               | per-commit JSONL ledger in `.claude/changelogs/` (in _addition_ to changesets) + archivist template                                                                                              |
+| `terse-style`      | off                               | token-lean output style (caveman-derived, MIT-attributed); activate via `/config`                                                                                                                |
+| `output-compactor` | off, experimental                 | PostToolUse hook: spills >10k-char Bash output to `.claude/tool-output/`, injects head+tail+pointer                                                                                              |
 
 ## Changesets are the canonical changelog
 
@@ -64,7 +64,7 @@ for "what shipped": one `.changeset/*.md` per meaningful change, `CHANGELOG.md` 
 release time by `changeset version`. The module wires the agent side of that:
 
 - **`changeset-write.mjs`** — deterministic, zero-dep changeset author: validates package
-  names against the *actual* workspace, writes the file, supports `--empty` for "no release
+  names against the _actual_ workspace, writes the file, supports `--empty` for "no release
   needed". Agents never hand-write `.changeset/*.md`.
 - **`/changeset` skill + `changeset-writer` agent (haiku)** — inspect the diff, pick
   patch/minor/major (major always asks first), record via the script.
@@ -77,7 +77,7 @@ release time by `changeset version`. The module wires the agent side of that:
   `@changesets/cli` for you — it prints the right command instead (pnpm-catalog-aware),
   because nothing in the kit needs it at runtime.
 
-Want commit-granular history *too*? Enable the `ledger` module — it writes to
+Want commit-granular history _too_? Enable the `ledger` module — it writes to
 `.claude/changelogs/<target>.md`, never the `CHANGELOG.md` changesets owns.
 
 ## Token/compression options (honest edition)

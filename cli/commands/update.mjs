@@ -13,24 +13,39 @@ export async function update(dir, flags) {
   const ctx = detect(root);
   const manifest = ctx.claude.manifest;
   if (!manifest) {
-    console.error('No .claude/kit-manifest.json — this repo has no kit install to update. Run: npx claude-kit init');
+    console.error(
+      'No .claude/kit-manifest.json — this repo has no kit install to update. Run: npx claude-kit init',
+    );
     return 1;
   }
   if (ctx.claude.settingsParseError) {
-    console.error(`.claude/settings.json is not valid JSON (${ctx.claude.settingsParseError}). Fix it by hand first.`);
+    console.error(
+      `.claude/settings.json is not valid JSON (${ctx.claude.settingsParseError}). Fix it by hand first.`,
+    );
     return 1;
   }
 
-  ui.intro(`claude-kit ${flags.kitVersion} — update (installed: v${manifest.kitVersion})`);
+  ui.intro(
+    `claude-kit ${flags.kitVersion} — update (installed: v${manifest.kitVersion})`,
+  );
 
   // Targets come from the user-edited kit.config.json when present — config is
   // the contract; detection is only the fallback.
-  const targets = ctx.claude.kitConfig?.targets?.length ? ctx.claude.kitConfig.targets : ctx.targets;
-  const answers = { moduleIds: manifest.modules ?? ['core'], targets, seedChangesetConfig: false };
+  const targets = ctx.claude.kitConfig?.targets?.length
+    ? ctx.claude.kitConfig.targets
+    : ctx.targets;
+  const answers = {
+    moduleIds: manifest.modules ?? ['core'],
+    targets,
+    seedChangesetConfig: false,
+  };
 
   let planResult;
   try {
-    planResult = computeEffects(root, buildPlan(ctx, answers), { manifest, force: flags.force });
+    planResult = computeEffects(root, buildPlan(ctx, answers), {
+      manifest,
+      force: flags.force,
+    });
   } catch (e) {
     if (e instanceof KitError) {
       console.error(e.message);
@@ -39,7 +54,10 @@ export async function update(dir, flags) {
     throw e;
   }
 
-  ui.note(ui.renderPreview(planResult), flags.dryRun ? 'Update plan (dry run)' : 'Update plan');
+  ui.note(
+    ui.renderPreview(planResult),
+    flags.dryRun ? 'Update plan (dry run)' : 'Update plan',
+  );
   if (flags.dryRun) {
     ui.outro('Dry run — nothing written.');
     return 0;

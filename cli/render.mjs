@@ -3,18 +3,50 @@
 // Seeded files are filled with DETECTED facts — a seeded file must be immediately
 // valid, with at most <!-- TODO --> comments, never raw <PLACEHOLDER>s.
 
-const DEFAULT_LINTABLE = ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'svelte', 'md', 'json', 'css', 'html'];
+const DEFAULT_LINTABLE = [
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'mjs',
+  'cjs',
+  'svelte',
+  'md',
+  'json',
+  'css',
+  'html',
+];
 
 function fixDefaultsFor(pm) {
   switch (pm?.name) {
     case 'pnpm':
-      return { runner: 'pnpm', filterFlag: '--filter', runScriptPrefix: ['run'], commands: ['lint:fix', 'format:fix'] };
+      return {
+        runner: 'pnpm',
+        filterFlag: '--filter',
+        runScriptPrefix: ['run'],
+        commands: ['lint:fix', 'format:fix'],
+      };
     case 'yarn':
-      return { runner: 'yarn', filterFlag: 'workspace', runScriptPrefix: [], commands: ['lint:fix', 'format:fix'] };
+      return {
+        runner: 'yarn',
+        filterFlag: 'workspace',
+        runScriptPrefix: [],
+        commands: ['lint:fix', 'format:fix'],
+      };
     case 'bun':
-      return { runner: 'bun', filterFlag: '--filter', runScriptPrefix: ['run'], commands: ['lint:fix', 'format:fix'] };
+      return {
+        runner: 'bun',
+        filterFlag: '--filter',
+        runScriptPrefix: ['run'],
+        commands: ['lint:fix', 'format:fix'],
+      };
     default:
-      return { runner: 'npm', filterFlag: '', runScriptPrefix: ['run'], commands: ['lint:fix', 'format:fix'] };
+      return {
+        runner: 'npm',
+        filterFlag: '',
+        runScriptPrefix: ['run'],
+        commands: ['lint:fix', 'format:fix'],
+      };
   }
 }
 
@@ -26,7 +58,13 @@ export function renderKitConfig(ctx, answers) {
     fix: fixDefaultsFor(ctx.packageManager),
     lintableExtensions: DEFAULT_LINTABLE,
     generatedFilePattern: '/(?:CHANGELOG|BACKLOG)\\.md$',
-    guard: { gitCommit: true, gitPush: true, gitStash: true, prCreate: true, custom: [] },
+    guard: {
+      gitCommit: true,
+      gitPush: true,
+      gitStash: true,
+      prCreate: true,
+      custom: [],
+    },
     changesets: {
       enabled: has('changesets'),
       stopCheck: has('changesets'),
@@ -56,12 +94,28 @@ export function renderKitConfig(ctx, answers) {
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
-const INTERESTING_SCRIPTS = ['dev', 'build', 'check', 'typecheck', 'lint', 'test', 'verify', 'fix', 'format', 'change'];
+const INTERESTING_SCRIPTS = [
+  'dev',
+  'build',
+  'check',
+  'typecheck',
+  'lint',
+  'test',
+  'verify',
+  'fix',
+  'format',
+  'change',
+];
 
 function scriptLines(ctx) {
   const scripts = ctx.rootPkg?.scripts ?? {};
-  const run = ctx.packageManager?.name === 'npm' ? 'npm run' : (ctx.packageManager?.name ?? 'npm run');
-  return INTERESTING_SCRIPTS.filter((s) => scripts[s]).map((s) => `- \`${run} ${s}\``);
+  const run =
+    ctx.packageManager?.name === 'npm'
+      ? 'npm run'
+      : (ctx.packageManager?.name ?? 'npm run');
+  return INTERESTING_SCRIPTS.filter((s) => scripts[s]).map(
+    (s) => `- \`${run} ${s}\``,
+  );
 }
 
 function changesetsSection(ctx, answers) {
@@ -81,7 +135,9 @@ function changesetsSection(ctx, answers) {
 
 function backlogSection(ctx, answers) {
   if (!answers.moduleIds.includes('backlog')) return [];
-  const prefixes = answers.targets.map((t) => `\`${t.prefix}\` (${t.pathPrefix || 'repo root'})`).join(', ');
+  const prefixes = answers.targets
+    .map((t) => `\`${t.prefix}\` (${t.pathPrefix || 'repo root'})`)
+    .join(', ');
   return [
     '### Tracking out-of-scope work',
     '',
@@ -102,14 +158,22 @@ export function renderClaudeMd(ctx, answers) {
     '',
     '## Layout',
     '',
-    ...answers.targets.map((t) => `- \`${t.pathPrefix || './'}\`: ${t.label}${t.packageName && t.packageName !== '.' ? ` (\`${t.packageName}\`)` : ''}`),
+    ...answers.targets.map(
+      (t) =>
+        `- \`${t.pathPrefix || './'}\`: ${t.label}${t.packageName && t.packageName !== '.' ? ` (\`${t.packageName}\`)` : ''}`,
+    ),
     '',
   ];
   const scripts = scriptLines(ctx);
   if (scripts.length) {
     lines.push('## Scripts (run from repo root)', '', ...scripts, '');
   }
-  lines.push('## Workflows', '', ...changesetsSection(ctx, answers), ...backlogSection(ctx, answers));
+  lines.push(
+    '## Workflows',
+    '',
+    ...changesetsSection(ctx, answers),
+    ...backlogSection(ctx, answers),
+  );
   lines.push(
     '## Conventions',
     '',
@@ -204,7 +268,8 @@ export function renderChangesetConfig(ctx) {
       fixed: [],
       linked: [],
       access: 'restricted',
-      baseBranch: ctx.git.branch && ctx.git.branch !== 'HEAD' ? ctx.git.branch : 'main',
+      baseBranch:
+        ctx.git.branch && ctx.git.branch !== 'HEAD' ? ctx.git.branch : 'main',
       updateInternalDependencies: 'patch',
       ignore: [],
     },

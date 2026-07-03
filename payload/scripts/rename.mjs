@@ -15,19 +15,19 @@
 // <line>/<col> are 1-based and must land on the identifier. Scope is the nearest
 // tsconfig.json above <file> (one package); cross-package symbols are renamed only
 // within that package. After applying, verify with the package's typecheck.
-import path from "node:path";
-import process from "node:process";
+import path from 'node:path';
+import process from 'node:process';
 
-import ts from "typescript";
+import ts from 'typescript';
 
 const args = process.argv.slice(2);
-const dryRun = args.includes("--dry-run");
-const [locArg, newName] = args.filter((a) => !a.startsWith("--"));
+const dryRun = args.includes('--dry-run');
+const [locArg, newName] = args.filter((a) => !a.startsWith('--'));
 
 const usage = () => {
   console.error(
-    "usage: node .claude/scripts/rename.mjs <file>:<line>:<col> <newName> [--dry-run]\n" +
-      "  <line>/<col> are 1-based and must point at the identifier (e.g. from `grep -n`).",
+    'usage: node .claude/scripts/rename.mjs <file>:<line>:<col> <newName> [--dry-run]\n' +
+      '  <line>/<col> are 1-based and must point at the identifier (e.g. from `grep -n`).',
   );
   process.exit(2);
 };
@@ -35,16 +35,16 @@ const usage = () => {
 if (!locArg || !newName) usage();
 
 // Parse `file:line:col` from the right so posix paths (no colons) stay intact.
-const parts = locArg.split(":");
+const parts = locArg.split(':');
 const col = Number(parts.pop());
 const line = Number(parts.pop());
-const file = path.resolve(parts.join(":"));
+const file = path.resolve(parts.join(':'));
 if (!Number.isFinite(line) || !Number.isFinite(col)) usage();
 
 const findTsconfig = (start) => {
   let dir = path.dirname(start);
   for (;;) {
-    const candidate = path.join(dir, "tsconfig.json");
+    const candidate = path.join(dir, 'tsconfig.json');
     if (ts.sys.fileExists(candidate)) return candidate;
     const parent = path.dirname(dir);
     if (parent === dir) return undefined;
@@ -70,7 +70,7 @@ fileNames.add(file);
 
 const host = {
   getScriptFileNames: () => [...fileNames],
-  getScriptVersion: () => "0",
+  getScriptVersion: () => '0',
   getScriptSnapshot: (f) => {
     const text = ts.sys.readFile(f);
     return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text);
@@ -88,7 +88,9 @@ const host = {
 const service = ts.createLanguageService(host, ts.createDocumentRegistry());
 const source = service.getProgram()?.getSourceFile(file);
 if (!source) {
-  console.error(`target file is not part of the project (${configPath}): ${file}`);
+  console.error(
+    `target file is not part of the project (${configPath}): ${file}`,
+  );
   process.exit(1);
 }
 
@@ -108,7 +110,7 @@ const byFile = new Map();
 const skipped = [];
 for (const loc of locations) {
   const f = path.resolve(loc.fileName);
-  if (f.includes("node_modules") || f.endsWith(".d.ts")) {
+  if (f.includes('node_modules') || f.endsWith('.d.ts')) {
     skipped.push(f);
     continue;
   }
@@ -127,17 +129,19 @@ for (const [f, locs] of byFile) {
   for (const loc of locs) {
     const start = loc.textSpan.start;
     const end = start + loc.textSpan.length;
-    const isLink = text.slice(Math.max(0, start - 7), start).includes("{@link");
+    const isLink = text.slice(Math.max(0, start - 7), start).includes('{@link');
     if (isLink) links++;
     if (dryRun) {
-      const ctx = original.slice(Math.max(0, start - 24), end + 12).replace(/\n/g, "⏎");
-      report.push(`    ${isLink ? "{@link} " : ""}…${ctx}…`);
+      const ctx = original
+        .slice(Math.max(0, start - 24), end + 12)
+        .replace(/\n/g, '⏎');
+      report.push(`    ${isLink ? '{@link} ' : ''}…${ctx}…`);
     }
     text =
       text.slice(0, start) +
-      (loc.prefixText ?? "") +
+      (loc.prefixText ?? '') +
       newName +
-      (loc.suffixText ?? "") +
+      (loc.suffixText ?? '') +
       text.slice(end);
     total++;
   }
@@ -146,14 +150,18 @@ for (const [f, locs] of byFile) {
 }
 
 console.log(
-  `${dryRun ? "[dry-run] would rename" : "renamed"} → ${newName}: ${total} location(s) across ${byFile.size} file(s)` +
-    (links ? `, incl. ${links} {@link} ref(s)` : ""),
+  `${dryRun ? '[dry-run] would rename' : 'renamed'} → ${newName}: ${total} location(s) across ${byFile.size} file(s)` +
+    (links ? `, incl. ${links} {@link} ref(s)` : ''),
 );
 for (const r of report) console.log(r);
 if (skipped.length) {
-  console.log(`  (skipped ${skipped.length} location(s) in node_modules/.d.ts)`);
+  console.log(
+    `  (skipped ${skipped.length} location(s) in node_modules/.d.ts)`,
+  );
 }
 if (!dryRun) {
   const pkgDir = path.dirname(configPath);
-  console.log(`verify: typecheck the package at ${path.relative(process.cwd(), pkgDir)}`);
+  console.log(
+    `verify: typecheck the package at ${path.relative(process.cwd(), pkgDir)}`,
+  );
 }

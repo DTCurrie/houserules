@@ -20,7 +20,11 @@ export function defaultEnabled() {
 
 export function plan() {
   return [
-    script(id, 'compact-tool-output.mjs', 'PostToolUse hook: compact oversized Bash output'),
+    script(
+      id,
+      'compact-tool-output.mjs',
+      'PostToolUse hook: compact oversized Bash output',
+    ),
     {
       kind: 'write',
       dest: '.claude/tool-output/.gitignore',
