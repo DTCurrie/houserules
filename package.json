@@ -34,13 +34,6 @@
     "tooling"
   ],
   "license": "MIT",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "11.5.0",
-      "onFail": "download"
-    }
-  },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "picocolors": "^1.1.1"
