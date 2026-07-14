@@ -13,8 +13,15 @@ Record what this change means for the next release. Arguments (optional override
    - `patch` — fixes, internal refactors with no API change (the default)
    - `minor` — new user-facing capability, backwards-compatible
    - `major` — breaking change. **Confirm with the user before recording a major.**
-3. **Write the summary**: 1–3 sentences in changelog voice — what changed and _why_, as the
-   package's users should read it. Reference backlog IDs it resolves, if any.
+3. **Write the summary**: **one short sentence** (aim ≤ 15 words) in changelog voice naming
+   what changed, as the package's users read it. Describe the change — not its mechanism,
+   rationale, or what stayed the same. No semicolons and no second clause ("so that…",
+   "whenever…", ", and also…"): a run-on is still too much even if it's one sentence. Put any
+   backlog IDs it resolves in parentheses.
+   - Good: `Fix compact tool output hook to reduce noise.`
+   - Too much: `changeset-write.mjs now authors with @changesets/write whenever changesets is
+installed, so files match the version; the zero-dep writer remains as fallback.`
+     → `Changeset authoring uses the repo's installed changesets writer when available.`
 4. **Record it** (the script validates package names against the real workspace):
    ```
    node .claude/scripts/changeset-write.mjs --pkg <name>:<level> [--pkg <name>:<level> ...] --summary "<summary>"

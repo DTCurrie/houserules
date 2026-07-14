@@ -3,7 +3,7 @@
 // commit-granular history. Its files live under .claude/changelogs/ so it can
 // never collide with the CHANGELOG.md that `changeset version` owns.
 
-import { script, scriptPermission } from './shared.mjs';
+import { script, scriptPermission, template } from './shared.mjs';
 
 export const id = 'ledger';
 export const title = 'Per-commit changelog ledger (in addition to changesets)';
@@ -23,6 +23,11 @@ export function plan() {
       id,
       'package-changelog.mjs',
       'per-commit ledger (writes .claude/changelogs/)',
+    ),
+    template(
+      id,
+      'agents/archivist.agent.md.template',
+      'ledger archivist pattern',
     ),
     {
       kind: 'merge-settings',

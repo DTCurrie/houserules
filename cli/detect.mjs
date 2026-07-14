@@ -59,6 +59,27 @@ function git(root, args) {
   }
 }
 
+// Reference templates under .claude/kit-templates/ that git still tracks. The
+// self-ignore file is deliberately excluded — it stays committed so the intent
+// travels with the repo. Non-empty only for installs that committed templates
+// before the kit began ignoring them; empty on any git failure or non-repo.
+export function trackedTemplateFiles(root) {
+  const out = git(root, ['ls-files', '-c', '--', '.claude/kit-templates']);
+  if (!out) return [];
+  return out
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((p) => p && p !== '.claude/kit-templates/.gitignore');
+}
+
+// Drop paths from the git index only — working-tree copies stay on disk and the
+// removal is staged, not committed (the user owns commits). Swallows git
+// failures so callers never crash on unexpected repo state.
+export function untrackFromIndex(root, files) {
+  if (!files.length) return true;
+  return git(root, ['rm', '--cached', '-f', '-q', '--', ...files]) !== null;
+}
+
 function detectPackageManager(root, rootPkg) {
   const pmField = rootPkg?.packageManager;
   if (typeof pmField === 'string' && pmField.includes('@')) {

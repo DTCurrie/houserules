@@ -42,6 +42,18 @@ export function agent(module, name, reason) {
   };
 }
 
+// Stage a raw kit-templates/<rel> file for hand-instantiation. `rel` is a
+// forward-slash path relative to payload/kit-templates (e.g. 'agents/foo.template').
+export function template(module, rel, reason = 'reference template') {
+  return {
+    kind: 'copy',
+    src: payloadPath('kit-templates', ...rel.split('/')),
+    dest: `.claude/kit-templates/${rel}`,
+    module,
+    reason,
+  };
+}
+
 export function hookCommand(scriptName) {
   return `node "$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
 }

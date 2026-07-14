@@ -20,6 +20,12 @@ test('OM1: ledger + reviewers + terse-style opt-ins land correctly', () => {
 
     // Ledger: script installed, config retargets to .claude/changelogs/ (never CHANGELOG.md).
     assert.ok(existsSync(join(root, '.claude/scripts/package-changelog.mjs')));
+    // Ledger ships the archivist pattern it references.
+    assert.ok(
+      existsSync(
+        join(root, '.claude/kit-templates/agents/archivist.agent.md.template'),
+      ),
+    );
     const config = readJson(join(root, '.claude/kit.config.json'));
     assert.equal(config.ledger.enabled, true);
     const cityville = config.targets.find((t) => t.name === 'cityville');

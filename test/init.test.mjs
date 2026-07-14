@@ -32,6 +32,21 @@ test('I1/I4/I5: init --yes on pnpm monorepo — manifest, config, settings, chan
     ]) {
       assert.ok(existsSync(join(root, rel)), `missing ${rel}`);
     }
+    // Ledger off → its archivist template is not staged.
+    assert.ok(
+      !existsSync(
+        join(root, '.claude/kit-templates/agents/archivist.agent.md.template'),
+      ),
+      'archivist template must not ship without the ledger module',
+    );
+    // Templates are reference-only: a self-gitignore keeps them (and the merge
+    // helper) uncommitted, while the .gitignore itself stays tracked.
+    const templatesIgnore = readFileSync(
+      join(root, '.claude/kit-templates/.gitignore'),
+      'utf8',
+    );
+    assert.match(templatesIgnore, /^\*$/m);
+    assert.match(templatesIgnore, /^!\.gitignore$/m);
 
     // Manifest: right modules, hashed files.
     const manifest = readJson(join(root, '.claude/kit-manifest.json'));
@@ -45,12 +60,7 @@ test('I1/I4/I5: init --yes on pnpm monorepo — manifest, config, settings, chan
     ]) {
       assert.ok(manifest.modules.includes(m), `module ${m}`);
     }
-    for (const m of [
-      'reviewers',
-      'ledger',
-      'terse-style',
-      'output-compactor',
-    ]) {
+    for (const m of ['reviewers', 'ledger', 'terse-style']) {
       assert.ok(!manifest.modules.includes(m), `unexpected module ${m}`);
     }
     assert.match(

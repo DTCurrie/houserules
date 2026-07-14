@@ -3,7 +3,7 @@
 
 import { resolve } from 'node:path';
 
-import { detect } from '../detect.mjs';
+import { detect, trackedTemplateFiles, untrackFromIndex } from '../detect.mjs';
 import { KitError, buildPlan, computeEffects } from '../plan.mjs';
 import { apply } from '../apply.mjs';
 import * as ui from '../ui.mjs';
@@ -58,7 +58,20 @@ export async function update(dir, flags) {
     ui.renderPreview(planResult),
     flags.dryRun ? 'Update plan (dry run)' : 'Update plan',
   );
+
+  // Reference templates are self-gitignored, but an install predating that may
+  // have committed them. Reconcile by dropping them from the index (working-tree
+  // copies stay). This is a git-index migration, not a target-file write, so it
+  // lives here rather than in apply()'s content pipeline — computed up front so
+  // the dry-run preview reflects it and can't lie.
+  const strayTemplates = ctx.git.isRepo ? trackedTemplateFiles(root) : [];
+
   if (flags.dryRun) {
+    if (strayTemplates.length)
+      ui.note(
+        `${strayTemplates.length} committed reference template(s) would be untracked from git (kept on disk).`,
+        'kit-templates',
+      );
     ui.outro('Dry run — nothing written.');
     return 0;
   }
@@ -69,6 +82,16 @@ export async function update(dir, flags) {
     previousManifest: manifest,
   });
   ui.note(ui.renderWritten(written), 'Written');
+
+  const untracked =
+    strayTemplates.length && untrackFromIndex(root, strayTemplates)
+      ? strayTemplates.length
+      : 0;
+  if (untracked)
+    ui.note(
+      `Untracked ${untracked} reference template(s) from git — kept on disk; commit the staged removal to finish.`,
+      'kit-templates',
+    );
 
   const skipped = planResult.effects.filter((e) => e.op === 'skip-modified');
   ui.outro(

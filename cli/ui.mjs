@@ -99,6 +99,25 @@ export async function selectModules(modules, ctx, preselectedIds) {
   return picked.includes('core') ? picked : ['core', ...picked];
 }
 
+// Multiselect over not-yet-installed modules for `claude-kit modules`. Unlike
+// selectModules this has no preselect and never force-adds core — it only offers
+// what the repo does not already have; an empty pick is valid (nothing to add).
+export async function selectNewModules(available, ctx) {
+  if (!available.length) return [];
+  const options = available.map((m) => ({
+    value: m.id,
+    label: m.title,
+    hint: `${m.group === 'experimental' ? 'EXPERIMENTAL — ' : ''}${m.hint(ctx)}`,
+  }));
+  return bail(
+    await p.multiselect({
+      message: 'Modules to add (space toggles, enter confirms; none = cancel)',
+      options,
+      required: false,
+    }),
+  );
+}
+
 export async function confirmTargets(targets) {
   if (!targets.length) return targets;
   const rows = targets

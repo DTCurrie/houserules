@@ -32,7 +32,6 @@ import * as rename from './modules/rename.mjs';
 import * as reviewers from './modules/reviewers.mjs';
 import * as ledger from './modules/ledger.mjs';
 import * as terseStyle from './modules/terse-style.mjs';
-import * as outputCompactor from './modules/output-compactor.mjs';
 
 export const MODULES = [
   core,
@@ -44,7 +43,6 @@ export const MODULES = [
   reviewers,
   ledger,
   terseStyle,
-  outputCompactor,
 ];
 
 export class KitError extends Error {}

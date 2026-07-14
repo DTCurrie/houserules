@@ -88,9 +88,6 @@ export function renderKitConfig(ctx, answers) {
       return target;
     }),
   };
-  if (has('output-compactor')) {
-    config.compactor = { threshold: 10000, headLines: 20, tailLines: 20 };
-  }
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
@@ -155,6 +152,9 @@ export function renderClaudeMd(ctx, answers) {
     `# ${name}`,
     '',
     '<!-- TODO: one-line description of the project. Keep this file lean — it is loaded every turn. -->',
+    '<!-- For a fuller from-scratch skeleton (layout, scripts, guardrail-doc pointers, per-target',
+    '     workflows), see .claude/kit-templates/CLAUDE.md.template — a gitignored reference that',
+    '     `npx claude-kit update` restores if absent. -->',
     '',
     '## Layout',
     '',
@@ -218,6 +218,9 @@ export function renderClaudeAdditions(ctx, answers) {
     '',
     'Your repo already has a CLAUDE.md, so the kit did not touch it. Merge the sections below',
     'by hand where they fit (keep CLAUDE.md lean — cut anything not true on every turn).',
+    'For a fuller from-scratch skeleton to compare structure against, see',
+    '`.claude/kit-templates/CLAUDE.md.template` (a gitignored reference; `npx claude-kit update`',
+    'restores it if absent).',
     '',
     '---',
     '',
@@ -261,8 +264,9 @@ model: haiku
 You are the ${target.label} reviewer, a read-only auditor for \`${target.pathPrefix || './'}\`.
 
 <!-- TODO(claude-kit): this is a DRAFT. Fill in the authoritative source below and delete
-     the DRAFT marker from the description above. See
-     .claude/kit-templates/agents/reviewer.agent.md.template for the full pattern. -->
+     the DRAFT marker from the description above. See the full pattern in
+     .claude/kit-templates/agents/reviewer.agent.md.template — a gitignored reference that
+     \`npx claude-kit update\` restores if it's missing. -->
 
 ## Authoritative source
 

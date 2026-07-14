@@ -13,13 +13,16 @@ const { version: KIT_VERSION } = require('../package.json');
 const USAGE = `claude-kit ${KIT_VERSION} — portable Claude Code context-discipline kit
 
 Usage:
-  npx claude-kit init   [dir] [--dry-run] [--yes] [--modules=a,b,-c]
-  npx claude-kit update [dir] [--dry-run] [--force]
-  npx claude-kit doctor [dir]
+  npx claude-kit init    [dir] [--dry-run] [--yes] [--modules=a,b,-c]
+  npx claude-kit modules [dir] [--dry-run] [--yes] [--modules=a,b]
+  npx claude-kit update  [dir] [--dry-run] [--force]
+  npx claude-kit doctor  [dir]
 
 Commands:
   init     Detect the repo, choose modules interactively, and install the kit
            into .claude/ (non-destructive; shows a full plan before writing).
+  modules  List installed vs available modules and enable more after init
+           (add-only). Interactive, or headless via --modules=<id,...>.
   update   Refresh kit-owned files to this kit version. Files you have edited
            are skipped with a warning (use --force to overwrite them).
   doctor   Validate the installation: config vs repo reality, hooks wired,
@@ -75,6 +78,10 @@ async function main() {
     case 'init': {
       const { init } = await import('./commands/init.mjs');
       return init(targetDir, flags);
+    }
+    case 'modules': {
+      const { modules } = await import('./commands/modules.mjs');
+      return modules(targetDir, flags);
     }
     case 'update': {
       const { update } = await import('./commands/update.mjs');

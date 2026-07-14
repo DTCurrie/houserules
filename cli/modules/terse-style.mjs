@@ -28,7 +28,7 @@ export function plan() {
     },
     {
       kind: 'advise',
-      text: 'Terse style installed but NOT active: enable it per-session/user via /config → Output style → "Kit Terse".',
+      text: 'Terse style installed but NOT active: enable via /config → Output style → "Kit Terse", or set "outputStyle": "Kit Terse" in settings.local.json (the exact style name, not the kit-terse filename).',
       module: id,
     },
   ];

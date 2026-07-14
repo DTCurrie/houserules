@@ -152,11 +152,8 @@ Each of these is a standing habit, not a script:
 - **Response-token compression is a style problem.** The kit's opt-in `terse-style` output
   style (adapted from caveman, MIT) cuts ~50–70% of response tokens by dropping filler and
   prose — at a readability cost. Good for grind sessions, wrong for explanations you'll reread.
-- **Tool-output compression is a spill problem.** The kit's experimental `output-compactor`
-  hook keeps oversized Bash output on disk and hands the model head+tail+pointer
-  (compress-cache-retrieve). Everything stays grep-able.
-- **headroom** (headroomlabs-ai/headroom) is the heavyweight option: a local Python proxy
-  (`headroom wrap claude`) doing content-aware input compression. Know before adopting: the
-  `headroom-ai` npm package is a **client for that proxy, not a standalone compressor** — there
-  is no pure-Node path. It composes with the kit (the kit reduces what enters context; headroom
-  compresses what does), but it's a separate runtime you operate yourself.
+- **Tool-output compression via hooks isn't reliable.** PostToolUse output replacement
+  (`updatedToolOutput`) is not honored on current Claude Code (verified inert on 2.1.208 — the hook
+  runs but the model still receives the raw output), so the kit ships no tool-output compressor.
+  Claude Code's own large-output persistence covers the worst case, and the durable lever stays
+  subagents — route high-volume reads/runs through one so the transcript never hits the main thread.

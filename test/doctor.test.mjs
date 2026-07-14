@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { appendFileSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { makeFixture, runCli } from './fixtures.mjs';
+import { makeFixture, runCli, sh } from './fixtures.mjs';
 
 test('DR1: healthy after init; missing file = ERROR; local edit / unwired hook / drift = WARN', () => {
   const root = makeFixture('pnpm-monorepo');
@@ -63,6 +63,27 @@ test('DR2: uninstalled repo → ERROR exit 1', () => {
     const r = runCli(['doctor', root]);
     assert.equal(r.status, 1);
     assert.match(r.stdout, /kit not installed/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('DR3: committed reference templates → WARN (exit 0) with the untrack fix', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    assert.equal(runCli(['init', '--yes', root]).status, 0);
+    // Fresh install: templates are gitignored, so doctor stays clean.
+    let r = runCli(['doctor', root]);
+    assert.equal(r.status, 0, r.stdout);
+    assert.doesNotMatch(r.stdout, /reference template/);
+
+    // Commit the templates (pre-gitignore install shape) → WARN, still exit 0.
+    sh(root, 'git', ['add', '-f', '.claude/kit-templates']);
+    sh(root, 'git', ['commit', '-qm', 'committed templates']);
+    r = runCli(['doctor', root]);
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(r.stdout, /reference template\(s\).*are committed/);
+    assert.match(r.stdout, /git rm --cached/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

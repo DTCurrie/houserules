@@ -20,9 +20,17 @@ job is to record the change that was just finished — accurately, in one pass.
 3. **Pick the bump per package** — `patch` for fixes/internal changes (default), `minor` for
    backwards-compatible features, `major` for breaking changes. **Never record a major on
    your own authority: report back and ask first.**
-4. **Write the summary** in changelog voice: 1–3 sentences, what changed and why, written for
-   the package's users. Quote load-bearing names/numbers from the diff, not from memory.
-   Include backlog IDs the change resolves.
+4. **Write the summary** in changelog voice: **one short sentence** (aim ≤ 15 words) naming
+   what changed, for the package's users. Describe the change itself — not the mechanism, the
+   rationale, or what stayed the same. No semicolons and no second clause: if you reach for
+   "so that…", "whenever…", "because…", or ", and also…", you are packing in too much — cut it.
+   Use exact names/numbers from the diff, not from memory. Put any backlog IDs it resolves in
+   parentheses.
+   - Good: `Fix compact tool output hook to reduce noise.`
+   - Good: `changeset authoring now requires the official changesets library.`
+   - Too much: `changeset-write.mjs now authors with @changesets/write whenever changesets is
+installed, so files match the installed version; the zero-dep writer remains as fallback.`
+     → `Changeset authoring uses the repo's installed changesets writer when available.`
 5. **Record it:**
    ```
    node .claude/scripts/changeset-write.mjs --pkg <name>:<level> [--pkg ...] --summary "..."

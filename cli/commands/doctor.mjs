@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
-import { detect } from '../detect.mjs';
+import { detect, trackedTemplateFiles } from '../detect.mjs';
 import { MANIFEST_PATH } from '../apply.mjs';
 import {
   listWorkspacePackages,
@@ -18,7 +18,6 @@ const HOOK_SCRIPTS = {
   'lint-fix': ['lint-format-fix.mjs'],
   changesets: ['changeset-check.mjs'],
   'session-context': ['session-context.mjs'],
-  'output-compactor': ['compact-tool-output.mjs'],
 };
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
@@ -67,6 +66,14 @@ export async function doctor(dir, flags) {
           `kit file locally edited: ${rel} (update will keep your version; --force overwrites)`,
         );
       }
+    }
+    // Reference templates that got committed before the kit ignored them.
+    const strayTemplates = ctx.git.isRepo ? trackedTemplateFiles(root) : [];
+    if (strayTemplates.length) {
+      report(
+        'WARN',
+        `${strayTemplates.length} reference template(s) under .claude/kit-templates/ are committed (reference-only). Untrack, keeping them on disk: npx claude-kit update — or: git rm --cached -r .claude/kit-templates && git add .claude/kit-templates/.gitignore`,
+      );
     }
   }
 
@@ -148,7 +155,7 @@ export async function doctor(dir, flags) {
         readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'),
       );
       const dupes = allHookCommands(local).filter((c) =>
-        /(guard-bash|lint-format-fix|changeset-check|session-context|compact-tool-output)\.mjs/.test(
+        /(guard-bash|lint-format-fix|changeset-check|session-context)\.mjs/.test(
           c,
         ),
       );

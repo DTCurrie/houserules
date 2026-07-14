@@ -10,7 +10,11 @@ import {
   renderClaudeMd,
   renderKitConfig,
 } from '../render.mjs';
-import { hookFragment, lib, script } from './shared.mjs';
+import { hookFragment, lib, script, template } from './shared.mjs';
+
+// Staged by the opt-in ledger module instead (see ledger.mjs), so a repo that
+// never enables the ledger doesn't carry its archivist pattern.
+const LEDGER_ONLY_TEMPLATE = 'agents/archivist.agent.md.template';
 
 export const id = 'core';
 export const title = 'Core (config, Bash guard, permissions, CLAUDE.md seed)';
@@ -47,18 +51,34 @@ export function plan(ctx, answers) {
     ),
   );
 
-  // Stage the raw templates for hand-instantiation, whatever modules are chosen.
+  // Stage the raw templates for hand-instantiation, whatever modules are chosen
+  // (except the archivist, which ships with the ledger module that references it).
   const templatesRoot = payloadPath('kit-templates');
   for (const file of walk(templatesRoot)) {
     const rel = relative(templatesRoot, file).replaceAll('\\', '/');
-    actions.push({
-      kind: 'copy',
-      src: file,
-      dest: `.claude/kit-templates/${rel}`,
-      module: id,
-      reason: 'reference template',
-    });
+    if (rel === LEDGER_ONLY_TEMPLATE) continue;
+    actions.push(template(id, rel));
   }
+
+  // The staged templates (and the CLAUDE.additions merge helper) are reference
+  // scaffolding, not repo content: a directory-local .gitignore keeps them out of
+  // commits while leaving them on disk for reference. The repo's own .gitignore is
+  // never touched; the .gitignore itself stays tracked so the intent travels with the repo.
+  actions.push({
+    kind: 'write',
+    dest: '.claude/kit-templates/.gitignore',
+    content: [
+      '# Reference scaffolding staged by claude-kit, refreshed by `npx claude-kit update`.',
+      '# The artifacts you build from these (agents, guardrail docs, CLAUDE.md) live',
+      '# elsewhere and are yours to commit — these skeletons are not meant to be.',
+      '*',
+      '!.gitignore',
+      '',
+    ].join('\n'),
+    module: id,
+    reason:
+      'templates are reference-only; self-gitignored (repo .gitignore untouched)',
+  });
 
   actions.push({
     kind: 'seed',
