@@ -41,6 +41,16 @@ function git(root, args) {
 const isChangesetMd = (p) =>
   p.startsWith('.changeset/') && p.endsWith('.md') && !/\/readme\.md$/i.test(p);
 
+// Generated ledgers are churn, not package source: the kit generates CHANGELOG.md
+// from changesets and BACKLOG.md via the backlog helper. Editing them never warrants
+// a changeset (see CLAUDE.md "don't chase BACKLOG.md/CHANGELOG.md churn"), yet a
+// root-package target (sourcePath "") scopes every top-level non-dotfile, so without
+// this they would trip the nudge on their own.
+const isGeneratedLedger = (p) => {
+  const base = p.split('/').pop();
+  return base === 'BACKLOG.md' || base === 'CHANGELOG.md';
+};
+
 try {
   const config = loadConfigSafe();
   const cs = config.changesets ?? {};
@@ -94,7 +104,9 @@ try {
       .filter(Boolean);
   }
 
-  const srcChanged = [...dirty, ...committed].filter(matchScope);
+  const srcChanged = [...dirty, ...committed].filter(
+    (p) => matchScope(p) && !isGeneratedLedger(p),
+  );
   const hasChangeset =
     dirty.some(isChangesetMd) || committedNewChangesets.some(isChangesetMd);
 

@@ -62,6 +62,42 @@ test('CC2: an untracked changeset silences the nudge; so does one committed on t
   }
 });
 
+test('CC4: generated ledgers in scope (BACKLOG.md/CHANGELOG.md) do not trip the nudge', () => {
+  const root = installedFixture();
+  try {
+    // Both match the cityville target scope (games/cityville/) but are generated churn.
+    writeFileSync(
+      join(root, 'games/cityville/CHANGELOG.md'),
+      '# Changelog\n\n- released a thing\n',
+    );
+    writeFileSync(
+      join(root, 'games/cityville/BACKLOG.md'),
+      '# Backlog\n\n- deferred a thing\n',
+    );
+    let r = runScript(root, SCRIPT, { input: '{}' });
+    assert.equal(
+      r.status,
+      0,
+      `ledger-only churn must stay silent: ${r.stderr}`,
+    );
+
+    // A real source change alongside the ledgers must still nudge.
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+    r = runScript(root, SCRIPT, { input: '{}' });
+    assert.equal(
+      r.status,
+      2,
+      `real source change must still nudge: ${r.stderr}`,
+    );
+    assert.match(r.stderr, /--pkg @fix\/cityville/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('CC3: kill-switches and fallbacks — stop_hook_active, stopCheck:false, non-target change, bad base', () => {
   const root = installedFixture();
   try {
