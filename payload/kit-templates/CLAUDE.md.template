@@ -114,7 +114,7 @@ that lists 100+ untracked files>. Burn-rate adds up fast.
 - **Pipe long output through `grep` at the source**: `<test cmd> 2>&1 | grep -E '<failure pattern>'`.
   Don't redirect to a file and re-read it.
 - **Batch related greps into one call** (`grep -nE 'a|b|c'`) instead of three searches.
-- **Don't read more memory/plan/debug files than you need.** Indexes are auto-loaded; the linked
+- **Don't read more memory/plans/debug files than you need.** Indexes are auto-loaded; the linked
   files are not. Open a linked file only if its one-line description is load-bearing.
 - **Run targeted tests by name before a full package run** (`<test-name-filter syntax>`). A
   multi-minute sweep is rarely the right first probe.

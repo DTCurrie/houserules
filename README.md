@@ -56,7 +56,7 @@ Non-destructive guarantees: it never runs package-manager installs, never edits 
 | `ledger`          | off                               | per-commit JSONL ledger in `.claude/changelogs/` (in _addition_ to changesets) + archivist template                                                                                              |
 | `terse-style`     | off                               | token-lean output style (caveman-derived, MIT-attributed); activate via `/config`                                                                                                                |
 | `debug-session`   | off                               | `/debug-session` skill: hypothesis→tagged-trace→cleanup loop (logs under `.claude/debug/`, verdicts via jq, all instrumentation removed) + SessionStart backstop + debugger agent template       |
-| `plans`           | off                               | `/plan` skill: persist large/multi-phase work to a gitignored `.claude/plans/<name>/` (PLAN + living ROADMAP + per-phase sub-plans); resume by grepping ROADMAP status                           |
+| `plans`           | off                               | `/plan-project` skill: persist large/multi-phase work to a gitignored `.claude/plans/<name>/` (PLAN + living ROADMAP + per-phase sub-plans); resume by grepping ROADMAP status                   |
 
 ## Changesets are the canonical changelog
 

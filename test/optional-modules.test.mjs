@@ -180,14 +180,14 @@ test('OM4: debug-session is off by default and core does not stage its template'
   }
 });
 
-test('OM5: plans lands the /plan skill, self-gitignores the workspace, and wires the CLAUDE.md pointer', () => {
+test('OM5: plans lands the /plan-project skill, self-gitignores the workspace, and wires the CLAUDE.md pointer', () => {
   const root = makeFixture('pnpm-monorepo');
   try {
     const r = runCli(['init', '--yes', '--modules=plans', root]);
     assert.equal(r.status, 0, r.stderr);
 
     // Skill lands; the module is script-free and wires no hook.
-    assert.ok(existsSync(join(root, '.claude/skills/plan/SKILL.md')));
+    assert.ok(existsSync(join(root, '.claude/skills/plan-project/SKILL.md')));
     const manifest = readJson(join(root, '.claude/kit-manifest.json'));
     assert.ok(manifest.modules.includes('plans'));
 
@@ -197,9 +197,13 @@ test('OM5: plans lands the /plan skill, self-gitignores the workspace, and wires
     assert.match(ignore, /^!\.gitignore$/m, 'the .gitignore stays tracked');
 
     // The pull-only pointer lands in the seeded root CLAUDE.md (not a nested plans/CLAUDE.md,
-    // which would never auto-load). It names /plan and the resume-by-ROADMAP discipline.
+    // which would never auto-load). It names /plan-project and the resume-by-ROADMAP discipline.
     const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
-    assert.match(claudeMd, /\/plan\b/, 'CLAUDE.md points at the /plan skill');
+    assert.match(
+      claudeMd,
+      /\/plan-project\b/,
+      'CLAUDE.md points at the /plan-project skill',
+    );
     assert.match(claudeMd, /\.claude\/plans\//);
     assert.match(claudeMd, /ROADMAP/, 'resume discipline is stated');
     assert.ok(
@@ -221,14 +225,14 @@ test('OM6: plans is off by default — no skill, no workspace, no CLAUDE.md poin
     const manifest = readJson(join(root, '.claude/kit-manifest.json'));
     assert.ok(!manifest.modules.includes('plans'));
 
-    assert.ok(!existsSync(join(root, '.claude/skills/plan/SKILL.md')));
+    assert.ok(!existsSync(join(root, '.claude/skills/plan-project/SKILL.md')));
     assert.ok(!existsSync(join(root, '.claude/plans/.gitignore')));
 
     // The CLAUDE.md pointer is gated on the module — absent when plans is off.
     const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
     assert.ok(
-      !claudeMd.includes('/plan'),
-      'no /plan pointer without the module',
+      !claudeMd.includes('/plan-project'),
+      'no /plan-project pointer without the module',
     );
     assert.ok(!claudeMd.includes('.claude/plans/'));
   } finally {
