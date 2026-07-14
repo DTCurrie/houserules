@@ -12,9 +12,13 @@ import {
 } from '../render.mjs';
 import { hookFragment, lib, script, template } from './shared.mjs';
 
-// Staged by the opt-in ledger module instead (see ledger.mjs), so a repo that
-// never enables the ledger doesn't carry its archivist pattern.
-const LEDGER_ONLY_TEMPLATE = 'agents/archivist.agent.md.template';
+// Templates staged by an opt-in module (not by core's blanket walk), so a repo that
+// never enables the owning module doesn't carry its pattern. See ledger.mjs /
+// debug-session.mjs, which stage these via template().
+const MODULE_OWNED_TEMPLATES = new Set([
+  'agents/archivist.agent.md.template',
+  'agents/debugger.agent.md.template',
+]);
 
 export const id = 'core';
 export const title = 'Core (config, Bash guard, permissions, CLAUDE.md seed)';
@@ -56,7 +60,7 @@ export function plan(ctx, answers) {
   const templatesRoot = payloadPath('kit-templates');
   for (const file of walk(templatesRoot)) {
     const rel = relative(templatesRoot, file).replaceAll('\\', '/');
-    if (rel === LEDGER_ONLY_TEMPLATE) continue;
+    if (MODULE_OWNED_TEMPLATES.has(rel)) continue;
     actions.push(template(id, rel));
   }
 

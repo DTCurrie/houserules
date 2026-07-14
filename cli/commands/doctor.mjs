@@ -18,6 +18,7 @@ const HOOK_SCRIPTS = {
   'lint-fix': ['lint-format-fix.mjs'],
   changesets: ['changeset-check.mjs'],
   'session-context': ['session-context.mjs'],
+  'debug-session': ['debug-session-check.mjs'],
 };
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
@@ -155,7 +156,7 @@ export async function doctor(dir, flags) {
         readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'),
       );
       const dupes = allHookCommands(local).filter((c) =>
-        /(guard-bash|lint-format-fix|changeset-check|session-context)\.mjs/.test(
+        /(guard-bash|lint-format-fix|changeset-check|session-context|debug-session-check)\.mjs/.test(
           c,
         ),
       );

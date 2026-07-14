@@ -2,31 +2,6 @@
 
 Deferred work. Add entries via `.claude/scripts/backlog-log.mjs`; remove on resolution.
 
-## [CLAUDEKIT-564f18] Hypothesis-driven debugger skill/agent with structured trace-log loop and instrumentation cleanup
-
-**Logged:** 2026-07-14
-**Chat:** c7c5a67e-0d18-4b8f-8196-111838e7d6c9
-
-Source: user request (2026-07-14). A skill/agent for systematic debugging.
-
-Flow: accept a bug-description prompt -> form explicit hypotheses -> add trace/debug
-logging to the code to test each hypothesis -> emit that logging to a structured,
-.gitignored log file under `.claude/debug/` (e.g. JSONL) -> read it efficiently with
-`jq` -> confirm/reject/support each hypothesis from the output -> loop until a root
-cause is found or all hypotheses are resolved -> review findings with the user ->
-propose a suggested fix -> and, once the user confirms the issue resolved (or on
-request), remove ALL added instrumentation so nothing is orphaned in source.
-
-Grounded in radium-sunrise/.claude/debug/ discipline (radium CLAUDE.md "Debugging with
-end-to-end tracing"). Kit-fit: payload/skills/debug-session/SKILL.md (zero-dep) plus an
-optional agent template; `.claude/debug/` self-gitignores like `.claude/tool-output/`;
-track every instrumentation edit so cleanup is complete. Consider a cleanup-guard hook.
-Note: the ultracode investigation surfaced a lighter version and observed the _discipline_
-already ships as a CLAUDE.md-template section — this is the fuller interactive skill/agent
-the user actually wants, so build the loop + log format + cleanup tracking, not just prose.
-
----
-
 ## [CLAUDEKIT-23d373] Phased-implementation planning skill/agent (PLAN + ROADMAP + per-phase sub-plans in .claude/plans/<name>/)
 
 **Logged:** 2026-07-14
