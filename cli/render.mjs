@@ -17,37 +17,45 @@ const DEFAULT_LINTABLE = [
   'html',
 ];
 
-function fixDefaultsFor(pm) {
+function fixDefaultsFor(pm, isMonorepo = true) {
+  let defaults;
   switch (pm?.name) {
     case 'pnpm':
-      return {
+      defaults = {
         runner: 'pnpm',
         filterFlag: '--filter',
         runScriptPrefix: ['run'],
         commands: ['lint:fix', 'format:fix'],
       };
+      break;
     case 'yarn':
-      return {
+      defaults = {
         runner: 'yarn',
         filterFlag: 'workspace',
         runScriptPrefix: [],
         commands: ['lint:fix', 'format:fix'],
       };
+      break;
     case 'bun':
-      return {
+      defaults = {
         runner: 'bun',
         filterFlag: '--filter',
         runScriptPrefix: ['run'],
         commands: ['lint:fix', 'format:fix'],
       };
+      break;
     default:
-      return {
+      defaults = {
         runner: 'npm',
         filterFlag: '',
         runScriptPrefix: ['run'],
         commands: ['lint:fix', 'format:fix'],
       };
   }
+  // A single-package repo has no workspace to filter into — `<pm> --filter <pkg>
+  // <script>` would fail, so clear the filter and run at the root (`<pm> run <script>`).
+  if (!isMonorepo) defaults.filterFlag = '';
+  return defaults;
 }
 
 export function renderKitConfig(ctx, answers) {
@@ -55,7 +63,7 @@ export function renderKitConfig(ctx, answers) {
   const config = {
     version: 2,
     packageManager: ctx.packageManager?.name ?? 'npm',
-    fix: fixDefaultsFor(ctx.packageManager),
+    fix: fixDefaultsFor(ctx.packageManager, ctx.isMonorepo),
     lintableExtensions: DEFAULT_LINTABLE,
     generatedFilePattern: '/(?:CHANGELOG|BACKLOG)\\.md$',
     guard: {

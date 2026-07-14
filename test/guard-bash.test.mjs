@@ -68,6 +68,45 @@ test('G1: defaults block commit/push/stash/pr-create; benign commands pass; no c
   }
 });
 
+test('G3: flag-tolerant under-block + command-position over-block (CLAUDEKIT-fe4d6d)', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    assert.equal(runCli(['init', '--yes', root]).status, 0);
+
+    // (1) Under-block fixed: flags before the subcommand must NOT let commit/stash slip
+    // through, and a guarded command after a separator must still be caught.
+    for (const cmd of [
+      'git -C /repo commit -m x',
+      'git -c user.name=x commit -m y',
+      'git --no-pager commit',
+      'git -C /repo stash',
+      'git add -A && git commit -m x',
+      'make build; git commit -m done',
+    ]) {
+      const r = runScript(root, SCRIPT, { input: payload(cmd) });
+      assert.equal(r.status, 2, `should block: ${cmd}`);
+    }
+
+    // (2) Over-block fixed: the same words inside another command's argument must PASS.
+    for (const cmd of [
+      'grep -rn "git commit" .',
+      'echo "remember to git commit when done"',
+      'node -e \'console.log("git stash")\'',
+      'rg "git push" src/',
+      'git log --grep "git commit"',
+    ]) {
+      const r = runScript(root, SCRIPT, { input: payload(cmd) });
+      assert.equal(
+        r.status,
+        0,
+        `should allow: ${cmd} (got ${r.status}: ${r.stderr})`,
+      );
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('G2: config toggles rules, custom rules fire, invalid regex skipped, garbage stdin passes', () => {
   const root = makeFixture('pnpm-monorepo');
   try {

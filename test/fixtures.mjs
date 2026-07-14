@@ -9,6 +9,10 @@
 // F2 npm-single — root package with only lint:fix, no TS/changesets, pre-existing
 //    settings.json with a user hook (odd whitespace) + permissions, existing CLAUDE.md.
 // F3 non-js — git repo, no package.json.
+// F4 pnpm-single — single-package pnpm repo (lockfile, NO workspace yaml) whose
+//    fixers are lint:fix + a write-`format` (prettier --write) with a separate
+//    format:check. The shape CLAUDEKIT-4e98d7 broke: filterFlag must be "" and the
+//    write-`format` must be detected as a fixer.
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
@@ -181,6 +185,23 @@ export function makeFixture(kind) {
         4,
       )}\n`,
     );
+  } else if (kind === 'pnpm-single') {
+    write(
+      root,
+      'package.json',
+      json({
+        name: 'solo',
+        version: '1.0.0',
+        scripts: {
+          'lint:fix': 'eslint . --fix',
+          format: 'prettier --write .',
+          'format:check': 'prettier --check .',
+          test: 'node --test',
+        },
+      }),
+    );
+    write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
+    write(root, 'src/index.js', 'export const x = 1;\n');
   } else if (kind === 'non-js') {
     write(root, 'README.md', '# not a js repo\n');
   } else {

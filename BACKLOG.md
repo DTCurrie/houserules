@@ -2,15 +2,6 @@
 
 Deferred work. Add entries via `.claude/scripts/backlog-log.mjs`; remove on resolution.
 
-## [CLAUDEKIT-4e98d7] render.mjs fixDefaultsFor breaks single-package pnpm installs
-
-**Logged:** 2026-07-03
-**Chat:** c6e0cf3d-b25f-4fdb-94fb-af4abfce496f
-
-cli/render.mjs fixDefaultsFor emits fix.filterFlag '--filter' regardless of monorepo status, and cli/detect.mjs detectFixCommands never selects a plain 'format' script (only fix/lint:fix/format:fix). Result: a single-package pnpm repo gets a broken lint-fix config — 'pnpm --filter <pkg> lint:fix' fails (no workspace) and prettier never auto-runs. Fix: filterFlag '' when not a monorepo, and allow a 'format' fixer fallback; add a regression test + changeset. Surfaced by dogfooding (scripts/dogfood-link.mjs hand-authors the correct single-package config as a workaround). Refs cli/render.mjs:20-51, cli/detect.mjs:17-29.
-
----
-
 ## [CLAUDEKIT-564f18] Hypothesis-driven debugger skill/agent with structured trace-log loop and instrumentation cleanup
 
 **Logged:** 2026-07-14
@@ -149,26 +140,6 @@ template() helper (cli/modules/shared.mjs:47) into gitignored .claude/kit-templa
 wired by an opt-in module mirroring ledger.mjs; read-only tools satisfy §4, haiku satisfies
 §3. Ship the template FIRST (strong); the /persona-audit fan-out skill is a follow-up whose
 decision-stream input contract must be placeheld (bespoke per repo, cannot be shipped).
-
----
-
-## [CLAUDEKIT-fe4d6d] guard-bash: symmetric flag-tolerance for commit/stash, plus anchor matches to command position
-
-**Logged:** 2026-07-14
-**Chat:** c7c5a67e-0d18-4b8f-8196-111838e7d6c9
-
-[investigation: STRONG | value medium | effort S | robustness] Reproduced live this session.
-
-Two-sided correctness bug in the always-on Bash guard (payload/scripts/guard-bash.mjs).
-(1) UNDER-BLOCK: gitCommit (:36) and gitStash (:49) lack the flag-tolerant prefix that
-gitPush (:43) has, so `git -C /repo commit` and `git -c ... stash` SLIP THROUGH the exact
-guard they should hit. (2) OVER-BLOCK: all rules substring-scan the whole line (:72-77), so a
-read-only `grep`/`node -e` containing the literal string "git commit" is wrongly blocked.
-Fix: give commit/stash the same flag-tolerant prefix; anchor matches to command-leading
-tokens; keep exit-0-on-unparseable. Add fixtures to test/guard-bash.test.mjs (which at :29
-already asserts `git -C /x push` blocks but has no commit/stash equivalent). Ship part 1
-(flag-tolerance, no tradeoff) unconditionally; part 2 (command-position anchoring) is a
-heuristic with a false-negative tradeoff on quoted/nested invocations — the design-decision half.
 
 ---
 

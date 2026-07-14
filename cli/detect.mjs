@@ -10,22 +10,28 @@ import {
   readJson,
 } from '../payload/scripts/lib/workspaces.mjs';
 
-// Fix-script detection priority. A unified `fix` script wins (repos like wireit
-// monorepos wire lint:fix+format:fix underneath it — running the parts as well
-// would duplicate work). `format` alone is deliberately NOT considered: in the
-// wild it is as often a check as a write.
-const FIX_PRIORITY = [
-  ['fix'],
-  ['lint:fix', 'format:fix'],
-  ['lint:fix'],
-  ['format:fix'],
-];
+// A `format` script is ambiguous — `prettier --write` writes, `prettier --check`
+// only verifies. Treat it as a fixer ONLY when it clearly writes, so the auto-fix
+// hook never wires a checker (which would fail unfixably on every stop).
+function isWriteFormatScript(cmd) {
+  if (typeof cmd !== 'string') return false;
+  if (/--check\b|--list-different\b/.test(cmd)) return false;
+  return /--write\b|(?:^|\s)-w\b/.test(cmd);
+}
 
+// Fix-script detection. A unified `fix` script wins (repos like wireit monorepos
+// wire lint:fix+format:fix underneath it — running the parts too would duplicate
+// work). Otherwise take the lint + format writers that exist: `format:fix` when
+// present, else a `format` script that clearly WRITES (never a bare/check `format`).
 export function detectFixCommands(scripts = {}) {
-  for (const combo of FIX_PRIORITY) {
-    if (combo.every((s) => typeof scripts[s] === 'string')) return combo;
-  }
-  return null;
+  if (typeof scripts.fix === 'string') return ['fix'];
+
+  const out = [];
+  if (typeof scripts['lint:fix'] === 'string') out.push('lint:fix');
+  if (typeof scripts['format:fix'] === 'string') out.push('format:fix');
+  else if (isWriteFormatScript(scripts.format)) out.push('format');
+
+  return out.length ? out : null;
 }
 
 export function suggestPrefix(name) {

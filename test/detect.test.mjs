@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
 
 import { detect, detectFixCommands, suggestPrefix } from '../cli/detect.mjs';
+import { renderKitConfig } from '../cli/render.mjs';
 import { parsePnpmWorkspaceGlobs } from '../payload/scripts/lib/workspaces.mjs';
 import { makeFixture } from './fixtures.mjs';
 
@@ -66,6 +67,28 @@ test('D4: npm single-package detection', () => {
   }
 });
 
+test('D6: single-package pnpm — filterFlag "" and a write-`format` fixer (CLAUDEKIT-4e98d7)', () => {
+  const root = makeFixture('pnpm-single');
+  try {
+    const ctx = detect(root);
+    assert.equal(ctx.packageManager.name, 'pnpm');
+    assert.equal(ctx.isMonorepo, false);
+    assert.equal(ctx.targets.length, 1);
+    // No format:fix, but `format` is `prettier --write` → a real writer, so it's paired.
+    assert.deepEqual(ctx.targets[0].fixCommands, ['lint:fix', 'format']);
+
+    // The generated config must NOT emit `--filter` for a single-package repo, or the
+    // fix hook would run `pnpm --filter <pkg> lint:fix` and fail (no workspace).
+    const config = JSON.parse(
+      renderKitConfig(ctx, { moduleIds: ['lint-fix'], targets: ctx.targets }),
+    );
+    assert.equal(config.fix.runner, 'pnpm');
+    assert.equal(config.fix.filterFlag, '');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('D5: non-js repo detection does not crash', () => {
   const root = makeFixture('non-js');
   try {
@@ -92,6 +115,18 @@ test('fix-command priority and prefix suggestions', () => {
     'format:fix',
   ]);
   assert.equal(detectFixCommands({ format: 'prettier --check .' }), null); // format may be a CHECK
+  // A write-`format` (prettier --write) is a valid fixer; pair it with lint:fix, or
+  // take it alone. A checker `format` is still ignored (above).
+  assert.deepEqual(
+    detectFixCommands({
+      'lint:fix': 'eslint . --fix',
+      format: 'prettier --write .',
+    }),
+    ['lint:fix', 'format'],
+  );
+  assert.deepEqual(detectFixCommands({ format: 'prettier --write .' }), [
+    'format',
+  ]);
   assert.equal(suggestPrefix('@schoolyard/cityville'), 'CITYVILLE');
   assert.equal(suggestPrefix('single-app'), 'SINGLEAPP');
 });
