@@ -7,6 +7,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -15,7 +16,7 @@ export const MANIFEST_PATH = '.claude/kit-manifest.json';
 
 export function apply(
   root,
-  { effects, settingsPlan },
+  { effects, settingsPlan, signature = null, prune = null },
   { kitVersion, moduleIds, previousManifest = null },
 ) {
   const written = [];
@@ -34,6 +35,16 @@ export function apply(
     if (action.mode) chmodSync(destAbs, action.mode);
     if (owned) files[action.dest] = hash;
     written.push({ dest: action.dest, op });
+  }
+
+  // Prune: delete retired kit-owned files (computed by computePrune, hash-guarded
+  // there) and drop them from the manifest. A prune is the only removal path; it
+  // still runs through apply so dry-run could render the same deletes.
+  for (const { dest } of prune?.deletes ?? []) {
+    const destAbs = join(root, dest);
+    if (existsSync(destAbs)) rmSync(destAbs, { force: true });
+    delete files[dest];
+    written.push({ dest, op: 'delete' });
   }
 
   if (settingsPlan && settingsPlan.changes.length) {
@@ -57,7 +68,9 @@ export function apply(
     !written.length &&
     previousManifest.kitVersion === kitVersion &&
     JSON.stringify(previousManifest.modules) === JSON.stringify(moduleIds) &&
-    JSON.stringify(previousManifest.files) === JSON.stringify(files);
+    JSON.stringify(previousManifest.files) === JSON.stringify(files) &&
+    JSON.stringify(previousManifest.settings ?? null) ===
+      JSON.stringify(signature);
   const manifest = stable
     ? previousManifest
     : {
@@ -65,6 +78,7 @@ export function apply(
         installedAt: new Date().toISOString(),
         modules: moduleIds,
         files,
+        ...(signature ? { settings: signature } : {}),
       };
   if (!stable) {
     const manifestAbs = join(root, MANIFEST_PATH);

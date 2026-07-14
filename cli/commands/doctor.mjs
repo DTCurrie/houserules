@@ -1,12 +1,14 @@
 // `claude-kit doctor` (claude-kit CLI): validate an installation against reality.
 // ERRORs (broken install) exit 1; WARNs (drift, advisories) exit 0.
 
-import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
 import { detect, trackedTemplateFiles } from '../detect.mjs';
 import { MANIFEST_PATH } from '../apply.mjs';
+import { MODULES } from '../plan.mjs';
+import { payloadPath } from '../paths.mjs';
 import {
   listWorkspacePackages,
   readJson,
@@ -19,9 +21,66 @@ const HOOK_SCRIPTS = {
   changesets: ['changeset-check.mjs'],
   'session-context': ['session-context.mjs'],
   'debug-session': ['debug-session-check.mjs'],
+  'read-guard': ['guard-read.mjs'],
+  regen: ['regen-on-edit.mjs'],
+  backlog: ['backlog-inject.mjs'],
 };
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
+
+// The always-loaded surface is paid on every turn (CONVENTIONS §1). ~3-4K tokens
+// is the sane target; take the upper end as the ceiling and ~200 lines alongside.
+const RESIDENT_TOKEN_BUDGET = 4000;
+const RESIDENT_LINE_BUDGET = 200;
+
+const estimateTokens = (chars) => Math.ceil(chars / 4); // dumb-simple; no tokenizer dep.
+const countLines = (t) =>
+  t === '' ? 0 : t.split('\n').length - (t.endsWith('\n') ? 1 : 0);
+
+// `@path` imports that Claude Code inlines: `@` at line start or after whitespace
+// (so `foo@bar` emails never match), followed by a path token. Returns the raw
+// specifiers; the caller keeps only those that resolve to a real file on disk.
+function parseImports(text) {
+  const specs = [];
+  for (const m of text.matchAll(/(?:^|\s)@([^\s@]+)/g)) specs.push(m[1]);
+  return specs;
+}
+
+// Measure the RESIDENT context surface: root CLAUDE.md plus every @-import it
+// pulls in (transitively, bounded). Returns null when there is no root CLAUDE.md.
+// Nested package CLAUDE.mds are deliberately NOT walked here — they are the
+// on-demand tier and must never be summed into the resident total.
+function measureResident(root) {
+  const rootMd = join(root, 'CLAUDE.md');
+  if (!existsSync(rootMd)) return null;
+  const seen = new Set();
+  let chars = 0;
+  let lines = 0;
+  let imports = 0;
+  const visit = (abs, depth) => {
+    if (seen.has(abs) || depth > 5) return;
+    seen.add(abs);
+    let text;
+    try {
+      text = readFileSync(abs, 'utf8');
+    } catch {
+      return;
+    }
+    chars += text.length;
+    lines += countLines(text);
+    if (depth > 0) imports += 1;
+    for (const spec of parseImports(text)) {
+      const target = resolve(dirname(abs), spec);
+      try {
+        if (statSync(target).isFile()) visit(target, depth + 1);
+      } catch {
+        /* unresolved specifier (package ref, typo) — not an import */
+      }
+    }
+  };
+  visit(rootMd, 0);
+  return { chars, lines, imports, tokens: estimateTokens(chars) };
+}
 
 function allHookCommands(settings) {
   const commands = [];
@@ -38,7 +97,43 @@ export async function doctor(dir, flags) {
   const root = resolve(dir);
   const ctx = detect(root);
   const findings = [];
+  const readouts = []; // always-printed context lines, not error/warn findings.
   const report = (level, msg) => findings.push({ level, msg });
+
+  // Resident-surface budget: make the kit's #1 lever (always-loaded context)
+  // measurable instead of only prose. Read-only; WARNs past budget, never ERRORs.
+  const resident = measureResident(root);
+  if (resident) {
+    const over =
+      resident.tokens > RESIDENT_TOKEN_BUDGET ||
+      resident.lines > RESIDENT_LINE_BUDGET;
+    const importNote = resident.imports
+      ? ` + ${resident.imports} @-import(s)`
+      : '';
+    readouts.push(
+      `resident context (CLAUDE.md${importNote}): ~${resident.tokens} tokens / ${resident.lines} lines ` +
+        `vs budget ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}` +
+        (over
+          ? ` — OVER`
+          : ` — ${RESIDENT_TOKEN_BUDGET - resident.tokens} tokens, ${RESIDENT_LINE_BUDGET - resident.lines} lines headroom`),
+    );
+    if (over)
+      report(
+        'WARN',
+        `always-loaded context exceeds budget (~${resident.tokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}) — trim root CLAUDE.md to a one-line index + on-demand files (CONVENTIONS §1)`,
+      );
+    // Nested package CLAUDE.mds are the on-demand tier — list separately, never summed.
+    const nested = listWorkspacePackages(root)
+      .map((p) => ({
+        rel: `${p.relDir}/CLAUDE.md`,
+        abs: join(p.dir, 'CLAUDE.md'),
+      }))
+      .filter((n) => existsSync(n.abs));
+    if (nested.length)
+      readouts.push(
+        `nested (on-demand, not in resident total): ${nested.map((n) => n.rel).join(', ')}`,
+      );
+  }
 
   const [major] = process.versions.node.split('.').map(Number);
   if (major < 20) report('ERROR', `node ${process.versions.node} < 20`);
@@ -88,9 +183,8 @@ export async function doctor(dir, flags) {
         'WARN',
         `kit.config.json version ${config.version ?? 1} (current schema: 2)`,
       );
-    const workspaceNames = new Set(
-      listWorkspacePackages(root).map((p) => p.name),
-    );
+    const workspacePackages = listWorkspacePackages(root);
+    const workspaceNames = new Set(workspacePackages.map((p) => p.name));
     for (const target of config.targets ?? []) {
       if (target.pathPrefix && !existsSync(join(root, target.pathPrefix))) {
         report(
@@ -123,13 +217,41 @@ export async function doctor(dir, flags) {
             `target "${target.name}": fix script "${cmd}" not in ${target.pathPrefix || './'}package.json`,
           );
       }
+      // Verify-changed: only validate a target's EXPLICIT verifyCommands (a detected
+      // script later renamed away) — not the global `verify` fallback, which sub-packages
+      // routinely lack because they rely on a root verify.
+      if (manifest?.modules?.includes('verify-changed'))
+        for (const cmd of target.verifyCommands ?? []) {
+          if (!scripts[cmd])
+            report(
+              'WARN',
+              `target "${target.name}": verify script "${cmd}" not in ${target.pathPrefix || './'}package.json`,
+            );
+        }
+    }
+    // Inverse of the target→workspace check: a workspace member that no target
+    // covers silently misses lint-fix / reviewer / ledger coverage while doctor
+    // still reports healthy. Point at the seed file (re-running init skips it).
+    const targeted = new Set((config.targets ?? []).map((t) => t.packageName));
+    for (const p of workspacePackages) {
+      if (!targeted.has(p.name))
+        report(
+          'WARN',
+          `workspace package "${p.name}" (${p.relDir}) has no kit target — add one to .claude/kit.config.json targets[] by hand (re-running init skips the existing config)`,
+        );
     }
   }
 
   // Hooks wired?
   if (manifest && ctx.claude.settingsExists && !ctx.claude.settingsParseError) {
     const commands = allHookCommands(ctx.claude.settings);
+    const lintFixWired = (config?.targets ?? []).some(
+      (t) => t.fixCommands?.length,
+    );
     for (const moduleId of manifest.modules ?? []) {
+      // lint-fix deliberately leaves its Stop hooks unwired when no target has a
+      // fix command (dfdc87) — don't flag that intentional gap.
+      if (moduleId === 'lint-fix' && !lintFixWired) continue;
       for (const scriptName of HOOK_SCRIPTS[moduleId] ?? []) {
         if (!commands.some((c) => c.includes(scriptName))) {
           report(
@@ -209,8 +331,87 @@ export async function doctor(dir, flags) {
     );
   }
 
+  if (
+    manifest?.modules?.includes('verify-changed') &&
+    config &&
+    !config.verify
+  ) {
+    report(
+      'WARN',
+      'verify-changed module installed but no `verify` block in kit.config.json — run: npx claude-kit update (or add it by hand)',
+    );
+  }
+
+  // Retired kit surface: modules/hooks the manifest records but the CURRENT kit no
+  // longer defines (the kit was add/update-only — this makes an orphan visible so
+  // `update` can prune it). See tool-output-compaction-inert.
+  if (manifest) {
+    const knownModuleIds = new Set(MODULES.map((m) => m.id));
+    for (const id of manifest.modules ?? []) {
+      if (!knownModuleIds.has(id))
+        report(
+          'WARN',
+          `manifest lists module "${id}" which this kit no longer defines — npx claude-kit update prunes its retired files/hooks`,
+        );
+    }
+    // A kit-owned OR kit-signed hook script this kit no longer ships is retired.
+    let currentScripts = new Set();
+    try {
+      currentScripts = new Set(
+        readdirSync(payloadPath('scripts')).filter((f) => f.endsWith('.mjs')),
+      );
+    } catch {
+      /* payload unreadable — skip the retired-script check */
+    }
+    const suspects = new Set();
+    for (const p of Object.keys(manifest.files ?? {}))
+      if (/^\.claude\/scripts\/[^/]+\.mjs$/.test(p))
+        suspects.add(p.split('/').pop());
+    for (const h of manifest.settings?.hooks ?? [])
+      if (h.script) suspects.add(h.script);
+    const wiredCommands = ctx.claude.settings
+      ? allHookCommands(ctx.claude.settings)
+      : [];
+    for (const base of suspects) {
+      if (currentScripts.has(base)) continue; // still shipped — fine
+      const wired = wiredCommands.some((c) => c.includes(base));
+      report(
+        'WARN',
+        `retired kit hook script ${base} is no longer shipped by this kit${wired ? ' but is still wired (a dead node process on every trigger)' : ''} — prune it: npx claude-kit update`,
+      );
+    }
+  }
+
+  // Terse output style: installing the file does not activate it (the style is
+  // user-selected). Report the real state from `outputStyle`, keyed on the
+  // frontmatter NAME "Kit Terse" — the `kit-terse` filename slug silently falls
+  // back to Default. See output-style-keyed-by-name-not-filename.
+  if (manifest?.modules?.includes('terse-style')) {
+    const styleOf = (s) =>
+      typeof s?.outputStyle === 'string' ? s.outputStyle : null;
+    const local = readJson(join(root, '.claude', 'settings.local.json'));
+    const active = styleOf(local) ?? styleOf(ctx.claude.settings);
+    if (active === 'Kit Terse') {
+      readouts.push('terse-style: ACTIVE (outputStyle "Kit Terse")');
+    } else if (active === 'kit-terse') {
+      report(
+        'WARN',
+        'terse-style: outputStyle "kit-terse" is the filename slug and silently falls back to Default — set outputStyle to "Kit Terse" (the frontmatter name)',
+      );
+    } else if (active) {
+      readouts.push(
+        `terse-style: INACTIVE — installed, but outputStyle "${active}" is active instead`,
+      );
+    } else {
+      readouts.push(
+        'terse-style: INACTIVE — installed but no outputStyle set; activate via /config → Output style → "Kit Terse", or set "outputStyle": "Kit Terse"',
+      );
+    }
+  }
+
   const errors = findings.filter((f) => f.level === 'ERROR');
   const warns = findings.filter((f) => f.level === 'WARN');
+  for (const line of readouts) console.log(`· ${line}`);
   for (const f of findings)
     console.log(`${f.level === 'ERROR' ? '✗ ERROR' : '! WARN '}  ${f.msg}`);
   console.log(

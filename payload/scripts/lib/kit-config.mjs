@@ -27,6 +27,29 @@ export const GUARD_DEFAULTS = {
   custom: [],
 };
 
+// Defaults for the opt-in PreToolUse(Read) guard (config.readGuard). Only unbounded
+// whole-file reads (no offset/limit) of generated/oversized files are redirected;
+// maxBytes is deliberately high so it catches only genuinely huge files, with
+// denyGlobs handling the common always-generated cases regardless of size.
+export const READ_GUARD_DEFAULTS = {
+  enabled: true,
+  maxBytes: 500000,
+  denyGlobs: [
+    '**/*.min.js',
+    '**/*.min.css',
+    '**/*.map',
+    'pnpm-lock.yaml',
+    'package-lock.json',
+    'yarn.lock',
+    'bun.lock',
+    'bun.lockb',
+    '**/dist/**',
+    '**/build/**',
+    '**/.next/**',
+    '**/node_modules/**',
+  ],
+};
+
 const EMPTY = Object.freeze({ targets: [] });
 const cache = new Map();
 

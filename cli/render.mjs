@@ -58,12 +58,22 @@ function fixDefaultsFor(pm, isMonorepo = true) {
   return defaults;
 }
 
+// The verify block mirrors fix (same runner/filter/prefix), but the read-only gate
+// commands differ — a unified `verify` script by default; per-target verifyCommands
+// (detected) override it. Only emitted when the verify-changed module is enabled.
+function verifyDefaultsFor(pm, isMonorepo = true) {
+  return { ...fixDefaultsFor(pm, isMonorepo), commands: ['verify'] };
+}
+
 export function renderKitConfig(ctx, answers) {
   const has = (id) => answers.moduleIds.includes(id);
   const config = {
     version: 2,
     packageManager: ctx.packageManager?.name ?? 'npm',
     fix: fixDefaultsFor(ctx.packageManager, ctx.isMonorepo),
+    ...(has('verify-changed')
+      ? { verify: verifyDefaultsFor(ctx.packageManager, ctx.isMonorepo) }
+      : {}),
     lintableExtensions: DEFAULT_LINTABLE,
     generatedFilePattern: '/(?:CHANGELOG|BACKLOG)\\.md$',
     guard: {
@@ -89,6 +99,8 @@ export function renderKitConfig(ctx, answers) {
         label: t.label,
       };
       if (t.fixCommands) target.fixCommands = t.fixCommands;
+      if (has('verify-changed') && t.verifyCommands)
+        target.verifyCommands = t.verifyCommands;
       if (has('ledger')) {
         target.changelogPath = `.claude/changelogs/${t.name}.md`;
         target.logPath = `.claude/changelogs/${t.name}.log`;

@@ -21,6 +21,7 @@ import {
   mergeSettings,
   parseSettingsText,
   renderSettings,
+  settingsSignature,
 } from './merge-settings.mjs';
 
 import * as core from './modules/core.mjs';
@@ -34,6 +35,13 @@ import * as ledger from './modules/ledger.mjs';
 import * as terseStyle from './modules/terse-style.mjs';
 import * as debugSession from './modules/debug-session.mjs';
 import * as plans from './modules/plans.mjs';
+import * as verifyChanged from './modules/verify-changed.mjs';
+import * as ready from './modules/ready.mjs';
+import * as sweep from './modules/sweep.mjs';
+import * as personaAuditor from './modules/persona-auditor.mjs';
+import * as readGuard from './modules/read-guard.mjs';
+import * as regen from './modules/regen.mjs';
+import * as statusline from './modules/statusline.mjs';
 
 export const MODULES = [
   core,
@@ -47,6 +55,13 @@ export const MODULES = [
   terseStyle,
   debugSession,
   plans,
+  verifyChanged,
+  ready,
+  sweep,
+  personaAuditor,
+  readGuard,
+  regen,
+  statusline,
 ];
 
 export class KitError extends Error {}
@@ -185,5 +200,52 @@ export function computeEffects(
     };
   }
 
-  return { effects, settingsPlan, advisories };
+  // The kit's settings signature is recorded even on a no-change run (the fragments
+  // describe the kit's contribution regardless of what's already merged in).
+  const signature = settingsSignature(fragments);
+
+  // Every file the current plan produces — the reference set a prune diffs against.
+  const plannedDests = new Set(
+    effects
+      .filter((e) => ['copy', 'write', 'seed'].includes(e.action.kind))
+      .map((e) => e.action.dest),
+  );
+
+  return { effects, settingsPlan, advisories, signature, plannedDests };
+}
+
+// Manifest-diff prune (used by update): a file the previous manifest recorded as
+// kit-owned but the current plan no longer produces is retired. Delete only
+// kit-owned, hash-UNMODIFIED files (a locally-edited one is kept + WARNed unless
+// --force); a file already gone is just dropped from the manifest. Also names the
+// retired hook SCRIPTS so the caller can unwire them. Pure computation — only
+// apply() writes; dry-run renders exactly this.
+// → { deletes:[{dest, modified?, gone?}], kept:[dest], removedScripts:[basename] }
+export function computePrune(
+  root,
+  { manifest, plannedDests, force = false } = {},
+) {
+  const deletes = [];
+  const kept = [];
+  for (const [dest, hash] of Object.entries(manifest?.files ?? {})) {
+    if (plannedDests.has(dest)) continue; // still produced by a current module
+    const abs = join(root, dest);
+    if (!existsSync(abs)) {
+      deletes.push({ dest, gone: true });
+      continue;
+    }
+    const modified = sha256(readFileSync(abs)) !== hash;
+    if (modified && !force) {
+      kept.push(dest);
+      continue;
+    }
+    deletes.push({ dest, modified });
+  }
+
+  // Retired scripts (that a hook might still reference) — surfaced for unwiring.
+  const removedScripts = deletes
+    .filter((d) => /^\.claude\/scripts\/.+\.mjs$/.test(d.dest))
+    .map((d) => d.dest.split('/').pop());
+
+  return { deletes, kept, removedScripts };
 }

@@ -1,5 +1,6 @@
 // `claude-kit init` (claude-kit CLI): detect → choose → plan → preview → apply.
 
+import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { detect } from '../detect.mjs';
@@ -14,6 +15,17 @@ import {
 import { apply } from '../apply.mjs';
 import * as ui from '../ui.mjs';
 
+// True when two paths point at the same directory, resolving symlinks (git's
+// toplevel is a realpath; resolve() alone is not, so /var vs /private/var on macOS
+// would spuriously differ). Falls back to a plain resolve compare if realpath fails.
+function samePath(a, b) {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return resolve(a) === resolve(b);
+  }
+}
+
 function preflight(root, ctx) {
   const [major] = process.versions.node.split('.').map(Number);
   if (major < 20)
@@ -23,6 +35,19 @@ function preflight(root, ctx) {
   if (!ctx.git.isRepo) {
     throw new KitError(
       `${root} is not a git work tree. Kit scripts resolve paths from the git root — run git init first.`,
+    );
+  }
+  // Refuse a below-toplevel install: the payload's hooks resolve every path from the
+  // git toplevel (repoRoot()), so a .claude/ written in a subdir would never be found
+  // — a silently broken install. Compare realpaths (git returns the physical path;
+  // /tmp→/private on macOS would otherwise make every install look like a subdir).
+  if (ctx.git.top && !samePath(root, ctx.git.top)) {
+    throw new KitError(
+      `Refusing to install below the git root.\n` +
+        `  here:     ${root}\n` +
+        `  git root: ${ctx.git.top}\n` +
+        `The kit's hooks resolve paths from the git toplevel, so a .claude/ here would never be found.\n` +
+        `Install from the toplevel instead:\n  cd ${ctx.git.top} && npx claude-kit init`,
     );
   }
   if (resolve(root) === KIT_ROOT)

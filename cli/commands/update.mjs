@@ -1,10 +1,23 @@
 // `claude-kit update` (claude-kit CLI): refresh kit-owned files to this kit
-// version, honoring local edits (manifest hash mismatch → skip unless --force).
+// version, honoring local edits (manifest hash mismatch → skip unless --force),
+// PRUNE files/hooks the current kit no longer ships (kit-owned + unmodified only),
+// and ADVERTISE genuinely-new default modules (never auto-enable).
 
 import { resolve } from 'node:path';
 
 import { detect, trackedTemplateFiles, untrackFromIndex } from '../detect.mjs';
-import { KitError, buildPlan, computeEffects } from '../plan.mjs';
+import {
+  MODULES,
+  KitError,
+  buildPlan,
+  computeEffects,
+  computePrune,
+} from '../plan.mjs';
+import {
+  parseSettingsText,
+  removeHooksByScript,
+  renderSettings,
+} from '../merge-settings.mjs';
 import { apply } from '../apply.mjs';
 import * as ui from '../ui.mjs';
 
@@ -54,10 +67,62 @@ export async function update(dir, flags) {
     throw e;
   }
 
+  // Prune: files the current kit no longer produces (kit-owned + hash-unmodified),
+  // plus the settings wiring of any retired hook script. Fold the hook removal into
+  // the same settings write the additive merge produces, so settings.json is written
+  // once — additive entries in, retired kit hooks out — never clobbering user hooks.
+  const prune = computePrune(root, {
+    manifest,
+    plannedDests: planResult.plannedDests,
+    force: flags.force,
+  });
+  if (prune.removedScripts.length) {
+    const base = planResult.settingsPlan
+      ? parseSettingsText(planResult.settingsPlan.text)
+      : (ctx.claude.settings ?? {});
+    const { merged, changes } = removeHooksByScript(base, prune.removedScripts);
+    if (changes.length) {
+      planResult.settingsPlan ??= {
+        dest: '.claude/settings.json',
+        existedBefore: ctx.claude.settingsExists,
+        changes: [],
+      };
+      planResult.settingsPlan.text = renderSettings(merged);
+      planResult.settingsPlan.changes.push(...changes);
+    }
+  }
+
+  // Advertise genuinely-new DEFAULT modules an existing install predates. init unions
+  // new defaults; update (the path people use) did not — surface them, never enable.
+  const addable = MODULES.filter(
+    (m) =>
+      !m.locked &&
+      m.defaultEnabled(ctx) &&
+      !(manifest.modules ?? []).includes(m.id),
+  ).map((m) => m.id);
+
   ui.note(
     ui.renderPreview(planResult),
     flags.dryRun ? 'Update plan (dry run)' : 'Update plan',
   );
+
+  if (prune.deletes.length || prune.kept.length) {
+    const lines = [];
+    for (const d of prune.deletes)
+      lines.push(
+        `- ${d.dest}${d.gone ? ' (already gone — dropped from manifest)' : d.modified ? ' (was locally edited; --force removed it)' : ''}`,
+      );
+    for (const k of prune.kept)
+      lines.push(
+        `! ${k} — retired, but locally edited: kept (--force to remove)`,
+      );
+    ui.note(lines.join('\n'), 'Prune (retired by this kit version)');
+  }
+  if (addable.length)
+    ui.note(
+      `New default module(s) available: ${addable.join(', ')}\nEnable with: npx claude-kit modules --modules=${addable.join(',')}`,
+      'Available modules',
+    );
 
   // Reference templates are self-gitignored, but an install predating that may
   // have committed them. Reconcile by dropping them from the index (working-tree
@@ -76,11 +141,15 @@ export async function update(dir, flags) {
     return 0;
   }
 
-  const { written } = apply(root, planResult, {
-    kitVersion: flags.kitVersion,
-    moduleIds: answers.moduleIds,
-    previousManifest: manifest,
-  });
+  const { written } = apply(
+    root,
+    { ...planResult, prune },
+    {
+      kitVersion: flags.kitVersion,
+      moduleIds: answers.moduleIds,
+      previousManifest: manifest,
+    },
+  );
   ui.note(ui.renderWritten(written), 'Written');
 
   const untracked =
@@ -94,10 +163,16 @@ export async function update(dir, flags) {
     );
 
   const skipped = planResult.effects.filter((e) => e.op === 'skip-modified');
+  const pruned = prune.deletes.filter((d) => !d.gone).length;
   ui.outro(
-    skipped.length
-      ? `Done — ${skipped.length} locally-edited file(s) kept as-is (rerun with --force to overwrite).`
-      : 'Done.',
+    [
+      pruned ? `pruned ${pruned} retired file(s)` : '',
+      skipped.length
+        ? `${skipped.length} locally-edited file(s) kept as-is (--force to overwrite)`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('; ') || 'Done.',
   );
   return 0;
 }

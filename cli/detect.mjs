@@ -34,6 +34,21 @@ export function detectFixCommands(scripts = {}) {
   return out.length ? out : null;
 }
 
+// Verify-command detection (the read-only gate: check/test/lint, never a fixer).
+// A unified `verify` script wins (repos wire the parts underneath it). Otherwise
+// take the checkers that exist — typecheck|check, test, lint — in that order.
+export function detectVerifyCommands(scripts = {}) {
+  if (typeof scripts.verify === 'string') return ['verify'];
+
+  const out = [];
+  if (typeof scripts.typecheck === 'string') out.push('typecheck');
+  else if (typeof scripts.check === 'string') out.push('check');
+  if (typeof scripts.test === 'string') out.push('test');
+  if (typeof scripts.lint === 'string') out.push('lint');
+
+  return out.length ? out : null;
+}
+
 export function suggestPrefix(name) {
   const short = name.includes('/') ? name.split('/').pop() : name;
   const cleaned = short.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -170,6 +185,7 @@ function buildTargets(root, rootPkg, packages) {
           : p.relDir,
         label: titleCase(name),
         fixCommands: detectFixCommands(p.pkg.scripts),
+        verifyCommands: detectVerifyCommands(p.pkg.scripts),
       };
     });
   }
@@ -184,6 +200,7 @@ function buildTargets(root, rootPkg, packages) {
         sourcePath: existsSync(join(root, 'src')) ? 'src' : '',
         label: titleCase(name),
         fixCommands: detectFixCommands(rootPkg.scripts),
+        verifyCommands: detectVerifyCommands(rootPkg.scripts),
       },
     ];
   }

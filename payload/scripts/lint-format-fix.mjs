@@ -51,6 +51,18 @@ const RUNNER = fix.runner ?? config.packageManager ?? 'pnpm';
 const FILTER_FLAG = fix.filterFlag ?? '--filter'; // '' / null for a single-package repo
 const RUN_PREFIX = fix.runScriptPrefix ?? []; // e.g. ['run'] for npm/yarn
 const COMMANDS = fix.commands ?? ['lint:fix', 'format:fix'];
+// Optional per-command extension gate (default off = today's behavior): a command
+// runs only if a changed file in the package has one of its extensions. Skips e.g.
+// lint:fix on a docs-only edit. Only helps repos with SEPARATE lint:fix + format:fix
+// (a unified `fix` can't be split); it saves blocking Stop-hook latency, not tokens.
+const COMMAND_EXTENSIONS = fix.commandExtensions ?? {}; // { "lint:fix": ["ts","tsx",...] }
+const gatePasses = (script, exts) => {
+  const allowed = COMMAND_EXTENSIONS[script];
+  if (!allowed?.length) return true; // ungated → always run
+  return allowed.some((e) =>
+    exts.has(String(e).replace(/^\./, '').toLowerCase()),
+  );
+};
 
 // prefix → package map (a changed file under `prefix` belongs to that package).
 // targets[].fixCommands overrides the global fix.commands per package — real repos
@@ -97,14 +109,20 @@ function changedPaths(cwd) {
 }
 
 function affectedPackages(paths) {
-  const pkgs = new Map();
+  const pkgs = new Map(); // name -> { commands, exts:Set<string> }
   for (const p of paths) {
     if (!LINTABLE_EXT.test(p)) continue;
     if (GENERATED_FILE_RE.test('/' + p)) continue;
     const match = PACKAGE_BY_PATH.find((pkg) => p.startsWith(pkg.prefix));
-    if (match) pkgs.set(match.name, match.commands);
+    if (!match) continue;
+    const entry = pkgs.get(match.name) ?? {
+      commands: match.commands,
+      exts: new Set(),
+    };
+    entry.exts.add(p.split('.').pop().toLowerCase());
+    pkgs.set(match.name, entry);
   }
-  return [...pkgs.entries()];
+  return [...pkgs.entries()].map(([name, v]) => [name, v.commands, v.exts]);
 }
 
 function runStep(pkg, script, cwd) {
@@ -135,8 +153,9 @@ function main() {
 
   const errors = [];
 
-  for (const [pkg, commands] of pkgs) {
+  for (const [pkg, commands, exts] of pkgs) {
     for (const script of commands) {
+      if (!gatePasses(script, exts)) continue; // no matching extension changed
       const r = runStep(pkg, script, cwd);
       if (!r.ok) errors.push({ pkg, step: script, output: r.output });
     }

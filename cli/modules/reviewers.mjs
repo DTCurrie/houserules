@@ -4,9 +4,11 @@
 // carries a DRAFT marker until the user fills it in (doctor flags leftovers).
 
 import { renderReviewerDraft } from '../render.mjs';
+import { skill } from './shared.mjs';
 
 export const id = 'reviewers';
-export const title = 'Per-target reviewer agent drafts';
+export const title =
+  'Per-target reviewer agent drafts + /review-change dispatch';
 export const group = 'optional';
 
 export function hint(ctx) {
@@ -19,9 +21,20 @@ export function defaultEnabled() {
 
 export function plan(ctx, answers) {
   const chosen = answers.reviewerTargets ?? answers.targets.map((t) => t.name);
-  const actions = [];
+  const actions = [
+    // The dispatch recipe: maps changed paths → each area's reviewer and fans them
+    // out read-only. Ships with the module so the reviewer drafts finally get wired
+    // up (they were generated but never dispatched before).
+    skill(
+      id,
+      'review-change',
+      'dispatch per-target reviewers by changed path (OK/Conflict/Gap)',
+    ),
+  ];
+  let reviewers = 0;
   for (const target of answers.targets) {
     if (!chosen.includes(target.name)) continue;
+    reviewers += 1;
     actions.push({
       kind: 'seed',
       dest: `.claude/agents/${target.name}-reviewer.md`,
@@ -30,10 +43,10 @@ export function plan(ctx, answers) {
       reason: `DRAFT reviewer for ${target.label}`,
     });
   }
-  if (actions.length) {
+  if (reviewers) {
     actions.push({
       kind: 'advise',
-      text: 'Reviewer agents are DRAFTs: fill in each authoritative source and remove the DRAFT marker (see .claude/agents/*-reviewer.md).',
+      text: 'Reviewer agents are DRAFTs: fill in each authoritative source and remove the DRAFT marker, then run /review-change to dispatch them by changed path.',
       module: id,
     });
   }

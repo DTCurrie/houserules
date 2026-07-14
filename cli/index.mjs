@@ -17,6 +17,7 @@ Usage:
   npx claude-kit modules [dir] [--dry-run] [--yes] [--modules=a,b]
   npx claude-kit update  [dir] [--dry-run] [--force]
   npx claude-kit doctor  [dir]
+  npx claude-kit report  [dir]
 
 Commands:
   init     Detect the repo, choose modules interactively, and install the kit
@@ -27,6 +28,8 @@ Commands:
            are skipped with a warning (use --force to overwrite them).
   doctor   Validate the installation: config vs repo reality, hooks wired,
            kit files intact, changesets invocation story.
+  report   Read-only transcript telemetry for this repo's sessions: per-session
+           + rolled-up token tables (cache_read cost-weighted, not vanity).
 
 Flags:
   --dry-run        Print the plan (or update/doctor report) without writing.
@@ -90,6 +93,10 @@ async function main() {
     case 'doctor': {
       const { doctor } = await import('./commands/doctor.mjs');
       return doctor(targetDir, flags);
+    }
+    case 'report': {
+      const { report } = await import('./commands/report.mjs');
+      return report(targetDir, flags);
     }
     default:
       console.error(`Unknown command "${command}".\n`);

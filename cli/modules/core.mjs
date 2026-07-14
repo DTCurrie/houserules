@@ -18,6 +18,7 @@ import { hookFragment, lib, script, template } from './shared.mjs';
 const MODULE_OWNED_TEMPLATES = new Set([
   'agents/archivist.agent.md.template',
   'agents/debugger.agent.md.template',
+  'agents/persona-auditor.agent.md.template',
 ]);
 
 export const id = 'core';

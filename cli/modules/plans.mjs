@@ -30,6 +30,13 @@ export function plan() {
       'plan-project',
       'the /plan-project scaffold + status-in-place ROADMAP discipline',
     ),
+    // /blast-radius shares the .claude/plans/ home (its dated impact maps land there,
+    // gitignored) — a worked example of read-only fan-out → archived artifact.
+    skill(
+      id,
+      'blast-radius',
+      'fan out read-only explorers once → archive a dated impact map under .claude/plans/',
+    ),
     // Plan workspaces are living project state, not commit artifacts, and churn every
     // phase. A directory-local .gitignore (like .claude/debug/) keeps them out of
     // commits without touching the repo's .gitignore; the .gitignore itself stays
@@ -51,7 +58,7 @@ export function plan() {
     },
     {
       kind: 'advise',
-      text: 'Planning: run /plan-project "<what to build>" for a large/multi-phase implementation — it scaffolds .claude/plans/<name>/ and tracks ROADMAP status in place so resuming is a grep, not a re-derivation.',
+      text: 'Planning: run /plan-project "<what to build>" for a large/multi-phase implementation — it scaffolds .claude/plans/<name>/ and tracks ROADMAP status in place so resuming is a grep, not a re-derivation. Run /blast-radius "<change>" to archive a dated impact map (also under .claude/plans/) before a wide change.',
       module: id,
     },
   ];
