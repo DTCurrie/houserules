@@ -179,3 +179,59 @@ test('OM4: debug-session is off by default and core does not stage its template'
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('OM5: plans lands the /plan skill, self-gitignores the workspace, and wires the CLAUDE.md pointer', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    const r = runCli(['init', '--yes', '--modules=plans', root]);
+    assert.equal(r.status, 0, r.stderr);
+
+    // Skill lands; the module is script-free and wires no hook.
+    assert.ok(existsSync(join(root, '.claude/skills/plan/SKILL.md')));
+    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    assert.ok(manifest.modules.includes('plans'));
+
+    // The plan workspace is self-gitignored (repo .gitignore untouched), same as debug.
+    const ignore = readFileSync(join(root, '.claude/plans/.gitignore'), 'utf8');
+    assert.match(ignore, /^\*$/m, 'plan workspaces ignored');
+    assert.match(ignore, /^!\.gitignore$/m, 'the .gitignore stays tracked');
+
+    // The pull-only pointer lands in the seeded root CLAUDE.md (not a nested plans/CLAUDE.md,
+    // which would never auto-load). It names /plan and the resume-by-ROADMAP discipline.
+    const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
+    assert.match(claudeMd, /\/plan\b/, 'CLAUDE.md points at the /plan skill');
+    assert.match(claudeMd, /\.claude\/plans\//);
+    assert.match(claudeMd, /ROADMAP/, 'resume discipline is stated');
+    assert.ok(
+      !existsSync(join(root, '.claude/plans/CLAUDE.md')),
+      'no nested plans/CLAUDE.md (it would never load when needed)',
+    );
+
+    // Doctor stays green (no hook to validate for this module).
+    assert.equal(runCli(['doctor', root]).status, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('OM6: plans is off by default — no skill, no workspace, no CLAUDE.md pointer', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    assert.equal(runCli(['init', '--yes', root]).status, 0);
+    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    assert.ok(!manifest.modules.includes('plans'));
+
+    assert.ok(!existsSync(join(root, '.claude/skills/plan/SKILL.md')));
+    assert.ok(!existsSync(join(root, '.claude/plans/.gitignore')));
+
+    // The CLAUDE.md pointer is gated on the module — absent when plans is off.
+    const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
+    assert.ok(
+      !claudeMd.includes('/plan'),
+      'no /plan pointer without the module',
+    );
+    assert.ok(!claudeMd.includes('.claude/plans/'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

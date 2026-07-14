@@ -2,34 +2,6 @@
 
 Deferred work. Add entries via `.claude/scripts/backlog-log.mjs`; remove on resolution.
 
-## [CLAUDEKIT-23d373] Phased-implementation planning skill/agent (PLAN + ROADMAP + per-phase sub-plans in .claude/plans/<name>/)
-
-**Logged:** 2026-07-14
-**Chat:** c7c5a67e-0d18-4b8f-8196-111838e7d6c9
-
-Source: user request (2026-07-14). SUPERSEDES/expands the investigation "plans module"
-candidate (Tier 2 #13) — do not create a separate #13 entry.
-
-A planning skill/agent that uses the existing planning tools, but when an implementation
-is large / multi-step / multi-phase, commits the plan to a .gitignored
-`.claude/plans/<plan-name>/` directory containing:
-
-- `PLAN.md` — core doc: general overview + links out to the roadmap and to each sub-plan.
-- `ROADMAP.md` — a LIVING status doc tracking completed / in-progress / future work.
-- one sub-plan doc per phase of work.
-  The agent manages the implementation as a project: it updates ROADMAP.md (and the relevant
-  sub-plan) as each phase/step is completed. Resume discipline: a returning session greps
-  ROADMAP status instead of re-deriving scope from the transcript.
-
-Grounded in radium-sunrise/.claude/plans/*.plan.md (dated, Status-tracked, cross-referencing
-plan artifacts). Kit-fit: an opt-in `plans` module (defaultEnabled false) shipping a `/plan`
-SKILL.md (zero-dep markdown) that scaffolds the `.claude/plans/<name>/` dir + a module-gated
-root-CLAUDE.md planning pointer. Keep the plans dir PULL-ONLY via the root CLAUDE.md pointer
-(a nested `.claude/plans/CLAUDE.md` won't load when it's needed). Investigation flagged: drop
-any invented INDEX/plan-log script; the value is the doc structure + status-in-place discipline.
-
----
-
 ## [CLAUDEKIT-217f59] verify-changed skill + script: DAG-scoped lint/check/test on changed packages plus dependents
 
 **Logged:** 2026-07-14

@@ -33,6 +33,7 @@ import * as reviewers from './modules/reviewers.mjs';
 import * as ledger from './modules/ledger.mjs';
 import * as terseStyle from './modules/terse-style.mjs';
 import * as debugSession from './modules/debug-session.mjs';
+import * as plans from './modules/plans.mjs';
 
 export const MODULES = [
   core,
@@ -45,6 +46,7 @@ export const MODULES = [
   ledger,
   terseStyle,
   debugSession,
+  plans,
 ];
 
 export class KitError extends Error {}

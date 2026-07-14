@@ -154,6 +154,21 @@ function backlogSection(ctx, answers) {
   ];
 }
 
+function plansSection(ctx, answers) {
+  if (!answers.moduleIds.includes('plans')) return [];
+  return [
+    '### Planning large, multi-phase work',
+    '',
+    'For an implementation too big to hold in one plan (3+ independently-landing phases, or work',
+    'you expect to pause and resume), run the `/plan` skill. It persists the plan to a gitignored',
+    '`.claude/plans/<name>/` workspace — a `PLAN.md` overview, a living `ROADMAP.md`, and one',
+    'sub-plan per phase — and keeps ROADMAP status current in place as each phase lands.',
+    '**Resuming such work?** Read `.claude/plans/<name>/ROADMAP.md` first for live status; grep its',
+    'status lines instead of re-deriving scope from the transcript.',
+    '',
+  ];
+}
+
 export function renderClaudeMd(ctx, answers) {
   const name = ctx.rootPkg?.name ?? 'this repo';
   const lines = [
@@ -181,6 +196,7 @@ export function renderClaudeMd(ctx, answers) {
     '',
     ...changesetsSection(ctx, answers),
     ...backlogSection(ctx, answers),
+    ...plansSection(ctx, answers),
   );
   lines.push(
     '## Conventions',
@@ -234,6 +250,7 @@ export function renderClaudeAdditions(ctx, answers) {
     '',
     ...changesetsSection(ctx, answers),
     ...backlogSection(ctx, answers),
+    ...plansSection(ctx, answers),
     '### Conventions to add',
     '',
     '- **The user always handles `git commit` / `push` / PR-create.** Describe what is ready and stop.',
