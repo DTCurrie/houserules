@@ -42,6 +42,20 @@ export function agent(module, name, reason) {
   };
 }
 
+// A Claude Code rule file (.claude/rules/<name>.md). Claude Code loads this
+// directory as memory: a rule whose frontmatter carries `paths:` globs loads only
+// when a matching file is in the working set; one WITHOUT `paths:` is resident on
+// every turn. Kit rules always carry `paths:`.
+export function rule(module, name, reason) {
+  return {
+    kind: 'copy',
+    src: payloadPath('rules', `${name}.md`),
+    dest: `.claude/rules/${name}.md`,
+    module,
+    reason,
+  };
+}
+
 // Stage a raw kit-templates/<rel> file for hand-instantiation. `rel` is a
 // forward-slash path relative to payload/kit-templates (e.g. 'agents/foo.template').
 export function template(module, rel, reason = 'reference template') {

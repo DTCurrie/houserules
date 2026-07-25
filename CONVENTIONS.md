@@ -107,9 +107,27 @@ per-developer, not in git). Nothing to copy; adopt the discipline:
 For each axis the repo keeps re-deriving (architecture, API conventions, security, voice, balance),
 write a small `.claude/rules/<topic>.md` (see `templates/rules/GUARDRAIL.md.template`): terse locked
 decisions **with their rationale**, a "if a change is in tension with this, the change is wrong"
-precedence line, and a `description` frontmatter. List it in CLAUDE.md with a **conditional trigger**,
-not "always read". The payoff is converting open-ended judgement into a cheap lookup against a locked
-answer — and avoiding the most expensive failure, work that points the wrong way and gets reverted.
+precedence line, and a `description` frontmatter. The payoff is converting open-ended judgement into a
+cheap lookup against a locked answer — and avoiding the most expensive failure, work that points the
+wrong way and gets reverted.
+
+**`.claude/rules/*.md` is auto-loaded — the frontmatter decides when** (verified against Claude Code
+2.1.220). A rule file **without** `paths:` is project memory: resident on _every_ turn, whether or not
+CLAUDE.md points at it. A rule file **with** `paths:` globs is conditional — it loads only when a
+matching file is in the working set:
+
+```yaml
+---
+paths:
+  - '**/*.ts'
+  - 'packages/api/**'
+---
+```
+
+So: give any rule scoped to a file type or area a `paths:` list (that _is_ its conditional trigger — a
+CLAUDE.md pointer is then redundant), and reserve globless rule files for the rare axis that is truly
+true on every turn. A globless guardrail doc silently spends the always-loaded budget from §1; if you
+want it pull-only instead, keep it out of `.claude/rules/` and link it from CLAUDE.md.
 
 ## 7. Generated-reference snapshot (optional, for fragmented authoritative corpora)
 

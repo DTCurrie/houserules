@@ -1,5 +1,9 @@
 ---
 description: "<one sentence: what locked-in decisions this doc governs and when to read it>"
+# Scope this doc to the files it governs. With `paths:`, Claude Code loads it ONLY when a
+# matching file is in the working set; WITHOUT it, the file is resident on every turn.
+paths:
+  - "<glob/**>"
 ---
 
 # <Topic>
@@ -29,8 +33,11 @@ locked-in goals.
 HOW TO USE THIS TEMPLATE (delete this comment in the real file):
 - One guardrail doc per axis the repo keeps re-deriving: architecture.md, api-conventions.md,
   security.md, voice.md, gameplay.md, etc. Keep each well under ~10KB.
-- It is NOT auto-loaded. In CLAUDE.md, list it with a CONDITIONAL trigger:
-    "- [.claude/rules/<topic>.md] — read before any change to <X>."
+- Files under .claude/rules/ ARE auto-loaded; the `paths:` frontmatter is what makes that
+  conditional (loaded only when a matching file is in play) instead of every-turn resident.
+  Keep `paths:` tight and you need no CLAUDE.md pointer. If this doc belongs elsewhere
+  (pull-only), move it out of .claude/rules/ and link it from CLAUDE.md with a conditional
+  trigger: "- [docs/<topic>.md] — read before any change to <X>."
   In each subagent that needs it, cite only the doc(s) relevant to that agent's job.
 - The value collapses if it gets auto-loaded every turn, or if the team treats it as a suggestion
   and lets it drift from real behavior. Locked decisions only.

@@ -37,6 +37,7 @@ const LINKS = [
   { name: 'skills', target: '../payload/skills' },
   { name: 'agents', target: '../payload/agents' },
   { name: 'output-styles', target: '../payload/output-styles' },
+  { name: 'rules', target: '../payload/rules' },
 ];
 
 function lstatOrNull(p) {
@@ -128,7 +129,9 @@ const kitConfig = {
 };
 
 const settings = {
-  outputStyle: 'kit-terse',
+  // The frontmatter `name` from payload/output-styles/kit-terse.md, NOT the filename
+  // slug — Claude Code matches outputStyle by name and silently falls back to Default.
+  outputStyle: 'Kit Terse',
   permissions: {
     allow: [
       'Bash(git status)',

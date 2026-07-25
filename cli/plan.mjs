@@ -42,6 +42,7 @@ import * as personaAuditor from './modules/persona-auditor.mjs';
 import * as readGuard from './modules/read-guard.mjs';
 import * as regen from './modules/regen.mjs';
 import * as statusline from './modules/statusline.mjs';
+import * as codeComments from './modules/code-comments.mjs';
 
 export const MODULES = [
   core,
@@ -62,6 +63,7 @@ export const MODULES = [
   readGuard,
   regen,
   statusline,
+  codeComments,
 ];
 
 export class KitError extends Error {}

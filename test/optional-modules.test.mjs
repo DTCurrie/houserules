@@ -239,3 +239,60 @@ test('OM6: plans is off by default — no skill, no workspace, no CLAUDE.md poin
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('OM7: code-comments lands a PATH-SCOPED rule (no hook, no CLAUDE.md pointer)', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    const r = runCli(['init', '--yes', '--modules=code-comments', root]);
+    assert.equal(r.status, 0, r.stderr);
+
+    const rulePath = join(root, '.claude/rules/code-comments.md');
+    const text = readFileSync(rulePath, 'utf8');
+
+    // The `paths:` frontmatter is what makes the rule conditional — without it
+    // Claude Code loads .claude/rules/*.md on EVERY turn (resident context).
+    assert.match(
+      text,
+      /^---\n(?:.*\n)*?paths:\n/,
+      'paths: frontmatter present',
+    );
+    assert.match(text, /^ {2}- ['"]\*\*\/\*\.ts['"]$/m);
+    assert.match(text, /Hard cap: 200 characters/);
+
+    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    assert.ok(manifest.modules.includes('code-comments'));
+    assert.ok(
+      manifest.files['.claude/rules/code-comments.md'],
+      'the rule is kit-owned (update-refreshable)',
+    );
+
+    // Script-free and hook-free: the platform does the conditional loading, and the
+    // rule self-scopes, so nothing is added to the always-loaded surface.
+    const settings = readJson(join(root, '.claude/settings.json'));
+    const cmds = Object.values(settings.hooks ?? {}).flatMap((groups) =>
+      groups.flatMap((g) => g.hooks.map((h) => h.command)),
+    );
+    assert.ok(!cmds.some((c) => c.includes('code-comments')));
+    const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
+    assert.ok(
+      !claudeMd.includes('code-comments'),
+      'no CLAUDE.md pointer — paths: is the trigger',
+    );
+
+    assert.equal(runCli(['doctor', root]).status, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('OM8: code-comments is off by default', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    assert.equal(runCli(['init', '--yes', root]).status, 0);
+    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    assert.ok(!manifest.modules.includes('code-comments'));
+    assert.ok(!existsSync(join(root, '.claude/rules/code-comments.md')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
