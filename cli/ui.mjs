@@ -6,6 +6,61 @@ import pc from 'picocolors';
 
 export const isTTY = () => Boolean(process.stdout.isTTY && process.stdin.isTTY);
 
+// clack sizes a note box to its longest line, so one line wider than the terminal
+// wraps and shreds the border — every multi-line string handed to note()/message()
+// is wrapped first. Prose stops at 100 cols even on a very wide terminal.
+const cols = () => Math.max(48, Math.min(process.stdout.columns || 80, 100));
+const noteWidth = () => cols() - 8; // "│  " + content + "  │" + slack
+const messageWidth = () => cols() - 4; // "│  " + content
+
+// Word-wrap to `width`. Tokens are never split — paths, commands and flags have to
+// stay copy-pasteable — so an over-long word just overflows its line. Width is
+// measured on visible characters; a break inside a coloured span is closed with a
+// reset so the colour can't bleed into the rest of the output.
+const ESC = String.fromCharCode(27);
+const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
+const visible = (s) => s.replace(ANSI, '').length;
+const hasAnsi = (s) => s.includes(`${ESC}[`);
+
+export function wrap(text, width = messageWidth()) {
+  return String(text)
+    .split('\n')
+    .flatMap((line) => {
+      const lead = /^[ \t]*/.exec(line)[0];
+      const words = line.slice(lead.length).split(/\s+/).filter(Boolean);
+      if (!words.length) return [''];
+      const out = [];
+      let current = lead + words[0];
+      for (const word of words.slice(1)) {
+        if (visible(current) + 1 + visible(word) <= width)
+          current += ` ${word}`;
+        else {
+          out.push(hasAnsi(current) ? `${current}${ESC}[0m` : current);
+          current = lead + word;
+        }
+      }
+      out.push(current);
+      return out;
+    })
+    .join('\n');
+}
+
+// "label  body", wrapped with the continuation lines hanging under the body column.
+export function labelled(label, text, width = noteWidth()) {
+  const [first, ...rest] = wrap(text, width - label.length).split('\n');
+  return [label + first, ...rest.map((l) => ' '.repeat(label.length) + l)].join(
+    '\n',
+  );
+}
+
+// Wrap BEFORE colouring: splitting an already-coloured string strands its reset
+// code on the first line, bleeding colour into everything after it.
+function bullet(text, width, color) {
+  return wrap(text, width - 2)
+    .split('\n')
+    .map((line, i) => color(i === 0 ? line : `  ${line}`));
+}
+
 export function intro(text) {
   if (isTTY()) p.intro(pc.inverse(` ${text} `));
   else console.log(`\n=== ${text} ===`);
@@ -21,6 +76,14 @@ export function note(text, title) {
   else console.log(`\n-- ${title ?? ''} --\n${text}\n`);
 }
 
+// One-line status in the flow, no box — for the many single-sentence notices that
+// a box only makes harder to read.
+export function message(text) {
+  const body = wrap(text, messageWidth());
+  if (isTTY()) p.log.message(body);
+  else console.log(body);
+}
+
 export function cancel(text) {
   if (isTTY()) p.cancel(text);
   else console.error(text);
@@ -32,6 +95,12 @@ function bail(value) {
     process.exit(1);
   }
   return value;
+}
+
+// A single unbreakable token (an absolute repo path) sets the whole box width, so
+// long paths are elided from the LEFT — the tail is what identifies the repo.
+function elideStart(text, max) {
+  return text.length <= max ? text : `…${text.slice(-(max - 1))}`;
 }
 
 export function profileCard(ctx) {
@@ -71,14 +140,15 @@ export function profileCard(ctx) {
   ]
     .filter(Boolean)
     .join(', ');
+  const row = (name, value) => labelled(name.padEnd(13), value);
   return [
-    `repo         ${ctx.root}`,
-    `package mgr  ${pm}`,
-    `packages     ${pkgs}`,
-    `typescript   ${ctx.typescript ? 'yes' : 'no'}`,
-    `fix scripts  ${fixes || pc.dim('n/a')}`,
-    `changesets   ${changesets}`,
-    `.claude      ${claudeBits || pc.dim('absent')}`,
+    row('repo', elideStart(ctx.root, noteWidth() - 13)),
+    row('package mgr', pm),
+    row('packages', pkgs),
+    row('typescript', ctx.typescript ? 'yes' : 'no'),
+    row('fix scripts', fixes || pc.dim('n/a')),
+    row('changesets', changesets),
+    row('.claude', claudeBits || pc.dim('absent')),
   ].join('\n');
 }
 
@@ -121,9 +191,11 @@ export async function selectNewModules(available, ctx) {
 export async function confirmTargets(targets) {
   if (!targets.length) return targets;
   const rows = targets
-    .map(
-      (t) =>
-        `  ${t.name}  prefix=${t.prefix}  src=${t.sourcePath || '(root)'}  fix=${t.fixCommands?.join('+') ?? '—'}`,
+    .map((t) =>
+      labelled(
+        `  ${t.name}  `,
+        `prefix=${t.prefix}  src=${t.sourcePath || '(root)'}  fix=${t.fixCommands?.join('+') ?? '—'}`,
+      ),
     )
     .join('\n');
   note(rows, 'Detected targets');
@@ -177,7 +249,8 @@ const OP_STYLE = {
   'skip-modified': ['!', pc.red],
 };
 
-export function renderPreview({ effects, settingsPlan, advisories }) {
+export function renderPreview({ effects, settingsPlan }) {
+  const width = noteWidth();
   const lines = [];
   const order = [
     'create',
@@ -195,34 +268,46 @@ export function renderPreview({ effects, settingsPlan, advisories }) {
     }
     for (const { action } of matching) {
       const [sigil, color] = OP_STYLE[op];
-      const label =
+      const suffix =
         op === 'skip-exists'
-          ? `${action.dest} ${pc.dim('(exists — yours, untouched)')}`
+          ? ' (exists — yours, untouched)'
           : op === 'skip-modified'
-            ? `${action.dest} ${pc.dim('(local edits — kept; update --force to overwrite)')}`
-            : action.dest;
-      lines.push(color(`${sigil} ${label}`));
+            ? ' (local edits — kept; update --force to overwrite)'
+            : '';
+      lines.push(...bullet(`${sigil} ${action.dest}${suffix}`, width, color));
     }
   }
   if (settingsPlan) {
     if (settingsPlan.changes.length) {
       lines.push(
-        OP_STYLE.merge[1](
+        ...bullet(
           `± ${settingsPlan.dest} ${settingsPlan.existedBefore ? '(merge into existing; .bak kept)' : '(create)'}`,
+          width,
+          OP_STYLE.merge[1],
         ),
       );
       for (const change of settingsPlan.changes) {
-        lines.push(pc.cyan(`    + ${change.kind}: ${change.detail}`));
+        lines.push(
+          ...bullet(`    + ${change.kind}: ${change.detail}`, width, pc.cyan),
+        );
       }
     } else {
       lines.push(pc.dim(`= ${settingsPlan.dest} already has every kit entry`));
     }
   }
-  if (advisories.length) {
-    lines.push('', pc.bold('Next steps (yours — the kit does not do these):'));
-    advisories.forEach((a, i) => lines.push(`  ${i + 1}. ${a.text}`));
-  }
   return lines.join('\n');
+}
+
+// Post-install to-dos. Printed OUTSIDE the plan box and last: they are long prose,
+// and a box sized to the longest of them is unreadable at any terminal width.
+export function nextSteps(advisories) {
+  if (!advisories.length) return;
+  const lines = advisories.map((a, i) =>
+    labelled(`${String(i + 1).padStart(2)}. `, a.text, messageWidth()),
+  );
+  const body = `${pc.bold('Next steps (yours — the kit does not do these):')}\n\n${lines.join('\n')}`;
+  if (isTTY()) p.log.message(body);
+  else console.log(`\n${body}\n`);
 }
 
 export function renderWritten(written) {
@@ -233,4 +318,27 @@ export function renderWritten(written) {
         `${w.op === 'create' ? '+' : w.op === 'merge' ? '±' : '~'} ${w.dest}`,
     )
     .join('\n');
+}
+
+// The receipt. A long one is a verbatim repeat of the plan printed moments earlier,
+// so past a handful of files it collapses to counts.
+export function written(list) {
+  if (!list.length) {
+    message('Nothing written — already up to date.');
+    return;
+  }
+  if (list.length <= 6) {
+    note(renderWritten(list), 'Written');
+    return;
+  }
+  const count = (op) => list.filter((w) => w.op === op).length;
+  const parts = [
+    ['created', count('create')],
+    ['updated', count('update')],
+    ['merged', count('merge')],
+  ]
+    .filter(([, n]) => n)
+    .map(([label, n]) => `${n} ${label}`);
+  const breakdown = parts.length > 1 ? ` — ${parts.join(', ')}` : '';
+  message(`Wrote ${list.length} files${breakdown} (listed above).`);
 }

@@ -49,7 +49,10 @@ export async function modules(dir, flags) {
 
   const statusTable = MODULES.map((m) => {
     const mark = installed.has(m.id) ? '✓ installed' : '○ available';
-    return `${mark}  ${m.id}${m.locked ? ' (always)' : ''} — ${m.title}`;
+    return ui.labelled(
+      `${mark}  `,
+      `${m.id}${m.locked ? ' (always)' : ''} — ${m.title}`,
+    );
   }).join('\n');
   ui.note(statusTable, 'Modules');
 
@@ -113,7 +116,14 @@ export async function modules(dir, flags) {
     flags.dryRun ? `${label} (dry run)` : label,
   );
 
+  // buildPlan re-plans the whole module set, so its advisories cover modules the
+  // user installed long ago. Only the newly-added ones are news here.
+  const advisories = planResult.advisories.filter((a) =>
+    chosen.includes(a.module),
+  );
+
   if (flags.dryRun) {
+    ui.nextSteps(advisories);
     ui.outro('Dry run — nothing written.');
     return 0;
   }
@@ -130,7 +140,8 @@ export async function modules(dir, flags) {
     moduleIds,
     previousManifest: manifest,
   });
-  ui.note(ui.renderWritten(written), 'Written');
+  ui.written(written);
+  ui.nextSteps(advisories);
   ui.outro(
     `Added ${chosen.join(', ')}. Validate any time with: npx claude-kit doctor`,
   );

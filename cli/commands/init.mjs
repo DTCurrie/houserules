@@ -91,9 +91,8 @@ export async function init(dir, flags) {
     return 1;
   }
   if (installed) {
-    ui.note(
-      `This repo already has kit v${installed.kitVersion}. init re-plans with your existing module set as the default;\nfor a plain refresh of kit-owned files use: npx claude-kit update`,
-      'Already installed',
+    ui.message(
+      `This repo already has kit v${installed.kitVersion}. init re-plans with your existing module set as the default; for a plain refresh of kit-owned files use: npx claude-kit update`,
     );
   }
 
@@ -133,6 +132,7 @@ export async function init(dir, flags) {
   );
 
   if (flags.dryRun) {
+    ui.nextSteps(planResult.advisories);
     ui.outro('Dry run — nothing written.');
     return 0;
   }
@@ -150,7 +150,8 @@ export async function init(dir, flags) {
     previousManifest: installed,
   });
 
-  ui.note(ui.renderWritten(written), 'Written');
+  ui.written(written);
+  ui.nextSteps(planResult.advisories);
   ui.outro('Installed. Validate any time with: npx claude-kit doctor');
   return 0;
 }

@@ -15,7 +15,7 @@ const USAGE = `claude-kit ${KIT_VERSION} — portable Claude Code context-discip
 Usage:
   npx claude-kit init    [dir] [--dry-run] [--yes] [--modules=a,b,-c]
   npx claude-kit modules [dir] [--dry-run] [--yes] [--modules=a,b]
-  npx claude-kit update  [dir] [--dry-run] [--force]
+  npx claude-kit update  [dir] [--dry-run] [--force] [--next-steps]
   npx claude-kit doctor  [dir]
   npx claude-kit report  [dir]
 
@@ -37,6 +37,8 @@ Flags:
   --modules=LIST   Adjust the default module selection headlessly, e.g.
                    --modules=ledger,terse-style,-rename (additive; "-" removes).
   --force          update only: overwrite kit files that have local edits.
+  --next-steps     update only: print the full post-install to-do list (summarized
+                   by default — init and modules always print theirs).
   --version        Print the kit version.
   --help           This text.
 
@@ -52,6 +54,7 @@ async function main() {
       yes: { type: 'boolean', default: false },
       modules: { type: 'string' },
       force: { type: 'boolean', default: false },
+      'next-steps': { type: 'boolean', default: false },
       version: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
     },
@@ -74,6 +77,7 @@ async function main() {
     yes: values.yes || !process.stdout.isTTY,
     modules: values.modules ?? '',
     force: values.force,
+    nextSteps: values['next-steps'],
     kitVersion: KIT_VERSION,
   };
 

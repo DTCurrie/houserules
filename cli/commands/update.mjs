@@ -21,6 +21,18 @@ import {
 import { apply } from '../apply.mjs';
 import * as ui from '../ui.mjs';
 
+// update runs often and its advisories are install-time to-dos the user already saw
+// — reprinting the whole list every refresh buries the actual diff. Summarize; the
+// full text is one flag away.
+function showNextSteps(advisories, flags) {
+  if (!advisories.length) return;
+  if (flags.nextSteps) ui.nextSteps(advisories);
+  else
+    ui.message(
+      `${advisories.length} post-install next step${advisories.length === 1 ? '' : 's'} — see: npx claude-kit update --next-steps`,
+    );
+}
+
 export async function update(dir, flags) {
   const root = resolve(dir);
   const ctx = detect(root);
@@ -119,9 +131,8 @@ export async function update(dir, flags) {
     ui.note(lines.join('\n'), 'Prune (retired by this kit version)');
   }
   if (addable.length)
-    ui.note(
-      `New default module(s) available: ${addable.join(', ')}\nEnable with: npx claude-kit modules --modules=${addable.join(',')}`,
-      'Available modules',
+    ui.message(
+      `New default module(s) available: ${addable.join(', ')} — enable with: npx claude-kit modules --modules=${addable.join(',')}`,
     );
 
   // Reference templates are self-gitignored, but an install predating that may
@@ -133,10 +144,10 @@ export async function update(dir, flags) {
 
   if (flags.dryRun) {
     if (strayTemplates.length)
-      ui.note(
-        `${strayTemplates.length} committed reference template(s) would be untracked from git (kept on disk).`,
-        'kit-templates',
+      ui.message(
+        `kit-templates: ${strayTemplates.length} committed reference template(s) would be untracked from git (kept on disk).`,
       );
+    showNextSteps(planResult.advisories, flags);
     ui.outro('Dry run — nothing written.');
     return 0;
   }
@@ -150,17 +161,18 @@ export async function update(dir, flags) {
       previousManifest: manifest,
     },
   );
-  ui.note(ui.renderWritten(written), 'Written');
+  ui.written(written);
 
   const untracked =
     strayTemplates.length && untrackFromIndex(root, strayTemplates)
       ? strayTemplates.length
       : 0;
   if (untracked)
-    ui.note(
-      `Untracked ${untracked} reference template(s) from git — kept on disk; commit the staged removal to finish.`,
-      'kit-templates',
+    ui.message(
+      `kit-templates: untracked ${untracked} reference template(s) from git — kept on disk; commit the staged removal to finish.`,
     );
+
+  showNextSteps(planResult.advisories, flags);
 
   const skipped = planResult.effects.filter((e) => e.op === 'skip-modified');
   const pruned = prune.deletes.filter((d) => !d.gone).length;

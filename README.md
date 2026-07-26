@@ -108,6 +108,7 @@ Want commit-granular history _too_? Enable the `ledger` module — it writes to
 ```
 npx claude-kit doctor    # validate: config vs repo reality, hooks wired, files intact
 npx claude-kit update    # refresh kit files after a new kit release (your edits are kept; --force overrides)
+                         # add --next-steps to reprint the post-install to-do list
 npx claude-kit modules   # list installed vs available modules; enable more after init (add-only)
 ```
 
