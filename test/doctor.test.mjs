@@ -94,6 +94,47 @@ test('DR4: resident-surface budget — headroom vs OVER; nested CLAUDE.md listed
   }
 });
 
+test('DR4b: resident surface counts .claude/CLAUDE.md + globless rules; path-scoped rules are free', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    assert.equal(
+      runCli(['init', '--yes', '--modules=code-comments', root]).status,
+      0,
+    );
+
+    // The shipped rule is path-scoped → conditional, so it is NOT resident.
+    let r = runCli(['doctor', root]);
+    assert.equal(r.status, 0, r.stdout);
+    assert.doesNotMatch(r.stdout, /resident context.*code-comments/);
+    assert.doesNotMatch(r.stdout, /loaded on EVERY turn/);
+
+    // A rule with no `paths:` frontmatter IS resident: named in the readout + WARNed.
+    writeFileSync(
+      join(root, '.claude/rules/always.md'),
+      '---\ndescription: "no globs"\n---\n\n# Always\n',
+    );
+    r = runCli(['doctor', root]);
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(
+      r.stdout,
+      /resident context \(CLAUDE\.md \+ \.claude\/rules\/always\.md\)/,
+    );
+    assert.match(r.stdout, /loaded on EVERY turn.*always\.md/);
+
+    // .claude/CLAUDE.md is project memory too — summed, not ignored.
+    writeFileSync(join(root, '.claude/CLAUDE.md'), '# big\n'.repeat(250));
+    r = runCli(['doctor', root]);
+    assert.match(
+      r.stdout,
+      /resident context \(CLAUDE\.md \+ \.claude\/CLAUDE\.md/,
+    );
+    assert.match(r.stdout, /resident context.*OVER/);
+    assert.match(r.stdout, /always-loaded context exceeds budget/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('DR5: workspace package with no kit target → WARN pointing at kit.config.json (exit 0)', () => {
   const root = makeFixture('pnpm-monorepo');
   try {

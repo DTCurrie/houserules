@@ -61,7 +61,7 @@ function fixDefaultsFor(pm, isMonorepo = true) {
 // The verify block mirrors fix (same runner/filter/prefix), but the read-only gate
 // commands differ — a unified `verify` script by default; per-target verifyCommands
 // (detected) override it. Only emitted when the verify-changed module is enabled.
-function verifyDefaultsFor(pm, isMonorepo = true) {
+export function verifyDefaultsFor(pm, isMonorepo = true) {
   return { ...fixDefaultsFor(pm, isMonorepo), commands: ['verify'] };
 }
 

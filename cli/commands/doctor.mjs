@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
 import { detect, trackedTemplateFiles } from '../detect.mjs';
+import { verifyDefaultsFor } from '../render.mjs';
 import { MANIFEST_PATH } from '../apply.mjs';
 import { MODULES } from '../plan.mjs';
 import { payloadPath } from '../paths.mjs';
@@ -46,13 +47,79 @@ function parseImports(text) {
   return specs;
 }
 
-// Measure the RESIDENT context surface: root CLAUDE.md plus every @-import it
-// pulls in (transitively, bounded). Returns null when there is no root CLAUDE.md.
-// Nested package CLAUDE.mds are deliberately NOT walked here — they are the
-// on-demand tier and must never be summed into the resident total.
+// Every project/local memory file Claude Code loads at session start, in its load
+// order. `.claude/CLAUDE.md` and `CLAUDE.local.md` are as resident as the root one —
+// measuring only the root under-reports the budget below.
+const RESIDENT_MEMORY_FILES = [
+  'CLAUDE.md',
+  '.claude/CLAUDE.md',
+  'CLAUDE.local.md',
+];
+
+// The `paths:` globs of a .claude/rules/*.md file, empty when it has none. Claude
+// Code loads a rule WITH globs only when a matching file is in the working set; one
+// WITHOUT them is resident on every turn (so an empty list here means "counts against
+// the budget"). Mirrors the platform's own degenerate case: a list of only `**` is
+// treated as unscoped. Supports both `paths: [a, b]` and a YAML block list.
+function ruleGlobs(text) {
+  const fm = /^---\n([\s\S]*?)\n---/.exec(text);
+  if (!fm) return [];
+  const lines = fm[1].split('\n');
+  const at = lines.findIndex((l) => /^paths:/.test(l));
+  if (at === -1) return [];
+  const inline = lines[at].slice('paths:'.length).trim();
+  const raw = inline ? inline.replace(/^\[|\]$/g, '').split(',') : [];
+  if (!inline) {
+    for (let i = at + 1; i < lines.length; i++) {
+      const item = /^[ \t]*-[ \t]*(.+)$/.exec(lines[i]);
+      if (!item) break; // next key or blank line ends the list
+      raw.push(item[1]);
+    }
+  }
+  return raw
+    .map((g) =>
+      g
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+        .replace(/\/\*\*$/, ''),
+    )
+    .filter((g) => g && g !== '**');
+}
+
+// Globless (= always-loaded) rule files under .claude/rules/, repo-relative.
+function globlessRuleFiles(root) {
+  let names;
+  try {
+    names = readdirSync(join(root, '.claude', 'rules')).filter((f) =>
+      f.endsWith('.md'),
+    );
+  } catch {
+    return []; // no rules dir — nothing to measure
+  }
+  const out = [];
+  for (const name of names.sort()) {
+    try {
+      const text = readFileSync(join(root, '.claude', 'rules', name), 'utf8');
+      if (!ruleGlobs(text).length) out.push(`.claude/rules/${name}`);
+    } catch {
+      /* unreadable rule file — not the doctor's problem */
+    }
+  }
+  return out;
+}
+
+// Measure the RESIDENT context surface: every project/local memory file plus every
+// @-import they pull in (transitively, bounded), plus the globless rule files that
+// load on every turn. Returns null when the repo has no resident surface at all.
+// Nested package CLAUDE.mds and path-scoped rules are deliberately NOT counted —
+// they are the on-demand tier and must never be summed into the resident total.
 function measureResident(root) {
-  const rootMd = join(root, 'CLAUDE.md');
-  if (!existsSync(rootMd)) return null;
+  const globless = globlessRuleFiles(root);
+  const sources = [
+    ...RESIDENT_MEMORY_FILES.filter((rel) => existsSync(join(root, rel))),
+    ...globless,
+  ];
+  if (!sources.length) return null;
   const seen = new Set();
   let chars = 0;
   let lines = 0;
@@ -78,8 +145,15 @@ function measureResident(root) {
       }
     }
   };
-  visit(rootMd, 0);
-  return { chars, lines, imports, tokens: estimateTokens(chars) };
+  for (const rel of sources) visit(join(root, rel), 0);
+  return {
+    chars,
+    lines,
+    imports,
+    tokens: estimateTokens(chars),
+    sources,
+    globless,
+  };
 }
 
 function allHookCommands(settings) {
@@ -111,7 +185,7 @@ export async function doctor(dir, flags) {
       ? ` + ${resident.imports} @-import(s)`
       : '';
     readouts.push(
-      `resident context (CLAUDE.md${importNote}): ~${resident.tokens} tokens / ${resident.lines} lines ` +
+      `resident context (${resident.sources.join(' + ')}${importNote}): ~${resident.tokens} tokens / ${resident.lines} lines ` +
         `vs budget ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}` +
         (over
           ? ` — OVER`
@@ -121,6 +195,14 @@ export async function doctor(dir, flags) {
       report(
         'WARN',
         `always-loaded context exceeds budget (~${resident.tokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}) — trim root CLAUDE.md to a one-line index + on-demand files (CONVENTIONS §1)`,
+      );
+    // A rule file with no `paths:` globs is loaded on every turn — usually not what
+    // the author intended, and invisible without this line (CONVENTIONS §6).
+    if (resident.globless.length)
+      report(
+        'WARN',
+        `rule file(s) loaded on EVERY turn (no \`paths:\` frontmatter): ${resident.globless.join(', ')} — ` +
+          'scope each with a `paths:` glob list so it loads only when a matching file is in play, or move it out of .claude/rules/ (CONVENTIONS §6)',
       );
     // Nested package CLAUDE.mds are the on-demand tier — list separately, never summed.
     const nested = listWorkspacePackages(root)
@@ -338,7 +420,9 @@ export async function doctor(dir, flags) {
   ) {
     report(
       'WARN',
-      'verify-changed module installed but no `verify` block in kit.config.json — run: npx claude-kit update (or add it by hand)',
+      'verify-changed module installed but no `verify` block in kit.config.json — add one by hand ' +
+        '(`update` will NOT: kit.config.json is user-owned and never rewritten). For this repo: ' +
+        `"verify": ${JSON.stringify(verifyDefaultsFor(ctx.packageManager, ctx.isMonorepo))}`,
     );
   }
 
