@@ -35,6 +35,7 @@ import * as ledger from './modules/ledger.mjs';
 import * as terseStyle from './modules/terse-style.mjs';
 import * as debugSession from './modules/debug-session.mjs';
 import * as plans from './modules/plans.mjs';
+import * as orchestrate from './modules/orchestrate.mjs';
 import * as verifyChanged from './modules/verify-changed.mjs';
 import * as ready from './modules/ready.mjs';
 import * as sweep from './modules/sweep.mjs';
@@ -56,6 +57,7 @@ export const MODULES = [
   terseStyle,
   debugSession,
   plans,
+  orchestrate,
   verifyChanged,
   ready,
   sweep,

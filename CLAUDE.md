@@ -39,6 +39,8 @@ the kit itself.
 
 - Stage-sized work (≤ a handful of files): implement directly in-context — no implementation
   subagents. Reserve subagents for genuinely parallel or unbounded work (wide sweeps, migrations).
+- Exception — a planned phase under `/orchestrate`: dispatch one scoped `task-worker` per slice and
+  review the returned reports; never pull a worker's diff into the main context.
 - Verify with static gates (`pnpm test`, lint) plus a short falsifiable acceptance checklist for
   the user; no browser/screenshot verification unless explicitly asked.
 - On AskUserQuestion timeout, stop and re-ask when the user returns — never carry tentative

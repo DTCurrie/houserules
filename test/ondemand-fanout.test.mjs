@@ -27,6 +27,62 @@ test('SW1: sweep module ships the /sweep skill (opt-in); off by default', () => 
   }
 });
 
+test('OR1: orchestrate ships /orchestrate + the sonnet task-worker (opt-in); off by default', () => {
+  const off = makeFixture('pnpm-monorepo');
+  const root = makeFixture('pnpm-monorepo');
+  const skillPath = join(root, '.claude/skills/orchestrate/SKILL.md');
+  const agentPath = join(root, '.claude/agents/task-worker.md');
+  try {
+    assert.equal(runCli(['init', '--yes', off]).status, 0);
+    assert.ok(
+      !existsSync(join(off, '.claude/skills/orchestrate/SKILL.md')),
+      'orchestrate off by default',
+    );
+    assert.ok(!existsSync(join(off, '.claude/agents/task-worker.md')));
+
+    // Fresh root: CLAUDE.md is a user-owned seed, so it only reflects the modules of
+    // the init that created it.
+    assert.equal(
+      runCli(['init', '--yes', '--modules=plans,orchestrate', root]).status,
+      0,
+    );
+    const skillText = readFileSync(skillPath, 'utf8');
+    // The load-bearing disciplines: ownership-based slicing, seam-first, report-not-diff.
+    assert.match(skillText, /file ownership/i);
+    assert.match(skillText, /disjoint/);
+    assert.match(skillText, /APPROVE|REVISE|RESLICE/);
+    assert.match(skillText, /--auto/);
+    const agentText = readFileSync(agentPath, 'utf8');
+    assert.match(agentText, /model: sonnet/);
+    assert.match(agentText, /no diffs/i);
+
+    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    assert.ok(manifest.modules.includes('orchestrate'));
+    // The CLAUDE.md carve-out to "no implementation subagents" lands with the module.
+    const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
+    assert.match(claudeMd, /\/orchestrate/);
+    assert.equal(runCli(['doctor', root]).status, 0);
+  } finally {
+    rmSync(off, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('OR2: orchestrate without plans still installs, and says so in the advisories', () => {
+  const root = makeFixture('npm-single');
+  try {
+    const r = runCli(['init', '--yes', '--modules=orchestrate', root]);
+    assert.equal(r.status, 0);
+    assert.ok(existsSync(join(root, '.claude/skills/orchestrate/SKILL.md')));
+    // Degrades gracefully (the `ready` pattern): no plans workspace, but a pointer to it.
+    assert.ok(!existsSync(join(root, '.claude/plans/.gitignore')));
+    assert.match(r.stdout, /plans/);
+    assert.equal(runCli(['doctor', root]).status, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('PA1: persona-auditor stages its template only when enabled; core never stages it', () => {
   const root = makeFixture('pnpm-monorepo');
   const tmpl = '.claude/kit-templates/agents/persona-auditor.agent.md.template';

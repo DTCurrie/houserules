@@ -181,6 +181,32 @@ function plansSection(ctx, answers) {
   ];
 }
 
+// /orchestrate is the one sanctioned exception to "no implementation subagents": a
+// planned phase's slices are the parallel, bounded work that clause carves out for.
+function orchestrateSection(ctx, answers) {
+  if (!answers.moduleIds.includes('orchestrate')) return [];
+  return [
+    '### Executing a planned phase',
+    '',
+    'To implement a phase from `.claude/plans/<slug>/`, run the `/orchestrate` skill (`/orchestrate all`',
+    'for every remaining phase; it stops for you between phases unless you pass `--auto`). It slices the',
+    'phase by **file ownership**, writes the shared seam first, dispatches one `task-worker` subagent per',
+    'slice in waves, and reviews each worker’s **report** — never its diff.',
+    '',
+  ];
+}
+
+function subagentExceptionLine(answers, { bold = true } = {}) {
+  if (!answers.moduleIds.includes('orchestrate')) return [];
+  const lead = bold
+    ? '- **Exception — a planned phase under `/orchestrate`**:'
+    : '- Exception — a planned phase under `/orchestrate`:';
+  return [
+    `${lead} dispatch one scoped \`task-worker\` per slice`,
+    '  and review the returned reports; never pull a worker’s diff into the main context.',
+  ];
+}
+
 export function renderClaudeMd(ctx, answers) {
   const name = ctx.rootPkg?.name ?? 'this repo';
   const lines = [
@@ -209,6 +235,7 @@ export function renderClaudeMd(ctx, answers) {
     ...changesetsSection(ctx, answers),
     ...backlogSection(ctx, answers),
     ...plansSection(ctx, answers),
+    ...orchestrateSection(ctx, answers),
   );
   lines.push(
     '## Conventions',
@@ -223,6 +250,7 @@ export function renderClaudeMd(ctx, answers) {
     '- **Stage-sized work (≤ a handful of files): implement directly in-context** — no implementation',
     '  subagents; briefs + re-reading + reports cost more than the work. Reserve subagents for genuinely',
     '  parallel or unbounded work (wide sweeps, per-file migrations, broad searches).',
+    ...subagentExceptionLine(answers),
     '- **Verify with static gates** (tests, typecheck, lint), then give the user a short falsifiable',
     '  acceptance checklist to confirm in the running app. Never drive browsers/screenshots for',
     '  verification unless explicitly asked.',
@@ -263,6 +291,7 @@ export function renderClaudeAdditions(ctx, answers) {
     ...changesetsSection(ctx, answers),
     ...backlogSection(ctx, answers),
     ...plansSection(ctx, answers),
+    ...orchestrateSection(ctx, answers),
     '### Conventions to add',
     '',
     '- **The user always handles `git commit` / `push` / PR-create.** Describe what is ready and stop.',
@@ -272,6 +301,7 @@ export function renderClaudeAdditions(ctx, answers) {
     '',
     '- Stage-sized work (≤ a handful of files): implement directly in-context; no implementation',
     '  subagents. Reserve subagents for genuinely parallel or unbounded work (wide sweeps, migrations).',
+    ...subagentExceptionLine(answers, { bold: false }),
     '- Verify with static gates (tests, typecheck, lint) + a short falsifiable acceptance checklist for',
     '  the user; no browser/screenshot verification unless explicitly asked.',
     '- Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.',
