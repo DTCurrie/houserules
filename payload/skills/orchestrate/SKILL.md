@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Execute a planned phase by fanning out tightly-scoped implementer subagents — slice the phase by file ownership, write the shared seam yourself first, dispatch one sonnet task-worker per slice in waves, then review each worker's REPORT (never its diff) and approve or send it back. Use to drive a `.claude/plans/<slug>/` phase to done without pulling the implementation into this context.
-argument-hint: '[<phase> | all] [--auto]'
+argument-hint: '[<plan-slug>] [<phase> | all] [--auto]'
 allowed-tools: Read, Edit, Write, Grep, Glob, Bash, Agent, SendMessage
 ---
 
@@ -17,10 +17,10 @@ slice does. That is also the anti-rot argument — no worker accumulates the oth
 
 ## 0. Preconditions and arguments
 
-This skill executes a **plan that already exists**. Read it first:
+This skill executes a **plan that already exists**. List the candidates with their live status:
 
 ```
-ls .claude/plans/*/ROADMAP.md
+grep -l . .claude/plans/*/ROADMAP.md | xargs grep -H '^\*\*Status:\*\*'
 ```
 
 - **No plan workspace?** Stop and run `/plan-project "<what to build>"` first (the `plans` module).
@@ -28,14 +28,35 @@ ls .claude/plans/*/ROADMAP.md
 - **Trivial work?** If the phase is a handful of files you'd finish in one pass, **do it yourself**.
   Briefs, dispatch, and review cost more than the work below roughly two slices.
 
-Resolve `$ARGUMENTS`:
+### Arguments
 
-| Argument | Means                                                                        |
-| -------- | ---------------------------------------------------------------------------- |
-| _(none)_ | the phase currently `IN PROGRESS` in `ROADMAP.md`; if none, the first `TODO` |
-| `<N>`    | phase N specifically                                                         |
-| `all`    | every remaining phase, in ROADMAP order                                      |
-| `--auto` | with `all`: do **not** stop for user check-in between phases                 |
+`/orchestrate [<plan-slug>] [<phase> | all] [--auto]` — both leading parts optional. A bare token
+that is a number or `all` is the **phase**; anything else is the **plan slug**.
+
+| Invocation                     | Means                                                   |
+| ------------------------------ | ------------------------------------------------------- |
+| `/orchestrate`                 | resolved plan (below), its live phase                   |
+| `/orchestrate auth-rework`     | that plan, its live phase                               |
+| `/orchestrate 3`               | resolved plan, phase 3                                  |
+| `/orchestrate auth-rework all` | that plan, every remaining phase, check-in between each |
+| `… all --auto`                 | same, without the inter-phase check-in                  |
+
+**Live phase** = the one marked `IN PROGRESS` in that plan's `ROADMAP.md`; if none, the first `TODO`.
+
+### Resolving which plan
+
+No slug given? In order:
+
+1. **One workspace under `.claude/plans/`** → that's it. (Ignore `blast-radius-*` impact maps —
+   they're archives, not plans.)
+2. **The conversation names one** — the user just planned it, or you're resuming work you were
+   already doing on it. Use it, and **say which one you picked** in your first line of output.
+3. **Exactly one has `Status: IN PROGRESS`** → that one.
+4. **Otherwise ask.** Two half-finished plans is precisely when guessing wrong is expensive — list
+   the slugs with their status lines and let the user pick.
+
+Never infer a plan from mtime or from which directory sorts first. State the resolved plan and phase
+before you slice anything; that one line is what lets the user stop you cheaply if you picked wrong.
 
 **Default is check-in.** After each phase closes, report what landed and stop for the user. `--auto`
 suppresses only that pause — it never suppresses a `BLOCKED` stop (§7).

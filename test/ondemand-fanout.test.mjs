@@ -52,6 +52,9 @@ test('OR1: orchestrate ships /orchestrate + the sonnet task-worker (opt-in); off
     assert.match(skillText, /disjoint/);
     assert.match(skillText, /APPROVE|REVISE|RESLICE/);
     assert.match(skillText, /--auto/);
+    // Which plan to drive is explicit, never guessed from mtime/sort order.
+    assert.match(skillText, /Resolving which plan/);
+    assert.match(skillText, /plan-slug/);
     const agentText = readFileSync(agentPath, 'utf8');
     assert.match(agentText, /model: sonnet/);
     assert.match(agentText, /no diffs/i);

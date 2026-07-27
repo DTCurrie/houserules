@@ -188,8 +188,9 @@ function orchestrateSection(ctx, answers) {
   return [
     '### Executing a planned phase',
     '',
-    'To implement a phase from `.claude/plans/<slug>/`, run the `/orchestrate` skill (`/orchestrate all`',
-    'for every remaining phase; it stops for you between phases unless you pass `--auto`). It slices the',
+    'To implement a phase from `.claude/plans/<slug>/`, run `/orchestrate [<plan-slug>] [<phase>|all]`',
+    '(the slug is optional when only one plan is live; it stops between phases unless you pass `--auto`).',
+    'It slices the',
     'phase by **file ownership**, writes the shared seam first, dispatches one `task-worker` subagent per',
     'slice in waves, and reviews each worker’s **report** — never its diff.',
     '',
