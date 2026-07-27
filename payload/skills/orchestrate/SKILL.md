@@ -131,10 +131,18 @@ Each brief carries exactly:
 > Steps: `<the ≤8 steps>`.
 > Acceptance: run `<command>` and include its last ~10 lines in your report.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
+> Do **not** run lint/format/fix commands — the orchestrator does that once per wave.
 > Out-of-scope discoveries: report them, do not fix them.
 > Reply with the REPORT format only — no diffs, no file dumps, no narration.
 
 Never hand a worker the whole plan. It gets its slice, its seam, and its constraints.
+
+**Formatting is orchestrator work, not worker work.** A fixer run by one worker rewrites files its
+siblings still hold open — the edits collide and every report gets noisier for it. It also duplicates:
+whole-repo fixers touch every changed package, so N workers do the same job N times. One run at the
+wave barrier (§7) is both cleaner and cheaper. If the kit's `lint-fix` module is installed, confirm
+`fix.onSubagentStop` is not `true` in `.claude/kit.config.json` — that setting fires the fixer at
+every worker's exit, which is exactly the collision above.
 
 ## 5. Review the report, not the diff
 
@@ -176,13 +184,29 @@ the extra cost as another reason to keep the cap at 2.)
 
 ## 7. Close the wave
 
-When every slice in the wave is `DONE` or `BLOCKED`:
+Every slice reviewed (`DONE` or `BLOCKED`), and only then — this is the wave **barrier**, the one
+point where the tree is quiet enough to touch globally:
 
-1. **Verify what actually changed** — run `/verify-changed` if installed (it scopes to the changed
+1. **Fix once** — run the repo's auto-fix (`lint:fix` / `format:fix`, or the `fix.commands` in
+   `.claude/kit.config.json`) across the packages the wave touched. One run, after the fan-out has
+   settled. Nothing was formatting mid-flight, so this is the first pass over a consistent tree.
+2. **Verify what actually changed** — run `/verify-changed` if installed (it scopes to the changed
    packages plus dependents, off-context); otherwise the repo's verify on the touched packages.
-2. **Update the slice table** in place.
-3. **Then** open the next wave. Never dispatch wave N+1 with an unreviewed slice from wave N — that
+3. **Update the slice table** in place.
+4. **Then** open the next wave. Never dispatch wave N+1 with an unreviewed slice from wave N — that
    is precisely how the architecture drifts while you aren't looking.
+
+**Residue** — what auto-fix couldn't fix — is yours by default: it's usually a handful of lines, and
+a brief costs more than the edit. Delegate only when it's genuinely bulk work:
+
+| Residue                                             | Do                                                                                           |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| ≤ ~5 files, or any of it needs judgment             | fix in-context yourself                                                                      |
+| Many files, **one** rule (a rename, an import swap) | `/sweep` — haiku shards, count-only reports                                                  |
+| Many files, several mechanical rules                | one cleanup `task-worker` owning exactly those paths, with the fix command as its acceptance |
+
+Never send residue back to the slice workers. Their briefs are spent, and the residue crosses slice
+boundaries by definition — that's why it survived to the barrier.
 
 A `BLOCKED` slice stops the phase: record why in the sub-plan and surface it to the user. `--auto`
 does not override this.

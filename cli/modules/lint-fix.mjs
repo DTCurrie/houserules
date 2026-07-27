@@ -1,5 +1,10 @@
 // lint-fix module (claude-kit CLI): Stop/SubagentStop hook that auto-fixes
 // lint/format on changed packages and surfaces only the unfixable residue.
+//
+// Both events stay wired, but the script no-ops on SubagentStop unless
+// `fix.onSubagentStop` is true — with parallel subagents each one would fix every
+// changed package concurrently. Wiring it anyway keeps the knob a config edit rather
+// than a re-run of `update`.
 
 import { hookFragment, script } from './shared.mjs';
 

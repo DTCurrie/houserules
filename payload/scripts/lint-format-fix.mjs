@@ -10,12 +10,17 @@
 // - stop_hook_active short-circuits to avoid loops
 // - no changes in working tree => exit 0
 // - only generated files changed => exit 0
+// - SubagentStop is a NO-OP by default (fix.onSubagentStop): with parallel subagents
+//   (/orchestrate waves, /sweep shards) each finishing worker would otherwise fix
+//   EVERY changed package concurrently, rewriting files its siblings still hold open.
+//   The parent turn's Stop runs the same fix once, after the fan-out settles.
 //
 // Config keys used (see kit.config.example.json):
 //   targets[].pathPrefix, targets[].packageName   — map a changed path to a package
 //   lintableExtensions                            — which file types trigger the hook
 //   generatedFilePattern                          — files written by tooling (skip)
 //   fix.runner / fix.filterFlag / fix.runScriptPrefix / fix.commands
+//   fix.onSubagentStop                            — opt back into per-subagent fixes
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -145,6 +150,10 @@ function tail(text, lines) {
 function main() {
   const input = readInput();
   if (input.stop_hook_active) process.exit(0);
+  // Per-subagent fixing races itself the moment work is fanned out in parallel, and
+  // buys nothing the parent's Stop doesn't: exit before spending the spawn.
+  if (input.hook_event_name === 'SubagentStop' && fix.onSubagentStop !== true)
+    process.exit(0);
 
   const cwd = repoRootCwd();
   const paths = changedPaths(cwd);

@@ -31,6 +31,11 @@ say so under `Deviations` — don't redesign it and don't work around it silentl
 here." A real problem you spot outside your objective goes under `Out of scope` — one line, so the
 orchestrator can log it. Discipline here is what makes parallel work reviewable.
 
+**Do not run lint, format, or fix commands.** You are one of several workers editing the tree at the
+same time; a fixer run from here rewrites files your siblings still have open. The orchestrator runs
+one pass over everything after all of you have reported. Leave formatting nits alone — they are not
+your slice.
+
 **Run the acceptance yourself.** A slice reported without its acceptance output is sent back
 unreviewed, every time. Run the command from your brief and include its tail. If it fails and you
 can't fix it inside your owned paths, report the failure honestly under `Blocked` — a truthful

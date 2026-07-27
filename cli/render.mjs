@@ -70,7 +70,13 @@ export function renderKitConfig(ctx, answers) {
   const config = {
     version: 2,
     packageManager: ctx.packageManager?.name ?? 'npm',
-    fix: fixDefaultsFor(ctx.packageManager, ctx.isMonorepo),
+    // onSubagentStop stays false: parallel subagents (an /orchestrate wave, /sweep
+    // shards) would each fix every changed package at once, clobbering siblings
+    // mid-edit. The parent turn's Stop hook covers the same ground once.
+    fix: {
+      ...fixDefaultsFor(ctx.packageManager, ctx.isMonorepo),
+      onSubagentStop: false,
+    },
     ...(has('verify-changed')
       ? { verify: verifyDefaultsFor(ctx.packageManager, ctx.isMonorepo) }
       : {}),
@@ -190,9 +196,9 @@ function orchestrateSection(ctx, answers) {
     '',
     'To implement a phase from `.claude/plans/<slug>/`, run `/orchestrate [<plan-slug>] [<phase>|all]`',
     '(the slug is optional when only one plan is live; it stops between phases unless you pass `--auto`).',
-    'It slices the',
-    'phase by **file ownership**, writes the shared seam first, dispatches one `task-worker` subagent per',
-    'slice in waves, and reviews each worker’s **report** — never its diff.',
+    'It slices the phase by **file ownership**, writes the shared seam first, dispatches one `task-worker`',
+    'subagent per slice in waves, and reviews each worker’s **report** — never its diff. Workers never run',
+    'lint/format/fix; the orchestrator does that once per wave, after every worker has reported.',
     '',
   ];
 }

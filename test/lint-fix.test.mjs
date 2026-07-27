@@ -82,6 +82,58 @@ test('L2: failing fix → exit 2 with residue tail; stop_hook_active short-circu
   }
 });
 
+test('L4: SubagentStop is a no-op by default; fix.onSubagentStop opts back in', () => {
+  const root = makeFixture('pnpm-monorepo');
+  const calls = join(root, 'runner-calls.txt');
+  try {
+    assert.equal(runCli(['init', '--yes', root]).status, 0);
+    stubRunner(root);
+    setRunner(root);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const x = 9;\n',
+    );
+
+    // Parallel workers each hitting SubagentStop would fix every changed package at
+    // once, clobbering siblings mid-edit. Default: don't run at all.
+    const sub = '{"hook_event_name":"SubagentStop"}';
+    assert.equal(runScript(root, SCRIPT, { input: sub }).status, 0);
+    assert.ok(!existsSync(calls), 'no fix commands run on SubagentStop');
+
+    // Stop (the parent turn) still fixes — that's the one pass per fan-out.
+    assert.equal(
+      runScript(root, SCRIPT, { input: '{"hook_event_name":"Stop"}' }).status,
+      0,
+    );
+    assert.match(readFileSync(calls, 'utf8'), /--filter @fix\/cityville fix/);
+
+    rmSync(calls, { force: true });
+    setRunner(root, { onSubagentStop: true });
+    assert.equal(runScript(root, SCRIPT, { input: sub }).status, 0);
+    assert.match(readFileSync(calls, 'utf8'), /--filter @fix\/cityville fix/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('L5: seeded kit.config.json carries fix.onSubagentStop: false', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    assert.equal(runCli(['init', '--yes', root]).status, 0);
+    const config = JSON.parse(
+      readFileSync(join(root, '.claude/kit.config.json'), 'utf8'),
+    );
+    assert.equal(config.fix.onSubagentStop, false);
+    assert.equal(
+      config.verify,
+      undefined,
+      'verify block not seeded by default',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('L3: single-package (no filter flag) uses run-prefix form; generated files ignored', () => {
   const root = makeFixture('npm-single');
   try {
