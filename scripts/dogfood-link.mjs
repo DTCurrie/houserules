@@ -6,9 +6,9 @@
 // regenerate anytime with `pnpm dogfood` (add --force to overwrite the config files).
 //
 // The settings/config below mirror the wiring the installer's core, lint-fix,
-// changesets, and session-context modules produce (cli/modules/*.mjs) — the one place
+// changesets, and session-context modules produce (src/modules/*.ts) — the one place
 // to update if a module's hooks change. Kept as inline literals rather than importing
-// cli/ internals, so this tool stays robust against CLI refactors.
+// src/ internals, so this tool stays robust against CLI refactors.
 //
 // Single-package tuned (claude-kit is not a monorepo): fix.filterFlag "" so the fix
 // hook runs `pnpm run <script>` not `pnpm --filter …`, and the fixers are lint:fix +
@@ -32,13 +32,27 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const claudeDir = join(repoRoot, '.claude');
 
 // Relative targets resolve from inside .claude/ (so `..` is the repo root).
+//
+// `scripts` points at the BUILD OUTPUT, because the payload's scripts are now
+// authored as .mts and compiled to dependency-free .mjs — node cannot run the
+// sources directly. That costs the old "edits under payload/ are live immediately"
+// property: after editing a .mts you must rebuild before the dogfooded hooks pick it
+// up. `pnpm dogfood:watch` keeps a tsc --watch running so the gap is a second, not a
+// manual step. The prose directories are copied verbatim and still link to source.
 const LINKS = [
-  { name: 'scripts', target: '../payload/scripts' },
+  { name: 'scripts', target: '../payload-dist/scripts' },
   { name: 'skills', target: '../payload/skills' },
   { name: 'agents', target: '../payload/agents' },
   { name: 'output-styles', target: '../payload/output-styles' },
   { name: 'rules', target: '../payload/rules' },
 ];
+
+if (!existsSync(join(repoRoot, 'payload-dist', 'scripts'))) {
+  console.error(
+    'payload-dist/scripts is missing — run `pnpm build:payload` first, then re-run dogfood.',
+  );
+  process.exit(1);
+}
 
 function lstatOrNull(p) {
   try {

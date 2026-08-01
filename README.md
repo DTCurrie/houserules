@@ -38,9 +38,15 @@ reading that produced them. Four levers:
 4. **Records** a receipt (`.claude/kit-manifest.json`, file hashes) so `update` can refresh
    kit files without clobbering your edits, and `doctor` can tell drift from damage.
 
-Non-destructive guarantees: it never runs package-manager installs, never edits an existing
-`CLAUDE.md`, never touches `settings.local.json`, never rewrites unparseable JSON, backs up
-`settings.json` once before its first merge, and `--dry-run` writes nothing at all.
+Non-destructive guarantees: it never runs package-manager installs, never touches
+`settings.local.json`, never rewrites unparseable JSON, backs up `settings.json` once before
+its first merge, and `--dry-run` writes nothing at all.
+
+In your `CLAUDE.md` the kit maintains a **marked block** — everything between
+`<!-- claude-kit:claude-md start -->` and `<!-- claude-kit:claude-md end -->`. It rewrites
+only what is inside those markers; every byte outside them is yours and is never modified.
+Opt out with `"claudeMd": { "managed": false }` in `.claude/kit.config.json` and the kit will
+not touch the file at all.
 
 ## Modules
 
@@ -108,10 +114,57 @@ Want commit-granular history _too_? Enable the `ledger` module — it writes to
 
 ```
 npx claude-kit doctor    # validate: config vs repo reality, hooks wired, files intact
+                         # --json for a machine-readable report (CI-stable shape)
 npx claude-kit update    # refresh kit files after a new kit release (your edits are kept; --force overrides)
                          # add --next-steps to reprint the post-install to-do list
-npx claude-kit modules   # list installed vs available modules; enable more after init (add-only)
+npx claude-kit modules   # list installed vs available modules; enable more after init
+                         # --disable=<ids> withdraws a module: prunes its files (your edits
+                         # are kept unless --force) and unwires only the settings entries no
+                         # remaining module still needs
 ```
+
+Every command takes the target repo as a positional `[dir]` or via `--cwd <dir>`, plus a
+global `--dry-run`. Flags are scoped per subcommand, so a flag that doesn't apply is an
+error rather than a silent no-op.
+
+**Exit codes** — `doctor` is usable as a CI gate:
+
+| Code | Meaning                                               |
+| ---- | ----------------------------------------------------- |
+| 0    | success (`doctor`: no problems)                       |
+| 1    | error, or `doctor` found a problem / actionable drift |
+| 2    | `.claude/kit.config.json` does not satisfy the schema |
+
+### Drift: `stale` vs `yours`
+
+`doctor` reports every managed file whose contents no longer match what the kit would write,
+with a unified diff, and says **why** they differ:
+
+| Status      | Means                                                         | Exit 1? |
+| ----------- | ------------------------------------------------------------- | ------- |
+| `stale`     | the kit changed; your copy is what it last wrote              | yes     |
+| `missing`   | a kit file is gone (a hook now wired to nothing)              | yes     |
+| `no-marker` | a managed block's markers were removed                        | yes     |
+| `orphaned`  | no enabled module produces it any more                        | yes     |
+| `yours`     | **you** edited it — kept, never overwritten without `--force` | no      |
+
+That distinction is the point. A content-hash lockfile can only say "differs"; the kit's
+manifest records what it last wrote, so it can tell a kit-side change from one of yours. **An
+edit you made on purpose never holds the exit code red** — nothing lets you acknowledge one, so
+failing on it would leave `doctor` permanently red on an install working exactly as you intended.
+
+```
+npx claude-kit doctor --fix            # reconcile stale/missing/no-marker; your edits survive
+npx claude-kit doctor --fix --force    # also overwrite the files you edited
+npx claude-kit doctor --fix --prune    # also delete orphans
+```
+
+### `kit.config.json` is schema-validated
+
+The config is validated against a schema generated from the kit's own zod definition and
+published at `claude-kit/schema/kit.config.schema.json`. `init` seeds a `$schema` reference
+into the file it writes, so editors give you completion and inline errors; `doctor` reports
+any problem per field (`changesets.baseBranchh is not a known changesets setting`) and exits 2.
 
 Smoke test the ledger + session detection:
 
@@ -139,12 +192,20 @@ node .claude/scripts/backlog-log.mjs list /tmp/kit-smoke-BACKLOG.md
 
 ```
 pnpm install
+pnpm build                                 # tsc -> dist/, then publint
 pnpm dogfood                               # link the kit into .claude/ (gitignored) so this repo runs its own kit
-pnpm test                                  # node:test suite incl. end-to-end init on fixtures
-node cli/index.mjs init --dry-run --yes <some-repo>
+pnpm test                                  # vitest suite incl. end-to-end init on fixtures
+pnpm check                                 # tsc --noEmit over src/ + test/
+node dist/cli.js init --dry-run --yes <some-repo>
 pnpm change                                # record a changeset for your change (dogfood)
 ```
 
-`cli/` may use dependencies; **everything under `payload/` is copied into user repos and must
-stay zero-dependency node builtins**. Releases: changesets → the release workflow opens a
-"Version Packages" PR → merging it publishes to npm (needs an `NPM_TOKEN` repo secret).
+`src/` is TypeScript and may use dependencies. **Everything under `payload/` is copied into user
+repos and must stay zero-dependency node builtins** — hook scripts are authored as `.mts` and
+compiled to plain `.mjs` in `payload-dist/`, which is what ships. Two tests enforce that promise:
+one parses every emitted script's imports, the other actually executes each one on bare node with
+no `node_modules` in reach. Editing a `.mts` needs a rebuild before the dogfooded hooks pick it
+up — `pnpm dogfood:watch` covers that.
+
+Releases: changesets → the release workflow opens a "Version Packages" PR → merging it publishes
+to npm (needs an `NPM_TOKEN` repo secret).

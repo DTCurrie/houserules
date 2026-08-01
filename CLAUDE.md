@@ -6,33 +6,53 @@ the kit itself.
 
 ## Layout
 
-- `cli/`: the installer — detect → plan (declarative actions) → preview → apply. May use
-  npm dependencies (@clack/prompts, picocolors).
-- `payload/`: everything copied into user repos (`scripts/`, `skills/`, `agents/`,
-  `output-styles/`, `kit-templates/`). **Zero runtime dependencies, node builtins only,
-  POSIX shells.** Hook scripts must never crash: config via `loadConfigSafe()`, exit 0 on
-  any failure path.
-- `test/`: node:test suites + `fixtures.mjs` generators (pnpm-monorepo / npm-single /
+- `src/`: the installer, TypeScript — detect → plan (declarative actions) → preview → apply.
+  May use npm dependencies (@clack/prompts, picocolors, zod). Builds to `dist/` (gitignored);
+  `src/types.ts` is the shared model every module and command is typed against, and
+  `src/core/config.ts` is the zod schema for `kit.config.json`.
+- `schema/kit.config.schema.json` is **generated** from that zod schema by `pnpm run schema`.
+  Never hand-edit it; `test/config-schema.test.ts` fails when it falls out of sync.
+- `payload/`: everything copied into user repos. Scripts are authored as `.mts` and compiled
+  to `payload-dist/scripts/*.mjs`; the prose dirs (`skills/`, `agents/`, `rules/`,
+  `output-styles/`, `kit-templates/`) are copied through verbatim. **`payload-dist/` is what
+  ships and what `payloadPath()` reads.** Zero runtime dependencies, node builtins only,
+  POSIX shells — enforced by `test/payload-deps.test.ts` (imports) and
+  `test/payload-run.test.ts` (actually executing each emitted script on bare node). Hook
+  scripts must never crash: config via `loadConfigSafe()`, exit 0 on any failure path.
+- `test/`: vitest suites + `fixtures.ts` generators (pnpm-monorepo / npm-single /
   non-js), all in mkdtemp dirs.
 
 ## Commands
 
+- `pnpm build` — `tsc` → `dist/`, regenerate the JSON Schema, then `publint`. Required before
+  any `dist/` probe.
+- `pnpm check` — `tsc --noEmit` over `src/` + `test/`.
 - `pnpm test` — full suite (includes end-to-end init/update/doctor on fixtures).
-- `node cli/index.mjs init --yes --dry-run <repo>` — safe manual probe against any repo.
+- `node dist/cli.js init --yes --dry-run <repo>` — safe manual probe against any repo.
 - `pnpm change` — record a changeset (required for any user-visible change; dogfood).
-- `pnpm dogfood` — symlink the kit into `.claude/` (gitignored) so this repo runs its own
-  hooks/skills/agents. Idempotent; re-run after pulling. The payload stays the single source of
-  truth — edits under `payload/` are live immediately.
+- `pnpm dogfood` — build the payload, then symlink the kit into `.claude/` (gitignored) so this
+  repo runs its own hooks/skills/agents. Idempotent; re-run after pulling.
+  **`.claude/scripts` points at `payload-dist/`, so a `.mts` edit is NOT live until it is
+  compiled** — run `pnpm dogfood:watch` (a `tsc --watch` on the payload) while working on hook
+  scripts, or re-run `pnpm dogfood`. The prose dirs still link to `payload/` and are live.
 
 ## Rules
 
-- The plan/apply boundary is load-bearing: modules return actions, only `cli/apply.mjs`
-  writes, dry-run renders the same computed effects. Never add filesystem writes elsewhere.
+- The plan/apply boundary is load-bearing: modules return actions, only `src/apply.ts`
+  writes (through `src/core/fs-target.ts`), dry-run renders the same computed effects. Never
+  add filesystem writes elsewhere.
 - Kit-owned vs user-owned: copies/writes are manifest-tracked and update-refreshable; seeds
   (kit.config.json, CLAUDE.md, reviewer drafts, .changeset/config.json) belong to the user —
   never overwrite.
-- init never runs package-manager installs and never edits an existing CLAUDE.md or
-  settings.local.json.
+- Two readers of kit.config.json, one shape: the CLI validates strictly via zod
+  (`src/core/config.ts`); the payload reads it defensively and **dependency-free**
+  (`loadConfigSafe()`). They share only the inferred `KitConfig` type — never make the payload
+  import zod. `test/payload-deps.test.ts` enforces this.
+- init never runs package-manager installs and never touches settings.local.json.
+- Managed regions: the kit maintains its own marker-delimited block inside files the user
+  owns (CLAUDE.md today). It writes ONLY between the markers — bytes outside them are
+  never modified. Those paths are in `SHARED_HOST_FILES`: never created wholesale, never
+  pruned, and their manifest hash covers the region BODY, not the file.
 - The user always handles `git commit` / `push` / PR-create.
 
 ## Cost & verification discipline

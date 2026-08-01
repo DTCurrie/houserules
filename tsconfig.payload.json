@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "./payload",
+    "outDir": "./payload-dist",
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    // Payload output is executed directly by node in a user's repo, with no
+    // helpers, no polyfills, no tslib. erasableSyntaxOnly keeps every construct
+    // erasable, so `.mjs` emit is the source minus its types and nothing else.
+    "erasableSyntaxOnly": true,
+    // Declarations are emitted so the CLI can consume the ONE shared module
+    // (scripts/lib/workspaces) from payload-dist. src/ compiles with rootDir=src and
+    // therefore cannot pull a payload source file into its program; importing the
+    // built artifact keeps a single parser without duplicating it. Build order is
+    // payload → src, wired in the `build` script.
+    "declaration": true,
+    "sourceMap": false,
+    "removeComments": false,
+    "types": ["node"]
+  },
+  "include": ["payload/**/*.mts"]
+}
