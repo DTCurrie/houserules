@@ -1,6 +1,6 @@
 {
   "name": "claude-kit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Interactive installer for a portable Claude Code context-discipline kit: hooks, skills, agents, changesets integration, and token-efficiency tooling.",
   "type": "module",
   "bin": {

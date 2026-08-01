@@ -1,5 +1,16 @@
 # claude-kit
 
+## 1.1.0
+
+### Minor Changes
+
+- 696a40d: Gitignore .claude/scripts by default, guard hooks against missing scripts, dedupe payload helpers.
+- 0f3949f: Orchestrate skill prescribes a Slice/Owns/State status table between waves (KIT-9b7155).
+
+### Patch Changes
+
+- 696a40d: Fix pnpm workspace parsing: flow sequences, recursive ** globs, and !negations.
+
 ## 1.0.0
 
 ### Major Changes
