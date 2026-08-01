@@ -137,6 +137,36 @@ Each brief carries exactly:
 
 Never hand a worker the whole plan. It gets its slice, its seam, and its constraints.
 
+### The status table — the one shape you print between waves
+
+The slice table (§3) is state on disk. This is its user-facing projection: emit it **once when the
+wave goes out and once when it closes**, and nowhere else. Same three columns, every run:
+
+```markdown
+| Slice            | Owns                     | State      |
+| ---------------- | ------------------------ | ---------- |
+| 1a session store | `src/auth/session*.ts`   | ✅ done    |
+| 1b token codec   | `src/auth/tokens.ts`     | 🔄 running |
+| 2a route wiring  | `src/api/routes/auth.ts` | ⬜ pending |
+```
+
+Every slice in the phase appears in every printing — including the waves that haven't opened yet.
+Progress is only legible against the whole, and a table that shows only the live wave hides how much
+is left.
+
+Collapse the on-disk vocabulary into four display states, so the table stays scannable while the
+sub-plan stays greppable:
+
+| On disk                             | Prints as    |
+| ----------------------------------- | ------------ |
+| `DONE`                              | `✅ done`    |
+| `DISPATCHED` `IN REVIEW` `REVISING` | `🔄 running` |
+| `TODO`                              | `⬜ pending` |
+| `BLOCKED`                           | `⛔ blocked` |
+
+No prose duplicating the table — one line under it for anything the columns can't carry (a blocked
+slice's reason, a revise round in flight), then move on.
+
 **Formatting is orchestrator work, not worker work.** A fixer run by one worker rewrites files its
 siblings still hold open — the edits collide and every report gets noisier for it. It also duplicates:
 whole-repo fixers touch every changed package, so N workers do the same job N times. One run at the
@@ -192,7 +222,7 @@ point where the tree is quiet enough to touch globally:
    settled. Nothing was formatting mid-flight, so this is the first pass over a consistent tree.
 2. **Verify what actually changed** — run `/verify-changed` if installed (it scopes to the changed
    packages plus dependents, off-context); otherwise the repo's verify on the touched packages.
-3. **Update the slice table** in place.
+3. **Update the slice table** in place, then print the status table (§4) — the wave-close printing.
 4. **Then** open the next wave. Never dispatch wave N+1 with an unreviewed slice from wave N — that
    is precisely how the architecture drifts while you aren't looking.
 
