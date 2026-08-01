@@ -27,6 +27,7 @@ import {
 } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
+import { parseArgs } from 'node:util';
 
 import { loadConfig, repoRoot } from './lib/kit-config.mjs';
 import { BACKLOG_ID } from './lib/backlog-id.mjs';
@@ -76,29 +77,6 @@ function tryShStr(cmd: string): string | null {
   } catch {
     return null;
   }
-}
-
-interface ParsedArgs {
-  positional: string[];
-  flags: Record<string, string | boolean | undefined>;
-}
-
-function parseArgs(rest: string[]): ParsedArgs {
-  const positional: string[] = [];
-  const flags: Record<string, string | boolean | undefined> = {};
-  for (let i = 0; i < rest.length; i++) {
-    const a = rest[i];
-    if (a === '--quiet') {
-      flags.quiet = true;
-      continue;
-    }
-    if (a.startsWith('--')) {
-      flags[a.slice(2)] = rest[++i];
-      continue;
-    }
-    positional.push(a);
-  }
-  return { positional, flags };
 }
 
 function getTarget(name: string): ResolvedTarget {
@@ -435,7 +413,17 @@ function usage() {
 }
 
 const [, , action, ...rest] = process.argv;
-const { positional, flags } = parseArgs(rest);
+const { values: flags, positionals: positional } = parseArgs({
+  args: rest,
+  options: {
+    changes: { type: 'string' },
+    reason: { type: 'string' },
+    backlog: { type: 'string' },
+    quiet: { type: 'boolean' },
+  },
+  allowPositionals: true,
+  strict: false,
+});
 
 switch (action) {
   case 'record': {
@@ -444,7 +432,7 @@ switch (action) {
       usage();
       process.exit(1);
     }
-    recordCommit(getTarget(name), ref, flags);
+    recordCommit(getTarget(name), ref, flags as RecordCommitOptions);
     break;
   }
   case 'show': {

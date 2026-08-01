@@ -27,6 +27,7 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { execSync } from 'node:child_process';
+import { parseArgs } from 'node:util';
 
 import { listPublishablePackageNames } from './lib/workspaces.mjs';
 
@@ -87,19 +88,33 @@ function usage(message?: string): never {
   process.exit(1);
 }
 
-const argv = process.argv.slice(2);
-const pkgArgs: string[] = [];
-let summaryArg: string | undefined;
-let defaultLevel = 'patch';
-let empty = false;
-for (let i = 0; i < argv.length; i++) {
-  const a = argv[i];
-  if (a === '--pkg') pkgArgs.push(argv[++i]);
-  else if (a === '--summary') summaryArg = argv[++i];
-  else if (a === '--level') defaultLevel = argv[++i];
-  else if (a === '--empty') empty = true;
-  else usage(`Unknown argument "${a}".`);
+let values: {
+  pkg?: string[];
+  summary?: string;
+  level?: string;
+  empty?: boolean;
+};
+try {
+  ({ values } = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      pkg: { type: 'string', multiple: true },
+      summary: { type: 'string' },
+      level: { type: 'string' },
+      empty: { type: 'boolean' },
+    },
+    allowPositionals: false,
+  }));
+} catch (e) {
+  const message = (e as Error).message;
+  const bad = message.match(/'(-[^']*)'/)?.[1] ?? message;
+  usage(`Unknown argument "${bad}".`);
 }
+
+const pkgArgs = values.pkg ?? [];
+const summaryArg = values.summary;
+const defaultLevel = values.level ?? 'patch';
+const empty = values.empty ?? false;
 if (!LEVELS.has(defaultLevel))
   usage(`Invalid --level "${defaultLevel}" (patch|minor|major).`);
 

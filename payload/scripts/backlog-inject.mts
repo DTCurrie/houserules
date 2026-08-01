@@ -14,6 +14,7 @@ import { resolve } from 'node:path';
 
 import { repoRoot } from './lib/kit-config.mjs';
 import { BACKLOG_ID } from './lib/backlog-id.mjs';
+import { readStdinJson } from './lib/proc.mjs';
 
 interface PromptPayload {
   prompt?: string;
@@ -29,7 +30,7 @@ interface BacklogRecord {
 }
 
 try {
-  const input: PromptPayload = JSON.parse(readFileSync(0, 'utf8') || '{}');
+  const input = readStdinJson<PromptPayload>();
   // Claude Code has used both `prompt` and `prompt_text` for this event across
   // versions — accept either so the injector doesn't silently no-op on one build.
   const prompt = String(input?.prompt ?? input?.prompt_text ?? '');

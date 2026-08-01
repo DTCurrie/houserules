@@ -157,6 +157,39 @@ test('SC5: re-running the installer does not duplicate kit hook entries', () => 
   }
 });
 
+test('SC7: an install carrying the OLD unguarded stock command is migrated to the guarded form', () => {
+  const root = makeFixture('npm-single');
+  try {
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+
+    // Roll a real kit hook back to the historical unguarded stock form, as if this
+    // install predates the guard, then re-run update: the kit must recognize its
+    // own old stock command and upgrade it in place.
+    const path = join(root, '.claude/settings.json');
+    const settings = settingsOf(root);
+    for (const group of settings.hooks?.PreToolUse ?? []) {
+      for (const hook of group.hooks ?? []) {
+        if (hook.command?.includes('guard-bash.mjs')) {
+          hook.command =
+            'node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs"';
+        }
+      }
+    }
+    writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`);
+
+    expect(runCli(['update', root]).status).toBe(0);
+    const after = commandsOf(settingsOf(root), 'PreToolUse').filter((c) =>
+      c.includes('guard-bash.mjs'),
+    );
+    expect(after, 'exactly one guard-bash entry').toHaveLength(1);
+    expect(after[0], 'the entry must now be the guarded form').toMatch(
+      /^\[ -f /,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("SC6: a user's edited variant of a kit hook wins over the stock version", () => {
   const root = makeFixture('npm-single');
   try {

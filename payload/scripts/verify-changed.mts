@@ -22,7 +22,7 @@
 // runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
 // "main"); per-target verifyCommands overrides commands for that package.
 
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
 import {
   loadConfigSafe,
@@ -33,6 +33,7 @@ import {
   listWorkspacePackages,
   type WorkspacePackage,
 } from './lib/workspaces.mjs';
+import { git, tail } from './lib/proc.mjs';
 
 const argv = new Set(process.argv.slice(2));
 const MODE = argv.has('--run') ? 'run' : argv.has('--json') ? 'json' : 'plan';
@@ -43,18 +44,6 @@ interface ScopeEntry {
   single?: boolean;
   commands?: string[];
   argv?: string[][];
-}
-
-function git(root: string, args: string[]): string | null {
-  try {
-    return execFileSync('git', args, {
-      cwd: root,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-  } catch {
-    return null;
-  }
 }
 
 // Working-tree dirty paths + everything committed since the base branch (when it
@@ -116,11 +105,6 @@ function withDependents(
     }
   }
   return inScope;
-}
-
-function tail(text: string, lines: number): string {
-  const parts = text.split('\n');
-  return parts.slice(Math.max(0, parts.length - lines)).join('\n');
 }
 
 function main() {

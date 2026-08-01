@@ -63,8 +63,26 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     script(
       id,
       'changeset-check.mjs',
-      'Stop hook: nudge when package source changed with no changeset',
+      'Stop hook: nudge when package set changed with no changeset',
     ),
+    // The Stop hook records which change-set it last nudged for, so an unchanged
+    // situation stays silent instead of re-printing every turn. Installed here rather
+    // than written lazily by the hook, so the directory never surfaces as untracked in
+    // the user's `git status`. Same directory-local pattern as .claude/debug/.
+    {
+      kind: 'write',
+      dest: '.claude/state/.gitignore',
+      content: [
+        '# Per-repo hook state (e.g. the last changeset nudge). Never for commit.',
+        '# The directory stays so hooks always have somewhere to persist.',
+        '*',
+        '!.gitignore',
+        '',
+      ].join('\n'),
+      module: id,
+      reason:
+        'hook state is throwaway; self-gitignored (repo .gitignore untouched)',
+    },
     skill(
       id,
       'changeset',

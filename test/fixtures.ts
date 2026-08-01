@@ -13,6 +13,11 @@
 //    fixers are lint:fix + a write-`format` (prettier --write) with a separate
 //    format:check. The shape CLAUDEKIT-4e98d7 broke: filterFlag must be "" and the
 //    write-`format` must be detected as a fixer.
+// F5 pnpm-flow-monorepo — the workspace-file shapes F1 does not cover: an inline
+//    FLOW sequence, a `**` glob whose package is nested under an intermediate dir,
+//    and a `!negation`. Each of these silently produced the wrong package set before
+//    the parser fixes; test/workspaces.test.ts covers the parsers in
+//    isolation, this covers detect → targets end to end.
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
@@ -28,7 +33,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export type FixtureKind =
-  'pnpm-monorepo' | 'npm-single' | 'pnpm-single' | 'non-js';
+  | 'pnpm-monorepo'
+  | 'pnpm-flow-monorepo'
+  | 'npm-single'
+  | 'pnpm-single'
+  | 'committed-scripts'
+  | 'non-js';
 
 export function sh(cwd: string, cmd: string, args: string[]): string {
   return execFileSync(cmd, args, {
@@ -189,6 +199,40 @@ export function makeFixture(kind: FixtureKind): string {
         4,
       )}\n`,
     );
+  } else if (kind === 'pnpm-flow-monorepo') {
+    write(
+      root,
+      'pnpm-workspace.yaml',
+      'packages: ["libs/**", "!libs/legacy"]\n',
+    );
+    write(
+      root,
+      'package.json',
+      json({
+        name: 'flow-root',
+        private: true,
+        packageManager: 'pnpm@11.5.0',
+        scripts: { 'lint:fix': 'eslint . --fix' },
+      }),
+    );
+    write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
+    // Nested one level deeper than any `*` glob reaches — only `**` finds it.
+    write(
+      root,
+      'libs/group/nested/package.json',
+      json({ name: '@flow/nested', scripts: PKG_SCRIPTS }),
+    );
+    write(root, 'libs/group/nested/src/index.ts', 'export const x = 1;\n');
+    write(
+      root,
+      'libs/plain/package.json',
+      json({ name: '@flow/plain', scripts: PKG_SCRIPTS }),
+    );
+    write(
+      root,
+      'libs/legacy/package.json',
+      json({ name: '@flow/legacy', scripts: PKG_SCRIPTS }),
+    );
   } else if (kind === 'pnpm-single') {
     write(
       root,
@@ -206,6 +250,23 @@ export function makeFixture(kind: FixtureKind): string {
     );
     write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
     write(root, 'src/index.js', 'export const x = 1;\n');
+  } else if (kind === 'committed-scripts') {
+    // The state every pre-gitignore install is in: kit scripts tracked by git.
+    // gitInit() commits everything below, so these land in the index — which is what
+    // the migration has to detect and stage out.
+    write(
+      root,
+      'package.json',
+      json({ name: 'legacy-install', version: '1.0.0' }),
+    );
+    for (const name of [
+      'changeset-check.mjs',
+      'session-context.mjs',
+      'guard-bash.mjs',
+    ]) {
+      write(root, `.claude/scripts/${name}`, '#!/usr/bin/env node\n');
+    }
+    write(root, '.claude/settings.json', json({ hooks: {} }));
   } else if (kind === 'non-js') {
     write(root, 'README.md', '# not a js repo\n');
   } else {

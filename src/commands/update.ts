@@ -5,7 +5,12 @@
 
 import { resolve } from 'node:path';
 
-import { detect, trackedTemplateFiles, untrackFromIndex } from '../detect.js';
+import {
+  detect,
+  trackedScriptFiles,
+  trackedTemplateFiles,
+  untrackFromIndex,
+} from '../detect.js';
 import {
   MODULES,
   KitError,
@@ -146,10 +151,20 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   // the dry-run preview reflects it and can't lie.
   const strayTemplates = ctx.git.isRepo ? trackedTemplateFiles(root) : [];
 
+  // Same migration for .claude/scripts/: build output that predates the kit's
+  // self-gitignore. Skipped entirely when the repo opted in to committing scripts.
+  const commitScripts = ctx.claude.kitConfig?.scripts?.commit === true;
+  const strayScripts =
+    ctx.git.isRepo && !commitScripts ? trackedScriptFiles(root) : [];
+
   if (flags.dryRun) {
     if (strayTemplates.length)
       ui.message(
         `kit-templates: ${strayTemplates.length} committed reference template(s) would be untracked from git (kept on disk).`,
+      );
+    if (strayScripts.length)
+      ui.message(
+        `scripts: ${strayScripts.length} committed hook script(s) would be untracked from git (kept on disk).`,
       );
     showNextSteps(planResult.advisories, flags);
     ui.outro('Dry run — nothing written.');
@@ -174,6 +189,15 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   if (untracked)
     ui.message(
       `kit-templates: untracked ${untracked} reference template(s) from git — kept on disk; commit the staged removal to finish.`,
+    );
+
+  const untrackedScripts =
+    strayScripts.length && untrackFromIndex(root, strayScripts)
+      ? strayScripts.length
+      : 0;
+  if (untrackedScripts)
+    ui.message(
+      `scripts: untracked ${untrackedScripts} hook script(s) from git — kept on disk; commit the staged removal to finish.`,
     );
 
   showNextSteps(planResult.advisories, flags);

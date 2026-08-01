@@ -139,6 +139,80 @@ test('DR4b: resident surface counts .claude/CLAUDE.md + globless rules; path-sco
   }
 });
 
+test('DR4c: skill/agent description frontmatter is a distinct resident line, strictly larger than without', () => {
+  const withSkills = makeFixture('pnpm-monorepo');
+  const withoutSkills = makeFixture('pnpm-monorepo');
+  try {
+    expect(runCli(['init', '--yes', withSkills]).status).toBe(0);
+    expect(
+      runCli([
+        'init',
+        '--yes',
+        '--modules=-backlog,-changesets,-reviewers',
+        withoutSkills,
+      ]).status,
+    ).toBe(0);
+
+    const withR = runCli(['doctor', withSkills]);
+    expect(withR.status, withR.stdout).toBe(0);
+    const lineRe =
+      /resident skill\/agent descriptions \((\d+) skill\(s\) \+ (\d+) agent\(s\)\): ~(\d+) tokens/;
+    const withMatch = lineRe.exec(withR.stdout);
+    expect(withMatch, withR.stdout).not.toBeNull();
+    const withSkillCount = Number(withMatch![1]);
+    const withAgentCount = Number(withMatch![2]);
+    const withTokens = Number(withMatch![3]);
+    expect(withSkillCount + withAgentCount).toBeGreaterThan(0);
+    expect(withTokens).toBeGreaterThan(0);
+
+    const withoutR = runCli(['doctor', withoutSkills]);
+    expect(withoutR.status, withoutR.stdout).toBe(0);
+    // No skills/agents installed → the line item does not appear at all, and it is
+    // never silently folded into the `resident context (...)` readout.
+    expect(withoutR.stdout).not.toMatch(/resident skill\/agent descriptions/);
+    expect(withoutR.stdout).toMatch(/resident context \(CLAUDE\.md\)/);
+
+    // Combined resident total (CLAUDE.md/rules + skill/agent descriptions) is
+    // strictly larger with skills/agents installed than without.
+    const claudeMdOnly = Number(
+      /resident context \(CLAUDE\.md\): ~(\d+) tokens/.exec(
+        withoutR.stdout,
+      )![1],
+    );
+    const claudeMdWithSkills = Number(
+      /resident context \(CLAUDE\.md\): ~(\d+) tokens/.exec(withR.stdout)![1],
+    );
+    expect(claudeMdWithSkills + withTokens).toBeGreaterThan(claudeMdOnly);
+  } finally {
+    rmSync(withSkills, { recursive: true, force: true });
+    rmSync(withoutSkills, { recursive: true, force: true });
+  }
+});
+
+test('DR4d: skill/agent BODY is excluded — only description frontmatter counts', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+
+    const lineRe =
+      /resident skill\/agent descriptions \(\d+ skill\(s\) \+ \d+ agent\(s\)\): ~(\d+) tokens/;
+    let r = runCli(['doctor', root]);
+    const before = Number(lineRe.exec(r.stdout)![1]);
+
+    // A huge skill BODY (not its description) barely moves the total — bodies load
+    // only on invocation, the on-demand tier, not on every turn.
+    appendFileSync(
+      join(root, '.claude/skills/backlog-add/SKILL.md'),
+      `\n${'x '.repeat(3000)}`,
+    );
+    r = runCli(['doctor', root]);
+    const after = Number(lineRe.exec(r.stdout)![1]);
+    expect(after).toBe(before);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('DR5: workspace package with no kit target → WARN pointing at kit.config.json (exit 0)', () => {
   const root = makeFixture('pnpm-monorepo');
   try {
@@ -209,6 +283,51 @@ test('DR6: terse-style ACTIVE / INACTIVE / mis-slugged fallback from the real ou
     r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).toMatch(/terse-style: INACTIVE.*Explanatory/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('DR4: committed .claude/scripts → WARN (exit 0) with the untrack fix', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+    // Fresh install: scripts are gitignored, so doctor stays clean.
+    let r = runCli(['doctor', root]);
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).not.toMatch(/script\(s\).*are committed/);
+
+    // Commit them (pre-gitignore install shape) → WARN, still exit 0.
+    sh(root, 'git', ['add', '-f', '.claude/scripts']);
+    sh(root, 'git', ['commit', '-qm', 'committed scripts']);
+    r = runCli(['doctor', root]);
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).toMatch(/script\(s\).*are committed/);
+    expect(r.stdout).toMatch(/git rm --cached/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('DR5: scripts.commit: true suppresses the committed-scripts finding', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+    const configPath = join(root, '.claude/kit.config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.scripts = { commit: true };
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+    sh(root, 'git', ['add', '-A']);
+    sh(root, 'git', ['commit', '-qm', 'opt-in commit + config change']);
+
+    // Reconcile the now-orphaned .gitignore (kit-owned, unmodified) before asserting
+    // doctor is clean — flipping the switch after install leaves it stale for one run.
+    expect(runCli(['update', root]).status).toBe(0);
+
+    const r = runCli(['doctor', root]);
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).not.toMatch(/script\(s\).*are committed/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

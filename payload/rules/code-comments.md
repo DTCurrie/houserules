@@ -2,6 +2,7 @@
 paths:
   - '**/*.ts'
   - '**/*.tsx'
+  - '**/*.mts'
   - '**/*.js'
   - '**/*.jsx'
   - '**/*.mjs'
@@ -9,14 +10,11 @@ paths:
   - '**/*.svelte'
   - '**/*.svelte.ts'
   - '**/*.svelte.js'
-  - '**/*.go'
-  - '**/*.py'
-  - '**/*.rs'
 ---
 
 # Code Comments
 
-These principles are language-agnostic — they hold for every language in the repo (TypeScript, Svelte, Go, Python, and so on). The examples below are illustrative, not language-specific.
+These principles are language-agnostic — they hold for every language in the repo. The examples below are illustrative, not language-specific.
 
 ## Rule — follow without deliberation
 

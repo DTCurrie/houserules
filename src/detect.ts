@@ -97,17 +97,27 @@ function git(root: string, args: string[]): string | null {
   }
 }
 
-// Reference templates under .claude/kit-templates/ that git still tracks. The
-// self-ignore file is deliberately excluded — it stays committed so the intent
-// travels with the repo. Non-empty only for installs that committed templates
-// before the kit began ignoring them; empty on any git failure or non-repo.
-export function trackedTemplateFiles(root: string): string[] {
-  const out = git(root, ['ls-files', '-c', '--', '.claude/kit-templates']);
+// Files under a self-gitignored kit directory that git still tracks. The
+// directory's own .gitignore is deliberately excluded — it stays committed so the
+// intent travels with the repo. Non-empty only for installs that committed the
+// directory's contents before the kit began ignoring them; empty on any git
+// failure or non-repo.
+function trackedFilesUnder(root: string, dir: string): string[] {
+  const out = git(root, ['ls-files', '-c', '--', dir]);
   if (!out) return [];
+  const ownGitignore = `${dir}/.gitignore`;
   return out
     .split('\n')
     .map((line) => line.trim())
-    .filter((p) => p && p !== '.claude/kit-templates/.gitignore');
+    .filter((p) => p && p !== ownGitignore);
+}
+
+export function trackedTemplateFiles(root: string): string[] {
+  return trackedFilesUnder(root, '.claude/kit-templates');
+}
+
+export function trackedScriptFiles(root: string): string[] {
+  return trackedFilesUnder(root, '.claude/scripts');
 }
 
 // Drop paths from the git index only — working-tree copies stay on disk and the

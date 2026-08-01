@@ -100,3 +100,104 @@ test("M2b: a user's EDITED variant of a kit hook wins (script-identity dedupe)",
 test('M4: corrupt settings text throws (never repaired)', () => {
   expect(() => parseSettingsText('{ not json')).toThrow();
 });
+
+const GUARDED_FRAGMENT: SettingsFragment = {
+  hooks: {
+    PreToolUse: [
+      {
+        matcher: 'Bash',
+        hooks: [
+          {
+            type: 'command',
+            command:
+              '[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" || echo "[kit] guard-bash.mjs missing — run: npx claude-kit update"',
+          },
+        ],
+      },
+    ],
+  },
+};
+
+test('M5: the kit upgrades its own historical stock command in place', () => {
+  const existing: Settings = {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks: [
+            {
+              type: 'command',
+              command:
+                'node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs"',
+            },
+          ],
+        },
+      ],
+    },
+  };
+  const { merged, changes } = mergeSettings(existing, GUARDED_FRAGMENT);
+  const commands = merged.hooks!.PreToolUse!.flatMap((g) =>
+    g.hooks.map((h) => h.command),
+  );
+  expect(commands).toHaveLength(1);
+  expect(commands[0]).toMatch(/^\[ -f /);
+  expect(changes.some((c) => c.detail.includes('upgraded'))).toBeTruthy();
+});
+
+test('M6: a user-edited variant of the same basename is left untouched (no upgrade)', () => {
+  const existing: Settings = {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks: [
+            {
+              type: 'command',
+              command:
+                'node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" --extra',
+            },
+          ],
+        },
+      ],
+    },
+  };
+  const { merged, changes } = mergeSettings(existing, GUARDED_FRAGMENT);
+  const commands = merged.hooks!.PreToolUse!.flatMap((g) =>
+    g.hooks.map((h) => h.command),
+  );
+  expect(commands).toHaveLength(1);
+  expect(commands[0]).toContain('--extra');
+  expect(changes.some((c) => c.detail.includes('guard-bash'))).toBeFalsy();
+});
+
+test('M7: an already-guarded command is a no-op on re-merge', () => {
+  const first = mergeSettings({}, GUARDED_FRAGMENT);
+  const second = mergeSettings(first.merged, GUARDED_FRAGMENT);
+  expect(second.changes).toHaveLength(0);
+  expect(JSON.stringify(second.merged)).toBe(JSON.stringify(first.merged));
+});
+
+test("M8: a user's unrelated hook is never disturbed by an upgrade elsewhere", () => {
+  const existing: Settings = {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks: [
+            {
+              type: 'command',
+              command:
+                'node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs"',
+            },
+            { type: 'command', command: 'node ./my-own-hook.js' },
+          ],
+        },
+      ],
+    },
+  };
+  const { merged } = mergeSettings(existing, GUARDED_FRAGMENT);
+  const commands = merged.hooks!.PreToolUse!.flatMap((g) =>
+    g.hooks.map((h) => h.command),
+  );
+  expect(commands).toContain('node ./my-own-hook.js');
+});

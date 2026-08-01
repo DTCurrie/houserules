@@ -14,20 +14,14 @@
 // Config missing or unreadable → the four defaults apply. Keep custom rules
 // conservative — only commands that are genuinely the user's to run.
 
-import { readFileSync } from 'node:fs';
-
 import { GUARD_DEFAULTS, loadConfigSafe } from './lib/kit-config.mjs';
+import { readStdinJson } from './lib/proc.mjs';
 
 interface BashPayload {
   tool_input?: { command?: string };
 }
 
-let input: BashPayload = {};
-try {
-  input = JSON.parse(readFileSync(0, 'utf8') || '{}');
-} catch {
-  process.exit(0); // No parseable payload — don't block.
-}
+const input = readStdinJson<BashPayload>();
 
 const cmd = input?.tool_input?.command ?? '';
 if (!cmd) process.exit(0);

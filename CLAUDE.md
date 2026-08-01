@@ -44,6 +44,16 @@ the kit itself.
 - Kit-owned vs user-owned: copies/writes are manifest-tracked and update-refreshable; seeds
   (kit.config.json, CLAUDE.md, reviewer drafts, .changeset/config.json) belong to the user —
   never overwrite.
+- `.claude/scripts/` is **generated, not source**: self-gitignored on init, and installs that
+  committed it are migrated by `update` (`git rm --cached` only — working tree untouched, never
+  committed). `scripts.commit: true` opts back into committing them. Because the scripts may be
+  absent on a fresh clone while `settings.json` is committed, `hookCommand()` wraps every hook in
+  a file-existence guard that `exec`s node — `exec` is load-bearing, since a plain `node` would
+  let any non-zero exit fall through to the fallback echo and swallow the code (changeset-check
+  exits 2 on purpose).
+- Every shared lib a payload script imports must be listed in `src/modules/core.ts`'s copy
+  manifest. A script installed without its lib fails with ERR_MODULE_NOT_FOUND in the user's repo,
+  which no unit test catches.
 - Two readers of kit.config.json, one shape: the CLI validates strictly via zod
   (`src/core/config.ts`); the payload reads it defensively and **dependency-free**
   (`loadConfigSafe()`). They share only the inferred `KitConfig` type — never make the payload

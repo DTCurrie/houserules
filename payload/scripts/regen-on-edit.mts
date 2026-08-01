@@ -10,61 +10,25 @@
 //   "regen": { "sourceGlob": "packages/foo/data/**/*.json", "command": "pnpm --filter foo gen" }
 // Keep the command fast and the sourceGlob tight — it runs on every matching edit.
 
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
 import { loadConfigSafe } from './lib/kit-config.mjs';
+import { globToRe, readStdinJson, repoRoot, tail } from './lib/proc.mjs';
 
 interface RegenPayload {
   tool_input?: { file_path?: string; path?: string };
 }
 
-let input: RegenPayload = {};
-try {
-  input = JSON.parse(readFileSync(0, 'utf8') || '{}');
-} catch {
-  process.exit(0);
-}
+const input = readStdinJson<RegenPayload>();
 
 const ti = input?.tool_input ?? {};
 const filePath = ti.file_path ?? ti.path ?? '';
 if (!filePath) process.exit(0);
 
-// `**` spans separators, `*` does not.
-function globToRe(glob: string): RegExp {
-  let re = '';
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i];
-    if (c === '*') {
-      if (glob[i + 1] === '*') {
-        re += '.*';
-        i++;
-        if (glob[i + 1] === '/') i++;
-      } else re += '[^/]*';
-    } else if ('.+^${}()|[]\\'.includes(c)) re += `\\${c}`;
-    else if (c === '?') re += '[^/]';
-    else re += c;
-  }
-  return new RegExp(`^${re}$`);
-}
-
-function tail(text: string, n: number): string {
-  const parts = String(text ?? '').split('\n');
-  return parts.slice(Math.max(0, parts.length - n)).join('\n');
-}
-
 try {
   const config = loadConfigSafe();
-  let root: string;
-  try {
-    root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    root = process.cwd();
-  }
+  const root = repoRoot();
   const abs = resolve(root, filePath);
   const rel = abs.startsWith(root) ? abs.slice(root.length + 1) : filePath;
 

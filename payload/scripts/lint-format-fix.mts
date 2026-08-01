@@ -23,9 +23,9 @@
 //   fix.onSubagentStop                            — opt back into per-subagent fixes
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 
 import { loadConfigSafe, type RunnerBlock } from './lib/kit-config.mjs';
+import { readStdinJson, repoRoot, tail } from './lib/proc.mjs';
 
 interface HookInput {
   stop_hook_active?: boolean;
@@ -91,21 +91,6 @@ function fixArgs(pkg: string, script: string): string[] {
   return [...RUN_PREFIX, script];
 }
 
-function readInput(): HookInput {
-  try {
-    return JSON.parse(readFileSync(0, 'utf-8') || '{}');
-  } catch {
-    return {};
-  }
-}
-
-function repoRootCwd(): string {
-  const r = spawnSync('git', ['rev-parse', '--show-toplevel'], {
-    encoding: 'utf-8',
-  });
-  return r.status === 0 ? r.stdout.trim() : process.cwd();
-}
-
 function changedPaths(cwd: string): string[] {
   const r = spawnSync('git', ['status', '--porcelain'], {
     encoding: 'utf-8',
@@ -153,20 +138,15 @@ function runStep(
   };
 }
 
-function tail(text: string, lines: number): string {
-  const parts = text.split('\n');
-  return parts.slice(Math.max(0, parts.length - lines)).join('\n');
-}
-
 function main() {
-  const input = readInput();
+  const input = readStdinJson<HookInput>();
   if (input.stop_hook_active) process.exit(0);
   // Per-subagent fixing races itself the moment work is fanned out in parallel, and
   // buys nothing the parent's Stop doesn't: exit before spending the spawn.
   if (input.hook_event_name === 'SubagentStop' && fix.onSubagentStop !== true)
     process.exit(0);
 
-  const cwd = repoRootCwd();
+  const cwd = repoRoot();
   const paths = changedPaths(cwd);
   const pkgs = affectedPackages(paths);
   if (pkgs.length === 0) process.exit(0);

@@ -1,7 +1,14 @@
 import { expect, test } from 'vitest';
-import { rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { detect, detectFixCommands, suggestPrefix } from '../src/detect.js';
+import {
+  detect,
+  detectFixCommands,
+  suggestPrefix,
+  trackedScriptFiles,
+  untrackFromIndex,
+} from '../src/detect.js';
 import { renderKitConfig } from '../src/render.js';
 import { parsePnpmWorkspaceGlobs } from '../payload-dist/scripts/lib/workspaces.mjs';
 import { makeFixture } from './fixtures.js';
@@ -130,6 +137,54 @@ test('fix-command priority and prefix suggestions', () => {
   ]);
   expect(suggestPrefix('@schoolyard/cityville')).toBe('CITYVILLE');
   expect(suggestPrefix('single-app')).toBe('SINGLEAPP');
+});
+
+// End-to-end counterpart to test/workspaces.test.ts: the flow sequence,
+// the `**` glob and the `!negation` all have to survive detect() into targets[].
+test('flow sequence + globstar + negation reach targets end to end', () => {
+  const root = makeFixture('pnpm-flow-monorepo');
+  try {
+    const ctx = detect(root);
+    expect(ctx.isMonorepo).toBe(true);
+    expect(ctx.packages.map((p) => p.name).sort()).toEqual([
+      '@flow/nested',
+      '@flow/plain',
+    ]);
+
+    const nested = ctx.targets.find((t) => t.packageName === '@flow/nested')!;
+    expect(nested.pathPrefix).toBe('libs/group/nested/');
+    expect(nested.sourcePath).toBe('libs/group/nested/src');
+    expect(ctx.targets.some((t) => t.packageName === '@flow/legacy')).toBe(
+      false,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('trackedScriptFiles finds a pre-gitignore install, untrackFromIndex stages (not commits) their removal', () => {
+  const root = makeFixture('committed-scripts');
+  try {
+    const tracked = trackedScriptFiles(root).sort();
+    expect(tracked).toEqual(
+      [
+        '.claude/scripts/changeset-check.mjs',
+        '.claude/scripts/guard-bash.mjs',
+        '.claude/scripts/session-context.mjs',
+      ].sort(),
+    );
+
+    expect(untrackFromIndex(root, tracked)).toBe(true);
+    expect(trackedScriptFiles(root)).toEqual([]);
+
+    // Working-tree files remain on disk, and the removal is only staged.
+    for (const rel of tracked)
+      expect(existsSync(join(root, rel)), `${rel} must remain on disk`).toBe(
+        true,
+      );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('pnpm-workspace.yaml parse ignores catalog blocks', () => {

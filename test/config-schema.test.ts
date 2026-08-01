@@ -39,7 +39,12 @@ test('CS3: the shipped example config parses', () => {
 });
 
 test('CS4: the config init actually generates parses, for every fixture shape', () => {
-  for (const kind of ['pnpm-monorepo', 'npm-single', 'non-js'] as const) {
+  for (const kind of [
+    'pnpm-monorepo',
+    'pnpm-flow-monorepo',
+    'npm-single',
+    'non-js',
+  ] as const) {
     const root = makeFixture(kind);
     try {
       expect(runCli(['init', '--yes', root]).status).toBe(0);

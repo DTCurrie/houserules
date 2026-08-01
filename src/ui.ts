@@ -30,6 +30,10 @@ const messageWidth = () => cols() - 4; // "│  " + content
 // reset so the colour can't bleed into the rest of the output.
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
+// Code points, not display columns: a CJK character or emoji occupies two terminal
+// cells but counts as one here, so a line of them under-measures and can overflow.
+// Accepted — this wraps paths, flags and English prose. `string-width` fixes it for
+// 4 packages / 104KB, which the audit judged not worth it.
 const visible = (s: string) => s.replace(ANSI, '').length;
 const hasAnsi = (s: string) => s.includes(`${ESC}[`);
 

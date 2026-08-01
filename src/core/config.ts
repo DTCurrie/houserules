@@ -164,6 +164,17 @@ export const KitConfigSchema = z.strictObject({
     })
     .optional(),
 
+  scripts: z
+    .strictObject({
+      commit: z
+        .boolean()
+        .optional()
+        .describe(
+          'Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx claude-kit update`.',
+        ),
+    })
+    .optional(),
+
   targets: z.array(targetSchema).describe('The packages/areas the kit tracks.'),
 });
 
@@ -193,6 +204,7 @@ const UNKNOWN_KEY_NOUNS: Record<string, string> = {
   guard: 'guard switch',
   changesets: 'changesets setting',
   readGuard: 'read-guard setting',
+  scripts: 'scripts setting',
 };
 
 function problemsFrom(error: z.ZodError): string[] {

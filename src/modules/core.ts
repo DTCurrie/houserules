@@ -46,7 +46,14 @@ function* walk(dir: string): Generator<string> {
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const actions: Action[] = [];
 
-  for (const name of ['kit-config.mjs', 'backlog-id.mjs', 'workspaces.mjs']) {
+  // Every shared lib the scripts import must be listed here — a script installed
+  // without its lib fails at runtime with ERR_MODULE_NOT_FOUND, in the user's repo.
+  for (const name of [
+    'kit-config.mjs',
+    'backlog-id.mjs',
+    'workspaces.mjs',
+    'proc.mjs',
+  ]) {
     actions.push(lib(id, name));
   }
   actions.push(
@@ -85,6 +92,26 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     reason:
       'templates are reference-only; self-gitignored (repo .gitignore untouched)',
   });
+
+  // Compiled hook scripts are build output, refreshed by `update` — self-gitignored
+  // like the templates above, so a fresh install never commits them. Opt out via
+  // kit.config.json (scripts.commit: true) for a repo that wants them tracked.
+  if (ctx.claude.kitConfig?.scripts?.commit !== true) {
+    actions.push({
+      kind: 'write',
+      dest: '.claude/scripts/.gitignore',
+      content: [
+        '# Compiled hook scripts, refreshed by `npx claude-kit update`.',
+        '# Build output, not source — not meant to be committed.',
+        '*',
+        '!.gitignore',
+        '',
+      ].join('\n'),
+      module: id,
+      reason:
+        'scripts are build output; self-gitignored (repo .gitignore untouched)',
+    });
+  }
 
   actions.push({
     kind: 'seed',

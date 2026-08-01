@@ -152,6 +152,16 @@
       },
       "additionalProperties": false
     },
+    "scripts": {
+      "type": "object",
+      "properties": {
+        "commit": {
+          "description": "Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx claude-kit update`.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
     "targets": {
       "type": "array",
       "items": {

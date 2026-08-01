@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
-import { detect, trackedTemplateFiles } from '../detect.js';
+import { detect, trackedScriptFiles, trackedTemplateFiles } from '../detect.js';
 import { verifyDefaultsFor } from '../render.js';
 import { MANIFEST_PATH } from '../apply.js';
 import { payloadPath } from '../paths.js';
@@ -130,6 +130,76 @@ interface ResidentMeasurement {
   globless: string[];
 }
 
+// The `description:` frontmatter of an installed skill/agent (single-line, quotes
+// optional). Returns null when the file has none.
+function frontmatterDescription(text: string): string | null {
+  const fm = /^---\n([\s\S]*?)\n---/.exec(text);
+  if (!fm) return null;
+  const m = /^description:[ \t]*(.*)$/m.exec(fm[1]);
+  if (!m) return null;
+  return m[1].trim().replace(/^['"]|['"]$/g, '');
+}
+
+interface SkillAgentMeasurement {
+  chars: number;
+  tokens: number;
+  skills: number;
+  agents: number;
+}
+
+// Claude Code puts every installed skill/agent's `description:` in the system
+// prompt as the available-skills/agents listing on EVERY turn — resident, same
+// tier as CLAUDE.md. The skill/agent BODY (the rest of SKILL.md / the agent file)
+// loads only on invocation and is deliberately NOT counted here.
+function measureSkillAgentDescriptions(
+  root: string,
+): SkillAgentMeasurement | null {
+  let chars = 0;
+  let skills = 0;
+  let agents = 0;
+  try {
+    for (const name of readdirSync(join(root, '.claude', 'skills'))) {
+      let text: string;
+      try {
+        text = readFileSync(
+          join(root, '.claude', 'skills', name, 'SKILL.md'),
+          'utf8',
+        );
+      } catch {
+        continue;
+      }
+      const desc = frontmatterDescription(text);
+      if (desc) {
+        chars += desc.length;
+        skills += 1;
+      }
+    }
+  } catch {
+    /* no skills dir */
+  }
+  try {
+    for (const name of readdirSync(join(root, '.claude', 'agents')).filter(
+      (f) => f.endsWith('.md'),
+    )) {
+      let text: string;
+      try {
+        text = readFileSync(join(root, '.claude', 'agents', name), 'utf8');
+      } catch {
+        continue;
+      }
+      const desc = frontmatterDescription(text);
+      if (desc) {
+        chars += desc.length;
+        agents += 1;
+      }
+    }
+  } catch {
+    /* no agents dir */
+  }
+  if (!skills && !agents) return null;
+  return { chars, tokens: estimateTokens(chars), skills, agents };
+}
+
 // Measure the RESIDENT context surface: every project/local memory file plus every
 // @-import they pull in (transitively, bounded), plus the globless rule files that
 // load on every turn. Returns null when the repo has no resident surface at all.
@@ -209,6 +279,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   // Resident-surface budget: make the kit's #1 lever (always-loaded context)
   // measurable instead of only prose. Read-only; WARNs past budget, never ERRORs.
   const resident = measureResident(root);
+  const skillsAgents = measureSkillAgentDescriptions(root);
+  const saTokens = skillsAgents?.tokens ?? 0;
   if (resident) {
     const over =
       resident.tokens > RESIDENT_TOKEN_BUDGET ||
@@ -223,11 +295,21 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
           ? ` — OVER`
           : ` — ${RESIDENT_TOKEN_BUDGET - resident.tokens} tokens, ${RESIDENT_LINE_BUDGET - resident.lines} lines headroom`),
     );
-    if (over)
+    // Combined with the resident skill/agent description surface below: either tier
+    // alone, or the two together, can push the always-loaded total over budget.
+    const combinedTokens = resident.tokens + saTokens;
+    const combinedOver =
+      combinedTokens > RESIDENT_TOKEN_BUDGET ||
+      resident.lines > RESIDENT_LINE_BUDGET;
+    if (combinedOver) {
+      const parts = [`root CLAUDE.md/rules (~${resident.tokens} tokens)`];
+      if (saTokens)
+        parts.push(`skill/agent descriptions (~${saTokens} tokens)`);
       report(
         'WARN',
-        `always-loaded context exceeds budget (~${resident.tokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}) — trim root CLAUDE.md to a one-line index + on-demand files (CONVENTIONS §1)`,
+        `always-loaded context exceeds budget (~${combinedTokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}) — ${parts.join(' + ')} — trim root CLAUDE.md to a one-line index + on-demand files (CONVENTIONS §1)`,
       );
+    }
     // A rule file with no `paths:` globs is loaded on every turn — usually not what
     // the author intended, and invisible without this line (CONVENTIONS §6).
     if (resident.globless.length)
@@ -248,6 +330,13 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
         `nested (on-demand, not in resident total): ${nested.map((n) => n.rel).join(', ')}`,
       );
   }
+  // Skill/agent `description:` frontmatter is a second, distinct resident surface —
+  // reported as its own line so a budget move is attributable to what caused it.
+  // Bodies are the on-demand tier (loaded only on invocation) and stay excluded.
+  if (skillsAgents)
+    readouts.push(
+      `resident skill/agent descriptions (${skillsAgents.skills} skill(s) + ${skillsAgents.agents} agent(s)): ~${skillsAgents.tokens} tokens`,
+    );
 
   const [major] = process.versions.node.split('.').map(Number);
   if (major < 20) report('ERROR', `node ${process.versions.node} < 20`);
@@ -276,6 +365,17 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
       report(
         'WARN',
         `${strayTemplates.length} reference template(s) under .claude/kit-templates/ are committed (reference-only). Untrack, keeping them on disk: npx claude-kit update — or: git rm --cached -r .claude/kit-templates && git add .claude/kit-templates/.gitignore`,
+      );
+    }
+    // Same story for .claude/scripts/: build output that predates the self-gitignore,
+    // or that a repo opted back into committing (scripts.commit: true).
+    const commitScripts = ctx.claude.kitConfig?.scripts?.commit === true;
+    const strayScripts =
+      ctx.git.isRepo && !commitScripts ? trackedScriptFiles(root) : [];
+    if (strayScripts.length) {
+      report(
+        'WARN',
+        `${strayScripts.length} script(s) under .claude/scripts/ are committed (build output). Untrack, keeping them on disk: npx claude-kit update — or: git rm --cached -r .claude/scripts && git add .claude/scripts/.gitignore`,
       );
     }
   }

@@ -7,9 +7,15 @@
 // - A hook is "already present" if an existing hook command normalizes to the same
 //   string OR mentions the same kit script basename — a user's edited variant of a
 //   kit hook always wins over the kit's stock version.
+// - ONE exception to "wins": if the existing command is byte-for-byte one of the
+//   kit's own known historical stock forms (see KIT_STOCK_FORMATS) for that
+//   basename, and the candidate differs, the kit upgrades it in place and reports
+//   the change. Anything not matching a listed stock form — any hand edit — is left
+//   untouched, exactly as before.
 // - Anything else in the file passes through untouched.
 
 import type {
+  HookEntry,
   HookGroup,
   Settings,
   SettingsChange,
@@ -29,20 +35,55 @@ function kitBasenames(cmd: unknown): string[] {
   return [...String(cmd ?? '').matchAll(KIT_SCRIPT_RE)].map((m) => m[1]!);
 }
 
-function hookAlreadyPresent(
+// Every command format the kit itself has ever emitted for a given script
+// basename, oldest first. Only these exact (whitespace-normalized) strings are
+// eligible for in-place upgrade; anything else mentioning the basename is
+// user-authored and is never touched.
+const KIT_STOCK_FORMATS: ((basename: string) => string)[] = [
+  (name) => `node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}"`,
+];
+
+function isRecognizedKitStock(command: unknown, basename: string): boolean {
+  const normalized = normalizeCommand(command);
+  return KIT_STOCK_FORMATS.some(
+    (f) => normalizeCommand(f(basename)) === normalized,
+  );
+}
+
+type HookMatch =
+  | { kind: 'none' }
+  | { kind: 'exact' }
+  | { kind: 'stock-upgrade'; hook: HookEntry }
+  | { kind: 'user-variant' };
+
+// Locate an existing hook that corresponds to `candidateCommand`, distinguishing
+// three cases: an identical command (no-op), the kit's own recognized stock form
+// for the same basename (eligible for in-place upgrade), or anything else
+// mentioning the basename (a user variant, never touched).
+function matchExistingHook(
   existingGroups: HookGroup[] | undefined,
   candidateCommand: string,
-): boolean {
+): HookMatch {
   const normalized = normalizeCommand(candidateCommand);
-  const candidateBases = new Set(kitBasenames(candidateCommand));
+  const candidateBases = kitBasenames(candidateCommand);
   for (const group of existingGroups ?? []) {
     for (const hook of group?.hooks ?? []) {
-      if (normalizeCommand(hook.command) === normalized) return true;
-      if (kitBasenames(hook.command).some((b) => candidateBases.has(b)))
-        return true;
+      if (normalizeCommand(hook.command) === normalized)
+        return { kind: 'exact' };
     }
   }
-  return false;
+  for (const group of existingGroups ?? []) {
+    for (const hook of group?.hooks ?? []) {
+      const matchedBase = kitBasenames(hook.command).find((b) =>
+        candidateBases.includes(b),
+      );
+      if (!matchedBase) continue;
+      if (isRecognizedKitStock(hook.command, matchedBase))
+        return { kind: 'stock-upgrade', hook };
+      return { kind: 'user-variant' };
+    }
+  }
+  return { kind: 'none' };
 }
 
 // fragment: { permissions?: {allow?: [], deny?: [], ask?: []},
@@ -84,7 +125,17 @@ export function mergeSettings(
   for (const [event, groups] of Object.entries(fragment.hooks ?? {})) {
     for (const group of groups) {
       for (const hook of group.hooks ?? []) {
-        if (hookAlreadyPresent(merged.hooks?.[event], hook.command)) continue;
+        const match = matchExistingHook(merged.hooks?.[event], hook.command);
+        if (match.kind === 'exact' || match.kind === 'user-variant') continue;
+        if (match.kind === 'stock-upgrade') {
+          const base = kitBasenames(hook.command)[0] ?? '';
+          match.hook.command = hook.command;
+          changes.push({
+            kind: 'hook',
+            detail: `${event}${group.matcher ? `(${group.matcher})` : ''}: ${base} (upgraded)`,
+          });
+          continue;
+        }
         merged.hooks ??= {};
         merged.hooks[event] ??= [];
         // Reuse an existing group with the same matcher so the file stays tidy.

@@ -11,11 +11,11 @@
 //
 // Config (kit.config.json → readGuard, all defaulted): { enabled, maxBytes, denyGlobs }.
 
-import { readFileSync, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
 
 import { READ_GUARD_DEFAULTS, loadConfigSafe } from './lib/kit-config.mjs';
+import { globToRe, readStdinJson, repoRoot } from './lib/proc.mjs';
 
 interface ReadPayload {
   tool_input?: {
@@ -26,50 +26,19 @@ interface ReadPayload {
   };
 }
 
-let input: ReadPayload = {};
-try {
-  input = JSON.parse(readFileSync(0, 'utf8') || '{}');
-} catch {
-  process.exit(0); // No parseable payload — never block.
-}
+const input = readStdinJson<ReadPayload>();
 
 const ti = input?.tool_input ?? {};
 const filePath = ti.file_path ?? ti.path ?? '';
 // A bounded read (offset/limit set) is exactly what we WANT — let it through.
 if (!filePath || ti.offset != null || ti.limit != null) process.exit(0);
 
-// Minimal, zero-dep glob → RegExp: `**` spans path separators, `*` does not.
-function globToRe(glob: string): RegExp {
-  let re = '';
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i];
-    if (c === '*') {
-      if (glob[i + 1] === '*') {
-        re += '.*';
-        i++;
-        if (glob[i + 1] === '/') i++; // `**/` also matches zero dirs
-      } else re += '[^/]*';
-    } else if ('.+^${}()|[]\\'.includes(c)) re += `\\${c}`;
-    else if (c === '?') re += '[^/]';
-    else re += c;
-  }
-  return new RegExp(`^${re}$`);
-}
-
 try {
   const cfg = { ...READ_GUARD_DEFAULTS, ...(loadConfigSafe().readGuard ?? {}) };
   if (cfg.enabled === false) process.exit(0);
 
   // Resolve a repo-relative path for glob matching (git root, else cwd).
-  let root: string;
-  try {
-    root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    root = process.cwd();
-  }
+  const root = repoRoot();
   const abs = resolve(root, filePath);
   const rel = abs.startsWith(root) ? abs.slice(root.length + 1) : filePath;
   const base = rel.split('/').pop() ?? rel;

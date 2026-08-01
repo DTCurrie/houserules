@@ -4,30 +4,17 @@
 // with full `git status` reads. stdout becomes session context: keep it tiny.
 // Every failure path exits 0; an orientation header must never break a session.
 
-import { execFileSync } from 'node:child_process';
-
 import { loadConfigSafe } from './lib/kit-config.mjs';
-
-// NOTE: returns RAW output — `git status --porcelain` lines are position-sensitive
-// (2 status chars + space); a global trim would eat the first line's prefix.
-function git(args: string[]): string | null {
-  try {
-    return execFileSync('git', args, {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-  } catch {
-    return null;
-  }
-}
+import { git } from './lib/proc.mjs';
 
 try {
-  const root = git(['rev-parse', '--show-toplevel'])?.trim();
+  const cwd = process.cwd();
+  const root = git(cwd, ['rev-parse', '--show-toplevel'])?.trim();
   if (root) {
     const lines = [];
-    const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'])?.trim();
+    const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])?.trim();
     let tracking = '';
-    const counts = git([
+    const counts = git(root, [
       'rev-list',
       '--left-right',
       '--count',
@@ -43,7 +30,7 @@ try {
     }
     lines.push(`[kit] branch: ${branch ?? '(no commits yet)'}${tracking}`);
 
-    const status = git(['status', '--porcelain']) ?? '';
+    const status = git(root, ['status', '--porcelain']) ?? '';
     const changed = status
       .split('\n')
       .filter(Boolean)

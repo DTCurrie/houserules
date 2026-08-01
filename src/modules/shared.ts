@@ -90,8 +90,19 @@ export function template(
   };
 }
 
+// Guarded so a missing script degrades to an actionable line instead of a raw
+// MODULE_NOT_FOUND stack trace — `.claude/scripts/` is generated and gitignored, so a
+// fresh clone legitimately has none until `claude-kit update` runs. settings.json IS
+// committed, which is why the guard lives in the command rather than in a script.
+//
+// `exec` is load-bearing: it replaces the shell, so node's exit code reaches the hook
+// runner untouched and the `||` branch becomes unreachable. With a plain `node`, any
+// non-zero exit would fall through to the echo — printing a false "missing" notice and
+// swallowing the code. changeset-check.mjs exits 2 deliberately to nudge Claude, so
+// that form would have silently disabled the changeset nudge.
 export function hookCommand(scriptName: string): string {
-  return `node "$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
+  const path = `"$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
+  return `[ -f ${path} ] && exec node ${path} || echo "[kit] ${scriptName} missing — run: npx claude-kit update"`;
 }
 
 // One settings fragment with a single hook entry.

@@ -7,26 +7,14 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
 
 import { loadConfigSafe } from './lib/kit-config.mjs';
+import { git } from './lib/proc.mjs';
 
 interface StatusPayload {
   workspace?: { project_dir?: string };
   context_window?: { used_percentage?: number };
   cost?: { total_cost_usd?: number };
-}
-
-function git(root: string, args: string[]): string | null {
-  try {
-    return execFileSync('git', args, {
-      cwd: root,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-  } catch {
-    return null;
-  }
 }
 
 try {

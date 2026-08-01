@@ -1,5 +1,11 @@
 import { expect, test } from 'vitest';
-import { appendFileSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import { makeFixture, runCli, runScript, sh } from './fixtures.js';
@@ -85,6 +91,90 @@ test('CC4: generated ledgers in scope (BACKLOG.md/CHANGELOG.md) do not trip the 
       2,
     );
     expect(r.stderr).toMatch(/--pkg @fix\/cityville/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('CC5: repeat-nudge suppression — same signature stays silent, a new file nudges again', () => {
+  const root = installedFixture();
+  try {
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+    let r = runScript(root, SCRIPT, { input: '{}' });
+    expect(r.status, `first nudge: ${r.stderr}`).toBe(2);
+
+    // Immediate re-run, nothing changed since: same signature, must stay silent.
+    r = runScript(root, SCRIPT, { input: '{}' });
+    expect(r.status, `unchanged situation must stay silent: ${r.stderr}`).toBe(
+      0,
+    );
+
+    // A NEW source file lands: the changed-set signature differs, must nudge again.
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const two = 2;\n',
+    );
+    r = runScript(root, SCRIPT, { input: '{}' });
+    expect(r.status, `new source file must nudge again: ${r.stderr}`).toBe(2);
+
+    // And it settles again for that new set.
+    r = runScript(root, SCRIPT, { input: '{}' });
+    expect(
+      r.status,
+      `newly-settled situation must stay silent: ${r.stderr}`,
+    ).toBe(0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('CC6: the suppression state file itself is never committed', () => {
+  const root = installedFixture();
+  try {
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+    const r = runScript(root, SCRIPT, { input: '{}' });
+    expect(r.status, r.stderr).toBe(2);
+
+    // The .gitignore inside .claude/state/ is itself lazily self-written (this
+    // script owns no install-time manifest entry), so `git status` still lists
+    // the directory as untracked — but `git add -A` must never stage the state
+    // file, which is the actual "never committed" guarantee.
+    sh(root, 'git', ['add', '-A']);
+    const staged = sh(root, 'git', [
+      'diff',
+      '--cached',
+      '--name-only',
+      '--',
+      '.claude/state/changeset-check.json',
+    ]);
+    expect(staged.trim()).toBe('');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('CC7: a corrupt/unwritable state file still nudges rather than crashing or silencing', () => {
+  const root = installedFixture();
+  try {
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+    // A directory in place of the state file makes both reads and writes fail.
+    mkdirSync(join(root, '.claude/state/changeset-check.json'), {
+      recursive: true,
+    });
+    const r = runScript(root, SCRIPT, { input: '{}' });
+    expect(
+      r.status,
+      `corrupt/unwritable state must fail open to a nudge: ${r.stderr}`,
+    ).toBe(2);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

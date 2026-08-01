@@ -135,6 +135,29 @@ error rather than a silent no-op.
 | 1    | error, or `doctor` found a problem / actionable drift |
 | 2    | `.claude/kit.config.json` does not satisfy the schema |
 
+### `.claude/scripts/` is generated, not source
+
+The hook scripts are build output, so the kit self-gitignores them — `.claude/scripts/.gitignore`
+and `.claude/state/.gitignore` are the only files there that git tracks. Your `settings.json`,
+`kit.config.json`, skills, agents and rules are all still committed; only the generated `.mjs`
+stays out of your diffs, so a kit upgrade doesn't show up as a wall of machine-written churn.
+
+If a repo already committed its scripts, `update` migrates it for you: the paths are
+`git rm --cached`'d — **staged only**, files stay on disk, and the kit never commits. `doctor`
+reports the state until you do.
+
+Because the scripts can be absent on a fresh clone while `settings.json` is committed, every hook
+command is guarded. A missing script prints
+
+```
+[kit] changeset-check.mjs missing — run: npx claude-kit update
+```
+
+instead of a Node stack trace, and the hook exits cleanly rather than failing your turn.
+
+Want the old behavior? Set `scripts.commit: true` in `.claude/kit.config.json` — the kit then
+skips the gitignore and the migration entirely.
+
 ### Drift: `stale` vs `yours`
 
 `doctor` reports every managed file whose contents no longer match what the kit would write,

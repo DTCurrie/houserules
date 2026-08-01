@@ -12,10 +12,11 @@ export default ts.config(
       globals: { ...globals.node },
     },
   },
-  // payload/ is hand-authored .mjs until phase 6 of the kit-v2 plan; it gets the JS
-  // rules only. src/ and test/ are TypeScript and get the typed rule set.
+  // Every TypeScript source gets the typed rule set. payload/ is authored as .mts —
+  // that extension has to be listed explicitly or ESLint matches nothing and the
+  // shipping hook scripts go silently unlinted.
   {
-    files: ['src/**/*.ts', 'test/**/*.ts', '*.ts'],
+    files: ['src/**/*.ts', 'test/**/*.ts', 'payload/**/*.mts', '*.ts'],
     extends: [ts.configs.recommended],
     rules: {
       // typescript-eslint's own guidance for TS sources: tsc already does this,
