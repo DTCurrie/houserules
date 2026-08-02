@@ -1,5 +1,16 @@
 # claude-kit
 
+## 1.3.0
+
+### Minor Changes
+
+- 8bc445f: /plan-project stops after scaffolding instead of starting phase 1
+- 8bc445f: doctor splits a settled local edit from a conflict, so an intentional edit no longer warns
+
+### Patch Changes
+
+- 8bc445f: Testing rule now forbids looping over assertions, naming it.each and collect-then-assert as the fixes.
+
 ## 1.2.0
 
 ### Minor Changes
