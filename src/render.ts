@@ -213,11 +213,11 @@ function changesetsSection(ctx: Ctx, answers: Answers): string[] {
   return [
     '### Recording changes (changesets)',
     '',
-    'After completing a meaningful change to a package, record a changeset **before the commit**',
-    '— run the `/changeset` skill (or spawn the `changeset-writer` agent). It inspects the diff,',
+    'After completing a meaningful change to a package, record a changeset **before the commit**.',
+    'Run the `/changeset` skill, or spawn the `changeset-writer` agent. It inspects the diff,',
     'picks patch/minor/major per package, and writes `.changeset/*.md` via',
-    '`node .claude/scripts/changeset-write.mjs`. Never hand-edit `CHANGELOG.md` — releases',
-    'generate it from changesets (`changeset version`). If nothing user-facing changed, record',
+    '`node .claude/scripts/changeset-write.mjs`. Never hand-edit `CHANGELOG.md`, which releases',
+    'generate from changesets (`changeset version`). If nothing user-facing changed, record',
     'that too: `node .claude/scripts/changeset-write.mjs --empty --summary "<why no release>"`.',
     '',
   ];
@@ -231,8 +231,8 @@ function backlogSection(ctx: Ctx, answers: Answers): string[] {
   return [
     '### Tracking out-of-scope work',
     '',
-    'Discover a real issue outside the current scope? **Do not fix it inline** — log it and move on:',
-    'run the `/backlog-add` skill (backed by `node .claude/scripts/backlog-log.mjs`).',
+    'Discover a real issue outside the current scope? **Do not fix it inline.** Log it and move on',
+    'with the `/backlog-add` skill, backed by `node .claude/scripts/backlog-log.mjs`.',
     `Prefixes by area: ${prefixes}.`,
     'On resolving an item while shipping, remove it: `node .claude/scripts/backlog-log.mjs remove <ID> <file> "<resolution>"`.',
     '',
@@ -246,9 +246,9 @@ function plansSection(ctx: Ctx, answers: Answers): string[] {
     '',
     'For an implementation too big to hold in one plan (3+ independently-landing phases, or work',
     'you expect to pause and resume), run the `/plan-project` skill. It persists the plan to a gitignored',
-    '`.claude/plans/<name>/` workspace — a `PLAN.md` overview, a living `ROADMAP.md`, and one',
-    'sub-plan per phase — and keeps ROADMAP status current in place as each phase lands.',
-    '**Resuming such work?** Read `.claude/plans/<name>/ROADMAP.md` first for live status; grep its',
+    '`.claude/plans/<name>/` workspace holding a `PLAN.md` overview, a living `ROADMAP.md`, and one',
+    'sub-plan per phase, and it keeps ROADMAP status current in place as each phase lands.',
+    '**Resuming such work?** Read `.claude/plans/<name>/ROADMAP.md` first for live status. Grep its',
     'status lines instead of re-deriving scope from the transcript.',
     '',
   ];
@@ -261,11 +261,11 @@ function orchestrateSection(ctx: Ctx, answers: Answers): string[] {
   return [
     '### Executing a planned phase',
     '',
-    'To implement a phase from `.claude/plans/<slug>/`, run `/orchestrate [<plan-slug>] [<phase>|all]`',
-    '(the slug is optional when only one plan is live; it stops between phases unless you pass `--auto`).',
+    'To implement a phase from `.claude/plans/<slug>/`, run `/orchestrate [<plan-slug>] [<phase>|all]`.',
+    'The slug is optional when only one plan is live, and it stops between phases unless you pass `--auto`.',
     'It slices the phase by **file ownership**, writes the shared seam first, dispatches one `task-worker`',
-    'subagent per slice in waves, and reviews each worker’s **report** — never its diff. Workers never run',
-    'lint/format/fix; the orchestrator does that once per wave, after every worker has reported.',
+    'subagent per slice in waves, and reviews each worker’s **report**, never its diff. Workers never run',
+    'lint/format/fix. The orchestrator does that once per wave, after every worker has reported.',
     '',
   ];
 }
@@ -276,11 +276,11 @@ function subagentExceptionLine(
 ): string[] {
   if (!answers.moduleIds.includes('orchestrate')) return [];
   const lead = bold
-    ? '- **Exception — a planned phase under `/orchestrate`**:'
-    : '- Exception — a planned phase under `/orchestrate`:';
+    ? '- **Exception, a planned phase under `/orchestrate`**:'
+    : '- Exception, a planned phase under `/orchestrate`:';
   return [
     `${lead} dispatch one scoped \`task-worker\` per slice`,
-    '  and review the returned reports; never pull a worker’s diff into the main context.',
+    '  and review the returned reports. Never pull a worker’s diff into the main context.',
   ];
 }
 
@@ -289,9 +289,9 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   const lines = [
     `# ${name}`,
     '',
-    '<!-- TODO: one-line description of the project. Keep this file lean — it is loaded every turn. -->',
+    '<!-- TODO: one-line description of the project. Keep this file lean. It is loaded every turn. -->',
     '<!-- For a fuller from-scratch skeleton (layout, scripts, guardrail-doc pointers, per-target',
-    '     workflows), see .claude/kit-templates/CLAUDE.md.template — a gitignored reference that',
+    '     workflows), see .claude/kit-templates/CLAUDE.md.template, a gitignored reference that',
     '     `npx claude-kit update` restores if absent. -->',
     '',
     '## Layout',
@@ -324,10 +324,10 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   const body = [
     '### claude-kit sections',
     '',
-    'This block is maintained by `npx claude-kit update` — content outside the markers around it',
+    'This block is maintained by `npx claude-kit update`. Content outside the markers around it',
     'is yours and never touched. For a fuller from-scratch skeleton to compare structure against, see',
-    '`.claude/kit-templates/CLAUDE.md.template` (a gitignored reference; `npx claude-kit update`',
-    'restores it if absent).',
+    '`.claude/kit-templates/CLAUDE.md.template`, a gitignored reference that `npx claude-kit update`',
+    'restores if absent.',
     '',
     ...changesetsSection(ctx, answers),
     ...backlogSection(ctx, answers),
@@ -340,20 +340,20 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
     '',
     '### Cost & verification discipline',
     '',
-    '- Stage-sized work (≤ a handful of files): implement directly in-context; no implementation',
+    '- Stage-sized work (≤ a handful of files): implement directly in-context, with no implementation',
     '  subagents. Reserve subagents for genuinely parallel or unbounded work (wide sweeps, migrations).',
     ...subagentExceptionLine(answers, { bold: false }),
-    '- Verify with static gates (tests, typecheck, lint) + a short falsifiable acceptance checklist for',
-    '  the user; no browser/screenshot verification unless explicitly asked.',
+    '- Verify with static gates (tests, typecheck, lint) plus a short falsifiable acceptance checklist',
+    '  for the user. No browser/screenshot verification unless explicitly asked.',
     '- Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.',
-    '- On AskUserQuestion timeout, stop and re-ask later — never carry tentative selections forward.',
+    '- On AskUserQuestion timeout, stop and re-ask later. Never carry tentative selections forward.',
     "- Read the repo's own docs + targeted greps before fanning out Explore/Plan agents.",
     '',
     '### Tool-use efficiency',
     '',
-    '- `grep -n` to locate, then `Read` with `offset`/`limit`; never read big files whole.',
-    '- Never `git stash` to baseline-check; use `git diff --name-only` / `git show HEAD:<path>`.',
-    '- Pipe long command output through `grep`; batch related greps into one call.',
+    '- `grep -n` to locate, then `Read` with `offset`/`limit`. Never read big files whole.',
+    '- Never `git stash` to baseline-check. Use `git diff --name-only` / `git show HEAD:<path>`.',
+    '- Pipe long command output through `grep`, and batch related greps into one call.',
     '',
   ];
   return `${body.join('\n')}`;
@@ -363,7 +363,7 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
 // unfilled authoritative source must not look invocable to the router.
 export function renderReviewerDraft(target: Target): string {
   return `---
-description: "DRAFT — fill in the authoritative source before use. Read-only reviewer for ${target.label} (${target.pathPrefix || 'repo root'})."
+description: "DRAFT: fill in the authoritative source before use. Read-only reviewer for ${target.label} (${target.pathPrefix || 'repo root'})."
 name: "${target.name}-reviewer"
 tools: Read, Grep, Glob
 model: haiku
@@ -373,7 +373,7 @@ You are the ${target.label} reviewer, a read-only auditor for \`${target.pathPre
 
 <!-- TODO(claude-kit): this is a DRAFT. Fill in the authoritative source below and delete
      the DRAFT marker from the description above. See the full pattern in
-     .claude/kit-templates/agents/reviewer.agent.md.template — a gitignored reference that
+     .claude/kit-templates/agents/reviewer.agent.md.template, a gitignored reference that
      \`npx claude-kit update\` restores if it's missing. -->
 
 ## Authoritative source
@@ -383,15 +383,15 @@ You are the ${target.label} reviewer, a read-only auditor for \`${target.pathPre
 ## What you do
 
 1. Read the change under review (diff, file, or description).
-2. Read the relevant sections of the authoritative source directly; never rely on memory.
-3. Quote the source verbatim; cite file paths with line numbers.
+2. Read the relevant sections of the authoritative source directly. Never rely on memory.
+3. Quote the source verbatim, and cite file paths with line numbers.
 4. Return one verdict: **OK** | **Conflict** (quote rule + conflicting code) | **Gap** (source silent).
 
 ## Constraints
 
-- Read-only: describe fixes precisely; never edit.
-- \`grep -n\` to locate, then \`Read\` with \`offset\` + \`limit\`; never read large files whole.
-- Aim for ≤ 8 tool calls; if no verdict by then, return open questions and stop.
+- Read-only. Describe fixes precisely, and never edit.
+- \`grep -n\` to locate, then \`Read\` with \`offset\` + \`limit\`. Never read large files whole.
+- Aim for ≤ 8 tool calls. If no verdict by then, return open questions and stop.
 `;
 }
 

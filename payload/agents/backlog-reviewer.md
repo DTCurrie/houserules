@@ -18,9 +18,9 @@ accumulate, not to do the work.
    matches the area convention for that BACKLOG.md's path.
 2. **Dedupe.** Grep the other entries in this and sibling `BACKLOG.md` files for the same problem
    under a different title. Run `node .claude/scripts/backlog-log.mjs list` to scan all backlogs.
-   If it's a near-duplicate, say which existing ID it overlaps and recommend merge/drop.
+   If it's a near-duplicate, say which existing ID it overlaps and recommend a merge or a drop.
 3. **Worth-tracking gut-check.** A good entry is concrete, deferred, and actionable: a specific fix
-   or improvement the project intends to do. Flag and recommend dropping: vague wishlist items
+   or improvement the project intends to do. Flag and recommend dropping vague wishlist items
    ("we should be better at X"), things already covered by an active plan, or work small enough it
    should just be done now rather than tracked.
 4. **Scope.** The entry should be genuinely out-of-scope for the current change, not a way to defer
@@ -29,5 +29,5 @@ accumulate, not to do the work.
 ## Output
 
 Return one of: **OK** (well-formed, non-duplicate, worth tracking) | **Reformat** (quote the issue)
-| **Duplicate of <ID>** | **Drop** (with the reason). Cite entry IDs and file paths. Read-only:
-never edit a BACKLOG.md; describe the change and let the implementer apply it.
+| **Duplicate of <ID>** | **Drop** (with the reason). Cite entry IDs and file paths. You are
+read-only, so never edit a BACKLOG.md. Describe the change and let the implementer apply it.

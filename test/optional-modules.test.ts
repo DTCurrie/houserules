@@ -306,3 +306,51 @@ test('OM8: code-comments is off by default', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('OM9: prose-voice lands a PATH-SCOPED markdown rule, off by default', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    expect(
+      !existsSync(join(root, '.claude/rules/prose-voice.md')),
+      'not installed until asked for',
+    ).toBeTruthy();
+
+    const r = runCli(['init', '--yes', '--modules=prose-voice', root]);
+    expect(r.status, r.stderr).toBe(0);
+
+    const text = readFileSync(
+      join(root, '.claude/rules/prose-voice.md'),
+      'utf8',
+    );
+
+    // Without `paths:` this rule would be resident on every turn. The dot-directory
+    // globs are separate entries because `**` does not reliably descend into them.
+    expect(text, 'paths: frontmatter present').toMatch(
+      /^---\n(?:.*\n)*?paths:\n/,
+    );
+    expect(text).toMatch(/^ {2}- ['"]\*\*\/\*\.md['"]$/m);
+    expect(text).toMatch(/^ {2}- ['"]\.changeset\/\*\.md['"]$/m);
+    expect(text).toMatch(/No semicolons/);
+
+    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    expect(manifest.modules.includes('prose-voice')).toBeTruthy();
+    expect(
+      manifest.files['.claude/rules/prose-voice.md'],
+      'the rule is kit-owned (update-refreshable)',
+    ).toBeTruthy();
+
+    // Same contract as code-comments: no hook, no CLAUDE.md pointer, `paths:` is the trigger.
+    const settings = readJson(join(root, '.claude/settings.json'));
+    const cmds = Object.values(settings.hooks ?? {}).flatMap((groups: any) =>
+      groups.flatMap((g: any) => g.hooks.map((h: any) => h.command)),
+    );
+    expect(!cmds.some((c: string) => c.includes('prose-voice'))).toBeTruthy();
+    expect(
+      !readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('prose-voice'),
+    ).toBeTruthy();
+
+    expect(runCli(['doctor', root]).status).toBe(0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

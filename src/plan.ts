@@ -45,6 +45,7 @@ import * as readGuard from './modules/read-guard.js';
 import * as regen from './modules/regen.js';
 import * as statusline from './modules/statusline.js';
 import * as codeComments from './modules/code-comments.js';
+import * as proseVoice from './modules/prose-voice.js';
 
 import type {
   Action,
@@ -88,6 +89,7 @@ export const MODULES: ModuleDef[] = [
   regen,
   statusline,
   codeComments,
+  proseVoice,
 ];
 
 export class KitError extends Error {}

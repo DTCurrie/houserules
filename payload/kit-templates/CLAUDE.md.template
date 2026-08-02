@@ -1,7 +1,7 @@
 # <PROJECT_NAME>
 
 <one-line description>. <Optional: pointer to canonical guardrail docs, e.g.
-".claude/rules/<topic>.md — read before any <topic>-affecting change.">
+".claude/rules/<topic>.md: read before any <topic>-affecting change.">
 
 ## Layout
 
@@ -23,15 +23,15 @@
 
 ### Working on <core domain>
 
-Authoritative sources; cross-check before answering or changing:
+Authoritative sources, to cross-check before answering or changing:
 
-- `<path/to/source-of-truth>`: <why it's authoritative; which way the dependency points>
+- `<path/to/source-of-truth>`: <why it's authoritative, and which way the dependency points>
 
 Approach:
 
-1. Read the relevant authoritative source first; quote/cite it when explaining behavior.
-2. For non-trivial changes, propose the diff and confirm before writing — `<HIGH_IMPACT_PATHS>`
-   are shared across the repo; always confirm.
+1. Read the relevant authoritative source first, and quote or cite it when explaining behavior.
+2. For non-trivial changes, propose the diff and confirm before writing. `<HIGH_IMPACT_PATHS>`
+   are shared across the repo, so always confirm.
 3. After a non-trivial change, fan out **in parallel** (one message, multiple subagent calls)
    to the relevant **read-only reviewers** and reconcile before declaring done. Verdicts are
    advisory: fix real issues, push back if wrong. Pin the read-only subagent type so they
@@ -42,32 +42,33 @@ Approach:
 
 Changesets are the canonical changelog: one `.changeset/*.md` per meaningful change,
 consumed by `changeset version` at release time. After completing a user-visible change and
-**before the user commits**, run the `/changeset` skill (or spawn `changeset-writer`). It
+**before the user commits**, run the `/changeset` skill, or spawn `changeset-writer`. It
 inspects the diff, picks patch/minor/major per package, and records via
-`node .claude/scripts/changeset-write.mjs` (validates package names against the workspace).
+`node .claude/scripts/changeset-write.mjs`, which validates package names against the workspace.
 Nothing release-worthy? Record that too: `changeset-write.mjs --empty --summary "<why>"`.
 Never hand-edit `CHANGELOG.md` or `.changeset/*.md`.
 
 ### Planning non-trivial features
 
-Enter plan mode (or spawn a `Plan` subagent) and clarify scope first. Include: problem,
-proposed solution, architecture notes, phased breakdown, todo checklist, open questions.
+Enter plan mode (or spawn a `Plan` subagent) and clarify scope first. Include the problem,
+proposed solution, architecture notes, phased breakdown, todo checklist, and open questions.
 
 ### Tracking out-of-scope work
 
-Discover a real issue outside current scope? **Do not fix it inline**; log it and keep moving —
-run the `/backlog-add` skill (backed by `node .claude/scripts/backlog-log.mjs`).
+Discover a real issue outside current scope? **Do not fix it inline.** Log it and keep moving
+with the `/backlog-add` skill, backed by `node .claude/scripts/backlog-log.mjs`.
 
 - Prefixes by area: `<PREFIX>` (`<path>`), ...
-- After every add, the skill spawns `backlog-reviewer` to validate/dedupe/gut-check; reconcile first.
+- After every add, the skill spawns `backlog-reviewer` to validate, dedupe, and gut-check the
+  entry. Reconcile its verdict first.
 - On resolving an item while shipping: `node .claude/scripts/backlog-log.mjs remove <ID> <file> "<resolution>"`.
-- No wishlist/vague items, and nothing already covered by an active plan.
+- No wishlist or vague items, and nothing already covered by an active plan.
 
 ### Debugging with end-to-end tracing
 
-For bugs needing more than a one-shot fix: form hypotheses first, then add structured
+For bugs needing more than a one-shot fix, form hypotheses first, then add structured
 instrumentation under `.claude/debug/`. Track every code-path edit so it can be removed.
-Delete the instrumentation once fixed — the dir should only hold active investigations.
+Delete the instrumentation once fixed. The dir should only hold active investigations.
 
 ## Conventions
 
@@ -75,28 +76,28 @@ Delete the instrumentation once fixed — the dir should only hold active invest
 - <"route all randomness / IO / etc. through `<module>`, not ad-hoc">
 - **The user always handles `git commit` / `push` / PR-create.** Never run them on the user's
   behalf. Describe what's staged and wait. (Also enforced by `.claude/scripts/guard-bash.mjs`.)
-- Memory index entries are auto-loaded; the linked files are not. Open a linked memory file
+- Memory index entries are auto-loaded, but the linked files are not. Open a linked memory file
   only when its one-line description is load-bearing for the current task.
 
 ## Cost & verification discipline
 
 - **Stage-sized work (≤ a handful of files): implement directly in-context.** No
-  implementation subagents — brief-writing + agents re-reading the same files + verbose
-  reports restating the diff costs more than the work itself. Reserve subagents for
+  implementation subagents. Brief-writing, agents re-reading the same files, and verbose
+  reports restating the diff cost more than the work itself. Reserve subagents for
   genuinely parallel or unbounded work (wide mechanical sweeps, per-file migrations,
   broad searches).
 - **Verify with static gates** (unit tests, typecheck, lint), then hand the user a short
   falsifiable acceptance checklist (3–5 concrete checks) to confirm in the running app.
-  **Never drive browsers/screenshots for verification unless explicitly asked** — slow,
-  flaky, and image tokens re-enter context on every iteration.
+  **Never drive browsers/screenshots for verification unless explicitly asked.** They are
+  slow and flaky, and image tokens re-enter context on every iteration.
 - **Derive empirical constants analytically.** When a value can be computed from the
   artifact itself (file headers, geometry, metadata), write the small parser script
   instead of a screenshot-and-iterate loop.
 - **An unanswered question is not an answer.** If an AskUserQuestion times out or goes
-  unanswered, stop the dependent work and re-ask when the user returns — never carry
+  unanswered, stop the dependent work and re-ask when the user returns. Never carry
   tentative or partial selections forward.
 - **Before fanning out Explore/Plan agents, read the repo's own docs + targeted greps.**
-  A well-documented repo answers most planning questions in-context; fan out only for
+  A well-documented repo answers most planning questions in-context, so fan out only for
   what the docs don't answer.
 
 ## Tool-use efficiency
@@ -106,17 +107,17 @@ that lists 100+ untracked files>. Burn-rate adds up fast.
 
 - **Read narrow ranges, not whole files.** `grep -n` to locate the symbol, then `Read` with
   `offset` + `limit`.
-- **Never `git stash` to baseline-check lint/typecheck** — the stash output dumps the full repo
+- **Never `git stash` to baseline-check lint/typecheck.** The stash output dumps the full repo
   file list. Use `git diff --name-only`, `git show HEAD:<path>`, or inspect the one file you changed.
 - **Don't chase incidental build-artifact churn.** Build/test/check regenerate files under
-  `<dist/build dir>`; that churn is expected and is not your change. Don't investigate, restore,
+  `<dist/build dir>`. That churn is expected and is not your change. Don't investigate, restore,
   or report it. Only react to source you actually edited. Don't invent "tidy the tree" tasks.
 - **Pipe long output through `grep` at the source**: `<test cmd> 2>&1 | grep -E '<failure pattern>'`.
   Don't redirect to a file and re-read it.
 - **Batch related greps into one call** (`grep -nE 'a|b|c'`) instead of three searches.
-- **Don't read more memory/plans/debug files than you need.** Indexes are auto-loaded; the linked
-  files are not. Open a linked file only if its one-line description is load-bearing.
+- **Don't read more memory/plans/debug files than you need.** Indexes are auto-loaded, but the
+  linked files are not. Open a linked file only if its one-line description is load-bearing.
 - **Run targeted tests by name before a full package run** (`<test-name-filter syntax>`). A
   multi-minute sweep is rarely the right first probe.
-- **Don't read large generated references whole** (`<generated reference path>`): `grep -n` for the
+- **Don't read large generated references whole** (`<generated reference path>`). `grep -n` for the
   section, then `Read` a tight window. Quote the real source file for load-bearing claims.

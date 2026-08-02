@@ -2,8 +2,8 @@
 // Ships /sweep, an on-demand skill that shards a repo-wide mechanical edit into
 // package-boundaried low-effort writer subagents — the orchestrator pays O(shards),
 // never sees the match set or individual diffs. Script-free: the value is the
-// locate-once → shard → fan-out → verify discipline, which the kit's own generated
-// CLAUDE.md already instructs agents to do but never packaged (CONVENTIONS §8).
+// locate-once → shard → fan-out → verify discipline that the kit's own generated
+// CLAUDE.md instructs agents to follow (CONVENTIONS §9, high-volume operations).
 
 import type { Action, ModuleGroup } from '../types.js';
 import { skill } from './shared.js';
