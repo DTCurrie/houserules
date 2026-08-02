@@ -157,7 +157,8 @@ and link it from CLAUDE.md.
 The kit's own `code-comments` and `prose-voice` modules are worked examples of the pattern: both ship
 as `paths:`-scoped rules with no hook and no CLAUDE.md pointer. `code-cleanliness` goes further,
 splitting a `paths:`-scoped rule from a pull-only `.claude/reference/design-principles.md` that the
-rule links to instead of restating.
+rule links to instead of restating. `testing` shows the axis cutting the other way: its `paths:` list
+holds test suffixes rather than source ones, so the rule is resident only while a test is open.
 
 ## 7. Generated-reference snapshots and pull-only access
 

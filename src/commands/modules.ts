@@ -25,7 +25,7 @@ import type {
 } from '../types.js';
 
 // Headless selection, intersected with what is actually available.
-function parseRequested(
+export function parseRequested(
   modulesFlag: string | undefined,
   available: ModuleDef[],
 ): { chosen: string[]; unknown: string[] } {

@@ -16,7 +16,13 @@ export default ts.config(
   // that extension has to be listed explicitly or ESLint matches nothing and the
   // shipping hook scripts go silently unlinted.
   {
-    files: ['src/**/*.ts', 'test/**/*.ts', 'payload/**/*.mts', '*.ts'],
+    files: [
+      'src/**/*.ts',
+      'test/**/*.ts',
+      'payload/**/*.mts',
+      'payload/**/__test__/**/*.ts',
+      '*.ts',
+    ],
     extends: [ts.configs.recommended],
     rules: {
       // typescript-eslint's own guidance for TS sources: tsc already does this,
@@ -35,7 +41,11 @@ export default ts.config(
   // settings key cannot type that key as part of Settings. `any` in a test helper
   // is that intent, not a gap; src/ stays strict.
   {
-    files: ['test/**/*.ts'],
+    files: [
+      'test/**/*.ts',
+      'src/**/__test__/**/*.ts',
+      'payload/**/__test__/**/*.ts',
+    ],
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },
 );

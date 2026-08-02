@@ -48,67 +48,62 @@ function readText(root: string, relativePath: string): string | null {
 }
 
 /**
- * Reports what on disk no longer matches what the kit would write, and why.
+ * Classifies ONE effect against what is on disk. Pure: every filesystem touch arrives
+ * through `readHost`, which is called at most once and only for the statuses that need
+ * content.
  *
- * Derived from the effects `computeEffects()` already produced rather than
- * re-implementing the comparison, so doctor and update cannot disagree about what has
- * drifted.
- *
- * @param effects From `computeEffects()`. The canonical content per path.
- * @param prune From `computePrune()`. Supplies the orphans.
+ * @param readHost Returns the destination file's current text, or null if it is absent.
+ *   For a region action this is the whole host file, not the region body.
  */
-export function computeDrift(
-  root: string,
-  effects: Effect[],
-  prune?: PruneResult | null,
-): DriftReport {
-  const files: FileDrift[] = [];
+export function classifyEffect(
+  effect: Effect,
+  readHost: () => string | null,
+): FileDrift {
+  const { action, op, content } = effect;
+  const base = { path: action.dest, module: action.module };
 
-  for (const { action, op, content } of effects) {
-    const base = { path: action.dest, module: action.module };
+  // A seed whose destination exists is the user's file, by design. Not drift.
+  if (op === 'skip-exists' || op === 'skip-identical') {
+    return { ...base, status: 'ok' };
+  }
+  if (op === 'create') {
+    return { ...base, status: 'missing' };
+  }
 
-    // A seed whose destination exists is the user's file, by design. Not drift.
-    if (op === 'skip-exists' || op === 'skip-identical') {
-      files.push({ ...base, status: 'ok' });
-      continue;
+  if (action.kind === 'region') {
+    const host = readHost();
+    const body = host === null ? null : extractBody(host, action.region);
+    if (body === null) {
+      // The host file is there but our markers are gone. Someone deleted them,
+      // or the file predates the region. `--fix` re-inserts at the anchor without
+      // disturbing anything else.
+      return { ...base, status: 'no-marker' };
     }
-    if (op === 'create') {
-      files.push({ ...base, status: 'missing' });
-      continue;
-    }
-
-    const canonical = content?.toString('utf8') ?? '';
-
-    if (action.kind === 'region') {
-      const host = readText(root, action.dest);
-      const body = host === null ? null : extractBody(host, action.region);
-      if (body === null) {
-        // The host file is there but our markers are gone. Someone deleted them,
-        // or the file predates the region. `--fix` re-inserts at the anchor without
-        // disturbing anything else.
-        files.push({ ...base, status: 'no-marker' });
-        continue;
-      }
-      files.push({
-        ...base,
-        status: op === 'skip-modified' ? 'yours' : 'stale',
-        yours: op === 'skip-modified',
-        diff: truncateDiff(unifiedDiff(body, action.body)),
-      });
-      continue;
-    }
-
-    const onDisk = readText(root, action.dest) ?? '';
-    files.push({
+    return {
       ...base,
       status: op === 'skip-modified' ? 'yours' : 'stale',
       yours: op === 'skip-modified',
-      diff: truncateDiff(unifiedDiff(onDisk, canonical)),
-    });
+      diff: truncateDiff(unifiedDiff(body, action.body)),
+    };
   }
 
-  // Orphans: recorded by the manifest, no longer produced by any enabled module.
-  // computePrune already refuses to propose deleting a shared host file.
+  const canonical = content?.toString('utf8') ?? '';
+  return {
+    ...base,
+    status: op === 'skip-modified' ? 'yours' : 'stale',
+    yours: op === 'skip-modified',
+    diff: truncateDiff(unifiedDiff(readHost() ?? '', canonical)),
+  };
+}
+
+/**
+ * The orphan half of a drift report. Pure: derived entirely from the prune result.
+ *
+ * Orphans are recorded by the manifest but no longer produced by any enabled module.
+ * `computePrune` already refuses to propose deleting a shared host file.
+ */
+export function orphanDrift(prune?: PruneResult | null): FileDrift[] {
+  const files: FileDrift[] = [];
   for (const { dest, gone } of prune?.deletes ?? []) {
     if (gone) continue; // already absent — nothing to report
     files.push({ path: dest, status: 'orphaned' });
@@ -119,8 +114,29 @@ export function computeDrift(
   for (const dest of prune?.kept ?? []) {
     files.push({ path: dest, status: 'orphaned', yours: true });
   }
+  return files;
+}
 
-  return { files };
+/**
+ * Reports what on disk no longer matches what the kit would write, and why.
+ *
+ * Derived from the effects `computeEffects()` already produced rather than
+ * re-implementing the comparison, so doctor and update cannot disagree about what has
+ * drifted. The per-file decision is {@link classifyEffect}, which is pure. This function
+ * is only the filesystem shell around it.
+ *
+ * @param effects From `computeEffects()`. The canonical content per path.
+ * @param prune From `computePrune()`. Supplies the orphans.
+ */
+export function computeDrift(
+  root: string,
+  effects: Effect[],
+  prune?: PruneResult | null,
+): DriftReport {
+  const files = effects.map((effect) =>
+    classifyEffect(effect, () => readText(root, effect.action.dest)),
+  );
+  return { files: [...files, ...orphanDrift(prune)] };
 }
 
 export function isClean(report: DriftReport): boolean {

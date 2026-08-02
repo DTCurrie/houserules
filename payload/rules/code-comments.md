@@ -67,11 +67,13 @@ rustdoc in Rust.
   goes stale, restates the module's own doc comments, and gets read by nobody. The filename and
   the exports are the header. A module-wide invariant belongs in the TSDoc of the export that
   enforces it. One that spans modules belongs in the repo's docs.
-  - The one exception is a file that exports nothing, such as an executable entry point or a
-    test suite. It has no symbol to hang documentation on, so a block at the top is the only
-    place its contract can live. Write it as TSDoc, the same as any other documentation, and
-    keep it to that contract: usage, options, and exit codes for a script, the invariant
-    under test for a suite. Never a summary of the design or a history of the file.
+  - The one exception is a file that exports nothing, such as an executable entry point. It
+    has no symbol to hang documentation on, so a block at the top is the only place its
+    contract can live. Write it as TSDoc, the same as any other documentation, and keep it to
+    that contract: usage, options, and exit codes. Never a summary of the design or a history
+    of the file.
+  - **Test files are not covered by that exception**, even though a suite exports nothing.
+    Its `describe` names carry the contract. See `testing.md` if that rule is installed.
 - **No landmark comments.** No `// ---- parsing ----`, no banner dividers, no
   `// === helpers ===`. Needing signposts to navigate a file means the file should be several
   files. Split it and name each one after the section it replaced.

@@ -58,7 +58,7 @@ function splitFlow(inner: string): string[] {
  * Extracts the `packages:` list from pnpm-workspace.yaml. Hand-rolled on purpose: the
  * payload ships into user repos and runs on bare node, so it cannot import a YAML
  * library. This is not a YAML parser. It reads one key in the shapes real workspace files
- * use, and never throws. `test/workspaces.test.ts` pins that contract case by case.
+ * use, and never throws. `__test__/workspaces.test.ts` pins that contract case by case.
  *
  * Sibling top-level blocks such as `catalog:` and `catalogMode:` must not confuse it, so
  * only lines inside the packages block are read and the block ends at the next

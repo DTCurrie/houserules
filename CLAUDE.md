@@ -11,22 +11,49 @@ the kit itself.
   (gitignored). `src/types.ts` is the shared model every module and command is typed against, and
   `src/core/config.ts` is the zod schema for `kit.config.json`.
 - `schema/kit.config.schema.json` is **generated** from that zod schema by `pnpm run schema`.
-  Never hand-edit it. `test/config-schema.test.ts` fails when it falls out of sync.
+  Never hand-edit it. `src/core/__test__/config.test.ts` fails when it falls out of sync.
 - `payload/`: everything copied into user repos. Scripts are authored as `.mts` and compiled
   to `payload-dist/scripts/*.mjs`. The prose dirs (`skills/`, `agents/`, `rules/`,
   `output-styles/`, `kit-templates/`) are copied through verbatim. **`payload-dist/` is what
   ships and what `payloadPath()` reads.** Zero runtime dependencies, node builtins only, POSIX
-  shells, enforced by `test/payload-deps.test.ts` (imports) and `test/payload-run.test.ts`
+  shells, enforced by `payload/__test__/dependencies.test.ts` (imports) and `payload/__test__/execution.test.ts`
   (actually executing each emitted script on bare node). Hook scripts must never crash: config
   via `loadConfigSafe()`, exit 0 on any failure path.
-- `test/`: vitest suites plus `fixtures.ts` generators (pnpm-monorepo / npm-single /
-  non-js), all in mkdtemp dirs.
+- Tests live in a `__test__/` **beside the code they are about**, per `payload/rules/testing.md`
+  which this repo dogfoods. The split is by SUBJECT, not by unit-versus-e2e: a fixture-driven
+  CLI test is still a test of its one subject, so `src/commands/__test__/modules.test.ts` holds
+  both the pure `parseRequested` cases and the ones that drive the command against a real tree.
+  Never add a `.e2e.test.ts` tier. If a file gets unwieldy, split it by CONCERN.
+  - **The filename names the unit, and every `describe` in it is about that unit.** A file named
+    for a theme is a grouping, and a grouping hides which unit is covered. `src/**/__test__/`,
+    `src/modules/__test__/` (named for the module it covers), `payload/scripts/__test__/`,
+    `payload/scripts/lib/__test__/`, and `payload/__test__/` for the two invariants over the
+    whole built tree (`dependencies`, `execution`).
+  - **`test/` holds no tests**, only the shared testing modules, one per artifact: `repo`
+    (builds the synthetic repos), `run` (`runCli`, `runScript`, `runIn`), `installed-tree`,
+    `doctor-report`, `runner-stub`, `hook-input`, `ctx-builder`, plus `global-setup`. Named
+    `test/` and not `__test__/` because the latter means "tests live here" and none do. They
+    get **no tests of their own**: every suite that imports one exercises it.
+  - Import them via the **`#test/*` alias**, mapped in `vitest.config.ts` (`resolve.alias`, a
+    regex prefix so a new module needs no config change) and `tsconfig.json` (`paths`). Not in
+    `package.json` `imports`, which would publish a mapping to files the package does not ship.
+  - Stage with `useInstalledRepo()`, which copies a cached post-`init` snapshot, rather than
+    running `init` in a test that is not about `init`. Otherwise one `init` regression fails
+    twenty unrelated suites and names the wrong thing. `useRepo()` gives a bare repo.
+  - Test files carry **no comments and no file header**. The `describe` name, the `it` name, and
+    a named helper are the three places meaning goes.
+- **Tests must never reach the published package**, and a green suite will not catch it.
+  `tsconfig.build.json` excludes `src/**/__test__/**` and `tsconfig.payload.json` excludes
+  `payload/**/__test__/**`, since `dist/` and `payload-dist/` are both `files` entries. A
+  shipped test would carry a `vitest` import into a user's install. `tsconfig.json` clears the
+  inherited exclude so `pnpm check` still typechecks them. Verify with a real
+  `pnpm pack` and grep the tarball, not with `find` over `dist/`.
 
 ## Commands
 
 - `pnpm build`: `tsc` → `dist/`, regenerate the JSON Schema, then `publint`. Required before
   any `dist/` probe.
-- `pnpm check`: `tsc --noEmit` over `src/` + `test/`.
+- `pnpm check`: `tsc --noEmit` over `src/` + `test/` + colocated `__test__/` dirs.
 - `pnpm test`: full suite, including end-to-end init/update/doctor on fixtures.
 - `node dist/cli.js init --yes --dry-run <repo>`: safe manual probe against any repo.
 - `pnpm change`: record a changeset. Required for any user-visible change, and dogfooded.
@@ -57,7 +84,7 @@ the kit itself.
 - Two readers of kit.config.json, one shape: the CLI validates strictly via zod
   (`src/core/config.ts`), and the payload reads it defensively and **dependency-free**
   (`loadConfigSafe()`). They share only the inferred `KitConfig` type. Never make the payload
-  import zod. `test/payload-deps.test.ts` enforces this.
+  import zod. `payload/__test__/dependencies.test.ts` enforces this.
 - init never runs package-manager installs and never touches settings.local.json.
 - Managed regions: the kit maintains its own marker-delimited block inside files the user
   owns (CLAUDE.md today). It writes ONLY between the markers, and bytes outside them are
@@ -67,6 +94,9 @@ the kit itself.
   `src/render.ts` generates) follows `payload/rules/prose-voice.md`: plain sentences, no
   semicolons, no em dash where a period or comma works. Frontmatter `description:` fields are
   the skill-routing signal, so keep every trigger term when rewording one.
+- `src/types.ts` and `src/modules/shared.ts` predate the catch-all-files rule in
+  `payload/rules/code-cleanliness.md`, which forbids both names. Tracked as KIT-1d28be. Do not
+  start that rename as a side quest, and do not add new files of that shape.
 - The user always handles `git commit` / `push` / PR-create.
 
 ## Cost & verification discipline

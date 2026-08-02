@@ -32,6 +32,7 @@ import * as statusline from './modules/statusline.js';
 import * as codeComments from './modules/code-comments.js';
 import * as codeCleanliness from './modules/code-cleanliness.js';
 import * as proseVoice from './modules/prose-voice.js';
+import * as testing from './modules/testing.js';
 
 import type {
   Action,
@@ -77,6 +78,7 @@ export const MODULES: ModuleDef[] = [
   codeComments,
   codeCleanliness,
   proseVoice,
+  testing,
 ];
 
 export class KitError extends Error {}
@@ -145,6 +147,35 @@ function readAction(action: CopyAction | WriteAction | SeedAction): Buffer {
     return readFileSync(action.src);
   }
   return Buffer.from(action.content, 'utf8');
+}
+
+/**
+ * Decides what `computeEffects` does with ONE kit-owned file. Pure: the caller resolves
+ * the bytes and the recorded hash, this only judges them.
+ *
+ * This encodes the kit-owned versus user-owned rule, which is the invariant the whole
+ * update story rests on. A file whose current bytes differ from the hash the manifest
+ * recorded is one YOU edited, and it is never refreshed without `force`. A file matching
+ * its recorded hash is one only the KIT has written, so a content change means the kit
+ * moved on and the refresh is safe and silent.
+ *
+ * @param recordedHash From the manifest. `undefined` means the kit never wrote this path,
+ *   so there is nothing to have diverged from and the file is refreshable.
+ */
+export function classifyWrite(args: {
+  exists: boolean;
+  onDisk: Buffer | null;
+  canonical: Buffer;
+  recordedHash: string | undefined;
+  force: boolean;
+}): 'create' | 'skip-identical' | 'skip-modified' | 'update' {
+  const { exists, onDisk, canonical, recordedHash, force } = args;
+  if (!exists || onDisk === null) return 'create';
+  if (onDisk.equals(canonical)) return 'skip-identical';
+  const locallyModified =
+    recordedHash !== undefined && sha256(onDisk) !== recordedHash;
+  if (locallyModified && !force) return 'skip-modified';
+  return 'update';
 }
 
 /**
@@ -226,23 +257,14 @@ export function computeEffects(
     // copy | write: kit-owned
     const content = readAction(action);
     const hash = sha256(content);
-    if (!exists) {
-      effects.push({ action, op: 'create', content, hash });
-      continue;
-    }
-    const onDisk = readFileSync(destAbs);
-    if (onDisk.equals(content)) {
-      effects.push({ action, op: 'skip-identical', content, hash });
-      continue;
-    }
-    const recordedHash = manifest?.files?.[action.dest];
-    const locallyModified =
-      recordedHash !== undefined && sha256(onDisk) !== recordedHash;
-    if (locallyModified && !force) {
-      effects.push({ action, op: 'skip-modified', content, hash });
-      continue;
-    }
-    effects.push({ action, op: 'update', content, hash });
+    const op = classifyWrite({
+      exists,
+      onDisk: exists ? readFileSync(destAbs) : null,
+      canonical: content,
+      recordedHash: manifest?.files?.[action.dest],
+      force,
+    });
+    effects.push({ action, op, content, hash });
   }
 
   // All modules' settings fragments merge into one pass over the real file.

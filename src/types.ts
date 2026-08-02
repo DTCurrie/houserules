@@ -392,7 +392,7 @@ export interface Flags {
 }
 
 /**
- * The exit-code contract, printed in `--help` and asserted in `test/cli.test.ts`.
+ * The exit-code contract, printed in `--help` and asserted in `src/__test__/cli.test.ts`.
  * There is deliberately no "refused to overwrite" code: `init` on an existing
  * install re-plans from the recorded module set rather than refusing.
  */

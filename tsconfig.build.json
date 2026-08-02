@@ -15,5 +15,9 @@
     "erasableSyntaxOnly": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  // Colocated unit tests live under src/ but must never be emitted. They import vitest,
+  // a devDependency, and package.json ships dist/, so an emitted test is a broken import
+  // in an installed copy of the package.
+  "exclude": ["src/**/__test__/**"]
 }

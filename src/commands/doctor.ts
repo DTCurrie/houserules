@@ -15,6 +15,7 @@ import {
   driftedFiles,
   FIXABLE,
   type DriftReport,
+  type FileDrift,
 } from '../core/drift.js';
 import { TargetRepo } from '../core/fs-target.js';
 import { MODULES, buildPlan, computeEffects, computePrune } from '../plan.js';
@@ -47,7 +48,7 @@ const countLines = (t: string) =>
 
 // `@` only at line start or after whitespace, so `foo@bar` emails never match. The
 // caller keeps only the specifiers that resolve to a real file on disk.
-function parseImports(text: string): string[] {
+export function parseImports(text: string): string[] {
   const specs: string[] = [];
   for (const m of text.matchAll(/(?:^|\s)@([^\s@]+)/g)) specs.push(m[1]);
   return specs;
@@ -63,7 +64,7 @@ const RESIDENT_MEMORY_FILES = [
 
 // A globbed rule loads only when a matching file is in the working set, so an empty
 // result here means "resident every turn". A list of only `**` counts as unscoped.
-function ruleGlobs(text: string): string[] {
+export function ruleGlobs(text: string): string[] {
   const fm = /^---\n([\s\S]*?)\n---/.exec(text);
   if (!fm) return [];
   const lines = fm[1].split('\n');
@@ -121,7 +122,7 @@ interface ResidentMeasurement {
 
 // The `description:` frontmatter of an installed skill/agent (single-line, quotes
 // optional). Returns null when the file has none.
-function frontmatterDescription(text: string): string | null {
+export function frontmatterDescription(text: string): string | null {
   const fm = /^---\n([\s\S]*?)\n---/.exec(text);
   if (!fm) return null;
   const m = /^description:[ \t]*(.*)$/m.exec(fm[1]);
@@ -232,7 +233,9 @@ function measureResident(root: string): ResidentMeasurement | null {
   };
 }
 
-function allHookCommands(settings: Settings | null | undefined): string[] {
+export function allHookCommands(
+  settings: Settings | null | undefined,
+): string[] {
   const commands: string[] = [];
   for (const groups of Object.values(settings?.hooks ?? {})) {
     for (const group of groups ?? []) {
@@ -245,9 +248,35 @@ function allHookCommands(settings: Settings | null | undefined): string[] {
 
 type Level = 'ERROR' | 'WARN';
 
-interface Finding {
+export interface Finding {
   level: Level;
   msg: string;
+}
+
+/**
+ * Drift entries that move the exit code. `yours` never does. There is no way to
+ * acknowledge a deliberate edit, so counting it would leave doctor permanently red on an
+ * install that is working exactly as intended.
+ */
+export function blockingDrift(drifted: FileDrift[]): FileDrift[] {
+  return drifted.filter((file) => file.status !== 'yours' && !file.yours);
+}
+
+/**
+ * The severity rollup, kept pure so the CI contract is testable without a repo on disk.
+ *
+ * A rejected config outranks everything, because nothing downstream can be trusted when
+ * the config itself will not parse.
+ */
+export function doctorExitCode(args: {
+  configProblems: readonly string[];
+  findings: readonly Finding[];
+  drifted: FileDrift[];
+}): number {
+  if (args.configProblems.length) return EXIT.badConfig;
+  const hasError = args.findings.some((f) => f.level === 'ERROR');
+  if (hasError || blockingDrift(args.drifted).length) return EXIT.error;
+  return EXIT.ok;
 }
 
 /**
@@ -705,17 +734,11 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   const errors = findings.filter((f) => f.level === 'ERROR');
   const warns = findings.filter((f) => f.level === 'WARN');
   const drifted = driftedFiles(drift);
-  // Drift moves the exit code, which is what makes `doctor` a usable CI gate. `yours`
-  // deliberately does not. See this function's doc comment.
-  const blocking = drifted.filter((f) => f.status !== 'yours' && !f.yours);
-  const code = configProblems.length
-    ? EXIT.badConfig
-    : errors.length || blocking.length
-      ? EXIT.error
-      : EXIT.ok;
+  const blocking = blockingDrift(drifted);
+  const code = doctorExitCode({ configProblems, findings, drifted });
 
   if (flags.json) {
-    // Stable shape: this is a CI contract, asserted in test/cli.test.ts.
+    // Stable shape: this is a CI contract, asserted in src/__test__/cli.test.ts.
     log.json({
       ok: code === EXIT.ok,
       exitCode: code,

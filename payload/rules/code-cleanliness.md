@@ -68,6 +68,23 @@ reference doc linked below.
 - **Delete speculative handling for cases the product does not have.** It adds a path to
   test and reason about for no behavior anyone needs. Version control remembers it.
 
+### Catch-all files
+
+- **Never create `types.ts`, `constants.ts`, `utils.ts`, `shared.ts`, or `helpers.ts`.**
+  These names describe how a file was filled, not what it is responsible for, so nothing
+  is ever out of place in one. They accumulate unrelated behavior until every module
+  imports them and none can be read on its own.
+- **Put the code in the unit that uses it.** A type, constant, or helper with one consumer
+  belongs in that consumer. Proximity is what makes it findable, and a grep for the symbol
+  lands the reader somewhere that explains it.
+- **Genuinely shared code gets its own module, named for its responsibility.** Name it for
+  what it does, not for the fact that several places need it. `retry-policy.ts` and
+  `currency-format.ts` say what they hold. `utils.ts` says only that someone had nowhere
+  else to put it.
+- **The test is whether you can name the file's job without "and".** If you cannot, it is
+  two modules. This is the one-nameable-task rule from Function size applied one level up,
+  and it is the Single Responsibility Principle. See `../reference/design-principles.md`.
+
 ### Where other rules apply
 
 - Whether and how to comment: see `code-comments.md`.
@@ -156,6 +173,28 @@ function formatCurrency(amount: number, currency: 'USD' | 'EUR') {
   if (currency === 'USD') return `$${amount}`;
   return `€${amount}`;
 }
+```
+
+**Bad — catch-all files nothing can be out of place in:**
+
+```
+src/
+  types.ts        // every type in the app
+  utils.ts        // formatting, retry, date math, a JSON guard
+  constants.ts    // timeouts next to feature flags next to copy strings
+  checkout/
+    index.ts
+```
+
+**Good — each file named for one job, most of it next to its consumer:**
+
+```
+src/
+  retry-policy.ts       // the retry constants and the backoff that uses them
+  currency-format.ts
+  checkout/
+    index.ts
+    checkout-types.ts   // the types only checkout uses, beside checkout
 ```
 
 </content>

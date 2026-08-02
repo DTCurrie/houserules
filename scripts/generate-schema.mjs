@@ -3,7 +3,7 @@
  * Regenerates schema/kit.config.schema.json from the zod schema in `src/core/config.ts`.
  *
  * Usage: `pnpm run schema`. Build first, since it reads dist/.
- * `test/config-schema.test.ts` fails if the committed file falls out of sync.
+ * `src/core/__test__/config.test.ts` fails if the committed file falls out of sync.
  */
 
 import { writeFileSync } from 'node:fs';
