@@ -7,14 +7,13 @@ import type { CheckResult, Finding } from './finding.js';
 
 // module id → hook script that must appear in a settings.json hook command.
 const HOOK_SCRIPTS: Record<string, string[]> = {
-  core: ['guard-bash.mjs'],
+  core: ['guard-bash.mjs', 'ledger-inject.mjs'],
   'lint-fix': ['lint-format-fix.mjs'],
   changesets: ['changeset-check.mjs'],
   'session-context': ['session-context.mjs'],
   'debug-session': ['debug-session-check.mjs'],
   'read-guard': ['guard-read.mjs'],
   regen: ['regen-on-edit.mjs'],
-  backlog: ['backlog-inject.mjs'],
 };
 
 const KIT_HOOK_SCRIPT_RE =

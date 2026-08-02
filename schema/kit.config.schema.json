@@ -129,6 +129,11 @@
       "properties": { "enabled": { "type": "boolean" } },
       "additionalProperties": false
     },
+    "decisions": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } },
+      "additionalProperties": false
+    },
     "claudeMd": {
       "type": "object",
       "properties": {

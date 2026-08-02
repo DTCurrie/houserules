@@ -242,6 +242,23 @@ function backlogSection(ctx: Ctx, answers: Answers): string[] {
   ];
 }
 
+function decisionsSection(ctx: Ctx, answers: Answers): string[] {
+  if (!answers.moduleIds.includes('decisions')) return [];
+  return [
+    '### Recording decisions',
+    '',
+    'Settled a design question that the code does not explain on its own? Record it with the',
+    '`/decide` skill, backed by `node .claude/scripts/decision-log.mjs`. It lands in the nearest',
+    '`DECISIONS.md` and is committed, so the reasoning outlives the transcript.',
+    'Record only what clears the bar: not obvious from the code, a competent person could have chosen',
+    'otherwise, and re-deriving it costs real time. Every record needs the alternative you rejected',
+    'and the trigger that would make you revisit it.',
+    'A decision never changes in place. When one is replaced, `supersede` writes a new record and',
+    'links back, so the chain of reasoning stays readable.',
+    '',
+  ];
+}
+
 function plansSection(ctx: Ctx, answers: Answers): string[] {
   if (!answers.moduleIds.includes('plans')) return [];
   return [
@@ -336,6 +353,7 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
     '',
     ...changesetsSection(ctx, answers),
     ...backlogSection(ctx, answers),
+    ...decisionsSection(ctx, answers),
     ...plansSection(ctx, answers),
     ...orchestrateSection(ctx, answers),
     '### Conventions',

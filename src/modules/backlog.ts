@@ -1,7 +1,7 @@
 import type { Action } from '../actions.js';
 import type { ModuleGroup } from '../module-def.js';
 import { agent, script, skill } from './copy-actions.js';
-import { hookFragment, scriptPermission } from './hook-wiring.js';
+import { scriptPermission } from './hook-wiring.js';
 
 export const id = 'backlog';
 export const title = 'Backlog ledger (/backlog-add + reviewer agent)';
@@ -29,19 +29,11 @@ export function plan(): Action[] {
       'log an out-of-scope discovery, then gut-check it',
     ),
     agent(id, 'backlog-reviewer', 'validates fresh backlog entries (haiku)'),
-    // Inert until a prompt actually references a logged ID. Verified on the stock CLI:
-    // UserPromptSubmit exit-0 stdout is added to context, same as SessionStart.
-    script(
-      id,
-      'backlog-inject.mjs',
-      'UserPromptSubmit: inject a referenced backlog entry from the log',
-    ),
     {
       kind: 'merge-settings',
       module: id,
       fragment: {
         permissions: { allow: [scriptPermission('backlog-log.mjs')] },
-        ...hookFragment('UserPromptSubmit', null, 'backlog-inject.mjs'),
       },
     },
   ];

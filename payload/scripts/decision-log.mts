@@ -1,0 +1,582 @@
+#!/usr/bin/env node
+/**
+ * Decision ledger helper.
+ *
+ * Usage:
+ *   decide    <prefix> <file> <title> [body] [--under <id>] [--supersedes <id>,<id>]
+ *             [--scope <path>,<path>] [--chat <id>]
+ *   supersede <id> <file> <new-title> [body] [--scope <path>,<path>] [--chat <id>]
+ *   amend     <id> <file> <new-body>
+ *   show      <id>
+ *   list      [<file>]
+ *   render    [<file>]
+ *   ancestry  <id>
+ *   current   <id>
+ *   tree      <id>
+ *   scope     <path> [<path>...]
+ *
+ * Log: .claude/decisions.log, one JSON record per line. Body content is gzip+base64.
+ * Status is never stored. A record is superseded once its id appears in a later record's
+ * `supersedes` array, and `list`/`render` derive that in one pass over the log.
+ *
+ * ancestry/current/tree/scope walk the same in-memory projection and print one line per
+ * node: id, title, status. ancestry and tree are indented by depth, since supersedes and
+ * under can each branch. No traversal prints a body; `show` is the only command that does,
+ * and only for one id.
+ *
+ * The ledger mechanics live in lib/entry-ledger.mjs, shared with backlog-log.mjs. This
+ * script owns what is specific to a decision: the record shape, the edges, and the verbs.
+ *
+ * Chat provenance stamps the active session and degrades to a chat:null warning outside
+ * Claude Code. Pass --chat=none or set CLAUDE_SESSION_ID to override.
+ */
+
+import { existsSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, relative, resolve } from 'node:path';
+
+import { repoRoot } from './lib/kit-config.mjs';
+import { makeId } from './lib/backlog-id.mjs';
+import {
+  SEPARATOR,
+  appendEvent,
+  decodeBody,
+  encodeBody,
+  findSurfaceFiles,
+  nowIso,
+  parseEntries,
+  readContentArg,
+  readLog,
+  readSurface,
+  relativeToRoot,
+  renderMetadata,
+  resolveChat,
+  takeChatFlag,
+  todayDate,
+} from './lib/entry-ledger.mjs';
+
+const REPO_ROOT = repoRoot();
+const LOG_FILE = resolve(REPO_ROOT, '.claude/decisions.log');
+const SURFACE = 'DECISIONS.md';
+
+interface DecisionRecord {
+  ts: string;
+  id: string;
+  action: 'decide' | 'supersede' | 'amend';
+  file?: string;
+  title?: string;
+  supersedes?: string[];
+  under?: string;
+  scope?: string[];
+  chat?: string | null;
+  content?: string;
+}
+
+interface DecisionEntry {
+  id: string;
+  file: string;
+  title: string;
+  date: string;
+  supersedes: string[];
+  under: string | null;
+  scope: string[];
+  chat: string | null;
+  content: string;
+}
+
+interface Projection {
+  entries: Map<string, DecisionEntry>;
+  superseded: Set<string>;
+}
+
+/** One pass over the log: the latest content per id, and which ids a later record superseded. */
+function projectDecisions(records: DecisionRecord[]): Projection {
+  const entries = new Map<string, DecisionEntry>();
+  const superseded = new Set<string>();
+  for (const r of records) {
+    if (r.action === 'decide' || r.action === 'supersede') {
+      entries.set(r.id, {
+        id: r.id,
+        file: r.file ?? '',
+        title: r.title ?? '',
+        date: r.ts.slice(0, 10),
+        supersedes: r.supersedes ?? [],
+        under: r.under ?? null,
+        scope: r.scope ?? [],
+        chat: r.chat ?? null,
+        content: r.content ?? '',
+      });
+      for (const target of r.supersedes ?? []) superseded.add(target);
+    } else if (r.action === 'amend') {
+      const existing = entries.get(r.id);
+      if (existing && r.content !== undefined) existing.content = r.content;
+    }
+  }
+  return { entries, superseded };
+}
+
+/** The id that superseded each target, derived from every entry's `supersedes` list. */
+function supersededByOf(
+  entries: Map<string, DecisionEntry>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const e of entries.values()) {
+    for (const target of e.supersedes) map.set(target, e.id);
+  }
+  return map;
+}
+
+/** Direct children under each parent id, derived from every entry's `under` field. */
+function underChildrenOf(
+  entries: Map<string, DecisionEntry>,
+): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const e of entries.values()) {
+    if (!e.under) continue;
+    const list = map.get(e.under) ?? [];
+    list.push(e.id);
+    map.set(e.under, list);
+  }
+  return map;
+}
+
+/** One line per node, indented by depth: id, title, status. Never a body. */
+function printEntryLine(
+  e: DecisionEntry,
+  superseded: Set<string>,
+  depth: number,
+): void {
+  const status = superseded.has(e.id) ? 'superseded' : 'accepted';
+  console.log(`${'  '.repeat(depth)}${e.id}  ${e.title}  ${status}`);
+}
+
+function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
+
+function requireKnownId(
+  entries: Map<string, DecisionEntry>,
+  id: string,
+  context: string,
+): void {
+  if (!entries.has(id))
+    fail(`${context} ${id} does not resolve in the decision log.`);
+}
+
+function requireAccepted(
+  superseded: Set<string>,
+  id: string,
+  context: string,
+): void {
+  if (superseded.has(id)) fail(`${context} ${id} is already superseded.`);
+}
+
+/** Walks the under-chain from `under` to make sure adding `newId -> under` cannot loop back. */
+function requireNoUnderCycle(
+  entries: Map<string, DecisionEntry>,
+  newId: string,
+  under: string,
+): void {
+  let current: string | null = under;
+  const seen = new Set<string>();
+  while (current) {
+    if (current === newId) {
+      fail(`--under ${under} would create a cycle back to this record.`);
+    }
+    if (seen.has(current)) return;
+    seen.add(current);
+    current = entries.get(current)?.under ?? null;
+  }
+}
+
+function splitList(flag: string | null): string[] {
+  return flag
+    ? flag
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+}
+
+function takeFlag(argv: string[], name: string): string | null {
+  const eq = `--${name}=`;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === `--${name}`) {
+      const v = argv[i + 1];
+      argv.splice(i, 2);
+      return v ?? null;
+    }
+    if (a?.startsWith(eq)) {
+      argv.splice(i, 1);
+      return a.slice(eq.length) || null;
+    }
+  }
+  return null;
+}
+
+function validatePrefix(prefix: string): void {
+  if (!/^[A-Z][A-Z0-9]*$/.test(prefix)) {
+    fail(
+      `Invalid prefix "${prefix}". Must be uppercase ASCII, such as SIM, DATA, or RULES.`,
+    );
+  }
+}
+
+function decisionHeader(file: string): string {
+  const name = relative(REPO_ROOT, dirname(resolve(file))) || 'repo root';
+  return `# Decisions — ${name}\n\nAppend-only decision log. Add entries via \`.claude/scripts/decision-log.mjs\`.\n\n`;
+}
+
+/** One `**Label:** value` row, its fields joined by \` · \` and absent fields dropped. */
+function metaRow(fields: Record<string, string | null>): string {
+  return Object.entries(fields)
+    .map(([k, v]) => renderMetadata({ [k]: v }))
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function renderEntry(
+  e: DecisionEntry,
+  status: 'accepted' | 'superseded',
+  supersededById: string | null,
+): string {
+  const scope = e.scope.length
+    ? e.scope.map((p) => `\`${p}\``).join(', ')
+    : null;
+  const meta = [
+    metaRow({ Decided: e.date, Status: status }),
+    metaRow({
+      Supersedes: e.supersedes.length ? e.supersedes.join(', ') : null,
+      Under: e.under,
+    }),
+    metaRow({
+      'Superseded by': status === 'superseded' ? supersededById : null,
+    }),
+    metaRow({ Chat: e.chat }),
+    metaRow({ Scope: scope }),
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const body = e.content ? decodeBody(e.content).trim() : '';
+  return `## [${e.id}] ${e.title}\n\n${meta}\n\n${body}\n\n${SEPARATOR}\n\n`;
+}
+
+/** Rebuilds one surface file from the log alone, in append order. */
+function rerenderFile(file: string): void {
+  const relFile = relativeToRoot(REPO_ROOT, file);
+  const records = readLog<DecisionRecord>(LOG_FILE);
+  const { entries, superseded } = projectDecisions(records);
+  const supersededBy = supersededByOf(entries);
+  const body = [...entries.values()]
+    .filter((e) => e.file === relFile)
+    .map((e) =>
+      renderEntry(
+        e,
+        superseded.has(e.id) ? 'superseded' : 'accepted',
+        supersededBy.get(e.id) ?? null,
+      ),
+    )
+    .join('');
+  writeFileSync(file, decisionHeader(file) + body);
+}
+
+function usage() {
+  console.error(
+    [
+      'Usage:',
+      '  decision-log.mjs decide    <prefix> <file> <title> [body] [--under <id>]',
+      '                             [--supersedes <id>,<id>] [--scope <path>,<path>] [--chat <id>]',
+      '  decision-log.mjs supersede <id> <file> <new-title> [body] [--scope <path>,<path>] [--chat <id>]',
+      '  decision-log.mjs amend     <id> <file> <new-body>',
+      '  decision-log.mjs show      <id>',
+      '  decision-log.mjs list      [<file>]',
+      '  decision-log.mjs render    [<file>]',
+      '  decision-log.mjs ancestry  <id>',
+      '  decision-log.mjs current   <id>',
+      '  decision-log.mjs tree      <id>',
+      '  decision-log.mjs scope     <path> [<path>...]',
+      '',
+      'When [body] is omitted, it is read from stdin.',
+      'decide/supersede auto-detect the active Claude Code session ID; pass --chat <id> or',
+      'set CLAUDE_SESSION_ID=<id> to override, or --chat=none to suppress.',
+      'ancestry/current/tree/scope print one line per record, id/title/status, indented by',
+      'depth for ancestry and tree. No traversal prints a body; use show for that.',
+    ].join('\n'),
+  );
+}
+
+const argv = process.argv.slice(2);
+const chatFlag = takeChatFlag(argv);
+const underFlag = takeFlag(argv, 'under');
+const supersedesFlag = takeFlag(argv, 'supersedes');
+const scopeFlag = takeFlag(argv, 'scope');
+const [action, ...rest] = argv;
+
+switch (action) {
+  case 'decide': {
+    const [prefix, file, title, content] = rest;
+    if (!prefix || !file || !title) {
+      usage();
+      process.exit(1);
+    }
+    validatePrefix(prefix);
+    const body = readContentArg(content);
+    if (!body) {
+      console.error(
+        'Empty body. Pass content as the 4th arg or pipe via stdin.',
+      );
+      process.exit(1);
+    }
+    const { entries, superseded } = projectDecisions(
+      readLog<DecisionRecord>(LOG_FILE),
+    );
+    const supersedeIds = splitList(supersedesFlag);
+    const scope = splitList(scopeFlag);
+    const ts = nowIso();
+    const id = makeId(prefix, title, ts);
+    if (underFlag) {
+      requireKnownId(entries, underFlag, '--under');
+      requireNoUnderCycle(entries, id, underFlag);
+    }
+    for (const target of supersedeIds) {
+      requireKnownId(entries, target, '--supersedes');
+      requireAccepted(superseded, target, '--supersedes');
+    }
+    const chat = resolveChat(chatFlag, REPO_ROOT);
+    const relFile = relativeToRoot(REPO_ROOT, file);
+    appendEvent(LOG_FILE, {
+      ts,
+      id,
+      action: 'decide',
+      file: relFile,
+      title,
+      ...(underFlag ? { under: underFlag } : {}),
+      ...(supersedeIds.length ? { supersedes: supersedeIds } : {}),
+      ...(scope.length ? { scope } : {}),
+      chat,
+      content: encodeBody(body),
+    });
+    rerenderFile(file);
+    console.log(id);
+    if (chat) console.log(`chat: ${chat}`);
+    else if (chatFlag !== 'none')
+      console.error(
+        'warning: no active Claude session detected; entry written without chat ID.',
+      );
+    break;
+  }
+
+  case 'supersede': {
+    const [targetId, file, newTitle, content] = rest;
+    if (!targetId || !file || !newTitle) {
+      usage();
+      process.exit(1);
+    }
+    const body = readContentArg(content);
+    if (!body) {
+      console.error(
+        'Empty body. Pass content as the 4th arg or pipe via stdin.',
+      );
+      process.exit(1);
+    }
+    const { entries, superseded } = projectDecisions(
+      readLog<DecisionRecord>(LOG_FILE),
+    );
+    requireKnownId(entries, targetId, 'supersede');
+    requireAccepted(superseded, targetId, 'supersede');
+    const prefix = targetId.split('-')[0];
+    const scope = splitList(scopeFlag);
+    const ts = nowIso();
+    const id = makeId(prefix, newTitle, ts);
+    const chat = resolveChat(chatFlag, REPO_ROOT);
+    const relFile = relativeToRoot(REPO_ROOT, file);
+    appendEvent(LOG_FILE, {
+      ts,
+      id,
+      action: 'supersede',
+      file: relFile,
+      title: newTitle,
+      supersedes: [targetId],
+      ...(scope.length ? { scope } : {}),
+      chat,
+      content: encodeBody(body),
+    });
+    rerenderFile(file);
+    console.log(id);
+    if (chat) console.log(`chat: ${chat}`);
+    else if (chatFlag !== 'none')
+      console.error(
+        'warning: no active Claude session detected; entry written without chat ID.',
+      );
+    break;
+  }
+
+  case 'amend': {
+    const [id, file, content] = rest;
+    if (!id || !file) {
+      usage();
+      process.exit(1);
+    }
+    const body = readContentArg(content);
+    if (!body) {
+      console.error(
+        'Empty body. Pass content as the 3rd arg or pipe via stdin.',
+      );
+      process.exit(1);
+    }
+    const { entries } = projectDecisions(readLog<DecisionRecord>(LOG_FILE));
+    requireKnownId(entries, id, 'amend');
+    const chat = resolveChat(chatFlag, REPO_ROOT);
+    const relFile = relativeToRoot(REPO_ROOT, file);
+    appendEvent(LOG_FILE, {
+      ts: nowIso(),
+      id,
+      action: 'amend',
+      file: relFile,
+      chat,
+      content: encodeBody(body),
+    });
+    rerenderFile(file);
+    break;
+  }
+
+  case 'show': {
+    const [id] = rest;
+    if (!id) {
+      usage();
+      process.exit(1);
+    }
+    if (!existsSync(LOG_FILE)) {
+      console.error('No decision log yet.');
+      process.exit(0);
+    }
+    let found = 0;
+    for (const r of readLog<DecisionRecord>(LOG_FILE)) {
+      if (r.id !== id) continue;
+      found++;
+      console.log(
+        `[${r.ts}] ${r.action}${r.title ? ` — ${r.title}` : ''}${r.file ? ` (${r.file})` : ''}`,
+      );
+      if (r.chat) console.log(`chat: ${r.chat}`);
+      if (r.supersedes?.length)
+        console.log(`supersedes: ${r.supersedes.join(', ')}`);
+      if (r.under) console.log(`under: ${r.under}`);
+      if (r.scope?.length) console.log(`scope: ${r.scope.join(', ')}`);
+      if (r.content) console.log(decodeBody(r.content));
+      console.log('---');
+    }
+    if (!found) {
+      console.error(`No log entries for ${id}.`);
+      process.exit(1);
+    }
+    break;
+  }
+
+  case 'list': {
+    const [file] = rest;
+    const files = file ? [resolve(file)] : findSurfaceFiles(REPO_ROOT, SURFACE);
+    for (const f of files) {
+      if (!existsSync(f) || !statSync(f).isFile()) continue;
+      const entries = parseEntries(readSurface(f));
+      if (!entries.length) continue;
+      console.log(`# ${relativeToRoot(REPO_ROOT, f)}`);
+      for (const e of entries) {
+        console.log(
+          `  ${e.id}  ${e.meta.Decided ?? todayDate()}  ${e.meta.Status ?? 'accepted'}  ${e.title}`,
+        );
+      }
+      console.log('');
+    }
+    break;
+  }
+
+  case 'render': {
+    const [file] = rest;
+    const files = file ? [resolve(file)] : findSurfaceFiles(REPO_ROOT, SURFACE);
+    for (const f of files) rerenderFile(f);
+    break;
+  }
+
+  case 'ancestry': {
+    const [id] = rest;
+    if (!id) {
+      usage();
+      process.exit(1);
+    }
+    const { entries, superseded } = projectDecisions(
+      readLog<DecisionRecord>(LOG_FILE),
+    );
+    requireKnownId(entries, id, 'ancestry');
+    const walk = (nodeId: string, depth: number): void => {
+      const e = entries.get(nodeId);
+      if (!e) return;
+      printEntryLine(e, superseded, depth);
+      for (const parent of e.supersedes) walk(parent, depth + 1);
+    };
+    walk(id, 0);
+    break;
+  }
+
+  case 'current': {
+    const [id] = rest;
+    if (!id) {
+      usage();
+      process.exit(1);
+    }
+    const { entries, superseded } = projectDecisions(
+      readLog<DecisionRecord>(LOG_FILE),
+    );
+    requireKnownId(entries, id, 'current');
+    const supersededBy = supersededByOf(entries);
+    let nodeId: string | undefined = id;
+    while (nodeId) {
+      const e: DecisionEntry | undefined = entries.get(nodeId);
+      if (!e) break;
+      printEntryLine(e, superseded, 0);
+      nodeId = supersededBy.get(nodeId);
+    }
+    break;
+  }
+
+  case 'tree': {
+    const [id] = rest;
+    if (!id) {
+      usage();
+      process.exit(1);
+    }
+    const { entries, superseded } = projectDecisions(
+      readLog<DecisionRecord>(LOG_FILE),
+    );
+    requireKnownId(entries, id, 'tree');
+    const children = underChildrenOf(entries);
+    const walk = (nodeId: string, depth: number): void => {
+      const e = entries.get(nodeId);
+      if (!e) return;
+      printEntryLine(e, superseded, depth);
+      for (const child of children.get(nodeId) ?? []) walk(child, depth + 1);
+    };
+    walk(id, 0);
+    break;
+  }
+
+  case 'scope': {
+    const paths = rest;
+    if (!paths.length) {
+      usage();
+      process.exit(1);
+    }
+    const { entries, superseded } = projectDecisions(
+      readLog<DecisionRecord>(LOG_FILE),
+    );
+    for (const e of entries.values()) {
+      if (e.scope.some((p) => paths.includes(p)))
+        printEntryLine(e, superseded, 0);
+    }
+    break;
+  }
+
+  default:
+    usage();
+    process.exit(action ? 1 : 0);
+}

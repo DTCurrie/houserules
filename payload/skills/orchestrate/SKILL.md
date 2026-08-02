@@ -255,6 +255,15 @@ All waves done → check the phase's own acceptance from the sub-plan, then upda
 header and the `ROADMAP.md` line to `DONE (<date>)` in one pass, with a `## Log` entry. This is
 `/plan-project`'s status-in-place discipline, and orchestration doesn't get to skip it.
 
+**Before reporting, promote durable decisions.** Skip this step if `.claude/scripts/decision-log.mjs`
+is absent. Re-read the phase's `## Notes & decisions` and the decisions-and-deviations section of
+every report you reconciled. Run `/decide` on anything that clears its bar: not obvious from the
+code, a competent person could have chosen otherwise, and re-deriving it costs real time. This
+proposes, it does not bulk-write. Most notes and most deviations are not decisions. A worker
+deviation you accepted is a decision candidate, because you approved a departure from the brief and
+nothing else in the tree records why. A note that was decided and then reversed mid-phase graduates
+as two linked records: the original and a `supersede` that replaces it, not one flattened summary.
+
 Then report to the user: slices run, what landed, the verify verdict, anything backlogged. **Stop
 here** unless the invocation was `all --auto`, in which case continue to the next phase's §1.
 

@@ -30,10 +30,21 @@ function installedCtx(overrides: {
   });
 }
 
-function wiring(command: string): Settings {
+function wiring(...commands: string[]): Settings {
   return {
-    hooks: { PreToolUse: [{ hooks: [{ type: 'command', command }] }] },
+    hooks: {
+      PreToolUse: [
+        { hooks: commands.map((command) => ({ type: 'command', command })) },
+      ],
+    },
   };
+}
+
+function coreWiring(): Settings {
+  return wiring(
+    'node .claude/scripts/guard-bash.mjs',
+    'node .claude/scripts/ledger-inject.mjs',
+  );
 }
 
 function writeSettingsLocal(root: string, content: unknown): void {
@@ -103,7 +114,7 @@ describe('checkSettingsWiring', () => {
   it('reports nothing when the module hook script is wired', () => {
     const ctx = installedCtx({
       modules: ['core'],
-      claude: { settings: wiring('node .claude/scripts/guard-bash.mjs') },
+      claude: { settings: coreWiring() },
     });
 
     expect(checkSettingsWiring('/repo', ctx).findings).toEqual([]);
@@ -164,7 +175,7 @@ describe('checkSettingsWiring', () => {
       modules: ['core'],
       claude: {
         settingsLocalExists: true,
-        settings: wiring('node .claude/scripts/guard-bash.mjs'),
+        settings: coreWiring(),
       },
     });
 
@@ -182,7 +193,7 @@ describe('checkSettingsWiring', () => {
       modules: ['core'],
       claude: {
         settingsLocalExists: true,
-        settings: wiring('node .claude/scripts/guard-bash.mjs'),
+        settings: coreWiring(),
       },
     });
 
@@ -197,7 +208,7 @@ describe('checkSettingsWiring', () => {
       modules: ['core'],
       claude: {
         settingsLocalExists: true,
-        settings: wiring('node .claude/scripts/guard-bash.mjs'),
+        settings: coreWiring(),
       },
     });
 

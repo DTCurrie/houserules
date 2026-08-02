@@ -168,6 +168,14 @@ stale ROADMAP is worse than none, because it lies to the next session. Add a one
 with the date and what's next, and bump the `**Updated:**` date. If a phase is blocked, mark it
 `BLOCKED` and note why in the sub-plan. Don't leave it silently `IN PROGRESS`.
 
+Before the workspace is discarded, re-read the phase's `## Notes & decisions` and offer to promote
+anything durable with `/decide`. It proposes, it does not bulk-write. Most notes are not decisions,
+and a bulk write is how a decision log fills with diary. Apply the bar from the `decide` skill: not
+obvious from the code, a competent person could have chosen otherwise, and re-deriving it costs real
+time. A note that records something decided and then reversed mid-phase graduates as two linked
+records, the first decision and a second that supersedes it, never flattened into one. Skip this step
+silently if `.claude/scripts/decision-log.mjs` is absent, since the `decisions` module is optional.
+
 When the plan itself changes and a phase splits, drops, or reorders, edit PLAN.md and ROADMAP.md to
 match reality. The docs track what you're _actually_ doing, not the original guess.
 

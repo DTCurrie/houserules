@@ -139,6 +139,8 @@ export const KitConfigSchema = z.strictObject({
 
   ledger: z.strictObject({ enabled: z.boolean().optional() }).optional(),
 
+  decisions: z.strictObject({ enabled: z.boolean().optional() }).optional(),
+
   claudeMd: z
     .strictObject({
       managed: z

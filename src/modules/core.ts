@@ -55,6 +55,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
   for (const name of [
     'kit-config.mjs',
     'backlog-id.mjs',
+    'entry-ledger.mjs',
     'workspaces.mjs',
     'proc.mjs',
   ]) {
@@ -65,6 +66,16 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       id,
       'guard-bash.mjs',
       'PreToolUse guard: git commit/push/stash, gh pr create',
+    ),
+  );
+  // Inert until a prompt actually references a logged ID. Verified on the stock CLI:
+  // UserPromptSubmit exit-0 stdout is added to context, same as SessionStart. Reads any
+  // kit ledger, so it belongs to core rather than to any one ledger module.
+  actions.push(
+    script(
+      id,
+      'ledger-inject.mjs',
+      'UserPromptSubmit: inject a referenced backlog or decision entry from the log',
     ),
   );
 
@@ -182,6 +193,12 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       },
       ...hookFragment('PreToolUse', 'Bash', 'guard-bash.mjs'),
     },
+  });
+
+  actions.push({
+    kind: 'merge-settings',
+    module: id,
+    fragment: hookFragment('UserPromptSubmit', null, 'ledger-inject.mjs'),
   });
 
   return actions;

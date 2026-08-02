@@ -20,6 +20,7 @@ import * as sessionContext from './modules/session-context.js';
 import * as rename from './modules/rename.js';
 import * as reviewers from './modules/reviewers.js';
 import * as ledger from './modules/ledger.js';
+import * as decisions from './modules/decisions.js';
 import * as terseStyle from './modules/terse-style.js';
 import * as debugSession from './modules/debug-session.js';
 import * as plans from './modules/plans.js';
@@ -135,6 +136,7 @@ export const MODULES: ModuleDef[] = [
   rename,
   reviewers,
   ledger,
+  decisions,
   terseStyle,
   debugSession,
   plans,

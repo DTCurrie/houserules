@@ -12,282 +12,91 @@
  * Log: .claude/backlog.log, one JSON record per line. Body content is gzip+base64 to keep
  * the log compact while remaining decodable with `show`.
  *
- * detectChatId() stamps the active session and is the one Claude-Code-specific part. It
+ * The ledger mechanics live in lib/entry-ledger.mjs, shared with the other ledgers. This
+ * script owns only what is specific to a backlog: the entry shape, the header, and the verbs.
+ *
+ * Chat provenance stamps the active session and is the one Claude-Code-specific part. It
  * degrades to a chat:null warning in any other harness. Pass --chat=none or set
  * CLAUDE_SESSION_ID to silence that.
  */
 
-import { gzipSync, gunzipSync } from 'node:zlib';
-import {
-  appendFileSync,
-  closeSync,
-  existsSync,
-  fstatSync,
-  openSync,
-  readFileSync,
-  readSync,
-  readdirSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 
 import { repoRoot } from './lib/kit-config.mjs';
-import { ENTRY_HEAD, makeId } from './lib/backlog-id.mjs';
+import { makeId } from './lib/backlog-id.mjs';
+import {
+  SEPARATOR,
+  appendEvent,
+  decodeBody,
+  encodeBody,
+  ensureSurfaceHeader,
+  findEntryRange,
+  findSurfaceFiles,
+  nowIso,
+  parseEntries,
+  readContentArg,
+  readLog,
+  readSurface,
+  relativeToRoot,
+  renderMetadata,
+  resolveChat,
+  takeChatFlag,
+  tidySurface,
+  todayDate,
+} from './lib/entry-ledger.mjs';
 
 const REPO_ROOT = repoRoot();
 const LOG_FILE = resolve(REPO_ROOT, '.claude/backlog.log');
+const SURFACE = 'BACKLOG.md';
 
-const SEPARATOR = '---';
-
-const nowIso = () => new Date().toISOString();
-const todayDate = () => nowIso().slice(0, 10);
-const encodeBody = (s?: string) =>
-  gzipSync(Buffer.from(s ?? '', 'utf8')).toString('base64');
-const decodeBody = (s: string) =>
-  gunzipSync(Buffer.from(s, 'base64')).toString('utf8');
-
-// Transcripts live at ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl, where
-// encoded-cwd is the absolute repo path with `/` replaced by `-`.
-function projectTranscriptDir() {
-  const encoded = REPO_ROOT.replaceAll('/', '-');
-  return resolve(homedir(), '.claude/projects', encoded);
+interface BacklogRecord {
+  ts: string;
+  id: string;
+  action: string;
+  file?: string;
+  title?: string;
+  reason?: string;
+  chat?: string | null;
+  content?: string;
 }
 
-interface TranscriptRecord {
-  sessionId?: string;
-  timestamp?: string;
-}
-
-function readLastJsonRecord(file: string): TranscriptRecord | null {
-  let fd;
-  try {
-    fd = openSync(file, 'r');
-  } catch {
-    return null;
-  }
-  try {
-    const { size } = fstatSync(fd);
-    if (size === 0) return null;
-    const chunkSize = Math.min(size, 16384);
-    const buf = Buffer.alloc(chunkSize);
-    readSync(fd, buf, 0, chunkSize, size - chunkSize);
-    const lines = buf.toString('utf8').split('\n').filter(Boolean);
-    for (let i = lines.length - 1; i >= 0; i--) {
-      try {
-        return JSON.parse(lines[i]);
-      } catch {
-        // Partial JSON at the buffer head, or a malformed line — keep walking back.
-      }
-    }
-    return null;
-  } finally {
-    closeSync(fd);
-  }
-}
-
-// Picks the transcript whose tail timestamp is freshest. mtime alone is not reliable
-// when several sessions share one project at once.
-function detectChatId(): string | null {
-  if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
-  const dir = projectTranscriptDir();
-  if (!existsSync(dir)) return null;
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-  let best: { ts: number; sessionId: string } | null = null;
-  for (const e of entries) {
-    if (!e.isFile() || !e.name.endsWith('.jsonl')) continue;
-    const rec = readLastJsonRecord(resolve(dir, e.name));
-    if (!rec?.sessionId || !rec?.timestamp) continue;
-    const ts = Date.parse(rec.timestamp);
-    if (!Number.isFinite(ts)) continue;
-    if (!best || ts > best.ts) best = { ts, sessionId: rec.sessionId };
-  }
-  return best?.sessionId ?? null;
-}
-
-function takeChatFlag(argv: string[]): string | null {
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--chat') {
-      const v = argv[i + 1];
-      argv.splice(i, 2);
-      return v ?? null;
-    }
-    if (a?.startsWith('--chat=')) {
-      argv.splice(i, 1);
-      return a.slice('--chat='.length) || null;
-    }
-  }
-  return null;
-}
-
-function appendEvent(record: Record<string, unknown>) {
-  appendFileSync(LOG_FILE, JSON.stringify(record) + '\n');
-}
-
-function readBacklog(file: string): string {
-  return existsSync(file) ? readFileSync(file, 'utf8') : '';
-}
-
-function ensureBacklogHeader(file: string) {
-  if (existsSync(file)) return;
-  const name = relative(REPO_ROOT, dirname(file)) || 'repo root';
-  writeFileSync(
-    file,
-    `# Backlog — ${name}\n\nDeferred work. Add entries via \`.claude/scripts/backlog-log.mjs\`; remove on resolution.\n\n`,
-  );
-}
-
-function readContentArg(content: string | undefined): string {
-  if (content !== undefined) return content;
-  // Read stdin if not a TTY.
-  if (process.stdin.isTTY) return '';
-  return readFileSync(0, 'utf8').trimEnd();
+function backlogHeader(file: string): string {
+  const name = relative(REPO_ROOT, dirname(resolve(file))) || 'repo root';
+  return `# Backlog — ${name}\n\nDeferred work. Add entries via \`.claude/scripts/backlog-log.mjs\`; remove on resolution.\n\n`;
 }
 
 function renderEntry(
   id: string,
   title: string,
   body: string,
-  dateOverride: string | null,
+  date: string | null,
   chat: string | null,
 ): string {
-  const date = dateOverride ?? todayDate();
-  const trimmed = body.trim();
-  const chatLine = chat ? `\n**Chat:** ${chat}` : '';
-  return `## [${id}] ${title}\n\n**Logged:** ${date}${chatLine}\n\n${trimmed}\n\n${SEPARATOR}\n\n`;
+  const meta = renderMetadata({ Logged: date ?? todayDate(), Chat: chat });
+  return `## [${id}] ${title}\n\n${meta}\n\n${body.trim()}\n\n${SEPARATOR}\n\n`;
 }
 
-interface EntryRange {
-  start: number;
-  end: number;
-  date: string | null;
-  chat: string | null;
-  lines: string[];
+function spliceEntry(
+  file: string,
+  id: string,
+  replacement: string[] | null,
+): boolean {
+  const range = findEntryRange(readSurface(file), id);
+  if (!range) return false;
+  const { start, end, lines } = range;
+  const head = lines.slice(0, start);
+  const tail = lines.slice(end);
+  const next = replacement
+    ? head.concat(replacement, '', tail)
+    : head.concat(tail);
+  writeFileSync(file, tidySurface(next.join('\n')));
+  return true;
 }
 
-function findEntryRange(text: string, id: string): EntryRange | null {
-  const lines = text.split('\n');
-  let start = -1;
-  let date: string | null = null;
-  let chat: string | null = null;
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(ENTRY_HEAD);
-    if (m && m[1] === id) {
-      start = i;
-      // Look for "**Logged:**" / "**Chat:**" metadata lines in the next few.
-      for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
-        const dm = lines[j].match(/^\*\*Logged:\*\*\s+(\d{4}-\d{2}-\d{2})/);
-        if (dm) date = dm[1];
-        const cm = lines[j].match(/^\*\*Chat:\*\*\s+(\S+)/);
-        if (cm) chat = cm[1];
-      }
-      break;
-    }
-  }
-  if (start === -1) return null;
-  // End at the next entry heading OR the next standalone --- line.
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    if (ENTRY_HEAD.test(lines[i])) {
-      end = i;
-      break;
-    }
-    if (lines[i].trim() === SEPARATOR) {
-      end = i + 1;
-      break;
-    }
-  }
-  // Consume one trailing blank line if present.
-  while (end < lines.length && lines[end].trim() === '') end++;
-  return { start, end, date, chat, lines };
-}
-
-interface ParsedEntry {
-  id: string;
-  title: string;
-  date: string | null;
-  chat: string | null;
-  body: string;
-}
-
-interface EntryDraft {
-  id: string;
-  title: string;
-  date: string | null;
-  chat: string | null;
-  body: string[];
-}
-
-function parseEntries(text: string): ParsedEntry[] {
-  const lines = text.split('\n');
-  const entries: EntryDraft[] = [];
-  let current: EntryDraft | null = null;
-  for (const line of lines) {
-    const m = line.match(ENTRY_HEAD);
-    if (m) {
-      if (current) entries.push(current);
-      current = { id: m[1], title: m[2], date: null, chat: null, body: [] };
-      continue;
-    }
-    if (!current) continue;
-    if (line.trim() === SEPARATOR) {
-      entries.push(current);
-      current = null;
-      continue;
-    }
-    const dm = line.match(/^\*\*Logged:\*\*\s+(\d{4}-\d{2}-\d{2})/);
-    if (dm && !current.date) {
-      current.date = dm[1];
-      continue;
-    }
-    const cm = line.match(/^\*\*Chat:\*\*\s+(\S+)/);
-    if (cm && !current.chat) {
-      current.chat = cm[1];
-      continue;
-    }
-    current.body.push(line);
-  }
-  if (current) entries.push(current);
-  return entries.map((e) => ({ ...e, body: e.body.join('\n').trim() }));
-}
-
-function findBacklogFiles(root = REPO_ROOT): string[] {
-  const skip = new Set([
-    'node_modules',
-    '.git',
-    '.svelte-kit',
-    'dist',
-    'build',
-    '.turbo',
-  ]);
-  const out: string[] = [];
-  const walk = (dir: string) => {
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      if (skip.has(e.name)) continue;
-      const full = resolve(dir, e.name);
-      if (e.isDirectory()) walk(full);
-      else if (e.isFile() && e.name === 'BACKLOG.md') out.push(full);
-    }
-  };
-  walk(root);
-  return out;
-}
-
-function relPath(p: string): string {
-  return relative(REPO_ROOT, resolve(p));
+function entryNotFound(id: string, file: string): never {
+  console.error(`Entry ${id} not found in ${file}.`);
+  process.exit(1);
 }
 
 function usage() {
@@ -332,18 +141,17 @@ switch (action) {
       process.exit(1);
     }
     const id = makeId(prefix, title, nowIso());
-    const chat = chatFlag === 'none' ? null : (chatFlag ?? detectChatId());
-    ensureBacklogHeader(file);
-    const existing = readBacklog(file);
-    const padded = existing.replace(/\s*$/, '') + '\n\n';
+    const chat = resolveChat(chatFlag, REPO_ROOT);
+    ensureSurfaceHeader(file, backlogHeader(file));
+    const padded = readSurface(file).replace(/\s*$/, '') + '\n\n';
     writeFileSync(file, padded + renderEntry(id, title, body, null, chat));
-    appendEvent({
+    appendEvent(LOG_FILE, {
       ts: nowIso(),
       id,
       action: 'add',
-      file: relPath(file),
+      file: relativeToRoot(REPO_ROOT, file),
       title,
-      chat: chat ?? null,
+      chat,
       content: encodeBody(body),
     });
     console.log(id);
@@ -361,27 +169,14 @@ switch (action) {
       usage();
       process.exit(1);
     }
-    const text = readBacklog(file);
-    const range = findEntryRange(text, id);
-    if (!range) {
-      console.error(`Entry ${id} not found in ${file}.`);
-      process.exit(1);
-    }
-    const { start, end, lines } = range;
-    const removed = lines.slice(0, start).concat(lines.slice(end)).join('\n');
-    writeFileSync(
-      file,
-      removed.replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n'),
-    );
-    const removeChat =
-      chatFlag === 'none' ? null : (chatFlag ?? detectChatId());
-    appendEvent({
+    if (!spliceEntry(file, id, null)) entryNotFound(id, file);
+    appendEvent(LOG_FILE, {
       ts: nowIso(),
       id,
       action: 'remove',
-      file: relPath(file),
+      file: relativeToRoot(REPO_ROOT, file),
       reason,
-      chat: removeChat ?? null,
+      chat: resolveChat(chatFlag, REPO_ROOT),
     });
     break;
   }
@@ -393,32 +188,27 @@ switch (action) {
       process.exit(1);
     }
     const body = readContentArg(content);
-    const text = readBacklog(file);
-    const range = findEntryRange(text, id);
-    if (!range) {
-      console.error(`Entry ${id} not found in ${file}.`);
-      process.exit(1);
-    }
-    const { start, end, date, chat, lines } = range;
-    const replacement = renderEntry(id, newTitle, body, date, chat).split('\n');
-    // renderEntry ends with two blank lines; splitting yields a trailing "" — drop it
-    // so the join below doesn't introduce an extra blank.
+    const range = findEntryRange(readSurface(file), id);
+    if (!range) entryNotFound(id, file);
+    // renderEntry ends with two blank lines; splitting yields a trailing "" — drop it so
+    // the splice does not introduce an extra blank.
+    const replacement = renderEntry(
+      id,
+      newTitle,
+      body,
+      range.meta.Logged ?? null,
+      range.meta.Chat ?? null,
+    ).split('\n');
     while (replacement.length && replacement[replacement.length - 1] === '')
       replacement.pop();
-    const next = lines
-      .slice(0, start)
-      .concat(replacement, '', lines.slice(end))
-      .join('\n');
-    writeFileSync(file, next.replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n'));
-    const updateChat =
-      chatFlag === 'none' ? null : (chatFlag ?? detectChatId());
-    appendEvent({
+    spliceEntry(file, id, replacement);
+    appendEvent(LOG_FILE, {
       ts: nowIso(),
       id,
       action: 'update',
-      file: relPath(file),
+      file: relativeToRoot(REPO_ROOT, file),
       title: newTitle,
-      chat: updateChat ?? null,
+      chat: resolveChat(chatFlag, REPO_ROOT),
       content: encodeBody(body),
     });
     break;
@@ -434,19 +224,13 @@ switch (action) {
       console.error('No backlog log yet.');
       process.exit(0);
     }
-    const lines = readFileSync(LOG_FILE, 'utf8').split('\n').filter(Boolean);
     let found = 0;
-    for (const line of lines) {
-      let r;
-      try {
-        r = JSON.parse(line);
-      } catch {
-        continue;
-      }
+    for (const r of readLog<BacklogRecord>(LOG_FILE)) {
       if (r.id !== id) continue;
       found++;
-      const headline = `[${r.ts}] ${r.action}${r.title ? ` — ${r.title}` : ''}${r.file ? ` (${r.file})` : ''}`;
-      console.log(headline);
+      console.log(
+        `[${r.ts}] ${r.action}${r.title ? ` — ${r.title}` : ''}${r.file ? ` (${r.file})` : ''}`,
+      );
       if (r.chat) console.log(`chat: ${r.chat}`);
       if (r.content) console.log(decodeBody(r.content));
       if (r.reason) console.log(`reason: ${r.reason}`);
@@ -461,15 +245,14 @@ switch (action) {
 
   case 'list': {
     const [file] = rest;
-    const files = file ? [resolve(file)] : findBacklogFiles();
+    const files = file ? [resolve(file)] : findSurfaceFiles(REPO_ROOT, SURFACE);
     for (const f of files) {
       if (!existsSync(f) || !statSync(f).isFile()) continue;
-      const entries = parseEntries(readFileSync(f, 'utf8'));
+      const entries = parseEntries(readSurface(f));
       if (!entries.length) continue;
-      console.log(`# ${relPath(f)}`);
+      console.log(`# ${relativeToRoot(REPO_ROOT, f)}`);
       for (const e of entries) {
-        const date = e.date ?? '????-??-??';
-        console.log(`  ${e.id}  ${date}  ${e.title}`);
+        console.log(`  ${e.id}  ${e.meta.Logged ?? '????-??-??'}  ${e.title}`);
       }
       console.log('');
     }
