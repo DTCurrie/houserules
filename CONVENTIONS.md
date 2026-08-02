@@ -155,7 +155,9 @@ from §1, and `doctor` flags it. If you want a doc pull-only instead, keep it ou
 and link it from CLAUDE.md.
 
 The kit's own `code-comments` and `prose-voice` modules are worked examples of the pattern: both ship
-as `paths:`-scoped rules with no hook and no CLAUDE.md pointer.
+as `paths:`-scoped rules with no hook and no CLAUDE.md pointer. `code-cleanliness` goes further,
+splitting a `paths:`-scoped rule from a pull-only `.claude/reference/design-principles.md` that the
+rule links to instead of restating.
 
 ## 7. Generated-reference snapshots and pull-only access
 

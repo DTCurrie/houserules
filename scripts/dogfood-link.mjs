@@ -39,6 +39,7 @@ const LINKS = [
   { name: 'agents', target: '../payload/agents' },
   { name: 'output-styles', target: '../payload/output-styles' },
   { name: 'rules', target: '../payload/rules' },
+  { name: 'reference', target: '../payload/reference' },
 ];
 
 if (!existsSync(join(repoRoot, 'payload-dist', 'scripts'))) {

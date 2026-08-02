@@ -20,6 +20,7 @@ const VERBATIM = [
   'skills',
   'agents',
   'rules',
+  'reference',
   'output-styles',
   'kit-templates',
 ];

@@ -354,3 +354,98 @@ test('OM9: prose-voice lands a PATH-SCOPED markdown rule, off by default', () =>
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('OM10: code-cleanliness lands a PATH-SCOPED rule plus a pull-only reference doc and the tidy skill', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    const r = runCli(['init', '--yes', '--modules=code-cleanliness', root]);
+    expect(r.status, r.stderr).toBe(0);
+
+    const rulePath = join(root, '.claude/rules/code-cleanliness.md');
+    const referencePath = join(root, '.claude/reference/design-principles.md');
+    const skillPath = join(root, '.claude/skills/tidy/SKILL.md');
+
+    expect(existsSync(rulePath)).toBeTruthy();
+    expect(existsSync(referencePath)).toBeTruthy();
+    expect(existsSync(skillPath)).toBeTruthy();
+
+    const ruleText = readFileSync(rulePath, 'utf8');
+    // The `paths:` frontmatter is what makes the rule conditional. Without it,
+    // Claude Code loads .claude/rules/*.md on EVERY turn (resident context).
+    expect(ruleText, 'paths: frontmatter present').toMatch(
+      /^---\n(?:.*\n)*?paths:\n/,
+    );
+    expect(ruleText).toMatch(
+      /Prefer intention-revealing names over short ones/,
+    );
+
+    const referenceText = readFileSync(referencePath, 'utf8');
+    // Pull-only: no `paths:` key at all, and not under .claude/rules/.
+    expect(referenceText, 'no paths: key in the reference doc').not.toMatch(
+      /^paths:/m,
+    );
+    expect(
+      existsSync(join(root, '.claude/rules/design-principles.md')),
+      'reference doc must not live under .claude/rules/',
+    ).toBeFalsy();
+    expect(referenceText).toMatch(
+      /Duplication is far cheaper than the wrong abstraction/,
+    );
+
+    const skillText = readFileSync(skillPath, 'utf8');
+    expect(skillText).toMatch(/This is rule-driven, not judgment-driven/);
+
+    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    expect(manifest.modules.includes('code-cleanliness')).toBeTruthy();
+    expect(
+      manifest.files['.claude/rules/code-cleanliness.md'],
+      'the rule is kit-owned (update-refreshable)',
+    ).toBeTruthy();
+    expect(
+      manifest.files['.claude/reference/design-principles.md'],
+      'the reference doc is kit-owned (update-refreshable)',
+    ).toBeTruthy();
+    expect(
+      manifest.files['.claude/skills/tidy/SKILL.md'],
+      'the skill is kit-owned (update-refreshable)',
+    ).toBeTruthy();
+
+    // Script-free and hook-free: nothing is added to the always-loaded surface.
+    const settings = readJson(join(root, '.claude/settings.json'));
+    const cmds = Object.values(settings.hooks ?? {}).flatMap((groups: any) =>
+      groups.flatMap((g: any) => g.hooks.map((h: any) => h.command)),
+    );
+    expect(
+      !cmds.some((c: string) => c.includes('code-cleanliness')),
+    ).toBeTruthy();
+    const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
+    expect(
+      !claudeMd.includes('code-cleanliness'),
+      'no CLAUDE.md pointer — paths: is the trigger',
+    ).toBeTruthy();
+
+    expect(runCli(['doctor', root]).status).toBe(0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('OM11: code-cleanliness is off by default', () => {
+  const root = makeFixture('pnpm-monorepo');
+  try {
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    expect(!manifest.modules.includes('code-cleanliness')).toBeTruthy();
+    expect(
+      !existsSync(join(root, '.claude/rules/code-cleanliness.md')),
+    ).toBeTruthy();
+    expect(
+      !existsSync(join(root, '.claude/reference/design-principles.md')),
+    ).toBeTruthy();
+    expect(
+      !existsSync(join(root, '.claude/skills/tidy/SKILL.md')),
+    ).toBeTruthy();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
