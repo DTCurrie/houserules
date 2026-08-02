@@ -70,9 +70,16 @@ owns end to end.
 A well-formed slice has:
 
 - **`owns`:** the exact paths/globs that worker may write. Nothing outside them.
-- **a falsifiable done:** a command whose output proves it (a named test, a build, a grep).
+- **a falsifiable done:** a command whose output proves it, **scoped to the paths the slice owns**. A
+  named test file, a typecheck of the owned module, a grep that proves the change landed.
 - **a brief that fits on one screen.** If it needs more than ~8 steps or touches more than ~6 files,
   split it.
+
+**A whole-suite run is not a valid slice acceptance.** Workers in a wave run in parallel, so when one
+runs its acceptance its siblings are mid-edit. A red full suite there says nothing about the slice,
+and it pushes the worker to either report a spurious `BLOCKED` or reach outside its owned paths to
+fix a sibling's half-written file. Repo-wide verification is the wave barrier's job (§7), where the
+tree is quiet.
 
 **File ownership is the parallelism constraint, not conceptual independence.** Two slices may run in
 the same wave **iff their `owns` sets are disjoint**. Two "unrelated" features that both edit a barrel
@@ -129,9 +136,11 @@ Each brief carries exactly:
 > You own **only** these paths: `<owns>`. Do not edit anything outside them.
 > Context you need: `<the seam file(s) + the 2–3 files worth reading first>`.
 > Steps: `<the ≤8 steps>`.
-> Acceptance: run `<command>` and include its last ~10 lines in your report.
+> Acceptance: run `<command, scoped to your owned paths>` and include its last ~10 lines in your
+> report.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
-> Do **not** run lint/format/fix commands. The orchestrator does that once per wave.
+> Do **not** run lint/format/fix commands or the full suite. The orchestrator does that once per wave.
+> A failure originating outside your owned paths is not your slice. Note it and move on.
 > Out-of-scope discoveries: report them, do not fix them.
 > Reply with the REPORT format only. No diffs, no file dumps, no narration.
 

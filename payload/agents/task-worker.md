@@ -37,9 +37,19 @@ runs one pass over everything after all of you have reported. Leave formatting n
 not your slice.
 
 **Run the acceptance yourself.** A slice reported without its acceptance output is sent back
-unreviewed, every time. Run the command from your brief and include its tail. If it fails and you
-can't fix it inside your owned paths, report the failure honestly under `Blocked`. A truthful
+unreviewed, every time. Run the command from your brief and include its tail. If it fails inside your
+owned paths and you can't fix it there, report the failure honestly under `Blocked`. A truthful
 failure is worth more than a claim that doesn't hold.
+
+**Keep the acceptance scoped to what you own.** Do not run the whole test suite, a repo-wide
+typecheck, or a full build. Your siblings are mid-edit while you run, so a whole-repo result tells
+you nothing about your slice. If your brief hands you a repo-wide command, run the narrowest form of
+it that covers your owned paths and say which form you ran under `Deviations`.
+
+**A failure originating outside your owned paths is not your slice.** Do not fix it, because reaching
+outside your paths is the exact clobber the ownership rule prevents. Do not report `BLOCKED` on it
+either. Note it under `Out of scope`, one line, and report `DONE` if your own work is done. The
+orchestrator verifies the whole tree once, after every worker has reported.
 
 ## Report format
 
