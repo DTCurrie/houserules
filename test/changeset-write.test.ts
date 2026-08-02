@@ -14,10 +14,8 @@ import { makeFixture, runCli, runScript } from './fixtures.js';
 
 const SCRIPT = '.claude/scripts/changeset-write.mjs';
 
-// Make @changesets/cli resolvable from the fixture, as in a repo that has
-// changesets installed as a devDependency. @changesets/write resolves through
-// it (pnpm-style strict layouts don't hoist transitive deps). The script
-// refuses to author without this — there is no fallback writer.
+// @changesets/write resolves through @changesets/cli, because pnpm-style strict
+// layouts do not hoist transitive deps. The script refuses to author without it.
 function linkChangesetsCli(root: string): void {
   const cliDir = dirname(
     createRequire(import.meta.url).resolve('@changesets/cli/package.json'),
@@ -138,9 +136,8 @@ test('CW3: single-package repo — --pkg optional, defaults to the root package;
 });
 
 test('CW4: refuses to author when @changesets/write is not resolvable — clear fix, no file', () => {
-  // The pnpm-monorepo fixture mirrors the reference repo: changesets driven by
-  // a root `pnpx @changesets/cli` script with NO devDependency. Authoring must
-  // hard-fail with install instructions, never hand-roll a changeset file.
+  // The fixture drives changesets from a root `pnpx` script with NO devDependency.
+  // Authoring must hard-fail with install instructions, never hand-roll a file.
   const root = makeFixture('pnpm-monorepo');
   try {
     expect(runCli(['init', '--yes', root]).status).toBe(0);

@@ -10,7 +10,7 @@ const readJson = (p: string): Record<string, any> =>
 const sha256 = (s: string): string =>
   createHash('sha256').update(s).digest('hex');
 
-// Plant a retired kit-owned hook script: on disk, recorded in the manifest as
+// Plant a retired kit-owned hook script on disk, recorded in the manifest as
 // kit-owned, and wired in settings.json alongside a USER hook that must survive.
 function plantRetiredHook(
   root: string,
@@ -87,10 +87,8 @@ test('PRN1: doctor WARNs a retired wired hook; update prunes the file + unwires 
     expect(runCli(['init', '--yes', root]).status).toBe(0);
     const { retired, settingsPath, manifestPath } = plantRetiredHook(root);
 
-    // doctor: the retired wired hook is visible, and the leftover file is reported
-    // as orphaned. Exit 1 — a script no module ships that is still wired spawns a
-    // dead process on every trigger, which is exactly the actionable drift a CI gate
-    // should catch. (Before the drift engine this only WARNed and exited 0.)
+    // The retired wired hook is visible and the leftover file reads as orphaned. Exit 1,
+    // because a wired script no module ships spawns a dead process on every trigger.
     let r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(1);
     expect(r.stdout).toMatch(
@@ -193,7 +191,7 @@ test('ADV1: update advertises a new default module the install lacks — never a
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/New default module\(s\) available[\s\S]*backlog/);
     expect(r.stdout).toMatch(/modules --modules=[\w,-]*backlog/);
-    // Advisory only — never auto-enabled.
+    // Advisory only: never auto-enabled.
     expect(
       !readJson(manifestPath).modules.includes('backlog'),
       'not auto-enabled',

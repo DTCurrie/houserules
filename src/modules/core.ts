@@ -1,6 +1,3 @@
-// core module (claude-kit CLI): always installed. Shared libs, the Bash guard,
-// kit.config.json, permissions, CLAUDE.md seed-or-stage, template staging.
-
 import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -13,9 +10,8 @@ import {
 import type { Action, Answers, Ctx, ModuleGroup } from '../types.js';
 import { hookFragment, lib, script, template } from './shared.js';
 
-// Templates staged by an opt-in module (not by core's blanket walk), so a repo that
-// never enables the owning module doesn't carry its pattern. See ledger.mjs /
-// debug-session.mjs, which stage these via template().
+// Staged by their owning opt-in module rather than by core's blanket walk, so a repo
+// that never enables that module does not carry its pattern.
 const MODULE_OWNED_TEMPLATES = new Set([
   'agents/archivist.agent.md.template',
   'agents/debugger.agent.md.template',
@@ -43,10 +39,14 @@ function* walk(dir: string): Generator<string> {
   }
 }
 
+/**
+ * The always-installed baseline: shared libs, the Bash guard, kit.config.json,
+ * permissions, the CLAUDE.md seed or managed region, and template staging.
+ */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const actions: Action[] = [];
 
-  // Every shared lib the scripts import must be listed here — a script installed
+  // Every shared lib the scripts import must be listed here. A script installed
   // without its lib fails at runtime with ERR_MODULE_NOT_FOUND, in the user's repo.
   for (const name of [
     'kit-config.mjs',
@@ -73,10 +73,8 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     actions.push(template(id, rel));
   }
 
-  // The staged templates (and the CLAUDE.additions merge helper) are reference
-  // scaffolding, not repo content: a directory-local .gitignore keeps them out of
-  // commits while leaving them on disk for reference. The repo's own .gitignore is
-  // never touched; the .gitignore itself stays tracked so the intent travels with the repo.
+  // Reference scaffolding, not repo content. A directory-local .gitignore keeps it out of
+  // commits without touching the repo's own, and stays tracked so the intent travels.
   actions.push({
     kind: 'write',
     dest: '.claude/kit-templates/.gitignore',
@@ -93,9 +91,8 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       'templates are reference-only; self-gitignored (repo .gitignore untouched)',
   });
 
-  // Compiled hook scripts are build output, refreshed by `update` — self-gitignored
-  // like the templates above, so a fresh install never commits them. Opt out via
-  // kit.config.json (scripts.commit: true) for a repo that wants them tracked.
+  // Build output, refreshed by `update`, so a fresh install never commits it. Opt out
+  // with kit.config.json `scripts.commit: true`.
   if (ctx.claude.kitConfig?.scripts?.commit !== true) {
     actions.push({
       kind: 'write',
@@ -121,9 +118,8 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     reason: 'per-repo kit config (targets + toolchain)',
   });
 
-  // CLAUDE.md itself is seeded only when absent; the seed must land BEFORE the
-  // region action below so a brand-new repo gets the seeded file and then the
-  // managed block is upserted into it in the same run.
+  // The seed must land BEFORE the region action below, so a brand-new repo gets the file
+  // and then the managed block upserted into it in the same run.
   if (!ctx.claude.claudeMdExists) {
     actions.push({
       kind: 'seed',
@@ -139,13 +135,8 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     });
   }
 
-  // Managed region: the kit maintains its sections in place inside the user's
-  // CLAUDE.md, writing only between the markers. Opt out via kit.config.json
-  // (claudeMd.managed: false) to fall back to hand-merge staging instead.
-  //
-  // Emitted unconditionally, including on a fresh repo where the seed above creates
-  // the file in this same plan: computeEffects resolves a region against the content
-  // the plan has already queued for that path, not just what is on disk.
+  // Emitted unconditionally. computeEffects resolves a region against the content the
+  // plan has already queued for that path, not just what is on disk.
   if (ctx.claude.kitConfig?.claudeMd?.managed === false) {
     actions.push({
       kind: 'advise',

@@ -1,8 +1,3 @@
-// Generators for the user-owned files init seeds (claude-kit CLI): kit.config.json,
-// CLAUDE.md (when absent), CLAUDE.additions.md (when present), reviewer drafts.
-// Seeded files are filled with DETECTED facts — a seeded file must be immediately
-// valid, with at most <!-- TODO --> comments, never raw <PLACEHOLDER>s.
-
 import type { Answers, Ctx, PackageManagerInfo, Target } from './types.js';
 
 interface FixDefaults {
@@ -64,15 +59,17 @@ function fixDefaultsFor(
         commands: ['lint:fix', 'format:fix'],
       };
   }
-  // A single-package repo has no workspace to filter into — `<pm> --filter <pkg>
+  // A single-package repo has no workspace to filter into. `<pm> --filter <pkg>
   // <script>` would fail, so clear the filter and run at the root (`<pm> run <script>`).
   if (!isMonorepo) defaults.filterFlag = '';
   return defaults;
 }
 
-// The verify block mirrors fix (same runner/filter/prefix), but the read-only gate
-// commands differ — a unified `verify` script by default; per-target verifyCommands
-// (detected) override it. Only emitted when the verify-changed module is enabled.
+/**
+ * The verify block, which mirrors fix on runner, filter, and prefix but differs on the
+ * commands because verify is the read-only gate. Detected per-target `verifyCommands`
+ * override the unified default. Only emitted when the verify-changed module is enabled.
+ */
 export function verifyDefaultsFor(
   pm: PackageManagerInfo | null | undefined,
   isMonorepo = true,
@@ -80,10 +77,12 @@ export function verifyDefaultsFor(
   return { ...fixDefaultsFor(pm, isMonorepo), commands: ['verify'] };
 }
 
-// `$schema` gives editors completion + inline validation on kit.config.json. The
-// config lives at `.claude/kit.config.json`, so a local path has to climb out of
-// `.claude/` first. A repo that only ever runs `npx claude-kit` has no local copy to
-// point at, so those get the published URL instead of a path that resolves to nothing.
+/**
+ * The `$schema` value that gives editors completion and inline validation on
+ * kit.config.json. The config lives at `.claude/kit.config.json`, so a local path has to
+ * climb out of `.claude/` first. A repo that only ever runs `npx claude-kit` has no local
+ * copy to point at, so it gets the published URL instead of a path resolving to nothing.
+ */
 export function schemaRefFor(ctx: Ctx): string {
   const deps = {
     ...ctx.rootPkg?.dependencies,
@@ -94,6 +93,10 @@ export function schemaRefFor(ctx: Ctx): string {
     : 'https://github.com/devintcurrie/claude-kit/schema/kit.config.schema.json';
 }
 
+/**
+ * Seeds `.claude/kit.config.json` from detected facts. A seeded file is immediately
+ * valid, carrying at most `<!-- TODO -->` comments and never a raw placeholder.
+ */
 export function renderKitConfig(ctx: Ctx, answers: Answers): string {
   const has = (id: string) => answers.moduleIds.includes(id);
   const config: {
@@ -126,9 +129,8 @@ export function renderKitConfig(ctx: Ctx, answers: Answers): string {
     $schema: schemaRefFor(ctx),
     version: 2,
     packageManager: ctx.packageManager?.name ?? 'npm',
-    // onSubagentStop stays false: parallel subagents (an /orchestrate wave, /sweep
-    // shards) would each fix every changed package at once, clobbering siblings
-    // mid-edit. The parent turn's Stop hook covers the same ground once.
+    // onSubagentStop stays false: parallel subagents would each fix every changed
+    // package at once, clobbering siblings mid-edit. The parent Stop hook covers it.
     fix: {
       ...fixDefaultsFor(ctx.packageManager, ctx.isMonorepo),
       onSubagentStop: false,
@@ -254,7 +256,7 @@ function plansSection(ctx: Ctx, answers: Answers): string[] {
   ];
 }
 
-// /orchestrate is the one sanctioned exception to "no implementation subagents": a
+// /orchestrate is the one sanctioned exception to "no implementation subagents". A
 // planned phase's slices are the parallel, bounded work that clause carves out for.
 function orchestrateSection(ctx: Ctx, answers: Answers): string[] {
   if (!answers.moduleIds.includes('orchestrate')) return [];
@@ -284,6 +286,7 @@ function subagentExceptionLine(
   ];
 }
 
+/** Seeds a whole CLAUDE.md, markers included, for a repo that has none. */
 export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   const name = ctx.rootPkg?.name ?? 'this repo';
   const lines = [
@@ -306,9 +309,8 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   if (scripts.length) {
     lines.push('## Scripts (run from repo root)', '', ...scripts, '');
   }
-  // Baked in the same shape `upsertRegion` produces (start, blank, body, blank, end),
-  // so the region action core.ts plans right after this seed finds the markers
-  // already present and matching, rather than a second, discarded insertion.
+  // Baked in the same shape `upsertRegion` produces, so the region action core.ts plans
+  // right after this seed finds matching markers instead of inserting a second block.
   lines.push(
     '<!-- claude-kit:claude-md start -->',
     '',
@@ -320,6 +322,7 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   return `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}`;
 }
 
+/** The managed-region body spliced into a CLAUDE.md the user already has. */
 export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   const body = [
     '### claude-kit sections',
@@ -359,8 +362,11 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   return `${body.join('\n')}`;
 }
 
-// A reviewer draft is USER-OWNED and deliberately marked DRAFT: an agent with an
-// unfilled authoritative source must not look invocable to the router.
+/**
+ * A reviewer agent seeded for one target. User-owned, and deliberately marked DRAFT
+ * because an agent with an unfilled authoritative source must not look invocable to the
+ * skill router.
+ */
 export function renderReviewerDraft(target: Target): string {
   return `---
 description: "DRAFT: fill in the authoritative source before use. Read-only reviewer for ${target.label} (${target.pathPrefix || 'repo root'})."
@@ -395,7 +401,7 @@ You are the ${target.label} reviewer, a read-only auditor for \`${target.pathPre
 `;
 }
 
-// Default .changeset/config.json when the repo has none.
+/** Default `.changeset/config.json`, seeded only when the repo has none. */
 export function renderChangesetConfig(ctx: Ctx): string {
   return `${JSON.stringify(
     {

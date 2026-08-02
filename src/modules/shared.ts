@@ -1,4 +1,3 @@
-// Tiny action factories shared by the modules (claude-kit CLI).
 import { payloadPath } from '../paths.js';
 import type {
   CopyAction,
@@ -60,10 +59,11 @@ export function agent(
   };
 }
 
-// A Claude Code rule file (.claude/rules/<name>.md). Claude Code loads this
-// directory as memory: a rule whose frontmatter carries `paths:` globs loads only
-// when a matching file is in the working set; one WITHOUT `paths:` is resident on
-// every turn. Kit rules always carry `paths:`.
+/**
+ * A Claude Code rule file. Claude Code loads `.claude/rules/` as memory, and a rule whose
+ * frontmatter carries `paths:` globs loads only when a matching file is in the working
+ * set. One without `paths:` is resident on every turn, so kit rules always carry them.
+ */
 export function rule(module: string, name: string, reason: string): CopyAction {
   return {
     kind: 'copy',
@@ -74,8 +74,11 @@ export function rule(module: string, name: string, reason: string): CopyAction {
   };
 }
 
-// Stage a raw kit-templates/<rel> file for hand-instantiation. `rel` is a
-// forward-slash path relative to payload/kit-templates (e.g. 'agents/foo.template').
+/**
+ * Stages a raw template for hand-instantiation.
+ *
+ * @param rel Forward-slash path relative to `payload/kit-templates`.
+ */
 export function template(
   module: string,
   rel: string,
@@ -90,22 +93,25 @@ export function template(
   };
 }
 
-// Guarded so a missing script degrades to an actionable line instead of a raw
-// MODULE_NOT_FOUND stack trace — `.claude/scripts/` is generated and gitignored, so a
-// fresh clone legitimately has none until `claude-kit update` runs. settings.json IS
-// committed, which is why the guard lives in the command rather than in a script.
-//
-// `exec` is load-bearing: it replaces the shell, so node's exit code reaches the hook
-// runner untouched and the `||` branch becomes unreachable. With a plain `node`, any
-// non-zero exit would fall through to the echo — printing a false "missing" notice and
-// swallowing the code. changeset-check.mjs exits 2 deliberately to nudge Claude, so
-// that form would have silently disabled the changeset nudge.
+/**
+ * The shell command that runs one hook script, guarded so a missing script degrades to an
+ * actionable line instead of a raw MODULE_NOT_FOUND stack trace. `.claude/scripts/` is
+ * generated and gitignored, so a fresh clone legitimately has none until
+ * `claude-kit update` runs, while settings.json is committed. That is why the guard lives
+ * in the command rather than in a script.
+ *
+ * `exec` is load-bearing. It replaces the shell, so node's exit code reaches the hook
+ * runner untouched and the `||` branch becomes unreachable. With a plain `node` any
+ * non-zero exit would fall through to the echo, printing a false "missing" notice and
+ * swallowing the code. changeset-check.mjs exits 2 on purpose to nudge Claude, so that
+ * form would have silently disabled the changeset nudge.
+ */
 export function hookCommand(scriptName: string): string {
   const path = `"$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
   return `[ -f ${path} ] && exec node ${path} || echo "[kit] ${scriptName} missing — run: npx claude-kit update"`;
 }
 
-// One settings fragment with a single hook entry.
+/** One settings fragment carrying a single hook entry. */
 export function hookFragment(
   event: string,
   matcher: string | null,

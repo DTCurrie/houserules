@@ -1,24 +1,3 @@
-// Synthetic target-repo fixtures (claude-kit tests). Generated into mkdtemp dirs;
-// callers rm them in test teardown.
-//
-// F1 pnpm-monorepo — schoolyard-shaped: workspace yaml with catalog blocks +
-//    catalogMode: strict, EMPTY workspace dirs, two packages whose fix scripts
-//    diverge from the root's, changesets config + 2 pending changesets but NO
-//    @changesets/cli devDependency (root script uses pnpx), settings.local.json
-//    only, no CLAUDE.md.
-// F2 npm-single — root package with only lint:fix, no TS/changesets, pre-existing
-//    settings.json with a user hook (odd whitespace) + permissions, existing CLAUDE.md.
-// F3 non-js — git repo, no package.json.
-// F4 pnpm-single — single-package pnpm repo (lockfile, NO workspace yaml) whose
-//    fixers are lint:fix + a write-`format` (prettier --write) with a separate
-//    format:check. The shape CLAUDEKIT-4e98d7 broke: filterFlag must be "" and the
-//    write-`format` must be detected as a fixer.
-// F5 pnpm-flow-monorepo — the workspace-file shapes F1 does not cover: an inline
-//    FLOW sequence, a `**` glob whose package is nested under an intermediate dir,
-//    and a `!negation`. Each of these silently produced the wrong package set before
-//    the parser fixes; test/workspaces.test.ts covers the parsers in
-//    isolation, this covers detect → targets end to end.
-
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
   mkdirSync,
@@ -32,6 +11,27 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/**
+ * Which synthetic repo shape to generate.
+ *
+ * - `pnpm-monorepo` is schoolyard-shaped: workspace yaml, catalog blocks with
+ *   `catalogMode: strict`, empty workspace dirs, two packages whose fix scripts diverge
+ *   from the root's, a changesets config and two pending changesets but no
+ *   `@changesets/cli` devDependency, only settings.local.json, and no CLAUDE.md.
+ * - `pnpm-flow-monorepo` covers the workspace-file shapes `pnpm-monorepo` does not: an
+ *   inline flow sequence, a `**` glob whose package is nested under an intermediate
+ *   directory, and a negation. Each silently produced the wrong package set before the
+ *   parser fixes. `test/workspaces.test.ts` covers the parsers in isolation, this covers
+ *   detect through to targets end to end.
+ * - `npm-single` is a root package with only `lint:fix`, no TypeScript or changesets, a
+ *   pre-existing settings.json carrying a user hook with odd whitespace plus permissions,
+ *   and an existing CLAUDE.md.
+ * - `pnpm-single` is a single-package pnpm repo with a lockfile and no workspace yaml,
+ *   whose fixers are `lint:fix` plus a writing `format` alongside a separate
+ *   `format:check`. The shape CLAUDEKIT-4e98d7 broke: `filterFlag` must be empty and the
+ *   writing `format` must be detected as a fixer.
+ * - `non-js` is a git repo with no package.json.
+ */
 export type FixtureKind =
   | 'pnpm-monorepo'
   | 'pnpm-flow-monorepo'
@@ -74,6 +74,11 @@ const PKG_SCRIPTS = {
   format: 'prettier . --check',
 };
 
+/**
+ * Builds one synthetic target repo in a fresh mkdtemp directory.
+ *
+ * @returns The repo root. Callers remove it in test teardown.
+ */
 export function makeFixture(kind: FixtureKind): string {
   const root = mkdtempSync(join(tmpdir(), `kit-${kind}-`));
 
@@ -216,7 +221,7 @@ export function makeFixture(kind: FixtureKind): string {
       }),
     );
     write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
-    // Nested one level deeper than any `*` glob reaches — only `**` finds it.
+    // Nested one level deeper than any `*` glob reaches. Only `**` finds it.
     write(
       root,
       'libs/group/nested/package.json',
@@ -252,7 +257,7 @@ export function makeFixture(kind: FixtureKind): string {
     write(root, 'src/index.js', 'export const x = 1;\n');
   } else if (kind === 'committed-scripts') {
     // The state every pre-gitignore install is in: kit scripts tracked by git.
-    // gitInit() commits everything below, so these land in the index — which is what
+    // gitInit() commits everything below, so these land in the index. This is what
     // the migration has to detect and stage out.
     write(
       root,
@@ -287,12 +292,8 @@ export interface RunResult {
   stderr: string;
 }
 
-// A fixture must look like a standalone user repo to anything we spawn into it.
-// vitest exports NODE_PATH pointing at pnpm's virtual store
-// (node_modules/.pnpm/node_modules), which holds EVERY transitively-installed
-// package — a child process inheriting it can resolve `@changesets/write` from a
-// fixture that has no changesets install at all, silently inverting any test whose
-// premise is "this dependency is absent here". Strip it at the spawn boundary.
+// vitest exports NODE_PATH pointing at pnpm's virtual store, so a child could resolve
+// a dependency the fixture never installed and invert any absence-premised test.
 function cleanEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env = { ...process.env, ...extra };
   delete env.NODE_PATH;
@@ -325,7 +326,7 @@ export function runScript(
   }) as RunResult;
 }
 
-// Deterministic content hash of a tree (skips .git) — dry-run purity assertions.
+// Deterministic content hash of a tree (skips .git). Used for dry-run purity assertions.
 export function treeHash(root: string): string {
   const hash = createHash('sha256');
   const walk = (dir: string): void => {

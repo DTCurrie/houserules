@@ -1,6 +1,3 @@
-// Read-only repo profiling (claude-kit CLI). Produces the `ctx` every module's
-// defaultEnabled()/plan() decides from. NOTHING in this file may write.
-
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -23,9 +20,8 @@ import type {
   WorkspacePackage,
 } from './types.js';
 
-// A `format` script is ambiguous — `prettier --write` writes, `prettier --check`
-// only verifies. Treat it as a fixer ONLY when it clearly writes, so the auto-fix
-// hook never wires a checker (which would fail unfixably on every stop).
+// `prettier --write` writes but `prettier --check` only verifies. Wiring a checker
+// into the auto-fix hook would fail unfixably on every stop.
 function isWriteFormatScript(cmd: unknown): boolean {
   if (typeof cmd !== 'string') return false;
   if (/--check\b|--list-different\b/.test(cmd)) return false;
@@ -34,10 +30,14 @@ function isWriteFormatScript(cmd: unknown): boolean {
 
 type ScriptsBag = Record<string, string | undefined>;
 
-// Fix-script detection. A unified `fix` script wins (repos like wireit monorepos
-// wire lint:fix+format:fix underneath it — running the parts too would duplicate
-// work). Otherwise take the lint + format writers that exist: `format:fix` when
-// present, else a `format` script that clearly WRITES (never a bare/check `format`).
+/**
+ * Picks the package.json scripts that WRITE fixes. A unified `fix` script wins, because
+ * repos like wireit monorepos wire lint:fix and format:fix underneath it and running the
+ * parts too would duplicate work. Otherwise takes the lint and format writers that
+ * exist, never a bare or `--check` `format`.
+ *
+ * @returns The script names in run order, or null when the package has no fixer.
+ */
 export function detectFixCommands(scripts: ScriptsBag = {}): string[] | null {
   if (typeof scripts.fix === 'string') return ['fix'];
 
@@ -49,9 +49,13 @@ export function detectFixCommands(scripts: ScriptsBag = {}): string[] | null {
   return out.length ? out : null;
 }
 
-// Verify-command detection (the read-only gate: check/test/lint, never a fixer).
-// A unified `verify` script wins (repos wire the parts underneath it). Otherwise
-// take the checkers that exist — typecheck|check, test, lint — in that order.
+/**
+ * Picks the read-only gate scripts, never a fixer. A unified `verify` script wins,
+ * because repos wire the parts underneath it. Otherwise takes the checkers that exist,
+ * in the order typecheck or check, then test, then lint.
+ *
+ * @returns The script names in run order, or null when the package has no checker.
+ */
 export function detectVerifyCommands(
   scripts: ScriptsBag = {},
 ): string[] | null {
@@ -97,11 +101,8 @@ function git(root: string, args: string[]): string | null {
   }
 }
 
-// Files under a self-gitignored kit directory that git still tracks. The
-// directory's own .gitignore is deliberately excluded — it stays committed so the
-// intent travels with the repo. Non-empty only for installs that committed the
-// directory's contents before the kit began ignoring them; empty on any git
-// failure or non-repo.
+// The directory's own .gitignore is excluded: it stays committed so the intent travels
+// with the repo. Empty on any git failure or non-repo.
 function trackedFilesUnder(root: string, dir: string): string[] {
   const out = git(root, ['ls-files', '-c', '--', dir]);
   if (!out) return [];
@@ -112,17 +113,23 @@ function trackedFilesUnder(root: string, dir: string): string[] {
     .filter((p) => p && p !== ownGitignore);
 }
 
+/** Committed reference templates from installs that predate the self-gitignore. */
 export function trackedTemplateFiles(root: string): string[] {
   return trackedFilesUnder(root, '.claude/kit-templates');
 }
 
+/** Committed hook scripts from installs that predate the self-gitignore. */
 export function trackedScriptFiles(root: string): string[] {
   return trackedFilesUnder(root, '.claude/scripts');
 }
 
-// Drop paths from the git index only — working-tree copies stay on disk and the
-// removal is staged, not committed (the user owns commits). Swallows git
-// failures so callers never crash on unexpected repo state.
+/**
+ * Drops paths from the git index only. Working-tree copies stay on disk and the removal
+ * is staged, never committed, because the user owns commits. Git failures are swallowed
+ * so callers never crash on unexpected repo state.
+ *
+ * @returns False when git refused the removal.
+ */
 export function untrackFromIndex(root: string, files: string[]): boolean {
   if (!files.length) return true;
   return git(root, ['rm', '--cached', '-f', '-q', '--', ...files]) !== null;
@@ -172,7 +179,7 @@ function detectChangesets(
         (f) => f.endsWith('.md') && f.toLowerCase() !== 'readme.md',
       ).length;
     } catch {
-      /* unreadable — treat as none */
+      /* unreadable. Treat as none */
     }
   }
   const devDep = hasDep(rootPkg, '@changesets/cli');
@@ -296,6 +303,10 @@ function detectPnpmCatalogModeStrict(root: string): boolean {
   }
 }
 
+/**
+ * Profiles a repo into the `ctx` every module's `defaultEnabled()` and `plan()` decides
+ * from. Read-only: nothing in this file may write.
+ */
 export function detect(root: string): Ctx {
   const gitTop = git(root, ['rev-parse', '--show-toplevel']);
   const rootPkg = readJson(join(root, 'package.json'));

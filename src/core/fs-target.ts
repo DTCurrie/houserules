@@ -1,11 +1,3 @@
-// The one filesystem seam for a target repo (claude-kit CLI). apply.ts writes
-// through it, and phase 5's drift engine reads through it, so "what a run would
-// touch" and "what a run did touch" are computed by the same code.
-//
-// `dryRun` is honored here rather than at every call site: a dry run still answers
-// read/exists truthfully and still reports what it *would* write, it just never
-// lands bytes.
-
 import {
   chmodSync,
   copyFileSync,
@@ -17,6 +9,14 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+/**
+ * The one filesystem seam for a target repo. `apply.ts` writes through it and the drift
+ * engine reads through it, so "what a run would touch" and "what a run did touch" are
+ * computed by the same code.
+ *
+ * `dryRun` is honored here rather than at every call site. A dry run still answers
+ * read/exists truthfully and still reports what it would write, it just never lands bytes.
+ */
 export class TargetRepo {
   readonly root: string;
   readonly dryRun: boolean;
@@ -55,7 +55,7 @@ export class TargetRepo {
   }
 
   /**
-   * Returns false when the file already holds exactly this content — mtimes stay
+   * Returns false when the file already holds exactly this content. Mtimes stay
    * put, and a dry run reports only the paths a real run would actually change.
    */
   write(
@@ -84,7 +84,7 @@ export class TargetRepo {
   /**
    * One-shot backup: copies `relativePath` to `<path>.bak` unless a backup is
    * already there. Taken once, before the kit's first write to a file the user
-   * owns — a second run must not overwrite the pristine original.
+   * owns. A second run must not overwrite the pristine original.
    */
   backupOnce(relativePath: string): void {
     if (this.dryRun) return;

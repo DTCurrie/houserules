@@ -1,12 +1,3 @@
-// persona-auditor module (claude-kit CLI): OPT-IN reference template.
-// Ships the persona-auditor agent pattern — a read-only, haiku, single-JSON-output
-// auditor that BLIND-RANKS a component's options from a persona's stated priorities
-// before reconciling against what the system actually chose, bucketing divergences
-// with a typed cause enum. The anti-anchoring discipline ("do not read the scoring
-// code") is the non-obvious IP. Template-only, default-off — mirrors ledger's shape;
-// the per-repo /persona-audit fan-out skill is deferred (its decision-stream input is
-// bespoke per repo and can't be shipped generically).
-
 import type { Action, ModuleGroup } from '../types.js';
 import { template } from './shared.js';
 
@@ -23,6 +14,15 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * A template-only reference pattern: a read-only, single-JSON-output auditor that
+ * blind-ranks a component's options from a persona's stated priorities before reconciling
+ * against what the system actually chose, bucketing divergences by a typed cause.
+ *
+ * The anti-anchoring discipline ("do not read the scoring code") is the non-obvious part.
+ * The per-repo fan-out skill is deferred, because its decision-stream input is bespoke
+ * per repo and cannot ship generically.
+ */
 export function plan(): Action[] {
   return [
     template(

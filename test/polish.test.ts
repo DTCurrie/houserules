@@ -73,7 +73,7 @@ test('EG1: per-extension gate skips lint:fix on a docs-only edit; runs it on a J
   try {
     expect(runCli(['init', '--yes', root]).status).toBe(0);
     stubRunner(root);
-    // Separate commands + a gate on lint:fix; clear per-target unified fixCommands.
+    // Separate commands + a gate on lint:fix. Clear per-target unified fixCommands.
     editConfig(root, (c) => {
       c.fix = {
         runner: './stub-runner.sh',

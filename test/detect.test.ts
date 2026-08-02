@@ -124,7 +124,7 @@ test('fix-command priority and prefix suggestions', () => {
     'format:fix',
   ]);
   expect(detectFixCommands({ format: 'prettier --check .' })).toBe(null); // format may be a CHECK
-  // A write-`format` (prettier --write) is a valid fixer; pair it with lint:fix, or
+  // A write-`format` (prettier --write) is a valid fixer. Pair it with lint:fix, or
   // take it alone. A checker `format` is still ignored (above).
   expect(
     detectFixCommands({

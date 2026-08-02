@@ -1,10 +1,3 @@
-// The only code in the kit that writes to a target repo (claude-kit CLI).
-// Everything it does was first computed by plan.computeEffects() and shown to
-// the user; apply() just executes that result and records the receipt.
-//
-// Every write goes through TargetRepo (src/core/fs-target.ts), so "what a run would
-// touch" and "what a run did touch" are answered by the same code.
-
 import { TargetRepo } from './core/fs-target.js';
 import type {
   ApplyInput,
@@ -16,6 +9,16 @@ import type {
 
 export const MANIFEST_PATH = '.claude/kit-manifest.json';
 
+/**
+ * Executes a computed plan. This is the only code in the kit that writes to a target
+ * repo, and it adds no decisions of its own. Every effect here was already produced by
+ * `computeEffects()` and shown to the user, and every write goes through `TargetRepo`,
+ * so "what a run would touch" and "what a run did touch" come from the same code.
+ *
+ * @param paths Restricts writes to this subset of dests (`doctor --fix` reconciling
+ * only what it reported). Omit to write everything the plan produces.
+ * @returns What was written, and the manifest receipt to record.
+ */
 export function apply(
   root: string,
   { effects, settingsPlan, signature = null, prune = null }: ApplyInput,
@@ -24,14 +27,12 @@ export function apply(
   const repo = new TargetRepo(root);
   const written: WrittenEntry[] = [];
   const files: Record<string, string> = { ...(previousManifest?.files ?? {}) };
-  // `paths` restricts writes to a chosen subset (doctor --fix reconciling only the
-  // files it reported). Absent means "write everything this plan produces".
   const wanted = (dest: string) => paths === undefined || paths.has(dest);
 
   for (const { action, op, content, hash } of effects) {
     if (!wanted(action.dest)) continue;
     // `region` is manifest-tracked like copy/write, but its recorded hash is the
-    // managed BODY's, not the host file's — the rest of that file is the user's.
+    // managed BODY's, not the host file's. The rest of that file is the user's.
     const owned =
       action.kind === 'copy' ||
       action.kind === 'write' ||
@@ -42,16 +43,15 @@ export function apply(
       continue;
     }
     if (content === null) continue;
-    // Only copy/write carry a mode; a seed never does.
+    // Only copy/write carry a mode. A seed never does.
     const mode = 'mode' in action ? action.mode : undefined;
     repo.write(action.dest, content, mode);
     if (owned && hash) files[action.dest] = hash;
     written.push({ dest: action.dest, op });
   }
 
-  // Prune: delete retired kit-owned files (computed by computePrune, hash-guarded
-  // there) and drop them from the manifest. A prune is the only removal path; it
-  // still runs through apply so dry-run could render the same deletes.
+  // The only removal path. It still runs through apply so dry-run renders the same
+  // deletes. computePrune already hash-guarded every entry.
   for (const { dest } of prune?.deletes ?? []) {
     if (repo.exists(dest)) repo.remove(dest);
     delete files[dest];

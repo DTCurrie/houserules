@@ -1,10 +1,3 @@
-// regen module (claude-kit CLI): OPT-IN PostToolUse(Edit|Write|MultiEdit) hook.
-// Wires regen-on-edit.mjs, which re-runs a USER-OWNED generator when an edited file
-// matches a target's `regen { sourceGlob, command }` — keeping a fragmented-corpus
-// reference snapshot fresh and grep-able instead of silently staling (CONVENTIONS §7).
-// Exit-2-with-tail on generator failure surfaces it to Claude. The regen blocks live
-// in kit.config.json targets (user-owned); this module just wires the hook.
-
 import type { Action, ModuleGroup } from '../types.js';
 import { hookFragment, script } from './shared.js';
 
@@ -20,6 +13,15 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * A PostToolUse hook that re-runs a user-owned generator when an edited file matches a
+ * target's `regen { sourceGlob, command }`, so a reference snapshot stays fresh and
+ * grep-able instead of silently staling (CONVENTIONS §7). A generator failure exits 2
+ * with the tail, which surfaces it to Claude.
+ *
+ * The regen blocks themselves live in the user-owned kit.config.json targets. This module
+ * only wires the hook.
+ */
 export function plan(): Action[] {
   return [
     script(

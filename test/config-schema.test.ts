@@ -31,8 +31,8 @@ test('CS2: the root is closed to unknown keys', () => {
 });
 
 test('CS3: the shipped example config parses', () => {
-  // The example is what we tell people to copy — including its `_help`/`_notes`
-  // documentation keys, which a strict schema must therefore accept.
+  // The example is what we tell people to copy (including its `_help`/`_notes`
+  // documentation keys), which a strict schema must therefore accept.
   expect(() =>
     parseKitConfig(repoFile('../kit.config.example.json')),
   ).not.toThrow();

@@ -1,15 +1,3 @@
-// prose-voice module (claude-kit CLI): OPT-IN writing-voice rule for prose the
-// agent authors. Ships .claude/rules/prose-voice.md — plain sentences, no
-// semicolons, em dashes rewritten away, filler cut, exact content byte-preserved.
-//
-// Scoped to markdown rather than source, so it fires on the artifacts the agent
-// writes as files: changesets, plans, backlog entries, docs, PR bodies staged as
-// markdown. Dot-directories are listed explicitly in the rule's `paths:` because
-// `**` does not reliably descend into them.
-//
-// Companion to code-comments: that rule decides WHETHER a comment should exist,
-// this one decides how the sentences read. Neither restates the other.
-
 import type { Action, ModuleGroup } from '../types.js';
 import { rule } from './shared.js';
 
@@ -25,6 +13,17 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * The writing-voice rule for prose the agent authors: plain sentences, no semicolons, em
+ * dashes rewritten away, filler cut, and exact content byte-preserved.
+ *
+ * Scoped to markdown rather than source, so it fires on the artifacts the agent writes as
+ * files. Dot-directories are listed explicitly in the rule's `paths:`, because `**` does
+ * not reliably descend into them.
+ *
+ * Companion to code-comments, which decides whether a comment should exist at all.
+ * Neither rule restates the other.
+ */
 export function plan(): Action[] {
   return [
     rule(

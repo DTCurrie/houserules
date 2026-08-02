@@ -1,15 +1,3 @@
-// `claude-kit modules` (claude-kit CLI): list installed vs available modules, enable
-// more after init, and — since the JSON patches became reversible — disable them
-// again with `--disable`. `update` stays refresh-only; this is the curated "turn a
-// feature on/off later" surface over the same detect → plan → preview → apply
-// pipeline, so only the delta is written.
-//
-// Disabling is the one destructive path here, so it is deliberately narrow: kit-owned
-// files the reduced plan no longer produces are pruned (hash-guarded, so your edits
-// survive), and only the settings entries the disabled modules contributed — and that
-// no remaining module still contributes — are withdrawn. Shared host files are never
-// deleted, only unwired.
-
 import { resolve } from 'node:path';
 
 import { detect } from '../detect.js';
@@ -36,7 +24,7 @@ import type {
   PlanResult,
 } from '../types.js';
 
-// Headless selection: --modules=<a,b>, intersected with what's actually available.
+// Headless selection, intersected with what is actually available.
 function parseRequested(
   modulesFlag: string | undefined,
   available: ModuleDef[],
@@ -189,6 +177,16 @@ async function disableModules(
   return 0;
 }
 
+/**
+ * Lists installed against available modules, enables more after init, and withdraws them
+ * again with `--disable`. Runs the same detect, plan, preview, apply pipeline as init, so
+ * only the delta is written.
+ *
+ * Disabling is the one destructive path and is deliberately narrow. Kit-owned files the
+ * reduced plan no longer produces are pruned, hash-guarded so your edits survive. Only
+ * the settings entries the disabled modules contributed, and that no remaining module
+ * still contributes, are withdrawn. Shared host files are never deleted, only unwired.
+ */
 export async function modules(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);
   const ctx = detect(root);
@@ -256,7 +254,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
   }
 
   const moduleIds = [...new Set([...installed, ...chosen])];
-  // Config is the contract when the user has edited it; detection is the fallback.
+  // Config is the contract when the user has edited it. Detection is the fallback.
   const targets = ctx.claude.kitConfig?.targets?.length
     ? ctx.claude.kitConfig.targets
     : ctx.targets;
@@ -285,8 +283,8 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
     flags.dryRun ? `${label} (dry run)` : label,
   );
 
-  // buildPlan re-plans the whole module set, so its advisories cover modules the
-  // user installed long ago. Only the newly-added ones are news here.
+  // buildPlan re-plans the whole module set, so its advisories cover modules installed
+  // long ago. Only the newly-added ones are news here.
   const advisories = planResult.advisories.filter((a) =>
     chosen.includes(a.module),
   );

@@ -1,26 +1,25 @@
 #!/usr/bin/env node
-// Non-interactive changeset author (claude-kit). Validates package names + bump
-// levels, then writes the changeset with the repo's own @changesets/write — the
-// exact writer `changeset add` uses, so files always match the installed
-// changesets version. The official library is REQUIRED: when it can't be
-// resolved from the repo root, exit 1 with install instructions. This script
-// never hand-rolls changeset files — authoring belongs to changesets itself;
-// the kit only adds workspace validation and a non-interactive interface.
-//
-// Usage:
-//   changeset-write.mjs --pkg <name>[:patch|minor|major] [--pkg ...] --summary "..."
-//   changeset-write.mjs --empty --summary "why no release is needed"
-//   echo "summary" | changeset-write.mjs --pkg <name>
-//
-// Options:
-//   --pkg name[:level]  package to bump; repeatable. Level defaults to --level.
-//   --level <l>         default bump level for --pkg entries without one (patch).
-//   --summary "..."     changelog body; read from stdin when omitted and piped.
-//   --empty             record "no release needed" (no packages bumped).
-//
-// Package names are validated against the packages that ACTUALLY exist (workspace
-// members, or the root package in a single-package repo) — never against a
-// possibly-stale kit.config.json.
+/**
+ * Non-interactive changeset author. Validates package names and bump levels, then writes
+ * the changeset with the repo's own @changesets/write, the exact writer `changeset add`
+ * uses, so files always match the installed changesets version. That library is required.
+ * When it cannot be resolved from the repo root this exits 1 with install instructions.
+ *
+ * Usage:
+ *   changeset-write.mjs --pkg <name>[:patch|minor|major] [--pkg ...] --summary "..."
+ *   changeset-write.mjs --empty --summary "why no release is needed"
+ *   echo "summary" | changeset-write.mjs --pkg <name>
+ *
+ * Options:
+ *   --pkg name[:level]  package to bump; repeatable. Level defaults to --level.
+ *   --level <l>         default bump level for --pkg entries without one (patch).
+ *   --summary "..."     changelog body; read from stdin when omitted and piped.
+ *   --empty             record "no release needed" (no packages bumped).
+ *
+ * Package names are validated against the packages that actually exist, the workspace
+ * members or the root package in a single-package repo, never against a possibly-stale
+ * kit.config.json.
+ */
 
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -42,11 +41,8 @@ interface Changeset {
 // it is never a dependency of this package (see loadOfficialWrite).
 type ChangesetWriter = (changeset: Changeset, cwd: string) => Promise<string>;
 
-// The repo's installed @changesets/write, or null when changesets isn't
-// installed. Resolved from the repo root, then through @changesets/cli's own
-// module context — package managers with a strict layout (pnpm) don't expose
-// transitive deps at the root. Import/shape failures of a RESOLVED module are
-// not caught: that's a broken install worth a loud stack, not a missing one.
+// Falls back to @changesets/cli's own module context, because a strict layout like
+// pnpm's does not expose transitive deps at the root.
 async function loadOfficialWrite(
   root: string,
 ): Promise<ChangesetWriter | null> {

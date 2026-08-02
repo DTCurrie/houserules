@@ -1,7 +1,3 @@
-// session-context module (claude-kit CLI): a SessionStart hook that prints a
-// 3-line orientation header (branch, changed files, affected targets) so the
-// agent stops re-deriving it with full `git status` calls.
-
 import type { Action, ModuleGroup } from '../types.js';
 import { hookFragment, script } from './shared.js';
 
@@ -17,6 +13,10 @@ export function defaultEnabled(): boolean {
   return true;
 }
 
+/**
+ * A SessionStart hook printing a three-line orientation header of branch, changed files,
+ * and affected targets, so the agent stops re-deriving it with full `git status` calls.
+ */
 export function plan(): Action[] {
   return [
     script(

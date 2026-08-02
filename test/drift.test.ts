@@ -1,11 +1,9 @@
-// The drift engine end-to-end: what doctor reports, what --fix reconciles, and the
-// one distinction the whole phase exists for —
-//
-//   stale = the KIT changed (refresh it, no questions)
-//   yours = YOU changed it (reported, never overwritten without --force)
-//
-// A content-hash lockfile cannot tell those apart. The manifest can, because it
-// records what the kit itself last wrote.
+/**
+ * The drift engine end-to-end: what doctor reports, what `--fix` reconciles, and the
+ * distinction the whole engine exists for. `stale` means the kit changed, so refresh it
+ * without asking. `yours` means you changed it, so report it and never overwrite without
+ * `--force`.
+ */
 
 import {
   appendFileSync,
@@ -78,7 +76,7 @@ test('DF3: a file the kit would rewrite but you did NOT touch is `stale` and blo
     expect(runCli(['init', '--yes', root]).status).toBe(0);
 
     // Forge the manifest hash so the on-disk file matches what the kit "last wrote"
-    // while differing from canonical — exactly the shape of a kit-side change.
+    // while differing from canonical. This is exactly the shape of a kit-side change.
     const guard = join(root, '.claude/scripts/guard-bash.mjs');
     const tampered = `${readFileSync(guard, 'utf8')}// kit changed upstream\n`;
     writeFileSync(guard, tampered);

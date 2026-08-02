@@ -1,11 +1,13 @@
-// The payload scripts, executed the way a user's machine executes them: bare node,
-// no node_modules anywhere up the tree, a hook payload on stdin.
-//
-// This is the test that makes the .mts → .mjs compilation trustworthy. Type-checking
-// proves the source is consistent; only running the EMITTED file proves the compiler
-// did not inject a helper, drop a shebang, or emit syntax the runtime rejects. And
-// running it from a directory with no dependencies is the only way to prove the
-// zero-runtime-dependency promise for real rather than by inspecting imports.
+/**
+ * The payload scripts, executed the way a user's machine executes them: bare node, no
+ * node_modules anywhere up the tree, and a hook payload on stdin.
+ *
+ * This is what makes the .mts to .mjs compilation trustworthy. Type-checking proves the
+ * source is consistent. Only running the emitted file proves the compiler did not inject
+ * a helper, drop a shebang, or emit syntax the runtime rejects. Running it from a
+ * directory with no dependencies is the only way to prove the zero-runtime-dependency
+ * promise for real rather than by inspecting imports.
+ */
 
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -92,10 +94,8 @@ test.each(HOOKS)('PR3: %s survives a malformed payload too', (script) => {
 });
 
 test('PR4: a CLI-style script fails with a legible message, not a stack trace', () => {
-  // Run outside a git work tree, so this exercises the earliest failure path there
-  // is. It must still be a sentence a human can act on — a module-resolution error
-  // or a raw stack here would mean the compiled output is broken, which is the only
-  // thing this phase could plausibly have broken.
+  // Outside a git work tree, so this is the earliest failure path there is. It must
+  // still be a sentence a human can act on, never a raw stack.
   const r = spawnSync(
     process.execPath,
     [join(SCRIPTS, 'changeset-write.mjs')],

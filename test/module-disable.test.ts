@@ -1,8 +1,10 @@
-// `claude-kit modules --disable` — the first path that withdraws something.
-//
-// The risk it carries is asymmetric: adding a module wrongly leaves clutter, but
-// removing one wrongly deletes a user's file or unwires a hook they still need. Every
-// test here is about the blast radius of the removal, not the removal itself.
+/**
+ * `claude-kit modules --disable`, the one path that withdraws something.
+ *
+ * The risk is asymmetric. Adding a module wrongly leaves clutter, but removing one
+ * wrongly deletes a user's file or unwires a hook they still need. Every test here is
+ * about the blast radius of the removal, not the removal itself.
+ */
 
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -177,9 +179,8 @@ test('MD6: a file you edited is KEPT on disable; `update --force` is the way out
     ).toBe(true);
     expect(readFileSync(script, 'utf8')).toMatch(/my edit/);
 
-    // The module is no longer installed, so `--disable` has nothing left to act on.
-    // The retired-file sweep belongs to `update`, which prunes anything the current
-    // plan no longer produces — hash-guarded, so it still needs --force here.
+    // The module is gone, so `--disable` has nothing left to act on. The retired-file
+    // sweep belongs to `update`, and it is hash-guarded, so it still needs --force.
     expect(runCli(['update', root, '--force']).status).toBe(0);
     expect(existsSync(script)).toBe(false);
   } finally {

@@ -1,15 +1,16 @@
-// The settings.json safety contract, asserted end-to-end against a real install.
-//
-// Written BEFORE the phase-4 rewrite (managed regions + reversible JSON patches) as
-// the guard on it. `deepMerge`/`deepRemove` are generic document operations; the kit's
-// contract is stricter than they are, and the stricter part is what a port loses
-// first. Every assertion here is a promise the README makes to users:
-//
-//   - a user's own hooks/permissions are never removed, rewritten, or reordered
-//   - a user's EDITED variant of a kit hook wins over the kit's stock version
-//   - unrelated top-level keys pass through untouched
-//   - settings.json is backed up once, before the first kit write
-//   - a settings.json the kit cannot parse is never rewritten
+/**
+ * The settings.json safety contract, asserted end-to-end against a real install.
+ *
+ * `deepMerge` and `deepRemove` are generic document operations. The kit's contract is
+ * stricter than they are, and the stricter part is what a port loses first. Every
+ * assertion here is a promise the README makes to users:
+ *
+ * - a user's own hooks and permissions are never removed, rewritten, or reordered
+ * - a user's edited variant of a kit hook wins over the kit's stock version
+ * - unrelated top-level keys pass through untouched
+ * - settings.json is backed up once, before the first kit write
+ * - a settings.json the kit cannot parse is never rewritten
+ */
 
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -95,8 +96,8 @@ test('SC2: the user hook keeps its position — kit entries append, never reorde
     seedUserSettings(root);
     expect(runCli(['init', '--yes', root]).status).toBe(0);
 
-    // The user's PreToolUse(Bash) hook was first before the install; the kit's
-    // guard-bash joins the same matcher group, and must land AFTER it.
+    // The user's PreToolUse(Bash) hook was first before the install. The kit's
+    // guard-bash joins the same matcher group and must land AFTER it.
     const group = (settingsOf(root).hooks?.PreToolUse ?? []).find(
       (g) => g.matcher === 'Bash',
     );

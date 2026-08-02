@@ -1,14 +1,4 @@
-// Managed regions: a marker-delimited block the kit owns inside a file the USER owns
-// (their CLAUDE.md, .gitignore, .prettierignore).
-//
-// The one invariant everything here exists to protect: bytes outside the markers are
-// never touched. `upsertRegion` splices by index rather than reformatting, so the
-// prefix and suffix come through verbatim — `test/regions.test.ts` (RG2) asserts that
-// byte-for-byte rather than by substring.
-//
-// Pure by construction: no filesystem access, so the same call decides the dry-run
-// preview and the real write.
-
+/** The markers and placement of one managed block inside a file the user owns. */
 export interface RegionSpec {
   id: string;
   start: string;
@@ -45,6 +35,7 @@ function buildBlock(body: string, spec: RegionSpec): string {
   return `${spec.start}${sep}${body.trimEnd()}${sep}${spec.end}`;
 }
 
+/** The managed content between the markers, or null when the markers are absent. */
 export function extractBody(content: string, spec: RegionSpec): string | null {
   const found = locate(content, spec);
   if (!found) return null;
@@ -54,6 +45,17 @@ export function extractBody(content: string, spec: RegionSpec): string | null {
     .replace(/\n$/, '');
 }
 
+/**
+ * Splices `body` into the marker block inside a file the user owns. Bytes outside the
+ * markers are never touched, which is the invariant the whole managed-region feature
+ * rests on. The splice is by index rather than a reformat, so the prefix and suffix come
+ * through verbatim. `test/regions.test.ts` (RG2) asserts that byte for byte.
+ *
+ * Pure by construction, with no filesystem access, so the same call decides the dry-run
+ * preview and the real write.
+ *
+ * @returns The new content, and whether the block was created, replaced, or inserted.
+ */
 export function upsertRegion(
   content: string | null,
   body: string,

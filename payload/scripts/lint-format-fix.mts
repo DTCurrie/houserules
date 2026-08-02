@@ -1,26 +1,22 @@
 #!/usr/bin/env node
-// Stop / SubagentStop hook (claude-kit). Config-driven via .claude/kit.config.json.
-//
-// Runs the repo's fix commands (e.g. lint:fix, format:fix) on the packages that have
-// working-tree changes, then exits 2 with stderr if anything didn't auto-fix — Claude
-// sees just the residue (a trimmed tail) and resolves it, instead of running lint by
-// hand and reading the full output.
-//
-// Safety:
-// - stop_hook_active short-circuits to avoid loops
-// - no changes in working tree => exit 0
-// - only generated files changed => exit 0
-// - SubagentStop is a NO-OP by default (fix.onSubagentStop): with parallel subagents
-//   (/orchestrate waves, /sweep shards) each finishing worker would otherwise fix
-//   EVERY changed package concurrently, rewriting files its siblings still hold open.
-//   The parent turn's Stop runs the same fix once, after the fan-out settles.
-//
-// Config keys used (see kit.config.example.json):
-//   targets[].pathPrefix, targets[].packageName   — map a changed path to a package
-//   lintableExtensions                            — which file types trigger the hook
-//   generatedFilePattern                          — files written by tooling (skip)
-//   fix.runner / fix.filterFlag / fix.runScriptPrefix / fix.commands
-//   fix.onSubagentStop                            — opt back into per-subagent fixes
+/**
+ * Stop and SubagentStop hook. Runs the repo's fix commands on the packages with
+ * working-tree changes, then exits 2 with stderr if anything did not auto-fix, so Claude
+ * sees only the residue instead of running lint by hand and reading the full output.
+ *
+ * Exits 0 when stop_hook_active is set (which avoids loops), when the working tree is
+ * clean, and when only generated files changed. SubagentStop is a no-op unless
+ * fix.onSubagentStop is set: with parallel subagents each finishing worker would
+ * otherwise fix every changed package concurrently, rewriting files its siblings still
+ * hold open. The parent turn's Stop runs the same fix once, after the fan-out settles.
+ *
+ * Config keys used (see kit.config.example.json):
+ *   targets[].pathPrefix, targets[].packageName   map a changed path to a package
+ *   lintableExtensions                            which file types trigger the hook
+ *   generatedFilePattern                          files written by tooling, skipped
+ *   fix.runner / fix.filterFlag / fix.runScriptPrefix / fix.commands
+ *   fix.onSubagentStop                            opt back into per-subagent fixes
+ */
 
 import { spawnSync } from 'node:child_process';
 
@@ -61,10 +57,8 @@ const RUNNER = fix.runner ?? config.packageManager ?? 'pnpm';
 const FILTER_FLAG = fix.filterFlag ?? '--filter'; // '' / null for a single-package repo
 const RUN_PREFIX = fix.runScriptPrefix ?? []; // e.g. ['run'] for npm/yarn
 const COMMANDS = fix.commands ?? ['lint:fix', 'format:fix'];
-// Optional per-command extension gate (default off = today's behavior): a command
-// runs only if a changed file in the package has one of its extensions. Skips e.g.
-// lint:fix on a docs-only edit. Only helps repos with SEPARATE lint:fix + format:fix
-// (a unified `fix` can't be split); it saves blocking Stop-hook latency, not tokens.
+// An optional gate, off by default, running a command only when a changed file carries
+// one of its extensions. It saves Stop-hook latency, not tokens.
 const COMMAND_EXTENSIONS = fix.commandExtensions ?? {}; // { "lint:fix": ["ts","tsx",...] }
 const gatePasses = (script: string, exts: Set<string>): boolean => {
   const allowed = COMMAND_EXTENSIONS[script];
@@ -74,9 +68,8 @@ const gatePasses = (script: string, exts: Set<string>): boolean => {
   );
 };
 
-// prefix → package map (a changed file under `prefix` belongs to that package).
-// targets[].fixCommands overrides the global fix.commands per package — real repos
-// diverge (a wireit root exposes `fix`, packages expose `lint:fix`/`format:fix`).
+// targets[].fixCommands overrides the global fix.commands per package, because real
+// repos diverge. A wireit root exposes `fix` while its packages expose `lint:fix`.
 const PACKAGE_BY_PATH = config.targets
   .filter((t) => t.packageName !== undefined && t.pathPrefix !== undefined)
   .map((t) => ({

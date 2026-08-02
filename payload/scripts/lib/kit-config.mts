@@ -1,25 +1,6 @@
-// Shared helpers for the claude-kit scripts: git-root discovery and the per-repo
-// config loader. kit.config.json lives at <repo>/.claude/kit.config.json and is the
-// single declarative file that adapts the scripts to a repo's package layout and
-// toolchain (schema version 2 — see kit.config.example.json in the kit repo).
-//
-// Loading discipline: CLI-style scripts (package-changelog) demand a config and
-// exit loudly without one; HOOK scripts must use loadConfigSafe() — a hook that
-// crashes on a missing/broken config turns into noise on every single tool call.
-
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
-
-// The shape the HOOKS read, typed loosely on purpose.
-//
-// `src/core/config.ts` holds the strict zod schema and is the authority on what a
-// VALID kit.config.json looks like. This reader is the other half of that split: it
-// runs inside a user's repo with no dependencies and must cope with a config the
-// schema would reject outright — a hook that dies on a bad config is noise on every
-// tool call. So every field here is optional, and callers default rather than assume.
-// The two cannot be one type: the payload is compiled with rootDir=payload and can
-// never import from src/ (that would drag zod into a user's repo).
 
 export interface RunnerBlock {
   runner?: string;
@@ -48,6 +29,17 @@ export interface ConfigTarget {
   regen?: { sourceGlob?: string; command?: string };
 }
 
+/**
+ * The shape the hooks read, typed loosely on purpose. `src/core/config.ts` holds the
+ * strict zod schema and is the authority on what a valid kit.config.json looks like. This
+ * reader is the other half of that split. It runs inside a user's repo with no
+ * dependencies and has to cope with a config the schema would reject outright, because a
+ * hook that dies on a bad config is noise on every tool call. Every field is therefore
+ * optional and callers default rather than assume.
+ *
+ * The two cannot be one type. The payload compiles with `rootDir=payload` and can never
+ * import from `src/`, which would drag zod into a user's repo.
+ */
 export interface KitConfig {
   version?: number;
   packageManager?: string;
@@ -86,10 +78,12 @@ export const GUARD_DEFAULTS = {
   custom: [],
 };
 
-// Defaults for the opt-in PreToolUse(Read) guard (config.readGuard). Only unbounded
-// whole-file reads (no offset/limit) of generated/oversized files are redirected;
-// maxBytes is deliberately high so it catches only genuinely huge files, with
-// denyGlobs handling the common always-generated cases regardless of size.
+/**
+ * Defaults for the opt-in PreToolUse(Read) guard. Only unbounded whole-file reads, those
+ * with no offset or limit, of generated or oversized files are redirected. `maxBytes` is
+ * deliberately high so it catches only genuinely huge files, and `denyGlobs` handles the
+ * common always-generated cases regardless of size.
+ */
 export const READ_GUARD_DEFAULTS = {
   enabled: true,
   maxBytes: 500000,
@@ -112,6 +106,11 @@ export const READ_GUARD_DEFAULTS = {
 const EMPTY = Object.freeze({ targets: [] });
 const cache = new Map();
 
+/**
+ * Reads `<repo>/.claude/kit.config.json`, the declarative file adapting the scripts to a
+ * repo's package layout and toolchain. CLI-style scripts demand a config and exit loudly
+ * without one. Hooks must call `loadConfigSafe()` instead.
+ */
 export function loadConfig(
   root: string = repoRoot(),
   { required = true }: { required?: boolean } = {},
@@ -146,7 +145,11 @@ export function loadConfig(
   return config;
 }
 
-// For hooks: never exits, never throws — worst case an empty config.
+/**
+ * The loader hooks must use. It never exits and never throws, returning an empty config
+ * in the worst case. A hook that crashes on a missing or broken config is noise on every
+ * single tool call.
+ */
 export function loadConfigSafe(): KitConfig {
   try {
     return loadConfig(repoRoot(), { required: false });

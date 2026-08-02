@@ -1,26 +1,24 @@
 #!/usr/bin/env node
-// On-demand helper (claude-kit): resolve the MINIMAL verify scope for the current
-// change — the packages whose files changed, PLUS every package that transitively
-// DEPENDS on them — and (with --run) run each package's verify commands, emitting a
-// compact PASS/FAIL-per-package verdict instead of a multi-minute full-suite
-// transcript. Removes the hand-maintained "shared packages" list: dependents are
-// derived from the workspace dependency graph, not memory.
-//
-// The /verify-changed skill runs this INSIDE a subagent so only the verdict returns
-// to the main context. Degrades to full scope (every workspace package) and exit 0
-// on any git/config failure — a verify helper must never block a session on its own
-// error. A real verify FAILURE under --run still exits 2 (that is the point).
-//
-// Modes:
-//   (default)  print the resolved scope + the exact command per package — a plan the
-//              subagent executes, reporting one compact line per package.
-//   --json     emit the resolved scope as JSON (tests / tooling).
-//   --run      run each package's verify commands; print "<pkg>: PASS|FAIL" (+ a
-//              trimmed residue tail on failure); exit 2 if any package failed.
-//
-// Config (kit.config.json, verify block — mirrors fix): verify.runner / filterFlag /
-// runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
-// "main"); per-target verifyCommands overrides commands for that package.
+/**
+ * Resolves the minimal verify scope for the current change: the packages whose files
+ * changed, plus every package that transitively depends on them. Dependents come from the
+ * workspace dependency graph, not a hand-maintained list.
+ *
+ * Degrades to full scope and exit 0 on any git or config failure, because a verify helper
+ * must never block a session on its own error. A real verify failure under --run still
+ * exits 2.
+ *
+ * Modes:
+ *   (default)  print the resolved scope + the exact command per package — a plan the
+ *              subagent executes, reporting one compact line per package.
+ *   --json     emit the resolved scope as JSON (tests / tooling).
+ *   --run      run each package's verify commands; print "<pkg>: PASS|FAIL" (+ a
+ *              trimmed residue tail on failure); exit 2 if any package failed.
+ *
+ * Config (kit.config.json, verify block — mirrors fix): verify.runner / filterFlag /
+ * runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
+ * "main"); per-target verifyCommands overrides commands for that package.
+ */
 
 import { spawnSync } from 'node:child_process';
 
@@ -72,10 +70,8 @@ function changedPaths(root: string, base: string): string[] {
   return [...out];
 }
 
-// Build the reverse-dependency closure: seed with the changed package names, then
-// pull in every package that (transitively) lists an in-scope package as a
-// dependency. This is the net-new bit — the "who else must I verify" the old
-// hand-maintained shared-packages list encoded by hand.
+// Seed with the changed package names, then pull in every package that transitively
+// lists an in-scope one as a dependency.
 function withDependents(
   seed: Set<string>,
   packages: WorkspacePackage[],

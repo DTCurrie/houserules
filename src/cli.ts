@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-// claude-kit CLI entry point (src/ may use npm dependencies; everything under
-// payload/ is copied into target repos and must stay zero-dependency node builtins).
-//
-// Argument parsing is commander's; the interactive install is clack's. They do not
-// overlap. Flags are scoped PER SUBCOMMAND, which is the point of the rewrite: the
-// old flat parser accepted `init --force` and silently ignored it.
-
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { Command, CommanderError } from 'commander';
@@ -223,7 +216,7 @@ try {
   process.exit(exitCode);
 } catch (error) {
   if (error instanceof CommanderError) {
-    // --help and --version report success; parse failures already wrote to stderr.
+    // --help and --version report success. Parse failures already wrote to stderr.
     process.exit(error.exitCode === 0 ? EXIT.ok : EXIT.error);
   }
   if (error instanceof KitConfigError) {

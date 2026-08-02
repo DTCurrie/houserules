@@ -1,14 +1,3 @@
-// plans module (claude-kit CLI): OPT-IN phased-implementation planning.
-// Ships the /plan-project skill, which persists a large/multi-phase implementation to a
-// gitignored `.claude/plans/<name>/` project workspace (PLAN overview + a living
-// ROADMAP + one sub-plan per phase) and keeps ROADMAP status current in place so a
-// returning session greps status instead of re-deriving scope from the transcript.
-//
-// Deliberately script-free: the value is the doc structure + status-in-place
-// discipline, not tooling. The `/plan-project` pointer lives in the root CLAUDE.md (see
-// render.mjs plansSection) because a nested `.claude/plans/CLAUDE.md` would never
-// load when it's needed — plans are pull-only.
-
 import type { Action, ModuleGroup } from '../types.js';
 import { skill } from './shared.js';
 
@@ -24,6 +13,16 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * Persists a large, multi-phase implementation to a gitignored `.claude/plans/<name>/`
+ * workspace: a PLAN overview, a living ROADMAP, and one sub-plan per phase. ROADMAP
+ * status stays current in place, so a returning session greps status instead of
+ * re-deriving scope from the transcript.
+ *
+ * Script-free, because the value is the doc structure and status-in-place discipline. The
+ * pointer lives in the root CLAUDE.md rather than a nested `.claude/plans/CLAUDE.md`,
+ * which would never load when it is needed.
+ */
 export function plan(): Action[] {
   return [
     skill(
@@ -31,17 +30,15 @@ export function plan(): Action[] {
       'plan-project',
       'the /plan-project scaffold + status-in-place ROADMAP discipline',
     ),
-    // /blast-radius shares the .claude/plans/ home (its dated impact maps land there,
-    // gitignored) — a worked example of read-only fan-out → archived artifact.
+    // /blast-radius shares the .claude/plans/ home, where its dated impact maps land.
     skill(
       id,
       'blast-radius',
       'fan out read-only explorers once → archive a dated impact map under .claude/plans/',
     ),
-    // Plan workspaces are living project state, not commit artifacts, and churn every
-    // phase. A directory-local .gitignore (like .claude/debug/) keeps them out of
-    // commits without touching the repo's .gitignore; the .gitignore itself stays
-    // tracked so the intent travels. Users who want to share a plan force-add it.
+    // Living project state, not commit artifacts, and it churns every phase. A
+    // directory-local .gitignore keeps it out of commits without touching the repo's own.
+    // Sharing a plan means force-adding it.
     {
       kind: 'write',
       dest: '.claude/plans/.gitignore',

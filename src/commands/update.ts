@@ -1,8 +1,3 @@
-// `claude-kit update` (claude-kit CLI): refresh kit-owned files to this kit
-// version, honoring local edits (manifest hash mismatch → skip unless --force),
-// PRUNE files/hooks the current kit no longer ships (kit-owned + unmodified only),
-// and ADVERTISE genuinely-new default modules (never auto-enable).
-
 import { resolve } from 'node:path';
 
 import {
@@ -27,9 +22,9 @@ import { apply } from '../apply.js';
 import * as ui from '../ui.js';
 import type { Answers, Flags, PlanResult, PruneResult } from '../types.js';
 
-// update runs often and its advisories are install-time to-dos the user already saw
-// — reprinting the whole list every refresh buries the actual diff. Summarize; the
-// full text is one flag away.
+// update runs often and its advisories are install-time to-dos the user already saw.
+// Reprinting the whole list every refresh buries the actual diff. The full text is one
+// flag away.
 function showNextSteps(
   advisories: PlanResult['advisories'],
   flags: Flags,
@@ -42,6 +37,12 @@ function showNextSteps(
     );
 }
 
+/**
+ * Refreshes kit-owned files to this kit version. Local edits are honored, so a manifest
+ * hash mismatch skips the file unless `--force`. Files and hooks the current kit no
+ * longer ships are pruned when they are kit-owned and unmodified. Genuinely-new default
+ * modules are advertised, never auto-enabled.
+ */
 export async function update(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);
   const ctx = detect(root);
@@ -63,8 +64,8 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     `claude-kit ${flags.kitVersion} — update (installed: v${manifest.kitVersion})`,
   );
 
-  // Targets come from the user-edited kit.config.json when present — config is
-  // the contract; detection is only the fallback.
+  // Targets come from the user-edited kit.config.json when present: config is
+  // the contract. Detection is only the fallback.
   const targets = ctx.claude.kitConfig?.targets?.length
     ? ctx.claude.kitConfig.targets
     : ctx.targets;
@@ -88,10 +89,8 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     throw e;
   }
 
-  // Prune: files the current kit no longer produces (kit-owned + hash-unmodified),
-  // plus the settings wiring of any retired hook script. Fold the hook removal into
-  // the same settings write the additive merge produces, so settings.json is written
-  // once — additive entries in, retired kit hooks out — never clobbering user hooks.
+  // The hook removal folds into the same settings write the additive merge produces, so
+  // settings.json is written once and never clobbers a user hook.
   const prune: PruneResult = computePrune(root, {
     manifest,
     plannedDests: planResult.plannedDests,
@@ -113,8 +112,8 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     }
   }
 
-  // Advertise genuinely-new DEFAULT modules an existing install predates. init unions
-  // new defaults; update (the path people use) did not — surface them, never enable.
+  // init unions new defaults, but update (the path people actually use) did not.
+  // Surface them, never enable them.
   const addable = MODULES.filter(
     (m) =>
       !m.locked &&
@@ -144,15 +143,11 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       `New default module(s) available: ${addable.join(', ')} — enable with: npx claude-kit modules --modules=${addable.join(',')}`,
     );
 
-  // Reference templates are self-gitignored, but an install predating that may
-  // have committed them. Reconcile by dropping them from the index (working-tree
-  // copies stay). This is a git-index migration, not a target-file write, so it
-  // lives here rather than in apply()'s content pipeline — computed up front so
-  // the dry-run preview reflects it and can't lie.
+  // A git-index migration, not a target-file write, so it lives here rather than in
+  // apply(). Computed up front so the dry-run preview reflects it and cannot lie.
   const strayTemplates = ctx.git.isRepo ? trackedTemplateFiles(root) : [];
 
-  // Same migration for .claude/scripts/: build output that predates the kit's
-  // self-gitignore. Skipped entirely when the repo opted in to committing scripts.
+  // Same migration for .claude/scripts/, skipped when the repo opted in to committing them.
   const commitScripts = ctx.claude.kitConfig?.scripts?.commit === true;
   const strayScripts =
     ctx.git.isRepo && !commitScripts ? trackedScriptFiles(root) : [];

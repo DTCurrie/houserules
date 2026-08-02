@@ -1,10 +1,3 @@
-// read-guard module (claude-kit CLI): OPT-IN PreToolUse(Read) guard.
-// Wires guard-read.mjs, which exit-2 redirects only UNBOUNDED whole-file reads of
-// generated/oversized files (lockfiles, dist, *.min.*, > maxBytes) toward a targeted
-// read or grep — reads carrying offset/limit pass untouched. Enforces the marketed-
-// but-unenforced "grep, don't read whole" rule (README, CONVENTIONS §7). Same exit-2
-// block contract as guard-bash (a shipped, working PreToolUse guard).
-
 import type { Action, ModuleGroup } from '../types.js';
 import { hookFragment, script } from './shared.js';
 
@@ -21,6 +14,12 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * A PreToolUse(Read) guard that exit-2 redirects unbounded whole-file reads of generated
+ * or oversized files toward a targeted read or a grep. A read carrying offset or limit
+ * passes untouched. This enforces the "grep, don't read whole" rule that README and
+ * CONVENTIONS §7 otherwise only assert, using the same exit-2 contract as guard-bash.
+ */
 export function plan(): Action[] {
   return [
     script(

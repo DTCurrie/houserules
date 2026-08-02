@@ -1,11 +1,10 @@
-// Unified diffs for the doctor report (claude-kit CLI).
-//
-// Human-facing only: a diff is never compared, hashed, or applied. `-` lines are
-// what is on disk, `+` lines are what the kit would write — so reading a hunk
-// answers "what would --fix change" without running it.
-
 import { structuredPatch } from 'diff';
 
+/**
+ * Diffs for the doctor report, human-facing only. A diff is never compared, hashed, or
+ * applied. `-` lines are what is on disk and `+` lines are what the kit would write, so
+ * reading a hunk answers "what would --fix change" without running it.
+ */
 export function unifiedDiff(from: string, to: string, context = 3): string {
   const { hunks } = structuredPatch('', '', from, to, '', '', { context });
   return hunks

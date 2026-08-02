@@ -1,19 +1,3 @@
-// Workspace-package enumeration without a YAML or glob dependency (claude-kit).
-//
-// Shared by the payload scripts (changeset-write validates --pkg names against the
-// packages that actually exist) and by the installer CLI (detection) — one parser,
-// so detection and validation can never disagree.
-//
-// Narrow but correct glob support, covering the shapes real workspace files use:
-// literal dirs, trailing `*` ("packages/*"), recursive `**` ("packages/**"), and
-// `!negations` (which filter the expanded set rather than expanding themselves).
-// Both YAML list forms are read — block sequences and inline flow sequences.
-//
-// The parsers here are hand-rolled on purpose: the payload ships into user repos and
-// runs on bare node, so it may not import a YAML or glob library. This is NOT a YAML
-// parser — it reads one key in the shapes real workspace files use, and never throws.
-// test/workspaces.test.ts pins that contract case by case.
-
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { PackageJson } from 'type-fest';
@@ -70,15 +54,17 @@ function splitFlow(inner: string): string[] {
   return items.map(cleanItem).filter(Boolean);
 }
 
-// Extract the `packages:` list from pnpm-workspace.yaml without a YAML parser.
-// Must not be confused by sibling top-level blocks (catalog:, catalogs:,
-// catalogMode:, onlyBuiltDependencies:, ...) — only lines inside the packages
-// block are read, and the block ends at the next non-indented line.
-//
-// Both YAML list forms occur in the wild and both are read:
-//   packages:            (block sequence)      packages: [a, b]   (flow sequence)
-//     - packages/*
-// A flow sequence may also span lines, so its interior is accumulated until `]`.
+/**
+ * Extracts the `packages:` list from pnpm-workspace.yaml. Hand-rolled on purpose: the
+ * payload ships into user repos and runs on bare node, so it cannot import a YAML
+ * library. This is not a YAML parser. It reads one key in the shapes real workspace files
+ * use, and never throws. `test/workspaces.test.ts` pins that contract case by case.
+ *
+ * Sibling top-level blocks such as `catalog:` and `catalogMode:` must not confuse it, so
+ * only lines inside the packages block are read and the block ends at the next
+ * non-indented line. Both YAML list forms occur in the wild and both are read, block
+ * sequences and flow sequences, and a flow sequence may span lines.
+ */
 export function parsePnpmWorkspaceGlobs(yamlText: string): string[] {
   const globs: string[] = [];
   let inPackages = false;
@@ -159,8 +145,8 @@ function descendants(base: string, depth = 12): string[] {
   ]);
 }
 
-// One positive glob → the directories it matches. `**` recurses to any depth (so a
-// package nested under an intermediate directory is found); `*` matches one segment.
+// `**` recurses to any depth, so a package under an intermediate directory is found.
+// `*` matches one segment.
 function expandGlob(root: string, glob: string): string[] {
   const clean = glob.trim().replace(/\/+$/, '');
   if (!clean || clean.startsWith('!')) return [];
@@ -176,8 +162,8 @@ function expandGlob(root: string, glob: string): string[] {
   return [];
 }
 
-// A `!glob` compiled to a matcher over root-relative, forward-slashed paths.
-// `**` spans separators, `*` does not; every other character is literal.
+// Matches over root-relative, forward-slashed paths. `**` spans separators, `*` does
+// not, and every other character is literal.
 function negationMatcher(glob: string): (relDir: string) => boolean {
   const pattern = glob
     .trim()
@@ -195,11 +181,14 @@ function negationMatcher(glob: string): (relDir: string) => boolean {
   return (relDir) => re.test(relDir);
 }
 
-// → [{ name, dir, relDir, pkg }] for every workspace member that has a named
-// package.json. Empty scaffold dirs (a bare .gitkeep) are silently skipped.
-//
-// `!globs` are EXCLUSIONS, not patterns to expand: they filter the set the positive
-// globs produced, which is why they are applied here rather than in expandGlob.
+/**
+ * Every workspace member that has a named package.json. Empty scaffold directories
+ * holding only a `.gitkeep` are silently skipped. Shared by the payload scripts and by
+ * the installer's detection, so validation and detection can never disagree.
+ *
+ * Negated globs are exclusions rather than patterns to expand, so they filter the set the
+ * positive globs produced. That is why they are applied here rather than in `expandGlob`.
+ */
 export function listWorkspacePackages(root: string): WorkspacePackage[] {
   const globs = workspaceGlobs(root);
   const excluded = globs
@@ -222,8 +211,10 @@ export function listWorkspacePackages(root: string): WorkspacePackage[] {
   return out;
 }
 
-// All valid --pkg names for changeset-write: workspace members, or for a
-// single-package repo the root package itself.
+/**
+ * Every valid `--pkg` name for changeset-write: the workspace members, or for a
+ * single-package repo the root package itself.
+ */
 export function listPublishablePackageNames(root: string): string[] {
   const members = listWorkspacePackages(root);
   if (members.length) return members.map((m) => m.name);

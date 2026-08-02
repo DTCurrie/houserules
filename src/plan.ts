@@ -1,18 +1,3 @@
-// The plan engine (claude-kit CLI).
-//
-// Modules declare WHAT should exist; they never touch the filesystem. A module is
-// { id, title, group, hint(ctx), defaultEnabled(ctx), plan(ctx, answers) } and
-// plan() returns actions:
-//
-//   { kind: 'copy',  src, dest, mode?, module, reason }   kit-owned file from payload/
-//   { kind: 'write', dest, content, mode?, module, reason } kit-owned generated file
-//   { kind: 'seed',  dest, content, module, reason }      user-owned; only if absent
-//   { kind: 'merge-settings', fragment, module }          hooks/permissions fragment
-//   { kind: 'advise', text, module }                      next-steps checklist item
-//
-// computeEffects() turns actions into effects against the real tree — the SAME
-// result object drives the dry-run preview and apply.mjs, so the preview cannot lie.
-
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -110,7 +95,12 @@ export function defaultModuleIds(ctx: Ctx): string[] {
   return MODULES.filter((m) => m.defaultEnabled(ctx)).map((m) => m.id);
 }
 
-// "--modules=ledger,-rename" → adjust defaults additively/subtractively.
+/**
+ * Adjusts the default module set additively and subtractively. A `--modules` value of
+ * `ledger,-rename` adds ledger and withdraws rename. `core` is always re-added.
+ *
+ * @throws KitError when the flag names a module that does not exist.
+ */
 export function resolveModuleIds(ctx: Ctx, modulesFlag?: string): string[] {
   const ids = new Set(defaultModuleIds(ctx));
   const known = new Set(MODULES.map((m) => m.id));
@@ -144,8 +134,8 @@ function sha256(content: Buffer | string): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
-// Whole-file content for the actions that own a whole file. A `region` action does
-// not — its bytes depend on the host file, so it is resolved in computeEffects.
+// A `region` action is absent here: its bytes depend on the host file, so it is
+// resolved inside computeEffects instead.
 function readAction(action: CopyAction | WriteAction | SeedAction): Buffer {
   if (action.kind === 'copy') {
     if (!existsSync(action.src))
@@ -155,8 +145,12 @@ function readAction(action: CopyAction | WriteAction | SeedAction): Buffer {
   return Buffer.from(action.content, 'utf8');
 }
 
-// → { effects, settingsPlan, advisories }
-//   effect: { action, op: create|update|skip-identical|skip-exists|skip-modified, content?, hash? }
+/**
+ * Turns the actions modules declared into effects against the real tree. The same
+ * result object drives the dry-run preview and `apply()`, so the preview cannot lie.
+ *
+ * @param force Refresh kit-owned files even when the manifest hash says you edited them.
+ */
 export function computeEffects(
   root: string,
   actions: Action[],
@@ -182,17 +176,9 @@ export function computeEffects(
     const destAbs = join(root, action.dest);
     const exists = existsSync(destAbs);
 
-    // A managed region inside a file the user owns. Everything is judged on the
-    // BODY between the markers — the host file's other content is theirs and is
-    // spliced through untouched by upsertRegion. The manifest therefore records the
-    // body hash, which is what makes "you edited our block" detectable without
-    // claiming ownership of the whole file.
     if (action.kind === 'region') {
-      // Read the content THIS PLAN will have produced by the time apply() reaches
-      // us, not just what is on disk. A fresh repo queues `seed CLAUDE.md` before
-      // `region CLAUDE.md`; resolving the region against the pre-write snapshot
-      // would emit a bare marker block, and apply()'s later write would silently
-      // discard everything the seed had put in the file.
+      // What THIS PLAN will have written by the time apply() gets here, not just what is
+      // on disk. A fresh repo queues `seed CLAUDE.md` before `region CLAUDE.md`.
       const pending = pendingContent.get(action.dest);
       const current =
         pending ?? (exists ? readFileSync(destAbs, 'utf8') : null);
@@ -235,7 +221,7 @@ export function computeEffects(
       continue;
     }
 
-    // copy | write — kit-owned
+    // copy | write: kit-owned
     const content = readAction(action);
     const hash = sha256(content);
     if (!exists) {
@@ -293,9 +279,7 @@ export function computeEffects(
   // describe the kit's contribution regardless of what's already merged in).
   const signature = settingsSignature(fragments);
 
-  // Every file the current plan produces — the reference set a prune diffs against.
-  // `region` is included so a retired region stops being pruned as an orphan; the
-  // prune path itself refuses to delete a shared host file (see computePrune).
+  // `region` is included so a retired region stops being pruned as an orphan.
   const plannedDests = new Set(
     effects
       .filter((e) =>
@@ -307,13 +291,17 @@ export function computeEffects(
   return { effects, settingsPlan, advisories, signature, plannedDests };
 }
 
-// Manifest-diff prune (used by update): a file the previous manifest recorded as
-// kit-owned but the current plan no longer produces is retired. Delete only
-// kit-owned, hash-UNMODIFIED files (a locally-edited one is kept + WARNed unless
-// --force); a file already gone is just dropped from the manifest. Also names the
-// retired hook SCRIPTS so the caller can unwire them. Pure computation — only
-// apply() writes; dry-run renders exactly this.
-// → { deletes:[{dest, modified?, gone?}], kept:[dest], removedScripts:[basename] }
+/**
+ * Manifest-diff prune, used by `update`. A file the previous manifest recorded as
+ * kit-owned but the current plan no longer produces is retired. Only kit-owned,
+ * hash-unmodified files are deleted. A locally edited one is kept and warned about
+ * unless `force`. A file already gone is just dropped from the manifest.
+ *
+ * Pure computation. Only `apply()` writes, and dry-run renders exactly this.
+ *
+ * @returns The deletions, the retired-but-kept files, and the basenames of retired hook
+ * scripts so the caller can unwire them.
+ */
 export function computePrune(
   root: string,
   {
@@ -330,10 +318,8 @@ export function computePrune(
   const kept: string[] = [];
   for (const [dest, hash] of Object.entries(manifest?.files ?? {})) {
     if (plannedDests.has(dest)) continue; // still produced by a current module
-    // Never prune a file the user owns and we only manage a region or a few keys
-    // of. A stale manifest entry here would otherwise propose deleting their
-    // CLAUDE.md outright — the manifest hash for these is the BODY's, so it would
-    // not even register as "locally modified".
+    // A stale manifest entry here would propose deleting the user's CLAUDE.md outright.
+    // The recorded hash is the region BODY's, so it would not even read as modified.
     if (SHARED_HOST_FILES.has(dest)) continue;
     const abs = join(root, dest);
     if (!existsSync(abs)) {
@@ -348,7 +334,7 @@ export function computePrune(
     deletes.push({ dest, modified });
   }
 
-  // Retired scripts (that a hook might still reference) — surfaced for unwiring.
+  // Retired scripts (that a hook might still reference). Surfaced for unwiring.
   const removedScripts = deletes
     .filter((d) => /^\.claude\/scripts\/.+\.mjs$/.test(d.dest))
     .map((d) => d.dest.split('/').pop())

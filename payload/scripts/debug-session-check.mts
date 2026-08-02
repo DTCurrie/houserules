@@ -1,14 +1,12 @@
 #!/usr/bin/env node
-// SessionStart hook (claude-kit debug-session module). The deterministic backstop
-// for the /debug-session cleanup guarantee ("remove ALL instrumentation, nothing
-// orphaned"): prints a one-line reminder when an investigation is still open or when
-// tagged instrumentation was left in source, so a paused or dropped debug session
-// can't silently ship trace logging.
-//
-// stdout becomes session context — keep it tiny, and print NOTHING when there's
-// nothing to report. Debugging is legitimately multi-session, so this only reminds;
-// it never blocks. Every failure path exits 0 (a broken SessionStart hook would nag
-// on every single session).
+/**
+ * SessionStart hook. Prints a one-line reminder when a debug investigation is still open
+ * or tagged instrumentation was left in source.
+ *
+ * stdout becomes session context, so this stays tiny and prints nothing when there is
+ * nothing to report. Debugging is legitimately multi-session, so it only reminds and
+ * never blocks. Every failure path exits 0.
+ */
 
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -32,9 +30,8 @@ function activeLogs(root: string): string[] {
   }
 }
 
-// Tagged instrumentation still in source. Excludes .claude/ so the skill, this
-// script, and the logs themselves never count as orphans. --untracked catches a
-// brand-new trace helper file too. Exit 1 (no matches) throws → caught → [].
+// Excludes .claude/ so the skill, this script, and the logs never count as orphans.
+// --untracked catches a brand-new trace helper file. Exit 1 (no matches) throws.
 function orphanedFiles(root: string): string[] {
   try {
     const out = execFileSync(

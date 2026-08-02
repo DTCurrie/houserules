@@ -1,12 +1,3 @@
-// debug-session module (claude-kit CLI): OPT-IN hypothesis-driven debugging.
-// Ships the /debug-session skill (the interactive loop: hypotheses → tagged trace
-// logging under .claude/debug/ → jq → confirm/reject → remove ALL instrumentation),
-// a self-gitignored throwaway-log dir, an off-context debugger agent template, and a
-// SessionStart backstop that flags an open session or leftover instrumentation.
-//
-// The CLAUDE.md template already carries the tracing *prose*; this is the enforced
-// loop + log format + cleanup-tracking the prose only gestures at.
-
 import type { Action, ModuleGroup } from '../types.js';
 import { hookFragment, script, skill, template } from './shared.js';
 
@@ -22,6 +13,15 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * Ships hypothesis-driven debugging: the skill's loop from hypotheses to tagged trace
+ * logs under `.claude/debug/` to jq to confirm or reject to removing all instrumentation,
+ * a self-gitignored log directory, a debugger agent template, and a SessionStart backstop
+ * that flags an open session or leftover instrumentation.
+ *
+ * The CLAUDE.md template already carries the tracing prose. This is the enforced loop,
+ * log format, and cleanup tracking the prose only gestures at.
+ */
 export function plan(): Action[] {
   return [
     skill(
@@ -39,9 +39,8 @@ export function plan(): Action[] {
       'agents/debugger.agent.md.template',
       'off-context debugger agent pattern',
     ),
-    // Throwaway trace logs must never enter a commit. A directory-local .gitignore
-    // (like .claude/kit-templates/) keeps them out without touching the repo's
-    // .gitignore; the .gitignore itself stays tracked so the intent travels.
+    // Throwaway trace logs must never enter a commit. A directory-local .gitignore keeps
+    // them out without touching the repo's own, and stays tracked so the intent travels.
     {
       kind: 'write',
       dest: '.claude/debug/.gitignore',

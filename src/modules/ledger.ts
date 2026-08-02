@@ -1,8 +1,3 @@
-// ledger module (claude-kit CLI): OPT-IN per-commit JSONL changelog ledger.
-// Changesets is the canonical changelog; this exists for repos that also want
-// commit-granular history. Its files live under .claude/changelogs/ so it can
-// never collide with the CHANGELOG.md that `changeset version` owns.
-
 import type { Action, ModuleGroup } from '../types.js';
 import { script, scriptPermission, template } from './shared.js';
 
@@ -18,6 +13,11 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * A per-commit JSONL changelog, for repos that want commit-granular history alongside
+ * changesets. Its files live under `.claude/changelogs/` so they can never collide with
+ * the CHANGELOG.md that `changeset version` owns.
+ */
 export function plan(): Action[] {
   return [
     script(

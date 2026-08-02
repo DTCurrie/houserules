@@ -1,18 +1,16 @@
 #!/usr/bin/env node
-// PreToolUse(Bash) guard (claude-kit). Converts load-bearing prose rules into a
-// deterministic check, so the model can't burn a turn violating them:
-//   1. "The user always handles git commit / push / PR-create."  (a violated commit
-//       costs a full wasted turn plus cleanup.)
-//   2. Context hygiene: `git stash` dumps the whole untracked-file list into context.
-//
-// Exit 2 + stderr blocks the tool call and feeds the reason back to Claude. Exit 0
-// allows. Wire it as a PreToolUse hook with matcher "Bash" (init does this).
-//
-// Rules are configured in .claude/kit.config.json (all default ON):
-//   "guard": { "gitCommit": true, "gitPush": true, "gitStash": true, "prCreate": true,
-//              "custom": [{ "pattern": "\\bdocker\\s+system\\s+prune\\b", "message": "..." }] }
-// Config missing or unreadable → the four defaults apply. Keep custom rules
-// conservative — only commands that are genuinely the user's to run.
+/**
+ * PreToolUse(Bash) guard. Blocks the git commands the user always runs themselves, plus
+ * `git stash`, which dumps the whole untracked-file list into context.
+ *
+ * Exit 2 with stderr blocks the tool call and feeds the reason back to Claude. Exit 0
+ * allows. Wire it as a PreToolUse hook with matcher "Bash".
+ *
+ * Config (.claude/kit.config.json, all default on):
+ *   "guard": { "gitCommit": true, "gitPush": true, "gitStash": true, "prCreate": true,
+ *              "custom": [{ "pattern": "\\bdocker\\s+system\\s+prune\\b", "message": "..." }] }
+ * A missing or unreadable config falls back to the four defaults.
+ */
 
 import { GUARD_DEFAULTS, loadConfigSafe } from './lib/kit-config.mjs';
 import { readStdinJson } from './lib/proc.mjs';
@@ -28,13 +26,8 @@ if (!cmd) process.exit(0);
 
 const guard = { ...GUARD_DEFAULTS, ...(loadConfigSafe().guard ?? {}) };
 
-// Match a guarded command only in COMMAND position — at the start of the line or right
-// after a shell separator (newline ; && || | &) — so the guard never fires on the same
-// words inside another command's argument (`grep "git commit"`, `echo "git commit"`,
-// `node -e '… git commit …'`). Accepted limitations (best-effort, not a shell parser):
-// a separator INSIDE quotes (`echo "a && git commit"`) can still mis-anchor, and
-// wrapped/nested forms (`sh -c "git commit"`, `xargs git commit`, `x=$(git commit)`)
-// are NOT caught.
+// Matches only in COMMAND position, so the guard never fires on the same words inside
+// another command's argument. Not a shell parser: nested forms are not caught.
 const CMD_START = String.raw`(?:^|[\n;&|])\s*`;
 // Tolerate flag/option arguments before a git subcommand: `git -C /path commit`,
 // `git -c k=v stash`, `git --no-pager push`.

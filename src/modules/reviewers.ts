@@ -1,8 +1,3 @@
-// reviewers module (claude-kit CLI): per-target read-only reviewer agents.
-// Default OFF and generated as explicit DRAFTs — an agent whose authoritative
-// source is an unfilled placeholder is worse than no agent, so the description
-// carries a DRAFT marker until the user fills it in (doctor flags leftovers).
-
 import { renderReviewerDraft } from '../render.js';
 import type { Action, Answers, Ctx, ModuleGroup } from '../types.js';
 import { skill } from './shared.js';
@@ -20,12 +15,15 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * Per-target read-only reviewer agents, generated as explicit DRAFTs. An agent whose
+ * authoritative source is an unfilled placeholder is worse than no agent, so the
+ * description carries a DRAFT marker until the user fills it in. Doctor flags leftovers.
+ */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const chosen = answers.reviewerTargets ?? answers.targets.map((t) => t.name);
   const actions: Action[] = [
-    // The dispatch recipe: maps changed paths → each area's reviewer and fans them
-    // out read-only. Ships with the module so the reviewer drafts finally get wired
-    // up (they were generated but never dispatched before).
+    // The dispatch recipe. Ships with the module so the drafts are actually wired up.
     skill(
       id,
       'review-change',

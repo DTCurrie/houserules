@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Assembles payload-dist/: the tree that actually ships and gets copied into user
-// repos. `.mts` sources are compiled by tsconfig.payload.json (run before this);
-// everything else under payload/ is prose and is copied through verbatim.
-//
-// One root, not two: src/paths.ts resolves payloadPath() to payload-dist, so the
-// installer never reads a half-built mixture of sources and output.
+/**
+ * Assembles payload-dist/, the tree that ships and gets copied into user repos. `.mts`
+ * sources are compiled by tsconfig.payload.json, which runs before this. Everything else
+ * under payload/ is prose and is copied through verbatim.
+ *
+ * One root, not two. `src/paths.ts` resolves `payloadPath()` to payload-dist, so the
+ * installer never reads a half-built mixture of sources and output.
+ */
 
 import { cpSync, existsSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +16,6 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE = join(ROOT, 'payload');
 const OUT = join(ROOT, 'payload-dist');
 
-// Copied verbatim — these are markdown/JSON assets, not code.
 const VERBATIM = [
   'skills',
   'agents',

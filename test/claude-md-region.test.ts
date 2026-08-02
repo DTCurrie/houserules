@@ -1,9 +1,11 @@
-// The CLAUDE.md managed-region contract, asserted end-to-end against a real install.
-//
-// The one invariant everything here exists to protect: bytes outside the markers are
-// never modified. Assertions compare exact substrings/full-file byte-equality, not
-// `toContain`, because a passing `toContain` would not catch a subtly-reformatted
-// prefix or suffix.
+/**
+ * The CLAUDE.md managed-region contract, asserted end-to-end against a real install.
+ *
+ * The invariant everything here protects: bytes outside the markers are never modified.
+ * Assertions compare exact substrings and full-file byte equality rather than
+ * `toContain`, because a passing `toContain` would not catch a subtly reformatted prefix
+ * or suffix.
+ */
 
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -25,7 +27,7 @@ function readClaudeMd(root: string): string {
 test('CM1: init inserts a managed block into an existing CLAUDE.md, original prose intact', () => {
   const root = makeFixture('npm-single');
   try {
-    // fixture ships: '# single-app\n\nPre-existing user CLAUDE.md — the kit must never edit this.\n'
+    // fixture ships: '# single-app\n\nPre-existing user CLAUDE.md. The kit must never edit this.\n'
     const before = readClaudeMd(root);
     const heading = '# single-app\n\n';
     const prose =
@@ -35,7 +37,7 @@ test('CM1: init inserts a managed block into an existing CLAUDE.md, original pro
     expect(runCli(['init', '--yes', root]).status).toBe(0);
 
     const after = readClaudeMd(root);
-    // anchor: after-h1 splices the block right after the H1 — both original
+    // anchor: after-h1 splices the block right after the H1. Both original
     // fragments must survive verbatim, unreformatted, on either side of it.
     expect(after.startsWith(heading)).toBe(true);
     expect(after.endsWith(prose)).toBe(true);

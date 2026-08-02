@@ -59,7 +59,7 @@ test('L1: changed package → runner invoked with --filter <pkg> fix (per-target
     const calls = readFileSync(join(root, 'runner-calls.txt'), 'utf8')
       .trim()
       .split('\n');
-    // fixCommands ["fix"] from detection overrides global commands — exactly one call.
+    // fixCommands ["fix"] from detection overrides global commands. Exactly one call.
     expect(calls).toEqual(['--filter @fix/cityville fix']);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -110,7 +110,7 @@ test('L4: SubagentStop is a no-op by default; fix.onSubagentStop opts back in', 
       'no fix commands run on SubagentStop',
     ).toBeTruthy();
 
-    // Stop (the parent turn) still fixes — that's the one pass per fan-out.
+    // Stop (the parent turn) still fixes. That's the one pass per fan-out.
     expect(
       runScript(root, SCRIPT, { input: '{"hook_event_name":"Stop"}' }).status,
     ).toBe(0);

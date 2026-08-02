@@ -1,10 +1,3 @@
-// ready module (claude-kit CLI): OPT-IN pre-handoff roll-up skill.
-// Ships /ready, a read-only, off-context skill that rolls the deterministic
-// pre-handoff checks into ONE ready/not-ready verdict + the acceptance checklist,
-// and flags backlog items resolved-but-not-removed. Script-free: the value is the
-// checklist discipline + delegation to /verify-changed and /review-change, not
-// tooling. Best paired with those two modules, but degrades gracefully without them.
-
 import type { Action, ModuleGroup } from '../types.js';
 import { skill } from './shared.js';
 
@@ -20,6 +13,15 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * A read-only, off-context skill that rolls the deterministic pre-handoff checks into one
+ * ready or not-ready verdict plus the acceptance checklist, and flags backlog items that
+ * were resolved but not removed.
+ *
+ * Script-free, because the value is the checklist discipline and the delegation to
+ * /verify-changed and /review-change. Best paired with those two modules, and degrades
+ * gracefully without them.
+ */
 export function plan(): Action[] {
   return [
     skill(

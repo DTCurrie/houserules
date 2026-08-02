@@ -1,13 +1,3 @@
-// changesets module (claude-kit CLI): changesets is the canonical changelog.
-// Deterministic changeset authoring (changeset-write.mjs), a Stop-hook presence
-// nudge (changeset-check.mjs), the /changeset skill, and the changeset-writer agent.
-//
-// HARD RULE: this module never runs a package manager. Repos with pnpm
-// `catalogMode: strict` would hard-fail a bare `pnpm add -D`, and installs mean
-// network + postinstall scripts + lockfile churn mid-init. But changeset-write.mjs
-// authors ONLY via the repo's installed @changesets/write (no fallback), so when
-// the devDependency is missing we advise the exact install command instead.
-
 import { renderChangesetConfig } from '../render.js';
 import type { Action, Answers, Ctx, ModuleGroup } from '../types.js';
 import {
@@ -53,6 +43,16 @@ function devDepAdvisory(ctx: Ctx): string | null {
   return `${via}authoring (changeset-write.mjs) needs @changesets/cli installed as a root devDependency: \`${add}\`.${catalogNote}`;
 }
 
+/**
+ * Wires changesets as the canonical changelog: deterministic authoring, a Stop-hook
+ * presence nudge, the skill, and the writer agent.
+ *
+ * This module never runs a package manager. Repos with pnpm `catalogMode: strict` would
+ * hard-fail a bare `pnpm add -D`, and an install means network, postinstall scripts, and
+ * lockfile churn mid-init. Since `changeset-write.mjs` authors only through the repo's
+ * installed `@changesets/write` and has no fallback, a missing devDependency is advised
+ * with the exact install command instead.
+ */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const actions: Action[] = [
     script(
@@ -65,10 +65,8 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       'changeset-check.mjs',
       'Stop hook: nudge when package set changed with no changeset',
     ),
-    // The Stop hook records which change-set it last nudged for, so an unchanged
-    // situation stays silent instead of re-printing every turn. Installed here rather
-    // than written lazily by the hook, so the directory never surfaces as untracked in
-    // the user's `git status`. Same directory-local pattern as .claude/debug/.
+    // Installed here rather than written lazily by the hook, so the state directory
+    // never surfaces as untracked in the user's `git status`.
     {
       kind: 'write',
       dest: '.claude/state/.gitignore',

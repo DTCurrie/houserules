@@ -194,7 +194,7 @@ test('OM5: plans lands the /plan-project skill, self-gitignores the workspace, a
     const r = runCli(['init', '--yes', '--modules=plans', root]);
     expect(r.status, r.stderr).toBe(0);
 
-    // Skill lands; the module is script-free and wires no hook.
+    // Skill lands. The module is script-free and wires no hook.
     expect(
       existsSync(join(root, '.claude/skills/plan-project/SKILL.md')),
     ).toBeTruthy();
@@ -238,7 +238,7 @@ test('OM6: plans is off by default — no skill, no workspace, no CLAUDE.md poin
     ).toBeTruthy();
     expect(!existsSync(join(root, '.claude/plans/.gitignore'))).toBeTruthy();
 
-    // The CLAUDE.md pointer is gated on the module — absent when plans is off.
+    // The CLAUDE.md pointer is gated on the module. Absent when plans is off.
     const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
     expect(
       !claudeMd.includes('/plan-project'),
@@ -259,7 +259,7 @@ test('OM7: code-comments lands a PATH-SCOPED rule (no hook, no CLAUDE.md pointer
     const rulePath = join(root, '.claude/rules/code-comments.md');
     const text = readFileSync(rulePath, 'utf8');
 
-    // The `paths:` frontmatter is what makes the rule conditional — without it
+    // The `paths:` frontmatter is what makes the rule conditional. Without it,
     // Claude Code loads .claude/rules/*.md on EVERY turn (resident context).
     expect(text, 'paths: frontmatter present').toMatch(
       /^---\n(?:.*\n)*?paths:\n/,

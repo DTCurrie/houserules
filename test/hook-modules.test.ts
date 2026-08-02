@@ -28,7 +28,7 @@ test('GR1: read-guard blocks unbounded reads of generated/oversized files; bound
       0,
     );
     expect(existsSync(join(root, GUARD)), 'guard installed').toBeTruthy();
-    // Hook wired at PreToolUse(Read); doctor validates it (exit 0).
+    // Hook wired at PreToolUse(Read). Doctor validates it (exit 0).
     const settings = readJson(join(root, '.claude/settings.json'));
     const cmds = (settings.hooks.PreToolUse ?? []).flatMap((g: any) =>
       g.hooks.map((h: any) => h.command),
@@ -81,7 +81,7 @@ test('BI1: backlog-inject injects a referenced entry from the log; unknown/absen
   const root = makeFixture('pnpm-monorepo');
   const INJECT = '.claude/scripts/backlog-inject.mjs';
   try {
-    // backlog is a default module — the injector ships with it.
+    // backlog is a default module. The injector ships with it.
     expect(runCli(['init', '--yes', root]).status).toBe(0);
     expect(
       existsSync(join(root, INJECT)),

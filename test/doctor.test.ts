@@ -19,15 +19,14 @@ test('DR1: healthy after init; missing file = ERROR; local edit / unwired hook /
     expect(r.status, `expected healthy, got:\n${r.stdout}${r.stderr}`).toBe(0);
     expect(r.stdout).toMatch(/healthy/);
 
-    // Local edit → reported as `yours` with a diff, and still exit 0: an edit you
-    // made on purpose is not a defect, and nothing lets you acknowledge it, so
-    // failing on it would leave doctor permanently red on a healthy install.
+    // A local edit is reported as `yours` with a diff and still exits 0. Nothing lets you
+    // acknowledge it, so failing would leave doctor permanently red on a healthy install.
     const guard = join(root, '.claude/scripts/guard-bash.mjs');
     appendFileSync(guard, '// tweak\n');
     r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).toMatch(/\.claude\/scripts\/guard-bash\.mjs: yours/);
-    // `-` is what is on disk, `+` is what the kit would write — so the line YOU
+    // `-` is what is on disk, `+` is what the kit would write. So the line YOU
     // added shows as a `-` (what --force would remove).
     expect(r.stdout, 'drift is reported with a diff').toMatch(/-\/\/ tweak/);
 
@@ -79,7 +78,7 @@ test('DR4: resident-surface budget — headroom vs OVER; nested CLAUDE.md listed
     expect(r.stdout).not.toMatch(/always-loaded context exceeds budget/);
 
     // A huge NESTED package CLAUDE.md is the on-demand tier: listed separately,
-    // never summed into the resident total — root stays under budget despite it.
+    // never summed into the resident total. Root stays under budget despite it.
     writeFileSync(join(root, 'games/cityville/CLAUDE.md'), 'x\n'.repeat(400));
     r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
@@ -87,10 +86,8 @@ test('DR4: resident-surface budget — headroom vs OVER; nested CLAUDE.md listed
     expect(r.stdout).toMatch(/nested.*games\/cityville\/CLAUDE\.md/);
     expect(r.stdout).not.toMatch(/always-loaded context exceeds budget/);
 
-    // Root CLAUDE.md over the line budget → readout OVER + a WARN, still exit 0.
-    // Append rather than overwrite: clobbering the file would also delete the kit's
-    // managed markers, which is a separate (real) drift finding and not what this
-    // test is about.
+    // Append rather than overwrite. Clobbering the file would also delete the kit's
+    // managed markers, which is a separate drift finding and not what this test is about.
     appendFileSync(join(root, 'CLAUDE.md'), '# big\n'.repeat(250));
     r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
@@ -126,7 +123,7 @@ test('DR4b: resident surface counts .claude/CLAUDE.md + globless rules; path-sco
     );
     expect(r.stdout).toMatch(/loaded on EVERY turn.*always\.md/);
 
-    // .claude/CLAUDE.md is project memory too — summed, not ignored.
+    // .claude/CLAUDE.md is project memory too (summed, not ignored).
     writeFileSync(join(root, '.claude/CLAUDE.md'), '# big\n'.repeat(250));
     r = runCli(['doctor', root]);
     expect(r.stdout).toMatch(
@@ -199,7 +196,7 @@ test('DR4d: skill/agent BODY is excluded — only description frontmatter counts
     let r = runCli(['doctor', root]);
     const before = Number(lineRe.exec(r.stdout)![1]);
 
-    // A huge skill BODY (not its description) barely moves the total — bodies load
+    // A huge skill BODY (not its description) barely moves the total. Bodies load
     // only on invocation, the on-demand tier, not on every turn.
     appendFileSync(
       join(root, '.claude/skills/backlog-add/SKILL.md'),
@@ -222,7 +219,7 @@ test('DR5: workspace package with no kit target → WARN pointing at kit.config.
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).not.toMatch(/has no kit target/);
 
-    // Add a package after init (apps/* is a workspace glob) — silently uncovered.
+    // Add a package after init (apps/* is a workspace glob). Silently uncovered.
     mkdirSync(join(root, 'apps/newgame'), { recursive: true });
     writeFileSync(
       join(root, 'apps/newgame/package.json'),
@@ -243,9 +240,8 @@ test('DR6: terse-style ACTIVE / INACTIVE / mis-slugged fallback from the real ou
   const root = makeFixture('pnpm-monorepo');
   try {
     expect(runCli(['init', '--yes', root]).status).toBe(0);
-    // Enable terse-style for real (default-off otherwise). Hand-editing the manifest
-    // instead would claim the module is installed while its files are not, which the
-    // drift engine now correctly reports as a broken install.
+    // Enable terse-style for real. Hand-editing the manifest would claim the module is
+    // installed while its files are not, which the drift engine reports as broken.
     expect(
       runCli(['modules', root, '--yes', '--modules', 'terse-style']).status,
     ).toBe(0);
@@ -322,7 +318,7 @@ test('DR5: scripts.commit: true suppresses the committed-scripts finding', () =>
     sh(root, 'git', ['commit', '-qm', 'opt-in commit + config change']);
 
     // Reconcile the now-orphaned .gitignore (kit-owned, unmodified) before asserting
-    // doctor is clean — flipping the switch after install leaves it stale for one run.
+    // doctor is clean. Flipping the switch after install leaves it stale for one run.
     expect(runCli(['update', root]).status).toBe(0);
 
     const r = runCli(['doctor', root]);

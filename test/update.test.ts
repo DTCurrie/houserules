@@ -47,8 +47,13 @@ test('U1: update keeps local edits, --force overwrites, stale files refresh', ()
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     r = runCli(['update', root]);
     expect(r.status, r.stderr).toBe(0);
+    const refreshed = readFileSync(lintPath, 'utf8');
     expect(
-      readFileSync(lintPath, 'utf8').includes('Stop / SubagentStop hook'),
+      refreshed.includes('OLD KIT VERSION'),
+      'stale file kept',
+    ).toBeFalsy();
+    expect(
+      refreshed.includes('loadConfigSafe'),
       'stale file not refreshed',
     ).toBeTruthy();
   } finally {
@@ -141,7 +146,7 @@ test('U5: update untracks .claude/scripts committed before they were ignored', (
       sh(root, 'git', ['ls-files', '.claude/scripts/.gitignore']).trim(),
       '.gitignore must stay tracked',
     ).toBeTruthy();
-    // Nothing committed by update — the staged removal is still pending.
+    // Nothing committed by update. The staged removal is still pending.
     expect(sh(root, 'git', ['status', '--porcelain']).trim()).not.toBe('');
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -1,18 +1,19 @@
-// Where the kit's own files live (claude-kit CLI).
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Resolved from this module's own location, which is one level under the package
-// root both in source (src/paths.ts) and in the build output (dist/paths.js), so
-// the CLI finds its payload no matter which repo it was invoked against.
+/**
+ * The kit's own package root, resolved from this module's location. That location is
+ * one level under the root in both source (`src/paths.ts`) and build output
+ * (`dist/paths.js`), so the CLI finds its payload whatever repo it was invoked against.
+ */
 export const KIT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-// The BUILT payload, not the sources: scripts ship as `.mjs` compiled from `.mts`,
-// and prose assets are copied alongside them by scripts/build-payload.mjs. One root,
-// so the installer can never read a half-built mixture of the two.
+// The BUILT payload, not the sources. One root, so the installer can never read a
+// half-built mixture of compiled scripts and copied prose.
 const PAYLOAD_ROOT = join(KIT_ROOT, 'payload-dist');
 
+/** Resolves a path inside the built payload that ships to user repos. */
 export function payloadPath(...segments: string[]): string {
   return join(PAYLOAD_ROOT, ...segments);
 }

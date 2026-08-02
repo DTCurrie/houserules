@@ -1,22 +1,22 @@
 #!/usr/bin/env node
-// Package changelog helper (claude-kit). Config-driven via .claude/kit.config.json.
-//
-// Records committed changes to a tracked source tree so you keep a queryable history
-// of what shipped and why. Driven by an archivist agent (or a git hook): the LLM/author
-// supplies the bullet summary; this script does all the git plumbing deterministically.
-//
-// Usage:
-//   record <target> <sha|HEAD> --changes "- bullet\n- bullet" [--reason "..."] [--backlog ID[,ID]] [--quiet]
-//   show   <target> <short-or-full-sha>
-//   list   <target>
-//
-// Targets are defined in .claude/kit.config.json (the `targets` array; `name` is the key).
-//
-// Storage (per target):
-//   <changelogPath>            — human-readable index (subject, file count, backlog, reason, changes)
-//   <logPath>                  — append-only JSONL; same metadata plus the full file list.
-//                                Diffs/prior file content are NOT stored — recover via
-//                                `git show <sha>` or `git show <sha>~1:<file>`.
+/**
+ * Package changelog helper. Records committed changes to a tracked source tree so you
+ * keep a queryable history of what shipped and why. The caller supplies the bullet
+ * summary and this script does the git plumbing deterministically.
+ *
+ * Usage:
+ *   record <target> <sha|HEAD> --changes "- bullet\n- bullet" [--reason "..."] [--backlog ID[,ID]] [--quiet]
+ *   show   <target> <short-or-full-sha>
+ *   list   <target>
+ *
+ * Targets are defined in .claude/kit.config.json (the `targets` array; `name` is the key).
+ *
+ * Storage (per target):
+ *   <changelogPath>            — human-readable index (subject, file count, backlog, reason, changes)
+ *   <logPath>                  — append-only JSONL; same metadata plus the full file list.
+ *                                Diffs/prior file content are NOT stored — recover via
+ *                                `git show <sha>` or `git show <sha>~1:<file>`.
+ */
 
 import {
   appendFileSync,

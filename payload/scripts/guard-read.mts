@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Opt-in PreToolUse(Read) guard (claude-kit). Enforces the marketed-but-unenforced
-// "grep, don't read whole" rule (README, CONVENTIONS §7): redirect ONLY an UNBOUNDED
-// whole-file Read of a generated/oversized file toward a targeted read or grep.
-//
-// A Read that already carries `offset`/`limit` PASSES — targeted reads are fine. Only
-// a whole-file read of a denyGlob match (lockfiles, dist, *.min.*, source maps) or a
-// file larger than maxBytes is blocked. Exit 2 + stderr blocks and feeds the reason
-// back to Claude (same contract as guard-bash). Every OTHER path exits 0 — a guard
-// that crashes would block every Read.
-//
-// Config (kit.config.json → readGuard, all defaulted): { enabled, maxBytes, denyGlobs }.
+/**
+ * PreToolUse(Read) guard. Redirects only an unbounded whole-file Read of a generated or
+ * oversized file toward a targeted read or a grep.
+ *
+ * A Read carrying offset or limit passes. Only a whole-file read of a denyGlob match or a
+ * file larger than maxBytes is blocked. Exit 2 with stderr blocks and feeds the reason
+ * back to Claude. Every other path exits 0, because a guard that crashes would block
+ * every Read.
+ *
+ * Config (kit.config.json, readGuard, all defaulted): { enabled, maxBytes, denyGlobs }.
+ */
 
 import { statSync } from 'node:fs';
 import { resolve } from 'node:path';

@@ -1,9 +1,4 @@
-// Plain output helpers for the non-interactive paths (claude-kit CLI).
-//
-// `ui.ts` (clack) owns the interactive install; this owns everything that has to be
-// readable in a CI log or piped through jq. The split that matters: under `--json`
-// stdout carries ONLY the JSON document, so any human commentary goes to stderr.
-
+/** Human commentary. Always stderr, so `--json` keeps stdout to the document alone. */
 export function message(text: string): void {
   console.log(text);
 }

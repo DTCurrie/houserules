@@ -1,8 +1,3 @@
-// terse-style module (claude-kit CLI): a caveman-inspired output style that cuts
-// response tokens via terse phrasing. Installing the file does NOT activate it —
-// output styles are user-selected — and the kit never writes `outputStyle` into
-// settings.json (that would silently clobber the user's choice).
-
 import { payloadPath } from '../paths.js';
 import type { Action, ModuleGroup } from '../types.js';
 
@@ -18,6 +13,11 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * A caveman-inspired output style that cuts response tokens through terse phrasing.
+ * Installing the file does not activate it. Output styles are user-selected, and the kit
+ * never writes `outputStyle` into settings.json, which would clobber the user's choice.
+ */
 export function plan(): Action[] {
   return [
     {

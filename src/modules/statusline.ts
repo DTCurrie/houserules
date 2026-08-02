@@ -1,9 +1,3 @@
-// statusline module (claude-kit CLI): OPT-IN kit-aware statusLine.
-// Ships statusline.mjs and wires it as the statusLine command ONLY when the user has
-// none (a single-value merge — never clobber a global statusline). Surfaces the two
-// fields the native bar can't: pending changeset debt + kit targets-touched, plus the
-// ambient context%/cost from the status JSON.
-
 import type { Action, ModuleGroup } from '../types.js';
 import { hookCommand, script } from './shared.js';
 
@@ -19,6 +13,11 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * A kit-aware statusLine surfacing the two fields the native bar cannot: pending
+ * changeset debt and kit targets touched, alongside the ambient context percentage and
+ * cost from the status JSON. Wired only when the user has no statusLine of their own.
+ */
 export function plan(): Action[] {
   return [
     script(
@@ -29,8 +28,7 @@ export function plan(): Action[] {
     {
       kind: 'merge-settings',
       module: id,
-      // Single-value fragment: set only when the user has no statusLine (merge-settings
-      // never overwrites an existing one).
+      // A single-value fragment, so merge-settings never overwrites an existing one.
       fragment: {
         statusLine: { type: 'command', command: hookCommand('statusline.mjs') },
       },

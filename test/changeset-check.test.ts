@@ -141,10 +141,8 @@ test('CC6: the suppression state file itself is never committed', () => {
     const r = runScript(root, SCRIPT, { input: '{}' });
     expect(r.status, r.stderr).toBe(2);
 
-    // The .gitignore inside .claude/state/ is itself lazily self-written (this
-    // script owns no install-time manifest entry), so `git status` still lists
-    // the directory as untracked — but `git add -A` must never stage the state
-    // file, which is the actual "never committed" guarantee.
+    // `git add -A` must never stage the state file. That is the actual
+    // "never committed" guarantee, since the directory itself stays untracked.
     sh(root, 'git', ['add', '-A']);
     const staged = sh(root, 'git', [
       'diff',
@@ -202,7 +200,7 @@ test('CC3: kill-switches and fallbacks — stop_hook_active, stopCheck:false, no
     r = runScript(root, SCRIPT, { input: '{}' });
     expect(r.status).toBe(0);
 
-    // Restore; missing base branch must fall back to worktree mode, not crash.
+    // Restore. Missing base branch must fall back to worktree mode, not crash.
     config.changesets.stopCheck = true;
     config.changesets.baseBranch = 'does-not-exist';
     writeFileSync(configPath, JSON.stringify(config, null, 2));

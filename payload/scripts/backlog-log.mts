@@ -1,20 +1,21 @@
 #!/usr/bin/env node
-// Backlog ledger helper (claude-kit).
-//
-// Usage:
-//   add    <prefix> <backlog-file> <title> [content]   # content from arg or stdin
-//   remove <id>     <backlog-file> <reason>
-//   update <id>     <backlog-file> <new-title> [content]
-//   show   <id>                                        # decoded history for one ID
-//   list   [<backlog-file>]                            # parsed entries from one or all backlogs
-//
-// IDs: <PREFIX>-<6 hex>, derived from sha256(prefix|title|isoTimestamp).
-// Log: .claude/backlog.log, one JSON record per line. Body content is gzip+base64
-// to keep the log compact while remaining decodable with `show`.
-//
-// Stack-agnostic: pure node builtins, repo root via git. The only Claude-Code-specific
-// bit is detectChatId(), which stamps the active session; it degrades to a warning
-// (chat:null) in any other harness, or pass --chat=none / set CLAUDE_SESSION_ID.
+/**
+ * Backlog ledger helper.
+ *
+ * Usage:
+ *   add    <prefix> <backlog-file> <title> [content]   # content from arg or stdin
+ *   remove <id>     <backlog-file> <reason>
+ *   update <id>     <backlog-file> <new-title> [content]
+ *   show   <id>                                        # decoded history for one ID
+ *   list   [<backlog-file>]                            # parsed entries from one or all backlogs
+ *
+ * Log: .claude/backlog.log, one JSON record per line. Body content is gzip+base64 to keep
+ * the log compact while remaining decodable with `show`.
+ *
+ * detectChatId() stamps the active session and is the one Claude-Code-specific part. It
+ * degrades to a chat:null warning in any other harness. Pass --chat=none or set
+ * CLAUDE_SESSION_ID to silence that.
+ */
 
 import { gzipSync, gunzipSync } from 'node:zlib';
 import {
@@ -47,13 +48,8 @@ const encodeBody = (s?: string) =>
 const decodeBody = (s: string) =>
   gunzipSync(Buffer.from(s, 'base64')).toString('utf8');
 
-// --- Chat (Claude Code session) detection -----------------------------------
 // Transcripts live at ~/.claude/projects/<encoded-cwd>/<session-id>.jsonl, where
-// encoded-cwd is the absolute repo path with `/` replaced by `-`. The active
-// session is identified by reading the most recent record from each transcript
-// and picking the file whose tail timestamp is freshest. mtime alone isn't
-// reliable when multiple sessions share the same project at once.
-
+// encoded-cwd is the absolute repo path with `/` replaced by `-`.
 function projectTranscriptDir() {
   const encoded = REPO_ROOT.replaceAll('/', '-');
   return resolve(homedir(), '.claude/projects', encoded);
@@ -91,6 +87,8 @@ function readLastJsonRecord(file: string): TranscriptRecord | null {
   }
 }
 
+// Picks the transcript whose tail timestamp is freshest. mtime alone is not reliable
+// when several sessions share one project at once.
 function detectChatId(): string | null {
   if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
   const dir = projectTranscriptDir();
@@ -113,7 +111,6 @@ function detectChatId(): string | null {
   return best?.sessionId ?? null;
 }
 
-// Pull `--chat <id>` (or `--chat=<id>`) out of argv. Returns the id or null.
 function takeChatFlag(argv: string[]): string | null {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];

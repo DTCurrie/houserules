@@ -1,10 +1,11 @@
-// The payload's zero-runtime-dependency rule, enforced rather than documented.
-//
-// Everything under payload/scripts is copied into user repos and run by node with
-// whatever that repo happens to have installed — which may be nothing. A stray
-// `import { z } from 'zod'` would not fail here; it would fail on a stranger's
-// machine, inside a hook, on every tool call. So: node builtins and relative paths
-// only.
+/**
+ * The payload's zero-runtime-dependency rule, enforced rather than documented.
+ *
+ * Everything under payload/scripts is copied into user repos and run by node with
+ * whatever that repo happens to have installed, which may be nothing. A stray
+ * `import { z } from 'zod'` would not fail here. It would fail on a stranger's machine,
+ * inside a hook, on every tool call. Node builtins and relative paths only.
+ */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -45,8 +46,8 @@ function specifiersOf(source: string): string[] {
  * The one sanctioned bare import, and why it does not violate the rule: rename.mjs
  * drives the TARGET REPO's own TypeScript LanguageService, so it consumes a package
  * that repo already has rather than one the kit ships. It is also agent-invoked
- * rather than hook-wired, and its module only installs when TypeScript is detected —
- * so a missing `typescript` is a legible error on an explicit command, never silent
+ * rather than hook-wired, and its module only installs when TypeScript is detected.
+ * A missing `typescript` is a legible error on an explicit command, never silent
  * breakage on every tool call. Anything else added here needs the same three
  * properties.
  */
@@ -81,7 +82,7 @@ test('PD2: every payload script imports only node builtins and relative paths', 
 
 test('PD3: the config loader in particular pulls in no dependency', () => {
   // Called by every hook. If anything here needs installing, every hook in every
-  // repo dies at once — this is the single highest-blast-radius file in the payload.
+  // repo dies at once. This is the single highest-blast-radius file in the payload.
   const source = readFileSync(
     join(PAYLOAD_SCRIPTS, 'lib/kit-config.mjs'),
     'utf8',

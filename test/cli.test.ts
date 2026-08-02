@@ -1,6 +1,8 @@
-// The CLI surface contract: per-subcommand flags, exit codes, and the --json shape.
-// These are the things a wrapper script or a CI job depends on, so they are asserted
-// rather than left to the help text.
+/**
+ * The CLI surface contract: per-subcommand flags, exit codes, and the `--json` shape.
+ * A wrapper script or a CI job depends on these, so they are asserted rather than left
+ * to the help text.
+ */
 
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

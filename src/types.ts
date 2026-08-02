@@ -1,10 +1,3 @@
-// The shared model of the claude-kit CLI. Every module, command, and the plan
-// engine itself is typed against this file — it is the seam, so a change here is a
-// change to the contract, not an implementation detail.
-//
-// The pipeline: detect() → Ctx, modules → Action[], computeEffects() → Effect[],
-// apply() → the only writes. Nothing outside apply.ts may touch the filesystem.
-
 import type { Except } from 'type-fest';
 import type { KitConfig, KitConfigTarget } from './core/config.js';
 import type { RegionSpec, UpsertStatus } from './core/regions.js';
@@ -17,9 +10,7 @@ import type {
 
 export type { PackageJson, WorkspacePackage };
 
-// ---------------------------------------------------------------- detection
-
-/** How the package manager was identified — shown in the profile card. */
+/** How the package manager was identified. Shown in the profile card. */
 export type PackageManagerSource = 'packageManager' | 'lockfile' | 'default';
 
 export interface PackageManagerInfo {
@@ -30,12 +21,12 @@ export interface PackageManagerInfo {
 
 /**
  * A unit of the repo the kit tracks: a workspace package, or the repo itself for a
- * single-package repo. Detection proposes these; `kit.config.json` is the contract
+ * single-package repo. Detection proposes these. `kit.config.json` is the contract
  * once the user has edited it.
  *
  * It is deliberately the SAME type as a config target rather than a near-duplicate.
  * `update`/`modules` prefer `kitConfig.targets` and fall back to detection's, so the
- * two are used interchangeably — declaring them separately only invited them to
+ * two are used interchangeably. Declaring them separately only invited them to
  * drift on optionality. Per-field documentation lives on the zod schema's
  * `.describe()` calls in `core/config.ts`.
  */
@@ -65,7 +56,7 @@ export interface ClaudeState {
   dirExists: boolean;
   settingsExists: boolean;
   settings: Settings | null;
-  /** Message from a failed settings.json parse; null when it parsed or is absent. */
+  /** Message from a failed settings.json parse. Null when it parsed or is absent. */
   settingsParseError: string | null;
   settingsLocalExists: boolean;
   claudeMdExists: boolean;
@@ -90,25 +81,21 @@ export interface Ctx {
   claude: ClaudeState;
 }
 
-// ------------------------------------------------------------------ answers
-
-/** What the user chose (interactively or via flags) — the second module input. */
+/** What the user chose (interactively or via flags). The second module input. */
 export interface Answers {
   moduleIds: string[];
   targets: Target[];
   seedChangesetConfig: boolean;
   /**
-   * Narrows which targets get a reviewer draft. No caller sets it today — the
-   * reviewers module falls back to every target — but it is the module's declared
+   * Narrows which targets get a reviewer draft. No caller sets it today. The
+   * reviewers module falls back to every target. But it is the module's declared
    * extension point, so it belongs in the seam rather than in a local intersection.
    */
   reviewerTargets?: string[];
 }
 
-// ------------------------------------------------------------------ actions
-
 /**
- * What a module declares should exist. Modules never touch the filesystem; they
+ * What a module declares should exist. Modules never touch the filesystem. They
  * return these and the plan engine turns them into Effects.
  *
  * - `copy`  kit-owned file sourced from payload/
@@ -152,7 +139,7 @@ export interface SeedAction extends ActionBase {
 
 /**
  * A marker-delimited block inside a file the USER owns. The kit rewrites only what
- * is between the markers; everything else in the host file survives verbatim. The
+ * is between the markers. Everything else in the host file survives verbatim. The
  * manifest records a hash of the BODY (not the file), so a hand-edited region is
  * detectable as a local edit while the user's own prose around it is irrelevant.
  */
@@ -183,7 +170,7 @@ export type Action =
   | MergeSettingsAction
   | AdviseAction;
 
-/** The actions that name a destination path — everything except advise/settings. */
+/** The actions that name a destination path. Everything except advise/settings. */
 export type FileAction = CopyAction | WriteAction | SeedAction | RegionAction;
 
 /** Narrowing helper: file actions are the ones with a `dest`. */
@@ -196,8 +183,6 @@ export function isFileAction(action: Action): action is FileAction {
   );
 }
 
-// ------------------------------------------------------------------ effects
-
 /**
  * What computeEffects() concluded an action means against the real tree.
  *
@@ -205,7 +190,7 @@ export function isFileAction(action: Action): action is FileAction {
  * - `update`          kit-owned, differs, and is safe to refresh
  * - `skip-identical`  already byte-identical
  * - `skip-exists`     a seed whose destination exists (user owns it)
- * - `skip-modified`   kit-owned but locally edited — kept unless --force
+ * - `skip-modified`   kit-owned but locally edited. Kept unless --force
  * - `delete`          only produced by the prune path, in apply()
  *
  * For a `region` action these describe the managed BODY, not the host file: a
@@ -223,13 +208,11 @@ export type EffectOp =
 export interface Effect {
   action: FileAction;
   op: EffectOp;
-  /** Bytes to write; null for a skipped seed. */
+  /** Bytes to write. Null for a skipped seed. */
   content: Buffer | null;
   /** sha256 of `content`, recorded in the manifest for kit-owned files. */
   hash?: string;
 }
-
-// ----------------------------------------------------------------- settings
 
 export interface HookEntry {
   type: 'command';
@@ -278,7 +261,7 @@ export interface SettingsPlan {
   dest: string;
   existedBefore: boolean;
   changes: SettingsChange[];
-  /** Rendered file text; absent only on a plan built purely to carry removals. */
+  /** Rendered file text. Absent only on a plan built purely to carry removals. */
   text?: string;
 }
 
@@ -288,8 +271,6 @@ export interface SettingsSignature {
   hooks: { event: string; matcher: string | null; script: string | null }[];
   permissions: string[];
 }
-
-// ----------------------------------------------------------------- manifest
 
 /** The receipt `.claude/kit-manifest.json`: what the kit installed and at what hash. */
 export interface KitManifest {
@@ -301,22 +282,18 @@ export interface KitManifest {
   settings?: SettingsSignature;
 }
 
-// ------------------------------------------------------------------- config
-
 /**
- * `.claude/kit.config.json` — user-owned, seeded once and never overwritten.
+ * `.claude/kit.config.json`: user-owned, seeded once and never overwritten.
  * Inferred from the zod schema in `core/config.ts`, so the validator and the type
  * cannot drift. The payload consumes this as a type-only import (zod is erased at
  * build and never reaches a user's repo).
  */
 export type { KitConfig, KitConfigTarget };
 
-// ------------------------------------------------------------------ modules
-
 /**
  * Which section of the interactive multiselect a module appears under.
  * `experimental` is supported by the picker (it prefixes the hint with a warning)
- * but no module currently declares it — keep it, so shipping one is a one-word change.
+ * but no module currently declares it. Keep it, so shipping one is a one-word change.
  */
 export type ModuleGroup = 'recommended' | 'optional' | 'experimental';
 
@@ -335,8 +312,6 @@ export interface ModuleDef {
   plan(ctx: Ctx, answers: Answers): Action[];
 }
 
-// --------------------------------------------------------------- plan engine
-
 export interface ComputeEffectsOptions {
   manifest?: KitManifest | null;
   force?: boolean;
@@ -347,7 +322,7 @@ export interface PlanResult {
   settingsPlan: SettingsPlan | null;
   advisories: AdviseAction[];
   signature: SettingsSignature;
-  /** Every dest the current plan produces — the reference set prune diffs against. */
+  /** Every dest the current plan produces. The reference set prune diffs against. */
   plannedDests: Set<string>;
 }
 
@@ -355,7 +330,7 @@ export interface PruneDelete {
   dest: string;
   /** The file was locally edited and --force removed it anyway. */
   modified?: boolean;
-  /** Already absent on disk — just dropped from the manifest. */
+  /** Already absent on disk. Just dropped from the manifest. */
   gone?: boolean;
 }
 
@@ -385,7 +360,7 @@ export interface ApplyOptions {
   kitVersion: string;
   moduleIds: string[];
   previousManifest?: KitManifest | null;
-  /** Restrict writes to these dests (doctor --fix); omit to write the whole plan. */
+  /** Restrict writes to these dests (doctor --fix). Omit to write the whole plan. */
   paths?: Set<string>;
 }
 
@@ -399,8 +374,6 @@ export interface ApplyResult {
   manifest: KitManifest;
 }
 
-// ------------------------------------------------------------------- CLI
-
 export interface Flags {
   dryRun: boolean;
   yes: boolean;
@@ -413,7 +386,7 @@ export interface Flags {
   fix: boolean;
   /** `doctor --fix` only: also delete orphaned kit files. */
   prune: boolean;
-  /** Machine-readable output on stdout; human text goes to stderr. */
+  /** Machine-readable output on stdout. Human text goes to stderr. */
   json: boolean;
   kitVersion: string;
 }

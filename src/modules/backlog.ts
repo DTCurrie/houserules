@@ -1,6 +1,3 @@
-// backlog module (claude-kit CLI): append-only ledger for out-of-scope work
-// (BACKLOG.md + JSONL log), the /backlog-add skill, and the reviewer agent.
-
 import type { Action, ModuleGroup } from '../types.js';
 import {
   agent,
@@ -22,6 +19,7 @@ export function defaultEnabled(): boolean {
   return true;
 }
 
+/** An append-only ledger for out-of-scope work, plus the skill and reviewer around it. */
 export function plan(): Action[] {
   return [
     script(
@@ -35,10 +33,8 @@ export function plan(): Action[] {
       'log an out-of-scope discovery, then gut-check it',
     ),
     agent(id, 'backlog-reviewer', 'validates fresh backlog entries (haiku)'),
-    // UserPromptSubmit injector: when a prompt names a real backlog ID, inject that
-    // entry's decoded record so the model skips a re-derivation round-trip. Inert
-    // until a prompt actually references a logged ID. Verified on the stock CLI:
-    // UserPromptSubmit exit-0 stdout is added to context (same as SessionStart).
+    // Inert until a prompt actually references a logged ID. Verified on the stock CLI:
+    // UserPromptSubmit exit-0 stdout is added to context, same as SessionStart.
     script(
       id,
       'backlog-inject.mjs',

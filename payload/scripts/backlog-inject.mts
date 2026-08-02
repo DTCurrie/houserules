@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-// Opt-in UserPromptSubmit hook (claude-kit). When a prompt mentions a real
-// <PREFIX>-6hex backlog ID, inject that entry's decoded log record on stdout so the
-// model doesn't spend a round-trip re-deriving it. stdout from a UserPromptSubmit
-// hook is added to the turn's context (same mechanism session-context.mjs relies on).
-//
-// Gated: only IDs that actually exist in .claude/backlog.log are injected (else
-// nothing). Prefers the latest add/update body over the full event history. Every
-// failure path exits 0 and prints nothing — an injector must never block a prompt.
+/**
+ * UserPromptSubmit hook. Prints the decoded log record for any backlog ID the prompt
+ * mentions, which the hook runner adds to the turn's context.
+ *
+ * Only IDs that exist in .claude/backlog.log are injected. Every failure path exits 0 and
+ * prints nothing, because an injector must never block a prompt.
+ */
 
 import { gunzipSync } from 'node:zlib';
 import { existsSync, readFileSync } from 'node:fs';

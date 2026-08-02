@@ -1,20 +1,18 @@
 #!/usr/bin/env node
-// Semantic rename via the TypeScript LanguageService — the scriptable equivalent of
-// VS Code's F2 (Rename Symbol). Renames a symbol and every reference to it, including
-// `{@link Foo}` targets in TSDoc comments, across the file's tsconfig project. Point it
-// at the identifier (line/col from `grep -n`) and it does a deterministic, project-wide
-// rename instead of the agent reading every consumer and editing by hand.
-//
-// claude-kit note: TYPESCRIPT REPOS ONLY. Requires `typescript` resolvable (install it
-// as a devDependency). Drop this file entirely from non-TS repos — it hard-fails at
-// import without the `typescript` package.
-//
-// usage:
-//   node .claude/scripts/rename.mjs <file>:<line>:<col> <newName> [--dry-run]
-//
-// <line>/<col> are 1-based and must land on the identifier. Scope is the nearest
-// tsconfig.json above <file> (one package); cross-package symbols are renamed only
-// within that package. After applying, verify with the package's typecheck.
+/**
+ * Semantic rename via the TypeScript LanguageService, the scriptable equivalent of VS
+ * Code's Rename Symbol. Renames a symbol and every reference to it, including
+ * `@link` targets in TSDoc comments, across the file's tsconfig project.
+ *
+ * TypeScript repos only. It hard-fails at import without the `typescript` package.
+ *
+ * Usage:
+ *   node .claude/scripts/rename.mjs <file>:<line>:<col> <newName> [--dry-run]
+ *
+ * <line> and <col> are 1-based and must land on the identifier. Scope is the nearest
+ * tsconfig.json above <file>, so a cross-package symbol is renamed only within its own
+ * package. Verify with the package's typecheck afterwards.
+ */
 import path from 'node:path';
 import process from 'node:process';
 

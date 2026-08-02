@@ -1,11 +1,3 @@
-// lint-fix module (claude-kit CLI): Stop/SubagentStop hook that auto-fixes
-// lint/format on changed packages and surfaces only the unfixable residue.
-//
-// Both events stay wired, but the script no-ops on SubagentStop unless
-// `fix.onSubagentStop` is true — with parallel subagents each one would fix every
-// changed package concurrently. Wiring it anyway keeps the knob a config edit rather
-// than a re-run of `update`.
-
 import type { Action, Answers, Ctx, ModuleGroup } from '../types.js';
 import { hookFragment, script } from './shared.js';
 
@@ -24,6 +16,15 @@ export function defaultEnabled(ctx: Ctx): boolean {
   return ctx.targets.some((t) => t.fixCommands);
 }
 
+/**
+ * A Stop and SubagentStop hook that auto-fixes lint and format on changed packages and
+ * surfaces only the unfixable residue.
+ *
+ * Both events stay wired, but the script no-ops on SubagentStop unless
+ * `fix.onSubagentStop` is true, because parallel subagents would each fix every changed
+ * package concurrently. Wiring it anyway keeps that knob a config edit rather than a
+ * re-run of `update`.
+ */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const actions: Action[] = [
     script(
@@ -33,10 +34,8 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     ),
   ];
 
-  // Wire the Stop/SubagentStop hooks ONLY when a target has a real detected fix
-  // command. config.fix.commands is always seeded, so wiring off that would run
-  // nonexistent lint:fix/format:fix and spill package-manager errors into context on
-  // every turn boundary. Gate on the target fixCommands; advise otherwise.
+  // Gate on target fixCommands, never on the always-seeded config.fix.commands. Wiring
+  // off the latter would spill package-manager errors into context every turn.
   const targets = answers?.targets ?? ctx?.targets ?? [];
   const anyFix = targets.some((t) => t.fixCommands?.length);
   if (anyFix) {

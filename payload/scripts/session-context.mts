@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// SessionStart hook (claude-kit). Prints a ≤4-line orientation header — branch,
-// uncommitted files, affected kit targets — so the agent doesn't re-derive it
-// with full `git status` reads. stdout becomes session context: keep it tiny.
-// Every failure path exits 0; an orientation header must never break a session.
+/**
+ * SessionStart hook. Prints an orientation header of at most four lines: branch,
+ * uncommitted files, and affected kit targets, so the agent does not re-derive it with
+ * full `git status` reads.
+ *
+ * stdout becomes session context, so this stays tiny. Every failure path exits 0.
+ */
 
 import { loadConfigSafe } from './lib/kit-config.mjs';
 import { git } from './lib/proc.mjs';

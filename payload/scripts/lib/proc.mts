@@ -1,13 +1,3 @@
-// Shared primitives for the payload hook scripts (claude-kit).
-//
-// These were copy-pasted across sibling scripts — `git()` in 4, stdin-JSON in 6,
-// `globToRe()` and `tail()` verbatim in 2 each — so a fix to one never reached the
-// others. One copy, imported everywhere.
-//
-// Payload rules still apply: node builtins only, no dependencies, every helper safe to
-// call from a hook that must never crash. Nothing here throws; failures return null or
-// a documented fallback.
-
 import { execFileSync, execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 

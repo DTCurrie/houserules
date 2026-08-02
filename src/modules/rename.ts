@@ -1,6 +1,3 @@
-// rename module (claude-kit CLI): TS LanguageService semantic rename script.
-// TypeScript repos only — the script hard-fails at import without `typescript`.
-
 import type { Action, Ctx, ModuleGroup } from '../types.js';
 import { script } from './shared.js';
 
@@ -18,6 +15,10 @@ export function defaultEnabled(ctx: Ctx): boolean {
   return ctx.typescript;
 }
 
+/**
+ * A TypeScript LanguageService semantic rename script. TypeScript repos only, since the
+ * script hard-fails at import without `typescript`.
+ */
 export function plan(): Action[] {
   return [
     script(

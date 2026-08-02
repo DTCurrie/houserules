@@ -1,14 +1,3 @@
-// orchestrate module (claude-kit CLI): OPT-IN execution layer for planned phases.
-// Ships /orchestrate + the sonnet `task-worker` agent it dispatches: the orchestrator
-// slices a phase by FILE OWNERSHIP, writes the shared seam itself, fans out one worker
-// per slice in waves, and reviews the returned REPORT — never the diff. Cost is
-// O(slices × report), and no worker accumulates the other slices' context.
-//
-// Script-free: the value is the slice/seam/wave/review discipline, not tooling. Pairs
-// with `plans` (it drives .claude/plans/<slug>/ phases and writes the slice table into
-// the phase sub-plans) but degrades gracefully — the skill's step 0 sends a user with no
-// plan workspace to /plan-project. Same graceful-pairing shape as the `ready` module.
-
 import type { Action, Answers, Ctx, ModuleGroup } from '../types.js';
 import { skill, agent } from './shared.js';
 
@@ -24,6 +13,17 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * The execution layer for planned phases: the skill plus the task-worker agent it
+ * dispatches. The orchestrator slices a phase by file ownership, writes the shared seam
+ * itself, fans out one worker per slice in waves, and reviews the returned report rather
+ * than the diff. Cost is O(slices x report), and no worker accumulates another slice's
+ * context.
+ *
+ * Script-free, because the value is the slice, seam, wave, and review discipline rather
+ * than tooling. It pairs with `plans` but degrades gracefully, sending a user with no
+ * plan workspace to /plan-project.
+ */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const withPlans = answers.moduleIds.includes('plans');
   return [

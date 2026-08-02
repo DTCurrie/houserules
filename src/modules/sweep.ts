@@ -1,10 +1,3 @@
-// sweep module (claude-kit CLI): OPT-IN /sweep skill.
-// Ships /sweep, an on-demand skill that shards a repo-wide mechanical edit into
-// package-boundaried low-effort writer subagents — the orchestrator pays O(shards),
-// never sees the match set or individual diffs. Script-free: the value is the
-// locate-once → shard → fan-out → verify discipline that the kit's own generated
-// CLAUDE.md instructs agents to follow (CONVENTIONS §9, high-volume operations).
-
 import type { Action, ModuleGroup } from '../types.js';
 import { skill } from './shared.js';
 
@@ -20,6 +13,14 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+/**
+ * An on-demand skill that shards a repo-wide mechanical edit into package-boundaried
+ * low-effort writer subagents. The orchestrator pays O(shards) and never sees the match
+ * set or the individual diffs.
+ *
+ * Script-free, because the value is the locate-once, shard, fan-out, verify discipline
+ * that the kit's own generated CLAUDE.md tells agents to follow (CONVENTIONS §9).
+ */
 export function plan(): Action[] {
   return [
     skill(

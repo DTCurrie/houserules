@@ -1,20 +1,3 @@
-// The drift engine (claude-kit CLI): what on disk no longer matches what the kit
-// would write, and — crucially — WHY.
-//
-// Derived from the effects computeEffects already produced rather than
-// re-implementing the comparison. That is deliberate: doctor and update then cannot
-// disagree about what is drifted, because they are reading the same computation.
-//
-// The distinction the whole phase exists for:
-//
-//   stale  — on disk matches what the kit last wrote, but the kit's canonical
-//            content has moved on. The KIT changed. `update` refreshes it silently.
-//   yours  — on disk differs from what the kit last wrote. YOU changed it. Reported
-//            with a diff and never overwritten without --force.
-//
-// A content-hash lockfile cannot tell these apart; the manifest can, because it
-// records what the kit itself last wrote. Do not collapse them.
-
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -22,6 +5,16 @@ import { truncateDiff, unifiedDiff } from './diff.js';
 import { extractBody } from './regions.js';
 import type { Effect, PruneResult } from '../types.js';
 
+/**
+ * Why a file no longer matches what the kit would write.
+ *
+ * `stale` and `yours` are the distinction the drift engine exists for. `stale` means
+ * disk matches what the kit last wrote but the kit's canonical content moved on, so the
+ * KIT changed and `update` refreshes it silently. `yours` means disk differs from what
+ * the kit last wrote, so YOU changed it, and it is never overwritten without `--force`.
+ * A content-hash lockfile cannot tell these apart. The manifest can, because it records
+ * what the kit itself last wrote. Do not collapse them.
+ */
 export type FileStatus =
   'ok' | 'missing' | 'stale' | 'yours' | 'no-marker' | 'orphaned';
 
@@ -55,8 +48,14 @@ function readText(root: string, relativePath: string): string | null {
 }
 
 /**
- * @param effects   from computeEffects() — the canonical content per path
- * @param prune     from computePrune() — supplies the orphans
+ * Reports what on disk no longer matches what the kit would write, and why.
+ *
+ * Derived from the effects `computeEffects()` already produced rather than
+ * re-implementing the comparison, so doctor and update cannot disagree about what has
+ * drifted.
+ *
+ * @param effects From `computeEffects()`. The canonical content per path.
+ * @param prune From `computePrune()`. Supplies the orphans.
  */
 export function computeDrift(
   root: string,
@@ -68,7 +67,7 @@ export function computeDrift(
   for (const { action, op, content } of effects) {
     const base = { path: action.dest, module: action.module };
 
-    // A seed whose destination exists is the user's file, by design — not drift.
+    // A seed whose destination exists is the user's file, by design. Not drift.
     if (op === 'skip-exists' || op === 'skip-identical') {
       files.push({ ...base, status: 'ok' });
       continue;
@@ -84,7 +83,7 @@ export function computeDrift(
       const host = readText(root, action.dest);
       const body = host === null ? null : extractBody(host, action.region);
       if (body === null) {
-        // The host file is there but our markers are gone — someone deleted them,
+        // The host file is there but our markers are gone. Someone deleted them,
         // or the file predates the region. `--fix` re-inserts at the anchor without
         // disturbing anything else.
         files.push({ ...base, status: 'no-marker' });
@@ -115,7 +114,7 @@ export function computeDrift(
     files.push({ path: dest, status: 'orphaned' });
   }
   // Retired AND locally edited: computePrune kept it precisely because you changed
-  // it, so it is reported but must not hold the exit code red — same reasoning as
+  // it, so it is reported but must not hold the exit code red. Same reasoning as
   // `yours`.
   for (const dest of prune?.kept ?? []) {
     files.push({ path: dest, status: 'orphaned', yours: true });

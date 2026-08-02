@@ -1,14 +1,3 @@
-// `claude-kit report` (claude-kit CLI): read-only transcript telemetry. Aggregates
-// this repo's Claude Code session logs (~/.claude/projects/<encoded-cwd>/*.jsonl)
-// into per-session + rolled-up token tables, so adopters can watch cache_read climb
-// and fresh input fall across init / module toggles.
-//
-// cache_read is the CHEAP tier — it is cost-weighted (0.1×), never summed flat with
-// fresh input, so the numbers can't become a misleading vanity metric. This is the
-// install-time-agnostic counterpart to `doctor`'s resident-surface snapshot, and the
-// parser (parseTranscript) is deliberately exported as the substrate for later
-// sub-reports. Native `/usage` already covers the live view; this is the trend view.
-
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -30,7 +19,7 @@ interface TranscriptMessage {
   content?: unknown;
 }
 
-/** One line of a Claude Code transcript .jsonl file — only the fields report() reads. */
+/** One line of a Claude Code transcript .jsonl file: only the fields report() reads. */
 interface TranscriptRecord {
   type?: string;
   isSidechain?: boolean;
@@ -49,11 +38,14 @@ interface TranscriptAgg {
 }
 
 // Anthropic cache multipliers relative to base input price: a cache READ bills at
-// ~0.1×, a cache WRITE at ~1.25×. Output is a different axis — reported separately.
+// ~0.1×, a cache WRITE at ~1.25×. Output is a different axis, reported separately.
 const CACHE_READ_WEIGHT = 0.1;
 const CACHE_WRITE_WEIGHT = 1.25;
 
-// → { turns, input, output, cacheRead, cacheWrite, toolResults, models:Set, sidechainTurns }
+/**
+ * Aggregates one Claude Code session log. Exported as the substrate for later
+ * sub-reports, not only for `report` itself.
+ */
 export function parseTranscript(text: string): TranscriptAgg {
   const agg: TranscriptAgg = {
     turns: 0,
@@ -95,7 +87,7 @@ export function parseTranscript(text: string): TranscriptAgg {
 }
 
 // Cost-weighted input-equivalent: fresh input at 1×, cache writes at 1.25×, cache
-// reads at 0.1× — so a session that offloaded work into the cache reads as cheaper.
+// reads at 0.1×. So a session that offloaded work into the cache reads as cheaper.
 function weightedInput(a: TranscriptAgg): number {
   return Math.round(
     a.input +
@@ -108,6 +100,11 @@ const n = (x: number) => x.toLocaleString('en-US');
 const pct = (num: number, den: number) =>
   den ? `${Math.round((num / den) * 100)}%` : '0%';
 
+/**
+ * Read-only transcript telemetry. Rolls this repo's session logs into per-session and
+ * total token tables so adopters can watch cache_read climb and fresh input fall across
+ * init and module toggles. Native `/usage` covers the live view. This is the trend view.
+ */
 export async function report(dir: string, _flags: Flags): Promise<number> {
   const root = resolve(dir);
   const ctx = detect(root);

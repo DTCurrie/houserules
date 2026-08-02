@@ -1,6 +1,3 @@
-// Presentation + prompts (claude-kit CLI). All clack usage lives here; commands
-// call these helpers so headless (--yes / non-TTY) paths never import a prompt.
-
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import type {
@@ -18,25 +15,24 @@ import type {
 export const isTTY = () => Boolean(process.stdout.isTTY && process.stdin.isTTY);
 
 // clack sizes a note box to its longest line, so one line wider than the terminal
-// wraps and shreds the border — every multi-line string handed to note()/message()
-// is wrapped first. Prose stops at 100 cols even on a very wide terminal.
+// wraps and shreds the border. Every multi-line string is wrapped before note().
 const cols = () => Math.max(48, Math.min(process.stdout.columns || 80, 100));
 const noteWidth = () => cols() - 8; // "│  " + content + "  │" + slack
 const messageWidth = () => cols() - 4; // "│  " + content
 
-// Word-wrap to `width`. Tokens are never split — paths, commands and flags have to
-// stay copy-pasteable — so an over-long word just overflows its line. Width is
-// measured on visible characters; a break inside a coloured span is closed with a
-// reset so the colour can't bleed into the rest of the output.
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
-// Code points, not display columns: a CJK character or emoji occupies two terminal
-// cells but counts as one here, so a line of them under-measures and can overflow.
-// Accepted — this wraps paths, flags and English prose. `string-width` fixes it for
-// 4 packages / 104KB, which the audit judged not worth it.
+// Code points, not display columns, so a line of CJK or emoji under-measures and can
+// overflow. Accepted: `string-width` fixes it for 4 packages and 104KB.
 const visible = (s: string) => s.replace(ANSI, '').length;
 const hasAnsi = (s: string) => s.includes(`${ESC}[`);
 
+/**
+ * Word-wraps to `width`, measured on visible characters so ANSI codes do not count. A
+ * token is never split, because paths, commands, and flags have to stay copy-pasteable,
+ * so an over-long word just overflows its line. A break inside a coloured span is closed
+ * with a reset so the colour cannot bleed into the rest of the output.
+ */
 export function wrap(text: string, width = messageWidth()): string {
   return String(text)
     .split('\n')
@@ -60,7 +56,7 @@ export function wrap(text: string, width = messageWidth()): string {
     .join('\n');
 }
 
-// "label  body", wrapped with the continuation lines hanging under the body column.
+/** Renders "label  body", hanging the wrapped continuation lines under the body column. */
 export function labelled(
   label: string,
   text: string,
@@ -99,8 +95,7 @@ export function note(text: string, title?: string): void {
   else console.log(`\n-- ${title ?? ''} --\n${text}\n`);
 }
 
-// One-line status in the flow, no box — for the many single-sentence notices that
-// a box only makes harder to read.
+/** One-line status in the flow, no box. A box only makes a single sentence harder to read. */
 export function message(text: string): void {
   const body = wrap(text, messageWidth());
   if (isTTY()) p.log.message(body);
@@ -121,7 +116,7 @@ function bail<T>(value: T | symbol): T {
 }
 
 // A single unbreakable token (an absolute repo path) sets the whole box width, so
-// long paths are elided from the LEFT — the tail is what identifies the repo.
+// long paths are elided from the LEFT. The tail is what identifies the repo.
 function elideStart(text: string, max: number): string {
   return text.length <= max ? text : `…${text.slice(-(max - 1))}`;
 }
@@ -199,9 +194,11 @@ export async function selectModules(
   return picked.includes('core') ? picked : ['core', ...picked];
 }
 
-// Multiselect over not-yet-installed modules for `claude-kit modules`. Unlike
-// selectModules this has no preselect and never force-adds core — it only offers
-// what the repo does not already have; an empty pick is valid (nothing to add).
+/**
+ * Multiselect over the modules the repo does not already have, for `claude-kit modules`.
+ * Unlike `selectModules` it has no preselect and never force-adds core, and an empty pick
+ * is valid.
+ */
 export async function selectNewModules(
   available: ModuleDef[],
   ctx: Ctx,
@@ -346,8 +343,10 @@ export function renderPreview({
   return lines.join('\n');
 }
 
-// Post-install to-dos. Printed OUTSIDE the plan box and last: they are long prose,
-// and a box sized to the longest of them is unreadable at any terminal width.
+/**
+ * Prints the post-install to-dos, outside the plan box and last. They are long prose, and
+ * a box sized to the longest of them is unreadable at any terminal width.
+ */
 export function nextSteps(advisories: AdviseAction[]): void {
   if (!advisories.length) return;
   const lines = advisories.map((a, i) =>
@@ -368,8 +367,10 @@ export function renderWritten(written: WrittenEntry[]): string {
     .join('\n');
 }
 
-// The receipt. A long one is a verbatim repeat of the plan printed moments earlier,
-// so past a handful of files it collapses to counts.
+/**
+ * Prints the receipt. A long one repeats the plan shown moments earlier verbatim, so past
+ * a handful of files it collapses to counts.
+ */
 export function written(list: WrittenEntry[]): void {
   if (!list.length) {
     message('Nothing written — already up to date.');

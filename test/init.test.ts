@@ -82,7 +82,7 @@ test('I1/I4/I5: init --yes on pnpm monorepo — manifest, config, settings, chan
     expect(cityville.fixCommands).toEqual(['fix']);
     expect(cityville.changelogPath).toBe(undefined); // ledger off → no ledger paths
 
-    // settings.json created with the hooks; settings.local.json untouched.
+    // settings.json created with the hooks. settings.local.json remains untouched.
     const settings = readJson(join(root, '.claude/settings.json'));
     const allCommands = Object.values(settings.hooks)
       .flat()
@@ -108,7 +108,7 @@ test('I1/I4/I5: init --yes on pnpm monorepo — manifest, config, settings, chan
     const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
     expect(claudeMd.includes('@fix/studio')).toBeTruthy();
     expect(claudeMd.includes('changeset')).toBeTruthy();
-    // <ID>-style usage hints in command examples are fine; unfilled template
+    // <ID>-style usage hints in command examples are fine. Unfilled template
     // placeholders like <PROJECT_NAME> are not.
     expect(
       !/<[A-Z][A-Z_]{3,}>/.test(claudeMd),
@@ -159,9 +159,7 @@ test('I6/M3: existing CLAUDE.md and settings.json are respected (npm single)', (
     expect(r.status, r.stderr).toBe(0);
 
     // CLAUDE.md gains the kit's managed block, and NOTHING else about the file
-    // changes. (Before phase 4 the kit refused to touch it and staged a
-    // CLAUDE.additions.md for hand-merging; that flow is retired — the promise is
-    // now "only between the markers", which is what this asserts.)
+    // changes. The promise is "only between the markers", which is what this asserts.
     const claudeAfter = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
     expect(claudeAfter).toContain('<!-- claude-kit:claude-md start -->');
     const withoutBlock = claudeAfter.replace(
@@ -177,7 +175,7 @@ test('I6/M3: existing CLAUDE.md and settings.json are respected (npm single)', (
       'the hand-merge staging file is retired',
     ).toBe(false);
 
-    // Settings merged, user entries first and intact; .bak is the pre-merge original.
+    // Settings merged, user entries first and intact. .bak is the pre-merge original.
     const settings = readJson(join(root, '.claude/settings.json'));
     expect(settings.permissions.allow[0]).toBe('Bash(echo hi)');
     expect(settings.hooks.PreToolUse[0].hooks[0].command).toBe(

@@ -1,19 +1,3 @@
-// Pure settings.json merge (claude-kit CLI). No filesystem access here — apply.mjs
-// and the dry-run preview both call this, so what you preview is what gets written.
-//
-// Rules (the safety contract):
-// - User entries are never removed, rewritten, or reordered; kit entries append.
-// - Permissions merge is a set-union on exact strings.
-// - A hook is "already present" if an existing hook command normalizes to the same
-//   string OR mentions the same kit script basename — a user's edited variant of a
-//   kit hook always wins over the kit's stock version.
-// - ONE exception to "wins": if the existing command is byte-for-byte one of the
-//   kit's own known historical stock forms (see KIT_STOCK_FORMATS) for that
-//   basename, and the candidate differs, the kit upgrades it in place and reports
-//   the change. Anything not matching a listed stock form — any hand edit — is left
-//   untouched, exactly as before.
-// - Anything else in the file passes through untouched.
-
 import type {
   HookEntry,
   HookGroup,
@@ -35,10 +19,8 @@ function kitBasenames(cmd: unknown): string[] {
   return [...String(cmd ?? '').matchAll(KIT_SCRIPT_RE)].map((m) => m[1]!);
 }
 
-// Every command format the kit itself has ever emitted for a given script
-// basename, oldest first. Only these exact (whitespace-normalized) strings are
-// eligible for in-place upgrade; anything else mentioning the basename is
-// user-authored and is never touched.
+// Every command format the kit has ever emitted, oldest first. Only these exact
+// whitespace-normalized strings are eligible for in-place upgrade.
 const KIT_STOCK_FORMATS: ((basename: string) => string)[] = [
   (name) => `node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}"`,
 ];
@@ -56,10 +38,6 @@ type HookMatch =
   | { kind: 'stock-upgrade'; hook: HookEntry }
   | { kind: 'user-variant' };
 
-// Locate an existing hook that corresponds to `candidateCommand`, distinguishing
-// three cases: an identical command (no-op), the kit's own recognized stock form
-// for the same basename (eligible for in-place upgrade), or anything else
-// mentioning the basename (a user variant, never touched).
 function matchExistingHook(
   existingGroups: HookGroup[] | undefined,
   candidateCommand: string,
@@ -86,14 +64,22 @@ function matchExistingHook(
   return { kind: 'none' };
 }
 
-// fragment: { permissions?: {allow?: [], deny?: [], ask?: []},
-//             hooks?: { EventName: [{ matcher?, hooks: [{type, command, ...}] }] } }
-// → { merged, changes: [{kind, detail}] }
-// Keys the kit may contribute as a single scalar/object value, set ONLY when the
-// user has none (never clobber a user's global). The array-append rules above and
-// the removal path below don't fit these — statusLine is one object, not a list.
+// Keys the kit contributes as one scalar or object rather than a list, so the
+// array-append rules do not fit them. Set only when the user has none.
 const SINGLE_VALUE_KEYS = ['statusLine'] as const;
 
+/**
+ * Folds one module's settings fragment into the existing file. Pure, with no filesystem
+ * access, so the dry-run preview and the real write agree.
+ *
+ * The safety contract: user entries are never removed, rewritten, or reordered, and kit
+ * entries append. Permissions merge as a set-union on exact strings. A hook counts as
+ * already present when an existing command normalizes to the same string or mentions the
+ * same kit script basename, and a user's edited variant always wins over the kit's stock
+ * version. The one exception is an existing command that is byte-for-byte a known
+ * historical stock form (see `KIT_STOCK_FORMATS`), which the kit upgrades in place and
+ * reports. Everything else in the file passes through untouched.
+ */
 export function mergeSettings(
   existing: Settings | null,
   fragment: SettingsFragment,
@@ -166,12 +152,12 @@ export function mergeSettings(
   return { merged, changes };
 }
 
-// The FIRST removal path (everything else here is additive). Surgically drop hook
-// entries whose command references one of `scriptBasenames` — a kit script the
-// current kit no longer ships — without touching, rewriting, or reordering any other
-// hook. Empty groups/events left behind are removed so the file stays clean. User
-// hooks (which never reference a kit script basename) are structurally untouched.
-// → { merged, changes: [{kind:'remove-hook', detail}] }
+/**
+ * Drops hook entries whose command references one of `scriptBasenames`, without touching,
+ * rewriting, or reordering any other hook. Empty groups and events left behind are
+ * removed so the file stays clean. User hooks never reference a kit script basename, so
+ * they are structurally untouched.
+ */
 export function removeHooksByScript(
   existing: Settings | null,
   scriptBasenames: string[],
@@ -212,12 +198,12 @@ export function removeHooksByScript(
  *   same script means disabling one must not unwire the other.
  * - A permission is dropped only when a removed fragment contributed it and no kept
  *   fragment still does. A user's own identical permission string is indistinguishable
- *   from ours, so this can in principle remove a line the user also wanted — which is
+ *   from ours, so this can in principle remove a line the user also wanted. Which is
  *   why disabling reports every change it makes rather than doing it silently.
  * - Anything the kit never contributed is not even considered.
  *
  * User hooks never reference a kit script basename, so they are structurally
- * untouched — the same property `removeHooksByScript` relies on.
+ * untouched. The same property `removeHooksByScript` relies on.
  */
 export function removeSettingsFragments(
   existing: Settings | null,
@@ -267,9 +253,10 @@ export function removeSettingsFragments(
   return { merged, changes };
 }
 
-// The kit's settings SIGNATURE: the hooks + permissions the kit contributed, derived
-// from the plan's merge-settings fragments. Recorded in the manifest so update/doctor
-// can reconcile precisely (which entries are the kit's) instead of guessing.
+/**
+ * Derives which hooks and permissions the kit contributed. Recorded in the manifest so
+ * update and doctor can reconcile precisely instead of guessing which entries are ours.
+ */
 export function settingsSignature(
   fragments: SettingsFragment[],
 ): SettingsSignature {
@@ -293,8 +280,8 @@ export function settingsSignature(
   return { hooks, permissions: [...permissions] };
 }
 
+/** @throws SyntaxError. The caller decides what that means. The kit never repairs user JSON. */
 export function parseSettingsText(text: string): Settings {
-  // Caller decides what a failure means; we never "repair" user JSON.
   return JSON.parse(text);
 }
 

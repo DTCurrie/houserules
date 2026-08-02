@@ -1,16 +1,3 @@
-// The `.claude/kit.config.json` schema (claude-kit CLI).
-//
-// Two readers, one shape. The CLI validates STRICTLY through this zod schema — an
-// unknown key is a typo the user wants told about, which is the whole reason this
-// file exists. The payload's `loadConfigSafe()` reads the same file DEFENSIVELY and
-// dependency-free (a hook that dies on a bad config is noise on every tool call).
-// They share the inferred `KitConfig` type and nothing else.
-//
-// Defaults deliberately live in the payload (GUARD_DEFAULTS, READ_GUARD_DEFAULTS in
-// scripts/lib/kit-config.mjs), not here: this schema answers "is this valid", not
-// "what does it mean when absent". Duplicating the defaults would let the two
-// readers drift, and the hooks are the ones that actually have to cope with absence.
-
 import { z } from 'zod';
 import type { Simplify } from 'type-fest';
 
@@ -72,6 +59,15 @@ const targetSchema = z.strictObject({
     ),
 });
 
+/**
+ * The strict validator for `.claude/kit.config.json`. An unknown key is a typo the user
+ * wants told about, which is the whole reason this schema exists.
+ *
+ * Defaults deliberately live in the payload (`GUARD_DEFAULTS`, `READ_GUARD_DEFAULTS` in
+ * `scripts/lib/kit-config.mjs`), not here. This schema answers "is this valid", not
+ * "what does it mean when absent". Duplicating the defaults would let the CLI reader and
+ * the payload reader drift, and the hooks are the ones that have to cope with absence.
+ */
 export const KitConfigSchema = z.strictObject({
   // Documentation keys the shipped example carries. Declared so a strict parse
   // does not reject the very file we tell people to copy.
@@ -103,10 +99,8 @@ export const KitConfigSchema = z.strictObject({
     .optional(),
   verify: runnerBlock
     .extend({
-      // verify-changed.mts resolves the diff against this, falling back to
-      // changesets.baseBranch and then "main". It reads the key, so the schema has
-      // to accept it — a strictObject that omitted it would reject a documented,
-      // working config.
+      // verify-changed.mts reads this key, so a strictObject omitting it would reject a
+      // documented, working config.
       baseBranch: z
         .string()
         .optional()
@@ -184,7 +178,7 @@ export type KitConfigTarget = Simplify<z.infer<typeof targetSchema>>;
 
 /**
  * The published JSON Schema, which powers editor IntelliSense via `$schema`.
- * `io: "input"` so optional-with-default fields stay optional — that is what a
+ * `io: "input"` so optional-with-default fields stay optional. That is what a
  * hand-written config actually looks like.
  */
 export function buildJsonSchema(): Record<string, unknown> {
@@ -251,7 +245,7 @@ export function parseKitConfig(raw: string): KitConfig {
   return result.data;
 }
 
-/** Validation that never throws — for doctor, which reports rather than aborts. */
+/** Validation that never throws. For doctor, which reports rather than aborts. */
 export function validateKitConfig(raw: string): string[] {
   try {
     parseKitConfig(raw);

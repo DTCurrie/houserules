@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-// Dev-only tool (never published — not in package.json "files"). Wires THIS repo to
-// run its own kit: symlinks .claude/{scripts,skills,agents} into payload/ (so the
-// payload stays the single source of truth — edits there are live immediately) and
-// writes the two real config files the hooks read. `.claude/` is gitignored;
-// regenerate anytime with `pnpm dogfood` (add --force to overwrite the config files).
-//
-// The settings/config below mirror the wiring the installer's core, lint-fix,
-// changesets, and session-context modules produce (src/modules/*.ts) — the one place
-// to update if a module's hooks change. Kept as inline literals rather than importing
-// src/ internals, so this tool stays robust against CLI refactors.
-//
-// Single-package tuned (claude-kit is not a monorepo): fix.filterFlag "" so the fix
-// hook runs `pnpm run <script>` not `pnpm --filter …`, and the fixers are lint:fix +
-// `format` (this repo's prettier script; there is no format:fix). See
-// kit.config.example.json `_notes.singlePackage`.
+/**
+ * Dev-only tool, never published. Wires this repo to run its own kit by symlinking
+ * .claude/{scripts,skills,agents} into payload/, so the payload stays the single source
+ * of truth and edits there are live immediately, and by writing the two real config files
+ * the hooks read. `.claude/` is gitignored.
+ *
+ * Usage: `pnpm dogfood`, with `--force` to overwrite the config files.
+ *
+ * The settings and config below mirror the wiring the installer's core, lint-fix,
+ * changesets, and session-context modules produce. This is the one place to update when a
+ * module's hooks change. They are inline literals rather than imports of `src/` internals,
+ * so this tool stays robust against CLI refactors.
+ */
+// Single-package tuned, so fix.filterFlag is "" and the fix hook runs
+// `pnpm run <script>`. See kit.config.example.json `_notes.singlePackage`.
 
 import {
   existsSync,
@@ -31,14 +31,8 @@ const force = process.argv.includes('--force');
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const claudeDir = join(repoRoot, '.claude');
 
-// Relative targets resolve from inside .claude/ (so `..` is the repo root).
-//
-// `scripts` points at the BUILD OUTPUT, because the payload's scripts are now
-// authored as .mts and compiled to dependency-free .mjs — node cannot run the
-// sources directly. That costs the old "edits under payload/ are live immediately"
-// property: after editing a .mts you must rebuild before the dogfooded hooks pick it
-// up. `pnpm dogfood:watch` keeps a tsc --watch running so the gap is a second, not a
-// manual step. The prose directories are copied verbatim and still link to source.
+// Targets resolve from inside .claude/, so `..` is the repo root. `scripts` points at
+// the BUILD OUTPUT: a .mts edit is not live until `pnpm dogfood:watch` compiles it.
 const LINKS = [
   { name: 'scripts', target: '../payload-dist/scripts' },
   { name: 'skills', target: '../payload/skills' },
@@ -144,7 +138,7 @@ const kitConfig = {
 
 const settings = {
   // The frontmatter `name` from payload/output-styles/kit-terse.md, NOT the filename
-  // slug — Claude Code matches outputStyle by name and silently falls back to Default.
+  // slug. Claude Code matches outputStyle by name and silently falls back to Default.
   outputStyle: 'Kit Terse',
   permissions: {
     allow: [

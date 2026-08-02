@@ -1,9 +1,3 @@
-// `claude-kit doctor` (claude-kit CLI): validate an installation against reality.
-//
-// Exit 1 on an ERROR (a broken install) or on ACTIONABLE drift; exit 2 on a config
-// the schema rejects. Drift you caused yourself (`yours`) is reported with a diff but
-// never moves the exit code — see the `blocking` filter below for why.
-
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
@@ -43,7 +37,7 @@ const HOOK_SCRIPTS: Record<string, string[]> = {
 };
 
 // The always-loaded surface is paid on every turn (CONVENTIONS §1). ~3-4K tokens
-// is the sane target; take the upper end as the ceiling and ~200 lines alongside.
+// is the sane target. Take the upper end as the ceiling and ~200 lines alongside.
 const RESIDENT_TOKEN_BUDGET = 4000;
 const RESIDENT_LINE_BUDGET = 200;
 
@@ -51,29 +45,24 @@ const estimateTokens = (chars: number) => Math.ceil(chars / 4); // dumb-simple; 
 const countLines = (t: string) =>
   t === '' ? 0 : t.split('\n').length - (t.endsWith('\n') ? 1 : 0);
 
-// `@path` imports that Claude Code inlines: `@` at line start or after whitespace
-// (so `foo@bar` emails never match), followed by a path token. Returns the raw
-// specifiers; the caller keeps only those that resolve to a real file on disk.
+// `@` only at line start or after whitespace, so `foo@bar` emails never match. The
+// caller keeps only the specifiers that resolve to a real file on disk.
 function parseImports(text: string): string[] {
   const specs: string[] = [];
   for (const m of text.matchAll(/(?:^|\s)@([^\s@]+)/g)) specs.push(m[1]);
   return specs;
 }
 
-// Every project/local memory file Claude Code loads at session start, in its load
-// order. `.claude/CLAUDE.md` and `CLAUDE.local.md` are as resident as the root one —
-// measuring only the root under-reports the budget below.
+// In Claude Code's load order. `.claude/CLAUDE.md` and `CLAUDE.local.md` are as resident
+// as the root one, so measuring only the root under-reports the budget.
 const RESIDENT_MEMORY_FILES = [
   'CLAUDE.md',
   '.claude/CLAUDE.md',
   'CLAUDE.local.md',
 ];
 
-// The `paths:` globs of a .claude/rules/*.md file, empty when it has none. Claude
-// Code loads a rule WITH globs only when a matching file is in the working set; one
-// WITHOUT them is resident on every turn (so an empty list here means "counts against
-// the budget"). Mirrors the platform's own degenerate case: a list of only `**` is
-// treated as unscoped. Supports both `paths: [a, b]` and a YAML block list.
+// A globbed rule loads only when a matching file is in the working set, so an empty
+// result here means "resident every turn". A list of only `**` counts as unscoped.
 function ruleGlobs(text: string): string[] {
   const fm = /^---\n([\s\S]*?)\n---/.exec(text);
   if (!fm) return [];
@@ -115,7 +104,7 @@ function globlessRuleFiles(root: string): string[] {
       const text = readFileSync(join(root, '.claude', 'rules', name), 'utf8');
       if (!ruleGlobs(text).length) out.push(`.claude/rules/${name}`);
     } catch {
-      /* unreadable rule file — not the doctor's problem */
+      /* unreadable rule file. Not the doctor's problem. */
     }
   }
   return out;
@@ -147,10 +136,8 @@ interface SkillAgentMeasurement {
   agents: number;
 }
 
-// Claude Code puts every installed skill/agent's `description:` in the system
-// prompt as the available-skills/agents listing on EVERY turn — resident, same
-// tier as CLAUDE.md. The skill/agent BODY (the rest of SKILL.md / the agent file)
-// loads only on invocation and is deliberately NOT counted here.
+// Claude Code puts every `description:` in the system prompt on every turn, the same
+// resident tier as CLAUDE.md. Bodies load only on invocation and are not counted.
 function measureSkillAgentDescriptions(
   root: string,
 ): SkillAgentMeasurement | null {
@@ -200,11 +187,8 @@ function measureSkillAgentDescriptions(
   return { chars, tokens: estimateTokens(chars), skills, agents };
 }
 
-// Measure the RESIDENT context surface: every project/local memory file plus every
-// @-import they pull in (transitively, bounded), plus the globless rule files that
-// load on every turn. Returns null when the repo has no resident surface at all.
-// Nested package CLAUDE.mds and path-scoped rules are deliberately NOT counted —
-// they are the on-demand tier and must never be summed into the resident total.
+// Nested package CLAUDE.mds and path-scoped rules are deliberately excluded. They are
+// the on-demand tier and must never be summed into the resident total.
 function measureResident(root: string): ResidentMeasurement | null {
   const globless = globlessRuleFiles(root);
   const sources = [
@@ -233,7 +217,7 @@ function measureResident(root: string): ResidentMeasurement | null {
       try {
         if (statSync(target).isFile()) visit(target, depth + 1);
       } catch {
-        /* unresolved specifier (package ref, typo) — not an import */
+        /* unresolved specifier. Not an import. */
       }
     }
   };
@@ -266,6 +250,14 @@ interface Finding {
   msg: string;
 }
 
+/**
+ * Validates an installation against reality.
+ *
+ * @returns Exit 1 on an ERROR (a broken install) or on actionable drift, exit 2 on a
+ * config the schema rejects. Drift you caused yourself (`yours`) is reported with a diff
+ * but never moves the exit code, because there is no way to acknowledge a deliberate
+ * edit and it would leave doctor permanently red on an install working as intended.
+ */
 export async function doctor(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);
   const ctx = detect(root);
@@ -276,8 +268,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   // config is not valid" (2) from "your install has a problem" (1).
   const configProblems: string[] = [];
 
-  // Resident-surface budget: make the kit's #1 lever (always-loaded context)
-  // measurable instead of only prose. Read-only; WARNs past budget, never ERRORs.
+  // The resident-surface budget makes the kit's #1 lever measurable instead of only
+  // prose. Read-only, and WARNs past budget rather than ERRORing.
   const resident = measureResident(root);
   const skillsAgents = measureSkillAgentDescriptions(root);
   const saTokens = skillsAgents?.tokens ?? 0;
@@ -295,8 +287,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
           ? ` — OVER`
           : ` — ${RESIDENT_TOKEN_BUDGET - resident.tokens} tokens, ${RESIDENT_LINE_BUDGET - resident.lines} lines headroom`),
     );
-    // Combined with the resident skill/agent description surface below: either tier
-    // alone, or the two together, can push the always-loaded total over budget.
+    // Either tier alone, or the two together, can push the always-loaded total over.
     const combinedTokens = resident.tokens + saTokens;
     const combinedOver =
       combinedTokens > RESIDENT_TOKEN_BUDGET ||
@@ -310,15 +301,15 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
         `always-loaded context exceeds budget (~${combinedTokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}) — ${parts.join(' + ')} — trim root CLAUDE.md to a one-line index + on-demand files (CONVENTIONS §1)`,
       );
     }
-    // A rule file with no `paths:` globs is loaded on every turn — usually not what
-    // the author intended, and invisible without this line (CONVENTIONS §6).
+    // A globless rule loads every turn. Usually not intended, and invisible without
+    // this line (CONVENTIONS §6).
     if (resident.globless.length)
       report(
         'WARN',
         `rule file(s) loaded on EVERY turn (no \`paths:\` frontmatter): ${resident.globless.join(', ')} — ` +
           'scope each with a `paths:` glob list so it loads only when a matching file is in play, or move it out of .claude/rules/ (CONVENTIONS §6)',
       );
-    // Nested package CLAUDE.mds are the on-demand tier — list separately, never summed.
+    // Nested package CLAUDE.mds are the on-demand tier. List separately, never summed.
     const nested = listWorkspacePackages(root)
       .map((p) => ({
         rel: `${p.relDir}/CLAUDE.md`,
@@ -330,9 +321,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
         `nested (on-demand, not in resident total): ${nested.map((n) => n.rel).join(', ')}`,
       );
   }
-  // Skill/agent `description:` frontmatter is a second, distinct resident surface —
-  // reported as its own line so a budget move is attributable to what caused it.
-  // Bodies are the on-demand tier (loaded only on invocation) and stay excluded.
+  // A second, distinct resident surface, reported on its own line so a budget move is
+  // attributable to what caused it.
   if (skillsAgents)
     readouts.push(
       `resident skill/agent descriptions (${skillsAgents.skills} skill(s) + ${skillsAgents.agents} agent(s)): ~${skillsAgents.tokens} tokens`,
@@ -355,11 +345,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
         `installed kit v${manifest.kitVersion}, this CLI is v${flags.kitVersion} — run: npx claude-kit update`,
       );
     }
-    // File integrity is the drift engine's job now (see the drift section below).
-    // It supersedes the old whole-file hash loop, which could not tell a stale file
-    // from one you edited, and mis-read every shared host file whose manifest hash
-    // covers only a managed region's body.
-    // Reference templates that got committed before the kit ignored them.
+    // Reference templates that got committed before the kit ignored them. File integrity
+    // itself is the drift engine's job, further down.
     const strayTemplates = ctx.git.isRepo ? trackedTemplateFiles(root) : [];
     if (strayTemplates.length) {
       report(
@@ -367,8 +354,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
         `${strayTemplates.length} reference template(s) under .claude/kit-templates/ are committed (reference-only). Untrack, keeping them on disk: npx claude-kit update — or: git rm --cached -r .claude/kit-templates && git add .claude/kit-templates/.gitignore`,
       );
     }
-    // Same story for .claude/scripts/: build output that predates the self-gitignore,
-    // or that a repo opted back into committing (scripts.commit: true).
+    // Same story for .claude/scripts/, which is build output.
     const commitScripts = ctx.claude.kitConfig?.scripts?.commit === true;
     const strayScripts =
       ctx.git.isRepo && !commitScripts ? trackedScriptFiles(root) : [];
@@ -380,14 +366,12 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     }
   }
 
-  // kit.config.json vs reality.
   const config = ctx.claude.kitConfig;
   if (!config) {
     report(manifest ? 'ERROR' : 'WARN', 'no .claude/kit.config.json');
   } else {
-    // Schema validation before the reality checks below: a config the schema
-    // rejects is one the hooks are silently misreading, and the field name is far
-    // more actionable than the downstream symptom.
+    // Schema validation runs first: a rejected config is one the hooks are silently
+    // misreading, and the field name beats the downstream symptom.
     const raw = readFileSync(join(root, '.claude', 'kit.config.json'), 'utf8');
     configProblems.push(...validateKitConfig(raw));
     for (const problem of configProblems) {
@@ -437,9 +421,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
             `target "${target.name}": fix script "${cmd}" not in ${target.pathPrefix || './'}package.json`,
           );
       }
-      // Verify-changed: only validate a target's EXPLICIT verifyCommands (a detected
-      // script later renamed away) — not the global `verify` fallback, which sub-packages
-      // routinely lack because they rely on a root verify.
+      // Only a target's EXPLICIT verifyCommands, never the global `verify` fallback,
+      // which sub-packages routinely lack because they rely on a root verify.
       if (manifest?.modules?.includes('verify-changed'))
         for (const cmd of target.verifyCommands ?? []) {
           if (!scripts[cmd])
@@ -449,9 +432,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
             );
         }
     }
-    // Inverse of the target→workspace check: a workspace member that no target
-    // covers silently misses lint-fix / reviewer / ledger coverage while doctor
-    // still reports healthy. Point at the seed file (re-running init skips it).
+    // A workspace member no target covers silently misses lint-fix, reviewer, and ledger
+    // coverage while doctor still reports healthy.
     const targeted = new Set((config.targets ?? []).map((t) => t.packageName));
     for (const p of workspacePackages) {
       if (!targeted.has(p.name))
@@ -462,15 +444,14 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     }
   }
 
-  // Hooks wired?
   if (manifest && ctx.claude.settingsExists && !ctx.claude.settingsParseError) {
     const commands = allHookCommands(ctx.claude.settings);
     const lintFixWired = (config?.targets ?? []).some(
       (t) => t.fixCommands?.length,
     );
     for (const moduleId of manifest.modules ?? []) {
-      // lint-fix deliberately leaves its Stop hooks unwired when no target has a
-      // fix command (dfdc87) — don't flag that intentional gap.
+      // lint-fix deliberately leaves its Stop hooks unwired when no target has a fix
+      // command (dfdc87). That gap is intentional.
       if (moduleId === 'lint-fix' && !lintFixWired) continue;
       for (const scriptName of HOOK_SCRIPTS[moduleId] ?? []) {
         if (!commands.some((c) => c.includes(scriptName))) {
@@ -512,7 +493,6 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     }
   }
 
-  // Changesets story.
   if (manifest?.modules?.includes('changesets')) {
     if (!ctx.changesets.configExists)
       report(
@@ -527,7 +507,6 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     }
   }
 
-  // DRAFT agents left unfilled.
   for (const agentFile of ctx.claude.agents) {
     try {
       const text = readFileSync(
@@ -540,7 +519,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
           `agent ${agentFile} is still a DRAFT — fill in its authoritative source`,
         );
     } catch {
-      /* unreadable agent file — not the doctor's problem */
+      /* unreadable agent file. Not the doctor's problem. */
     }
   }
 
@@ -564,9 +543,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     );
   }
 
-  // Retired kit surface: modules/hooks the manifest records but the CURRENT kit no
-  // longer defines (the kit was add/update-only — this makes an orphan visible so
-  // `update` can prune it). See tool-output-compaction-inert.
+  // Modules and hooks the manifest records but the current kit no longer defines. The
+  // kit is otherwise add-and-update-only, so without this an orphan stays invisible.
   if (manifest) {
     const knownModuleIds = new Set(MODULES.map((m) => m.id));
     for (const id of manifest.modules ?? []) {
@@ -583,7 +561,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
         readdirSync(payloadPath('scripts')).filter((f) => f.endsWith('.mjs')),
       );
     } catch {
-      /* payload unreadable — skip the retired-script check */
+      /* payload unreadable. Skip the retired-script check. */
     }
     const suspects = new Set<string>();
     for (const p of Object.keys(manifest.files ?? {}))
@@ -604,10 +582,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     }
   }
 
-  // Terse output style: installing the file does not activate it (the style is
-  // user-selected). Report the real state from `outputStyle`, keyed on the
-  // frontmatter NAME "Kit Terse" — the `kit-terse` filename slug silently falls
-  // back to Default. See output-style-keyed-by-name-not-filename.
+  // Installing the style file does not activate it. Keyed on the frontmatter NAME
+  // "Kit Terse", because the `kit-terse` filename slug silently falls back to Default.
   if (manifest?.modules?.includes('terse-style')) {
     const styleOf = (s: Settings | null | undefined) =>
       typeof s?.outputStyle === 'string' ? s.outputStyle : null;
@@ -633,11 +609,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     }
   }
 
-  // ---- drift: what on disk no longer matches what the kit would write ----------
-  //
-  // Derived from the same plan `update` would run, so the two can never disagree.
-  // Drift is a WARN, not an ERROR: a drifted install is not a broken one. It still
-  // moves the exit code to 1, which is what makes `doctor` usable as a CI gate.
+  // Derived from the same plan `update` would run, so the two can never disagree. A WARN
+  // rather than an ERROR, because a drifted install is not a broken one.
   let drift: DriftReport = { files: [] };
   if (manifest) {
     const targets = ctx.claude.kitConfig?.targets?.length
@@ -721,8 +694,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
       orphaned:
         'orphaned — no enabled module produces it; `--fix --prune` removes it',
     };
-    // A missing file is a BROKEN install (a hook wired to a script that is not
-    // there), not merely drift — it keeps the ERROR level it has always had.
+    // A missing file is a broken install, a hook wired to a script that is not there,
+    // not merely drift.
     report(
       file.status === 'missing' ? 'ERROR' : 'WARN',
       `${file.path}: ${explain[file.status] ?? file.status}`,
@@ -732,12 +705,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   const errors = findings.filter((f) => f.level === 'ERROR');
   const warns = findings.filter((f) => f.level === 'WARN');
   const drifted = driftedFiles(drift);
-  // Drift moves the exit code — that is what makes `doctor` a usable CI gate — but
-  // `yours` deliberately does NOT. A file you edited on purpose is not a defect, and
-  // there is no "acknowledge this edit" mechanism, so counting it would leave doctor
-  // permanently red on an install that is working exactly as you intended. It is
-  // still reported, with a diff. Everything else (stale, missing, no-marker,
-  // orphaned) is a real kit-vs-disk mismatch and does move the code.
+  // Drift moves the exit code, which is what makes `doctor` a usable CI gate. `yours`
+  // deliberately does not. See this function's doc comment.
   const blocking = drifted.filter((f) => f.status !== 'yours' && !f.yours);
   const code = configProblems.length
     ? EXIT.badConfig
@@ -746,7 +715,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
       : EXIT.ok;
 
   if (flags.json) {
-    // Stable shape — this is a CI contract, asserted in test/cli.test.ts.
+    // Stable shape: this is a CI contract, asserted in test/cli.test.ts.
     log.json({
       ok: code === EXIT.ok,
       exitCode: code,
@@ -768,7 +737,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   for (const line of readouts) console.log(`· ${line}`);
   for (const f of findings)
     console.log(`${f.level === 'ERROR' ? '✗ ERROR' : '! WARN '}  ${f.msg}`);
-  // Diffs come after the finding list so the summary stays scannable; only the
+  // Diffs come after the finding list so the summary stays scannable. Only the
   // statuses where "what changed" is actionable carry one.
   for (const file of drifted) {
     if (!file.diff) continue;

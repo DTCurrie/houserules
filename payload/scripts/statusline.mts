@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// Opt-in statusLine command (claude-kit). Surfaces only the two things the native
-// statusline can't: pending changeset debt (unreleased .changeset/*.md) and which
-// kit targets the working tree has touched — plus the ambient context%/cost from the
-// status JSON Claude Code pipes in. One line to stdout; every failure path prints
-// nothing and exits 0 (a broken statusline must never disrupt the session).
+/**
+ * statusLine command. Surfaces the two things the native statusline cannot: pending
+ * changeset debt and which kit targets the working tree has touched, alongside the
+ * ambient context percentage and cost from the status JSON Claude Code pipes in.
+ *
+ * One line to stdout. Every failure path prints nothing and exits 0.
+ */
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';

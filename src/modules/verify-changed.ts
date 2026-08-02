@@ -1,11 +1,3 @@
-// verify-changed module (claude-kit CLI): OPT-IN diff-scoped verification.
-// Ships the /verify-changed skill + verify-changed.mjs helper, which resolves the
-// changed packages PLUS their transitive dependents and runs each package's verify
-// commands, returning a compact PASS/FAIL-per-package verdict. The skill runs the
-// helper INSIDE a subagent so a multi-minute full-suite transcript never reaches the
-// main context — only the verdict does. Config lives in the `verify` block that
-// render.mjs adds to kit.config.json when this module is enabled.
-
 import { script, scriptPermission, skill } from './shared.js';
 import type { Action, Ctx, ModuleGroup } from '../types.js';
 
@@ -23,6 +15,16 @@ export function defaultEnabled() {
   return false;
 }
 
+/**
+ * Diff-scoped verification. The helper resolves the changed packages plus their
+ * transitive dependents and runs each package's verify commands, returning a compact
+ * pass-or-fail-per-package verdict. The skill runs the helper inside a subagent, so a
+ * multi-minute full-suite transcript never reaches the main context. Only the verdict
+ * does.
+ *
+ * Config lives in the `verify` block that `render.ts` adds to kit.config.json when this
+ * module is enabled.
+ */
 export function plan(): Action[] {
   return [
     script(

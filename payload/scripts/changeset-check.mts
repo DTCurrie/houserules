@@ -1,22 +1,15 @@
 #!/usr/bin/env node
-// Stop hook (claude-kit): nudge when package source changed with no changeset
-// alongside it. Changesets accompany the change, not the release — this converts
-// that convention into a deterministic check.
-//
-// Exit 2 (+stderr) asks Claude to write the changeset (or record --empty why not);
-// exit 0 stays silent. EVERY failure path exits 0: a nudge hook must never break
-// a session. Branch-aware: a changeset already committed on this branch counts,
-// so the nudge can't recur turn after turn.
-//
-// Config (kit.config.json): changesets.enabled must be true, changesets.stopCheck
-// (default true) is the kill-switch, changesets.baseBranch (default "main") is the
-// comparison base. Source scope = targets[].sourcePath, else workspace packages.
-//
-// Repeat-nudge suppression: the nudge would otherwise fire on every Stop while the
-// omission stands, which scales with turns, not sessions. So the last-nudged
-// signature (a hash of the sorted changed-source set) is persisted per-repo under
-// .claude/state/ (self-gitignored, like .claude/debug/) and the nudge is skipped
-// once for that exact signature — a NEW source file changing the set nudges again.
+/**
+ * Stop hook. Nudges when package source changed with no changeset alongside it.
+ *
+ * Exit 2 with stderr asks Claude to write the changeset, or to record --empty saying why
+ * not. Exit 0 stays silent, and every failure path exits 0, because a nudge hook must
+ * never break a session.
+ *
+ * Config (kit.config.json): changesets.enabled must be true, changesets.stopCheck
+ * (default true) is the kill-switch, changesets.baseBranch (default "main") is the
+ * comparison base. Source scope is targets[].sourcePath, else workspace packages.
+ */
 
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -47,9 +40,8 @@ function readLastSignature(root: string): string | undefined {
   }
 }
 
-// Best-effort persistence. A write failure must never change the exit code — the
-// nudge already happened this turn; if it can't be recorded, the next turn just
-// nudges again, which is the safe (fail-open) direction.
+// A write failure must never change the exit code. The nudge already happened this turn,
+// and an unrecorded one just nudges again next turn, which fails open.
 function writeLastSignature(root: string, signature: string): void {
   try {
     const dir = join(root, STATE_DIR);
@@ -74,11 +66,8 @@ if (input.stop_hook_active) process.exit(0);
 const isChangesetMd = (p: string): boolean =>
   p.startsWith('.changeset/') && p.endsWith('.md') && !/\/readme\.md$/i.test(p);
 
-// Generated ledgers are churn, not package source: the kit generates CHANGELOG.md
-// from changesets and BACKLOG.md via the backlog helper. Editing them never warrants
-// a changeset (see CLAUDE.md "don't chase BACKLOG.md/CHANGELOG.md churn"), yet a
-// root-package target (sourcePath "") scopes every top-level non-dotfile, so without
-// this they would trip the nudge on their own.
+// Generated ledgers are churn, not package source. A root-package target scopes every
+// top-level non-dotfile, so without this they would trip the nudge on their own.
 const isGeneratedLedger = (p: string): boolean => {
   const base = p.split('/').pop();
   return base === 'BACKLOG.md' || base === 'CHANGELOG.md';
@@ -110,10 +99,8 @@ try {
     .filter(Boolean)
     .map((l) => l.slice(3).trim().replace(/^"|"$/g, ''));
 
-  // Branch: everything since the changesets base, when it resolves. One
-  // name-status call covers both consumers: `committed` wants every changed
-  // path regardless of status, `committedNewChangesets` wants only the ADDED
-  // ones under .changeset/ — both are derivable from the same status+path pairs.
+  // One name-status call covers both consumers: every changed path, and the ADDED
+  // ones under .changeset/.
   const base = cs.baseBranch ?? 'main';
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])?.trim();
   let committed: string[] = [];
