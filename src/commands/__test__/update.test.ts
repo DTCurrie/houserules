@@ -22,6 +22,7 @@ import {
   sha256,
 } from '#test/installed-tree';
 import { splitFrontmatter } from '../../core/frontmatter.js';
+import { PRETTIERIGNORE_REGION } from '../../modules/prettier-guard.js';
 
 function plantRetiredHookAlongsideUserHook(
   root: string,
@@ -75,6 +76,65 @@ describe('update without --force on a kit script with a local edit', () => {
 
   it('keeps the local edit instead of overwriting it', () => {
     expect(readFileSync(guardPath, 'utf8')).toBe(edited);
+  });
+});
+
+describe('update reporting the local edits it kept', () => {
+  let root: string;
+
+  const unwrapped = (text: string): string => text.replace(/\s+/g, ' ');
+
+  function editKitScripts(count: number): void {
+    for (const name of [
+      'guard-bash.mjs',
+      'session-context.mjs',
+      'changeset-check.mjs',
+      'backlog-log.mjs',
+    ].slice(0, count)) {
+      appendFileSync(join(root, '.claude/scripts', name), '// tweak\n');
+    }
+  }
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+  });
+
+  it('points at the diff doctor already computes, so --force is not the only lever', () => {
+    editKitScripts(1);
+
+    const result = runCli(['update', root]);
+
+    expect(unwrapped(result.stdout)).toContain(
+      'See what changed: npx claude-kit doctor --json',
+    );
+  });
+
+  it('blames a formatter when several kit files read as edited, with the update remedy', () => {
+    editKitScripts(3);
+
+    const result = runCli(['update', root]);
+
+    expect(unwrapped(result.stdout)).toContain(
+      'A repo-wide formatter run is the likely cause. Run `npx claude-kit update --force` to restore them',
+    );
+  });
+
+  it('stays silent about a formatter once a .prettierignore block protects the install', () => {
+    editKitScripts(3);
+    writeFileSync(
+      join(root, '.prettierignore'),
+      `${PRETTIERIGNORE_REGION.start}\n.claude/scripts/\n${PRETTIERIGNORE_REGION.end}\n`,
+    );
+
+    const result = runCli(['update', root]);
+
+    expect(unwrapped(result.stdout)).not.toContain('likely cause');
+  });
+
+  it('says nothing about local edits when the install is clean', () => {
+    const result = runCli(['update', root]);
+
+    expect(unwrapped(result.stdout)).not.toContain('See what changed');
   });
 });
 

@@ -19,6 +19,7 @@ import {
   renderSettings,
 } from '../merge-settings.js';
 import { apply } from '../apply.js';
+import { formatterMangleHint } from '../modules/formatter-mangle.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
 import type { Answers } from '../module-def.js';
@@ -37,6 +38,26 @@ function showNextSteps(
     ui.message(
       `${advisories.length} post-install next step${advisories.length === 1 ? '' : 's'} — see: npx claude-kit update --next-steps`,
     );
+}
+
+/**
+ * Why the kept files differ, and how to see it for yourself.
+ *
+ * A hash mismatch is the only evidence `update` has, and on its own it reads as an
+ * accusation. Without the diff the user cannot tell a formatter rewrite from a real edit,
+ * which leaves `--force` as the only lever and no reason to trust it.
+ */
+function showLocalEdits(root: string, dests: string[]): void {
+  if (!dests.length) return;
+  ui.message(
+    `${dests.length} file(s) differ from what the kit last wrote, so they were kept. See what changed: npx claude-kit doctor --json, where every drift entry carries a diff.`,
+  );
+  const hint = formatterMangleHint(
+    root,
+    dests,
+    'Run `npx claude-kit update --force` to restore them',
+  );
+  if (hint) ui.message(hint);
 }
 
 /**
@@ -128,6 +149,11 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     flags.dryRun ? 'Update plan (dry run)' : 'Update plan',
   );
 
+  const skipped = planResult.effects
+    .filter((e) => e.op === 'skip-modified')
+    .map((e) => e.action.dest);
+  showLocalEdits(root, skipped);
+
   if (prune.deletes.length || prune.kept.length) {
     const lines: string[] = [];
     for (const d of prune.deletes)
@@ -199,7 +225,6 @@ export async function update(dir: string, flags: Flags): Promise<number> {
 
   showNextSteps(planResult.advisories, flags);
 
-  const skipped = planResult.effects.filter((e) => e.op === 'skip-modified');
   const pruned = prune.deletes.filter((d) => !d.gone).length;
   ui.outro(
     [

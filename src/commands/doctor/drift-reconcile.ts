@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { readJson } from '../../../payload-dist/scripts/lib/workspaces.mjs';
@@ -13,18 +12,10 @@ import {
 } from '../../core/drift.js';
 import { TargetRepo } from '../../core/fs-target.js';
 import { MANIFEST_PATH, type KitManifest } from '../../core/manifest.js';
-import { extractBody } from '../../core/regions.js';
 import type { Ctx } from '../../detect.js';
-import { PRETTIERIGNORE_REGION } from '../../modules/prettier-guard.js';
+import { formatterMangleHint } from '../../modules/formatter-mangle.js';
 import { buildPlan, computeEffects, computePrune } from '../../plan.js';
 import type { CheckResult, Finding } from './finding.js';
-
-/**
- * More than a couple of kit-owned files under `.claude/` reading as local edits, with no
- * `.prettierignore` block to explain it, is unlikely to be deliberate. A formatter run
- * over the whole repo is the far more likely cause.
- */
-const SUSPECTED_FORMATTER_MANGLE_THRESHOLD = 2;
 
 const DRIFT_EXPLANATIONS: Record<string, string> = {
   missing: 'missing. `doctor --fix` recreates it',
@@ -38,16 +29,6 @@ const DRIFT_EXPLANATIONS: Record<string, string> = {
 
 export interface DriftCheck extends CheckResult {
   drift: DriftReport;
-}
-
-function prettierignoreBlockPresent(root: string): boolean {
-  let content: string;
-  try {
-    content = readFileSync(join(root, '.prettierignore'), 'utf8');
-  } catch {
-    return false;
-  }
-  return extractBody(content, PRETTIERIGNORE_REGION) !== null;
 }
 
 /**
@@ -156,21 +137,12 @@ export function reconcileDrift(
     });
   }
 
-  const settledUnderClaude = settled.filter((path) =>
-    path.startsWith('.claude/'),
+  const mangleHint = formatterMangleHint(
+    root,
+    settled,
+    'Run `npx claude-kit doctor --fix --force` to restore them',
   );
-  if (
-    settledUnderClaude.length > SUSPECTED_FORMATTER_MANGLE_THRESHOLD &&
-    !prettierignoreBlockPresent(root)
-  ) {
-    findings.push({
-      level: 'WARN',
-      msg:
-        `${settledUnderClaude.length} kit-owned file(s) under .claude/ show local edits ` +
-        'and no .prettierignore block protects them. A repo-wide formatter run is the ' +
-        'likely cause. Run `npx claude-kit doctor --fix --force` to restore them',
-    });
-  }
+  if (mangleHint) findings.push({ level: 'WARN', msg: mangleHint });
 
   return { drift, findings, readouts: settledReadout(settled) };
 }
