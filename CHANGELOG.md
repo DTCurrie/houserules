@@ -1,5 +1,21 @@
 # claude-kit
 
+## 1.2.0
+
+### Minor Changes
+
+- a7eb731: Add optional testing module: path-scoped rule for colocated unit tests and behavioral test names.
+- c920010: Add opt-in prose-voice rule and rewrite kit prose in plainer sentences.
+- 063b1d0: Rewrite the code-comments rule: TSDoc for exported API, no file headers, no landmark dividers.
+- ac4e875: Add the code-cleanliness module: path-scoped rule, pull-only design-principles reference, and /tidy skill.
+
+### Patch Changes
+
+- c920010: Fix CONVENTIONS.md sections listing shipped modules as unbuilt and a wrong template path.
+- 5aa693d: doctor now exits 2 with the schema errors on a malformed kit.config.json instead of crashing.
+- 202a46c: Scope task-worker slice acceptance to owned paths instead of the whole repo
+- 86d566b: Scope prose-voice to source files too, so code-comments no longer defers to an unloaded rule.
+
 ## 1.1.0
 
 ### Minor Changes
