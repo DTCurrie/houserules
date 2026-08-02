@@ -1,5 +1,13 @@
 # claude-kit
 
+## 1.3.1
+
+### Patch Changes
+
+- ed133dd: Rule bodies stay update-refreshable after you trim their `paths:` frontmatter.
+- ed133dd: Kit-owned files are protected from the repo formatter via a managed .prettierignore block.
+- ed133dd: A customized rule `paths:` is no longer drift, and warns only when the kit's default moves.
+
 ## 1.3.0
 
 ### Minor Changes
