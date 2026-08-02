@@ -115,16 +115,38 @@ describe('checkConfigValidity, schema validation', () => {
     });
   });
 
-  it('warns when the config declares an older schema version', () => {
+  it('rejects a config declaring an older schema version', () => {
     const root = useRepo('pnpm-monorepo');
     const ctx = stageConfig(root, {
       version: 1,
       targets: [STUDIO_TARGET, CITYVILLE_TARGET],
     });
 
-    expect(messages(root, ctx)).toContain(
-      'kit.config.json version 1 (current schema: 2)',
-    );
+    expect(checkConfigValidity(root, ctx).configProblems).toEqual([
+      expect.stringContaining('version'),
+    ]);
+  });
+
+  it('skips the reality checks once the schema rejects the config', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(root, {
+      version: 2,
+      packageManager: '',
+      targets: [{ ...STUDIO_TARGET, pathPrefix: 'apps/ghost' }],
+    });
+
+    expect(messages(root, ctx)).toEqual([
+      expect.stringContaining('kit.config.json: packageManager'),
+    ]);
+  });
+
+  it('does not walk targets that are not an array, which used to throw', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(root, { version: 2, targets: 'nope' });
+
+    expect(checkConfigValidity(root, ctx).configProblems).toEqual([
+      expect.stringContaining('targets'),
+    ]);
   });
 });
 
@@ -206,7 +228,12 @@ describe('checkConfigValidity, target reality', () => {
     const root = useRepo('pnpm-monorepo');
     const ctx = stageConfig(root, {
       version: 2,
-      fix: { commands: ['nope:fix'] },
+      fix: {
+        runner: 'pnpm',
+        filterFlag: '--filter',
+        runScriptPrefix: ['run'],
+        commands: ['nope:fix'],
+      },
       targets: [STUDIO_TARGET, CITYVILLE_TARGET],
     });
 

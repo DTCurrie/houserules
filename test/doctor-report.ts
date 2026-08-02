@@ -8,6 +8,7 @@ export interface JsonReport {
   ok: boolean;
   exitCode: number;
   root?: string;
+  configBlocked?: boolean;
   configProblems?: string[];
   findings?: { level: string; msg: string }[];
   readouts?: string[];

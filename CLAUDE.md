@@ -106,9 +106,12 @@ the kit itself.
 - `doctor` is an orchestrator over independent checks. Each check in `src/commands/doctor/`
   is a pure-ish function of `(root, ctx, flags)` returning `{ findings, readouts }`, and
   `src/commands/doctor.ts` only sequences them and rolls the severity up to an exit code.
-  Order matters in one place: `reconcileDrift` runs last because `--fix` writes, and every
-  check before it must see the tree as the user left it. Add a new check as a new file, never
-  as another branch inside `doctor()`.
+  Order matters in two places. `checkConfigValidity` runs first and is a gate: a config the
+  schema rejects means every later check would read fields it cannot trust, and `--fix` would
+  plan writes from it, so `doctor()` reports the schema problems and returns exit 2 without
+  running anything else. `reconcileDrift` runs last because `--fix` writes, and every check
+  before it must see the tree as the user left it. Add a new check as a new file, never as
+  another branch inside `doctor()`.
 - The user always handles `git commit` / `push` / PR-create.
 
 ## Cost & verification discipline

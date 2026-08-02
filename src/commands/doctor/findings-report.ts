@@ -11,6 +11,11 @@ export interface DoctorReport {
   readouts: string[];
   drift: DriftReport;
   blockingCount: number;
+  /**
+   * The config was rejected, so every check after it was skipped. Without this an empty
+   * `drift` would read as "nothing drifted" when it means "drift was never computed".
+   */
+  configBlocked: boolean;
 }
 
 /** The `--json` shape. This is a CI contract, asserted in src/__test__/cli.test.ts. */
@@ -20,6 +25,7 @@ export function printJsonReport(report: DoctorReport): void {
     ok: report.exitCode === EXIT.ok,
     exitCode: report.exitCode,
     root: report.root,
+    configBlocked: report.configBlocked,
     configProblems: report.configProblems,
     findings: report.findings,
     readouts: report.readouts,
@@ -58,6 +64,13 @@ export function printTextReport(report: DoctorReport, isFixing: boolean): void {
       ? `\n${errors.length} error(s), ${warns.length} warning(s).`
       : '✓ kit installation healthy — no findings.',
   );
+  if (report.configBlocked) {
+    console.log(
+      'Every other check was skipped: they all read .claude/kit.config.json, and a config the schema rejects cannot be trusted.',
+    );
+    console.log('Fix the problems above, then run doctor again.');
+    return;
+  }
   if (drifted.length && !isFixing) {
     console.log('Run `npx claude-kit doctor --fix` to reconcile.');
   }

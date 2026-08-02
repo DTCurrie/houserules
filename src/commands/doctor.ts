@@ -8,7 +8,11 @@ import { checkConfigValidity } from './doctor/config-validity.js';
 import { reconcileDrift } from './doctor/drift-reconcile.js';
 import { checkEnvironment } from './doctor/environment.js';
 import type { CheckResult, Finding } from './doctor/finding.js';
-import { printJsonReport, printTextReport } from './doctor/findings-report.js';
+import {
+  printJsonReport,
+  printTextReport,
+  type DoctorReport,
+} from './doctor/findings-report.js';
 import { checkInstallIntegrity } from './doctor/install-integrity.js';
 import { checkModuleHealth } from './doctor/module-health.js';
 import { checkResidentSurface } from './doctor/resident-surface.js';
@@ -53,6 +57,24 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   const ctx = detect(root);
   const config = checkConfigValidity(root, ctx);
 
+  // A config the schema rejects is foundational: every check below reads it, and
+  // `--fix` would plan writes from it. Report the schema problems and stop, rather
+  // than reporting what a config we do not trust claims about the repo.
+  if (config.configProblems.length)
+    return render(
+      {
+        root,
+        exitCode: EXIT.badConfig,
+        configProblems: config.configProblems,
+        findings: config.findings,
+        readouts: [],
+        drift: { files: [] },
+        blockingCount: 0,
+        configBlocked: true,
+      },
+      flags,
+    );
+
   // Ordered as the report reads: context first, then the install itself. Drift runs
   // last because under `--fix` it writes, and every check before it must see the tree
   // as the user left it.
@@ -76,16 +98,23 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     drifted,
   });
 
-  const report = {
-    root,
-    exitCode,
-    configProblems: config.configProblems,
-    findings,
-    readouts,
-    drift,
-    blockingCount: blockingDrift(drifted).length,
-  };
+  return render(
+    {
+      root,
+      exitCode,
+      configProblems: config.configProblems,
+      findings,
+      readouts,
+      drift,
+      blockingCount: blockingDrift(drifted).length,
+      configBlocked: false,
+    },
+    flags,
+  );
+}
+
+function render(report: DoctorReport, flags: Flags): number {
   if (flags.json) printJsonReport(report);
   else printTextReport(report, flags.fix);
-  return exitCode;
+  return report.exitCode;
 }

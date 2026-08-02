@@ -92,29 +92,3 @@ Applies to the other three rules in degree, not in kind. Worth re-measuring all 
 `doctor`'s resident-surface budget once the trigger question is settled.
 
 ---
-
-## [CLAUDEKIT-8e6742] doctor crashes on a kit.config.json whose targets is not an array
-
-**Logged:** 2026-08-02
-**Chat:** 71b57f0c-75a8-4ce5-ad2f-ead436a9bf23
-
-`detect()` reads kit.config.json with `readJson<KitConfig>()`, an unchecked cast, so a
-structurally wrong config reaches the checks unvalidated. `checkConfigValidity` then does
-`(config.targets ?? []).map(...)`, which throws `TypeError: .map is not a function` when
-`targets` is a string. doctor dies with an uncaught stack trace instead of exiting 2 with the
-schema errors it had already collected, which is exactly the case exit code 2 exists for.
-
-Reproduce: set `"targets": "nope"` in `.claude/kit.config.json`, run `npx claude-kit doctor`.
-
-Pre-existing, not introduced by the doctor decomposition. Surfaced by a unit test written
-against `checkConfigValidity` while splitting `src/commands/doctor/`; the test was retargeted
-at a non-crashing schema violation so it would not encode the crash.
-
-The fix is a decision, not a one-liner: either return right after `configProblems` is non-empty
-(a rejected config means the reality checks are reading garbage anyway), or make each target
-loop defensive. The first is smaller and matches the "config outranks everything" rule already
-in `doctorExitCode`, but it changes output for anyone whose config both fails the schema and
-has real target problems, so it needs its own changeset.
-
----
-

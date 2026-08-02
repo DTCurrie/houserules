@@ -9,12 +9,11 @@ import { validateKitConfig } from '../../core/config.js';
 import type { Ctx } from '../../detect.js';
 import type { CheckResult, Finding } from './finding.js';
 
-const CURRENT_CONFIG_VERSION = 2;
-
 export interface ConfigValidity extends CheckResult {
   /**
    * Schema rejections, kept apart from the findings so the exit code can distinguish
-   * "your config is not valid" (2) from "your install has a problem" (1).
+   * "your config is not valid" (2) from "your install has a problem" (1). A non-empty
+   * list means the reality checks below it did not run.
    */
   configProblems: string[];
 }
@@ -23,6 +22,12 @@ export interface ConfigValidity extends CheckResult {
  * Whether `.claude/kit.config.json` satisfies the schema and describes a repo that
  * actually exists: every target's paths, package, and named scripts, plus any workspace
  * package no target covers.
+ *
+ * The schema gate is absolute. A config the schema rejects is one whose fields cannot be
+ * trusted to be the types this function reads them as, so a rejection returns
+ * immediately rather than walking `targets` that may not be an array. Reporting what a
+ * malformed config "says" about the repo would be reporting noise, and the user's next
+ * action is the same either way: fix the config and run doctor again.
  */
 export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
   const findings: Finding[] = [];
@@ -45,12 +50,7 @@ export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
   for (const problem of configProblems) {
     findings.push({ level: 'ERROR', msg: `kit.config.json: ${problem}` });
   }
-
-  if (config.version !== CURRENT_CONFIG_VERSION)
-    findings.push({
-      level: 'WARN',
-      msg: `kit.config.json version ${config.version ?? 1} (current schema: ${CURRENT_CONFIG_VERSION})`,
-    });
+  if (configProblems.length) return { findings, readouts: [], configProblems };
 
   const workspacePackages = listWorkspacePackages(root);
   const workspaceNames = new Set(workspacePackages.map((p) => p.name));

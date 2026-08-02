@@ -357,6 +357,94 @@ describe('doctor workspace coverage', () => {
   });
 });
 
+describe('doctor on a kit.config.json the schema rejects', () => {
+  let root: string;
+
+  function breakConfig(
+    mutate: (config: Record<string, unknown>) => void,
+  ): void {
+    const path = join(root, '.claude/kit.config.json');
+    const config = JSON.parse(readFileSync(path, 'utf8'));
+    mutate(config);
+    writeFileSync(path, JSON.stringify(config, null, 2));
+  }
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+  });
+
+  it('exits 2 rather than crashing when targets is not an array', () => {
+    breakConfig((c) => {
+      c.targets = 'nope';
+    });
+
+    expect(runCli(['doctor', root]).status).toBe(EXIT.badConfig);
+  });
+
+  it('names the offending field instead of printing a stack trace', () => {
+    breakConfig((c) => {
+      c.targets = 'nope';
+    });
+
+    const r = runCli(['doctor', root]);
+
+    expect(r.stdout).toMatch(/kit\.config\.json: targets/);
+    expect(r.stdout).not.toMatch(/TypeError/);
+  });
+
+  it('tells the user to fix the config and run again', () => {
+    breakConfig((c) => {
+      c.packageManager = '';
+    });
+
+    expect(runCli(['doctor', root]).stdout).toMatch(
+      /Fix the problems above, then run doctor again\./,
+    );
+  });
+
+  it('reports that every other check was skipped', () => {
+    breakConfig((c) => {
+      c.packageManager = '';
+    });
+
+    expect(runDoctorJson(root).configBlocked).toBe(true);
+  });
+
+  it('skips the drift computation instead of reporting an empty drift list as clean', () => {
+    rmSync(join(root, '.claude/scripts/guard-bash.mjs'));
+    breakConfig((c) => {
+      c.packageManager = '';
+    });
+
+    const report = runDoctorJson(root);
+
+    expect(report.drift).toEqual([]);
+    expect(report.configBlocked).toBe(true);
+  });
+
+  it('skips the resident-context readout, since that check reads the config too', () => {
+    breakConfig((c) => {
+      c.packageManager = '';
+    });
+
+    expect(runDoctorJson(root).readouts).toEqual([]);
+  });
+
+  it('refuses to write under --fix, since the plan would be built from a config it rejected', () => {
+    rmSync(join(root, '.claude/scripts/guard-bash.mjs'));
+    breakConfig((c) => {
+      c.packageManager = '';
+    });
+
+    const status = runCli(['doctor', root, '--fix']).status;
+
+    expect(status).toBe(EXIT.badConfig);
+    expect(existsSync(join(root, '.claude/scripts/guard-bash.mjs'))).toBe(
+      false,
+    );
+  });
+});
+
 describe('doctor terse-style output-style detection', () => {
   let root: string;
   let setStyle: (v: string | undefined) => void;
