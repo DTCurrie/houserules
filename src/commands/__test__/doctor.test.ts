@@ -107,10 +107,12 @@ describe('doctorExitCode', () => {
 });
 
 describe('blockingDrift', () => {
-  it('excludes an entry with status "yours"', () => {
-    const result = blockingDrift([drift({ status: 'yours' })]);
-    expect(result).toEqual([]);
-  });
+  it.each(['yours', 'conflict'] as const)(
+    'excludes an entry with status "%s"',
+    (status) => {
+      expect(blockingDrift([drift({ status })])).toEqual([]);
+    },
+  );
 
   it('excludes an entry with yours: true even when its status is not "yours"', () => {
     const result = blockingDrift([drift({ status: 'orphaned', yours: true })]);
@@ -139,17 +141,35 @@ describe('doctor on a freshly initialized pnpm monorepo', () => {
     expect(r.stdout).toMatch(/healthy/);
   });
 
-  it('exits 0 and reports a locally edited kit file as "yours" with a diff, since nothing can acknowledge the edit', () => {
+  it('exits 0 and names a locally edited kit file in a readout, since nothing can acknowledge the edit', () => {
     const guard = join(root, '.claude/scripts/guard-bash.mjs');
     appendFileSync(guard, '// tweak\n');
 
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
-    expect(r.stdout).toMatch(/\.claude\/scripts\/guard-bash\.mjs: yours/);
-    expect(
-      r.stdout,
-      'diff is against what the kit would write, so the added line shows as `-`',
-    ).toMatch(/-\/\/ tweak/);
+    expect(r.stdout).toMatch(
+      /your edits on 1 kit file\(s\), kept as-is: \.claude\/scripts\/guard-bash\.mjs/,
+    );
+  });
+
+  it('prints no warning and no diff for a locally edited kit file the kit has not changed since', () => {
+    appendFileSync(join(root, '.claude/scripts/guard-bash.mjs'), '// tweak\n');
+
+    const r = runCli(['doctor', root]);
+    expect(r.stdout).not.toMatch(/WARN/);
+    expect(r.stdout).not.toMatch(/-\/\/ tweak/);
+  });
+
+  it('does not offer --fix when the only drift is a local edit that --fix would not touch', () => {
+    appendFileSync(join(root, '.claude/scripts/guard-bash.mjs'), '// tweak\n');
+
+    expect(runCli(['doctor', root]).stdout).not.toMatch(/to reconcile/);
+  });
+
+  it('offers --fix when a kit-owned file is missing', () => {
+    rmSync(join(root, '.claude/scripts/guard-bash.mjs'));
+
+    expect(runCli(['doctor', root]).stdout).toMatch(/to reconcile/);
   });
 
   it('exits 1 when a kit-owned file is missing', () => {

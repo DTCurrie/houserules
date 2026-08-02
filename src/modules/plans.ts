@@ -57,7 +57,7 @@ export function plan(): Action[] {
     },
     {
       kind: 'advise',
-      text: 'Planning: run /plan-project "<what to build>" for a large/multi-phase implementation — it scaffolds .claude/plans/<name>/ and tracks ROADMAP status in place so resuming is a grep, not a re-derivation. Run /blast-radius "<change>" to archive a dated impact map (also under .claude/plans/) before a wide change.',
+      text: 'Planning: run /plan-project "<what to build>" for a large/multi-phase implementation. It scaffolds .claude/plans/<name>/, tracks ROADMAP status in place so resuming is a grep, and then stops. Implementing a phase is a separate step. Run /blast-radius "<change>" to archive a dated impact map (also under .claude/plans/) before a wide change.',
       module: id,
     },
   ];

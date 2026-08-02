@@ -48,9 +48,10 @@ export function printTextReport(report: DoctorReport, isFixing: boolean): void {
   for (const f of report.findings)
     console.log(`${f.level === 'ERROR' ? '✗ ERROR' : '! WARN '}  ${f.msg}`);
   // Diffs come after the finding list so the summary stays scannable. Only the
-  // statuses where "what changed" is actionable carry one.
+  // statuses where "what changed" is actionable carry one. A settled `yours` edit is
+  // reported as a readout, so re-printing its diff every run is noise.
   for (const file of drifted) {
-    if (!file.diff) continue;
+    if (!file.diff || file.status === 'yours') continue;
     console.log(`\n--- ${file.path} (${file.status})`);
     console.log(
       file.diff
@@ -71,7 +72,9 @@ export function printTextReport(report: DoctorReport, isFixing: boolean): void {
     console.log('Fix the problems above, then run doctor again.');
     return;
   }
-  if (drifted.length && !isFixing) {
+  // Gated on blocking drift, not on drift at all. A local edit is never reconciled by a
+  // bare `--fix`, so offering it there contradicts the healthy verdict just printed.
+  if (report.blockingCount && !isFixing) {
     console.log('Run `npx claude-kit doctor --fix` to reconcile.');
   }
 }

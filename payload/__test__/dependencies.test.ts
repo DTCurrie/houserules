@@ -79,9 +79,11 @@ describe('lib/kit-config.mjs, the highest-blast-radius file since every hook cal
   );
 
   it('imports only node builtins or relative paths', () => {
-    for (const spec of importAndExportSpecifiersOf(source)) {
-      expect(spec.startsWith('node:') || spec.startsWith('.')).toBe(true);
-    }
+    expect(
+      importAndExportSpecifiersOf(source).filter(
+        (spec) => !spec.startsWith('node:') && !spec.startsWith('.'),
+      ),
+    ).toEqual([]);
   });
 
   it('does not import zod', () => {

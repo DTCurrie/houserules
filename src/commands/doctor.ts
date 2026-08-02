@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 
 import type { Flags } from '../cli-contract.js';
 import { EXIT } from '../cli-contract.js';
-import { driftedFiles, type FileDrift } from '../core/drift.js';
+import { driftedFiles, isLocalEdit, type FileDrift } from '../core/drift.js';
 import { detect } from '../detect.js';
 import { checkConfigValidity } from './doctor/config-validity.js';
 import { reconcileDrift } from './doctor/drift-reconcile.js';
@@ -19,12 +19,13 @@ import { checkResidentSurface } from './doctor/resident-surface.js';
 import { checkSettingsWiring } from './doctor/settings-wiring.js';
 
 /**
- * Drift entries that move the exit code. `yours` never does. There is no way to
- * acknowledge a deliberate edit, so counting it would leave doctor permanently red on an
- * install that is working exactly as intended.
+ * Drift entries that move the exit code. A local edit never does, whether it is a settled
+ * `yours` or a `conflict` the kit has also moved on from. Neither is overwritten without
+ * `--force`, so counting them would leave doctor permanently red on an install that is
+ * working exactly as intended.
  */
 export function blockingDrift(drifted: FileDrift[]): FileDrift[] {
-  return drifted.filter((file) => file.status !== 'yours' && !file.yours);
+  return drifted.filter((file) => !isLocalEdit(file));
 }
 
 /**
@@ -48,9 +49,11 @@ export function doctorExitCode(args: {
  * Validates an installation against reality.
  *
  * @returns Exit 1 on an ERROR (a broken install) or on actionable drift, exit 2 on a
- * config the schema rejects. Drift you caused yourself (`yours`) is reported with a diff
- * but never moves the exit code, because there is no way to acknowledge a deliberate
- * edit and it would leave doctor permanently red on an install working as intended.
+ * config the schema rejects. Drift you caused yourself never moves the exit code, because
+ * there is no way to acknowledge a deliberate edit and it would leave doctor permanently
+ * red on an install working as intended. A settled `yours` edit is a readout. A
+ * `conflict`, where the kit shipped a newer version of a file you edited, is a warning
+ * with a diff, since that one leaves you a merge to make.
  */
 export async function doctor(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);

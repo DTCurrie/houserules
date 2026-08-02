@@ -17,6 +17,7 @@ import {
   classifyEffect,
   driftedFiles,
   FIXABLE,
+  FORCE_ONLY,
   isClean,
   orphanDrift,
 } from '../drift.js';
@@ -36,8 +37,16 @@ function copyAction(overrides: Partial<CopyAction> = {}): CopyAction {
   };
 }
 
-function effect(action: FileAction, op: Effect['op'], content = ''): Effect {
-  return { action, op, content: Buffer.from(content, 'utf8') };
+const KIT_LAST_WROTE = 'sha-of-the-version-the-kit-last-wrote';
+const KIT_WOULD_WRITE_NOW = 'sha-of-the-version-the-kit-ships-today';
+
+function effect(
+  action: FileAction,
+  op: Effect['op'],
+  content = '',
+  hash?: string,
+): Effect {
+  return { action, op, content: Buffer.from(content, 'utf8'), hash };
 }
 
 const REGION: RegionSpec = {
@@ -67,55 +76,101 @@ describe('classifyEffect', () => {
   it.each(['skip-exists', 'skip-identical'] as const)(
     'reports "ok" for a %s effect',
     (op) => {
-      const result = classifyEffect(effect(copyAction(), op), neverCalled);
+      const result = classifyEffect(
+        effect(copyAction(), op),
+        neverCalled,
+        KIT_LAST_WROTE,
+      );
       expect(result.status).toBe('ok');
     },
   );
 
   it('does not call readHost for an "ok" effect', () => {
     let calls = 0;
-    classifyEffect(effect(copyAction(), 'skip-exists'), () => {
-      calls += 1;
-      return null;
-    });
+    classifyEffect(
+      effect(copyAction(), 'skip-exists'),
+      () => {
+        calls += 1;
+        return null;
+      },
+      KIT_LAST_WROTE,
+    );
     expect(calls).toBe(0);
   });
 
   it('reports "missing" for a create effect', () => {
-    const result = classifyEffect(effect(copyAction(), 'create'), neverCalled);
+    const result = classifyEffect(
+      effect(copyAction(), 'create'),
+      neverCalled,
+      KIT_LAST_WROTE,
+    );
     expect(result.status).toBe('missing');
   });
 
   it('does not call readHost for a "missing" effect', () => {
     let calls = 0;
-    classifyEffect(effect(copyAction(), 'create'), () => {
-      calls += 1;
-      return null;
-    });
+    classifyEffect(
+      effect(copyAction(), 'create'),
+      () => {
+        calls += 1;
+        return null;
+      },
+      KIT_LAST_WROTE,
+    );
     expect(calls).toBe(0);
   });
 
-  it('reports a locally-edited non-region file as "yours" with yours set', () => {
+  it('reports a locally-edited non-region file the kit has not changed since as "yours"', () => {
     const result = classifyEffect(
-      effect(copyAction(), 'skip-modified', 'canonical'),
+      effect(copyAction(), 'skip-modified', 'canonical', KIT_LAST_WROTE),
       () => 'edited on disk',
+      KIT_LAST_WROTE,
     );
     expect(result.status).toBe('yours');
     expect(result.yours).toBe(true);
   });
 
+  it('reports a locally-edited non-region file the kit HAS changed since as "conflict"', () => {
+    const result = classifyEffect(
+      effect(copyAction(), 'skip-modified', 'canonical', KIT_WOULD_WRITE_NOW),
+      () => 'edited on disk',
+      KIT_LAST_WROTE,
+    );
+    expect(result.status).toBe('conflict');
+  });
+
+  it('still marks a "conflict" as your edit, so it cannot hold the exit code red', () => {
+    const result = classifyEffect(
+      effect(copyAction(), 'skip-modified', 'canonical', KIT_WOULD_WRITE_NOW),
+      () => 'edited on disk',
+      KIT_LAST_WROTE,
+    );
+    expect(result.yours).toBe(true);
+  });
+
+  it('falls back to "yours" for a local edit with no recorded hash to compare against', () => {
+    const result = classifyEffect(
+      effect(copyAction(), 'skip-modified', 'canonical', KIT_WOULD_WRITE_NOW),
+      () => 'edited on disk',
+      undefined,
+    );
+    expect(result.status).toBe('yours');
+  });
+
   it('carries a diff against the canonical content for a "yours" non-region file', () => {
     const result = classifyEffect(
-      effect(copyAction(), 'skip-modified', 'canonical'),
+      effect(copyAction(), 'skip-modified', 'canonical', KIT_LAST_WROTE),
       () => 'edited on disk',
+      KIT_LAST_WROTE,
     );
     expect(result.diff).toMatch(/edited on disk/);
   });
 
   it('reports a non-region file the kit itself would refresh as "stale" with yours false', () => {
     const result = classifyEffect(
-      effect(copyAction(), 'update', 'new canonical'),
+      effect(copyAction(), 'update', 'new canonical', KIT_WOULD_WRITE_NOW),
       () => 'old canonical',
+      KIT_LAST_WROTE,
     );
     expect(result.status).toBe('stale');
     expect(result.yours).toBeFalsy();
@@ -123,14 +178,19 @@ describe('classifyEffect', () => {
 
   it('diffs against an empty string when readHost returns null for a non-region file', () => {
     const result = classifyEffect(
-      effect(copyAction(), 'update', 'new canonical'),
+      effect(copyAction(), 'update', 'new canonical', KIT_WOULD_WRITE_NOW),
       () => null,
+      KIT_LAST_WROTE,
     );
     expect(result.diff).toMatch(/new canonical/);
   });
 
   it('reports "no-marker" for a region whose host file is absent', () => {
-    const result = classifyEffect(effect(regionAction(), 'update'), () => null);
+    const result = classifyEffect(
+      effect(regionAction(), 'update'),
+      () => null,
+      KIT_LAST_WROTE,
+    );
     expect(result.status).toBe('no-marker');
   });
 
@@ -138,15 +198,22 @@ describe('classifyEffect', () => {
     const result = classifyEffect(
       effect(regionAction(), 'update'),
       () => 'some prose with no markers at all',
+      KIT_LAST_WROTE,
     );
     expect(result.status).toBe('no-marker');
   });
 
-  it('reports a locally-edited region as "yours" diffing only the region body', () => {
+  it('reports a locally-edited region the kit has not changed since as "yours", diffing only the region body', () => {
     const host = 'prefix\n<!-- start -->\nedited body\n<!-- end -->\nsuffix';
     const result = classifyEffect(
-      effect(regionAction({ body: 'canonical body' }), 'skip-modified'),
+      effect(
+        regionAction({ body: 'canonical body' }),
+        'skip-modified',
+        '',
+        KIT_LAST_WROTE,
+      ),
       () => host,
+      KIT_LAST_WROTE,
     );
     expect(result.status).toBe('yours');
     expect(result.yours).toBe(true);
@@ -154,11 +221,32 @@ describe('classifyEffect', () => {
     expect(result.diff).not.toMatch(/prefix/);
   });
 
+  it('reports a locally-edited region the kit HAS changed since as "conflict"', () => {
+    const host = 'prefix\n<!-- start -->\nedited body\n<!-- end -->\nsuffix';
+    const result = classifyEffect(
+      effect(
+        regionAction({ body: 'canonical body' }),
+        'skip-modified',
+        '',
+        KIT_WOULD_WRITE_NOW,
+      ),
+      () => host,
+      KIT_LAST_WROTE,
+    );
+    expect(result.status).toBe('conflict');
+  });
+
   it('reports a stale region diffing only the region body, not the surrounding prose', () => {
     const host = 'prefix\n<!-- start -->\nold body\n<!-- end -->\nsuffix';
     const result = classifyEffect(
-      effect(regionAction({ body: 'new body' }), 'update'),
+      effect(
+        regionAction({ body: 'new body' }),
+        'update',
+        '',
+        KIT_WOULD_WRITE_NOW,
+      ),
       () => host,
+      KIT_LAST_WROTE,
     );
     expect(result.status).toBe('stale');
     expect(result.yours).toBeFalsy();
@@ -251,9 +339,25 @@ describe('FIXABLE', () => {
     },
   );
 
-  it.each(['ok', 'yours', 'orphaned'] as const)('excludes "%s"', (status) => {
-    expect(FIXABLE).not.toContain(status);
+  it.each(['ok', 'yours', 'conflict', 'orphaned'] as const)(
+    'excludes "%s"',
+    (status) => {
+      expect(FIXABLE).not.toContain(status);
+    },
+  );
+});
+
+describe('FORCE_ONLY', () => {
+  it.each(['yours', 'conflict'] as const)('includes "%s"', (status) => {
+    expect(FORCE_ONLY).toContain(status);
   });
+
+  it.each(['ok', 'missing', 'stale', 'no-marker', 'orphaned'] as const)(
+    'excludes "%s"',
+    (status) => {
+      expect(FORCE_ONLY).not.toContain(status);
+    },
+  );
 });
 
 function simulateKitContentMovedOn(root: string, relPath: string): void {
@@ -262,6 +366,16 @@ function simulateKitContentMovedOn(root: string, relPath: string): void {
   writeFileSync(filePath, tampered);
   const manifest = manifestOf(root);
   manifest.files[relPath] = sha256(tampered);
+  writeManifest(root, manifest);
+}
+
+function simulateEditOnTopOfAnOlderKitVersion(
+  root: string,
+  relPath: string,
+): void {
+  appendFileSync(join(root, relPath), '// my tweak\n');
+  const manifest = manifestOf(root);
+  manifest.files[relPath] = sha256('what an older kit version wrote\n');
   writeManifest(root, manifest);
 }
 
@@ -297,6 +411,66 @@ describe('a file edited locally (`yours`)', () => {
     const report = runDoctorJson(root);
     expect(report.counts.blocking).toBe(0);
     expect(report.exitCode).toBe(0);
+  });
+
+  it('raises no warning, since the kit has not changed the file since you edited it', () => {
+    expect(runDoctorJson(root).counts.warnings).toBe(0);
+  });
+});
+
+describe('a file edited locally that the kit has since changed (`conflict`)', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('npm-single');
+    simulateEditOnTopOfAnOlderKitVersion(
+      root,
+      '.claude/scripts/guard-bash.mjs',
+    );
+  });
+
+  it('is reported with status `conflict`', () => {
+    const entry = driftFor(
+      runDoctorJson(root),
+      '.claude/scripts/guard-bash.mjs',
+    );
+    expect(entry?.status).toBe('conflict');
+  });
+
+  it('is still marked as your edit', () => {
+    const entry = driftFor(
+      runDoctorJson(root),
+      '.claude/scripts/guard-bash.mjs',
+    );
+    expect(entry?.yours).toBe(true);
+  });
+
+  it('raises a warning, since a newer kit version leaves you a merge to make', () => {
+    expect(runDoctorJson(root).counts.warnings).toBe(1);
+  });
+
+  it('does not hold the exit code red, since the file is still yours', () => {
+    const report = runDoctorJson(root);
+    expect(report.counts.blocking).toBe(0);
+    expect(report.exitCode).toBe(0);
+  });
+
+  it('is left alone by --fix without --force', () => {
+    const before = readFileSync(join(root, '.claude/scripts/guard-bash.mjs'));
+
+    runCli(['doctor', root, '--fix']);
+
+    expect(readFileSync(join(root, '.claude/scripts/guard-bash.mjs'))).toEqual(
+      before,
+    );
+  });
+
+  it('is reconciled to canonical by --fix --force', () => {
+    runCli(['doctor', root, '--fix', '--force']);
+
+    expect(
+      readFileSync(join(root, '.claude/scripts/guard-bash.mjs'), 'utf8'),
+    ).not.toMatch(/my tweak/);
   });
 });
 

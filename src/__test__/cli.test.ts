@@ -108,7 +108,7 @@ describe('doctor', () => {
     });
 
     it('emits an object with every CI-contract key', () => {
-      for (const key of [
+      const contractKeys = [
         'ok',
         'exitCode',
         'root',
@@ -116,12 +116,12 @@ describe('doctor', () => {
         'findings',
         'readouts',
         'counts',
-      ]) {
-        expect(
-          parsed,
-          `"${key}" is part of the --json contract`,
-        ).toHaveProperty(key);
-      }
+      ];
+
+      expect(
+        contractKeys.filter((key) => !(key in parsed)),
+        'these keys are part of the --json contract',
+      ).toEqual([]);
     });
 
     it('sets exitCode to the process exit status', () => {

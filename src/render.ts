@@ -251,6 +251,7 @@ function plansSection(ctx: Ctx, answers: Answers): string[] {
     'you expect to pause and resume), run the `/plan-project` skill. It persists the plan to a gitignored',
     '`.claude/plans/<name>/` workspace holding a `PLAN.md` overview, a living `ROADMAP.md`, and one',
     'sub-plan per phase, and it keeps ROADMAP status current in place as each phase lands.',
+    'It plans only, and stops there. Starting phase 1 is a separate, explicit step.',
     '**Resuming such work?** Read `.claude/plans/<name>/ROADMAP.md` first for live status. Grep its',
     'status lines instead of re-deriving scope from the transcript.',
     '',

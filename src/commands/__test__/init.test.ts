@@ -60,7 +60,7 @@ describe('init --yes on a pnpm monorepo', () => {
   });
 
   it('installs every kit-owned file', () => {
-    for (const rel of [
+    const kitOwned = [
       '.claude/scripts/guard-bash.mjs',
       '.claude/scripts/lint-format-fix.mjs',
       '.claude/scripts/backlog-log.mjs',
@@ -74,9 +74,12 @@ describe('init --yes on a pnpm monorepo', () => {
       '.claude/agents/backlog-reviewer.md',
       '.claude/agents/changeset-writer.md',
       '.claude/kit-templates/CLAUDE.md.template',
-    ]) {
-      expect(existsSync(join(root, rel)), `missing ${rel}`).toBeTruthy();
-    }
+    ];
+
+    expect(
+      kitOwned.filter((rel) => !existsSync(join(root, rel))),
+      'missing from the installed tree',
+    ).toEqual([]);
   });
 
   it('does not stage the archivist template when the ledger module is off', () => {
@@ -98,22 +101,15 @@ describe('init --yes on a pnpm monorepo', () => {
 
   it('records exactly the default module set in the manifest', () => {
     const manifest = manifestOf(root);
-    for (const m of [
-      'core',
-      'lint-fix',
+
+    expect([...manifest.modules].sort()).toEqual([
       'backlog',
       'changesets',
-      'session-context',
+      'core',
+      'lint-fix',
       'rename',
-    ]) {
-      expect(manifest.modules.includes(m), `module ${m}`).toBeTruthy();
-    }
-    for (const m of ['reviewers', 'ledger', 'terse-style']) {
-      expect(
-        manifest.modules.includes(m),
-        `unexpected module ${m}`,
-      ).toBeFalsy();
-    }
+      'session-context',
+    ]);
   });
 
   it('hashes manifest-tracked files with a sha256 digest', () => {
@@ -143,14 +139,17 @@ describe('init --yes on a pnpm monorepo', () => {
 
   it('wires every kit script into a settings.json hook', () => {
     const allCommands = allHookCommands(root).join('\n');
-    for (const s of [
+    const hookScripts = [
       'guard-bash',
       'lint-format-fix',
       'changeset-check',
       'session-context',
-    ]) {
-      expect(allCommands.includes(s), `hook ${s} wired`).toBeTruthy();
-    }
+    ];
+
+    expect(
+      hookScripts.filter((script) => !allCommands.includes(script)),
+      'not wired into any settings.json hook',
+    ).toEqual([]);
   });
 
   it('does not create a settings.json.bak when settings.json did not pre-exist', () => {

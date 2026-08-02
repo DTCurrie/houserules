@@ -7,6 +7,7 @@ import {
   computeDrift,
   driftedFiles,
   FIXABLE,
+  FORCE_ONLY,
   type DriftReport,
 } from '../../core/drift.js';
 import { TargetRepo } from '../../core/fs-target.js';
@@ -16,12 +17,13 @@ import { buildPlan, computeEffects, computePrune } from '../../plan.js';
 import type { CheckResult, Finding } from './finding.js';
 
 const DRIFT_EXPLANATIONS: Record<string, string> = {
-  missing: 'missing — `doctor --fix` recreates it',
-  stale: 'stale — the kit has a newer version; `update` refreshes it',
-  yours: 'yours — you edited it; kept unless --force',
-  'no-marker': 'managed markers removed — `doctor --fix` re-inserts the block',
+  missing: 'missing. `doctor --fix` recreates it',
+  stale: 'stale. The kit has a newer version, and `update` refreshes it',
+  conflict:
+    'you edited it and the kit shipped a newer version since. Merge by hand, or `--fix --force` to take the kit copy',
+  'no-marker': 'managed markers removed. `doctor --fix` re-inserts the block',
   orphaned:
-    'orphaned — no enabled module produces it; `--fix --prune` removes it',
+    'orphaned. No enabled module produces it, and `--fix --prune` removes it',
 };
 
 export interface DriftCheck extends CheckResult {
@@ -59,14 +61,13 @@ export function reconcileDrift(
 
   try {
     const planResult = planAgainst(manifest, flags.force);
-    drift = computeDrift(
-      root,
-      planResult.effects,
-      computePrune(root, {
+    drift = computeDrift(root, planResult.effects, {
+      manifest,
+      prune: computePrune(root, {
         manifest,
         plannedDests: planResult.plannedDests,
       }),
-    );
+    });
 
     if (flags.fix) {
       const fixable = new Set(
@@ -74,7 +75,7 @@ export function reconcileDrift(
           .filter(
             (f) =>
               FIXABLE.includes(f.status) ||
-              (f.status === 'yours' && flags.force),
+              (flags.force && FORCE_ONLY.includes(f.status)),
           )
           .map((f) => f.path),
       );
@@ -99,14 +100,13 @@ export function reconcileDrift(
       // Re-derive against the reconciled tree so the report reflects reality.
       const reconciled = readJson<KitManifest>(join(root, MANIFEST_PATH));
       const after = planAgainst(reconciled, false);
-      drift = computeDrift(
-        root,
-        after.effects,
-        computePrune(root, {
+      drift = computeDrift(root, after.effects, {
+        manifest: reconciled,
+        prune: computePrune(root, {
           manifest: reconciled,
           plannedDests: after.plannedDests,
         }),
-      );
+      });
     }
   } catch (e) {
     findings.push({
@@ -115,12 +115,29 @@ export function reconcileDrift(
     });
   }
 
+  const settled: string[] = [];
   for (const file of driftedFiles(drift)) {
+    if (file.status === 'yours') {
+      settled.push(file.path);
+      continue;
+    }
     findings.push({
       level: file.status === 'missing' ? 'ERROR' : 'WARN',
       msg: `${file.path}: ${DRIFT_EXPLANATIONS[file.status] ?? file.status}`,
     });
   }
 
-  return { drift, findings, readouts: [] };
+  return { drift, findings, readouts: settledReadout(settled) };
+}
+
+/**
+ * A settled local edit is reported as context rather than as a warning. The kit itself
+ * tells you to edit some of what it installs, so warning about the result would leave
+ * doctor permanently yellow and bury the drift that does need a decision.
+ */
+function settledReadout(settled: string[]): string[] {
+  if (!settled.length) return [];
+  return [
+    `your edits on ${settled.length} kit file(s), kept as-is: ${settled.join(', ')}`,
+  ];
 }

@@ -15,13 +15,16 @@ describe('debug-session', () => {
     });
 
     it('installs the skill, the backstop hook script, and the debugger agent template', () => {
-      for (const rel of [
+      const installed = [
         '.claude/skills/debug-session/SKILL.md',
         '.claude/scripts/debug-session-check.mjs',
         '.claude/kit-templates/agents/debugger.agent.md.template',
-      ]) {
-        expect(existsSync(join(root, rel)), `missing ${rel}`).toBeTruthy();
-      }
+      ];
+
+      expect(
+        installed.filter((rel) => !existsSync(join(root, rel))),
+        'missing from the installed tree',
+      ).toEqual([]);
     });
 
     it('self-gitignores its debug log directory while keeping the .gitignore itself tracked', () => {

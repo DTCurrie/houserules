@@ -1,11 +1,14 @@
 ---
 name: plan-project
-description: Plan and drive a large, multi-phase implementation as a persisted project. Scaffold a gitignored `.claude/plans/<name>/` workspace with a PLAN overview, a living ROADMAP, and one sub-plan per phase, then keep ROADMAP status current in place as each phase lands so a returning session greps status instead of re-deriving scope from the transcript. Use when a task is too big to hold in one in-context plan.
+description: Plan a large, multi-phase implementation as a persisted project. Scaffold a gitignored `.claude/plans/<name>/` workspace with a PLAN overview, a living ROADMAP, and one sub-plan per phase, then stop and hand off. Implementation is a separate, explicit step (`/orchestrate` or in-context), and ROADMAP status is kept current in place as each phase lands so a returning session greps status instead of re-deriving scope from the transcript. Use when a task is too big to hold in one in-context plan.
 argument-hint: <what to build>
 allowed-tools: Read, Edit, Write, Grep, Glob, Bash, Agent
 ---
 
-Plan and drive a multi-phase implementation as a project: **$ARGUMENTS**
+Plan a multi-phase implementation as a persisted project: **$ARGUMENTS**
+
+**This skill plans. It does not implement.** It ends at a scaffolded workspace and a handoff (§4).
+Starting phase 1 is the user's call, not a continuation of planning.
 
 One discipline makes this cheaper than re-planning from scratch each session. The plan lives on disk,
 not in the transcript, and **`ROADMAP.md` is the single source of truth for what's done**. Every phase
@@ -134,13 +137,30 @@ Checkboxes mirror it: `[ ]` todo, `[~]` in progress, `[x]` done.
 memory that survives the transcript.>
 ```
 
-## 4. Implement phase by phase
+## 4. Stop and hand off
 
-Work one phase at a time, top of the ROADMAP down. Before starting a phase, set its ROADMAP line and
-sub-plan header to `IN PROGRESS`. Do the work, and tick the sub-plan's step checkboxes as you go.
-Don't smuggle a later phase's work into the current one. The point is that each phase lands cleanly.
+The scaffold **is** the deliverable. Do not open phase 1. Do not edit a source file. Do not dispatch a
+subagent to start. Every phase in the ROADMAP stays `TODO`.
 
-## 5. Status in place
+This is a hard stop, not a suggestion. The point of writing the plan down is that the user gets to
+read it and change it before any code moves, and a skill that slides from planning into implementing
+takes that away. A phase that looks small enough to just do is still the user's call.
+
+Report, then wait:
+
+- the resolved slug and the workspace path,
+- the phases, one line each, in order,
+- anything you had to assume or couldn't resolve while planning,
+- the next command, so starting is one keystroke:
+  - `/orchestrate <slug> 1` fans out scoped workers for phase 1 (needs the `orchestrate` module).
+  - Or the user asks you to take phase 1 in-context.
+
+Whoever picks it up works one phase at a time, top of the ROADMAP down. Before starting a phase, they
+set its ROADMAP line and sub-plan header to `IN PROGRESS`, then tick the sub-plan's step checkboxes as
+they go. Don't smuggle a later phase's work into the current one. The point is that each phase lands
+cleanly.
+
+## 5. Status in place (for whoever implements)
 
 The instant a phase lands and its acceptance actually passes, update **both** the ROADMAP line
 (`[x]` / `Status: DONE (<date>)`) and the sub-plan header, in the same edit pass, before moving on. A

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { truncateDiff, unifiedDiff } from './diff.js';
+import type { KitManifest } from './manifest.js';
 import { extractBody } from './regions.js';
 import type { Effect, PruneResult } from '../plan.js';
 
@@ -14,21 +15,30 @@ import type { Effect, PruneResult } from '../plan.js';
  * the kit last wrote, so YOU changed it, and it is never overwritten without `--force`.
  * A content-hash lockfile cannot tell these apart. The manifest can, because it records
  * what the kit itself last wrote. Do not collapse them.
+ *
+ * `conflict` is both at once: you edited the file AND the kit shipped a newer version of
+ * it since. That is the only local edit that leaves you a decision to make, which is why
+ * it is split out. A settled `yours` is a fact about the install, not a problem with it,
+ * and reporting the two the same way leaves doctor permanently yellow on a repo that
+ * followed the kit's own advice to edit a file.
  */
 export type FileStatus =
-  'ok' | 'missing' | 'stale' | 'yours' | 'no-marker' | 'orphaned';
+  'ok' | 'missing' | 'stale' | 'yours' | 'conflict' | 'no-marker' | 'orphaned';
 
 export interface FileDrift {
   path: string;
   module?: string;
   status: FileStatus;
   /**
-   * You edited this file. Set on `yours`, and on an `orphaned` file that the prune
-   * path kept BECAUSE you edited it. Callers use it to decide what is actionable:
-   * a deliberate edit should not hold an exit code red forever.
+   * You edited this file. Set on `yours` and `conflict`, and on an `orphaned` file that
+   * the prune path kept BECAUSE you edited it. Callers use it to decide what is
+   * actionable: a deliberate edit should not hold an exit code red forever.
    */
   yours?: boolean;
-  /** Unified diff (on disk → canonical). Present for `stale`, `yours`, `no-marker`. */
+  /**
+   * Unified diff (on disk → canonical). Present for `stale`, `yours`, `conflict`, and
+   * `no-marker`.
+   */
   diff?: string;
 }
 
@@ -36,8 +46,29 @@ export interface DriftReport {
   files: FileDrift[];
 }
 
-/** Statuses `doctor --fix` reconciles without asking. `yours` needs --force. */
+export interface ComputeDriftOptions {
+  /**
+   * The receipt of what the kit last wrote. Without it a local edit cannot be told from
+   * a conflict, because the comparison is recorded hash against canonical hash.
+   */
+  manifest: KitManifest | null;
+  prune?: PruneResult | null;
+}
+
+/** Statuses `doctor --fix` reconciles without asking. A local edit needs --force. */
 export const FIXABLE: readonly FileStatus[] = ['missing', 'stale', 'no-marker'];
+
+/** Statuses that ARE a local edit, so `--fix` touches them only under `--force`. */
+export const FORCE_ONLY: readonly FileStatus[] = ['yours', 'conflict'];
+
+/**
+ * You changed this file. Answers a different question from {@link FORCE_ONLY}, which is
+ * about what a rewrite would resolve. This is about who caused the divergence, so it also
+ * covers a retired file the prune path kept BECAUSE you had edited it.
+ */
+export function isLocalEdit(file: FileDrift): boolean {
+  return file.yours === true || FORCE_ONLY.includes(file.status);
+}
 
 function readText(root: string, relativePath: string): string | null {
   try {
@@ -48,18 +79,35 @@ function readText(root: string, relativePath: string): string | null {
 }
 
 /**
+ * Which side of a local edit the kit is on. `skip-modified` only establishes that YOU
+ * changed the file. Comparing what the kit last wrote against what it would write now
+ * establishes whether the KIT changed too, which is the difference between a settled
+ * edit and a merge you still owe.
+ */
+function editedStatus(
+  recordedHash: string | undefined,
+  canonicalHash: string | undefined,
+): 'yours' | 'conflict' {
+  if (recordedHash === undefined || canonicalHash === undefined) return 'yours';
+  return recordedHash === canonicalHash ? 'yours' : 'conflict';
+}
+
+/**
  * Classifies ONE effect against what is on disk. Pure: every filesystem touch arrives
  * through `readHost`, which is called at most once and only for the statuses that need
  * content.
  *
  * @param readHost Returns the destination file's current text, or null if it is absent.
  *   For a region action this is the whole host file, not the region body.
+ * @param recordedHash The manifest's hash for this dest, which is what the kit last
+ *   wrote. For a region that is the BODY's hash, matching what `Effect.hash` carries.
  */
 export function classifyEffect(
   effect: Effect,
   readHost: () => string | null,
+  recordedHash: string | undefined,
 ): FileDrift {
-  const { action, op, content } = effect;
+  const { action, op, content, hash } = effect;
   const base = { path: action.dest, module: action.module };
 
   // A seed whose destination exists is the user's file, by design. Not drift.
@@ -69,6 +117,9 @@ export function classifyEffect(
   if (op === 'create') {
     return { ...base, status: 'missing' };
   }
+
+  const edited = op === 'skip-modified';
+  const status = edited ? editedStatus(recordedHash, hash) : 'stale';
 
   if (action.kind === 'region') {
     const host = readHost();
@@ -81,8 +132,8 @@ export function classifyEffect(
     }
     return {
       ...base,
-      status: op === 'skip-modified' ? 'yours' : 'stale',
-      yours: op === 'skip-modified',
+      status,
+      yours: edited,
       diff: truncateDiff(unifiedDiff(body, action.body)),
     };
   }
@@ -90,8 +141,8 @@ export function classifyEffect(
   const canonical = content?.toString('utf8') ?? '';
   return {
     ...base,
-    status: op === 'skip-modified' ? 'yours' : 'stale',
-    yours: op === 'skip-modified',
+    status,
+    yours: edited,
     diff: truncateDiff(unifiedDiff(readHost() ?? '', canonical)),
   };
 }
@@ -126,15 +177,18 @@ export function orphanDrift(prune?: PruneResult | null): FileDrift[] {
  * is only the filesystem shell around it.
  *
  * @param effects From `computeEffects()`. The canonical content per path.
- * @param prune From `computePrune()`. Supplies the orphans.
  */
 export function computeDrift(
   root: string,
   effects: Effect[],
-  prune?: PruneResult | null,
+  { manifest, prune }: ComputeDriftOptions,
 ): DriftReport {
   const files = effects.map((effect) =>
-    classifyEffect(effect, () => readText(root, effect.action.dest)),
+    classifyEffect(
+      effect,
+      () => readText(root, effect.action.dest),
+      manifest?.files?.[effect.action.dest],
+    ),
   );
   return { files: [...files, ...orphanDrift(prune)] };
 }

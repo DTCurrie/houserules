@@ -331,9 +331,9 @@ describe('trackedScriptFiles and untrackFromIndex', () => {
     expect(untrackFromIndex(root, tracked)).toBe(true);
 
     expect(trackedScriptFiles(root)).toEqual([]);
-    for (const rel of tracked)
-      expect(existsSync(join(root, rel)), `${rel} must remain on disk`).toBe(
-        true,
-      );
+    expect(
+      tracked.filter((rel) => !existsSync(join(root, rel))),
+      'untracking deleted these from the working tree',
+    ).toEqual([]);
   });
 });

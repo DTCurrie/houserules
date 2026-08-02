@@ -48,13 +48,16 @@ describe('code-cleanliness', () => {
     const root = useInstalledRepo('pnpm-monorepo');
     const manifest = manifestOf(root);
     expect(manifest.modules.includes('code-cleanliness')).toBe(false);
-    for (const f of [
+    const moduleFiles = [
       '.claude/rules/code-cleanliness.md',
       '.claude/reference/design-principles.md',
       '.claude/skills/tidy/SKILL.md',
-    ]) {
-      expect(existsSync(join(root, f)), `${f} absent`).toBe(false);
-    }
+    ];
+
+    expect(
+      moduleFiles.filter((rel) => existsSync(join(root, rel))),
+      'installed despite the module being off',
+    ).toEqual([]);
   });
 
   describe('when enabled', () => {

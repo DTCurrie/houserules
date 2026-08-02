@@ -41,10 +41,10 @@ describe('resolveModuleIds', () => {
   it('adds a bare module id to the defaults rather than replacing them', () => {
     const ctx = makeCtx();
     const resolved = resolveModuleIds(ctx, 'ledger');
-    for (const defaultId of defaultModuleIds(ctx)) {
-      expect(resolved).toContain(defaultId);
-    }
-    expect(resolved).toContain('ledger');
+
+    expect(resolved).toEqual(
+      expect.arrayContaining([...defaultModuleIds(ctx), 'ledger']),
+    );
   });
 
   it('applies several comma-separated entries, mixing additions and removals', () => {

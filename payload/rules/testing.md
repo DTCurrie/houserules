@@ -129,6 +129,10 @@ that covers it is part of the change, not a follow-up.
   A test coupled to internals blocks the refactor it was supposed to protect.
 - **No conditional in a test body.** An `if` around an assertion means the test has two cases.
   Write two tests, or a case table.
+- **No loop around an assertion.** A `for` over cases stops at the first failure and the output
+  names the test, not the case that broke. Use `it.each` when each case is its own behavior.
+  When the behavior is "all of them", collect the failures and assert once on the collection,
+  so the message lists every one instead of the first. Loops in Arrange are fine.
 - **No test that polices a repo convention instead of production behavior.** A suite asserting
   where files live, how they are named, or how they are formatted is a lint rule wearing a test
   costume. It fails on a rename that broke nothing and passes while the product is broken. Put
