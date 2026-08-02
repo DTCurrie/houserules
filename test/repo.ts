@@ -35,12 +35,15 @@ import { runCli, runIn } from './run.js';
  *   whose fixers are `lint:fix` plus a writing `format` alongside a separate
  *   `format:check`. The shape CLAUDEKIT-4e98d7 broke: `filterFlag` must be empty and the
  *   writing `format` must be detected as a fixer.
+ * - `npm-single-prettier` is `npm-single` plus a `prettier` devDependency, so
+ *   `ctx.prettier` is true and the `.prettierignore` protection block plans in.
  * - `non-js` is a git repo with no package.json.
  */
 type RepoShape =
   | 'pnpm-monorepo'
   | 'pnpm-flow-monorepo'
   | 'npm-single'
+  | 'npm-single-prettier'
   | 'pnpm-single'
   | 'committed-scripts'
   | 'non-js';
@@ -275,6 +278,18 @@ function buildRepo(shape: RepoShape): string {
         4,
       )}\n`,
     );
+  } else if (shape === 'npm-single-prettier') {
+    write(
+      root,
+      'package.json',
+      json({
+        name: 'single-app-prettier',
+        version: '1.0.0',
+        scripts: { 'lint:fix': 'eslint . --fix', test: 'node --test' },
+        devDependencies: { prettier: '^3.0.0' },
+      }),
+    );
+    write(root, 'src/index.js', 'module.exports = 1;\n');
   } else if (shape === 'pnpm-flow-monorepo') {
     write(
       root,

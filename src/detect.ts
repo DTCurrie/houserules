@@ -80,6 +80,8 @@ export interface Ctx {
   packages: WorkspacePackage[];
   targets: Target[];
   typescript: boolean;
+  /** Prettier can run here, so the kit's files need protecting from it. */
+  prettier: boolean;
   changesets: ChangesetsState;
   pnpmCatalogModeStrict: boolean;
   claude: ClaudeState;
@@ -285,6 +287,34 @@ function detectTypescript(
   );
 }
 
+// Config file OR dependency OR an existing ignore file. Any one of them means a
+// `prettier --write .` can reach `.claude/`, which is all this needs to decide.
+const PRETTIER_CONFIG_FILES = [
+  '.prettierrc',
+  '.prettierrc.json',
+  '.prettierrc.yaml',
+  '.prettierrc.yml',
+  '.prettierrc.json5',
+  '.prettierrc.js',
+  '.prettierrc.mjs',
+  '.prettierrc.cjs',
+  'prettier.config.js',
+  'prettier.config.mjs',
+  'prettier.config.cjs',
+  '.prettierignore',
+];
+
+/**
+ * Whether prettier can run over this repo. The kit only writes its `.prettierignore` block
+ * when the answer is yes, so a repo with no formatter never gains a config file it did not
+ * ask for.
+ */
+function detectPrettier(root: string, rootPkg: PackageJson | null): boolean {
+  if (hasDep(rootPkg, 'prettier')) return true;
+  if (rootPkg?.prettier !== undefined) return true;
+  return PRETTIER_CONFIG_FILES.some((name) => existsSync(join(root, name)));
+}
+
 function buildTargets(
   root: string,
   rootPkg: PackageJson | null,
@@ -392,6 +422,7 @@ export function detect(root: string): Ctx {
     packages,
     targets: buildTargets(root, rootPkg, packages),
     typescript: detectTypescript(root, rootPkg, packages),
+    prettier: detectPrettier(root, rootPkg),
     changesets,
     pnpmCatalogModeStrict: detectPnpmCatalogModeStrict(root),
     claude: detectClaudeState(root),

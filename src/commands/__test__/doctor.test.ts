@@ -11,12 +11,18 @@ import { join } from 'node:path';
 
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn } from '#test/run';
-import { readJson } from '#test/installed-tree';
+import {
+  manifestOf,
+  readJson,
+  sha256,
+  writeManifest,
+} from '#test/installed-tree';
 import { runDoctorJson } from '#test/doctor-report';
 import { blockingDrift, doctorExitCode } from '../doctor.js';
 import type { Finding } from '../doctor/finding.js';
 import { EXIT } from '../../cli-contract.js';
 import type { FileDrift } from '../../core/drift.js';
+import { PRETTIERIGNORE_REGION } from '../../modules/prettier-guard.js';
 
 function drift(overrides: Partial<FileDrift> = {}): FileDrift {
   return { path: 'some/file', status: 'stale', ...overrides };
@@ -30,6 +36,11 @@ function enableModuleForReal(root: string, moduleId: string): void {
   expect(runCli(['modules', root, '--yes', '--modules', moduleId]).status).toBe(
     0,
   );
+}
+
+function frontmatterOf(text: string): string {
+  const match = /^---\n[\s\S]*?\n---\n/.exec(text);
+  return match ? match[0] : '';
 }
 
 function reconcileOrphanedGitignoreLeftByFlippingScriptsCommit(
@@ -640,6 +651,108 @@ describe('doctor --fix', () => {
 
     expect(runCli(['doctor', root, '--fix']).status).toBe(0);
     expect(existsSync(guard)).toBe(true);
+  });
+});
+
+describe('doctor and a body-owned rule frontmatter', () => {
+  let root: string;
+  let rulePath: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo', { modules: 'code-comments' });
+    rulePath = join(root, '.claude/rules/code-comments.md');
+  });
+
+  it('reports nothing anywhere for a customized frontmatter whose shipped default has not moved', () => {
+    const original = readFileSync(rulePath, 'utf8');
+    const body = original.slice(frontmatterOf(original).length);
+    const customized = '---\npaths:\n  - "custom/**"\n---\n';
+    writeFileSync(rulePath, customized + body);
+
+    const r = runCli(['doctor', root]);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).not.toMatch(/code-comments\.md/);
+  });
+
+  it('warns once when a customized frontmatter differs from a default the kit has since moved on from, while still exiting 0', () => {
+    const original = readFileSync(rulePath, 'utf8');
+    const body = original.slice(frontmatterOf(original).length);
+    const customized = '---\npaths:\n  - "custom/**"\n---\n';
+    writeFileSync(rulePath, customized + body);
+    const manifest = manifestOf(root) as {
+      files: Record<string, unknown>;
+      [key: string]: unknown;
+    };
+    manifest.files['.claude/rules/code-comments.md'] = {
+      body: sha256(body),
+      frontmatter: sha256('---\npaths:\n  - "an-older-default/**"\n---\n'),
+    };
+    writeManifest(root, manifest as any);
+
+    const r = runCli(['doctor', root]);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).toMatch(
+      /code-comments\.md: the kit shipped a new default `paths:`/,
+    );
+  });
+});
+
+describe('doctor, the suspected-formatter-mangle hint', () => {
+  let root: string;
+
+  function editThreeKitFiles(): void {
+    for (const rel of [
+      '.claude/scripts/guard-bash.mjs',
+      '.claude/scripts/session-context.mjs',
+      '.claude/scripts/changeset-check.mjs',
+    ]) {
+      appendFileSync(join(root, rel), '// tweak\n');
+    }
+  }
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+  });
+
+  it('warns with the recovery command when several kit files read as edited and no .prettierignore block exists', () => {
+    editThreeKitFiles();
+
+    const r = runCli(['doctor', root]);
+
+    expect(r.stdout).toMatch(/likely cause/);
+    expect(r.stdout).toMatch(/npx claude-kit doctor --fix --force/);
+  });
+
+  it('does not move the exit code, since a WARN finding alone never does', () => {
+    editThreeKitFiles();
+
+    expect(runCli(['doctor', root]).status).toBe(0);
+  });
+
+  it('stays silent once a .prettierignore block is present', () => {
+    editThreeKitFiles();
+    writeFileSync(
+      join(root, '.prettierignore'),
+      `${PRETTIERIGNORE_REGION.start}\n.claude/scripts/\n${PRETTIERIGNORE_REGION.end}\n`,
+    );
+
+    const r = runCli(['doctor', root]);
+
+    expect(r.stdout).not.toMatch(/likely cause/);
+  });
+
+  it('stays silent when only a couple of kit files read as edited', () => {
+    appendFileSync(join(root, '.claude/scripts/guard-bash.mjs'), '// tweak\n');
+    appendFileSync(
+      join(root, '.claude/scripts/session-context.mjs'),
+      '// tweak\n',
+    );
+
+    const r = runCli(['doctor', root]);
+
+    expect(r.stdout).not.toMatch(/likely cause/);
   });
 });
 

@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { listWorkspacePackages } from '../../../payload-dist/scripts/lib/workspaces.mjs';
+import { frontmatterBlock } from '../../core/frontmatter.js';
 import type { CheckResult, Finding } from './finding.js';
 
 // The always-loaded surface is paid on every turn (CONVENTIONS §1). ~3-4K tokens
@@ -35,9 +36,9 @@ const RESIDENT_MEMORY_FILES = [
 // A globbed rule loads only when a matching file is in the working set, so an empty
 // result here means "resident every turn". A list of only `**` counts as unscoped.
 export function ruleGlobs(text: string): string[] {
-  const fm = /^---\n([\s\S]*?)\n---/.exec(text);
-  if (!fm) return [];
-  const lines = fm[1].split('\n');
+  const fm = frontmatterBlock(text);
+  if (fm === null) return [];
+  const lines = fm.split('\n');
   const at = lines.findIndex((l) => /^paths:/.test(l));
   if (at === -1) return [];
   const inline = lines[at].slice('paths:'.length).trim();
@@ -138,9 +139,9 @@ export function measureResident(root: string): ResidentMeasurement | null {
 // The `description:` frontmatter of an installed skill/agent (single-line, quotes
 // optional). Returns null when the file has none.
 export function frontmatterDescription(text: string): string | null {
-  const fm = /^---\n([\s\S]*?)\n---/.exec(text);
-  if (!fm) return null;
-  const m = /^description:[ \t]*(.*)$/m.exec(fm[1]);
+  const fm = frontmatterBlock(text);
+  if (fm === null) return null;
+  const m = /^description:[ \t]*(.*)$/m.exec(fm);
   if (!m) return null;
   return m[1].trim().replace(/^['"]|['"]$/g, '');
 }

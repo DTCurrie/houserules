@@ -47,6 +47,30 @@ export interface RegionAction extends ActionBase {
   reason: string;
 }
 
+/**
+ * A file whose BODY the kit owns and whose FRONTMATTER you own. The mirror image of
+ * {@link RegionAction}. There the kit owns a marked span inside a file that is yours.
+ * Here it owns everything below the closing `---`, and the frontmatter above it is yours
+ * to configure.
+ *
+ * Rule files are the case this exists for. The kit's own advice tells you to trim a rule's
+ * `paths:` globs to the suffixes your repo uses, and a whole-file hash would then freeze
+ * the rule BODY at whatever shipped the day you trimmed it. The manifest records the body
+ * hash and the shipped frontmatter hash separately, so `update` splices a fresh body under
+ * whatever frontmatter is on disk.
+ *
+ * On a fresh install there is no host file to splice into, so the payload file is written
+ * whole, frontmatter included.
+ */
+export interface BodyAction extends ActionBase {
+  kind: 'body';
+  /** Absolute path under payload/. */
+  src: string;
+  /** Repo-relative destination. */
+  dest: string;
+  reason: string;
+}
+
 /** A fragment folded into .claude/settings.json. */
 export interface MergeSettingsAction extends ActionBase {
   kind: 'merge-settings';
@@ -68,8 +92,10 @@ export type Action =
   | WriteAction
   | SeedAction
   | RegionAction
+  | BodyAction
   | MergeSettingsAction
   | AdviseAction;
 
 /** The actions that name a destination path. Everything except advise/settings. */
-export type FileAction = CopyAction | WriteAction | SeedAction | RegionAction;
+export type FileAction =
+  CopyAction | WriteAction | SeedAction | RegionAction | BodyAction;

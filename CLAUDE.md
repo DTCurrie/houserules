@@ -76,6 +76,12 @@ the kit itself.
 - Kit-owned vs user-owned: copies and writes are manifest-tracked and update-refreshable. Seeds
   (kit.config.json, CLAUDE.md, reviewer drafts, .changeset/config.json) belong to the user, so
   never overwrite them.
+- Ownership can split INSIDE one file, and there are two shapes of that. A `region` action means
+  the kit owns a marker-delimited block in a file the user owns. A `body` action is the mirror:
+  the kit owns everything below the closing `---` and the user owns the frontmatter above it.
+  Rules are the `body` case, because the kit's own advise text tells users to trim a rule's
+  `paths:` to their repo. Both record a hash of the part the KIT wrote, never of the whole file,
+  and `update` splices rather than overwrites. Adding a third split needs a reason this good.
 - `.claude/scripts/` is **generated, not source**: self-gitignored on init, and installs that
   committed it are migrated by `update` (`git rm --cached` only, working tree untouched, never
   committed). `scripts.commit: true` opts back into committing them. Because the scripts may be
@@ -92,9 +98,19 @@ the kit itself.
   import zod. `payload/__test__/dependencies.test.ts` enforces this.
 - init never runs package-manager installs and never touches settings.local.json.
 - Managed regions: the kit maintains its own marker-delimited block inside files the user
-  owns (CLAUDE.md today). It writes ONLY between the markers, and bytes outside them are
-  never modified. Those paths are in `SHARED_HOST_FILES`: never created wholesale, never
-  pruned, and their manifest hash covers the region BODY, not the file.
+  owns (CLAUDE.md, and `.prettierignore` when prettier is detected). It writes ONLY between
+  the markers, and bytes outside them are never modified. Those paths are in
+  `SHARED_HOST_FILES`: never created wholesale, never pruned, and their manifest hash covers
+  the region BODY, not the file.
+- The kit's installed files must stay out of the host repo's formatter. Everything under
+  `.claude/` that the manifest tracks by content hash is byte-fragile, so a repo-wide
+  `prettier --write` rewrites it and `update` then reads the whole install as local edits
+  and skips it. That is silent, which is why `src/modules/prettier-guard.ts` writes the
+  `.prettierignore` block rather than the README documenting it. It belongs to `core` and not
+  to `lint-fix`, even though that module's Stop hook is the usual way the formatter gets
+  dragged across `.claude/`: the fragility is a property of the install, and `lint-fix` does
+  not even enable itself in a repo with no fix script. A new kit-owned subtree under
+  `.claude/` belongs in `PRETTIERIGNORE_BODY` the same day it is added.
 - Prose the kit ships (payload skills, agents, rules, templates, and the CLAUDE.md region
   `src/render.ts` generates) follows `payload/rules/prose-voice.md`: plain sentences, no
   semicolons, no em dash where a period or comma works. Frontmatter `description:` fields are

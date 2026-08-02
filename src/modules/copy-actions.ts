@@ -1,4 +1,4 @@
-import type { CopyAction } from '../actions.js';
+import type { BodyAction, CopyAction } from '../actions.js';
 import { payloadPath } from '../paths.js';
 
 export function script(
@@ -57,11 +57,16 @@ export function agent(
 /**
  * A Claude Code rule file. Claude Code loads `.claude/rules/` as memory, and a rule whose
  * frontmatter carries `paths:` globs loads only when a matching file is in the working
- * set. One without `paths:` is resident on every turn, so kit rules always carry them.
+ * set. One without `paths:` is resident on every turn, so kit rules always ship with them.
+ *
+ * Split ownership, which is why this is a `body` action and not a `copy`. The `paths:` list
+ * is yours, because only your repo knows which suffixes it uses, and the kit's own advise
+ * text tells you to trim it. Everything below the closing `---` is the kit's, and stays
+ * update-refreshable however far the frontmatter diverges. See {@link BodyAction}.
  */
-export function rule(module: string, name: string, reason: string): CopyAction {
+export function rule(module: string, name: string, reason: string): BodyAction {
   return {
-    kind: 'copy',
+    kind: 'body',
     src: payloadPath('rules', `${name}.md`),
     dest: `.claude/rules/${name}.md`,
     module,

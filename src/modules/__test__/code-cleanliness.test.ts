@@ -27,7 +27,7 @@ describe('code-cleanliness', () => {
     expect(manifest.modules.includes('code-cleanliness')).toBeTruthy();
     expect(
       manifest.files['.claude/rules/code-cleanliness.md'],
-      'the rule is kit-owned (update-refreshable)',
+      'the rule BODY is kit-owned (update-refreshable)',
     ).toBeTruthy();
 
     const settings = settingsOf(root);

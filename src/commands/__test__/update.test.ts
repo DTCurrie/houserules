@@ -21,6 +21,7 @@ import {
   settingsOf,
   sha256,
 } from '#test/installed-tree';
+import { splitFrontmatter } from '../../core/frontmatter.js';
 
 function plantRetiredHookAlongsideUserHook(
   root: string,
@@ -508,5 +509,112 @@ describe('update when the install predates a new default module', () => {
 
   it('never auto-enables the advertised module', () => {
     expect(readJson(manifestPath).modules.includes('backlog')).toBeFalsy();
+  });
+});
+
+describe('update on a body-owned rule with a trimmed frontmatter', () => {
+  const rulePath = '.claude/rules/testing.md';
+  let root: string;
+  let trimmedFrontmatter: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('npm-single', { modules: 'testing' });
+    const { body } = splitFrontmatter(
+      readFileSync(join(root, rulePath), 'utf8'),
+    );
+    trimmedFrontmatter = "---\npaths:\n  - '**/*.test.ts'\n---\n";
+    writeFileSync(join(root, rulePath), trimmedFrontmatter + body);
+    runCli(['update', root]);
+  });
+
+  it('preserves the trimmed frontmatter byte for byte', () => {
+    const { frontmatter } = splitFrontmatter(
+      readFileSync(join(root, rulePath), 'utf8'),
+    );
+    expect(frontmatter).toBe(trimmedFrontmatter);
+  });
+
+  it('records the manifest entry as a body/frontmatter hash pair', () => {
+    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    expect(manifest.files[rulePath]).toEqual({
+      body: expect.any(String),
+      frontmatter: expect.any(String),
+    });
+  });
+});
+
+describe('update on a body-owned rule whose body the kit has since changed', () => {
+  const rulePath = '.claude/rules/testing.md';
+  let root: string;
+  let trimmedFrontmatter: string;
+  let currentBody: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('npm-single', { modules: 'testing' });
+    currentBody = splitFrontmatter(
+      readFileSync(join(root, rulePath), 'utf8'),
+    ).body;
+    trimmedFrontmatter = "---\npaths:\n  - '**/*.test.ts'\n---\n";
+    const olderBody = '# an older version of the testing rule\n';
+    writeFileSync(join(root, rulePath), trimmedFrontmatter + olderBody);
+
+    const manifestPath = join(root, '.claude/kit-manifest.json');
+    const manifest = readJson(manifestPath);
+    manifest.files[rulePath] = {
+      ...manifest.files[rulePath],
+      body: sha256(olderBody),
+    };
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    runCli(['update', root]);
+  });
+
+  it('rewrites the body to the current payload content', () => {
+    const { body } = splitFrontmatter(
+      readFileSync(join(root, rulePath), 'utf8'),
+    );
+    expect(body).toBe(currentBody);
+  });
+
+  it('leaves the trimmed frontmatter untouched', () => {
+    const { frontmatter } = splitFrontmatter(
+      readFileSync(join(root, rulePath), 'utf8'),
+    );
+    expect(frontmatter).toBe(trimmedFrontmatter);
+  });
+});
+
+describe('update on a body-owned rule recorded with a legacy whole-file manifest hash', () => {
+  const rulePath = '.claude/rules/testing.md';
+  let root: string;
+  let manifestPath: string;
+  let result: RunResult;
+
+  beforeEach(() => {
+    root = useInstalledRepo('npm-single', { modules: 'testing' });
+    manifestPath = join(root, '.claude/kit-manifest.json');
+    const manifest = readJson(manifestPath);
+    manifest.files[rulePath] = sha256(
+      readFileSync(join(root, rulePath), 'utf8'),
+    );
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    result = runCli(['update', root]);
+  });
+
+  it('exits 0', () => {
+    expect(result.status, result.stderr).toBe(0);
+  });
+
+  it('does not report it as a local edit', () => {
+    expect(result.stdout).not.toMatch(/kept as-is/);
+  });
+
+  it('rewrites the manifest entry to the body/frontmatter hash shape', () => {
+    const entry = readJson(manifestPath).files[rulePath];
+    expect(entry).toEqual({
+      body: expect.any(String),
+      frontmatter: expect.any(String),
+    });
   });
 });

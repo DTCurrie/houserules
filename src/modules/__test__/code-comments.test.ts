@@ -26,7 +26,7 @@ describe('code-comments', () => {
     expect(manifest.modules.includes('code-comments')).toBeTruthy();
     expect(
       manifest.files['.claude/rules/code-comments.md'],
-      'the rule is kit-owned (update-refreshable)',
+      'the rule BODY is kit-owned (update-refreshable)',
     ).toBeTruthy();
 
     const settings = settingsOf(root);

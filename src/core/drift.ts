@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { truncateDiff, unifiedDiff } from './diff.js';
+import { classifyFrontmatter, splitFrontmatter } from './frontmatter.js';
+import { bodyHashes, wholeFileHash } from './manifest.js';
 import type { KitManifest } from './manifest.js';
 import { extractBody } from './regions.js';
 import type { Effect, PruneResult } from '../plan.js';
@@ -40,6 +43,14 @@ export interface FileDrift {
    * `no-marker`.
    */
   diff?: string;
+  /**
+   * A body-owned file whose frontmatter you customized AND whose shipped default has moved
+   * since. Deliberately an annotation rather than a {@link FileStatus}, for two reasons. It
+   * is orthogonal to the body, which has its own status on the same entry. And a status
+   * would enter `driftedFiles()` and hold the exit code red over a file that is behaving
+   * exactly as designed.
+   */
+  defaultMoved?: boolean;
 }
 
 export interface DriftReport {
@@ -101,18 +112,36 @@ function editedStatus(
  *   For a region action this is the whole host file, not the region body.
  * @param recordedHash The manifest's hash for this dest, which is what the kit last
  *   wrote. For a region that is the BODY's hash, matching what `Effect.hash` carries.
+ * @param recordedDefaultFrontmatter A body action's manifest-recorded default
+ *   frontmatter hash, used to tell a customization the kit's shipped default has moved
+ *   past from one it has not. Ignored for every other action kind.
  */
 export function classifyEffect(
   effect: Effect,
   readHost: () => string | null,
   recordedHash: string | undefined,
+  recordedDefaultFrontmatter?: string,
 ): FileDrift {
   const { action, op, content, hash } = effect;
   const base = { path: action.dest, module: action.module };
 
+  const bodyHost =
+    action.kind === 'body' && op !== 'create' ? readHost() : null;
+  const defaultMoved =
+    action.kind === 'body' &&
+    op !== 'create' &&
+    classifyFrontmatter({
+      onDisk: createHash('sha256')
+        .update(splitFrontmatter(bodyHost ?? '').frontmatter)
+        .digest('hex'),
+      recordedDefault: recordedDefaultFrontmatter,
+      shippedDefault: effect.frontmatterHash ?? '',
+    }) === 'default-moved';
+  const annotation = defaultMoved ? { defaultMoved: true } : {};
+
   // A seed whose destination exists is the user's file, by design. Not drift.
   if (op === 'skip-exists' || op === 'skip-identical') {
-    return { ...base, status: 'ok' };
+    return { ...base, ...annotation, status: 'ok' };
   }
   if (op === 'create') {
     return { ...base, status: 'missing' };
@@ -135,6 +164,22 @@ export function classifyEffect(
       status,
       yours: edited,
       diff: truncateDiff(unifiedDiff(body, action.body)),
+    };
+  }
+
+  if (action.kind === 'body') {
+    const diskBody = bodyHost === null ? '' : splitFrontmatter(bodyHost).body;
+    // `content` is the disk frontmatter spliced onto the canonical body, so re-splitting
+    // it recovers the canonical body without re-deriving it from the payload file.
+    const canonicalBody = splitFrontmatter(
+      content?.toString('utf8') ?? '',
+    ).body;
+    return {
+      ...base,
+      ...annotation,
+      status,
+      yours: edited,
+      diff: truncateDiff(unifiedDiff(diskBody, canonicalBody)),
     };
   }
 
@@ -178,6 +223,33 @@ export function orphanDrift(prune?: PruneResult | null): FileDrift[] {
  *
  * @param effects From `computeEffects()`. The canonical content per path.
  */
+/**
+ * The recorded hash to compare an effect's content against, per action kind.
+ *
+ * A body-owned dest whose manifest entry is still the legacy whole-file string reads as
+ * undefined here, which `editedStatus` treats as `yours`. The entry predates body
+ * ownership, so the kit cannot prove its own copy of the body moved on, and `conflict`
+ * would be an alarm it cannot justify.
+ */
+function recordedHashFor(
+  manifest: KitManifest | null,
+  effect: Effect,
+): string | undefined {
+  return effect.action.kind === 'body'
+    ? bodyHashes(manifest, effect.action.dest)?.body
+    : wholeFileHash(manifest, effect.action.dest);
+}
+
+/** The manifest's recorded default frontmatter hash for a body-owned dest, or undefined. */
+function recordedDefaultFrontmatterFor(
+  manifest: KitManifest | null,
+  effect: Effect,
+): string | undefined {
+  return effect.action.kind === 'body'
+    ? bodyHashes(manifest, effect.action.dest)?.frontmatter
+    : undefined;
+}
+
 export function computeDrift(
   root: string,
   effects: Effect[],
@@ -187,7 +259,8 @@ export function computeDrift(
     classifyEffect(
       effect,
       () => readText(root, effect.action.dest),
-      manifest?.files?.[effect.action.dest],
+      recordedHashFor(manifest, effect),
+      recordedDefaultFrontmatterFor(manifest, effect),
     ),
   );
   return { files: [...files, ...orphanDrift(prune)] };

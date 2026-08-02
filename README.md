@@ -190,6 +190,30 @@ npx claude-kit doctor --fix --force    # also overwrite the files you edited
 npx claude-kit doctor --fix --prune    # also delete orphans
 ```
 
+### Rules: you own the frontmatter, the kit owns the body
+
+A rule's `paths:` globs decide when Claude Code loads it, and only your repo knows which
+suffixes it actually uses. So a rule file is split down the middle. Everything below the
+closing `---` is the kit's and stays refreshable forever. The frontmatter above it is yours.
+
+Trim `paths:` to your repo and nothing breaks. It is not drift, it is not a warning, and the
+rule body still updates. The only time the kit says anything is when it ships a new default
+`paths:` and yours differ, and then it tells you once and keeps your version.
+
+### The formatter
+
+Everything the kit installs under `.claude/` is tracked by content hash, so a repo-wide
+`prettier --write .` rewrites those bytes and `update` then reads your whole install as local
+edits and refuses to refresh it. Nothing warns you, because from the manifest's side it looks
+exactly like you edited every file.
+
+When prettier is detected, the kit maintains a marker-delimited block in `.prettierignore`
+listing the subtrees it owns. Everything outside the markers is untouched, and a repo with no
+prettier never gains the file. eslint flat config is JavaScript, so the kit prints the
+`ignores` entry for you to paste instead of editing it.
+
+Already hit this? `npx claude-kit doctor --fix --force` takes the kit's copies back.
+
 ### `kit.config.json` is schema-validated
 
 The config is validated against a schema generated from the kit's own zod definition and

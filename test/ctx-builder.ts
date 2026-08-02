@@ -29,6 +29,7 @@ export function makeCtx(overrides: Partial<Ctx> = {}): Ctx {
     packages: [],
     targets: [],
     typescript: false,
+    prettier: false,
     changesets: {
       configExists: false,
       config: null,

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -309,6 +309,35 @@ describe('detect', () => {
     expect(ctx.targets.some((t) => t.packageName === '@flow/legacy')).toBe(
       false,
     );
+  });
+});
+
+describe('detect, ctx.prettier', () => {
+  it('is true when prettier is a devDependency', () => {
+    const root = useRepo('npm-single-prettier');
+    expect(detect(root).prettier).toBe(true);
+  });
+
+  it('is true when a prettier config file exists with no dependency', () => {
+    const root = useRepo('npm-single');
+    writeFileSync(join(root, '.prettierrc.json'), '{}\n');
+    expect(detect(root).prettier).toBe(true);
+  });
+
+  it('is true when a .prettierignore already exists with no dependency', () => {
+    const root = useRepo('npm-single');
+    writeFileSync(join(root, '.prettierignore'), 'dist/\n');
+    expect(detect(root).prettier).toBe(true);
+  });
+
+  it('is false for a repo with neither a dependency nor a config file', () => {
+    const root = useRepo('npm-single');
+    expect(detect(root).prettier).toBe(false);
+  });
+
+  it('is false for a bare repo with no package.json', () => {
+    const root = useRepo('non-js');
+    expect(detect(root).prettier).toBe(false);
   });
 });
 

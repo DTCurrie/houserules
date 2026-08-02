@@ -9,6 +9,8 @@ import {
   settingsSignature,
 } from './merge-settings.js';
 import { extractBody, upsertRegion } from './core/regions.js';
+import { classifyFrontmatter, splitFrontmatter } from './core/frontmatter.js';
+import { bodyHashes, wholeFileHash } from './core/manifest.js';
 
 import * as core from './modules/core.js';
 import * as lintFix from './modules/lint-fix.js';
@@ -65,7 +67,8 @@ import type {
  *
  * For a `region` action these describe the managed BODY, not the host file: a
  * `skip-identical` region means the block already matches, whatever the user has
- * written around it.
+ * written around it. A `body` action reads the same way, where the managed part is
+ * everything below the closing `---` and the frontmatter above it is the user's.
  */
 export type EffectOp =
   | 'create'
@@ -80,8 +83,17 @@ export interface Effect {
   op: EffectOp;
   /** Bytes to write. Null for a skipped seed. */
   content: Buffer | null;
-  /** sha256 of `content`, recorded in the manifest for kit-owned files. */
+  /**
+   * sha256 of `content`, recorded in the manifest for kit-owned files. For a `region` or
+   * `body` action it is the hash of the managed part alone, not of the file written.
+   */
   hash?: string;
+  /**
+   * `body` actions only: sha256 of the frontmatter the KIT ships, which is the default a
+   * later run compares the user's against. Never the hash of what is on disk. Recorded
+   * beside `hash` as {@link BodyHashes}.
+   */
+  frontmatterHash?: string;
 }
 
 export interface ComputeEffectsOptions {
@@ -284,7 +296,7 @@ export function computeEffects(
         effects.push({ action, op: 'skip-identical', content, hash });
         continue;
       }
-      const recordedHash = manifest?.files?.[action.dest];
+      const recordedHash = wholeFileHash(manifest, action.dest);
       const locallyModified =
         recordedHash !== undefined &&
         currentBody !== null &&
@@ -300,6 +312,77 @@ export function computeEffects(
         content,
         hash,
       });
+      continue;
+    }
+
+    if (action.kind === 'body') {
+      if (!existsSync(action.src))
+        throw new KitError(`Kit payload file missing: ${action.src}`);
+      const shipped = readFileSync(action.src, 'utf8');
+      const { frontmatter: shippedFrontmatter, body: canonicalBody } =
+        splitFrontmatter(shipped);
+      const hash = sha256(canonicalBody);
+      const frontmatterHash = sha256(shippedFrontmatter);
+
+      if (!exists) {
+        effects.push({
+          action,
+          op: 'create',
+          content: Buffer.from(shipped, 'utf8'),
+          hash,
+          frontmatterHash,
+        });
+        continue;
+      }
+
+      const diskText = readFileSync(destAbs, 'utf8');
+      const { frontmatter: diskFrontmatter, body: diskBody } =
+        splitFrontmatter(diskText);
+      const frontmatterState = classifyFrontmatter({
+        onDisk: sha256(diskFrontmatter),
+        recordedDefault: bodyHashes(manifest, action.dest)?.frontmatter,
+        shippedDefault: frontmatterHash,
+      });
+      const resolvedFrontmatter =
+        frontmatterState === 'default' ? shippedFrontmatter : diskFrontmatter;
+      const content = Buffer.from(resolvedFrontmatter + canonicalBody, 'utf8');
+
+      if (resolvedFrontmatter + canonicalBody === diskText) {
+        effects.push({
+          action,
+          op: 'skip-identical',
+          content,
+          hash,
+          frontmatterHash,
+        });
+        continue;
+      }
+
+      const recordedBody = bodyHashes(manifest, action.dest);
+      const recordedWholeFile = wholeFileHash(manifest, action.dest);
+      let locallyModified: boolean;
+      if (recordedBody !== undefined) {
+        locallyModified = sha256(diskBody) !== recordedBody.body;
+      } else if (recordedWholeFile !== undefined) {
+        // A legacy manifest entry, written before body ownership existed, holds the
+        // hash of the WHOLE file. An untouched install still matches that hash and
+        // must adopt cleanly rather than read as modified on its first body-owned update.
+        locallyModified = sha256(diskText) !== recordedWholeFile;
+      } else {
+        locallyModified = false;
+      }
+
+      if (locallyModified && !force) {
+        effects.push({
+          action,
+          op: 'skip-modified',
+          content,
+          hash,
+          frontmatterHash,
+        });
+        continue;
+      }
+      effects.push({ action, op: 'update', content, hash, frontmatterHash });
       continue;
     }
 
@@ -320,7 +403,7 @@ export function computeEffects(
       exists,
       onDisk: exists ? readFileSync(destAbs) : null,
       canonical: content,
-      recordedHash: manifest?.files?.[action.dest],
+      recordedHash: wholeFileHash(manifest, action.dest),
       force,
     });
     effects.push({ action, op, content, hash });
@@ -362,11 +445,11 @@ export function computeEffects(
   // describe the kit's contribution regardless of what's already merged in).
   const signature = settingsSignature(fragments);
 
-  // `region` is included so a retired region stops being pruned as an orphan.
+  // `region` and `body` are included so a retired one stops being pruned as an orphan.
   const plannedDests = new Set(
     effects
       .filter((e) =>
-        ['copy', 'write', 'seed', 'region'].includes(e.action.kind),
+        ['copy', 'write', 'seed', 'region', 'body'].includes(e.action.kind),
       )
       .map((e) => e.action.dest),
   );
@@ -409,7 +492,10 @@ export function computePrune(
       deletes.push({ dest, gone: true });
       continue;
     }
-    const modified = sha256(readFileSync(abs)) !== hash;
+    const modified =
+      typeof hash === 'object'
+        ? sha256(splitFrontmatter(readFileSync(abs, 'utf8')).body) !== hash.body
+        : sha256(readFileSync(abs)) !== hash;
     if (modified && !force) {
       kept.push(dest);
       continue;

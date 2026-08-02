@@ -1,7 +1,11 @@
 import type { Except } from 'type-fest';
 
 import { TargetRepo } from './core/fs-target.js';
-import { MANIFEST_PATH, type KitManifest } from './core/manifest.js';
+import {
+  MANIFEST_PATH,
+  type BodyHashes,
+  type KitManifest,
+} from './core/manifest.js';
 import type { SettingsSignature } from './merge-settings.js';
 import type { EffectOp, PlanResult, PruneResult } from './plan.js';
 
@@ -54,27 +58,35 @@ export function apply(
 ): ApplyResult {
   const repo = new TargetRepo(root);
   const written: WrittenEntry[] = [];
-  const files: Record<string, string> = { ...(previousManifest?.files ?? {}) };
+  const files: Record<string, string | BodyHashes> = {
+    ...(previousManifest?.files ?? {}),
+  };
   const wanted = (dest: string) => paths === undefined || paths.has(dest);
 
-  for (const { action, op, content, hash } of effects) {
+  for (const { action, op, content, hash, frontmatterHash } of effects) {
     if (!wanted(action.dest)) continue;
-    // `region` is manifest-tracked like copy/write, but its recorded hash is the
-    // managed BODY's, not the host file's. The rest of that file is the user's.
+    // `region` and `body` are manifest-tracked like copy/write, but the recorded hash
+    // covers only the part the kit owns: the region body, or the file body below the
+    // frontmatter. The rest of the file is the user's.
     const owned =
       action.kind === 'copy' ||
       action.kind === 'write' ||
-      action.kind === 'region';
+      action.kind === 'region' ||
+      action.kind === 'body';
+    const recorded: string | BodyHashes | undefined =
+      action.kind === 'body' && frontmatterHash !== undefined
+        ? { body: hash ?? '', frontmatter: frontmatterHash }
+        : hash;
     if (op === 'skip-exists' || op === 'skip-modified') continue;
     if (op === 'skip-identical') {
-      if (owned && hash) files[action.dest] = hash; // adopt identical file as kit-owned
+      if (owned && recorded) files[action.dest] = recorded; // adopt identical file as kit-owned
       continue;
     }
     if (content === null) continue;
     // Only copy/write carry a mode. A seed never does.
     const mode = 'mode' in action ? action.mode : undefined;
     repo.write(action.dest, content, mode);
-    if (owned && hash) files[action.dest] = hash;
+    if (owned && recorded) files[action.dest] = recorded;
     written.push({ dest: action.dest, op });
   }
 

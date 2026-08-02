@@ -22,7 +22,12 @@ import {
   orphanDrift,
 } from '../drift.js';
 import type { DriftReport } from '../drift.js';
-import type { CopyAction, FileAction, RegionAction } from '../../actions.js';
+import type {
+  BodyAction,
+  CopyAction,
+  FileAction,
+  RegionAction,
+} from '../../actions.js';
 import type { Effect } from '../../plan.js';
 import type { RegionSpec } from '../regions.js';
 
@@ -64,6 +69,17 @@ function regionAction(overrides: Partial<RegionAction> = {}): RegionAction {
     body: 'canonical body',
     region: REGION,
     reason: 'managed region',
+    ...overrides,
+  };
+}
+
+function bodyAction(overrides: Partial<BodyAction> = {}): BodyAction {
+  return {
+    kind: 'body',
+    module: 'testing',
+    src: '/payload/rules/testing.md',
+    dest: '.claude/rules/testing.md',
+    reason: 'body-owned rule',
     ...overrides,
   };
 }
@@ -252,6 +268,112 @@ describe('classifyEffect', () => {
     expect(result.yours).toBeFalsy();
     expect(result.diff).toMatch(/old body/);
     expect(result.diff).not.toMatch(/suffix/);
+  });
+
+  it('reports "ok" for a body-owned file whose frontmatter differs but whose body matches canonical', () => {
+    const host = '---\npaths: ["custom/**"]\n---\nshared body\n';
+    const content = '---\npaths: ["custom/**"]\n---\nshared body\n';
+    const result = classifyEffect(
+      effect(bodyAction(), 'skip-identical', content),
+      () => host,
+      KIT_LAST_WROTE,
+    );
+    expect(result.status).toBe('ok');
+  });
+
+  it('reports "missing" for a body-owned file that is gone', () => {
+    const result = classifyEffect(
+      effect(bodyAction(), 'create'),
+      neverCalled,
+      undefined,
+    );
+    expect(result.status).toBe('missing');
+  });
+
+  it('reports a body-owned file whose body was edited but the kit has not changed since as "yours", diffing only the body', () => {
+    const host = '---\npaths: ["custom/**"]\n---\nmy edited body\n';
+    const content = '---\npaths: ["custom/**"]\n---\ncanonical body\n';
+    const result = classifyEffect(
+      effect(bodyAction(), 'skip-modified', content, KIT_LAST_WROTE),
+      () => host,
+      KIT_LAST_WROTE,
+    );
+    expect(result.status).toBe('yours');
+    expect(result.yours).toBe(true);
+    expect(result.diff).toMatch(/my edited body/);
+    expect(result.diff).not.toMatch(/paths:/);
+  });
+
+  it('reports a body-owned file whose body was edited and the kit HAS changed since as "conflict"', () => {
+    const host = '---\npaths: ["custom/**"]\n---\nmy edited body\n';
+    const content = '---\npaths: ["custom/**"]\n---\ncanonical body\n';
+    const result = classifyEffect(
+      effect(bodyAction(), 'skip-modified', content, KIT_WOULD_WRITE_NOW),
+      () => host,
+      KIT_LAST_WROTE,
+    );
+    expect(result.status).toBe('conflict');
+  });
+
+  it('reports a body-owned file the kit itself would refresh as "stale", diffing only the body', () => {
+    const host = '---\npaths: ["custom/**"]\n---\nold body\n';
+    const content = '---\npaths: ["custom/**"]\n---\nnew body\n';
+    const result = classifyEffect(
+      effect(bodyAction(), 'update', content, KIT_WOULD_WRITE_NOW),
+      () => host,
+      KIT_LAST_WROTE,
+    );
+    expect(result.status).toBe('stale');
+    expect(result.yours).toBeFalsy();
+    expect(result.diff).toMatch(/old body/);
+    expect(result.diff).toMatch(/new body/);
+    expect(result.diff).not.toMatch(/paths:/);
+  });
+});
+
+describe('classifyEffect, the "defaultMoved" annotation on a body action', () => {
+  const HOST = '---\npaths: ["custom/**"]\n---\nshared body\n';
+  const HOST_FRONTMATTER = '---\npaths: ["custom/**"]\n---\n';
+  const CONTENT = '---\npaths: ["custom/**"]\n---\nshared body\n';
+
+  it('is absent when the frontmatter matches the recorded default, i.e. it was never customized', () => {
+    const result = classifyEffect(
+      effect(bodyAction(), 'skip-identical', CONTENT),
+      () => HOST,
+      KIT_LAST_WROTE,
+      sha256(HOST_FRONTMATTER),
+    );
+    expect(result.defaultMoved).toBeUndefined();
+  });
+
+  it('is absent when the frontmatter is customized but the shipped default has not moved', () => {
+    const recordedDefault = sha256('---\npaths: ["old/**"]\n---\n');
+    const result = classifyEffect(
+      {
+        ...effect(bodyAction(), 'skip-identical', CONTENT),
+        frontmatterHash: recordedDefault,
+      },
+      () => HOST,
+      KIT_LAST_WROTE,
+      recordedDefault,
+    );
+    expect(result.defaultMoved).toBeUndefined();
+  });
+
+  it('is present, on an "ok"-status entry, when the frontmatter is customized and the shipped default has moved since', () => {
+    const recordedDefault = sha256('---\npaths: ["old/**"]\n---\n');
+    const shippedDefault = sha256('---\npaths: ["new/**"]\n---\n');
+    const result = classifyEffect(
+      {
+        ...effect(bodyAction(), 'skip-identical', CONTENT),
+        frontmatterHash: shippedDefault,
+      },
+      () => HOST,
+      KIT_LAST_WROTE,
+      recordedDefault,
+    );
+    expect(result.status).toBe('ok');
+    expect(result.defaultMoved).toBe(true);
   });
 });
 

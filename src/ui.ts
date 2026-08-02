@@ -307,7 +307,12 @@ export function renderPreview({
           : op === 'skip-modified'
             ? ' (local edits — kept; update --force to overwrite)'
             : '';
-      const regionSuffix = action.kind === 'region' ? ' (managed block)' : '';
+      const regionSuffix =
+        action.kind === 'region'
+          ? ' (managed block)'
+          : action.kind === 'body'
+            ? ' (managed body)'
+            : '';
       lines.push(
         ...bullet(
           `${sigil} ${action.dest}${regionSuffix}${suffix}`,

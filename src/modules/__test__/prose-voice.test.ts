@@ -30,7 +30,7 @@ describe('prose-voice', () => {
     expect(manifest.modules.includes('prose-voice')).toBeTruthy();
     expect(
       manifest.files['.claude/rules/prose-voice.md'],
-      'the rule is kit-owned (update-refreshable)',
+      'the rule BODY is kit-owned (update-refreshable)',
     ).toBeTruthy();
 
     const settings = settingsOf(root);

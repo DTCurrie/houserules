@@ -12,6 +12,7 @@ import type { Ctx } from '../detect.js';
 import type { Answers, ModuleGroup } from '../module-def.js';
 import { lib, script, template } from './copy-actions.js';
 import { hookFragment } from './hook-wiring.js';
+import { prettierGuardActions } from './prettier-guard.js';
 
 // Staged by their owning opt-in module rather than by core's blanket walk, so a repo
 // that never enables that module does not carry its pattern.
@@ -112,6 +113,8 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
         'scripts are build output; self-gitignored (repo .gitignore untouched)',
     });
   }
+
+  actions.push(...prettierGuardActions(ctx));
 
   actions.push({
     kind: 'seed',
