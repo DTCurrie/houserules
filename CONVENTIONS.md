@@ -154,8 +154,26 @@ that is truly true on every turn. A globless guardrail doc silently spends the a
 from §1, and `doctor` flags it. If you want a doc pull-only instead, keep it out of `.claude/rules/`
 and link it from CLAUDE.md.
 
+**`paths:` is a working-set trigger, not a write-intent trigger, and a plain Read is enough to fire
+it.** The docs state it directly: path-scoped rules trigger when Claude reads a matching file, not
+on every tool use. So a rule scoped to `**/*.md` loads on a turn that only answered a question after
+reading a backlog entry. There is no tool filter and no read-versus-write gate in rule frontmatter,
+`paths` is the only field, verified against 2.1.220. A `PreToolUse` hook can inject context and does
+reach the model, but it lands next to the tool result, so it cannot shape the edit that triggered
+it. Budget for the rule loading on reads, and pick globs on that basis rather than on where writes
+happen.
+
+**If one rule defers to another, the target's `paths:` must cover the source's.** A rule that says
+"see `other.md` for X" is a dangling pointer on any file where the target is not loaded. `prose-voice`
+is the worked example of getting this wrong and then right: it owns sentence-level voice, both
+`code-comments` and `testing` defer to it, and its `paths:` list was markdown-only, so on every
+source file the comment rule pointed at a rule that was not in context. The fix was to widen the
+target, not narrow it. Check the direction of every cross-rule reference before trimming a glob
+list.
+
 The kit's own `code-comments` and `prose-voice` modules are worked examples of the pattern: both ship
-as `paths:`-scoped rules with no hook and no CLAUDE.md pointer. `code-cleanliness` goes further,
+as `paths:`-scoped rules with no hook and no CLAUDE.md pointer, over the same source extensions so
+the deference between them resolves. `code-cleanliness` goes further,
 splitting a `paths:`-scoped rule from a pull-only `.claude/reference/design-principles.md` that the
 rule links to instead of restating. `testing` shows the axis cutting the other way: its `paths:` list
 holds test suffixes rather than source ones, so the rule is resident only while a test is open.
@@ -219,10 +237,10 @@ Each of these is a standing habit, not a script:
 - **Response-token compression is a style problem.** The kit's opt-in `terse-style` output style
   (adapted from caveman, MIT) cuts ~50–70% of response tokens by dropping filler and prose, at a
   readability cost. Good for grind sessions, wrong for explanations you'll reread.
-- **Authored prose is a separate lever.** `prose-voice` is a `paths:`-scoped rule covering the
-  markdown the agent writes (changesets, plans, docs, backlog entries) rather than its chat replies,
-  so it composes with any output style. It buys clarity more than tokens. Splitting an em-dashed
-  clause into two sentences is roughly token-neutral.
+- **Authored prose is a separate lever.** `prose-voice` is a `paths:`-scoped rule covering the prose
+  the agent writes (changesets, plans, docs, backlog entries, and the sentences inside code comments)
+  rather than its chat replies, so it composes with any output style. It buys clarity more than
+  tokens. Splitting an em-dashed clause into two sentences is roughly token-neutral.
 - **Tool-output compression via hooks isn't reliable.** PostToolUse output replacement
   (`updatedToolOutput`) is not honored on current Claude Code, verified inert on 2.1.208, where the
   hook runs but the model still receives the raw output. The kit therefore ships no tool-output

@@ -6,6 +6,19 @@ paths:
   - '.changeset/*.md'
   - '.claude/**/*.md'
   - '.github/**/*.md'
+  # Source extensions mirror `code-comments.md`, because a code comment is prose
+  # this rule governs. Without these the comment rule points at a rule that is
+  # not loaded whenever the file in play is source rather than markdown.
+  - '**/*.ts'
+  - '**/*.tsx'
+  - '**/*.mts'
+  - '**/*.js'
+  - '**/*.jsx'
+  - '**/*.mjs'
+  - '**/*.cjs'
+  - '**/*.svelte'
+  - '**/*.svelte.ts'
+  - '**/*.svelte.js'
 ---
 
 # Prose Voice
