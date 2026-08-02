@@ -9,7 +9,7 @@ import {
   schemaRefFor,
   verifyDefaultsFor,
 } from '../render.js';
-import type { PackageManagerInfo } from '../types.js';
+import type { PackageManagerInfo } from '../detect.js';
 import { makeAnswers, makeCtx, makeTarget } from '#test/ctx-builder';
 
 describe('verifyDefaultsFor', () => {

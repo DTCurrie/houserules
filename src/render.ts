@@ -1,4 +1,5 @@
-import type { Answers, Ctx, PackageManagerInfo, Target } from './types.js';
+import type { Ctx, PackageManagerInfo, Target } from './detect.js';
+import type { Answers } from './module-def.js';
 
 interface FixDefaults {
   runner: string;

@@ -1,5 +1,6 @@
-import type { Action, ModuleGroup } from '../types.js';
-import { template } from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { template } from './copy-actions.js';
 
 export const id = 'persona-auditor';
 export const title =

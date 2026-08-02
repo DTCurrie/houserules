@@ -1,11 +1,60 @@
-import type {
-  HookEntry,
-  HookGroup,
-  Settings,
-  SettingsChange,
-  SettingsFragment,
-  SettingsSignature,
-} from './types.js';
+export interface HookEntry {
+  type: 'command';
+  command: string;
+  statusMessage?: string;
+  [key: string]: unknown;
+}
+
+export interface HookGroup {
+  matcher?: string;
+  hooks: HookEntry[];
+}
+
+export interface Permissions {
+  allow?: string[];
+  deny?: string[];
+  ask?: string[];
+}
+
+/** A .claude/settings.json document. Unknown keys pass through untouched. */
+export interface Settings {
+  permissions?: Permissions;
+  hooks?: Record<string, HookGroup[]>;
+  statusLine?: unknown;
+  outputStyle?: string;
+  [key: string]: unknown;
+}
+
+/** A module's contribution to settings.json. Additive by construction. */
+export interface SettingsFragment {
+  permissions?: Permissions;
+  hooks?: Record<string, HookGroup[]>;
+  statusLine?: unknown;
+  [key: string]: unknown;
+}
+
+export type SettingsChangeKind =
+  'permission' | 'hook' | 'remove-hook' | 'statusLine';
+
+export interface SettingsChange {
+  kind: SettingsChangeKind;
+  detail: string;
+}
+
+export interface SettingsPlan {
+  dest: string;
+  existedBefore: boolean;
+  changes: SettingsChange[];
+  /** Rendered file text. Absent only on a plan built purely to carry removals. */
+  text?: string;
+}
+
+/** The hooks + permissions the kit contributed, recorded so update/doctor can
+ * reconcile precisely instead of guessing which entries are the kit's. */
+export interface SettingsSignature {
+  hooks: { event: string; matcher: string | null; script: string | null }[];
+  permissions: string[];
+}
 
 const KIT_SCRIPT_RE = /([\w-]+\.mjs)\b/g;
 

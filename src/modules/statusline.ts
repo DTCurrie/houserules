@@ -1,5 +1,7 @@
-import type { Action, ModuleGroup } from '../types.js';
-import { hookCommand, script } from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { script } from './copy-actions.js';
+import { hookCommand } from './hook-wiring.js';
 
 export const id = 'statusline';
 export const title = 'Kit-aware statusline (changeset debt + targets-touched)';

@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { detect } from '../detect.js';
-import type { Flags } from '../types.js';
+import type { Flags } from '../cli-contract.js';
 
 interface Usage {
   input_tokens?: number;

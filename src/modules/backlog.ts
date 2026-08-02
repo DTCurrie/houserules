@@ -1,11 +1,7 @@
-import type { Action, ModuleGroup } from '../types.js';
-import {
-  agent,
-  hookFragment,
-  script,
-  scriptPermission,
-  skill,
-} from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { agent, script, skill } from './copy-actions.js';
+import { hookFragment, scriptPermission } from './hook-wiring.js';
 
 export const id = 'backlog';
 export const title = 'Backlog ledger (/backlog-add + reviewer agent)';

@@ -1,5 +1,6 @@
-import type { Action, ModuleGroup } from '../types.js';
-import { skill } from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { skill } from './copy-actions.js';
 
 export const id = 'ready';
 export const title = 'Pre-handoff roll-up (/ready)';

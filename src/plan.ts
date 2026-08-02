@@ -36,24 +36,83 @@ import * as testing from './modules/testing.js';
 
 import type {
   Action,
-  ComputeEffectsOptions,
+  AdviseAction,
   CopyAction,
-  WriteAction,
+  FileAction,
   SeedAction,
-  Ctx,
-  Answers,
-  Effect,
-  KitManifest,
-  ModuleDef,
-  PlanResult,
-  PruneDelete,
-  PruneResult,
+  WriteAction,
+} from './actions.js';
+import type { KitManifest } from './core/manifest.js';
+import type { Ctx } from './detect.js';
+import type { Answers, ModuleDef } from './module-def.js';
+import type {
+  Settings,
   SettingsChange,
   SettingsFragment,
   SettingsPlan,
-  Settings,
-  AdviseAction,
-} from './types.js';
+  SettingsSignature,
+} from './merge-settings.js';
+
+/**
+ * What computeEffects() concluded an action means against the real tree.
+ *
+ * - `create`          the file is absent
+ * - `update`          kit-owned, differs, and is safe to refresh
+ * - `skip-identical`  already byte-identical
+ * - `skip-exists`     a seed whose destination exists (user owns it)
+ * - `skip-modified`   kit-owned but locally edited. Kept unless --force
+ * - `delete`          only produced by the prune path, in apply()
+ *
+ * For a `region` action these describe the managed BODY, not the host file: a
+ * `skip-identical` region means the block already matches, whatever the user has
+ * written around it.
+ */
+export type EffectOp =
+  | 'create'
+  | 'update'
+  | 'skip-identical'
+  | 'skip-exists'
+  | 'skip-modified'
+  | 'delete';
+
+export interface Effect {
+  action: FileAction;
+  op: EffectOp;
+  /** Bytes to write. Null for a skipped seed. */
+  content: Buffer | null;
+  /** sha256 of `content`, recorded in the manifest for kit-owned files. */
+  hash?: string;
+}
+
+export interface ComputeEffectsOptions {
+  manifest?: KitManifest | null;
+  force?: boolean;
+}
+
+export interface PlanResult {
+  effects: Effect[];
+  settingsPlan: SettingsPlan | null;
+  advisories: AdviseAction[];
+  signature: SettingsSignature;
+  /** Every dest the current plan produces. The reference set prune diffs against. */
+  plannedDests: Set<string>;
+}
+
+export interface PruneDelete {
+  dest: string;
+  /** The file was locally edited and --force removed it anyway. */
+  modified?: boolean;
+  /** Already absent on disk. Just dropped from the manifest. */
+  gone?: boolean;
+}
+
+export interface PruneResult {
+  deletes: PruneDelete[];
+  /** Retired but locally edited, so kept. */
+  kept: string[];
+  /** Basenames of retired hook scripts, so the caller can unwire them. */
+  removedScripts: string[];
+}
 
 export const MODULES: ModuleDef[] = [
   core,

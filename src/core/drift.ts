@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { truncateDiff, unifiedDiff } from './diff.js';
 import { extractBody } from './regions.js';
-import type { Effect, PruneResult } from '../types.js';
+import type { Effect, PruneResult } from '../plan.js';
 
 /**
  * Why a file no longer matches what the kit would write.

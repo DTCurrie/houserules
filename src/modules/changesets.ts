@@ -1,12 +1,9 @@
 import { renderChangesetConfig } from '../render.js';
-import type { Action, Answers, Ctx, ModuleGroup } from '../types.js';
-import {
-  agent,
-  hookFragment,
-  script,
-  scriptPermission,
-  skill,
-} from './shared.js';
+import type { Action } from '../actions.js';
+import type { Ctx } from '../detect.js';
+import type { Answers, ModuleGroup } from '../module-def.js';
+import { agent, script, skill } from './copy-actions.js';
+import { hookFragment, scriptPermission } from './hook-wiring.js';
 
 export const id = 'changesets';
 export const title = 'Changesets integration (canonical changelog)';

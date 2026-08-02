@@ -13,16 +13,9 @@ import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn } from '#test/run';
 import { readJson } from '#test/installed-tree';
 import { runDoctorJson } from '#test/doctor-report';
-import {
-  allHookCommands,
-  blockingDrift,
-  doctorExitCode,
-  frontmatterDescription,
-  parseImports,
-  ruleGlobs,
-  type Finding,
-} from '../doctor.js';
-import { EXIT } from '../../types.js';
+import { blockingDrift, doctorExitCode } from '../doctor.js';
+import type { Finding } from '../doctor/finding.js';
+import { EXIT } from '../../cli-contract.js';
 import type { FileDrift } from '../../core/drift.js';
 
 function drift(overrides: Partial<FileDrift> = {}): FileDrift {
@@ -131,148 +124,6 @@ describe('blockingDrift', () => {
       expect(blockingDrift([entry])).toEqual([entry]);
     },
   );
-});
-
-describe('parseImports', () => {
-  it('matches an @specifier at the start of the line', () => {
-    expect(parseImports('@lib/thing.md')).toEqual(['lib/thing.md']);
-  });
-
-  it('matches an @specifier that follows whitespace', () => {
-    expect(parseImports('see @lib/thing.md for more')).toEqual([
-      'lib/thing.md',
-    ]);
-  });
-
-  it('matches several @specifiers in one text', () => {
-    expect(parseImports('@a.md and @b.md')).toEqual(['a.md', 'b.md']);
-  });
-
-  it('does not match an email address, since @ must be preceded by whitespace or line start', () => {
-    expect(parseImports('contact foo@bar.com for help')).toEqual([]);
-  });
-
-  it('returns an empty list for empty text', () => {
-    expect(parseImports('')).toEqual([]);
-  });
-});
-
-describe('ruleGlobs', () => {
-  it('parses the inline array form', () => {
-    expect(ruleGlobs('---\npaths: [a/**, b/**]\n---\n\nbody')).toEqual([
-      'a',
-      'b',
-    ]);
-  });
-
-  it('parses the dashed list form', () => {
-    expect(ruleGlobs('---\npaths:\n  - a/**\n  - b/**\n---\n\nbody')).toEqual([
-      'a',
-      'b',
-    ]);
-  });
-
-  it('strips single and double quotes around each entry', () => {
-    expect(
-      ruleGlobs('---\npaths:\n  - \'a/**\'\n  - "b/**"\n---\n\nbody'),
-    ).toEqual(['a', 'b']);
-  });
-
-  it('strips a trailing /** from an entry', () => {
-    expect(ruleGlobs('---\npaths:\n  - src/**\n---\n\nbody')).toEqual(['src']);
-  });
-
-  it('drops a bare ** entry', () => {
-    expect(ruleGlobs('---\npaths:\n  - "**"\n---\n\nbody')).toEqual([]);
-  });
-
-  it('returns an empty list when there is no frontmatter at all', () => {
-    expect(ruleGlobs('# just a heading\n')).toEqual([]);
-  });
-
-  it('returns an empty list when frontmatter has no paths: key', () => {
-    expect(ruleGlobs('---\ndescription: "no globs"\n---\n\nbody')).toEqual([]);
-  });
-
-  it('stops the dashed list at the next frontmatter key', () => {
-    expect(
-      ruleGlobs(
-        '---\npaths:\n  - a/**\n  - b/**\ndescription: "next key"\n---\n\nbody',
-      ),
-    ).toEqual(['a', 'b']);
-  });
-});
-
-describe('frontmatterDescription', () => {
-  it('reads an unquoted description', () => {
-    expect(
-      frontmatterDescription('---\ndescription: plain text\n---\n\nbody'),
-    ).toBe('plain text');
-  });
-
-  it('reads a single-quoted description, stripping the quotes', () => {
-    expect(
-      frontmatterDescription("---\ndescription: 'quoted text'\n---\n\nbody"),
-    ).toBe('quoted text');
-  });
-
-  it('reads a double-quoted description, stripping the quotes', () => {
-    expect(
-      frontmatterDescription('---\ndescription: "quoted text"\n---\n\nbody'),
-    ).toBe('quoted text');
-  });
-
-  it('returns null when frontmatter has no description: key', () => {
-    expect(frontmatterDescription('---\npaths: [a]\n---\n\nbody')).toBeNull();
-  });
-
-  it('returns null when there is no frontmatter at all', () => {
-    expect(frontmatterDescription('# just a heading\n')).toBeNull();
-  });
-});
-
-describe('allHookCommands', () => {
-  it('returns an empty list for null settings', () => {
-    expect(allHookCommands(null)).toEqual([]);
-  });
-
-  it('returns an empty list for undefined settings', () => {
-    expect(allHookCommands(undefined)).toEqual([]);
-  });
-
-  it('returns an empty list when settings has no hooks', () => {
-    expect(allHookCommands({})).toEqual([]);
-  });
-
-  it('flattens a single hook command', () => {
-    const settings = {
-      hooks: {
-        PreToolUse: [
-          { hooks: [{ type: 'command' as const, command: 'a.mjs' }] },
-        ],
-      },
-    };
-    expect(allHookCommands(settings)).toEqual(['a.mjs']);
-  });
-
-  it('flattens several hook commands across several events', () => {
-    const settings = {
-      hooks: {
-        PreToolUse: [
-          { hooks: [{ type: 'command' as const, command: 'a.mjs' }] },
-        ],
-        PostToolUse: [
-          {
-            hooks: [
-              { type: 'command' as const, command: 'b.mjs' },
-              { type: 'command' as const, command: 'c.mjs' },
-            ],
-          },
-        ],
-      },
-    };
-    expect(allHookCommands(settings)).toEqual(['a.mjs', 'b.mjs', 'c.mjs']);
-  });
 });
 
 describe('doctor on a freshly initialized pnpm monorepo', () => {

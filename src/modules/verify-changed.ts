@@ -1,5 +1,8 @@
-import { script, scriptPermission, skill } from './shared.js';
-import type { Action, Ctx, ModuleGroup } from '../types.js';
+import type { Action } from '../actions.js';
+import type { Ctx } from '../detect.js';
+import type { ModuleGroup } from '../module-def.js';
+import { script, skill } from './copy-actions.js';
+import { scriptPermission } from './hook-wiring.js';
 
 export const id = 'verify-changed';
 export const title = 'Diff-scoped verification (/verify-changed)';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { mergeSettings, parseSettingsText } from '../merge-settings.js';
-import type { Settings, SettingsFragment } from '../types.js';
+import type { Settings, SettingsFragment } from '../merge-settings.js';
 
 const KIT_FRAGMENT: SettingsFragment = {
   permissions: { allow: ['Bash(git status:*)', 'Bash(git diff:*)'] },

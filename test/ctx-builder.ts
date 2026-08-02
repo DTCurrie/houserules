@@ -1,4 +1,5 @@
-import type { Answers, Ctx, Target } from '../src/types.js';
+import type { Ctx, Target } from '../src/detect.js';
+import type { Answers } from '../src/module-def.js';
 
 export function makeTarget(overrides: Partial<Target> = {}): Target {
   return {

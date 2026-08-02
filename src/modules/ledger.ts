@@ -1,5 +1,7 @@
-import type { Action, ModuleGroup } from '../types.js';
-import { script, scriptPermission, template } from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { script, template } from './copy-actions.js';
+import { scriptPermission } from './hook-wiring.js';
 
 export const id = 'ledger';
 export const title = 'Per-commit changelog ledger (in addition to changesets)';

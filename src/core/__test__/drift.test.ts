@@ -21,12 +21,8 @@ import {
   orphanDrift,
 } from '../drift.js';
 import type { DriftReport } from '../drift.js';
-import type {
-  CopyAction,
-  Effect,
-  FileAction,
-  RegionAction,
-} from '../../types.js';
+import type { CopyAction, FileAction, RegionAction } from '../../actions.js';
+import type { Effect } from '../../plan.js';
 import type { RegionSpec } from '../regions.js';
 
 function copyAction(overrides: Partial<CopyAction> = {}): CopyAction {

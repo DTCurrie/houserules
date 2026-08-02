@@ -1,16 +1,11 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import type {
-  AdviseAction,
-  ChangesetInvocation,
-  Ctx,
-  Effect,
-  EffectOp,
-  ModuleDef,
-  SettingsPlan,
-  Target,
-  WrittenEntry,
-} from './types.js';
+import type { AdviseAction } from './actions.js';
+import type { WrittenEntry } from './apply.js';
+import type { ChangesetInvocation, Ctx, Target } from './detect.js';
+import type { SettingsPlan } from './merge-settings.js';
+import type { ModuleDef } from './module-def.js';
+import type { Effect, EffectOp } from './plan.js';
 
 export const isTTY = () => Boolean(process.stdout.isTTY && process.stdin.isTTY);
 

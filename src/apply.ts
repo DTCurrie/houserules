@@ -1,13 +1,41 @@
-import { TargetRepo } from './core/fs-target.js';
-import type {
-  ApplyInput,
-  ApplyOptions,
-  ApplyResult,
-  KitManifest,
-  WrittenEntry,
-} from './types.js';
+import type { Except } from 'type-fest';
 
-export const MANIFEST_PATH = '.claude/kit-manifest.json';
+import { TargetRepo } from './core/fs-target.js';
+import { MANIFEST_PATH, type KitManifest } from './core/manifest.js';
+import type { SettingsSignature } from './merge-settings.js';
+import type { EffectOp, PlanResult, PruneResult } from './plan.js';
+
+/**
+ * What apply() consumes: a plan result minus the fields it has no use for, plus the
+ * prune. Derived from `PlanResult` rather than restated, so a field added there
+ * cannot silently go unconsidered here. `signature` widens to optional because a
+ * caller may apply without recording one.
+ */
+export type ApplyInput = Except<
+  PlanResult,
+  'advisories' | 'plannedDests' | 'signature'
+> & {
+  signature?: SettingsSignature | null;
+  prune?: PruneResult | null;
+};
+
+export interface ApplyOptions {
+  kitVersion: string;
+  moduleIds: string[];
+  previousManifest?: KitManifest | null;
+  /** Restrict writes to these dests (doctor --fix). Omit to write the whole plan. */
+  paths?: Set<string>;
+}
+
+export interface WrittenEntry {
+  dest: string;
+  op: EffectOp | 'merge';
+}
+
+export interface ApplyResult {
+  written: WrittenEntry[];
+  manifest: KitManifest;
+}
 
 /**
  * Executes a computed plan. This is the only code in the kit that writes to a target

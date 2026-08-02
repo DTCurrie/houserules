@@ -1,5 +1,6 @@
-import type { Action, ModuleGroup } from '../types.js';
-import { rule } from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { rule } from './copy-actions.js';
 
 export const id = 'code-comments';
 export const title = 'Comment discipline rule (.claude/rules/code-comments.md)';

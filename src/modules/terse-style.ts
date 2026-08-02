@@ -1,5 +1,6 @@
 import { payloadPath } from '../paths.js';
-import type { Action, ModuleGroup } from '../types.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
 
 export const id = 'terse-style';
 export const title = 'Terse output style (token-lean responses)';

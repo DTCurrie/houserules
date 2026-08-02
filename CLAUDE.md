@@ -8,8 +8,12 @@ the kit itself.
 
 - `src/`: the installer, in TypeScript. The pipeline is detect → plan (declarative actions) →
   preview → apply. May use npm dependencies (@clack/prompts, picocolors, zod). Builds to `dist/`
-  (gitignored). `src/types.ts` is the shared model every module and command is typed against, and
-  `src/core/config.ts` is the zod schema for `kit.config.json`.
+  (gitignored). There is no central type module. Every shared type lives with the code that
+  produces it: `Ctx` and `Target` in `src/detect.ts`, `Effect`/`PlanResult`/`PruneResult` in
+  `src/plan.ts`, the `Settings*` and `Hook*` shapes in `src/merge-settings.ts`, `Apply*` in
+  `src/apply.ts`, `KitManifest` in `src/core/manifest.ts`, the `Action` union in
+  `src/actions.ts`, `ModuleDef`/`Answers` in `src/module-def.ts`, and `Flags`/`EXIT` in
+  `src/cli-contract.ts`. `src/core/config.ts` is the zod schema for `kit.config.json`.
 - `schema/kit.config.schema.json` is **generated** from that zod schema by `pnpm run schema`.
   Never hand-edit it. `src/core/__test__/config.test.ts` fails when it falls out of sync.
 - `payload/`: everything copied into user repos. Scripts are authored as `.mts` and compiled
@@ -26,9 +30,10 @@ the kit itself.
   Never add a `.e2e.test.ts` tier. If a file gets unwieldy, split it by CONCERN.
   - **The filename names the unit, and every `describe` in it is about that unit.** A file named
     for a theme is a grouping, and a grouping hides which unit is covered. `src/**/__test__/`,
-    `src/modules/__test__/` (named for the module it covers), `payload/scripts/__test__/`,
-    `payload/scripts/lib/__test__/`, and `payload/__test__/` for the two invariants over the
-    whole built tree (`dependencies`, `execution`).
+    `src/modules/__test__/` (named for the module it covers), `src/commands/doctor/__test__/`
+    (one file per doctor check), `payload/scripts/__test__/`, `payload/scripts/lib/__test__/`,
+    and `payload/__test__/` for the two invariants over the whole built tree (`dependencies`,
+    `execution`).
   - **`test/` holds no tests**, only the shared testing modules, one per artifact: `repo`
     (builds the synthetic repos), `run` (`runCli`, `runScript`, `runIn`), `installed-tree`,
     `doctor-report`, `runner-stub`, `hook-input`, `ctx-builder`, plus `global-setup`. Named
@@ -94,9 +99,16 @@ the kit itself.
   `src/render.ts` generates) follows `payload/rules/prose-voice.md`: plain sentences, no
   semicolons, no em dash where a period or comma works. Frontmatter `description:` fields are
   the skill-routing signal, so keep every trigger term when rewording one.
-- `src/types.ts` and `src/modules/shared.ts` predate the catch-all-files rule in
-  `payload/rules/code-cleanliness.md`, which forbids both names. Tracked as KIT-1d28be. Do not
-  start that rename as a side quest, and do not add new files of that shape.
+- No catch-all files, per `payload/rules/code-cleanliness.md`, which the kit ships and this
+  repo obeys. There is no `types.ts`, `shared.ts`, `utils.ts`, `constants.ts`, or `helpers.ts`
+  anywhere in `src/`. A type belongs to the module that produces it, and genuinely shared code
+  gets a module named for its job. Do not reintroduce one.
+- `doctor` is an orchestrator over independent checks. Each check in `src/commands/doctor/`
+  is a pure-ish function of `(root, ctx, flags)` returning `{ findings, readouts }`, and
+  `src/commands/doctor.ts` only sequences them and rolls the severity up to an exit code.
+  Order matters in one place: `reconcileDrift` runs last because `--fix` writes, and every
+  check before it must see the tree as the user left it. Add a new check as a new file, never
+  as another branch inside `doctor()`.
 - The user always handles `git commit` / `push` / PR-create.
 
 ## Cost & verification discipline

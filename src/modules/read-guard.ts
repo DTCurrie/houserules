@@ -1,5 +1,7 @@
-import type { Action, ModuleGroup } from '../types.js';
-import { hookFragment, script } from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { script } from './copy-actions.js';
+import { hookFragment } from './hook-wiring.js';
 
 export const id = 'read-guard';
 export const title =

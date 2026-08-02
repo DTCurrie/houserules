@@ -1,5 +1,7 @@
-import type { Action, Answers, Ctx, ModuleGroup } from '../types.js';
-import { skill, agent } from './shared.js';
+import type { Action } from '../actions.js';
+import type { Ctx } from '../detect.js';
+import type { Answers, ModuleGroup } from '../module-def.js';
+import { agent, skill } from './copy-actions.js';
 
 export const id = 'orchestrate';
 export const title = 'Phase execution via scoped workers (/orchestrate)';

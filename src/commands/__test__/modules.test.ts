@@ -6,7 +6,7 @@ import { treeHash, useInstalledRepo, useRepo } from '#test/repo';
 import { runCli } from '#test/run';
 import { allHookCommands, manifestOf, settingsOf } from '#test/installed-tree';
 import { parseRequested } from '../modules.js';
-import type { ModuleDef } from '../../types.js';
+import type { ModuleDef } from '../../module-def.js';
 
 function installedWithReadGuard(): string {
   const root = useInstalledRepo('npm-single', { modules: 'read-guard' });

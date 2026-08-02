@@ -1,6 +1,8 @@
 import { renderReviewerDraft } from '../render.js';
-import type { Action, Answers, Ctx, ModuleGroup } from '../types.js';
-import { skill } from './shared.js';
+import type { Action } from '../actions.js';
+import type { Ctx } from '../detect.js';
+import type { Answers, ModuleGroup } from '../module-def.js';
+import { skill } from './copy-actions.js';
 
 export const id = 'reviewers';
 export const title =

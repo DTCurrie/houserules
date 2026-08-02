@@ -12,7 +12,10 @@ import {
 } from '../plan.js';
 import { apply } from '../apply.js';
 import * as ui from '../ui.js';
-import type { Answers, Ctx, Flags, PlanResult } from '../types.js';
+import type { Flags } from '../cli-contract.js';
+import type { Ctx } from '../detect.js';
+import type { Answers } from '../module-def.js';
+import type { PlanResult } from '../plan.js';
 
 // Symlinks are resolved because git's toplevel is a realpath and resolve() alone is not,
 // so /var vs /private/var on macOS would spuriously differ.

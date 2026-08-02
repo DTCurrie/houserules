@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 import { Command, CommanderError } from 'commander';
 
 import { KitConfigError } from './core/config.js';
-import { EXIT } from './types.js';
-import type { Flags } from './types.js';
+import type { Flags } from './cli-contract.js';
+import { EXIT } from './cli-contract.js';
 
 const require = createRequire(import.meta.url);
 const { version: KIT_VERSION } = require('../package.json') as {

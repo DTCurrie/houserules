@@ -1,5 +1,7 @@
-import type { Action, ModuleGroup } from '../types.js';
-import { hookFragment, script, skill, template } from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { script, skill, template } from './copy-actions.js';
+import { hookFragment } from './hook-wiring.js';
 
 export const id = 'debug-session';
 export const title = 'Hypothesis-driven debug session (/debug-session)';

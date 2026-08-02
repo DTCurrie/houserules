@@ -1,5 +1,7 @@
-import type { Action, Ctx, ModuleGroup } from '../types.js';
-import { script } from './shared.js';
+import type { Action } from '../actions.js';
+import type { Ctx } from '../detect.js';
+import type { ModuleGroup } from '../module-def.js';
+import { script } from './copy-actions.js';
 
 export const id = 'rename';
 export const title = 'TS semantic rename script';

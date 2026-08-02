@@ -11,47 +11,6 @@ Pinned typescript to ^6.0.3 in phase 1 of kit-v2: typescript-eslint@8.65 peers '
 
 ---
 
-## [CLAUDEKIT-05896a] Split src/types.ts and src/commands/doctor.ts into modules
-
-**Logged:** 2026-08-02
-**Chat:** f64be1d6-c130-4301-b887-11f04e395435
-
-Both files show the pattern the code-comments rule flags: they needed landmark dividers to navigate. The dividers were deleted in the comment sweep, but the underlying shape was left alone.
-
-types.ts is 432 lines across 10 sections (detection, answers, actions, effects, settings, manifest, config, modules, plan engine, CLI). doctor.ts is 792 lines mixing resident-surface measurement, config validation, hook checks, changesets, drift, and reporting.
-
-Splitting types.ts into src/types/*.ts behind a barrel would keep the `src/types.js` import path every module already uses, so the churn is contained. CLAUDE.md names src/types.ts as the shared seam and would need a matching edit. doctor.ts splits along its finding groups, each returning Finding[].
-
-Deferred from the code-comments sweep: it is an import-churn refactor, not a comment change.
-
----
-
-## [CLAUDEKIT-bc0a96] Remove catch-all files flagged by the new code-cleanliness rule
-
-**Logged:** 2026-08-02
-**Chat:** 37858c79-9026-4397-b70c-f9607150e3dc
-
-The code-cleanliness rule now bans `types.ts`, `constants.ts`, `utils.ts`, `shared.ts`, and `helpers.ts` by name. This repo has two of them, so the kit violates a rule it ships.
-
-Violations, both under src/:
-
-- `src/types.ts` (405 lines) — already tracked for splitting by CLAUDEKIT-05896a, which reached the same conclusion from the code-comments angle (it needed landmark dividers to navigate). That entry owns the split. Listed here only so the rule-violation view is complete.
-- `src/modules/shared.ts` (151 lines) — NOT covered by any existing entry. Holds the action factories every module imports: script, lib, skill, agent, rule, reference, template, hookCommand, hookFragment, scriptPermission. Three distinct jobs sharing a file: payload copy-action builders, hook command construction, and settings fragments. Splits cleanly into something like `copy-actions.ts` and `hook-wiring.ts`, both named for what they do.
-
-CLAUDE.md documents both files as intentional seams ("`src/types.ts` is the shared model every module and command is typed against"). Any split needs a matching CLAUDE.md edit in the same change, or the docs start lying.
-
-Not urgent. Both files are coherent today and the import churn is real. The reason to track it is that shipping a rule we break is the kind of thing a user notices first.
-
----
-
-## [KIT-f1ec7e] Decompose doctor() into per-check functions
-
-**Logged:** 2026-08-02
-
-Its ~500-line body with a report() closure blocks unit-testing the individual checks: measureResident budget math, skill/agent description counting, workspace-target scanning, terse-style detection. Ruled out of the test-discipline project as a rewrite rather than a test-driven extraction, which is why doctor's 27 e2e tests could not be thinned.
-
----
-
 ## [CLAUDEKIT-f216db] Scope task-worker acceptance to owned paths, not the whole repo
 
 **Logged:** 2026-08-02
@@ -87,10 +46,75 @@ Worth checking whether the same assumption leaks into the `sweep` skill's per-sh
 
 ---
 
-## [KIT-1d28be] src/types.ts and src/modules/shared.ts violate the catch-all-files rule the kit ships
+## [CLAUDEKIT-9247bb] prose-voice loads on any markdown read, not on prose-authoring intent
 
 **Logged:** 2026-08-02
+**Chat:** ac2674a8-5868-45d6-a3ec-eb83c0210f5c
 
-code-cleanliness.md forbids types.ts/shared.ts/utils.ts by name, but the installer has both and CLAUDE.md documents src/types.ts as the shared model. Either split them per responsibility (Action/Effect/Ctx into the modules that own them, shared.ts action builders into an action-builders.ts) or carve out a stated exception in the rule. Ships to users, so the inconsistency is visible.
+`.claude/rules/*.md` with a `paths:` list loads when a matching file enters the working set, and
+entering the working set includes a plain **Read**. It is not gated on write intent. So
+`payload/rules/prose-voice.md`, whose globs are `**/*.md` plus `.changeset/`, `.claude/**` and
+`.github/**`, loads whenever the agent reads any markdown at all. Observed live: a turn that only
+answered a question, after reading `BACKLOG.md` and a `SKILL.md`, pulled in the full rule. 77 lines
+and about 3KB spent on a turn that authored no prose.
+
+Markdown is the worst case for this trigger. Reading a `.ts` file usually does precede editing it, so
+`code-comments` and `code-cleanliness` mostly pay off. Reading a `.md` file usually does not. Docs,
+plans, backlogs, skills and READMEs are what an agent reads to answer a question, so the rule fires
+hardest exactly when it is least needed.
+
+The docs also currently overstate the trigger. `README.md` line 70 says prose-voice is "path-scoped
+to markdown, so it loads when the agent is writing a changeset, plan, or doc". It loads when the
+agent _touches_ one, in either direction. `CONVENTIONS.md` section 6 is more careful ("when a
+matching file is in the working set") but presents prose-voice as a worked example of scoping done
+right, without noting the read-side cost. Whatever the fix, both need to describe the trigger
+accurately.
+
+Options, roughly in increasing cost:
+
+- **Narrow the globs.** Drop the blanket `**/*.md` and keep only the dirs the agent authors into
+  (`.changeset/*.md`, `.claude/plans/**/*.md`). Cheap and stays hookless. Does not actually fix the
+  read-versus-write problem, it only shrinks the surface that trips it, and it gives up README and
+  docs edits, which are a real use of the rule.
+- **Gate on write intent with a hook.** A `PreToolUse(Edit|Write)` matcher on markdown paths that
+  injects the rule only when a write is about to happen. This is precisely "load on authoring
+  intent". `read-guard` already establishes the PreToolUse pattern in this codebase. First: verify
+  whether `PreToolUse` stdout or `hookSpecificOutput.additionalContext` actually reaches the model's
+  context on the CLI version we target. If it does not, this option is dead and the entry should say
+  so. Note the tradeoff: `prose-voice` ships today with no hook and no CLAUDE.md pointer, and
+  CONVENTIONS.md section 6 holds that up as the clean pattern. Adding a hook trades that purity for
+  a tighter trigger.
+- **Check whether the rule frontmatter grew a tool filter.** The `paths:` behavior in CONVENTIONS.md
+  is marked "verified against Claude Code 2.1.220". Re-verify against current before building
+  anything, in case a native gate now exists.
+
+Applies to the other three rules in degree, not in kind. Worth re-measuring all four against
+`doctor`'s resident-surface budget once the trigger question is settled.
 
 ---
+
+## [CLAUDEKIT-8e6742] doctor crashes on a kit.config.json whose targets is not an array
+
+**Logged:** 2026-08-02
+**Chat:** 71b57f0c-75a8-4ce5-ad2f-ead436a9bf23
+
+`detect()` reads kit.config.json with `readJson<KitConfig>()`, an unchecked cast, so a
+structurally wrong config reaches the checks unvalidated. `checkConfigValidity` then does
+`(config.targets ?? []).map(...)`, which throws `TypeError: .map is not a function` when
+`targets` is a string. doctor dies with an uncaught stack trace instead of exiting 2 with the
+schema errors it had already collected, which is exactly the case exit code 2 exists for.
+
+Reproduce: set `"targets": "nope"` in `.claude/kit.config.json`, run `npx claude-kit doctor`.
+
+Pre-existing, not introduced by the doctor decomposition. Surfaced by a unit test written
+against `checkConfigValidity` while splitting `src/commands/doctor/`; the test was retargeted
+at a non-crashing schema violation so it would not encode the crash.
+
+The fix is a decision, not a one-liner: either return right after `configProblems` is non-empty
+(a rejected config means the reality checks are reading garbage anyway), or make each target
+loop defensive. The first is smaller and matches the "config outranks everything" rule already
+in `doctorExitCode`, but it changes output for anyone whose config both fails the schema and
+has real target problems, so it needs its own changeset.
+
+---
+

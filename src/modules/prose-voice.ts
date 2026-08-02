@@ -1,5 +1,6 @@
-import type { Action, ModuleGroup } from '../types.js';
-import { rule } from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { rule } from './copy-actions.js';
 
 export const id = 'prose-voice';
 export const title = 'Writing voice rule (.claude/rules/prose-voice.md)';

@@ -15,14 +15,11 @@ import {
 } from '../merge-settings.js';
 import { apply } from '../apply.js';
 import * as ui from '../ui.js';
-import type {
-  Answers,
-  Ctx,
-  Flags,
-  KitManifest,
-  ModuleDef,
-  PlanResult,
-} from '../types.js';
+import type { Flags } from '../cli-contract.js';
+import type { KitManifest } from '../core/manifest.js';
+import type { Ctx } from '../detect.js';
+import type { Answers, ModuleDef } from '../module-def.js';
+import type { PlanResult } from '../plan.js';
 
 // Headless selection, intersected with what is actually available.
 export function parseRequested(

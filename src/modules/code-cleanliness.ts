@@ -1,5 +1,6 @@
-import type { Action, ModuleGroup } from '../types.js';
-import { reference, rule, skill } from './shared.js';
+import type { Action } from '../actions.js';
+import type { ModuleGroup } from '../module-def.js';
+import { reference, rule, skill } from './copy-actions.js';
 
 export const id = 'code-cleanliness';
 export const title =

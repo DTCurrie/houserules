@@ -20,7 +20,9 @@ import {
 } from '../merge-settings.js';
 import { apply } from '../apply.js';
 import * as ui from '../ui.js';
-import type { Answers, Flags, PlanResult, PruneResult } from '../types.js';
+import type { Flags } from '../cli-contract.js';
+import type { Answers } from '../module-def.js';
+import type { PlanResult, PruneResult } from '../plan.js';
 
 // update runs often and its advisories are install-time to-dos the user already saw.
 // Reprinting the whole list every refresh buries the actual diff. The full text is one
