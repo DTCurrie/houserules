@@ -3,7 +3,9 @@ import globals from 'globals';
 import ts from 'typescript-eslint';
 
 export default ts.config(
-  { ignores: ['.claude/', 'dist/', 'payload-dist/', 'coverage/'] },
+  {
+    ignores: ['.claude/', '**/dist/', '**/payload-dist/', '**/coverage/'],
+  },
   js.configs.recommended,
   {
     languageOptions: {
@@ -17,10 +19,11 @@ export default ts.config(
   // shipping hook scripts go silently unlinted.
   {
     files: [
-      'src/**/*.ts',
-      'test/**/*.ts',
-      'payload/**/*.mts',
-      'payload/**/__test__/**/*.ts',
+      'packages/*/src/**/*.ts',
+      'packages/*/test/**/*.ts',
+      'packages/*/payload/**/*.mts',
+      'packages/*/payload/**/__test__/**/*.ts',
+      'packages/*/*.ts',
       '*.ts',
     ],
     extends: [ts.configs.recommended],
@@ -42,9 +45,9 @@ export default ts.config(
   // is that intent, not a gap; src/ stays strict.
   {
     files: [
-      'test/**/*.ts',
-      'src/**/__test__/**/*.ts',
-      'payload/**/__test__/**/*.ts',
+      'packages/*/test/**/*.ts',
+      'packages/*/src/**/__test__/**/*.ts',
+      'packages/*/payload/**/__test__/**/*.ts',
     ],
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },

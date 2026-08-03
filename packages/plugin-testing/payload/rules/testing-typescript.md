@@ -1,0 +1,157 @@
+---
+paths:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.test.mts'
+  - '**/*.spec.ts'
+  - '**/*.spec.tsx'
+  - '**/*.spec.mts'
+---
+
+# Testing — TypeScript
+
+Language-specific guidance for TypeScript test files. See `testing.md` for the runner-agnostic
+rules on placement, structure, and naming that this guide assumes. The examples below are
+Vitest and TypeScript, but the principles they illustrate apply to any test runner with a
+`describe`/`it` shape.
+
+## Rule — follow without deliberation
+
+- **Pick one suffix per repo, `.test.ts` or `.spec.ts`, and never mix them.** Two conventions
+  mean every glob in the repo has to list both, and one of them eventually gets missed.
+- **Exclude tests from the build.** A test under a compiled source root is emitted into the
+  published output and imports the test runner, which is a dev dependency. Add the exclude to
+  the build config, then check the output directory for a `__test__` after building.
+
+## Examples
+
+**Bad — prefixed name, comments carrying the meaning, four behaviors in one test:**
+
+```ts
+test('DR1: doctor states', () => {
+  const root = useInstalledRepo('monorepo');
+
+  // healthy after init
+  expect(runCli(['doctor', root]).status).toBe(0);
+
+  // A local edit is reported as `yours` and still exits 0.
+  appendFileSync(join(root, '.claude/scripts/guard.mjs'), '// tweak\n');
+  expect(runCli(['doctor', root]).status).toBe(0);
+
+  // missing file → error
+  rmSync(join(root, '.claude/scripts/guard.mjs'));
+  expect(runCli(['doctor', root]).status).toBe(1);
+});
+```
+
+**Good — one behavior each, the name carries what the comment used to:**
+
+```ts
+describe('doctor', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('monorepo');
+  });
+
+  it('exits 0 on a freshly initialized repo', () => {
+    expect(runCli(['doctor', root]).status).toBe(0);
+  });
+
+  it('exits 0 when a kit file was edited locally, since nothing can acknowledge the edit', () => {
+    appendFileSync(join(root, '.claude/scripts/guard.mjs'), '// tweak\n');
+    expect(runCli(['doctor', root]).status).toBe(0);
+  });
+
+  it('exits 1 when a kit file is missing', () => {
+    rmSync(join(root, '.claude/scripts/guard.mjs'));
+    expect(runCli(['doctor', root]).status).toBe(1);
+  });
+});
+```
+
+The one surviving explanation is in the third name, because "exits 0 on a local edit" is
+genuinely surprising. The rule it encodes is stated, not narrated.
+
+**Bad — driving the whole program to check one pure decision:**
+
+```ts
+it('errors on an unknown module', () => {
+  const root = useRepo('monorepo');
+  const result = runCli(['init', '--modules=nope', root]);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(/Unknown module/);
+});
+```
+
+**Good — the decision as a unit, plus one end-to-end test that it is wired in:**
+
+```ts
+// src/__test__/plan.test.ts
+describe('resolveModuleIds, given a context whose only default is core', () => {
+  it('names the offending module when the id does not exist', () => {
+    expect(() => resolveModuleIds(ctx, 'nope')).toThrow(
+      /Unknown module "nope"/,
+    );
+  });
+
+  it.each([
+    { flag: '', expected: ['core'] },
+    { flag: 'output-prose', expected: ['core', 'output-prose'] },
+    { flag: 'output-prose,-output-prose', expected: ['core'] },
+  ])('resolves "$flag" to $expected', ({ flag, expected }) => {
+    expect(resolveModuleIds(ctx, flag)).toEqual(expected);
+  });
+});
+```
+
+Note what the case table pins: a bare id ADDS to the defaults rather than replacing them, and
+a leading `-` removes. Those cases were written by reading the implementation, not by guessing
+from the flag's name. Guessing is how a test ends up asserting a syntax the code never had.
+
+**Bad — mocking a collaborator the test should be exercising for real:**
+
+```ts
+vi.mock('../parse-config', () => ({ parseConfig: () => ({ strict: true }) }));
+
+it('runs in strict mode', () => {
+  expect(loadSettings('./config.json').strict).toBe(true);
+});
+```
+
+Nothing here would fail if `parseConfig` stopped returning `strict`.
+
+**Good — mock the file system, run the real parser:**
+
+```ts
+it('runs in strict mode when the config file sets it', () => {
+  vi.spyOn(fs, 'readFileSync').mockReturnValue('{"strict": true}');
+
+  expect(loadSettings('./config.json').strict).toBe(true);
+});
+```
+
+**Bad — a conditional hiding a second case:**
+
+```ts
+it('formats the total', () => {
+  const result = format(items);
+  if (items.length === 0) {
+    expect(result).toBe('empty');
+  } else {
+    expect(result).toMatch(/^\$/);
+  }
+});
+```
+
+**Good — the two cases named:**
+
+```ts
+it('returns "empty" for no items', () => {
+  expect(format([])).toBe('empty');
+});
+
+it('prefixes a currency total with $', () => {
+  expect(format([{ price: 3 }])).toMatch(/^\$/);
+});
+```

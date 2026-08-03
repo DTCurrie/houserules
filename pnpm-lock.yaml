@@ -206,6 +206,30 @@ settings:
 importers:
 
   .:
+    devDependencies:
+      '@changesets/cli':
+        specifier: ^2.31.0
+        version: 2.31.0(@types/node@26.1.2)
+      '@eslint/js':
+        specifier: ^10.0.1
+        version: 10.0.1(eslint@10.6.0)
+      eslint:
+        specifier: ^10.6.0
+        version: 10.6.0
+      globals:
+        specifier: ^17.7.0
+        version: 17.7.0
+      prettier:
+        specifier: ^3.9.4
+        version: 3.9.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      typescript-eslint:
+        specifier: ^8.65.0
+        version: 8.65.0(eslint@10.6.0)(typescript@6.0.3)
+
+  packages/cli:
     dependencies:
       '@clack/prompts':
         specifier: ^0.11.0
@@ -222,19 +246,22 @@ importers:
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
+      semver:
+        specifier: ^7.8.5
+        version: 7.8.5
       zod:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@changesets/cli':
-        specifier: ^2.31.0
-        version: 2.31.0(@types/node@26.1.2)
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.6.0)
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.7.1
       eslint:
         specifier: ^10.6.0
         version: 10.6.0
@@ -259,6 +286,78 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(vite@8.1.5(@types/node@26.1.2))
+
+  packages/plugin-backlog:
+    devDependencies:
+      '@claude-kit/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/plugin-changesets:
+    devDependencies:
+      '@claude-kit/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/plugin-decisions:
+    devDependencies:
+      '@claude-kit/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/plugin-persona-auditor:
+    devDependencies:
+      '@claude-kit/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/plugin-prose:
+    devDependencies:
+      '@claude-kit/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/plugin-testing:
+    devDependencies:
+      '@claude-kit/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
 packages:
 
@@ -563,6 +662,9 @@ packages:
 
   '@types/node@26.1.2':
     resolution: {integrity: sha512-Vu4a5UFA9rIIFJ7rB/Vaafh9lrCQszopTCx6KjFboXTGQbPNasehVR5TEiithSDGyd1DEiUByggTZsg8jukeIg==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@typescript-eslint/eslint-plugin@8.65.0':
     resolution: {integrity: sha512-IEgob78X12rHpUmtcwFsXhZdVGJtwTVP8FiCLZkR6GlYVrl2PcuB+KhCE5BlVC/eQpQnu8WXRtkHZuPar+gCRA==}
@@ -1793,6 +1895,8 @@ snapshots:
   '@types/node@26.1.2':
     dependencies:
       undici-types: 8.3.0
+
+  '@types/semver@7.7.1': {}
 
   '@typescript-eslint/eslint-plugin@8.65.0(@typescript-eslint/parser@8.65.0(eslint@10.6.0)(typescript@6.0.3))(eslint@10.6.0)(typescript@6.0.3)':
     dependencies:

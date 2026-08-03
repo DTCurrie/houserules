@@ -1,0 +1,75 @@
+{
+  "name": "@claude-kit/cli",
+  "version": "0.1.0",
+  "description": "Interactive installer for a portable Claude Code context-discipline kit: hooks, skills, agents, changesets integration, and token-efficiency tooling.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "claude-kit": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "payload-dist",
+    "schema",
+    "kit.config.example.json",
+    "CONVENTIONS.md"
+  ],
+  "exports": {
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "default": "./dist/plugin.js"
+    },
+    "./schema": "./schema/kit.config.schema.json"
+  },
+  "scripts": {
+    "build": "npm run build:payload && tsc -p tsconfig.build.json && node scripts/generate-schema.mjs && publint",
+    "schema": "node scripts/generate-schema.mjs",
+    "check": "npm run build:payload && tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dogfood": "npm run build:payload && node scripts/dogfood-link.mjs",
+    "prepack": "npm run build",
+    "build:payload": "tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
+    "dogfood:watch": "tsc -p tsconfig.payload.json --watch"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devintcurrie/claude-kit.git"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agent",
+    "hooks",
+    "changesets",
+    "tooling"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "commander": "^15.0.0",
+    "dequal": "^2.0.3",
+    "diff": "^9.0.0",
+    "picocolors": "^1.1.1",
+    "semver": "^7.8.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.2",
+    "@types/semver": "^7.7.1",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.4",
+    "publint": "^0.3.22",
+    "type-fest": "^5.8.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
+  }
+}

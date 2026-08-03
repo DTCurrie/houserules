@@ -1,8 +1,31 @@
 # claude-kit
 
-npm-published interactive installer (`npx claude-kit init`) for a portable Claude Code
-context-discipline kit. Read README.md for the product story. This file is for working on
-the kit itself.
+Interactive installer for a portable Claude Code context-discipline kit. Read
+`packages/cli/README.md` for the product story. This file is for working on the kit itself.
+
+## Workspace
+
+A pnpm workspace of seven packages. Every path in the Layout section below is relative to
+**`packages/cli/`** unless it starts with `packages/`.
+
+- `packages/cli` is `@claude-kit/cli`, the installer. It ships the binary **`claude-kit`**,
+  so the package name and the command differ, the same split `@changesets/cli` uses for
+  `changeset`. Install is `pnpm add -D @claude-kit/cli`, then `claude-kit <cmd>`. Its core
+  ships 15 built-in modules (`src/plan.ts`'s `MODULES` array): `core`, `lint-fix`,
+  `session-context`, `rename`, `reviewers`, `debug-session`, `plans`, `orchestrate`,
+  `verify-changed`, `ready`, `sweep`, `read-guard`, `regen`, `statusline`,
+  `code-cleanliness`.
+- Six first-party plugins, each `packages/plugin-<name>`, hold the modules that moved out of
+  the core: `plugin-prose`, `plugin-testing`, `plugin-changesets`, `plugin-backlog`,
+  `plugin-decisions`, `plugin-persona-auditor`. `src/retired-modules.ts`'s
+  `RETIRED_MODULES` maps every retired built-in id to the package that now ships it.
+- The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
+  workflows, `CLAUDE.md`, `BACKLOG.md`, and the gitignored `.claude/`. Root
+  `pnpm build|test|check` delegate with `pnpm -r`. `pnpm lint` and `pnpm lint:fix` run
+  `eslint` directly against the whole workspace, since lint lives at the root and no
+  package has its own lint script.
+- **`.claude/` stays at the workspace root**, because that is where Claude Code looks, while
+  each package's payload lives with that package. `scripts/dogfood-link.mjs` bridges the two.
 
 ## Layout
 
@@ -23,8 +46,8 @@ the kit itself.
   shells, enforced by `payload/__test__/dependencies.test.ts` (imports) and `payload/__test__/execution.test.ts`
   (actually executing each emitted script on bare node). Hook scripts must never crash: config
   via `loadConfigSafe()`, exit 0 on any failure path.
-- Tests live in a `__test__/` **beside the code they are about**, per `payload/rules/testing.md`
-  which this repo dogfoods. The split is by SUBJECT, not by unit-versus-e2e: a fixture-driven
+- Tests live in a `__test__/` **beside the code they are about**, per
+  `packages/plugin-testing/payload/rules/testing.md` which this repo dogfoods. The split is by SUBJECT, not by unit-versus-e2e: a fixture-driven
   CLI test is still a test of its one subject, so `src/commands/__test__/modules.test.ts` holds
   both the pure `parseRequested` cases and the ones that drive the command against a real tree.
   Never add a `.e2e.test.ts` tier. If a file gets unwieldy, split it by CONCERN.
@@ -60,13 +83,24 @@ the kit itself.
   any `dist/` probe.
 - `pnpm check`: `tsc --noEmit` over `src/` + `test/` + colocated `__test__/` dirs.
 - `pnpm test`: full suite, including end-to-end init/update/doctor on fixtures.
-- `node dist/cli.js init --yes --dry-run <repo>`: safe manual probe against any repo.
+- `node packages/cli/dist/cli.js init --yes --dry-run <repo>`: safe manual probe against any
+  repo.
 - `pnpm change`: record a changeset. Required for any user-visible change, and dogfooded.
-- `pnpm dogfood`: build the payload, then symlink the kit into `.claude/` (gitignored) so this
-  repo runs its own hooks/skills/agents. Idempotent, so re-run after pulling.
-  **`.claude/scripts` points at `payload-dist/`, so a `.mts` edit is NOT live until it is
-  compiled.** Run `pnpm dogfood:watch` (a `tsc --watch` on the payload) while working on hook
-  scripts, or re-run `pnpm dogfood`. The prose dirs still link to `payload/` and are live.
+- `pnpm lint` / `pnpm lint:fix`: run from the workspace root only. `eslint.config.mjs` lives
+  at the root with `packages/*/` globs, and no package defines its own `lint` script.
+- `pnpm dogfood`: build the payload, then wire this repo's `.claude/` (gitignored) to run its
+  own hooks/skills/agents. `scripts/dogfood-link.mjs` discovers every workspace package that
+  has a `payload/` dir and assembles each `.claude/<surface>/` directory from **per-entry
+  symlinks** across all of them, not one directory symlink, because `.claude/rules/` now
+  draws from the CLI plus the prose and testing plugins at once. It throws if two packages
+  contribute the same entry name. Idempotent, so re-run after pulling.
+  **`.claude/scripts` still points at BUILD OUTPUT (`payload-dist/`), so a `.mts` edit is NOT
+  live until it is compiled.** Run `pnpm dogfood:watch` (a `tsc --watch` on the payload) while
+  working on hook scripts, or re-run `pnpm dogfood`. The prose/rules/agents/output-styles/
+  reference dirs link straight to each package's `payload/` and are live on save.
+  **Warning:** `payload-dist/` is not cleaned by the build, so deleting a `.mts` leaves a
+  stale `.mjs` behind (`CLAUDEKIT-6d85f1`). Has bitten twice; if a script goes missing check
+  for a stale compiled leftover.
 
 ## Rules
 
@@ -112,11 +146,13 @@ the kit itself.
   not even enable itself in a repo with no fix script. A new kit-owned subtree under
   `.claude/` belongs in `PRETTIERIGNORE_BODY` the same day it is added.
 - Prose the kit ships (payload skills, agents, rules, templates, and the CLAUDE.md region
-  `src/render.ts` generates) follows `payload/rules/prose-voice.md`: plain sentences, no
-  semicolons, no em dash where a period or comma works. Frontmatter `description:` fields are
-  the skill-routing signal, so keep every trigger term when rewording one.
-- No catch-all files, per `payload/rules/code-cleanliness.md`, which the kit ships and this
-  repo obeys. There is no `types.ts`, `shared.ts`, `utils.ts`, `constants.ts`, or `helpers.ts`
+  `src/render.ts` generates) follows `packages/plugin-prose/payload/rules/prose-voice.md`:
+  plain sentences, no semicolons, no em dash where a period or comma works. Frontmatter
+  `description:` fields are the skill-routing signal, so keep every trigger term when
+  rewording one.
+- No catch-all files, per `payload/rules/code-cleanliness.md` (in `packages/cli`), which the
+  kit ships and this repo obeys. There is no `types.ts`, `shared.ts`, `utils.ts`,
+  `constants.ts`, or `helpers.ts`
   anywhere in `src/`. A type belongs to the module that produces it, and genuinely shared code
   gets a module named for its job. Do not reintroduce one.
 - `doctor` is an orchestrator over independent checks. Each check in `src/commands/doctor/`
@@ -128,6 +164,18 @@ the kit itself.
   running anything else. `reconcileDrift` runs last because `--fix` writes, and every check
   before it must see the tree as the user left it. Add a new check as a new file, never as
   another branch inside `doctor()`.
+- A plugin's payload actions must resolve inside its OWN package. The repo-root
+  `scripts/probe-plugin.mjs` loads a plugin through the real resolver and fails any action
+  whose `src` escapes the package directory, which is the failure a build alone will not
+  catch.
+- `src/retired-modules.ts`'s `RETIRED_MODULES` entries are permanent. Removing one re-arms a
+  silent prune for any repo that upgrades the CLI without also installing the plugin the
+  module moved to: `computePrune` deletes any manifest dest the current plan no longer
+  produces, and a removed entry stops that from erroring first.
+- Any guard that prevents a prune must run before `computeEffects` and inside the command's
+  `KitError` handler. `assertNoRetiredModules` is that guard: it has to see the recorded
+  module set before a plan is computed from it, and it throws `KitError` so the command
+  aborts with nothing written rather than silently deleting the retired module's files.
 - The user always handles `git commit` / `push` / PR-create.
 
 ## Cost & verification discipline

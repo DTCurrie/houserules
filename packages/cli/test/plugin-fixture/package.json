@@ -1,0 +1,7 @@
+{
+  "name": "@claude-kit/plugin-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts"
+}
