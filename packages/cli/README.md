@@ -108,7 +108,46 @@ Nothing was changed. Installing the plugin restores the module and its files.
 ```
 
 The module's files on disk are never deleted by this error. Install the named package, add
-the `plugins` entry the message shows, and re-run `update` to pick the module back up.
+the `plugins` entry the message shows, and re-run `update` to pick the module back up. The
+recorded module ids are rewritten to their new namespaced form as part of that run, so this is
+a one-time step and a second `update` is a no-op.
+
+Three other things move in the same upgrade, and two of them need a command from you.
+
+**Your `CLAUDE.md` block is adopted automatically.** A pre-rename install carries
+`<!-- claude-kit:claude-md start -->`. `update` recognizes that pair, replaces it with the
+current one, and leaves every byte outside the markers untouched. No second block is created,
+and there is nothing to run.
+
+**The ledgers move to `.claude/ledgers/`, on first use rather than during `update`.** A ledger
+at `.claude/backlog.log` or `.claude/decisions.log` is renamed to
+`.claude/ledgers/<name>.jsonl` the first time a ledger command runs, not by `update` itself. Run
+any ledger command once to trigger it:
+
+```
+node .claude/scripts/backlog-log.mjs list
+```
+
+The rename is what makes the ledger committable. A `.log` extension is caught by the `*.log`
+pattern most repos already have, so the record was invisible to git. Commit
+`.claude/ledgers/` once it exists. The `.gitignore` written beside it keeps the generated
+`*.md` out, because the `.jsonl` is the record and the markdown is a view of it.
+
+**Rendered surfaces need one `render`.** Entries recorded before the move name their surface by
+repo-relative path, such as `games/tower-push/BACKLOG.md`. Those are matched to the area they
+belong to on read, so nothing is lost, but no markdown exists until you ask for it:
+
+```
+node .claude/scripts/backlog-log.mjs render
+```
+
+With no argument it writes every surface the ledger implies, including an area whose entries
+have all been resolved.
+
+A surface you committed at its old path is untracked for you, including a nested one such as
+`games/tower-push/BACKLOG.md`. The file stays on disk and the removal is staged, never committed,
+so you review it like any other change. Only a path the ledger itself records is offered, so a
+`BACKLOG.md` you wrote by hand and the kit never generated is left alone.
 
 ## Changesets are the canonical changelog
 

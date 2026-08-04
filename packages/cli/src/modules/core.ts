@@ -1,6 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
+import { claudeMdRegion } from '../core/claude-md-region.js';
 import { ledgerDirFor } from '../core/ledger-dir.js';
 import { payloadPath } from '../paths.js';
 import {
@@ -182,17 +183,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       kind: 'region',
       dest: 'CLAUDE.md',
       body: renderClaudeAdditions(ctx, answers),
-      region: {
-        id: 'claude-md',
-        start: '<!-- agent-kit:claude-md start -->',
-        end: '<!-- agent-kit:claude-md end -->',
-        anchor: 'after-h1',
-        pad: true,
-        legacy: {
-          start: '<!-- claude-kit:claude-md start -->',
-          end: '<!-- claude-kit:claude-md end -->',
-        },
-      },
+      region: claudeMdRegion,
       module: id,
       reason:
         'kit sections, maintained in place (content outside the markers is never touched)',

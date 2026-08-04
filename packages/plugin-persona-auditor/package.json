@@ -19,7 +19,7 @@
     "payload-dist"
   ],
   "scripts": {
-    "build": "rm -rf dist payload-dist && tsc -p tsconfig.json && node scripts/build-payload.mjs",
+    "build": "rm -rf dist payload-dist && tsc -p tsconfig.build.json && node scripts/build-payload.mjs",
     "check": "tsc --noEmit -p tsconfig.json",
     "prepack": "npm run build",
     "test": "vitest run"

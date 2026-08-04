@@ -1,19 +1,17 @@
 {
+  "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "target": "ES2024",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "rootDir": "./src",
-    "outDir": "./dist",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "verbatimModuleSyntax": true,
-    "erasableSyntaxOnly": true,
-    "types": ["node"]
+    "noEmit": true,
+    "rootDir": ".",
+    // Mirrors the `#test/*` alias in vitest.config.ts so `tsc --noEmit` resolves it, to
+    // @agent-kit/test's published subpaths. Kept out of tsconfig.build.json: nothing under
+    // src/ that ships may reference it.
+    "paths": {
+      "#test/*": ["./node_modules/@agent-kit/test/dist/*.d.ts"]
+    }
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["src/**/__test__/**"]
+  // tsconfig.build.json excludes colocated tests so they stay out of dist/. Typechecking
+  // must still see them, so the inherited exclude is cleared here.
+  "exclude": [],
+  "include": ["src/**/*.ts"]
 }

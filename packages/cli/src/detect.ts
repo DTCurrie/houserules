@@ -190,6 +190,31 @@ export function trackedScriptFiles(root: string): string[] {
   return trackedFilesUnder(root, '.claude/scripts');
 }
 
+/** Distinct repo-relative `file` values recorded in one ledger's JSONL entries. */
+function ledgerRecordedFiles(ledgerFile: string): Set<string> {
+  const files = new Set<string>();
+  if (!existsSync(ledgerFile)) return files;
+  let text: string;
+  try {
+    text = readFileSync(ledgerFile, 'utf8');
+  } catch {
+    return files;
+  }
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let record: { file?: unknown };
+    try {
+      record = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof record.file === 'string' && record.file.includes('/')) {
+      files.add(record.file);
+    }
+  }
+  return files;
+}
+
 /**
  * Committed ledger markdown, which is a generated view of the `.jsonl` beside it.
  *
@@ -197,6 +222,11 @@ export function trackedScriptFiles(root: string): string[] {
  * `BACKLOG.md` and `DECISIONS.md` at the root. Returns nothing unless a ledger actually
  * exists, so a repo that keeps its own hand-written `BACKLOG.md` and has never run a ledger
  * module is never offered up for untracking.
+ *
+ * Nested per-area surfaces, such as `games/tower-push/BACKLOG.md`, are derived from the
+ * ledger entries' own `file` field rather than a directory scan or a target's `pathPrefix`.
+ * The ledger only ever records a surface the kit itself wrote, so matching against it can
+ * never sweep up a user's own hand-written file at a path the kit never produced.
  */
 export function trackedLedgerSurfaces(
   root: string,
@@ -215,7 +245,17 @@ export function trackedLedgerSurfaces(
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-  return [...inDir, ...atRoot];
+  const recorded = new Set<string>([
+    ...ledgerRecordedFiles(join(root, ledgerDir, 'backlog.jsonl')),
+    ...ledgerRecordedFiles(join(root, ledgerDir, 'decisions.jsonl')),
+  ]);
+  const nested = recorded.size
+    ? (git(root, ['ls-files', '-c', '--', ...recorded]) ?? '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+    : [];
+  return [...inDir, ...atRoot, ...nested];
 }
 
 /**

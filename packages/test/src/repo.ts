@@ -66,18 +66,92 @@ function gitInit(root: string): void {
   runIn(root, 'git', ['commit', '-qm', 'fixture: initial']);
 }
 
+const PKG_SCRIPTS = {
+  dev: 'vite dev',
+  fix: 'wireit',
+  'lint:fix': 'eslint . --fix',
+  'format:fix': 'prettier . --write',
+  format: 'prettier . --check',
+};
+
 /**
- * What `init`'s own detection would have produced for `packageManager` and `targets`, for
- * each shape that gets combined with `opts.plugins`. Declaring the plugin means writing the
- * whole `.claude/kit.config.json` seed up front (see `useInstalledRepo`), which bypasses
- * `renderKitConfig` entirely, so these facts about the fixture — which `buildRepo` itself
- * defines below — have to be restated here rather than left for that render to compute.
- * Add a shape here before combining it with `opts.plugins`.
+ * The packages `buildRepo` writes for each shape whose `.claude/kit.config.json` seed gets
+ * combined with `opts.plugins` (see `useInstalledRepo`). `buildRepo` writes each
+ * package.json and source file straight from this list, so `pluginFixtureFacts` below
+ * derives `packageManager` and `targets` from it instead of restating them.
  */
-const PLUGIN_FIXTURE_FACTS: Partial<
+const PLUGIN_FIXTURE_PACKAGES: Partial<
   Record<
     RepoShape,
     {
+      packageManagerField: string;
+      packages: Array<{
+        dir: string;
+        packageName: string;
+        name: string;
+        prefix: string;
+        label: string;
+        scripts: Record<string, string>;
+        sourceFile: { rel: string; content: string };
+      }>;
+    }
+  >
+> = {
+  'pnpm-monorepo': {
+    packageManagerField: 'pnpm@11.5.0',
+    packages: [
+      {
+        dir: 'games/cityville',
+        packageName: '@fix/cityville',
+        name: 'cityville',
+        prefix: 'CITYVILLE',
+        label: 'Cityville',
+        scripts: PKG_SCRIPTS,
+        sourceFile: { rel: 'src/game.ts', content: 'export const game = 1;\n' },
+      },
+      {
+        dir: 'apps/studio',
+        packageName: '@fix/studio',
+        name: 'studio',
+        prefix: 'STUDIO',
+        label: 'Studio',
+        scripts: PKG_SCRIPTS,
+        sourceFile: { rel: 'src/main.ts', content: 'export const app = 1;\n' },
+      },
+    ],
+  },
+  'npm-single': {
+    packageManagerField: 'npm',
+    packages: [
+      {
+        dir: '',
+        packageName: 'single-app',
+        name: 'single-app',
+        prefix: 'SINGLEAPP',
+        label: 'Single App',
+        scripts: { 'lint:fix': 'eslint . --fix', test: 'node --test' },
+        sourceFile: { rel: 'src/index.js', content: 'module.exports = 1;\n' },
+      },
+    ],
+  },
+};
+
+/**
+ * Picks the scripts that write fixes, mirroring the single rule the fixtures above
+ * actually exercise: a `fix` script wins outright, otherwise `lint:fix` runs alone.
+ */
+function fixCommandsFor(scripts: Record<string, string>): string[] {
+  if (scripts.fix) return ['fix'];
+  return scripts['lint:fix'] ? ['lint:fix'] : [];
+}
+
+/**
+ * What `init`'s own detection would have produced for `packageManager` and `targets`,
+ * derived from {@link PLUGIN_FIXTURE_PACKAGES} rather than restated, since that table is
+ * the same data `buildRepo` writes to disk for these shapes.
+ */
+function pluginFixtureFacts(shape: RepoShape):
+  | {
       packageManager: string;
       targets: Array<{
         name: string;
@@ -89,54 +163,27 @@ const PLUGIN_FIXTURE_FACTS: Partial<
         fixCommands?: string[];
       }>;
     }
-  >
-> = {
-  'pnpm-monorepo': {
-    packageManager: 'pnpm',
-    targets: [
-      {
-        name: 'cityville',
-        prefix: 'CITYVILLE',
-        packageName: '@fix/cityville',
-        pathPrefix: 'games/cityville/',
-        sourcePath: 'games/cityville/src',
-        label: 'Cityville',
-        fixCommands: ['fix'],
-      },
-      {
-        name: 'studio',
-        prefix: 'STUDIO',
-        packageName: '@fix/studio',
-        pathPrefix: 'apps/studio/',
-        sourcePath: 'apps/studio/src',
-        label: 'Studio',
-        fixCommands: ['fix'],
-      },
-    ],
-  },
-  'npm-single': {
-    packageManager: 'npm',
-    targets: [
-      {
-        name: 'single-app',
-        prefix: 'SINGLEAPP',
-        packageName: 'single-app',
-        pathPrefix: '',
-        sourcePath: 'src',
-        label: 'Single App',
-        fixCommands: ['lint:fix'],
-      },
-    ],
-  },
-};
-
-const PKG_SCRIPTS = {
-  dev: 'vite dev',
-  fix: 'wireit',
-  'lint:fix': 'eslint . --fix',
-  'format:fix': 'prettier . --write',
-  format: 'prettier . --check',
-};
+  | undefined {
+  const spec = PLUGIN_FIXTURE_PACKAGES[shape];
+  if (!spec) return undefined;
+  const at = spec.packageManagerField.lastIndexOf('@');
+  const packageManager =
+    at > 0 ? spec.packageManagerField.slice(0, at) : spec.packageManagerField;
+  return {
+    packageManager,
+    targets: spec.packages.map((p) => ({
+      name: p.name,
+      prefix: p.prefix,
+      packageName: p.packageName,
+      pathPrefix: p.dir ? `${p.dir}/` : '',
+      sourcePath: p.dir
+        ? `${p.dir}/${dirname(p.sourceFile.rel)}`
+        : dirname(p.sourceFile.rel),
+      label: p.label,
+      fixCommands: fixCommandsFor(p.scripts),
+    })),
+  };
+}
 
 /**
  * A bare synthetic repo with no kit installed, removed after the current test.
@@ -209,13 +256,13 @@ export function useInstalledRepo(
     // `/<bareId>` suffix, which is how a plugin-qualified module (`cs/changesets`) reads
     // as `changesets`.
     if (opts.plugins?.length) {
-      const facts = PLUGIN_FIXTURE_FACTS[shape];
+      const facts = pluginFixtureFacts(shape);
       if (!facts) {
         rmSync(staging, { recursive: true, force: true });
         throw new Error(
-          `useInstalledRepo(${key}): no PLUGIN_FIXTURE_FACTS entry for shape "${shape}". ` +
+          `useInstalledRepo(${key}): no PLUGIN_FIXTURE_PACKAGES entry for shape "${shape}". ` +
             'A plugin declaration writes the whole kit.config.json seed up front, which ' +
-            'needs packageManager/targets restated for the shape. Add one in repo.ts.',
+            'needs packageManager/targets derived for the shape. Add one in repo.ts.',
         );
       }
       const tokens = (opts.modules ?? '')
@@ -335,13 +382,15 @@ function buildRepo(shape: RepoShape): string {
         '',
       ].join('\n'),
     );
+    const monorepo = PLUGIN_FIXTURE_PACKAGES['pnpm-monorepo'];
+    if (!monorepo) throw new Error('unreachable: pnpm-monorepo has no spec');
     write(
       root,
       'package.json',
       json({
         name: 'fix-root',
         private: true,
-        packageManager: 'pnpm@11.5.0',
+        packageManager: monorepo.packageManagerField,
         scripts: {
           build: 'wireit',
           verify: 'wireit',
@@ -355,18 +404,14 @@ function buildRepo(shape: RepoShape): string {
     write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
     write(root, 'packages/.gitkeep', '');
     write(root, 'toolkits/.gitkeep', '');
-    write(
-      root,
-      'apps/studio/package.json',
-      json({ name: '@fix/studio', private: true, scripts: PKG_SCRIPTS }),
-    );
-    write(root, 'apps/studio/src/main.ts', 'export const app = 1;\n');
-    write(
-      root,
-      'games/cityville/package.json',
-      json({ name: '@fix/cityville', private: true, scripts: PKG_SCRIPTS }),
-    );
-    write(root, 'games/cityville/src/game.ts', 'export const game = 1;\n');
+    for (const pkg of monorepo.packages) {
+      write(
+        root,
+        `${pkg.dir}/package.json`,
+        json({ name: pkg.packageName, private: true, scripts: pkg.scripts }),
+      );
+      write(root, `${pkg.dir}/${pkg.sourceFile.rel}`, pkg.sourceFile.content);
+    }
     write(
       root,
       '.changeset/config.json',
@@ -394,21 +439,23 @@ function buildRepo(shape: RepoShape): string {
       json({ permissions: { allow: ['WebFetch(domain:example.com)'] } }),
     );
   } else if (shape === 'npm-single') {
+    const single = PLUGIN_FIXTURE_PACKAGES['npm-single']?.packages[0];
+    if (!single) throw new Error('unreachable: npm-single has no spec');
     write(
       root,
       'package.json',
       json({
-        name: 'single-app',
+        name: single.packageName,
         version: '1.0.0',
-        scripts: { 'lint:fix': 'eslint . --fix', test: 'node --test' },
+        scripts: single.scripts,
       }),
     );
     write(
       root,
       'package-lock.json',
-      json({ name: 'single-app', lockfileVersion: 3 }),
+      json({ name: single.packageName, lockfileVersion: 3 }),
     );
-    write(root, 'src/index.js', 'module.exports = 1;\n');
+    write(root, single.sourceFile.rel, single.sourceFile.content);
     write(
       root,
       'CLAUDE.md',

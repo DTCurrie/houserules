@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import {
   detect,
@@ -38,6 +39,35 @@ import type { PlanResult, PruneResult } from '../plan.js';
 function strayLedgerSurfaces(root: string, ctx: Ctx): string[] {
   const dir = ledgerDirFor(ctx);
   return ctx.git.isRepo && dir ? trackedLedgerSurfaces(root, dir) : [];
+}
+
+/** Ledger scripts with a log still at the pre-split `.claude/` path, not the ledger dir. */
+function legacyLedgerScripts(root: string): string[] {
+  const scripts: string[] = [];
+  if (
+    existsSync(join(root, '.claude/backlog.log')) ||
+    existsSync(join(root, '.claude/backlog.jsonl'))
+  ) {
+    scripts.push('backlog-log.mjs');
+  }
+  if (
+    existsSync(join(root, '.claude/decisions.log')) ||
+    existsSync(join(root, '.claude/decisions.jsonl'))
+  ) {
+    scripts.push('decision-log.mjs');
+  }
+  return scripts;
+}
+
+// The rename happens on the first ledger command, not during update, and the markdown only
+// once render runs. Without this message a migrating repo updates and finds .claude/ledgers/
+// empty with nothing telling them what to run.
+function showLegacyLedgerHint(root: string): void {
+  for (const script of legacyLedgerScripts(root)) {
+    ui.message(
+      `ledgers: .claude/scripts/${script} still has a log at the old .claude/ path. Run \`node .claude/scripts/${script} list\` to move it into .claude/ledgers/, then \`node .claude/scripts/${script} render\` to write the markdown.`,
+    );
+  }
 }
 
 // update runs often and its advisories are install-time to-dos the user already saw.
@@ -232,6 +262,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       ui.message(
         `ledgers: ${dryLedgers.length} committed rendered file(s) would be untracked from git (kept on disk).`,
       );
+    showLegacyLedgerHint(root);
     showNextSteps(planResult.advisories, flags);
     ui.outro('Dry run — nothing written.');
     return 0;
@@ -278,6 +309,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       `ledgers: untracked ${untrackedLedgers} rendered file(s) from git — kept on disk; commit the staged removal to finish.`,
     );
 
+  showLegacyLedgerHint(root);
   showNextSteps(planResult.advisories, flags);
 
   const pruned = prune.deletes.filter((d) => !d.gone).length;

@@ -1,3 +1,5 @@
+import { claudeMdRegion } from './core/claude-md-region.js';
+import { upsertRegion } from './core/regions.js';
 import { hasModule } from './plugin-registry.js';
 import type { Ctx, PackageManagerInfo, Target } from './detect.js';
 import type { Answers } from './module-def.js';
@@ -345,16 +347,14 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   if (scripts.length) {
     lines.push('## Scripts (run from repo root)', '', ...scripts, '');
   }
-  // Baked in the same shape `upsertRegion` produces, so the region action core.ts plans
-  // right after this seed finds matching markers instead of inserting a second block.
-  lines.push(
-    '<!-- agent-kit:claude-md start -->',
-    '',
-    renderClaudeAdditions(ctx, answers).trimEnd(),
-    '',
-    '<!-- agent-kit:claude-md end -->',
-    '',
+  // Built with the same upsertRegion call the region action in core.ts uses, so the block
+  // this seed writes is always the shape that action finds, rather than a second one.
+  const { content: block } = upsertRegion(
+    null,
+    renderClaudeAdditions(ctx, answers),
+    claudeMdRegion,
   );
+  lines.push(block.trimEnd(), '');
   return `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}`;
 }
 

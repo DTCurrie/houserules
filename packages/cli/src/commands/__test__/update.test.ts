@@ -321,6 +321,59 @@ describe('update with scripts.commit: true (opted in to committing scripts)', ()
   });
 });
 
+describe('update on a repo with a legacy ledger still outside .claude/ledgers', () => {
+  const unwrapped = (text: string): string => text.replace(/\s+/g, ' ');
+
+  it('names the backlog command to run when .claude/backlog.jsonl is still there', () => {
+    const root = useInstalledRepo('npm-single');
+    writeFileSync(
+      join(root, '.claude/backlog.jsonl'),
+      `${JSON.stringify({ id: 'B1', file: 'BACKLOG.md' })}\n`,
+    );
+
+    const result = runCli(['update', root]);
+
+    expect(unwrapped(result.stdout)).toContain(
+      'node .claude/scripts/backlog-log.mjs list',
+    );
+    expect(unwrapped(result.stdout)).toContain(
+      'node .claude/scripts/backlog-log.mjs render',
+    );
+  });
+
+  it('names the decisions command to run when .claude/decisions.log is still there', () => {
+    const root = useInstalledRepo('npm-single');
+    writeFileSync(join(root, '.claude/decisions.log'), '');
+
+    const result = runCli(['update', root]);
+
+    expect(unwrapped(result.stdout)).toContain(
+      'node .claude/scripts/decision-log.mjs list',
+    );
+  });
+
+  it('says nothing about a legacy ledger when there is none', () => {
+    const root = useInstalledRepo('npm-single');
+
+    const result = runCli(['update', root]);
+
+    expect(unwrapped(result.stdout)).not.toContain('decision-log.mjs');
+    expect(unwrapped(result.stdout)).not.toContain('backlog-log.mjs');
+  });
+
+  it('names the command on a dry run too', () => {
+    const root = useInstalledRepo('npm-single');
+    writeFileSync(
+      join(root, '.claude/backlog.jsonl'),
+      `${JSON.stringify({ id: 'B1', file: 'BACKLOG.md' })}\n`,
+    );
+
+    const result = runCli(['update', '--dry-run', root]);
+
+    expect(unwrapped(result.stdout)).toContain('backlog-log.mjs');
+  });
+});
+
 describe('update on a repo with no prior kit install', () => {
   it('refuses with exit 1 and points at the missing manifest', () => {
     const root = useRepo('non-js');

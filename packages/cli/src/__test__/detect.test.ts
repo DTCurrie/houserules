@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -7,11 +7,13 @@ import {
   detectFixCommands,
   detectVerifyCommands,
   suggestPrefix,
+  trackedLedgerSurfaces,
   trackedScriptFiles,
   untrackFromIndex,
 } from '../detect.js';
 import { renderKitConfig } from '../render.js';
 import { useRepo } from '#test/repo';
+import { runIn } from '#test/run';
 
 describe('detectFixCommands', () => {
   it('returns null for an empty scripts bag', () => {
@@ -365,5 +367,58 @@ describe('trackedScriptFiles and untrackFromIndex', () => {
       tracked.filter((rel) => !existsSync(join(root, rel))),
       'untracking deleted these from the working tree',
     ).toEqual([]);
+  });
+});
+
+function commitAll(root: string): void {
+  runIn(root, 'git', ['add', '-A']);
+  runIn(root, 'git', ['commit', '-qm', 'fixture: ledger']);
+}
+
+describe('trackedLedgerSurfaces, nested per-area surfaces', () => {
+  it('offers a nested surface a pre-move ledger entry records by repo-relative path', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/ledgers/backlog.jsonl'),
+      `${JSON.stringify({ id: 'B1', file: 'games/tower-push/BACKLOG.md' })}\n`,
+    );
+    mkdirSync(join(root, 'games/tower-push'), { recursive: true });
+    writeFileSync(join(root, 'games/tower-push/BACKLOG.md'), '# Backlog\n');
+    commitAll(root);
+
+    expect(trackedLedgerSurfaces(root, '.claude/ledgers')).toEqual([
+      'games/tower-push/BACKLOG.md',
+    ]);
+  });
+
+  it('leaves alone a nested file no ledger entry names', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/ledgers/backlog.jsonl'),
+      `${JSON.stringify({ id: 'B1', file: 'BACKLOG.md' })}\n`,
+    );
+    mkdirSync(join(root, 'apps/foo'), { recursive: true });
+    writeFileSync(join(root, 'apps/foo/BACKLOG.md'), '# hand-written\n');
+    commitAll(root);
+
+    expect(trackedLedgerSurfaces(root, '.claude/ledgers')).toEqual([]);
+  });
+
+  it('skips unparseable lines instead of throwing', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/ledgers/backlog.jsonl'),
+      `not json\n${JSON.stringify({ id: 'B1', file: 'games/tower-push/BACKLOG.md' })}\n`,
+    );
+    mkdirSync(join(root, 'games/tower-push'), { recursive: true });
+    writeFileSync(join(root, 'games/tower-push/BACKLOG.md'), '# Backlog\n');
+    commitAll(root);
+
+    expect(trackedLedgerSurfaces(root, '.claude/ledgers')).toEqual([
+      'games/tower-push/BACKLOG.md',
+    ]);
   });
 });
