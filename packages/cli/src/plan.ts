@@ -8,7 +8,7 @@ import {
   renderSettings,
   settingsSignature,
 } from './merge-settings.js';
-import { extractBody, upsertRegion } from './core/regions.js';
+import { extractBody, hasLegacyRegion, upsertRegion } from './core/regions.js';
 import { classifyFrontmatter, splitFrontmatter } from './core/frontmatter.js';
 import { bodyHashes, wholeFileHash } from './core/manifest.js';
 
@@ -289,7 +289,13 @@ export function computeEffects(
         pending ?? (exists ? readFileSync(destAbs, 'utf8') : null);
       const currentBody =
         current === null ? null : extractBody(current, action.region);
-      const hash = sha256(action.body);
+      // Trimmed on both sides, and on the recorded hash too. A padded region writes
+      // `start\n\nbody\n\nend`, and extractBody strips only one newline from each end, so a
+      // region read back from disk is never byte-identical to the body that produced it.
+      // Comparing untrimmed made `locallyModified` true for every padded region whose body
+      // legitimately changed, which meant a kit upgrade reported CLAUDE.md as user-edited and
+      // refused to touch it. Only the skip-identical check above, which already trimmed, hid it.
+      const hash = sha256(action.body.trim());
       const next = upsertRegion(current, action.body, action.region);
       const content = Buffer.from(next.content, 'utf8');
 
@@ -298,10 +304,16 @@ export function computeEffects(
         continue;
       }
       const recordedHash = wholeFileHash(manifest, action.dest);
+      // A block still under the legacy markers was recorded by an older kit generation whose
+      // hash semantics are not this one's, so the comparison below would report drift for every
+      // such install and strand it on the old markers behind a --force it has no reason to run.
+      const adoptingLegacy =
+        current !== null && hasLegacyRegion(current, action.region);
       const locallyModified =
+        !adoptingLegacy &&
         recordedHash !== undefined &&
         currentBody !== null &&
-        sha256(currentBody) !== recordedHash;
+        sha256(currentBody.trim()) !== recordedHash;
       if (locallyModified && !force) {
         effects.push({ action, op: 'skip-modified', content, hash });
         continue;

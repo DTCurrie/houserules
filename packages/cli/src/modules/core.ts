@@ -188,6 +188,10 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
         end: '<!-- agent-kit:claude-md end -->',
         anchor: 'after-h1',
         pad: true,
+        legacy: {
+          start: '<!-- claude-kit:claude-md start -->',
+          end: '<!-- claude-kit:claude-md end -->',
+        },
       },
       module: id,
       reason:

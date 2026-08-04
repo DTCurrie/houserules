@@ -729,6 +729,26 @@ describe('decision-log.mjs list', () => {
       'superseded',
     );
   });
+
+  it('reports a live entry from a migrated ledger with no rendered surface on disk', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'SIM-aaaaaa',
+        action: 'decide',
+        file: 'games/cityville/DECISIONS.md',
+        title: 'Old-style decision',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    const r = run(root, ['list']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('SIM-aaaaaa');
+    expect(r.stdout).toContain('Old-style decision');
+  });
 });
 
 describe('decision-log.mjs render', () => {
@@ -1127,6 +1147,136 @@ describe('decision-log.mjs, given a configured ledgers.dir', () => {
     expect(
       readFileSync(join(root, 'custom-ledgers/DECISIONS.md'), 'utf8'),
     ).toContain(`[${id}]`);
+  });
+});
+
+describe('decision-log.mjs render, given a ledger written before the ledger-directory move', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+  });
+
+  it('renders a record whose file field is a repo-relative target path at the target surface', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'SIM-aaaaaa',
+        action: 'decide',
+        file: 'games/cityville/DECISIONS.md',
+        title: 'Old-style decision',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    run(root, ['render', 'cityville']);
+
+    expect(readFile(root, '.claude/ledgers/cityville.DECISIONS.md')).toContain(
+      '[SIM-aaaaaa] Old-style decision',
+    );
+  });
+
+  it('renders a mix of old-style and new-style entries for the same area together', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'SIM-aaaaaa',
+        action: 'decide',
+        file: 'games/cityville/DECISIONS.md',
+        title: 'Old-style decision',
+        chat: null,
+        content: encodeBody('body one'),
+      },
+      {
+        ts: '2026-01-02T00:00:00.000Z',
+        id: 'SIM-bbbbbb',
+        action: 'decide',
+        file: 'cityville.DECISIONS.md',
+        title: 'New-style decision',
+        chat: null,
+        content: encodeBody('body two'),
+      },
+    ]);
+
+    run(root, ['render', 'cityville']);
+
+    const surface = readFile(root, '.claude/ledgers/cityville.DECISIONS.md');
+    expect(surface).toContain('[SIM-aaaaaa] Old-style decision');
+    expect(surface).toContain('[SIM-bbbbbb] New-style decision');
+  });
+
+  it('does not bleed an old-style entry from one target into a sibling target surface', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'SIM-aaaaaa',
+        action: 'decide',
+        file: 'games/cityville/DECISIONS.md',
+        title: 'Cityville decision',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    run(root, ['render', 'studio']);
+
+    expect(readFile(root, '.claude/ledgers/studio.DECISIONS.md')).not.toContain(
+      'Cityville decision',
+    );
+  });
+
+  it('falls back to the trailing directory name for an area the config no longer lists', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'SIM-aaaaaa',
+        action: 'decide',
+        file: 'packages/retired-area/DECISIONS.md',
+        title: 'Orphaned decision',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    run(root, ['render', 'retired-area']);
+
+    expect(
+      readFile(root, '.claude/ledgers/retired-area.DECISIONS.md'),
+    ).toContain('[SIM-aaaaaa] Orphaned decision');
+  });
+
+  it('writes every surface the migrated ledger implies when render is given no argument', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'SIM-aaaaaa',
+        action: 'decide',
+        file: 'games/cityville/DECISIONS.md',
+        title: 'Cityville decision',
+        chat: null,
+        content: encodeBody('body one'),
+      },
+      {
+        ts: '2026-01-02T00:00:00.000Z',
+        id: 'SIM-bbbbbb',
+        action: 'decide',
+        file: 'apps/studio/DECISIONS.md',
+        title: 'Studio decision',
+        chat: null,
+        content: encodeBody('body two'),
+      },
+    ]);
+
+    const r = run(root, ['render']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFile(root, '.claude/ledgers/cityville.DECISIONS.md')).toContain(
+      '[SIM-aaaaaa] Cityville decision',
+    );
+    expect(readFile(root, '.claude/ledgers/studio.DECISIONS.md')).toContain(
+      '[SIM-bbbbbb] Studio decision',
+    );
   });
 });
 

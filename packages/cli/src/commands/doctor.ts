@@ -84,7 +84,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   const checks: CheckResult[] = [
     checkResidentSurface(root),
     checkEnvironment(ctx),
-    checkInstallIntegrity(root, ctx, flags.kitVersion),
+    checkInstallIntegrity(root, ctx, flags.kitVersion, config.registry),
     config,
     checkSettingsWiring(root, ctx),
     checkModuleHealth(root, ctx),

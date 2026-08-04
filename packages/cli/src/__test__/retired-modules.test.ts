@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { KitError } from '../plan.js';
 import type { ModuleDef } from '../module-def.js';
-import type { RegisteredModule, Registry } from '../plugin-registry.js';
+import type {
+  PluginSource,
+  RegisteredModule,
+  Registry,
+} from '../plugin-registry.js';
 import {
   assertNoRetiredModules,
   findRetired,
+  resolveRecordedModuleIds,
   RETIRED_MODULES,
   retiredModuleAdvice,
 } from '../retired-modules.js';
@@ -21,17 +26,42 @@ function stubModule(id: string): ModuleDef {
   };
 }
 
-function registryWith(ids: string[]): Registry {
-  const modules: RegisteredModule[] = ids.map((id) => ({
-    id,
-    def: stubModule(id),
-    source: null,
-  }));
+function pluginSource(alias: string): PluginSource {
+  return {
+    name: `@agent-kit/plugin-${alias}`,
+    alias,
+    version: '0.0.0',
+    dir: `/packages/plugin-${alias}`,
+  };
+}
+
+function registryOf(modules: RegisteredModule[]): Registry {
   return {
     modules,
     plugins: [],
     get: (id) => modules.find((m) => m.id === id),
   };
+}
+
+function registryWith(ids: string[]): Registry {
+  return registryOf(
+    ids.map((id) => ({ id, def: stubModule(id), source: null })),
+  );
+}
+
+function registryWithPluginModule(
+  alias: string,
+  bareId: string,
+  builtIns: string[] = ['core'],
+): Registry {
+  return registryOf([
+    ...builtIns.map((id) => ({ id, def: stubModule(id), source: null })),
+    {
+      id: `${alias}/${bareId}`,
+      def: stubModule(bareId),
+      source: pluginSource(alias),
+    },
+  ]);
 }
 
 describe('findRetired', () => {
@@ -48,7 +78,24 @@ describe('findRetired', () => {
   });
 
   it('reports nothing once the plugin supplying that id is installed', () => {
-    expect(findRetired(['backlog'], registryWith(['backlog']))).toEqual([]);
+    expect(
+      findRetired(['backlog'], registryWithPluginModule('backlog', 'backlog')),
+    ).toEqual([]);
+  });
+
+  it('reports nothing when the plugin alias differs from the module id', () => {
+    expect(
+      findRetired(['changesets'], registryWithPluginModule('cs', 'changesets')),
+    ).toEqual([]);
+  });
+
+  it('reports nothing for an id that was renamed before it moved into a plugin', () => {
+    expect(
+      findRetired(
+        ['terse-style'],
+        registryWithPluginModule('prose', 'output-prose'),
+      ),
+    ).toEqual([]);
   });
 
   it('reports each retired id once even when named repeatedly', () => {
@@ -102,6 +149,108 @@ describe('assertNoRetiredModules', () => {
     expect(() =>
       assertNoRetiredModules(['core', 'lint-fix'], registryWith(['core'])),
     ).not.toThrow();
+  });
+
+  it('passes a pre-split manifest once the plugin supplying the id is wired', () => {
+    expect(() =>
+      assertNoRetiredModules(
+        ['core', 'backlog'],
+        registryWithPluginModule('backlog', 'backlog'),
+      ),
+    ).not.toThrow();
+  });
+});
+
+describe('resolveRecordedModuleIds', () => {
+  it('rewrites a pre-split bare id to the namespaced id the registry answers to', () => {
+    expect(
+      resolveRecordedModuleIds(
+        ['core', 'backlog'],
+        registryWithPluginModule('backlog', 'backlog'),
+      ),
+    ).toEqual(['core', 'backlog/backlog']);
+  });
+
+  it('uses the alias the repo chose rather than the module id', () => {
+    expect(
+      resolveRecordedModuleIds(
+        ['changesets'],
+        registryWithPluginModule('cs', 'changesets'),
+      ),
+    ).toEqual(['cs/changesets']);
+  });
+
+  it('leaves an id the registry already answers to alone', () => {
+    expect(
+      resolveRecordedModuleIds(['core', 'lint-fix'], registryWith(['core'])),
+    ).toEqual(['core', 'lint-fix']);
+  });
+
+  it('leaves a genuinely retired id bare, so the gate still reports it', () => {
+    expect(
+      resolveRecordedModuleIds(['backlog'], registryWith(['core'])),
+    ).toEqual(['backlog']);
+  });
+
+  it('is idempotent, so a migrated manifest does not migrate again', () => {
+    const registry = registryWithPluginModule('backlog', 'backlog');
+    const once = resolveRecordedModuleIds(['backlog'], registry);
+
+    expect(resolveRecordedModuleIds(once, registry)).toEqual(once);
+  });
+
+  it('resolves an id that was renamed and moved into a plugin in one reorganization', () => {
+    expect(
+      resolveRecordedModuleIds(
+        ['terse-style'],
+        registryWithPluginModule('prose', 'output-prose'),
+      ),
+    ).toEqual(['prose/output-prose']);
+  });
+
+  it('resolves a renamed id that stayed a built-in', () => {
+    expect(
+      resolveRecordedModuleIds(['terse-style'], registryWith(['output-prose'])),
+    ).toEqual(['output-prose']);
+  });
+
+  it('throws rather than guess when two plugins supply the same id', () => {
+    const registry = registryOf([
+      { id: 'core', def: stubModule('core'), source: null },
+      {
+        id: 'a/backlog',
+        def: stubModule('backlog'),
+        source: pluginSource('a'),
+      },
+      {
+        id: 'b/backlog',
+        def: stubModule('backlog'),
+        source: pluginSource('b'),
+      },
+    ]);
+
+    expect(() => resolveRecordedModuleIds(['backlog'], registry)).toThrow(
+      KitError,
+    );
+  });
+
+  it('names both candidates when it refuses an ambiguous id', () => {
+    const registry = registryOf([
+      {
+        id: 'a/backlog',
+        def: stubModule('backlog'),
+        source: pluginSource('a'),
+      },
+      {
+        id: 'b/backlog',
+        def: stubModule('backlog'),
+        source: pluginSource('b'),
+      },
+    ]);
+
+    expect(() => resolveRecordedModuleIds(['backlog'], registry)).toThrow(
+      /a\/backlog.*b\/backlog/s,
+    );
   });
 });
 

@@ -37,9 +37,10 @@ import {
   appendEvent,
   decodeBody,
   encodeBody,
-  findSurfaceFiles,
+  impliedSurfaceFiles,
   ledgerDir,
   ledgerPath,
+  normalizeSurfaceRef,
   nowIso,
   parseEntries,
   readContentArg,
@@ -171,10 +172,16 @@ function projectFile(file: string): {
   surviving: BacklogEntry[];
   removed: Set<string>;
 } {
-  const relFile = surfaceRelFile(LEDGER_DIR, file);
+  const relFile = normalizeSurfaceRef(
+    surfaceRelFile(LEDGER_DIR, file),
+    SURFACE,
+    CONFIG.targets ?? [],
+  );
   const { entries, removed } = projectBacklog(readLog<BacklogRecord>(LOG_FILE));
   const surviving = [...entries.values()].filter(
-    (e) => e.file === relFile && !removed.has(e.id),
+    (e) =>
+      normalizeSurfaceRef(e.file, SURFACE, CONFIG.targets ?? []) === relFile &&
+      !removed.has(e.id),
   );
   return { surviving, removed };
 }
@@ -183,6 +190,38 @@ function projectFile(file: string): {
 function rerenderFile(file: string): void {
   const { surviving, removed } = projectFile(file);
   writeSurface(file, surviving, removed);
+}
+
+/** Every surface implied by the ledger's own recorded `file` values, plus every one on disk. */
+function allSurfaceFiles(): string[] {
+  return impliedSurfaceFiles(
+    LEDGER_DIR,
+    SURFACE,
+    readLog<BacklogRecord>(LOG_FILE).map((r) => r.file),
+    CONFIG.targets ?? [],
+  );
+}
+
+/**
+ * The entries `list` prints for one surface. Reads the rendered markdown when it exists on
+ * disk, and projects straight from the ledger when it does not, so a surface the ledger implies
+ * but nothing has rendered yet still reports its live entries.
+ */
+function listEntries(
+  file: string,
+): { id: string; title: string; logged: string }[] {
+  if (existsSync(file) && statSync(file).isFile()) {
+    return parseEntries(readSurface(file)).map((e) => ({
+      id: e.id,
+      title: e.title,
+      logged: e.meta.Logged ?? '????-??-??',
+    }));
+  }
+  return projectFile(file).surviving.map((e) => ({
+    id: e.id,
+    title: e.title,
+    logged: e.date,
+  }));
 }
 
 function entryNotFound(id: string, file: string): never {
@@ -335,16 +374,13 @@ switch (action) {
 
   case 'list': {
     const [file] = rest;
-    const files = file
-      ? [resolveSurfaceArg(file)]
-      : findSurfaceFiles(LEDGER_DIR, SURFACE);
+    const files = file ? [resolveSurfaceArg(file)] : allSurfaceFiles();
     for (const f of files) {
-      if (!existsSync(f) || !statSync(f).isFile()) continue;
-      const entries = parseEntries(readSurface(f));
+      const entries = listEntries(f);
       if (!entries.length) continue;
       console.log(`# ${relativeToRoot(REPO_ROOT, f)}`);
       for (const e of entries) {
-        console.log(`  ${e.id}  ${e.meta.Logged ?? '????-??-??'}  ${e.title}`);
+        console.log(`  ${e.id}  ${e.logged}  ${e.title}`);
       }
       console.log('');
     }
@@ -353,9 +389,7 @@ switch (action) {
 
   case 'render': {
     const [file] = rest;
-    const files = file
-      ? [resolveSurfaceArg(file)]
-      : findSurfaceFiles(LEDGER_DIR, SURFACE);
+    const files = file ? [resolveSurfaceArg(file)] : allSurfaceFiles();
     for (const f of files) rerenderFile(f);
     break;
   }

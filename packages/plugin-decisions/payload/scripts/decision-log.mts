@@ -46,9 +46,10 @@ import {
   appendEvent,
   decodeBody,
   encodeBody,
-  findSurfaceFiles,
+  impliedSurfaceFiles,
   ledgerDir,
   ledgerPath,
+  normalizeSurfaceRef,
   nowIso,
   parseEntries,
   readContentArg,
@@ -304,14 +305,69 @@ function renderEntry(
   return `## [${e.id}] ${e.title}\n\n${meta}\n\n${body}\n\n${SEPARATOR}\n\n`;
 }
 
+/**
+ * The entries recorded for `file`, projected from the ledger alone, plus which of them the
+ * log records as superseded and by what.
+ */
+function projectFileEntries(file: string): {
+  entries: DecisionEntry[];
+  superseded: Set<string>;
+  supersededBy: Map<string, string>;
+} {
+  const relFile = normalizeSurfaceRef(
+    surfaceRelFile(file),
+    SURFACE,
+    CONFIG.targets ?? [],
+  );
+  const { entries: allEntries, superseded } = projectDecisions(
+    readLog<DecisionRecord>(LOG_FILE),
+  );
+  const entries = [...allEntries.values()].filter(
+    (e) =>
+      normalizeSurfaceRef(e.file, SURFACE, CONFIG.targets ?? []) === relFile,
+  );
+  return { entries, superseded, supersededBy: supersededByOf(allEntries) };
+}
+
+/** Every surface implied by the ledger's own recorded `file` values, plus every one on disk. */
+function allSurfaceFiles(): string[] {
+  return impliedSurfaceFiles(
+    LEDGER_DIR,
+    SURFACE,
+    readLog<DecisionRecord>(LOG_FILE).map((r) => r.file),
+    CONFIG.targets ?? [],
+  );
+}
+
+/**
+ * The entries `list` prints for one surface. Reads the rendered markdown when it exists on
+ * disk, and projects straight from the ledger when it does not, so a surface the ledger
+ * implies but nothing has rendered yet still reports its live entries.
+ */
+function listEntries(
+  file: string,
+): { id: string; title: string; decided: string; status: string }[] {
+  if (existsSync(file) && statSync(file).isFile()) {
+    return parseEntries(readSurface(file)).map((e) => ({
+      id: e.id,
+      title: e.title,
+      decided: e.meta.Decided ?? todayDate(),
+      status: e.meta.Status ?? 'accepted',
+    }));
+  }
+  const { entries, superseded } = projectFileEntries(file);
+  return entries.map((e) => ({
+    id: e.id,
+    title: e.title,
+    decided: e.date,
+    status: superseded.has(e.id) ? 'superseded' : 'accepted',
+  }));
+}
+
 /** Rebuilds one surface file from the log alone, in append order. */
 function rerenderFile(file: string): void {
-  const relFile = surfaceRelFile(file);
-  const records = readLog<DecisionRecord>(LOG_FILE);
-  const { entries, superseded } = projectDecisions(records);
-  const supersededBy = supersededByOf(entries);
-  const body = [...entries.values()]
-    .filter((e) => e.file === relFile)
+  const { entries, superseded, supersededBy } = projectFileEntries(file);
+  const body = entries
     .map((e) =>
       renderEntry(
         e,
@@ -533,18 +589,13 @@ switch (action) {
 
   case 'list': {
     const [file] = rest;
-    const files = file
-      ? [resolveSurfaceFile(file)]
-      : findSurfaceFiles(LEDGER_DIR, SURFACE);
+    const files = file ? [resolveSurfaceFile(file)] : allSurfaceFiles();
     for (const f of files) {
-      if (!existsSync(f) || !statSync(f).isFile()) continue;
-      const entries = parseEntries(readSurface(f));
+      const entries = listEntries(f);
       if (!entries.length) continue;
       console.log(`# ${relativeToRoot(REPO_ROOT, f)}`);
       for (const e of entries) {
-        console.log(
-          `  ${e.id}  ${e.meta.Decided ?? todayDate()}  ${e.meta.Status ?? 'accepted'}  ${e.title}`,
-        );
+        console.log(`  ${e.id}  ${e.decided}  ${e.status}  ${e.title}`);
       }
       console.log('');
     }
@@ -553,9 +604,7 @@ switch (action) {
 
   case 'render': {
     const [file] = rest;
-    const files = file
-      ? [resolveSurfaceFile(file)]
-      : findSurfaceFiles(LEDGER_DIR, SURFACE);
+    const files = file ? [resolveSurfaceFile(file)] : allSurfaceFiles();
     for (const f of files) rerenderFile(f);
     break;
   }

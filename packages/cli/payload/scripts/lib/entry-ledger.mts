@@ -321,6 +321,72 @@ export function surfaceRelFile(dir: string, file: string): string {
   return relative(dir, resolve(file));
 }
 
+/**
+ * The ledger-dir-relative surface name a recorded `file` value refers to today.
+ *
+ * Ledgers written before the surfaces moved into the ledger directory recorded a repo-relative
+ * path such as `games/tower-push/BACKLOG.md`. Nothing can equal that today, because
+ * {@link surfaceRelFile} now yields `tower-push.BACKLOG.md`, so every such entry silently stops
+ * matching its surface and the ledger renders empty.
+ *
+ * Normalizing on READ rather than rewriting the ledger is deliberate. The ledger is append-only
+ * and is the committed source of truth, so a migration that rewrote historical `file` fields
+ * would edit records that already shipped. This is a pure projection instead, it is idempotent,
+ * and a repo can roll back to an older kit without its history having been altered.
+ *
+ * The area is taken from the configured targets first, since that is authoritative. The trailing
+ * directory name is the fallback, which is what makes an area the config no longer lists still
+ * resolve rather than vanish.
+ *
+ * @param recorded The `file` value as stored on the entry.
+ * @param basename The surface basename, `BACKLOG.md` or `DECISIONS.md`.
+ */
+export function normalizeSurfaceRef(
+  recorded: string,
+  basename: string,
+  targets: ReadonlyArray<{ name: string; pathPrefix?: string }>,
+): string {
+  const clean = recorded.replace(/^\.\//, '');
+  if (!clean.includes('/')) return clean;
+  if (!clean.endsWith(`/${basename}`)) return clean;
+
+  const dir = clean.slice(0, -(basename.length + 1));
+  const match = targets.find(
+    (target) => (target.pathPrefix ?? '').replace(/\/+$/, '') === dir,
+  );
+  const area = match?.name ?? dir.split('/').filter(Boolean).pop();
+  return area ? `${area}.${basename}` : clean;
+}
+
+/**
+ * Every surface the ledger implies, union'd with every surface already on disk.
+ *
+ * The `.jsonl` is the source of truth and the markdown is a generated view, so a freshly
+ * migrated ledger, one whose entries moved into `.claude/ledgers/` but was never rendered,
+ * has zero files on disk and would otherwise look empty to `list` and `render`. Deriving the
+ * surface set from the ledger's own recorded `file` values instead means a surface with no
+ * live entries still gets its header, and a surface every entry was removed from does not
+ * silently vanish just because nothing wrote it since.
+ *
+ * @param recordedFiles The raw `file` value off every ledger record, in any order, possibly
+ *   holding `undefined` for records that predate the field.
+ */
+export function impliedSurfaceFiles(
+  dir: string,
+  basename: string,
+  recordedFiles: Iterable<string | undefined>,
+  targets: ReadonlyArray<{ name: string; pathPrefix?: string }>,
+): string[] {
+  const names = new Set<string>();
+  for (const recorded of recordedFiles) {
+    if (recorded) names.add(normalizeSurfaceRef(recorded, basename, targets));
+  }
+  const fromLedger = [...names].map((name) => resolve(dir, name));
+  return [
+    ...new Set([...findSurfaceFiles(dir, basename), ...fromLedger]),
+  ].sort();
+}
+
 /** Every rendered surface with this basename in the ledger directory. */
 export function findSurfaceFiles(dir: string, basename: string): string[] {
   let entries;

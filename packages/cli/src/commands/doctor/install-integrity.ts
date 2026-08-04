@@ -1,4 +1,5 @@
 import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { ledgerDirFor } from '../../core/ledger-dir.js';
 import { MANIFEST_PATH } from '../../core/manifest.js';
@@ -10,18 +11,37 @@ import {
 import type { Ctx } from '../../detect.js';
 import { payloadPath } from '../../paths.js';
 import { MODULES } from '../../plan.js';
+import type { Registry } from '../../plugin-registry.js';
 import type { CheckResult, Finding } from './finding.js';
 import { allHookCommands } from './settings-wiring.js';
+
+/** Every `.mjs` script name shipped across a set of built payload directories. */
+function shippedScripts(dirs: string[]): Set<string> {
+  const scripts = new Set<string>();
+  for (const dir of dirs) {
+    try {
+      for (const f of readdirSync(dir)) if (f.endsWith('.mjs')) scripts.add(f);
+    } catch {
+      /* payload directory unreadable. Skip it for the retired-script check. */
+    }
+  }
+  return scripts;
+}
 
 /**
  * Whether what the manifest claims still matches what this kit ships: the receipt
  * exists, its version is current, nothing generated got committed, and no retired
  * module or hook script is left behind.
+ *
+ * @param registry Built-ins plus every configured plugin's modules, as `checkConfigValidity`
+ * resolved it. Null only when a plugin failed to resolve, which that check already reported,
+ * and the retired-module scan then falls back to the built-ins.
  */
 export function checkInstallIntegrity(
   root: string,
   ctx: Ctx,
   kitVersion: string,
+  registry: Registry | null,
 ): CheckResult {
   const findings: Finding[] = [];
   const manifest = ctx.claude.manifest;
@@ -74,7 +94,11 @@ export function checkInstallIntegrity(
 
   // Modules and hooks the manifest records but the current kit no longer defines. The
   // kit is otherwise add-and-update-only, so without this an orphan stays invisible.
-  const knownModuleIds = new Set(MODULES.map((m) => m.id));
+  // Resolved against the registry, which includes every module a configured plugin
+  // contributes, not just the built-ins.
+  const knownModuleIds = new Set(
+    registry ? registry.modules.map((m) => m.id) : MODULES.map((m) => m.id),
+  );
   for (const id of manifest.modules ?? []) {
     if (!knownModuleIds.has(id))
       findings.push({
@@ -82,15 +106,14 @@ export function checkInstallIntegrity(
         msg: `manifest lists module "${id}" which this kit no longer defines — npx agent-kit update prunes its retired files/hooks`,
       });
   }
-  // A kit-owned OR kit-signed hook script this kit no longer ships is retired.
-  let currentScripts = new Set<string>();
-  try {
-    currentScripts = new Set(
-      readdirSync(payloadPath('scripts')).filter((f) => f.endsWith('.mjs')),
-    );
-  } catch {
-    /* payload unreadable. Skip the retired-script check. */
-  }
+  // A kit-owned OR kit-signed hook script this kit no longer ships is retired. Scripts
+  // ship from the CLI's own payload plus every resolved plugin's payload.
+  const scriptDirs = [
+    payloadPath('scripts'),
+    ...(registry?.plugins.map((p) => join(p.dir, 'payload-dist', 'scripts')) ??
+      []),
+  ];
+  const currentScripts = shippedScripts(scriptDirs);
   const suspects = new Set<string>();
   for (const p of Object.keys(manifest.files ?? {}))
     if (/^\.claude\/scripts\/[^/]+\.mjs$/.test(p))

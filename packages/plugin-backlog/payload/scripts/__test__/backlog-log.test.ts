@@ -641,6 +641,26 @@ describe('backlog-log.mjs list', () => {
 
     expect(run(root, ['list']).stdout).not.toContain(`# ${ROOT_SURFACE}`);
   });
+
+  it('reports a live entry from a migrated ledger with no rendered surface on disk', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: 'games/cityville/BACKLOG.md',
+        title: 'Old-style item',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    const r = run(root, ['list']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('TEST-aaaaaa');
+    expect(r.stdout).toContain('Old-style item');
+  });
 });
 
 describe('backlog-log.mjs migrating a ledger written before the ledger-directory move', () => {
@@ -662,6 +682,133 @@ describe('backlog-log.mjs migrating a ledger written before the ledger-directory
 
     expect(readFile(root, ROOT_SURFACE)).toContain(
       '## [TEST-aaaaaa] Pre-move item',
+    );
+  });
+
+  it('renders a record whose file field is a repo-relative target path at the target surface', () => {
+    const root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: 'games/cityville/BACKLOG.md',
+        title: 'Old-style item',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    run(root, ['render', 'cityville']);
+
+    expect(readFile(root, '.claude/ledgers/cityville.BACKLOG.md')).toContain(
+      '## [TEST-aaaaaa] Old-style item',
+    );
+  });
+
+  it('renders a mix of old-style and new-style entries for the same area together', () => {
+    const root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: 'games/cityville/BACKLOG.md',
+        title: 'Old-style item',
+        chat: null,
+        content: encodeBody('body one'),
+      },
+      {
+        ts: '2026-01-02T00:00:00.000Z',
+        id: 'TEST-bbbbbb',
+        action: 'add',
+        file: 'cityville.BACKLOG.md',
+        title: 'New-style item',
+        chat: null,
+        content: encodeBody('body two'),
+      },
+    ]);
+
+    run(root, ['render', 'cityville']);
+
+    const surface = readFile(root, '.claude/ledgers/cityville.BACKLOG.md');
+    expect(surface).toContain('## [TEST-aaaaaa] Old-style item');
+    expect(surface).toContain('## [TEST-bbbbbb] New-style item');
+  });
+
+  it('does not bleed an old-style entry from one target into a sibling target surface', () => {
+    const root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: 'games/cityville/BACKLOG.md',
+        title: 'Cityville item',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    run(root, ['render', 'studio']);
+
+    expect(readFile(root, '.claude/ledgers/studio.BACKLOG.md')).not.toContain(
+      'Cityville item',
+    );
+  });
+
+  it('falls back to the trailing directory name for an area the config no longer lists', () => {
+    const root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: 'packages/retired-area/BACKLOG.md',
+        title: 'Orphaned item',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    run(root, ['render', 'retired-area']);
+
+    expect(readFile(root, '.claude/ledgers/retired-area.BACKLOG.md')).toContain(
+      '## [TEST-aaaaaa] Orphaned item',
+    );
+  });
+
+  it('writes every surface the migrated ledger implies when render is given no argument', () => {
+    const root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: 'games/cityville/BACKLOG.md',
+        title: 'Cityville item',
+        chat: null,
+        content: encodeBody('body one'),
+      },
+      {
+        ts: '2026-01-02T00:00:00.000Z',
+        id: 'TEST-bbbbbb',
+        action: 'add',
+        file: 'apps/studio/BACKLOG.md',
+        title: 'Studio item',
+        chat: null,
+        content: encodeBody('body two'),
+      },
+    ]);
+
+    const r = run(root, ['render']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFile(root, '.claude/ledgers/cityville.BACKLOG.md')).toContain(
+      '## [TEST-aaaaaa] Cityville item',
+    );
+    expect(readFile(root, '.claude/ledgers/studio.BACKLOG.md')).toContain(
+      '## [TEST-bbbbbb] Studio item',
     );
   });
 });

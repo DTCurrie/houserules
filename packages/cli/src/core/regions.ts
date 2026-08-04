@@ -5,6 +5,15 @@ export interface RegionSpec {
   end: string;
   anchor: 'eof' | 'after-h1';
   pad?: boolean;
+  /**
+   * A marker pair an earlier kit version wrote, recognized on read so its block is adopted.
+   *
+   * Read-side only. Every write emits `start`/`end`, so an install converges on the current
+   * markers in one update and never carries both. Without this an install whose markers were
+   * renamed matches nothing, and `upsertRegion` inserts a SECOND block while the original is
+   * orphaned in place, still claiming to be kit-maintained.
+   */
+  legacy?: { start: string; end: string };
 }
 
 export type UpsertStatus = 'created' | 'replaced' | 'inserted';
@@ -16,23 +25,49 @@ interface Located {
   innerEnd: number;
 }
 
-function locate(content: string, spec: RegionSpec): Located | null {
-  const start = content.indexOf(spec.start);
+function locateMarkers(
+  content: string,
+  startMarker: string,
+  endMarker: string,
+): Located | null {
+  const start = content.indexOf(startMarker);
   if (start === -1) return null;
-  const innerStart = start + spec.start.length;
-  const innerEnd = content.indexOf(spec.end, innerStart);
+  const innerStart = start + startMarker.length;
+  const innerEnd = content.indexOf(endMarker, innerStart);
   if (innerEnd === -1) return null;
   return {
     blockStart: start,
-    blockEnd: innerEnd + spec.end.length,
+    blockEnd: innerEnd + endMarker.length,
     innerStart,
     innerEnd,
   };
 }
 
+// Current markers win, so a file that somehow carries both converges rather than ping-ponging.
+function locate(content: string, spec: RegionSpec): Located | null {
+  const current = locateMarkers(content, spec.start, spec.end);
+  if (current || !spec.legacy) return current;
+  return locateMarkers(content, spec.legacy.start, spec.legacy.end);
+}
+
 function buildBlock(body: string, spec: RegionSpec): string {
   const sep = spec.pad ? '\n\n' : '\n';
   return `${spec.start}${sep}${body.trimEnd()}${sep}${spec.end}`;
+}
+
+/**
+ * Whether the block on disk sits under the legacy markers rather than the current pair.
+ *
+ * Callers use this to decide that a recorded hash is not comparable. A manifest written by the
+ * kit generation that used those markers computed its region hash with that generation's
+ * semantics, so measuring today's body against it reports drift that says nothing about whether
+ * the user edited anything. The block is kit-owned either way, and bytes outside the markers are
+ * never touched, so adopting it is the migration working rather than an edit being lost.
+ */
+export function hasLegacyRegion(content: string, spec: RegionSpec): boolean {
+  if (!spec.legacy) return false;
+  if (locateMarkers(content, spec.start, spec.end)) return false;
+  return locateMarkers(content, spec.legacy.start, spec.legacy.end) !== null;
 }
 
 /** The managed content between the markers, or null when the markers are absent. */

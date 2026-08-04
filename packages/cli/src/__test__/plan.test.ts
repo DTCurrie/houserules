@@ -821,3 +821,124 @@ describe('buildPlan, for a module declaring options', () => {
     expect(deletes.map((d) => d.dest)).toEqual(['alpha.md']);
   });
 });
+
+describe('computeEffects, given a "region" action on a padded region', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-region-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  const CURRENT = {
+    id: 'claude-md',
+    start: '<!-- agent-kit:claude-md start -->',
+    end: '<!-- agent-kit:claude-md end -->',
+    anchor: 'after-h1' as const,
+    pad: true,
+    legacy: {
+      start: '<!-- claude-kit:claude-md start -->',
+      end: '<!-- claude-kit:claude-md end -->',
+    },
+  };
+
+  function regionAction(body: string) {
+    return {
+      kind: 'region' as const,
+      module: 'core',
+      dest: 'CLAUDE.md',
+      body,
+      region: CURRENT,
+      reason: 'test',
+    };
+  }
+
+  function hostFile(
+    root: string,
+    markers: { start: string; end: string },
+    body: string,
+  ): void {
+    writeFileSync(
+      join(root, 'CLAUDE.md'),
+      `# Title\n\n${markers.start}\n\n${body}\n\n${markers.end}\n\nUser prose below.\n`,
+    );
+  }
+
+  function manifestRecording(hash: string) {
+    return {
+      kitVersion: '1.0.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      modules: ['core'],
+      files: { 'CLAUDE.md': hash },
+    };
+  }
+
+  it('refreshes a changed body rather than calling the padding a local edit', () => {
+    const root = tempDir();
+    hostFile(root, CURRENT, 'old body');
+
+    const { effects } = computeEffects(root, [regionAction('new body')], {
+      manifest: manifestRecording(sha256('old body')),
+    });
+
+    expect(effects[0].op).toBe('update');
+  });
+
+  it('still refuses a body the user edited', () => {
+    const root = tempDir();
+    hostFile(root, CURRENT, 'body the user rewrote');
+
+    const { effects } = computeEffects(root, [regionAction('new body')], {
+      manifest: manifestRecording(sha256('what the kit last wrote')),
+    });
+
+    expect(effects[0].op).toBe('skip-modified');
+  });
+
+  it('adopts a block under legacy markers even though no recorded hash can match it', () => {
+    const root = tempDir();
+    hostFile(
+      root,
+      CURRENT.legacy,
+      'body written by the previous kit generation',
+    );
+
+    const { effects } = computeEffects(root, [regionAction('new body')], {
+      manifest: manifestRecording('a-hash-from-another-codebase'),
+    });
+
+    expect(effects[0].op).toBe('update');
+  });
+
+  it('leaves no legacy marker behind once it adopts', () => {
+    const root = tempDir();
+    hostFile(root, CURRENT.legacy, 'old');
+
+    const { effects } = computeEffects(root, [regionAction('new body')], {
+      manifest: manifestRecording('a-hash-from-another-codebase'),
+    });
+
+    expect(effects[0].content!.toString()).not.toContain(
+      'claude-kit:claude-md',
+    );
+  });
+
+  it('preserves every byte outside the markers when adopting', () => {
+    const root = tempDir();
+    hostFile(root, CURRENT.legacy, 'old');
+
+    const { effects } = computeEffects(root, [regionAction('new body')], {
+      manifest: manifestRecording('a-hash-from-another-codebase'),
+    });
+
+    const written = effects[0].content!.toString();
+    expect(written.startsWith('# Title\n')).toBe(true);
+    expect(written.endsWith('\nUser prose below.\n')).toBe(true);
+  });
+});

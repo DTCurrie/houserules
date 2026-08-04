@@ -92,6 +92,51 @@ describe('upsertRegion', () => {
   });
 });
 
+describe('upsertRegion, with a legacy marker pair', () => {
+  const LEGACY_SPEC: RegionSpec = {
+    ...SPEC,
+    legacy: {
+      start: '<!-- claude-kit:claude-md start -->',
+      end: '<!-- claude-kit:claude-md end -->',
+    },
+  };
+
+  it('replaces a block found only under the legacy markers rather than inserting a second block', () => {
+    const before = 'prefix line one\nprefix line two\n';
+    const after = '\nsuffix line one\nsuffix line two\n';
+    const existing = `${before}${LEGACY_SPEC.legacy!.start}\nold body\n${LEGACY_SPEC.legacy!.end}${after}`;
+    const { content, status } = upsertRegion(existing, 'new body', LEGACY_SPEC);
+    expect(status).toBe('replaced');
+    expect(content).toBe(
+      `${before}${LEGACY_SPEC.start}\nnew body\n${LEGACY_SPEC.end}${after}`,
+    );
+  });
+
+  it('emits only the current markers, never the legacy ones, once adopted', () => {
+    const existing = `${LEGACY_SPEC.legacy!.start}\nold body\n${LEGACY_SPEC.legacy!.end}\n`;
+    const { content } = upsertRegion(existing, 'new body', LEGACY_SPEC);
+    expect(content).not.toContain(LEGACY_SPEC.legacy!.start);
+    expect(content).not.toContain(LEGACY_SPEC.legacy!.end);
+  });
+
+  it('leaves a file already on the current markers unaffected by the legacy fallback', () => {
+    const existing = `${LEGACY_SPEC.start}\nold body\n${LEGACY_SPEC.end}\n`;
+    const { content, status } = upsertRegion(existing, 'new body', LEGACY_SPEC);
+    expect(status).toBe('replaced');
+    expect(content).toBe(
+      `${LEGACY_SPEC.start}\nnew body\n${LEGACY_SPEC.end}\n`,
+    );
+  });
+
+  it('inserts exactly once when the file carries neither the current nor the legacy markers', () => {
+    const existing = 'Just some prose.\n';
+    const { content, status } = upsertRegion(existing, 'body', LEGACY_SPEC);
+    expect(status).toBe('inserted');
+    const starts = content.match(new RegExp(LEGACY_SPEC.start, 'g')) ?? [];
+    expect(starts).toHaveLength(1);
+  });
+});
+
 describe('extractBody', () => {
   it('returns null when the end marker is missing (half-open)', () => {
     const halfOpen = `some text\n${SPEC.start}\nbody\n`;

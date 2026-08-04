@@ -10,7 +10,10 @@ import {
 import type { Ctx } from '../detect.js';
 import { ledgerDirFor } from '../core/ledger-dir.js';
 import { resolveModuleOptions } from '../module-options.js';
-import { assertNoRetiredModules } from '../retired-modules.js';
+import {
+  assertNoRetiredModules,
+  resolveRecordedModuleIds,
+} from '../retired-modules.js';
 import {
   MODULES,
   KitError,
@@ -105,26 +108,32 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   const targets = ctx.claude.kitConfig?.targets?.length
     ? ctx.claude.kitConfig.targets
     : ctx.targets;
-  const updateModuleIds = manifest.modules ?? ['core'];
-  const moduleOptions = resolveModuleOptions(
-    registry,
-    updateModuleIds,
-    ctx.claude.kitConfig?.moduleOptions,
-  );
-
-  const answers: Answers = {
-    moduleIds: updateModuleIds,
-    targets,
-    seedChangesetConfig: false,
-    moduleOptions,
-  };
+  const recordedModuleIds = manifest.modules ?? ['core'];
 
   let planResult: PlanResult;
+  let updateModuleIds: string[];
   try {
-    // Inside the KitError handler, and before any plan exists, so computePrune below can never
-    // see a plan that is missing a retired module's files. Continuing would delete them and
-    // look identical to a deliberate removal.
+    // Both of these are inside the KitError handler, and before any plan exists, so computePrune
+    // below can never see a plan that is missing a module's files. Continuing would delete them
+    // and look identical to a deliberate removal.
+    //
+    // Resolution runs first. A pre-split manifest records bare ids that the registry no longer
+    // answers to, and buildPlan matches on the registered id, so leaving them bare would drop
+    // every plugin module's actions and prune its files. The gate runs on the resolved ids, and
+    // an id nothing supplies survives resolution unchanged, so it is still reported.
+    updateModuleIds = resolveRecordedModuleIds(recordedModuleIds, registry);
     assertNoRetiredModules(updateModuleIds, registry);
+    const moduleOptions = resolveModuleOptions(
+      registry,
+      updateModuleIds,
+      ctx.claude.kitConfig?.moduleOptions,
+    );
+    const answers: Answers = {
+      moduleIds: updateModuleIds,
+      targets,
+      seedChangesetConfig: false,
+      moduleOptions,
+    };
     planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
       manifest,
       force: flags.force,
@@ -162,12 +171,14 @@ export async function update(dir: string, flags: Flags): Promise<number> {
 
   // init unions new defaults, but update (the path people actually use) did not.
   // Surface them, never enable them.
+  // Against the resolved ids, not the recorded ones. A plugin module the repo already has is
+  // recorded bare, so comparing against the manifest would advertise it as newly available.
   const addable = registry.modules
     .filter(
       (m) =>
         !m.def.locked &&
         m.def.defaultEnabled(ctx) &&
-        !(manifest.modules ?? []).includes(m.id),
+        !updateModuleIds.includes(m.id),
     )
     .map((m) => m.id);
 
@@ -231,7 +242,9 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     { ...planResult, prune },
     {
       kitVersion: flags.kitVersion,
-      moduleIds: answers.moduleIds,
+      // The resolved ids, never the recorded ones. Writing the bare ids back would re-run the
+      // migration on every update and leave the manifest disagreeing with the registry forever.
+      moduleIds: updateModuleIds,
       previousManifest: manifest,
     },
   );
