@@ -1,3 +1,4 @@
+import { hasModule } from './plugin-registry.js';
 import type { Ctx, PackageManagerInfo, Target } from './detect.js';
 import type { Answers } from './module-def.js';
 
@@ -81,17 +82,21 @@ export function verifyDefaultsFor(
 /**
  * The `$schema` value that gives editors completion and inline validation on
  * kit.config.json. The config lives at `.claude/kit.config.json`, so a local path has to
- * climb out of `.claude/` first. A repo that only ever runs `npx claude-kit` has no local
+ * climb out of `.claude/` first. A repo that only ever runs `npx agent-kit` has no local
  * copy to point at, so it gets the published URL instead of a path resolving to nothing.
+ *
+ * The dependency probed here is the package name, `@agent-kit/cli`, not the binary name.
+ * An earlier version probed the bare binary name, which was never a published package, so
+ * the local-path branch could not fire for anyone.
  */
 export function schemaRefFor(ctx: Ctx): string {
   const deps = {
     ...ctx.rootPkg?.dependencies,
     ...ctx.rootPkg?.devDependencies,
   };
-  return 'claude-kit' in deps
-    ? '../node_modules/claude-kit/schema/kit.config.schema.json'
-    : 'https://github.com/devintcurrie/claude-kit/schema/kit.config.schema.json';
+  return '@agent-kit/cli' in deps
+    ? '../node_modules/@agent-kit/cli/schema/kit.config.schema.json'
+    : 'https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json';
 }
 
 /**
@@ -99,7 +104,7 @@ export function schemaRefFor(ctx: Ctx): string {
  * valid, carrying at most `<!-- TODO -->` comments and never a raw placeholder.
  */
 export function renderKitConfig(ctx: Ctx, answers: Answers): string {
-  const has = (id: string) => answers.moduleIds.includes(id);
+  const has = (id: string) => hasModule(answers.moduleIds, id);
   const config: {
     $schema: string;
     version: number;
@@ -216,7 +221,7 @@ function scriptLines(ctx: Ctx): string[] {
 }
 
 function changesetsSection(ctx: Ctx, answers: Answers): string[] {
-  if (!answers.moduleIds.includes('changesets')) return [];
+  if (!hasModule(answers.moduleIds, 'changesets')) return [];
   return [
     '### Recording changes (changesets)',
     '',
@@ -231,7 +236,7 @@ function changesetsSection(ctx: Ctx, answers: Answers): string[] {
 }
 
 function backlogSection(ctx: Ctx, answers: Answers): string[] {
-  if (!answers.moduleIds.includes('backlog')) return [];
+  if (!hasModule(answers.moduleIds, 'backlog')) return [];
   const prefixes = answers.targets
     .map((t) => `\`${t.prefix}\` (${t.pathPrefix || 'repo root'})`)
     .join(', ');
@@ -242,29 +247,37 @@ function backlogSection(ctx: Ctx, answers: Answers): string[] {
     'with the `/backlog-add` skill, backed by `node .claude/scripts/backlog-log.mjs`.',
     `Prefixes by area: ${prefixes}.`,
     'On resolving an item while shipping, remove it: `node .claude/scripts/backlog-log.mjs remove <ID> <file> "<resolution>"`.',
+    'The append-only ledger at `.claude/ledgers/backlog.jsonl` is committed and is the record. The',
+    '`BACKLOG.md` beside it is generated and gitignored, so never hand-edit it: a hand edit does not',
+    'survive the next write, and `render` rebuilds the file from the ledger.',
     '',
   ];
 }
 
 function decisionsSection(ctx: Ctx, answers: Answers): string[] {
-  if (!answers.moduleIds.includes('decisions')) return [];
+  if (!hasModule(answers.moduleIds, 'decisions')) return [];
   return [
     '### Recording decisions',
     '',
     'Settled a design question that the code does not explain on its own? Record it with the',
-    '`/decide` skill, backed by `node .claude/scripts/decision-log.mjs`. It lands in the nearest',
-    '`DECISIONS.md` and is committed, so the reasoning outlives the transcript.',
+    '`/decide` skill, backed by `node .claude/scripts/decision-log.mjs`. The record lands in the',
+    'append-only ledger at `.claude/ledgers/decisions.jsonl`, which is committed, so the reasoning',
+    'outlives the transcript. The `DECISIONS.md` beside it is generated from that ledger and is',
+    'gitignored, so never hand-edit it: rebuild it any time with `render`.',
     'Record only what clears the bar: not obvious from the code, a competent person could have chosen',
     'otherwise, and re-deriving it costs real time. Every record needs the alternative you rejected',
     'and the trigger that would make you revisit it.',
     'A decision never changes in place. When one is replaced, `supersede` writes a new record and',
     'links back, so the chain of reasoning stays readable.',
+    'Before reworking an area, ask whether a decision already governs it:',
+    '`node .claude/scripts/decision-log.mjs scope <path>`. It answers in a few lines, matches a',
+    'file against any directory scope above it, and is the only way to ask that question.',
     '',
   ];
 }
 
 function plansSection(ctx: Ctx, answers: Answers): string[] {
-  if (!answers.moduleIds.includes('plans')) return [];
+  if (!hasModule(answers.moduleIds, 'plans')) return [];
   return [
     '### Planning large, multi-phase work',
     '',
@@ -282,7 +295,7 @@ function plansSection(ctx: Ctx, answers: Answers): string[] {
 // /orchestrate is the one sanctioned exception to "no implementation subagents". A
 // planned phase's slices are the parallel, bounded work that clause carves out for.
 function orchestrateSection(ctx: Ctx, answers: Answers): string[] {
-  if (!answers.moduleIds.includes('orchestrate')) return [];
+  if (!hasModule(answers.moduleIds, 'orchestrate')) return [];
   return [
     '### Executing a planned phase',
     '',
@@ -299,7 +312,7 @@ function subagentExceptionLine(
   answers: Answers,
   { bold = true }: { bold?: boolean } = {},
 ): string[] {
-  if (!answers.moduleIds.includes('orchestrate')) return [];
+  if (!hasModule(answers.moduleIds, 'orchestrate')) return [];
   const lead = bold
     ? '- **Exception, a planned phase under `/orchestrate`**:'
     : '- Exception, a planned phase under `/orchestrate`:';
@@ -318,7 +331,7 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
     '<!-- TODO: one-line description of the project. Keep this file lean. It is loaded every turn. -->',
     '<!-- For a fuller from-scratch skeleton (layout, scripts, guardrail-doc pointers, per-target',
     '     workflows), see .claude/kit-templates/CLAUDE.md.template, a gitignored reference that',
-    '     `npx claude-kit update` restores if absent. -->',
+    '     `npx agent-kit update` restores if absent. -->',
     '',
     '## Layout',
     '',
@@ -335,11 +348,11 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   // Baked in the same shape `upsertRegion` produces, so the region action core.ts plans
   // right after this seed finds matching markers instead of inserting a second block.
   lines.push(
-    '<!-- claude-kit:claude-md start -->',
+    '<!-- agent-kit:claude-md start -->',
     '',
     renderClaudeAdditions(ctx, answers).trimEnd(),
     '',
-    '<!-- claude-kit:claude-md end -->',
+    '<!-- agent-kit:claude-md end -->',
     '',
   );
   return `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}`;
@@ -348,11 +361,11 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
 /** The managed-region body spliced into a CLAUDE.md the user already has. */
 export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   const body = [
-    '### claude-kit sections',
+    '### agent-kit sections',
     '',
-    'This block is maintained by `npx claude-kit update`. Content outside the markers around it',
+    'This block is maintained by `npx agent-kit update`. Content outside the markers around it',
     'is yours and never touched. For a fuller from-scratch skeleton to compare structure against, see',
-    '`.claude/kit-templates/CLAUDE.md.template`, a gitignored reference that `npx claude-kit update`',
+    '`.claude/kit-templates/CLAUDE.md.template`, a gitignored reference that `npx agent-kit update`',
     'restores if absent.',
     '',
     ...changesetsSection(ctx, answers),
@@ -401,10 +414,10 @@ model: haiku
 
 You are the ${target.label} reviewer, a read-only auditor for \`${target.pathPrefix || './'}\`.
 
-<!-- TODO(claude-kit): this is a DRAFT. Fill in the authoritative source below and delete
+<!-- TODO(agent-kit): this is a DRAFT. Fill in the authoritative source below and delete
      the DRAFT marker from the description above. See the full pattern in
      .claude/kit-templates/agents/reviewer.agent.md.template, a gitignored reference that
-     \`npx claude-kit update\` restores if it's missing. -->
+     \`npx agent-kit update\` restores if it's missing. -->
 
 ## Authoritative source
 

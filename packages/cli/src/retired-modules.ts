@@ -14,16 +14,16 @@ import type { Registry } from './plugin-registry.js';
  * version, and the cost of keeping a line here forever is one line.
  */
 export const RETIRED_MODULES: Readonly<Record<string, string>> = {
-  backlog: '@claude-kit/plugin-backlog',
-  changesets: '@claude-kit/plugin-changesets',
-  ledger: '@claude-kit/plugin-changesets',
-  decisions: '@claude-kit/plugin-decisions',
-  'code-comments': '@claude-kit/plugin-prose',
-  'prose-voice': '@claude-kit/plugin-prose',
-  'output-prose': '@claude-kit/plugin-prose',
-  'terse-style': '@claude-kit/plugin-prose',
-  testing: '@claude-kit/plugin-testing',
-  'persona-auditor': '@claude-kit/plugin-persona-auditor',
+  backlog: '@agent-kit/plugin-backlog',
+  changesets: '@agent-kit/plugin-changesets',
+  ledger: '@agent-kit/plugin-changesets',
+  decisions: '@agent-kit/plugin-decisions',
+  'code-comments': '@agent-kit/plugin-prose',
+  'prose-voice': '@agent-kit/plugin-prose',
+  'output-prose': '@agent-kit/plugin-prose',
+  'terse-style': '@agent-kit/plugin-prose',
+  testing: '@agent-kit/plugin-testing',
+  'persona-auditor': '@agent-kit/plugin-persona-auditor',
 };
 
 /** One retired id and the package that would bring it back. */

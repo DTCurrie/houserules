@@ -13,7 +13,7 @@ Auto-loaded context is paid on **every turn of every session**, before any work.
 `CLAUDE.md`, any globless `.claude/rules/*.md` (§6), the skill and agent `description:` frontmatter
 that the harness lists every turn, and the machine-local memory index (§5).
 
-`npx claude-kit doctor` measures the in-repo part of that and fails past **4000 tokens or 200 lines**
+`npx agent-kit doctor` measures the in-repo part of that and fails past **4000 tokens or 200 lines**
 (`RESIDENT_TOKEN_BUDGET` / `RESIDENT_LINE_BUDGET` in `src/commands/doctor.ts`). Skill and agent
 _bodies_ are excluded, because they load on invocation, not on every turn. The memory index lives
 outside the repo, so doctor cannot see it. Budget it by hand.
@@ -129,7 +129,7 @@ machine-local, per-developer, and not in git. Nothing to copy, so adopt the disc
 
 For each axis the repo keeps re-deriving (architecture, API conventions, security, voice, balance),
 write a small `.claude/rules/<topic>.md`. The kit ships a starting point at
-`.claude/kit-templates/rules/GUARDRAIL.md.template`, restored by `npx claude-kit update` if it goes
+`.claude/kit-templates/rules/GUARDRAIL.md.template`, restored by `npx agent-kit update` if it goes
 missing. Each doc carries terse locked decisions **with their rationale**, a "if a change is in
 tension with this, the change is wrong" precedence line, and `description` frontmatter. The payoff is
 converting open-ended judgement into a cheap lookup against a locked answer, which avoids the most
@@ -250,9 +250,9 @@ Each of these is a standing habit, not a script:
 
 ## 11. Plugin surface semver policy
 
-`@claude-kit/cli/plugin` (`PluginApi`, `Plugin`, `definePlugin`, `PayloadBuilders`, and the
+`@agent-kit/cli/plugin` (`PluginApi`, `Plugin`, `definePlugin`, `PayloadBuilders`, and the
 `Action` union it re-exports) is public API the moment a plugin depends on it. A plugin
-declares `peerDependencies: { "@claude-kit/cli": "^<major>" }`, so a breaking change to this
+declares `peerDependencies: { "@agent-kit/cli": "^<major>" }`, so a breaking change to this
 surface breaks every plugin still on that major. See
 [README.md](README.md#writing-a-plugin) for what a plugin author sees.
 
@@ -273,6 +273,7 @@ and `payload/__test__/execution.test.ts` enforce both against the kit's own payl
 way a plugin's would be held to them.
 
 `.claude/scripts/lib/*.mjs` is a public runtime API too, versioned with the CLI, because
-plugin payload scripts import those libs instead of vendoring copies (see DECISIONS.md,
-"The CLI package ships substrate that plugins build on"). A signature change to a lib
+plugin payload scripts import those libs instead of vendoring copies (see the decision "The CLI
+package ships substrate that plugins build on", which
+`node .claude/scripts/decision-log.mjs list` will find). A signature change to a lib
 function follows this same minor/major split.

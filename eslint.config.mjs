@@ -43,11 +43,16 @@ export default ts.config(
   // arbitrary shapes into them — a suite asserting the kit tolerates an unknown
   // settings key cannot type that key as part of Settings. `any` in a test helper
   // is that intent, not a gap; src/ stays strict.
+  //
+  // `packages/test/src/**` is the one src/ tree that qualifies. The whole package is
+  // testing infrastructure, and it keeps that infrastructure under src/ only because it is
+  // published for plugin authors to build their own suites on. Every other src/ stays strict.
   {
     files: [
       'packages/*/test/**/*.ts',
       'packages/*/src/**/__test__/**/*.ts',
       'packages/*/payload/**/__test__/**/*.ts',
+      'packages/test/src/**/*.ts',
     ],
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },

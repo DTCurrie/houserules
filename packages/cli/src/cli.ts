@@ -61,7 +61,7 @@ function flagsFrom(options: CommandOptions, command: Command): Flags {
 }
 
 const program = new Command()
-  .name('claude-kit')
+  .name('agent-kit')
   .description('portable Claude Code context-discipline kit')
   .version(KIT_VERSION, '-v, --version')
   .option('--cwd <dir>', 'target repo root (default: current directory)')
@@ -216,7 +216,7 @@ Exit codes:
   1  error, or doctor found a problem
   2  .claude/kit.config.json does not satisfy the schema
 
-Details: https://github.com/devintcurrie/claude-kit#readme`,
+Details: https://github.com/DTCurrie/agent-kit#readme`,
 );
 
 try {

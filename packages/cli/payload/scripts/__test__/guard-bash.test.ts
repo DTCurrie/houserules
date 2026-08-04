@@ -47,7 +47,7 @@ describe('guard-bash', () => {
   ])('blocks "$cmd" by default', ({ cmd }) => {
     const r = runScript(root, SCRIPT, { input: payload(cmd) });
     expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/Blocked by claude-kit guard/);
+    expect(r.stderr).toMatch(/Blocked by agent-kit guard/);
   });
 
   it.each([

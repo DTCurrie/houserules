@@ -628,7 +628,7 @@ describe('removing the CLAUDE.md markers (`no-marker`)', () => {
     root = useInstalledRepo('npm-single');
     claudeMd = join(root, 'CLAUDE.md');
     const stripped = readFileSync(claudeMd, 'utf8').replace(
-      /\n*<!-- claude-kit:claude-md start -->[\s\S]*?<!-- claude-kit:claude-md end -->\n*/,
+      /\n*<!-- agent-kit:claude-md start -->[\s\S]*?<!-- agent-kit:claude-md end -->\n*/,
       '\n\nMY OWN PROSE MARKER\n\n',
     );
     writeFileSync(claudeMd, stripped);
@@ -637,7 +637,7 @@ describe('removing the CLAUDE.md markers (`no-marker`)', () => {
   it('is fixed by re-inserting the markers', () => {
     expect(runCli(['doctor', root, '--fix']).status).toBe(0);
     expect(readFileSync(claudeMd, 'utf8')).toContain(
-      '<!-- claude-kit:claude-md start -->',
+      '<!-- agent-kit:claude-md start -->',
     );
   });
 

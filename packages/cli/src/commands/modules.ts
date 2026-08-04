@@ -181,7 +181,7 @@ async function disableModules(
   );
   ui.written(written);
   ui.outro(
-    `Disabled ${doomed.join(', ')}. Validate any time with: npx claude-kit doctor`,
+    `Disabled ${doomed.join(', ')}. Validate any time with: npx agent-kit doctor`,
   );
   return 0;
 }
@@ -203,7 +203,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
   const manifest = ctx.claude.manifest;
   if (!manifest) {
     console.error(
-      'No .claude/kit-manifest.json — nothing installed here yet. Run: npx claude-kit init',
+      'No .claude/kit-manifest.json — nothing installed here yet. Run: npx agent-kit init',
     );
     return 1;
   }
@@ -214,7 +214,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
     return 1;
   }
 
-  ui.intro(`claude-kit ${flags.kitVersion} — modules`);
+  ui.intro(`agent-kit ${flags.kitVersion} — modules`);
 
   const installed = new Set(manifest.modules ?? ['core']);
 
@@ -338,7 +338,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
   ui.written(written);
   ui.nextSteps(advisories);
   ui.outro(
-    `Added ${chosen.join(', ')}. Validate any time with: npx claude-kit doctor`,
+    `Added ${chosen.join(', ')}. Validate any time with: npx agent-kit doctor`,
   );
   return 0;
 }

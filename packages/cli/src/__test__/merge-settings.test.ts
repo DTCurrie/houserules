@@ -136,7 +136,7 @@ describe('mergeSettings', () => {
               {
                 type: 'command',
                 command:
-                  '[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" || echo "[kit] guard-bash.mjs missing — run: npx claude-kit update"',
+                  '[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" || echo "[kit] guard-bash.mjs missing — run: npx agent-kit update"',
               },
             ],
           },

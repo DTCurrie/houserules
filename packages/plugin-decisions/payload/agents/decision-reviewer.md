@@ -21,8 +21,12 @@ that don't belong in the log, or that duplicate one already there, before they a
    vague or circular one counts as missing: "revisit if it stops working" is not a falsifiable
    trigger, and a rejected alternative that was never actually plausible is not a rejected
    alternative.
-3. **Dedupe.** Run `node .claude/scripts/decision-log.mjs list` to scan every `DECISIONS.md`,
-   then `grep -n` the surface files for the same ground under a different title. If an existing
+3. **Dedupe.** Start from the record's `Scope:` paths and run
+   `node .claude/scripts/decision-log.mjs scope <path>` for each. That is the narrow, precise
+   question, and it matches a file against any directory scope above it, so it finds decisions a
+   title search never would. Fall back to `list` for a record with no scope, and `show <id>` to
+   read a candidate in full. Query the ledger rather than grepping the rendered `DECISIONS.md`,
+   which is generated and gitignored, so a clone may not have it. If an existing
    decision already covers it, say which id and whether the new record should instead be a
    `supersede` of it or an `amend`.
 4. **Scope paths.** Any path under the record's `Scope:` must still exist. A record naming paths
@@ -33,7 +37,7 @@ that don't belong in the log, or that duplicate one already there, before they a
 Return one of: **OK** | **Below bar** (name which of the three fails) | **Duplicate of <ID>**
 (with supersede or amend as the recommendation) | **Weak field** (name the field and why).
 Optionally tag **Stale scope** alongside any verdict. Cite ids and file paths. You are read-only,
-so never edit a `DECISIONS.md` and never run `decide`, `supersede`, `amend`, or `render`. Describe
+so never edit a rendered `DECISIONS.md` and never run `decide`, `supersede`, `amend`, or `render`. Describe
 the fix and let the implementer apply it via the `decide` skill.
 
 Budget yourself to roughly 8 tool calls: `grep -n` to locate a candidate duplicate, then `Read`

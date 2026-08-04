@@ -1,5 +1,5 @@
 {
-  "name": "@claude-kit/plugin-fixture-minimal",
+  "name": "@agent-kit/plugin-fixture-minimal",
   "version": "1.0.0",
   "private": true,
   "main": "index.cjs"

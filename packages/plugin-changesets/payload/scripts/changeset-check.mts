@@ -66,12 +66,15 @@ if (input.stop_hook_active) process.exit(0);
 const isChangesetMd = (p: string): boolean =>
   p.startsWith('.changeset/') && p.endsWith('.md') && !/\/readme\.md$/i.test(p);
 
-// Generated ledgers are churn, not package source. A root-package target scopes every
+// Generated files are churn, not package source. A root-package target scopes every
 // top-level non-dotfile, so without this they would trip the nudge on their own.
-const isGeneratedLedger = (p: string): boolean => {
-  const base = p.split('/').pop();
-  return base === 'BACKLOG.md' || base === 'CHANGELOG.md';
-};
+//
+// Read from `generatedFilePattern` rather than hardcoded, so this and lint-format-fix.mjs
+// answer "is this file generated" from one place a repo can configure. The rendered ledgers
+// no longer reach here at all, since they live in the ledger directory and are gitignored,
+// but CHANGELOG.md is still both generated and tracked.
+const generatedFileRe = (pattern?: string): RegExp =>
+  new RegExp(pattern ?? '/(?:CHANGELOG|BACKLOG)\\.md$');
 
 try {
   const config = loadConfigSafe();
@@ -127,8 +130,9 @@ try {
       .map((e) => e.path);
   }
 
+  const isGenerated = generatedFileRe(config.generatedFilePattern);
   const srcChanged = [...dirty, ...committed].filter(
-    (p) => matchScope(p) && !isGeneratedLedger(p),
+    (p) => matchScope(p) && !isGenerated.test(`/${p}`),
   );
   const hasChangeset =
     dirty.some(isChangesetMd) || committedNewChangesets.some(isChangesetMd);

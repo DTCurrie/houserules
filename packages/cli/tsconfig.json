@@ -3,9 +3,14 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": ".",
-    // Mirrors the `#test/*` alias in vitest.config.ts so `tsc --noEmit` resolves it.
-    // Kept out of tsconfig.build.json: nothing under src/ that ships may reference it.
-    "paths": { "#test/*": ["./test/*.ts"] }
+    // Mirrors the `#test/*` alias in vitest.config.ts so `tsc --noEmit` resolves it, now to
+    // @agent-kit/test's published subpaths rather than a local `test/*.ts` file. Kept out
+    // of tsconfig.build.json: nothing under src/ that ships may reference it. The exact-match
+    // entry for ctx-builder wins over the wildcard, since that module stays CLI-internal.
+    "paths": {
+      "#test/ctx-builder": ["./test/ctx-builder.ts"],
+      "#test/*": ["./node_modules/@agent-kit/test/dist/*.d.ts"]
+    }
   },
   // tsconfig.build.json excludes colocated tests so they stay out of dist/. Typechecking
   // must still see them, so the inherited exclude is cleared here.

@@ -113,7 +113,7 @@ export async function report(dir: string, _flags: Flags): Promise<number> {
   const encoded = top.replaceAll('/', '-');
   const projDir = join(base, 'projects', encoded);
 
-  console.log(`\n=== claude-kit report — ${top} ===\n`);
+  console.log(`\n=== agent-kit report — ${top} ===\n`);
   if (!existsSync(projDir)) {
     console.log(`No transcripts found (looked in ${projDir}).`);
     return 0;

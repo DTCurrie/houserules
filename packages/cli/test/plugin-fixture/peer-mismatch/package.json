@@ -1,9 +1,9 @@
 {
-  "name": "@claude-kit/plugin-fixture-peer-mismatch",
+  "name": "@agent-kit/plugin-fixture-peer-mismatch",
   "version": "1.0.0",
   "private": true,
   "main": "index.cjs",
   "peerDependencies": {
-    "@claude-kit/cli": "^999.0.0"
+    "@agent-kit/cli": "^999.0.0"
   }
 }

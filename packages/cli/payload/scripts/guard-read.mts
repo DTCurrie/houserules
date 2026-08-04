@@ -61,7 +61,7 @@ try {
       ? `matches a generated/denylisted pattern (${matchedGlob})`
       : `is large (${Math.round(size / 1024)} KB > ${Math.round(cfg.maxBytes / 1024)} KB)`;
     process.stderr.write(
-      `claude-kit read guard: ${rel} ${why}. Don't read it whole — ` +
+      `agent-kit read guard: ${rel} ${why}. Don't read it whole — ` +
         `grep for what you need (\`grep -n '<pattern>' ${rel}\`) then Read with offset+limit, ` +
         `or re-run this Read with an explicit limit if you truly need a window.\n`,
     );

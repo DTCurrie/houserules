@@ -43,7 +43,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       kind: 'advise',
       text: withPlans
         ? 'Executing a plan: run /orchestrate [<plan-slug>] [<phase>|all] to drive a .claude/plans/<slug>/ phase — it slices by file ownership, dispatches one sonnet task-worker per slice, and reviews reports instead of diffs. It stops for you between phases unless you pass --auto.'
-        : 'Executing a plan: /orchestrate drives a .claude/plans/<slug>/ phase, but the `plans` module is off, so nothing scaffolds those workspaces. Enable it (npx claude-kit modules --modules=plans) or /orchestrate will just send you to /plan-project.',
+        : 'Executing a plan: /orchestrate drives a .claude/plans/<slug>/ phase, but the `plans` module is off, so nothing scaffolds those workspaces. Enable it (npx agent-kit modules --modules=plans) or /orchestrate will just send you to /plan-project.',
       module: id,
     },
   ];

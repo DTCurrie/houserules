@@ -1,18 +1,18 @@
-# claude-kit
+# agent-kit
 
 A portable kit of Claude Code infrastructure that keeps the agent's context lean. Install it
 and run `init` in any repo:
 
 ```
-pnpm add -D @claude-kit/cli
-pnpm exec claude-kit init
+pnpm add -D @agent-kit/cli
+pnpm exec agent-kit init
 ```
 
-The package is `@claude-kit/cli` and the binary it installs is `claude-kit`, the same split
-`@changesets/cli` uses for `changeset`. Every later command is just `claude-kit <cmd>`, since
+The package is `@agent-kit/cli` and the binary it installs is `agent-kit`, the same split
+`@changesets/cli` uses for `changeset`. Every later command is just `agent-kit <cmd>`, since
 the local binary is on the path once the package is a dependency.
 
-(Local checkout: `node /path/to/claude-kit/packages/cli/dist/cli.js init`. Non-interactive:
+(Local checkout: `node /path/to/agent-kit/packages/cli/dist/cli.js init`. Non-interactive:
 add `--yes`. Preview only: add `--dry-run`.)
 
 ## The one idea
@@ -48,14 +48,14 @@ Non-destructive guarantees: it never runs package-manager installs, never touche
 its first merge, and `--dry-run` writes nothing at all.
 
 In your `CLAUDE.md` the kit maintains a **marked block**, everything between
-`<!-- claude-kit:claude-md start -->` and `<!-- claude-kit:claude-md end -->`. It rewrites
+`<!-- agent-kit:claude-md start -->` and `<!-- agent-kit:claude-md end -->`. It rewrites
 only what is inside those markers. Every byte outside them is yours and is never modified.
 Opt out with `"claudeMd": { "managed": false }` in `.claude/kit.config.json` and the kit will
 not touch the file at all.
 
 ## Modules
 
-`@claude-kit/cli` ships exactly 15 modules. Everything else lives in a plugin package.
+`@agent-kit/cli` ships exactly 15 modules. Everything else lives in a plugin package.
 
 | Module             | Default                   | What you get                                                                                                                                                                                                                                                                                                                        |
 | ------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -81,14 +81,14 @@ A plugin is a separate package that contributes more modules. Install it as a de
 and declare it in `.claude/kit.config.json` (see [Writing a plugin](#writing-a-plugin)) to
 select its modules.
 
-| Package                              | Modules it ships                                                                                                                 |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `@claude-kit/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`                                                                             |
-| `@claude-kit/plugin-testing`         | ships `testing` (plus opt-in `testing-typescript` and `testing-javascript` language guides, chosen through the module's options) |
-| `@claude-kit/plugin-changesets`      | ships `changesets`, `ledger`                                                                                                     |
-| `@claude-kit/plugin-backlog`         | ships `backlog`                                                                                                                  |
-| `@claude-kit/plugin-decisions`       | ships `decisions`                                                                                                                |
-| `@claude-kit/plugin-persona-auditor` | ships `persona-auditor`                                                                                                          |
+| Package                             | Modules it ships                                                                                                                 |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `@agent-kit/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`                                                                             |
+| `@agent-kit/plugin-testing`         | ships `testing` (plus opt-in `testing-typescript` and `testing-javascript` language guides, chosen through the module's options) |
+| `@agent-kit/plugin-changesets`      | ships `changesets`, `ledger`                                                                                                     |
+| `@agent-kit/plugin-backlog`         | ships `backlog`                                                                                                                  |
+| `@agent-kit/plugin-decisions`       | ships `decisions`                                                                                                                |
+| `@agent-kit/plugin-persona-auditor` | ships `persona-auditor`                                                                                                          |
 
 Installing a plugin opts you into the plugin. Each module inside it still honors its own
 default: most default off, so you enable them individually with `--modules` or through
@@ -102,8 +102,8 @@ without changing anything:
 
 ```
 This install uses modules that moved out of the CLI into plugins:
-  backlog moved to @claude-kit/plugin-backlog. Install it, then add
-  { "name": "@claude-kit/plugin-backlog", "alias": "<alias>" } to the "plugins" array in .claude/kit.config.json.
+  backlog moved to @agent-kit/plugin-backlog. Install it, then add
+  { "name": "@agent-kit/plugin-backlog", "alias": "<alias>" } to the "plugins" array in .claude/kit.config.json.
 Nothing was changed. Installing the plugin restores the module and its files.
 ```
 
@@ -112,7 +112,7 @@ the `plugins` entry the message shows, and re-run `update` to pick the module ba
 
 ## Changesets are the canonical changelog
 
-Shipped by `@claude-kit/plugin-changesets`. The kit treats
+Shipped by `@agent-kit/plugin-changesets`. The kit treats
 [changesets](https://github.com/changesets/changesets) as the source of truth
 for "what shipped": one `.changeset/*.md` per meaningful change, `CHANGELOG.md` generated at
 release time by `changeset version`. The module wires the agent side of that:
@@ -140,7 +140,7 @@ Want commit-granular history _too_? Enable the `ledger` module. It writes to
 
 ## Token/compression options
 
-`output-prose` and `prose-voice` below are shipped by `@claude-kit/plugin-prose`.
+`output-prose` and `prose-voice` below are shipped by `@agent-kit/plugin-prose`.
 
 - **Kit-native discipline** (free, always): lean CLAUDE.md, grep-don't-read rules, haiku/low
   subagents, hooks that emit residue not transcripts.
@@ -158,11 +158,11 @@ Want commit-granular history _too_? Enable the `ledger` module. It writes to
 ## After install
 
 ```
-npx claude-kit doctor    # validate: config vs repo reality, hooks wired, files intact
+npx agent-kit doctor    # validate: config vs repo reality, hooks wired, files intact
                          # --json for a machine-readable report (CI-stable shape)
-npx claude-kit update    # refresh kit files after a new kit release (your edits are kept, --force overrides)
+npx agent-kit update    # refresh kit files after a new kit release (your edits are kept, --force overrides)
                          # add --next-steps to reprint the post-install to-do list
-npx claude-kit modules   # list installed vs available modules, and enable more after init
+npx agent-kit modules   # list installed vs available modules, and enable more after init
                          # --disable=<ids> withdraws a module: prunes its files (your edits
                          # are kept unless --force) and unwires only the settings entries no
                          # remaining module still needs
@@ -195,7 +195,7 @@ Because the scripts can be absent on a fresh clone while `settings.json` is comm
 command is guarded. A missing script prints
 
 ```
-[kit] changeset-check.mjs missing — run: npx claude-kit update
+[kit] changeset-check.mjs missing — run: npx agent-kit update
 ```
 
 instead of a Node stack trace, and the hook exits cleanly rather than failing your turn.
@@ -222,9 +222,9 @@ edit you made on purpose never holds the exit code red.** Nothing lets you ackno
 failing on it would leave `doctor` permanently red on an install working exactly as you intended.
 
 ```
-npx claude-kit doctor --fix            # reconcile stale/missing/no-marker, your edits survive
-npx claude-kit doctor --fix --force    # also overwrite the files you edited
-npx claude-kit doctor --fix --prune    # also delete orphans
+npx agent-kit doctor --fix            # reconcile stale/missing/no-marker, your edits survive
+npx agent-kit doctor --fix --force    # also overwrite the files you edited
+npx agent-kit doctor --fix --prune    # also delete orphans
 ```
 
 ### Rules: you own the frontmatter, the kit owns the body
@@ -249,20 +249,39 @@ listing the subtrees it owns. Everything outside the markers is untouched, and a
 prettier never gains the file. eslint flat config is JavaScript, so the kit prints the
 `ignores` entry for you to paste instead of editing it.
 
-Already hit this? `npx claude-kit doctor --fix --force` takes the kit's copies back.
+Already hit this? `npx agent-kit doctor --fix --force` takes the kit's copies back.
 
 ### `kit.config.json` is schema-validated
 
 The config is validated against a schema generated from the kit's own zod definition and
-published at `claude-kit/schema/kit.config.schema.json`. `init` seeds a `$schema` reference
-into the file it writes, so editors give you completion and inline errors. `doctor` reports
+published inside `@agent-kit/cli` at `schema/kit.config.schema.json`. `init` seeds a `$schema`
+reference into the file it writes, so editors give you completion and inline errors. A repo
+that depends on `@agent-kit/cli` gets the local
+`../node_modules/@agent-kit/cli/schema/kit.config.schema.json`. One that only ever runs
+`npx agent-kit` has no local copy, so it gets the published URL instead. `doctor` reports
 any problem per field (`changesets.baseBranchh is not a known changesets setting`) and exits 2.
 
-Smoke test the backlog ledger, if `@claude-kit/plugin-backlog` is installed:
+## Ledgers: what is committed and what is generated
+
+The backlog and decision modules keep an append-only ledger at
+`.claude/ledgers/<name>.jsonl`. **That file is the record and it is committed.** The
+`BACKLOG.md` and `DECISIONS.md` beside it are rendered from it and are gitignored, so a hand
+edit does not survive the next write. Rebuild either any time:
 
 ```
-node .claude/scripts/backlog-log.mjs add TEST /tmp/kit-smoke-BACKLOG.md "smoke" "remove me"
-node .claude/scripts/backlog-log.mjs list /tmp/kit-smoke-BACKLOG.md
+node .claude/scripts/backlog-log.mjs render BACKLOG.md
+```
+
+A monorepo separates areas by filename in that one directory, `studio.BACKLOG.md`, rather than
+by nesting a ledger beside each package. Point `ledgers.dir` in `.claude/kit.config.json`
+somewhere else if you prefer, though it cannot be the repo root: the kit self-ignores that
+directory with `*.md`, and that rule at the root would hide every document in the project.
+
+Smoke test the backlog ledger, if `@agent-kit/plugin-backlog` is installed:
+
+```
+node .claude/scripts/backlog-log.mjs add TEST BACKLOG.md "smoke" "remove me"
+node .claude/scripts/backlog-log.mjs list
 ```
 
 ## Writing a plugin
@@ -281,7 +300,7 @@ A user installs your package as a dependency, then adds it to the `plugins` arra
 
 ```json
 {
-  "plugins": [{ "name": "@claude-kit/plugin-prose", "alias": "prose" }],
+  "plugins": [{ "name": "@agent-kit/plugin-prose", "alias": "prose" }],
   "targets": []
 }
 ```
@@ -294,10 +313,10 @@ factory verbatim, through `PluginApi.config`, and the kit never reads inside it.
 
 ### Building it
 
-Publish it as `@claude-kit/plugin-<name>`, with
+Publish it as `@agent-kit/plugin-<name>`, with
 
 ```json
-"peerDependencies": { "@claude-kit/cli": "^<major>" }
+"peerDependencies": { "@agent-kit/cli": "^<major>" }
 ```
 
 pinned to the major version of the `PluginApi` surface you built against. See
@@ -308,7 +327,7 @@ The default export is a factory, wrapped in `definePlugin` for the parameter and
 types:
 
 ```ts
-import { definePlugin } from '@claude-kit/cli/plugin';
+import { definePlugin } from '@agent-kit/cli/plugin';
 
 export default definePlugin((api) => [
   {
@@ -336,7 +355,7 @@ A payload script that needs shared logic imports it from `.claude/scripts/lib/*.
 than vendoring a copy. That surface is a public runtime API, versioned with the CLI. See
 [CONVENTIONS.md](CONVENTIONS.md#11-plugin-surface-semver-policy).
 
-Your package builds its own `payload-dist/` from source, the same way `@claude-kit/cli`
+Your package builds its own `payload-dist/` from source, the same way `@agent-kit/cli`
 builds its own. `PluginApi.payload` reads from your plugin's `payload-dist/`, never from the
 CLI's, so ship one alongside your compiled `dist/`.
 

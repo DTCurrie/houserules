@@ -1,6 +1,6 @@
 {
-  "$schema": "../node_modules/claude-kit/schema/kit.config.schema.json",
-  "_help": "claude-kit per-repo config, schema v2. `npx claude-kit init` generates this from detection; edit freely afterwards — `npx claude-kit doctor` validates it against the repo. Consumed by: guard-bash.mjs (guard), lint-format-fix.mjs (fix + targets), changeset-check.mjs (changesets + targets), package-changelog.mjs (targets, when ledger.enabled), verify-changed.mjs (verify + targets[].verifyCommands, when the verify-changed module is enabled).",
+  "$schema": "../node_modules/@agent-kit/cli/schema/kit.config.schema.json",
+  "_help": "agent-kit per-repo config, schema v2. `npx agent-kit init` generates this from detection; edit freely afterwards — `npx agent-kit doctor` validates it against the repo. Consumed by: guard-bash.mjs (guard), lint-format-fix.mjs (fix + targets), changeset-check.mjs (changesets + targets), package-changelog.mjs (targets, when ledger.enabled), verify-changed.mjs (verify + targets[].verifyCommands, when the verify-changed module is enabled).",
   "version": 2,
   "packageManager": "pnpm",
   "fix": {

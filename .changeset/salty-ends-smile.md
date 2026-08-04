@@ -1,10 +1,10 @@
 ---
-'@claude-kit/plugin-prose': minor
-'@claude-kit/plugin-testing': minor
-'@claude-kit/plugin-changesets': minor
-'@claude-kit/plugin-backlog': minor
-'@claude-kit/plugin-decisions': minor
-'@claude-kit/plugin-persona-auditor': minor
+'@agent-kit/plugin-prose': minor
+'@agent-kit/plugin-testing': minor
+'@agent-kit/plugin-changesets': minor
+'@agent-kit/plugin-backlog': minor
+'@agent-kit/plugin-decisions': minor
+'@agent-kit/plugin-persona-auditor': minor
 ---
 
 Initial release of the six first-party plugins split out of the CLI.

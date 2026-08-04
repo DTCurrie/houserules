@@ -78,7 +78,7 @@ for (const rule of guard.custom ?? []) {
 
 for (const d of DENY) {
   if (d.re.test(cmd)) {
-    process.stderr.write(`Blocked by claude-kit guard: ${d.msg}\n`);
+    process.stderr.write(`Blocked by agent-kit guard: ${d.msg}\n`);
     process.exit(2);
   }
 }

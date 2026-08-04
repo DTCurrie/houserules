@@ -43,7 +43,7 @@ function addBacklogEntry(
   title: string,
   body: string,
 ): void {
-  appendLog(root, '.claude/backlog.log', {
+  appendLog(root, '.claude/ledgers/backlog.jsonl', {
     id,
     action: 'add',
     title,
@@ -59,7 +59,7 @@ function decideEntry(
   body: string,
   supersedes: string[] = [],
 ): void {
-  appendLog(root, '.claude/decisions.log', {
+  appendLog(root, '.claude/ledgers/decisions.jsonl', {
     id,
     action: 'decide',
     title,
@@ -232,6 +232,27 @@ describe('ledger-inject.mjs', () => {
 
       expect(r.status).toBe(0);
       expect(r.stdout.trim()).toBe('');
+    });
+  });
+  describe('a ledger left at a pre-move path', () => {
+    it('injects a backlog entry after migrating the legacy .log into place', () => {
+      const root = useInstalledRepo('pnpm-monorepo');
+      appendLog(root, '.claude/backlog.log', {
+        id: 'SIM-aaaaaa',
+        action: 'add',
+        title: 'legacy located entry',
+        file: 'BACKLOG.md',
+        content: encodeBody('body'),
+      } satisfies BacklogRecord);
+
+      const r = runScript(
+        root,
+        INJECT,
+        promptInput('what is SIM-aaaaaa about'),
+      );
+
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toMatch(/legacy located entry/);
     });
   });
 });

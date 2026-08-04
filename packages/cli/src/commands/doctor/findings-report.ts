@@ -75,6 +75,6 @@ export function printTextReport(report: DoctorReport, isFixing: boolean): void {
   // Gated on blocking drift, not on drift at all. A local edit is never reconciled by a
   // bare `--fix`, so offering it there contradicts the healthy verdict just printed.
   if (report.blockingCount && !isFixing) {
-    console.log('Run `npx claude-kit doctor --fix` to reconcile.');
+    console.log('Run `npx agent-kit doctor --fix` to reconcile.');
   }
 }

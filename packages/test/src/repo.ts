@@ -33,7 +33,7 @@ import { runCli, runIn } from './run.js';
  *   and an existing CLAUDE.md.
  * - `pnpm-single` is a single-package pnpm repo with a lockfile and no workspace yaml,
  *   whose fixers are `lint:fix` plus a writing `format` alongside a separate
- *   `format:check`. The shape CLAUDEKIT-4e98d7 broke: `filterFlag` must be empty and the
+ *   `format:check`. The shape AGENTKIT-4e98d7 broke: `filterFlag` must be empty and the
  *   writing `format` must be detected as a fixer.
  * - `npm-single-prettier` is `npm-single` plus a `prettier` devDependency, so
  *   `ctx.prettier` is true and the `.prettierignore` protection block plans in.
@@ -65,6 +65,70 @@ function gitInit(root: string): void {
   runIn(root, 'git', ['add', '-A']);
   runIn(root, 'git', ['commit', '-qm', 'fixture: initial']);
 }
+
+/**
+ * What `init`'s own detection would have produced for `packageManager` and `targets`, for
+ * each shape that gets combined with `opts.plugins`. Declaring the plugin means writing the
+ * whole `.claude/kit.config.json` seed up front (see `useInstalledRepo`), which bypasses
+ * `renderKitConfig` entirely, so these facts about the fixture — which `buildRepo` itself
+ * defines below — have to be restated here rather than left for that render to compute.
+ * Add a shape here before combining it with `opts.plugins`.
+ */
+const PLUGIN_FIXTURE_FACTS: Partial<
+  Record<
+    RepoShape,
+    {
+      packageManager: string;
+      targets: Array<{
+        name: string;
+        prefix: string;
+        packageName: string;
+        pathPrefix: string;
+        sourcePath: string;
+        label: string;
+        fixCommands?: string[];
+      }>;
+    }
+  >
+> = {
+  'pnpm-monorepo': {
+    packageManager: 'pnpm',
+    targets: [
+      {
+        name: 'cityville',
+        prefix: 'CITYVILLE',
+        packageName: '@fix/cityville',
+        pathPrefix: 'games/cityville/',
+        sourcePath: 'games/cityville/src',
+        label: 'Cityville',
+        fixCommands: ['fix'],
+      },
+      {
+        name: 'studio',
+        prefix: 'STUDIO',
+        packageName: '@fix/studio',
+        pathPrefix: 'apps/studio/',
+        sourcePath: 'apps/studio/src',
+        label: 'Studio',
+        fixCommands: ['fix'],
+      },
+    ],
+  },
+  'npm-single': {
+    packageManager: 'npm',
+    targets: [
+      {
+        name: 'single-app',
+        prefix: 'SINGLEAPP',
+        packageName: 'single-app',
+        pathPrefix: '',
+        sourcePath: 'src',
+        label: 'Single App',
+        fixCommands: ['lint:fix'],
+      },
+    ],
+  },
+};
 
 const PKG_SCRIPTS = {
   dev: 'vite dev',
@@ -99,20 +163,92 @@ export function useRepo(shape: RepoShape): string {
  * Use {@link useRepo} plus a real `init` when the subject IS `init`, or when the test re-runs
  * `init` over a tree it has already mutated.
  *
- * @param opts.modules Passed through as `--modules=`. Part of the cache key.
+ * @param opts.modules Passed through as `--modules=`. Part of the cache key. A plugin's
+ * module is selected as `<alias>/<moduleId>`, matching `opts.plugins`' aliases.
+ * @param opts.plugins Plugins to declare in `.claude/kit.config.json` before `init` runs, as
+ * `{ name, alias }` pairs. `name` must be a filesystem path to the plugin package, since
+ * test cannot resolve a plugin by npm name. Written as the whole seed file, so `init`
+ * reads the declared plugin while resolving `--modules=` and renders everything else — the
+ * CLAUDE.md region, scripts, settings — with full knowledge of the modules selected. Part of
+ * the cache key.
+ * @param opts.config Merged into `.claude/kit.config.json` after `init`, for keys a fixture
+ * needs set that neither `init`'s detection nor its module set determines. Part of the cache
+ * key.
  * @returns The repo root, removed after the current test.
  */
 export function useInstalledRepo(
   shape: RepoShape,
-  opts: { modules?: string } = {},
+  opts: {
+    modules?: string;
+    plugins?: Array<{ name: string; alias: string }>;
+    config?: Record<string, unknown>;
+  } = {},
 ): string {
-  const key = `${shape}::${opts.modules ?? ''}`;
+  const pluginTag = (opts.plugins ?? [])
+    .map((p) => `${p.name}=${p.alias}`)
+    .join(',');
+  const configTag = opts.config ? JSON.stringify(opts.config) : '';
+  const key = `${shape}::${opts.modules ?? ''}::${pluginTag}::${configTag}`;
   const snapshot = join(snapshotRoot(), key.replace(/[^a-z0-9]+/gi, '_'));
 
   // On disk, not a module-level Map: vitest gives every test FILE a fresh module registry, so
   // an in-memory cache never survives across files and each would clobber the shared snapshot.
   if (!existsSync(snapshot)) {
     const staging = buildRepo(shape);
+
+    // A plugin's modules can only be selected once the plugin is declared in
+    // `.claude/kit.config.json`, but that file is a seed `init` never overwrites once
+    // present. Writing it here, before the one `init` call, means `init` reads the
+    // plugin declaration to build its module registry and resolve `--modules=` and, since
+    // that same registry drives everything else the run touches — the CLAUDE.md region,
+    // scripts, settings — those all see the full module set. The one thing the seed write
+    // itself skips over is `renderKitConfig`, which never runs because the seed's
+    // destination already exists, so the two boolean toggles it would have derived from
+    // the module set (`changesets.enabled`/`stopCheck`, `ledger.enabled`) are computed
+    // here instead, the same way `hasModule` does it: an id matches bare or by
+    // `/<bareId>` suffix, which is how a plugin-qualified module (`cs/changesets`) reads
+    // as `changesets`.
+    if (opts.plugins?.length) {
+      const facts = PLUGIN_FIXTURE_FACTS[shape];
+      if (!facts) {
+        rmSync(staging, { recursive: true, force: true });
+        throw new Error(
+          `useInstalledRepo(${key}): no PLUGIN_FIXTURE_FACTS entry for shape "${shape}". ` +
+            'A plugin declaration writes the whole kit.config.json seed up front, which ' +
+            'needs packageManager/targets restated for the shape. Add one in repo.ts.',
+        );
+      }
+      const tokens = (opts.modules ?? '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t && !t.startsWith('-'));
+      const hasToken = (bareId: string) =>
+        tokens.some((t) => t === bareId || t.endsWith(`/${bareId}`));
+      const targets = hasToken('ledger')
+        ? facts.targets.map((t) => ({
+            ...t,
+            changelogPath: `.claude/changelogs/${t.name}.md`,
+            logPath: `.claude/changelogs/${t.name}.log`,
+          }))
+        : facts.targets;
+      write(
+        staging,
+        '.claude/kit.config.json',
+        json({
+          version: 2,
+          packageManager: facts.packageManager,
+          targets,
+          changesets: {
+            enabled: hasToken('changesets'),
+            stopCheck: hasToken('changesets'),
+            baseBranch: 'main',
+          },
+          ledger: { enabled: hasToken('ledger') },
+          plugins: opts.plugins,
+        }),
+      );
+    }
+
     const args = ['init', '--yes'];
     if (opts.modules) args.push(`--modules=${opts.modules}`);
     const result = runCli([...args, staging]);
@@ -122,6 +258,7 @@ export function useInstalledRepo(
         `useInstalledRepo(${key}) could not stage: init exited ${result.status}\n${result.stderr}`,
       );
     }
+    if (opts.config) patchConfig(staging, opts.config);
     // Publish atomically. Two workers can miss the same key at once, so each builds into a
     // private directory and the first rename wins. A loser's rename fails with ENOTEMPTY,
     // which is success: the winner published an equivalent tree from the same CLI.
@@ -139,6 +276,26 @@ export function useInstalledRepo(
   cpSync(snapshot, root, { recursive: true });
   onTestFinished(() => rmSync(root, { recursive: true, force: true }));
   return root;
+}
+
+/**
+ * Merges `patch` into the staged `.claude/kit.config.json`, one level deep so a fixture can
+ * set `changesets.stopCheck` without restating the whole block.
+ */
+function patchConfig(root: string, patch: Record<string, unknown>): void {
+  const configPath = join(root, '.claude/kit.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8')) as Record<
+    string,
+    unknown
+  >;
+  for (const [key, value] of Object.entries(patch)) {
+    const existing = config[key];
+    config[key] =
+      existing && typeof existing === 'object' && !Array.isArray(existing)
+        ? { ...(existing as Record<string, unknown>), ...(value as object) }
+        : value;
+  }
+  writeFileSync(configPath, json(config));
 }
 
 // global-setup.ts creates this and removes it in teardown. Falling back to a local

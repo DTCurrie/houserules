@@ -1,4 +1,4 @@
-# claude-kit
+# agent-kit
 
 Interactive installer for a portable Claude Code context-discipline kit. Read
 `packages/cli/README.md` for the product story. This file is for working on the kit itself.
@@ -8,9 +8,9 @@ Interactive installer for a portable Claude Code context-discipline kit. Read
 A pnpm workspace of seven packages. Every path in the Layout section below is relative to
 **`packages/cli/`** unless it starts with `packages/`.
 
-- `packages/cli` is `@claude-kit/cli`, the installer. It ships the binary **`claude-kit`**,
+- `packages/cli` is `@agent-kit/cli`, the installer. It ships the binary **`agent-kit`**,
   so the package name and the command differ, the same split `@changesets/cli` uses for
-  `changeset`. Install is `pnpm add -D @claude-kit/cli`, then `claude-kit <cmd>`. Its core
+  `changeset`. Install is `pnpm add -D @agent-kit/cli`, then `agent-kit <cmd>`. Its core
   ships 15 built-in modules (`src/plan.ts`'s `MODULES` array): `core`, `lint-fix`,
   `session-context`, `rename`, `reviewers`, `debug-session`, `plans`, `orchestrate`,
   `verify-changed`, `ready`, `sweep`, `read-guard`, `regen`, `statusline`,
@@ -20,7 +20,7 @@ A pnpm workspace of seven packages. Every path in the Layout section below is re
   `plugin-decisions`, `plugin-persona-auditor`. `src/retired-modules.ts`'s
   `RETIRED_MODULES` maps every retired built-in id to the package that now ships it.
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
-  workflows, `CLAUDE.md`, `BACKLOG.md`, and the gitignored `.claude/`. Root
+  workflows, `CLAUDE.md`, and the gitignored `.claude/`. Root
   `pnpm build|test|check` delegate with `pnpm -r`. `pnpm lint` and `pnpm lint:fix` run
   `eslint` directly against the whole workspace, since lint lives at the root and no
   package has its own lint script.
@@ -79,8 +79,8 @@ A pnpm workspace of seven packages. Every path in the Layout section below is re
 
 ## Commands
 
-- `pnpm build`: `tsc` → `dist/`, regenerate the JSON Schema, then `publint`. Required before
-  any `dist/` probe.
+- `pnpm build`: clear `dist/` + `payload-dist/` (so a deleted source ships no orphan), `tsc` →
+  `dist/`, regenerate the JSON Schema, then `publint`. Required before any `dist/` probe.
 - `pnpm check`: `tsc --noEmit` over `src/` + `test/` + colocated `__test__/` dirs.
 - `pnpm test`: full suite, including end-to-end init/update/doctor on fixtures.
 - `node packages/cli/dist/cli.js init --yes --dry-run <repo>`: safe manual probe against any
@@ -98,9 +98,9 @@ A pnpm workspace of seven packages. Every path in the Layout section below is re
   live until it is compiled.** Run `pnpm dogfood:watch` (a `tsc --watch` on the payload) while
   working on hook scripts, or re-run `pnpm dogfood`. The prose/rules/agents/output-styles/
   reference dirs link straight to each package's `payload/` and are live on save.
-  **Warning:** `payload-dist/` is not cleaned by the build, so deleting a `.mts` leaves a
-  stale `.mjs` behind (`CLAUDEKIT-6d85f1`). Has bitten twice; if a script goes missing check
-  for a stale compiled leftover.
+  `build:payload` removes `payload-dist/` before compiling, so a deleted `.mts` no longer
+  leaves a stale `.mjs` behind. `dogfood:watch` is the exception, since a watch never cleans.
+  Run `pnpm dogfood` after deleting a script.
 
 ## Rules
 

@@ -4,4 +4,11 @@ payload-dist/
 *.log
 .DS_Store
 *.tgz
-.claude/
+.notes/
+
+# This repo dogfoods the kit, so .claude/ is assembled by `pnpm dogfood` and is not source.
+# `.claude/ledgers/` is the exception: it holds the append-only ledgers behind DECISIONS.md
+# and BACKLOG.md, and losing them loses every recorded entry. `.claude/*` rather than `.claude/`,
+# because git cannot re-include a path whose parent directory is itself excluded.
+.claude/*
+!.claude/ledgers/

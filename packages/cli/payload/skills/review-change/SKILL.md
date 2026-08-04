@@ -45,7 +45,7 @@ Collect the verdicts into one table of area → OK / Conflict / Gap, with a one-
 
 ## Notes
 
-- Reviewer agents ship as **DRAFTs** (`npx claude-kit modules --modules=reviewers`). Each needs its
-  authoritative source filled in before its verdict means anything, and `npx claude-kit doctor` flags
+- Reviewer agents ship as **DRAFTs** (`npx agent-kit modules --modules=reviewers`). Each needs its
+  authoritative source filled in before its verdict means anything, and `npx agent-kit doctor` flags
   any still-DRAFT reviewer. A DRAFT reviewer's verdict is not trustworthy, so treat it as unreviewed.
 - This dispatches reviewers. It does not run tests. For scoped verification, use `/verify-changed`.

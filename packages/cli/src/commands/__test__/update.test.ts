@@ -105,7 +105,7 @@ describe('update reporting the local edits it kept', () => {
     const result = runCli(['update', root]);
 
     expect(unwrapped(result.stdout)).toContain(
-      'See what changed: npx claude-kit doctor --json',
+      'See what changed: npx agent-kit doctor --json',
     );
   });
 
@@ -115,7 +115,7 @@ describe('update reporting the local edits it kept', () => {
     const result = runCli(['update', root]);
 
     expect(unwrapped(result.stdout)).toContain(
-      'A repo-wide formatter run is the likely cause. Run `npx claude-kit update --force` to restore them',
+      'A repo-wide formatter run is the likely cause. Run `npx agent-kit update --force` to restore them',
     );
   });
 
@@ -598,9 +598,7 @@ describe('update on an install whose manifest names a retired module', () => {
   });
 
   it('names the plugin package that restores the module', () => {
-    expect(result.stdout + result.stderr).toMatch(
-      /@claude-kit\/plugin-backlog/,
-    );
+    expect(result.stdout + result.stderr).toMatch(/@agent-kit\/plugin-backlog/);
   });
 
   it('leaves the retired module’s files on disk', () => {

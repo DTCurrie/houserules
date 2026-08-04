@@ -195,7 +195,7 @@ export async function selectModules(
 }
 
 /**
- * Multiselect over the modules the repo does not already have, for `claude-kit modules`.
+ * Multiselect over the modules the repo does not already have, for `agent-kit modules`.
  * Unlike `selectModules` it has no preselect and never force-adds core, and an empty pick
  * is valid.
  */

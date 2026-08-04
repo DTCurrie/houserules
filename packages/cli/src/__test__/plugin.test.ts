@@ -13,10 +13,10 @@ const FIXTURE_ROOT = join(KIT_ROOT, 'test/plugin-fixture');
 const CLI_PAYLOAD_ROOT = join(KIT_ROOT, 'payload-dist');
 
 // The fixture is a standalone package under test/, not a pnpm workspace member, so nothing
-// links "@claude-kit/cli" into its node_modules. Link it here so the fixture resolves the
+// links "@agent-kit/cli" into its node_modules. Link it here so the fixture resolves the
 // same bare specifier a real plugin package would.
 function ensureFixtureSelfLink(): void {
-  const link = join(FIXTURE_ROOT, 'node_modules', '@claude-kit', 'cli');
+  const link = join(FIXTURE_ROOT, 'node_modules', '@agent-kit', 'cli');
   if (existsSync(link)) return;
   mkdirSync(dirname(link), { recursive: true });
   symlinkSync(KIT_ROOT, link, 'dir');
@@ -31,7 +31,7 @@ async function loadFixturePlugin(): Promise<Plugin> {
 function buildApi(config: unknown): PluginApi {
   return {
     payload: createPayloadBuilders(join(FIXTURE_ROOT, 'payload-dist')),
-    packageName: '@claude-kit/plugin-fixture',
+    packageName: '@agent-kit/plugin-fixture',
     alias: 'fixture',
     config,
   };
@@ -49,7 +49,7 @@ function planAllActions(api: PluginApi, plugin: Plugin): Action[] {
   );
 }
 
-describe('a plugin authored against @claude-kit/cli/plugin', () => {
+describe('a plugin authored against @agent-kit/cli/plugin', () => {
   it('returns at least two modules', async () => {
     const plugin = await loadFixturePlugin();
     const modules = plugin(buildApi({ note: 'from config' }));

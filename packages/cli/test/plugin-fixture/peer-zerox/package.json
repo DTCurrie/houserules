@@ -1,9 +1,9 @@
 {
-  "name": "@claude-kit/plugin-fixture-peer-zerox",
+  "name": "@agent-kit/plugin-fixture-peer-zerox",
   "version": "1.0.0",
   "private": true,
   "main": "index.cjs",
   "peerDependencies": {
-    "@claude-kit/cli": "^0.2.0"
+    "@agent-kit/cli": "^0.2.0"
   }
 }

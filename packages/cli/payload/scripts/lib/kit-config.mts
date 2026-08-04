@@ -56,6 +56,7 @@ export interface KitConfig {
   };
   changesets?: { enabled?: boolean; stopCheck?: boolean; baseBranch?: string };
   ledger?: { enabled?: boolean };
+  ledgers?: { dir?: string };
   readGuard?: { enabled?: boolean; maxBytes?: number; denyGlobs?: string[] };
   claudeMd?: { managed?: boolean };
   targets: ConfigTarget[];
@@ -121,8 +122,8 @@ export function loadConfig(
   if (!existsSync(path)) {
     if (required) {
       console.error(
-        `claude-kit: missing ${path}\n` +
-          'Run `npx claude-kit init` (or copy kit.config.example.json) to create it.',
+        `agent-kit: missing ${path}\n` +
+          'Run `npx agent-kit init` (or copy kit.config.example.json) to create it.',
       );
       process.exit(1);
     }
@@ -133,7 +134,7 @@ export function loadConfig(
     } catch (e) {
       if (required) {
         console.error(
-          `claude-kit: ${path} is not valid JSON: ${(e as Error).message}`,
+          `agent-kit: ${path} is not valid JSON: ${(e as Error).message}`,
         );
         process.exit(1);
       }

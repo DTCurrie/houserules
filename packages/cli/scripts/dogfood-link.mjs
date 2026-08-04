@@ -190,12 +190,12 @@ const kitConfig = {
   ],
   targets: [
     {
-      name: 'claude-kit',
-      prefix: 'CLAUDEKIT',
-      packageName: '@claude-kit/cli',
+      name: 'agent-kit',
+      prefix: 'AGENTKIT',
+      packageName: '@agent-kit/cli',
       pathPrefix: 'packages/cli/',
       sourcePath: 'packages/cli/src',
-      label: 'Claude Kit',
+      label: 'Agent Kit',
       fixCommands: ['lint:fix', 'format'],
     },
   ],

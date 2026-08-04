@@ -184,7 +184,7 @@ if (!officialWrite) {
   console.error(
     [
       'Cannot author a changeset: @changesets/write is not resolvable from this repo.',
-      'claude-kit writes changesets only with the official changesets library — no fallback.',
+      'agent-kit writes changesets only with the official changesets library — no fallback.',
       'Fix: install the CLI as a root devDependency, then rerun:',
       '  pnpm add -D -w @changesets/cli   # npm: npm install -D @changesets/cli',
       'Notes: a pnpx/npx-only root script is not enough (nothing is resolvable from',

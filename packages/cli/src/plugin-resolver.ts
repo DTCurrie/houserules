@@ -170,7 +170,7 @@ function checkPeerRange(
   if (!validRange(range)) {
     fail(
       pluginName,
-      `declares an unparseable peerDependencies["@claude-kit/cli"] range "${range}". Use a valid semver range, such as "^${cliVersion}".`,
+      `declares an unparseable peerDependencies["@agent-kit/cli"] range "${range}". Use a valid semver range, such as "^${cliVersion}".`,
     );
   }
   // Prereleases satisfy a range only when it names one, so a CLI on 1.0.0-rc.1 would fail a
@@ -179,7 +179,7 @@ function checkPeerRange(
   if (!satisfies(cliVersion, range, { includePrerelease: true })) {
     fail(
       pluginName,
-      `requires @claude-kit/cli "${range}" but the running CLI is ${cliVersion}. Update the plugin, or pin a compatible @claude-kit/cli version.`,
+      `requires @agent-kit/cli "${range}" but the running CLI is ${cliVersion}. Update the plugin, or pin a compatible @agent-kit/cli version.`,
     );
   }
 }
@@ -213,7 +213,7 @@ export const buildRegistry: BuildRegistry = (root, config, builtIns) => {
     const dir = resolvePluginDir(root, entry.name);
     const pkg = readPluginPackageJson(dir, entry.name);
 
-    const peerRange = pkg.peerDependencies?.['@claude-kit/cli'];
+    const peerRange = pkg.peerDependencies?.['@agent-kit/cli'];
     if (peerRange !== undefined)
       checkPeerRange(entry.name, peerRange, cliVersion);
 

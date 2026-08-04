@@ -3,9 +3,9 @@
  * UserPromptSubmit hook. Prints the decoded record for any backlog or decision ID the
  * prompt mentions, which the hook runner adds to the turn's context.
  *
- * Backlog IDs come from .claude/backlog.log: the latest add/update per id wins, and a
- * remove tombstones the entry so nothing is injected. Decision IDs come from
- * .claude/decisions.log and are never tombstoned. A superseded decision still injects,
+ * Backlog IDs come from the backlog ledger: the latest add/update per id wins, and a
+ * remove tombstones the entry so nothing is injected. Decision IDs come from the decision
+ * ledger and are never tombstoned. A superseded decision still injects,
  * labelled superseded, with one ancestry line per prior record it descends from.
  *
  * Every failure path exits 0 and prints nothing, because an injector must never block a
@@ -14,12 +14,11 @@
 
 import { gunzipSync } from 'node:zlib';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
-import { repoRoot } from './lib/kit-config.mjs';
+import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
 import { BACKLOG_ID } from './lib/backlog-id.mjs';
 import { readStdinJson } from './lib/proc.mjs';
-import { readLog } from './lib/entry-ledger.mjs';
+import { ledgerPath, readLog } from './lib/entry-ledger.mjs';
 
 interface PromptPayload {
   prompt?: string;
@@ -145,9 +144,10 @@ try {
   if (!ids.length) process.exit(0);
 
   const root = repoRoot();
-  const backlog = projectBacklog(resolve(root, '.claude/backlog.log'));
+  const ledgerDirName = loadConfigSafe().ledgers?.dir;
+  const backlog = projectBacklog(ledgerPath(root, 'backlog', ledgerDirName));
   const { entries: decisions, superseded } = projectDecisions(
-    resolve(root, '.claude/decisions.log'),
+    ledgerPath(root, 'decisions', ledgerDirName),
   );
 
   const blocks: string[] = [];

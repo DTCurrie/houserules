@@ -35,35 +35,43 @@ describe('verifyDefaultsFor', () => {
 });
 
 describe('schemaRefFor', () => {
-  it('points at the local node_modules copy when claude-kit is a dependency', () => {
+  it('points at the local node_modules copy when @agent-kit/cli is a dependency', () => {
     const ctx = makeCtx({
-      rootPkg: { name: 'my-repo', dependencies: { 'claude-kit': '^1.0.0' } },
+      rootPkg: {
+        name: 'my-repo',
+        dependencies: { '@agent-kit/cli': '^1.0.0' },
+      },
     });
     expect(schemaRefFor(ctx)).toBe(
-      '../node_modules/claude-kit/schema/kit.config.schema.json',
+      '../node_modules/@agent-kit/cli/schema/kit.config.schema.json',
     );
   });
 
-  it('points at the local node_modules copy when claude-kit is a devDependency', () => {
+  it('points at the local node_modules copy when @agent-kit/cli is a devDependency', () => {
     const ctx = makeCtx({
-      rootPkg: { name: 'my-repo', devDependencies: { 'claude-kit': '^1.0.0' } },
+      rootPkg: {
+        name: 'my-repo',
+        devDependencies: { '@agent-kit/cli': '^1.0.0' },
+      },
     });
     expect(schemaRefFor(ctx)).toBe(
-      '../node_modules/claude-kit/schema/kit.config.schema.json',
+      '../node_modules/@agent-kit/cli/schema/kit.config.schema.json',
     );
   });
 
-  it('falls back to the published URL when claude-kit is not a dependency', () => {
-    const ctx = makeCtx({ rootPkg: { name: 'my-repo' } });
+  it('falls back to the published URL when @agent-kit/cli is not a dependency', () => {
+    const ctx = makeCtx({
+      rootPkg: { name: 'my-repo', dependencies: { react: '^18.0.0' } },
+    });
     expect(schemaRefFor(ctx)).toBe(
-      'https://github.com/devintcurrie/claude-kit/schema/kit.config.schema.json',
+      'https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json',
     );
   });
 
   it('falls back to the published URL when there is no root package.json', () => {
     const ctx = makeCtx({ rootPkg: null });
     expect(schemaRefFor(ctx)).toBe(
-      'https://github.com/devintcurrie/claude-kit/schema/kit.config.schema.json',
+      'https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json',
     );
   });
 });
@@ -345,8 +353,8 @@ describe('renderClaudeMd', () => {
   it('emits exactly one start marker and one end marker', () => {
     const ctx = makeCtx();
     const md = renderClaudeMd(ctx, makeAnswers());
-    const starts = md.match(/<!-- claude-kit:claude-md start -->/g) ?? [];
-    const ends = md.match(/<!-- claude-kit:claude-md end -->/g) ?? [];
+    const starts = md.match(/<!-- agent-kit:claude-md start -->/g) ?? [];
+    const ends = md.match(/<!-- agent-kit:claude-md end -->/g) ?? [];
     expect(starts).toHaveLength(1);
     expect(ends).toHaveLength(1);
   });
@@ -354,8 +362,8 @@ describe('renderClaudeMd', () => {
   it('places the start marker before the end marker', () => {
     const ctx = makeCtx();
     const md = renderClaudeMd(ctx, makeAnswers());
-    expect(md.indexOf('<!-- claude-kit:claude-md start -->')).toBeLessThan(
-      md.indexOf('<!-- claude-kit:claude-md end -->'),
+    expect(md.indexOf('<!-- agent-kit:claude-md start -->')).toBeLessThan(
+      md.indexOf('<!-- agent-kit:claude-md end -->'),
     );
   });
 
@@ -364,8 +372,8 @@ describe('renderClaudeMd', () => {
     const answers = makeAnswers({ moduleIds: ['core', 'changesets'] });
     const md = renderClaudeMd(ctx, answers);
     const additions = renderClaudeAdditions(ctx, answers).trimEnd();
-    const start = md.indexOf('<!-- claude-kit:claude-md start -->');
-    const end = md.indexOf('<!-- claude-kit:claude-md end -->');
+    const start = md.indexOf('<!-- agent-kit:claude-md start -->');
+    const end = md.indexOf('<!-- agent-kit:claude-md end -->');
     const between = md.slice(start, end);
     expect(between).toContain(additions);
   });

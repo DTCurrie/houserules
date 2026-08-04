@@ -1,7 +1,7 @@
 {
-  "name": "@claude-kit/plugin-testing",
+  "name": "@agent-kit/plugin-testing",
   "version": "0.0.0",
-  "description": "claude-kit plugin: a runner-agnostic testing rule, split into opt-in per-language guides.",
+  "description": "agent-kit plugin: a runner-agnostic testing rule, split into opt-in per-language guides.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -19,7 +19,7 @@
     "payload-dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-payload.mjs",
+    "build": "rm -rf dist payload-dist && tsc -p tsconfig.json && node scripts/build-payload.mjs",
     "check": "tsc --noEmit -p tsconfig.json",
     "prepack": "npm run build"
   },
@@ -27,16 +27,16 @@
     "node": ">=22"
   },
   "peerDependencies": {
-    "@claude-kit/cli": "^0.1.0"
+    "@agent-kit/cli": "^0.1.0"
   },
   "devDependencies": {
-    "@claude-kit/cli": "workspace:*",
+    "@agent-kit/cli": "workspace:*",
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3"
   },
   "license": "MIT",
   "keywords": [
-    "claude-kit",
-    "claude-kit-plugin"
+    "agent-kit",
+    "agent-kit-plugin"
   ]
 }

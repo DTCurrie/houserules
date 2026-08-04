@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/devintcurrie/claude-kit/schema/kit.config.schema.json",
-  "title": "claude-kit config",
-  "description": "Per-repo configuration for claude-kit (.claude/kit.config.json).",
+  "$id": "https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json",
+  "title": "agent-kit config",
+  "description": "Per-repo configuration for agent-kit (.claude/kit.config.json).",
   "type": "object",
   "properties": {
     "_help": { "type": "string" },
@@ -134,6 +134,16 @@
       "properties": { "enabled": { "type": "boolean" } },
       "additionalProperties": false
     },
+    "ledgers": {
+      "type": "object",
+      "properties": {
+        "dir": {
+          "description": "Where the backlog and decision ledgers live, relative to the repo root. Holds both the committed `.jsonl` source of truth and the generated markdown rendered from it. Defaults to `.claude/ledgers`. One directory per repo: a monorepo distinguishes areas by filename, such as `studio.BACKLOG.md`, not by nesting.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "claudeMd": {
       "type": "object",
       "properties": {
@@ -161,7 +171,7 @@
       "type": "object",
       "properties": {
         "commit": {
-          "description": "Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx claude-kit update`.",
+          "description": "Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx agent-kit update`.",
           "type": "boolean"
         }
       },

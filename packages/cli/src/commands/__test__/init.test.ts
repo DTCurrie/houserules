@@ -214,9 +214,9 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
 
   it('adds the managed CLAUDE.md block without touching any byte outside the markers', () => {
     const claudeAfter = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
-    expect(claudeAfter).toContain('<!-- claude-kit:claude-md start -->');
+    expect(claudeAfter).toContain('<!-- agent-kit:claude-md start -->');
     const withoutBlock = claudeAfter.replace(
-      /\n*<!-- claude-kit:claude-md start -->[\s\S]*?<!-- claude-kit:claude-md end -->\n*/,
+      /\n*<!-- agent-kit:claude-md start -->[\s\S]*?<!-- agent-kit:claude-md end -->\n*/,
       '\n\n',
     );
     expect(withoutBlock.trim()).toBe(claudeBefore.trim());
@@ -444,7 +444,7 @@ describe('init below the git toplevel', () => {
   it('refuses with exit 1, naming the git root problem and a cd fix', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/below the git root/);
-    expect(result.stderr).toMatch(/cd .* npx claude-kit init/);
+    expect(result.stderr).toMatch(/cd .* npx agent-kit init/);
   });
 
   it('writes nothing to the subdirectory', () => {

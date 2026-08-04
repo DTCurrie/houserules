@@ -37,7 +37,7 @@ function registryWith(ids: string[]): Registry {
 describe('findRetired', () => {
   it('reports a retired id the registry cannot supply', () => {
     expect(findRetired(['backlog'], registryWith(['core']))).toEqual([
-      { id: 'backlog', packageName: '@claude-kit/plugin-backlog' },
+      { id: 'backlog', packageName: '@agent-kit/plugin-backlog' },
     ]);
   });
 
@@ -61,8 +61,8 @@ describe('findRetired', () => {
 describe('retiredModuleAdvice', () => {
   it('groups ids that came from the same package onto one line', () => {
     const advice = retiredModuleAdvice([
-      { id: 'changesets', packageName: '@claude-kit/plugin-changesets' },
-      { id: 'ledger', packageName: '@claude-kit/plugin-changesets' },
+      { id: 'changesets', packageName: '@agent-kit/plugin-changesets' },
+      { id: 'ledger', packageName: '@agent-kit/plugin-changesets' },
     ]);
 
     expect(advice.split('\n')).toHaveLength(1);
@@ -71,11 +71,11 @@ describe('retiredModuleAdvice', () => {
 
   it('names the plugins array so the fix is copy-pasteable', () => {
     const advice = retiredModuleAdvice([
-      { id: 'testing', packageName: '@claude-kit/plugin-testing' },
+      { id: 'testing', packageName: '@agent-kit/plugin-testing' },
     ]);
 
     expect(advice).toContain('.claude/kit.config.json');
-    expect(advice).toContain('"name": "@claude-kit/plugin-testing"');
+    expect(advice).toContain('"name": "@agent-kit/plugin-testing"');
   });
 });
 
@@ -83,7 +83,7 @@ describe('assertNoRetiredModules', () => {
   it('throws KitError naming the package that restores the module', () => {
     expect(() =>
       assertNoRetiredModules(['backlog'], registryWith(['core'])),
-    ).toThrow(/@claude-kit\/plugin-backlog/);
+    ).toThrow(/@agent-kit\/plugin-backlog/);
   });
 
   it('throws KitError rather than a bare Error, so the CLI reports it as a user problem', () => {
@@ -108,13 +108,13 @@ describe('assertNoRetiredModules', () => {
 describe('RETIRED_MODULES', () => {
   it('maps every retired id to a plugin package name', () => {
     const wrong = Object.entries(RETIRED_MODULES).filter(
-      ([, pkg]) => !pkg.startsWith('@claude-kit/plugin-'),
+      ([, pkg]) => !pkg.startsWith('@agent-kit/plugin-'),
     );
 
     expect(wrong).toEqual([]);
   });
 
   it('carries the pre-rename terse-style id, since an old manifest still records it', () => {
-    expect(RETIRED_MODULES['terse-style']).toBe('@claude-kit/plugin-prose');
+    expect(RETIRED_MODULES['terse-style']).toBe('@agent-kit/plugin-prose');
   });
 });

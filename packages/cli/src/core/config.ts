@@ -170,6 +170,17 @@ export const KitConfigSchema = z.strictObject({
 
   decisions: z.strictObject({ enabled: z.boolean().optional() }).optional(),
 
+  ledgers: z
+    .strictObject({
+      dir: z
+        .string()
+        .optional()
+        .describe(
+          'Where the backlog and decision ledgers live, relative to the repo root. Holds both the committed `.jsonl` source of truth and the generated markdown rendered from it. Defaults to `.claude/ledgers`. One directory per repo: a monorepo distinguishes areas by filename, such as `studio.BACKLOG.md`, not by nesting.',
+        ),
+    })
+    .optional(),
+
   claudeMd: z
     .strictObject({
       managed: z
@@ -195,7 +206,7 @@ export const KitConfigSchema = z.strictObject({
         .boolean()
         .optional()
         .describe(
-          'Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx claude-kit update`.',
+          'Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx agent-kit update`.',
         ),
     })
     .optional(),
@@ -228,10 +239,10 @@ export function buildJsonSchema(): Record<string, unknown> {
   const { $schema, ...body } = z.toJSONSchema(KitConfigSchema, { io: 'input' });
   return {
     $schema,
-    $id: 'https://github.com/devintcurrie/claude-kit/schema/kit.config.schema.json',
-    title: 'claude-kit config',
+    $id: 'https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json',
+    title: 'agent-kit config',
     description:
-      'Per-repo configuration for claude-kit (.claude/kit.config.json).',
+      'Per-repo configuration for agent-kit (.claude/kit.config.json).',
     ...body,
   };
 }

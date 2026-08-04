@@ -79,3 +79,16 @@ export type BuildRegistry = (
 export function namespacedId(alias: string | null, moduleId: string): string {
   return alias === null ? moduleId : `${alias}/${moduleId}`;
 }
+
+/**
+ * Whether `moduleIds` contains `bareId`, whichever namespace it arrived under.
+ *
+ * The inverse of {@link namespacedId}, and the only correct way to ask "is this capability
+ * installed". A built-in registers under its bare id, but the same module shipped by a plugin
+ * registers as `<alias>/<id>`, so a plain `includes(bareId)` silently answers false for every
+ * plugin-sourced module. Comparing against a module's OWN `def.id` is a different question and
+ * does not need this.
+ */
+export function hasModule(moduleIds: string[], bareId: string): boolean {
+  return moduleIds.some((id) => id === bareId || id.endsWith(`/${bareId}`));
+}

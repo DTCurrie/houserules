@@ -31,13 +31,16 @@ The kit's Stop hooks already enforce the auto-fix and changeset-nudge on every t
 
 ## 4. Backlog resolved-but-not-removed (the novel check)
 
-A backlog item you _fixed_ during this work must be _removed_ from its ledger. A resolved item left in
-`BACKLOG.md` misleads the next session. Detect it:
+A backlog item you _fixed_ during this work must be _removed_ from its ledger. A resolved item left
+open misleads the next session. Detect it:
 
 ```
 git diff --name-only    # did this change touch files a backlog entry is about?
-grep -rn "CLAUDEKIT-\|<PREFIX>-" BACKLOG.md **/BACKLOG.md 2>/dev/null
+node .claude/scripts/backlog-log.mjs list
 ```
+
+Ask the ledger, not the rendered markdown. `BACKLOG.md` is generated and gitignored, so a fresh
+clone may not have it yet, and grepping it would report nothing on a repo that has entries.
 
 For each open backlog entry whose subject the current change plausibly resolves, flag it: _"<ID> looks
 resolved by this change but is still in <file>. Remove it with `node .claude/scripts/backlog-log.mjs

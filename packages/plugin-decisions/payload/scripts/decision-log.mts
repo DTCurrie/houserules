@@ -15,9 +15,14 @@
  *   tree      <id>
  *   scope     <path> [<path>...]
  *
- * Log: .claude/decisions.log, one JSON record per line. Body content is gzip+base64.
- * Status is never stored. A record is superseded once its id appears in a later record's
- * `supersedes` array, and `list`/`render` derive that in one pass over the log.
+ * Log: .claude/ledgers/decisions.jsonl (or `ledgers.dir` from kit.config.json), one JSON
+ * record per line. Body content is gzip+base64. Status is never stored. A record is
+ * superseded once its id appears in a later record's `supersedes` array, and `list`/
+ * `render` derive that in one pass over the log.
+ *
+ * Every `<file>` above resolves against the ledger directory: the surface basename itself,
+ * or omitted, means the repo-root surface (`<dir>/DECISIONS.md`); a bare word names an area
+ * (`<dir>/<word>.DECISIONS.md`); anything containing a `/` is honored as a literal path.
  *
  * ancestry/current/tree/scope walk the same in-memory projection and print one line per
  * node: id, title, status. ancestry and tree are indented by depth, since supersedes and
@@ -32,9 +37,9 @@
  */
 
 import { existsSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 
-import { repoRoot } from './lib/kit-config.mjs';
+import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
 import { makeId } from './lib/backlog-id.mjs';
 import {
   SEPARATOR,
@@ -42,21 +47,37 @@ import {
   decodeBody,
   encodeBody,
   findSurfaceFiles,
+  ledgerDir,
+  ledgerPath,
   nowIso,
   parseEntries,
   readContentArg,
   readLog,
   readSurface,
+  rebuildWouldDropEntries,
   relativeToRoot,
   renderMetadata,
   resolveChat,
+  resolveSurfaceArg,
+  surfaceScope,
   takeChatFlag,
   todayDate,
 } from './lib/entry-ledger.mjs';
 
 const REPO_ROOT = repoRoot();
-const LOG_FILE = resolve(REPO_ROOT, '.claude/decisions.log');
+const CONFIG = loadConfigSafe();
+const LEDGER_DIR = ledgerDir(REPO_ROOT, CONFIG.ledgers?.dir);
+const LOG_FILE = ledgerPath(REPO_ROOT, 'decisions', CONFIG.ledgers?.dir);
 const SURFACE = 'DECISIONS.md';
+
+function resolveSurfaceFile(fileArg?: string): string {
+  return resolveSurfaceArg(REPO_ROOT, LEDGER_DIR, SURFACE, fileArg);
+}
+
+/** The surface-relative path recorded on each entry: the file's location inside the ledger directory. */
+function surfaceRelFile(file: string): string {
+  return relative(LEDGER_DIR, resolve(file));
+}
 
 interface DecisionRecord {
   ts: string;
@@ -189,6 +210,27 @@ function requireNoUnderCycle(
   }
 }
 
+const normalizeScopePath = (p: string): string =>
+  p.replace(/^\.\//, '').replace(/\/+$/, '');
+
+/**
+ * Whether a recorded scope and a queried path govern each other, in either direction.
+ *
+ * Exact equality alone makes `scope` unusable for the question it exists to answer. A
+ * decision scoped to `packages/cli/src/modules` governs every file beneath it, so querying
+ * `packages/cli/src/modules/core.ts` has to find it. An exact-only match returns nothing
+ * there, which reads as "no decision applies" and is a confident false negative.
+ *
+ * The reverse direction matters too: asking about a directory should surface a decision
+ * scoped to one file inside it, since that decision still constrains work in that area.
+ */
+function scopesOverlap(recorded: string, queried: string): boolean {
+  if (recorded === queried) return true;
+  return (
+    queried.startsWith(`${recorded}/`) || recorded.startsWith(`${queried}/`)
+  );
+}
+
 function splitList(flag: string | null): string[] {
   return flag
     ? flag
@@ -224,7 +266,7 @@ function validatePrefix(prefix: string): void {
 }
 
 function decisionHeader(file: string): string {
-  const name = relative(REPO_ROOT, dirname(resolve(file))) || 'repo root';
+  const name = surfaceScope(file, SURFACE, CONFIG.targets);
   return `# Decisions — ${name}\n\nAppend-only decision log. Add entries via \`.claude/scripts/decision-log.mjs\`.\n\n`;
 }
 
@@ -264,7 +306,7 @@ function renderEntry(
 
 /** Rebuilds one surface file from the log alone, in append order. */
 function rerenderFile(file: string): void {
-  const relFile = relativeToRoot(REPO_ROOT, file);
+  const relFile = surfaceRelFile(file);
   const records = readLog<DecisionRecord>(LOG_FILE);
   const { entries, superseded } = projectDecisions(records);
   const supersededBy = supersededByOf(entries);
@@ -278,7 +320,20 @@ function rerenderFile(file: string): void {
       ),
     )
     .join('');
-  writeFileSync(file, decisionHeader(file) + body);
+  const nextContent = decisionHeader(file) + body;
+  if (rebuildWouldDropEntries(file, nextContent)) {
+    console.error(
+      `Refusing to rewrite ${relativeToRoot(REPO_ROOT, file)}: the decision ` +
+        `ledger at ${LOG_FILE} is missing or has fewer entries than the file ` +
+        'already on disk. Rewriting now would destroy the entries it already ' +
+        'carries. Decisions are append-only, so the ledger should never hold ' +
+        `less than the file it renders. The ledger is committed, so restore it ` +
+        `with \`git checkout -- ${relativeToRoot(REPO_ROOT, LOG_FILE)}\`, or ` +
+        'copy it from another checkout, then retry.',
+    );
+    process.exit(1);
+  }
+  writeFileSync(file, nextContent);
 }
 
 function usage() {
@@ -315,11 +370,12 @@ const [action, ...rest] = argv;
 
 switch (action) {
   case 'decide': {
-    const [prefix, file, title, content] = rest;
-    if (!prefix || !file || !title) {
+    const [prefix, fileArg, title, content] = rest;
+    if (!prefix || !fileArg || !title) {
       usage();
       process.exit(1);
     }
+    const file = resolveSurfaceFile(fileArg);
     validatePrefix(prefix);
     const body = readContentArg(content);
     if (!body) {
@@ -344,7 +400,7 @@ switch (action) {
       requireAccepted(superseded, target, '--supersedes');
     }
     const chat = resolveChat(chatFlag, REPO_ROOT);
-    const relFile = relativeToRoot(REPO_ROOT, file);
+    const relFile = surfaceRelFile(file);
     appendEvent(LOG_FILE, {
       ts,
       id,
@@ -368,11 +424,12 @@ switch (action) {
   }
 
   case 'supersede': {
-    const [targetId, file, newTitle, content] = rest;
-    if (!targetId || !file || !newTitle) {
+    const [targetId, fileArg, newTitle, content] = rest;
+    if (!targetId || !fileArg || !newTitle) {
       usage();
       process.exit(1);
     }
+    const file = resolveSurfaceFile(fileArg);
     const body = readContentArg(content);
     if (!body) {
       console.error(
@@ -390,7 +447,7 @@ switch (action) {
     const ts = nowIso();
     const id = makeId(prefix, newTitle, ts);
     const chat = resolveChat(chatFlag, REPO_ROOT);
-    const relFile = relativeToRoot(REPO_ROOT, file);
+    const relFile = surfaceRelFile(file);
     appendEvent(LOG_FILE, {
       ts,
       id,
@@ -413,11 +470,12 @@ switch (action) {
   }
 
   case 'amend': {
-    const [id, file, content] = rest;
-    if (!id || !file) {
+    const [id, fileArg, content] = rest;
+    if (!id || !fileArg) {
       usage();
       process.exit(1);
     }
+    const file = resolveSurfaceFile(fileArg);
     const body = readContentArg(content);
     if (!body) {
       console.error(
@@ -428,7 +486,7 @@ switch (action) {
     const { entries } = projectDecisions(readLog<DecisionRecord>(LOG_FILE));
     requireKnownId(entries, id, 'amend');
     const chat = resolveChat(chatFlag, REPO_ROOT);
-    const relFile = relativeToRoot(REPO_ROOT, file);
+    const relFile = surfaceRelFile(file);
     appendEvent(LOG_FILE, {
       ts: nowIso(),
       id,
@@ -475,7 +533,9 @@ switch (action) {
 
   case 'list': {
     const [file] = rest;
-    const files = file ? [resolve(file)] : findSurfaceFiles(REPO_ROOT, SURFACE);
+    const files = file
+      ? [resolveSurfaceFile(file)]
+      : findSurfaceFiles(LEDGER_DIR, SURFACE);
     for (const f of files) {
       if (!existsSync(f) || !statSync(f).isFile()) continue;
       const entries = parseEntries(readSurface(f));
@@ -493,7 +553,9 @@ switch (action) {
 
   case 'render': {
     const [file] = rest;
-    const files = file ? [resolve(file)] : findSurfaceFiles(REPO_ROOT, SURFACE);
+    const files = file
+      ? [resolveSurfaceFile(file)]
+      : findSurfaceFiles(LEDGER_DIR, SURFACE);
     for (const f of files) rerenderFile(f);
     break;
   }
@@ -569,8 +631,13 @@ switch (action) {
     const { entries, superseded } = projectDecisions(
       readLog<DecisionRecord>(LOG_FILE),
     );
+    const queries = paths.map(normalizeScopePath);
     for (const e of entries.values()) {
-      if (e.scope.some((p) => paths.includes(p)))
+      if (
+        e.scope.some((p) =>
+          queries.some((q) => scopesOverlap(normalizeScopePath(p), q)),
+        )
+      )
         printEntryLine(e, superseded, 0);
     }
     break;

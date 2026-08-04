@@ -32,7 +32,7 @@ reading every diff.
    path, lead with a verb (Added / Removed / Reduced / Replaced / Renamed), quote load-bearing
    numbers, skip cosmetic noise.
 5. **Find backlog IDs.** The script auto-extracts any `PREFIX-XXXXXX` from the message. If you
-   suspect an unnamed resolved item, grep `.claude/backlog.log` for recent `remove` events and ask
+   suspect an unnamed resolved item, run `node .claude/scripts/backlog-log.mjs list` for recent `remove` events and ask
    before attaching via `--backlog`.
 6. **Record it:**
    ```

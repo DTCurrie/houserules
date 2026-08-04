@@ -1,10 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
-const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
+// The CLI's package root, found by resolving its package.json rather than a relative path
+// into a sibling package. Any suite that pulls in @agent-kit/test, in this workspace or
+// installed from npm by a plugin author, builds the same CLI the same way.
+const require = createRequire(import.meta.url);
+const CLI_ROOT = dirname(require.resolve('@agent-kit/cli/package.json'));
 
 /**
  * Builds the CLI before any suite runs. The end-to-end suites spawn `dist/cli.js` rather
@@ -16,7 +20,7 @@ export default function setup(): () => void {
   execFileSync(
     'node',
     ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.build.json'],
-    { cwd: REPO_ROOT, stdio: 'inherit' },
+    { cwd: CLI_ROOT, stdio: 'inherit' },
   );
 
   // Where useInstalledRepo() keeps its per-(shape, modules) snapshots. Created here so

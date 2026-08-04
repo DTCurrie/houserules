@@ -4,8 +4,8 @@ import { extractBody, upsertRegion, type RegionSpec } from '../regions.js';
 
 const SPEC: RegionSpec = {
   id: 'claude-md',
-  start: '<!-- claude-kit:claude-md start -->',
-  end: '<!-- claude-kit:claude-md end -->',
+  start: '<!-- agent-kit:claude-md start -->',
+  end: '<!-- agent-kit:claude-md end -->',
   anchor: 'eof',
 };
 

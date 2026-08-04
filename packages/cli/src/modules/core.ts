@@ -1,6 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
+import { ledgerDirFor } from '../core/ledger-dir.js';
 import { payloadPath } from '../paths.js';
 import {
   renderClaudeAdditions,
@@ -89,7 +90,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     kind: 'write',
     dest: '.claude/kit-templates/.gitignore',
     content: [
-      '# Reference scaffolding staged by claude-kit, refreshed by `npx claude-kit update`.',
+      '# Reference scaffolding staged by agent-kit, refreshed by `npx agent-kit update`.',
       '# The artifacts you build from these (agents, guardrail docs, CLAUDE.md) live',
       '# elsewhere and are yours to commit — these skeletons are not meant to be.',
       '*',
@@ -108,7 +109,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       kind: 'write',
       dest: '.claude/scripts/.gitignore',
       content: [
-        '# Compiled hook scripts, refreshed by `npx claude-kit update`.',
+        '# Compiled hook scripts, refreshed by `npx agent-kit update`.',
         '# Build output, not source — not meant to be committed.',
         '*',
         '!.gitignore',
@@ -117,6 +118,29 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       module: id,
       reason:
         'scripts are build output; self-gitignored (repo .gitignore untouched)',
+    });
+  }
+
+  // The ledgers' `.jsonl` is the committed source of truth and the `.md` beside it is a
+  // generated view, so only the markdown is ignored. Owned by core rather than by either
+  // ledger plugin, because both write into this one directory and two modules cannot own the
+  // same dest. The repo root is refused upstream: `*.md` there would hide every document.
+  const ledgerDir = ledgerDirFor(ctx);
+  if (ledgerDir) {
+    actions.push({
+      kind: 'write',
+      dest: `${ledgerDir}/.gitignore`,
+      content: [
+        '# Rendered from the .jsonl ledgers beside this file by `backlog-log.mjs` and',
+        '# `decision-log.mjs`. Generated, not source, so it is not committed and hand-edits',
+        '# do not survive the next write. The .jsonl IS committed: it is the record.',
+        '# Rebuild any time with `render`.',
+        '*.md',
+        '',
+      ].join('\n'),
+      module: id,
+      reason:
+        'rendered ledgers are generated; the .jsonl beside them stays committed',
     });
   }
 
@@ -160,8 +184,8 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       body: renderClaudeAdditions(ctx, answers),
       region: {
         id: 'claude-md',
-        start: '<!-- claude-kit:claude-md start -->',
-        end: '<!-- claude-kit:claude-md end -->',
+        start: '<!-- agent-kit:claude-md start -->',
+        end: '<!-- agent-kit:claude-md end -->',
         anchor: 'after-h1',
         pad: true,
       },

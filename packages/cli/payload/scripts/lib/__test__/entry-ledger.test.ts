@@ -1,19 +1,31 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
   decodeBody,
   encodeBody,
-  findEntryRange,
   findSurfaceFiles,
+  ledgerDir,
+  ledgerPath,
   parseEntries,
   readLog,
+  rebuildWouldDropEntries,
   renderMetadata,
+  resolveSurfaceArg,
+  surfacePath,
+  surfaceRelFile,
+  surfaceScope,
   resolveChat,
   takeChatFlag,
-  tidySurface,
 } from '../../../../payload-dist/scripts/lib/entry-ledger.mjs';
 
 const roots: string[] = [];
@@ -103,50 +115,6 @@ describe('parseEntries', () => {
   });
 });
 
-describe('findEntryRange', () => {
-  const surface =
-    '# Head\n\n## [SIM-aaaaaa] First\n\n**Logged:** 2026-01-01\n\none\n\n---\n\n## [SIM-bbbbbb] Second\n\ntwo\n\n---\n';
-
-  it('returns null when the id is absent', () => {
-    expect(findEntryRange(surface, 'SIM-zzzzzz')).toBeNull();
-  });
-
-  it('collects the header metadata of the matched entry', () => {
-    expect(findEntryRange(surface, 'SIM-aaaaaa')!.meta).toEqual({
-      Logged: '2026-01-01',
-    });
-  });
-
-  it('spans through the separator so removing an entry takes it too', () => {
-    const range = findEntryRange(surface, 'SIM-aaaaaa')!;
-
-    expect(range.lines.slice(range.start, range.end)).toContain('---');
-  });
-
-  it('stops before the next entry heading', () => {
-    const range = findEntryRange(surface, 'SIM-aaaaaa')!;
-
-    expect(range.lines.slice(range.start, range.end).join('\n')).not.toContain(
-      'SIM-bbbbbb',
-    );
-  });
-
-  it('keeps the last value when a label repeats inside the header window', () => {
-    const repeated =
-      '## [SIM-aaaaaa] T\n**Logged:** 2026-01-01\n**Logged:** 2026-09-09\n\nbody\n\n---\n';
-
-    expect(findEntryRange(repeated, 'SIM-aaaaaa')!.meta.Logged).toBe(
-      '2026-09-09',
-    );
-  });
-
-  it('ignores a metadata line past the eight-line header window', () => {
-    const late = `## [SIM-aaaaaa] T\n${'filler\n'.repeat(7)}**Late:** value\n\n---\n`;
-
-    expect(findEntryRange(late, 'SIM-aaaaaa')!.meta.Late).toBeUndefined();
-  });
-});
-
 describe('renderMetadata', () => {
   it('renders one bolded label per line', () => {
     expect(renderMetadata({ Logged: '2026-01-01', Chat: 'abc' })).toBe(
@@ -192,36 +160,159 @@ describe('readLog', () => {
 });
 
 describe('findSurfaceFiles', () => {
-  it('finds the file at the root and in nested directories', () => {
+  it('finds the root surface and every per-area surface in the ledger directory', () => {
     const root = tempRoot();
-    writeAt(root, 'BACKLOG.md', '');
-    writeAt(root, 'apps/studio/BACKLOG.md', '');
+    writeAt(root, 'ledgers/BACKLOG.md', '');
+    writeAt(root, 'ledgers/studio.BACKLOG.md', '');
 
-    expect(findSurfaceFiles(root, 'BACKLOG.md')).toHaveLength(2);
-  });
-
-  it('does not descend into node_modules', () => {
-    const root = tempRoot();
-    writeAt(root, 'node_modules/pkg/BACKLOG.md', '');
-
-    expect(findSurfaceFiles(root, 'BACKLOG.md')).toEqual([]);
+    expect(findSurfaceFiles(join(root, 'ledgers'), 'BACKLOG.md')).toHaveLength(
+      2,
+    );
   });
 
   it('ignores a file with a different basename', () => {
     const root = tempRoot();
-    writeAt(root, 'DECISIONS.md', '');
+    writeAt(root, 'ledgers/DECISIONS.md', '');
 
-    expect(findSurfaceFiles(root, 'BACKLOG.md')).toEqual([]);
+    expect(findSurfaceFiles(join(root, 'ledgers'), 'BACKLOG.md')).toEqual([]);
+  });
+
+  it('ignores the ledger itself rather than treating it as a surface', () => {
+    const root = tempRoot();
+    writeAt(root, 'ledgers/backlog.jsonl', '');
+
+    expect(findSurfaceFiles(join(root, 'ledgers'), 'BACKLOG.md')).toEqual([]);
+  });
+
+  it('returns nothing when the ledger directory does not exist', () => {
+    expect(findSurfaceFiles(join(tempRoot(), 'absent'), 'BACKLOG.md')).toEqual(
+      [],
+    );
   });
 });
 
-describe('tidySurface', () => {
-  it('collapses a run of blank lines left by a splice', () => {
-    expect(tidySurface('a\n\n\n\nb\n')).toBe('a\n\nb\n');
+describe('ledgerDir', () => {
+  it('defaults to .claude/ledgers', () => {
+    const root = tempRoot();
+
+    expect(ledgerDir(root)).toBe(join(root, '.claude/ledgers'));
   });
 
-  it('ends the file with exactly one newline', () => {
-    expect(tidySurface('a\n\n\n')).toBe('a\n');
+  it('honours a configured directory', () => {
+    const root = tempRoot();
+
+    expect(ledgerDir(root, 'docs/ledgers')).toBe(join(root, 'docs/ledgers'));
+  });
+
+  it('falls back to the default when the configured path escapes the repo', () => {
+    const root = tempRoot();
+
+    expect(ledgerDir(root, '../outside')).toBe(join(root, '.claude/ledgers'));
+  });
+
+  it('refuses the repo root, where the self-ignore rule would hide every document', () => {
+    const root = tempRoot();
+
+    expect(ledgerDir(root, '.')).toBe(join(root, '.claude/ledgers'));
+  });
+});
+
+describe('surfacePath', () => {
+  it('leaves the root surface unprefixed', () => {
+    expect(surfacePath('/l', 'BACKLOG.md')).toBe('/l/BACKLOG.md');
+  });
+
+  it('prefixes a per-area surface with the target name', () => {
+    expect(surfacePath('/l', 'BACKLOG.md', 'studio')).toBe(
+      '/l/studio.BACKLOG.md',
+    );
+  });
+});
+
+describe('surfaceScope', () => {
+  it('names the repo root for an unprefixed surface', () => {
+    expect(surfaceScope('/l/BACKLOG.md', 'BACKLOG.md', [])).toBe('repo root');
+  });
+
+  it('maps a target name to its path prefix', () => {
+    expect(
+      surfaceScope('/l/studio.BACKLOG.md', 'BACKLOG.md', [
+        { name: 'studio', pathPrefix: 'apps/studio/' },
+      ]),
+    ).toBe('apps/studio');
+  });
+
+  it('falls back to the target name when no target matches', () => {
+    expect(surfaceScope('/l/studio.BACKLOG.md', 'BACKLOG.md', [])).toBe(
+      'studio',
+    );
+  });
+});
+
+describe('resolveSurfaceArg', () => {
+  it('resolves an omitted argument to the root surface in the ledger directory', () => {
+    expect(
+      resolveSurfaceArg('/repo', '/repo/.claude/ledgers', 'BACKLOG.md'),
+    ).toBe('/repo/.claude/ledgers/BACKLOG.md');
+  });
+
+  it('resolves the bare basename to the ledger directory rather than the repo root', () => {
+    expect(
+      resolveSurfaceArg(
+        '/repo',
+        '/repo/.claude/ledgers',
+        'BACKLOG.md',
+        'BACKLOG.md',
+      ),
+    ).toBe('/repo/.claude/ledgers/BACKLOG.md');
+  });
+
+  it('treats a bare word as an area name', () => {
+    expect(
+      resolveSurfaceArg(
+        '/repo',
+        '/repo/.claude/ledgers',
+        'BACKLOG.md',
+        'studio',
+      ),
+    ).toBe('/repo/.claude/ledgers/studio.BACKLOG.md');
+  });
+
+  it('resolves an explicit path against the repo root, not the process cwd', () => {
+    expect(
+      resolveSurfaceArg(
+        '/repo',
+        '/repo/.claude/ledgers',
+        'BACKLOG.md',
+        'docs/BACKLOG.md',
+      ),
+    ).toBe('/repo/docs/BACKLOG.md');
+  });
+});
+
+describe('surfaceRelFile', () => {
+  it('records the root surface as a bare basename, matching records written before the move', () => {
+    expect(
+      surfaceRelFile(
+        '/repo/.claude/ledgers',
+        '/repo/.claude/ledgers/BACKLOG.md',
+      ),
+    ).toBe('BACKLOG.md');
+  });
+
+  it('records an area surface by its prefixed filename', () => {
+    expect(
+      surfaceRelFile(
+        '/repo/.claude/ledgers',
+        '/repo/.claude/ledgers/studio.BACKLOG.md',
+      ),
+    ).toBe('studio.BACKLOG.md');
+  });
+
+  it('stays stable when the ledger directory is configured elsewhere', () => {
+    expect(
+      surfaceRelFile('/repo/docs/ledgers', '/repo/docs/ledgers/BACKLOG.md'),
+    ).toBe('BACKLOG.md');
   });
 });
 
@@ -255,6 +346,138 @@ describe('resolveChat', () => {
 
   it('takes an explicit id over anything detected', () => {
     expect(resolveChat('session-7', tempRoot())).toBe('session-7');
+  });
+});
+
+function entriesOf(count: number): string {
+  let text = '';
+  for (let i = 0; i < count; i++) {
+    text += `## [SIM-aaaaa${i}] Entry ${i}\n\nbody ${i}\n\n---\n\n`;
+  }
+  return text;
+}
+
+describe('ledgerPath', () => {
+  it('returns the ledgers path when no ledger exists anywhere', () => {
+    const root = tempRoot();
+
+    const result = ledgerPath(root, 'decision-log');
+
+    expect(result).toBe(join(root, '.claude/ledgers/decision-log.jsonl'));
+  });
+
+  it('returns the ledgers path and leaves it alone when it already exists', () => {
+    const root = tempRoot();
+    writeAt(root, '.claude/ledgers/decision-log.jsonl', '{"id":"A"}\n');
+
+    const result = ledgerPath(root, 'decision-log');
+
+    expect(result).toBe(join(root, '.claude/ledgers/decision-log.jsonl'));
+    expect(readFileSync(result, 'utf8')).toBe('{"id":"A"}\n');
+  });
+
+  it('migrates a legacy .log and preserves its exact byte content', () => {
+    const root = tempRoot();
+    const legacyBody = '{"id":"A"}\n{"id":"B"}\n';
+    writeAt(root, '.claude/decision-log.log', legacyBody);
+
+    const result = ledgerPath(root, 'decision-log');
+
+    expect(result).toBe(join(root, '.claude/ledgers/decision-log.jsonl'));
+    expect(readFileSync(result, 'utf8')).toBe(legacyBody);
+    expect(existsSync(join(root, '.claude/decision-log.log'))).toBe(false);
+  });
+
+  it('migrates a flat .jsonl left by the previous layout', () => {
+    const root = tempRoot();
+    writeAt(root, '.claude/decision-log.jsonl', '{"id":"A"}\n');
+
+    const result = ledgerPath(root, 'decision-log');
+
+    expect(result).toBe(join(root, '.claude/ledgers/decision-log.jsonl'));
+    expect(readFileSync(result, 'utf8')).toBe('{"id":"A"}\n');
+    expect(existsSync(join(root, '.claude/decision-log.jsonl'))).toBe(false);
+  });
+
+  it('prefers the newest layout and leaves older files untouched', () => {
+    const root = tempRoot();
+    writeAt(root, '.claude/ledgers/decision-log.jsonl', '{"id":"current"}\n');
+    writeAt(root, '.claude/decision-log.jsonl', '{"id":"flat"}\n');
+    writeAt(root, '.claude/decision-log.log', '{"id":"legacy"}\n');
+
+    const result = ledgerPath(root, 'decision-log');
+
+    expect(readFileSync(result, 'utf8')).toBe('{"id":"current"}\n');
+    expect(existsSync(join(root, '.claude/decision-log.jsonl'))).toBe(true);
+    expect(existsSync(join(root, '.claude/decision-log.log'))).toBe(true);
+  });
+});
+
+describe('rebuildWouldDropEntries', () => {
+  it('returns false when the file does not exist', () => {
+    const root = tempRoot();
+
+    expect(
+      rebuildWouldDropEntries(join(root, 'DECISIONS.md'), entriesOf(1)),
+    ).toBe(false);
+  });
+
+  it('returns false when the file has no entries', () => {
+    const root = tempRoot();
+    const file = writeAt(
+      root,
+      'DECISIONS.md',
+      '# Decisions\n\nno entries yet\n',
+    );
+
+    expect(rebuildWouldDropEntries(file, entriesOf(1))).toBe(false);
+  });
+
+  it('returns true when a four-entry file is replaced by one-entry content', () => {
+    const root = tempRoot();
+    const file = writeAt(root, 'DECISIONS.md', entriesOf(4));
+
+    expect(rebuildWouldDropEntries(file, entriesOf(1))).toBe(true);
+  });
+
+  it('returns false when the only missing entry is one the ledger recorded as removed', () => {
+    const root = tempRoot();
+    const file = writeAt(root, 'BACKLOG.md', entriesOf(3));
+
+    expect(
+      rebuildWouldDropEntries(file, entriesOf(2), new Set(['SIM-aaaaa2'])),
+    ).toBe(false);
+  });
+
+  it('returns true when an entry vanishes that the ledger did not record as removed', () => {
+    const root = tempRoot();
+    const file = writeAt(root, 'BACKLOG.md', entriesOf(3));
+
+    expect(
+      rebuildWouldDropEntries(file, entriesOf(2), new Set(['SIM-aaaaa9'])),
+    ).toBe(true);
+  });
+
+  it('returns true when one entry is swapped for another and the count is unchanged', () => {
+    const root = tempRoot();
+    const file = writeAt(root, 'BACKLOG.md', entriesOf(2));
+    const swapped = `${entriesOf(1)}## [SIM-bbbbb0] Other\n\nbody\n\n---\n\n`;
+
+    expect(rebuildWouldDropEntries(file, swapped)).toBe(true);
+  });
+
+  it('returns false when the replacement has the same entry count', () => {
+    const root = tempRoot();
+    const file = writeAt(root, 'DECISIONS.md', entriesOf(3));
+
+    expect(rebuildWouldDropEntries(file, entriesOf(3))).toBe(false);
+  });
+
+  it('returns false when the replacement has more entries', () => {
+    const root = tempRoot();
+    const file = writeAt(root, 'DECISIONS.md', entriesOf(2));
+
+    expect(rebuildWouldDropEntries(file, entriesOf(3))).toBe(false);
   });
 });
 

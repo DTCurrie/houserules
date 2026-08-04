@@ -1,13 +1,13 @@
 {
-  "name": "@claude-kit/cli",
+  "name": "@agent-kit/cli",
   "version": "0.1.0",
-  "description": "Interactive installer for a portable Claude Code context-discipline kit: hooks, skills, agents, changesets integration, and token-efficiency tooling.",
+  "description": "agent-kit: an interactive installer for a portable Claude Code context-discipline kit: hooks, skills, agents, changesets integration, and token-efficiency tooling.",
   "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "claude-kit": "dist/cli.js"
+    "agent-kit": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -17,6 +17,7 @@
     "CONVENTIONS.md"
   ],
   "exports": {
+    "./package.json": "./package.json",
     "./plugin": {
       "types": "./dist/plugin.d.ts",
       "default": "./dist/plugin.js"
@@ -24,14 +25,14 @@
     "./schema": "./schema/kit.config.schema.json"
   },
   "scripts": {
-    "build": "npm run build:payload && tsc -p tsconfig.build.json && node scripts/generate-schema.mjs && publint",
+    "build": "npm run build:payload && rm -rf dist && tsc -p tsconfig.build.json && node scripts/generate-schema.mjs && publint",
     "schema": "node scripts/generate-schema.mjs",
     "check": "npm run build:payload && tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "dogfood": "npm run build:payload && node scripts/dogfood-link.mjs",
     "prepack": "npm run build",
-    "build:payload": "tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
+    "build:payload": "rm -rf payload-dist && tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
     "dogfood:watch": "tsc -p tsconfig.payload.json --watch"
   },
   "engines": {
@@ -39,7 +40,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/devintcurrie/claude-kit.git"
+    "url": "git+https://github.com/DTCurrie/agent-kit.git"
   },
   "keywords": [
     "claude",
@@ -47,7 +48,8 @@
     "agent",
     "hooks",
     "changesets",
-    "tooling"
+    "tooling",
+    "agent-kit"
   ],
   "license": "MIT",
   "dependencies": {
@@ -60,6 +62,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@agent-kit/test": "workspace:*",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.2",
     "@types/semver": "^7.7.1",

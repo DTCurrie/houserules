@@ -172,7 +172,7 @@ export function reconcileDrift(
   const mangleHint = formatterMangleHint(
     root,
     settled,
-    'Run `npx claude-kit doctor --fix --force` to restore them',
+    'Run `npx agent-kit doctor --fix --force` to restore them',
   );
   if (mangleHint) findings.push({ level: 'WARN', msg: mangleHint });
 

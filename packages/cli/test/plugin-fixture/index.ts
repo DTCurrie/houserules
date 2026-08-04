@@ -1,11 +1,11 @@
-import { definePlugin, hookFragment } from '@claude-kit/cli/plugin';
+import { definePlugin, hookFragment } from '@agent-kit/cli/plugin';
 import type {
   Action,
   Answers,
   Ctx,
   ModuleDef,
   PluginApi,
-} from '@claude-kit/cli/plugin';
+} from '@agent-kit/cli/plugin';
 
 interface FixtureConfig {
   note?: string;

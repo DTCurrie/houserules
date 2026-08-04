@@ -7,6 +7,7 @@ import {
   parseModuleOptionFlags,
   resolveModuleOptions,
 } from '../module-options.js';
+import { hasModule } from '../plugin-registry.js';
 import {
   MODULES,
   KitError,
@@ -52,7 +53,7 @@ function preflight(root: string, ctx: Ctx): void {
         `  here:     ${root}\n` +
         `  git root: ${ctx.git.top}\n` +
         `The kit's hooks resolve paths from the git toplevel, so a .claude/ here would never be found.\n` +
-        `Install from the toplevel instead:\n  cd ${ctx.git.top} && npx claude-kit init`,
+        `Install from the toplevel instead:\n  cd ${ctx.git.top} && npx agent-kit init`,
     );
   }
   if (resolve(root) === KIT_ROOT)
@@ -81,7 +82,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
     throw e;
   }
 
-  ui.intro(`claude-kit ${flags.kitVersion} — init`);
+  ui.intro(`agent-kit ${flags.kitVersion} — init`);
   ui.note(ui.profileCard(ctx), 'Detected');
 
   // Already installed? Default to the previously chosen modules.
@@ -101,7 +102,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   }
   if (installed) {
     ui.message(
-      `This repo already has kit v${installed.kitVersion}. init re-plans with your existing module set as the default; for a plain refresh of kit-owned files use: npx claude-kit update`,
+      `This repo already has kit v${installed.kitVersion}. init re-plans with your existing module set as the default; for a plain refresh of kit-owned files use: npx agent-kit update`,
     );
   }
 
@@ -134,7 +135,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   };
   if (
     !flags.yes &&
-    moduleIds.includes('changesets') &&
+    hasModule(moduleIds, 'changesets') &&
     !ctx.changesets.configExists
   ) {
     answers.seedChangesetConfig = await ui.confirm(
@@ -182,6 +183,6 @@ export async function init(dir: string, flags: Flags): Promise<number> {
 
   ui.written(written);
   ui.nextSteps(planResult.advisories);
-  ui.outro('Installed. Validate any time with: npx claude-kit doctor');
+  ui.outro('Installed. Validate any time with: npx agent-kit doctor');
   return 0;
 }

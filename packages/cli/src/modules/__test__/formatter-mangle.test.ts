@@ -11,7 +11,7 @@ import {
   prettierGuardActions,
 } from '../prettier-guard.js';
 
-const REMEDY = 'Run `npx claude-kit update --force` to restore them';
+const REMEDY = 'Run `npx agent-kit update --force` to restore them';
 
 function regionBody(actions: Action[]): string {
   const region = actions.find(

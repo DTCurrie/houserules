@@ -1,6 +1,6 @@
 ---
 name: decide
-description: Record a decision to the nearest DECISIONS.md ledger, with the rejected alternative and revisit trigger that make it worth keeping. Use when a discussion settles a design question, when recording why we chose one option over another, or when a new decision supersedes a prior one.
+description: Record a decision to the decision ledger, with the rejected alternative and revisit trigger that make it worth keeping. Use when a discussion settles a design question, when recording why we chose one option over another, or when a new decision supersedes a prior one.
 argument-hint: decide|supersede|amend <args...>
 allowed-tools: Bash(node .claude/scripts/decision-log.mjs:*), Agent
 ---
@@ -35,8 +35,26 @@ cannot state a genuine rejected alternative or a genuine revisit trigger, do not
 plausible-sounding one to pass the check. That is worse than refusing. Ask the user for the
 missing piece, or conclude this is not actually a decision and drop it.
 
+## Check for an existing decision first
+
+Before recording, ask whether one already governs this ground:
+
+```
+node .claude/scripts/decision-log.mjs scope <path>   # paths the work touches
+```
+
+A path matches a decision scoped to any directory above it, so a file finds the decision that
+governs its package. If one comes back covering the same question, this is a `supersede` of it,
+not a second record. Two decisions on one question is how a log stops being answerable.
+
+Nothing else can answer this. The recorded scope only exists in the ledger, and grepping the
+rendered `DECISIONS.md` cannot match a file against a directory scope.
+
 ## Commands, from `.claude/scripts/decision-log.mjs`
 
+- `scope <path> [<path>...]`. Which decisions govern these paths. Run this before recording.
+- `list [<file>]`, `show <id>`. Survey every decision, then read one in full.
+- `ancestry <id>`, `current <id>`, `tree <id>`. Walk the supersession chain.
 - `decide <prefix> <file> <title> [body] [--under <id>] [--supersedes <id>,<id>] [--scope <path>,<path>] [--chat <id>]`
 - `supersede <id> <file> <new-title> [body] [--scope <path>,<path>] [--chat <id>]`. Writes a
   new record. It never edits the old one. Nothing is ever deleted.
@@ -53,8 +71,9 @@ CLAUDE.md still gets a record here, and the CLAUDE.md line cites its id.
 
 ## Where the file goes
 
-`DECISIONS.md` beside the area it governs. The tool discovers it from `<file>`. Repo-wide
-decisions go in a root `DECISIONS.md`.
+Every rendered `DECISIONS.md` lives in `.claude/ledgers/`, beside the ledger it is generated
+from. Pass `DECISIONS.md` as `<file>` for a repo-wide decision, or a bare area name such as
+`studio` for one scoped to that area, rendered as `.claude/ledgers/studio.DECISIONS.md`.
 
 ## Steps
 

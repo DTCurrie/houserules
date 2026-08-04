@@ -470,6 +470,52 @@ describe('doctor on a kit.config.json the schema rejects', () => {
   });
 });
 
+describe('doctor committed rendered ledger detection', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+  });
+
+  it('says nothing on a fresh install, where the rendered ledgers are gitignored', () => {
+    const r = runCli(['doctor', root]);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).not.toMatch(/rendered ledger file\(s\)/);
+  });
+
+  it('warns with the untrack command when a rendered ledger is committed', () => {
+    seedLedger(root);
+    writeFileSync(join(root, 'BACKLOG.md'), '# Backlog\n\n## [X-aaaaaa] t\n');
+    runIn(root, 'git', ['add', '-f', 'BACKLOG.md']);
+
+    const r = runCli(['doctor', root]);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).toMatch(/rendered ledger file\(s\)/);
+    expect(r.stdout).toMatch(/git rm --cached/);
+  });
+
+  it('stays silent for a repo with its own BACKLOG.md and no ledger behind it', () => {
+    writeFileSync(join(root, 'BACKLOG.md'), '# My own backlog\n');
+    runIn(root, 'git', ['add', '-f', 'BACKLOG.md']);
+
+    const r = runCli(['doctor', root]);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).not.toMatch(/rendered ledger file\(s\)/);
+  });
+});
+
+function seedLedger(root: string): void {
+  const dir = join(root, '.claude/ledgers');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, 'backlog.jsonl'),
+    '{"ts":"2026-01-01T00:00:00.000Z","id":"X-aaaaaa","action":"add","file":"BACKLOG.md","title":"t","chat":null}\n',
+  );
+}
+
 describe('doctor committed .claude/scripts detection', () => {
   let root: string;
 
@@ -665,7 +711,7 @@ describe('doctor, the suspected-formatter-mangle hint', () => {
     const r = runCli(['doctor', root]);
 
     expect(r.stdout).toMatch(/likely cause/);
-    expect(r.stdout).toMatch(/npx claude-kit doctor --fix --force/);
+    expect(r.stdout).toMatch(/npx agent-kit doctor --fix --force/);
   });
 
   it('does not move the exit code, since a WARN finding alone never does', () => {

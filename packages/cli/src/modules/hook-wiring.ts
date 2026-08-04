@@ -8,7 +8,7 @@ import type {
  * The shell command that runs one hook script, guarded so a missing script degrades to an
  * actionable line instead of a raw MODULE_NOT_FOUND stack trace. `.claude/scripts/` is
  * generated and gitignored, so a fresh clone legitimately has none until
- * `claude-kit update` runs, while settings.json is committed. That is why the guard lives
+ * `agent-kit update` runs, while settings.json is committed. That is why the guard lives
  * in the command rather than in a script.
  *
  * `exec` is load-bearing. It replaces the shell, so node's exit code reaches the hook
@@ -19,7 +19,7 @@ import type {
  */
 export function hookCommand(scriptName: string): string {
   const path = `"$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
-  return `[ -f ${path} ] && exec node ${path} || echo "[kit] ${scriptName} missing — run: npx claude-kit update"`;
+  return `[ -f ${path} ] && exec node ${path} || echo "[kit] ${scriptName} missing — run: npx agent-kit update"`;
 }
 
 /** One settings fragment carrying a single hook entry. */

@@ -1,7 +1,7 @@
 {
-  "name": "@claude-kit/plugin-changesets",
+  "name": "@agent-kit/plugin-changesets",
   "version": "0.0.0",
-  "description": "claude-kit plugin: changesets integration (canonical changelog) and the optional per-commit changelog ledger.",
+  "description": "agent-kit plugin: changesets integration (canonical changelog) and the optional per-commit changelog ledger.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -19,24 +19,27 @@
     "payload-dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
+    "build": "rm -rf dist payload-dist && tsc -p tsconfig.json && tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
     "check": "tsc --noEmit -p tsconfig.json",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "test": "vitest run"
   },
   "engines": {
     "node": ">=22"
   },
   "peerDependencies": {
-    "@claude-kit/cli": "^0.1.0"
+    "@agent-kit/cli": "^0.1.0"
   },
   "devDependencies": {
-    "@claude-kit/cli": "workspace:*",
+    "@agent-kit/cli": "workspace:*",
+    "@agent-kit/test": "workspace:*",
     "@types/node": "^26.1.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "license": "MIT",
   "keywords": [
-    "claude-kit",
-    "claude-kit-plugin"
+    "agent-kit",
+    "agent-kit-plugin"
   ]
 }

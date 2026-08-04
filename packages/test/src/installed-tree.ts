@@ -85,8 +85,8 @@ export function editKitConfig(
   writeFileSync(kitConfigPath(root), JSON.stringify(config, null, 2));
 }
 
-export const REGION_START = '<!-- claude-kit:claude-md start -->';
-export const REGION_END = '<!-- claude-kit:claude-md end -->';
+export const REGION_START = '<!-- agent-kit:claude-md start -->';
+export const REGION_END = '<!-- agent-kit:claude-md end -->';
 
 export function claudeMdPath(root: string): string {
   return join(root, 'CLAUDE.md');

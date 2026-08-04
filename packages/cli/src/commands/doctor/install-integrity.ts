@@ -1,7 +1,12 @@
 import { readdirSync } from 'node:fs';
 
+import { ledgerDirFor } from '../../core/ledger-dir.js';
 import { MANIFEST_PATH } from '../../core/manifest.js';
-import { trackedScriptFiles, trackedTemplateFiles } from '../../detect.js';
+import {
+  trackedLedgerSurfaces,
+  trackedScriptFiles,
+  trackedTemplateFiles,
+} from '../../detect.js';
 import type { Ctx } from '../../detect.js';
 import { payloadPath } from '../../paths.js';
 import { MODULES } from '../../plan.js';
@@ -24,7 +29,7 @@ export function checkInstallIntegrity(
   if (!manifest) {
     findings.push({
       level: 'ERROR',
-      msg: `no ${MANIFEST_PATH} — kit not installed here (run: npx claude-kit init)`,
+      msg: `no ${MANIFEST_PATH} — kit not installed here (run: npx agent-kit init)`,
     });
     return { findings, readouts: [] };
   }
@@ -32,7 +37,7 @@ export function checkInstallIntegrity(
   if (manifest.kitVersion !== kitVersion) {
     findings.push({
       level: 'WARN',
-      msg: `installed kit v${manifest.kitVersion}, this CLI is v${kitVersion} — run: npx claude-kit update`,
+      msg: `installed kit v${manifest.kitVersion}, this CLI is v${kitVersion} — run: npx agent-kit update`,
     });
   }
   // Reference templates that got committed before the kit ignored them. File integrity
@@ -41,7 +46,7 @@ export function checkInstallIntegrity(
   if (strayTemplates.length) {
     findings.push({
       level: 'WARN',
-      msg: `${strayTemplates.length} reference template(s) under .claude/kit-templates/ are committed (reference-only). Untrack, keeping them on disk: npx claude-kit update — or: git rm --cached -r .claude/kit-templates && git add .claude/kit-templates/.gitignore`,
+      msg: `${strayTemplates.length} reference template(s) under .claude/kit-templates/ are committed (reference-only). Untrack, keeping them on disk: npx agent-kit update — or: git rm --cached -r .claude/kit-templates && git add .claude/kit-templates/.gitignore`,
     });
   }
   // Same story for .claude/scripts/, which is build output.
@@ -51,7 +56,19 @@ export function checkInstallIntegrity(
   if (strayScripts.length) {
     findings.push({
       level: 'WARN',
-      msg: `${strayScripts.length} script(s) under .claude/scripts/ are committed (build output). Untrack, keeping them on disk: npx claude-kit update — or: git rm --cached -r .claude/scripts && git add .claude/scripts/.gitignore`,
+      msg: `${strayScripts.length} script(s) under .claude/scripts/ are committed (build output). Untrack, keeping them on disk: npx agent-kit update — or: git rm --cached -r .claude/scripts && git add .claude/scripts/.gitignore`,
+    });
+  }
+
+  // And for the rendered ledgers, which are a view of the .jsonl beside them. The .jsonl
+  // stays committed: it is the record, and the markdown is rebuilt from it by `render`.
+  const ledgerDir = ledgerDirFor(ctx);
+  const strayLedgers =
+    ctx.git.isRepo && ledgerDir ? trackedLedgerSurfaces(root, ledgerDir) : [];
+  if (strayLedgers.length) {
+    findings.push({
+      level: 'WARN',
+      msg: `${strayLedgers.length} rendered ledger file(s) are committed (generated from the .jsonl beside them). Untrack, keeping them on disk: npx agent-kit update — or: git rm --cached ${strayLedgers.join(' ')}`,
     });
   }
 
@@ -62,7 +79,7 @@ export function checkInstallIntegrity(
     if (!knownModuleIds.has(id))
       findings.push({
         level: 'WARN',
-        msg: `manifest lists module "${id}" which this kit no longer defines — npx claude-kit update prunes its retired files/hooks`,
+        msg: `manifest lists module "${id}" which this kit no longer defines — npx agent-kit update prunes its retired files/hooks`,
       });
   }
   // A kit-owned OR kit-signed hook script this kit no longer ships is retired.
@@ -88,7 +105,7 @@ export function checkInstallIntegrity(
     const wired = wiredCommands.some((c) => c.includes(base));
     findings.push({
       level: 'WARN',
-      msg: `retired kit hook script ${base} is no longer shipped by this kit${wired ? ' but is still wired (a dead node process on every trigger)' : ''} — prune it: npx claude-kit update`,
+      msg: `retired kit hook script ${base} is no longer shipped by this kit${wired ? ' but is still wired (a dead node process on every trigger)' : ''} — prune it: npx agent-kit update`,
     });
   }
 

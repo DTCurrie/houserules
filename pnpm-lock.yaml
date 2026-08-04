@@ -253,6 +253,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@agent-kit/test':
+        specifier: workspace:*
+        version: link:../test
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.6.0)
@@ -287,57 +290,105 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.2)(vite@8.1.5(@types/node@26.1.2))
 
+  packages/cli/test/plugin-fixture:
+    devDependencies:
+      '@agent-kit/cli':
+        specifier: workspace:*
+        version: link:../..
+
   packages/plugin-backlog:
     devDependencies:
-      '@claude-kit/cli':
+      '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
+      '@agent-kit/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@8.1.5(@types/node@26.1.2))
 
   packages/plugin-changesets:
     devDependencies:
-      '@claude-kit/cli':
+      '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
+      '@agent-kit/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@8.1.5(@types/node@26.1.2))
 
   packages/plugin-decisions:
     devDependencies:
-      '@claude-kit/cli':
+      '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
+      '@agent-kit/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@8.1.5(@types/node@26.1.2))
 
   packages/plugin-persona-auditor:
     devDependencies:
-      '@claude-kit/cli':
+      '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
+      '@agent-kit/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@8.1.5(@types/node@26.1.2))
 
   packages/plugin-prose:
     devDependencies:
-      '@claude-kit/cli':
+      '@agent-kit/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@agent-kit/test':
+        specifier: workspace:*
+        version: link:../test
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@8.1.5(@types/node@26.1.2))
+
+  packages/plugin-testing:
+    devDependencies:
+      '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
       '@types/node':
@@ -347,9 +398,9 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/plugin-testing:
+  packages/test:
     devDependencies:
-      '@claude-kit/cli':
+      '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
       '@types/node':
@@ -358,6 +409,9 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@8.1.5(@types/node@26.1.2))
 
 packages:
 

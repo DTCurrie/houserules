@@ -56,7 +56,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
   } else {
     actions.push({
       kind: 'advise',
-      text: 'lint-fix is enabled but no target has a detected fix command — the Stop hooks were NOT wired (they would run nonexistent lint:fix/format:fix and spill errors every turn). Add "fixCommands": ["lint:fix", …] to a target in .claude/kit.config.json (with the matching package.json scripts), then run npx claude-kit update to wire them.',
+      text: 'lint-fix is enabled but no target has a detected fix command — the Stop hooks were NOT wired (they would run nonexistent lint:fix/format:fix and spill errors every turn). Add "fixCommands": ["lint:fix", …] to a target in .claude/kit.config.json (with the matching package.json scripts), then run npx agent-kit update to wire them.',
       module: id,
     });
   }

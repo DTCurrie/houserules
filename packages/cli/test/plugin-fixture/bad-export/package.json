@@ -1,5 +1,5 @@
 {
-  "name": "@claude-kit/plugin-fixture-bad-export",
+  "name": "@agent-kit/plugin-fixture-bad-export",
   "version": "1.0.0",
   "private": true,
   "main": "index.cjs"

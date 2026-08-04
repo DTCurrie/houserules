@@ -1,8 +1,9 @@
 {
-  "name": "claude-kit-workspace",
+  "name": "agent-kit-workspace",
   "version": "0.0.0",
   "private": true,
-  "description": "Workspace root for claude-kit and its first-party plugins. Not published.",
+  "description": "Workspace root for agent-kit and its first-party plugins. Not published.",
+  "packageManager": "pnpm@11.5.0",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -13,14 +14,14 @@
     "test": "pnpm -r test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "schema": "pnpm --filter @claude-kit/cli schema",
+    "schema": "pnpm --filter @agent-kit/cli schema",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "change": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish",
-    "dogfood": "pnpm --filter @claude-kit/cli dogfood",
-    "dogfood:watch": "pnpm --filter @claude-kit/cli dogfood:watch"
+    "dogfood": "pnpm --filter @agent-kit/cli dogfood",
+    "dogfood:watch": "pnpm --filter @agent-kit/cli dogfood:watch"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

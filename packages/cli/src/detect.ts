@@ -191,6 +191,34 @@ export function trackedScriptFiles(root: string): string[] {
 }
 
 /**
+ * Committed ledger markdown, which is a generated view of the `.jsonl` beside it.
+ *
+ * Covers the ledger directory and the repo root, because an install predating the move kept
+ * `BACKLOG.md` and `DECISIONS.md` at the root. Returns nothing unless a ledger actually
+ * exists, so a repo that keeps its own hand-written `BACKLOG.md` and has never run a ledger
+ * module is never offered up for untracking.
+ */
+export function trackedLedgerSurfaces(
+  root: string,
+  ledgerDir: string,
+): string[] {
+  const hasLedger = ['backlog', 'decisions'].some((name) =>
+    existsSync(join(root, ledgerDir, `${name}.jsonl`)),
+  );
+  if (!hasLedger) return [];
+  const inDir = trackedFilesUnder(root, ledgerDir).filter((p) =>
+    p.endsWith('.md'),
+  );
+  const atRoot = (
+    git(root, ['ls-files', '-c', '--', 'BACKLOG.md', 'DECISIONS.md']) ?? ''
+  )
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return [...inDir, ...atRoot];
+}
+
+/**
  * Drops paths from the git index only. Working-tree copies stay on disk and the removal
  * is staged, never committed, because the user owns commits. Git failures are swallowed
  * so callers never crash on unexpected repo state.

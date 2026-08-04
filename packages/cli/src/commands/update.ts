@@ -2,10 +2,13 @@ import { resolve } from 'node:path';
 
 import {
   detect,
+  trackedLedgerSurfaces,
   trackedScriptFiles,
   trackedTemplateFiles,
   untrackFromIndex,
 } from '../detect.js';
+import type { Ctx } from '../detect.js';
+import { ledgerDirFor } from '../core/ledger-dir.js';
 import { resolveModuleOptions } from '../module-options.js';
 import { assertNoRetiredModules } from '../retired-modules.js';
 import {
@@ -28,6 +31,12 @@ import type { Flags } from '../cli-contract.js';
 import type { Answers } from '../module-def.js';
 import type { PlanResult, PruneResult } from '../plan.js';
 
+/** Committed rendered ledgers, or nothing when the kit must not manage that directory. */
+function strayLedgerSurfaces(root: string, ctx: Ctx): string[] {
+  const dir = ledgerDirFor(ctx);
+  return ctx.git.isRepo && dir ? trackedLedgerSurfaces(root, dir) : [];
+}
+
 // update runs often and its advisories are install-time to-dos the user already saw.
 // Reprinting the whole list every refresh buries the actual diff. The full text is one
 // flag away.
@@ -39,7 +48,7 @@ function showNextSteps(
   if (flags.nextSteps) ui.nextSteps(advisories);
   else
     ui.message(
-      `${advisories.length} post-install next step${advisories.length === 1 ? '' : 's'} — see: npx claude-kit update --next-steps`,
+      `${advisories.length} post-install next step${advisories.length === 1 ? '' : 's'} — see: npx agent-kit update --next-steps`,
     );
 }
 
@@ -53,12 +62,12 @@ function showNextSteps(
 function showLocalEdits(root: string, dests: string[]): void {
   if (!dests.length) return;
   ui.message(
-    `${dests.length} file(s) differ from what the kit last wrote, so they were kept. See what changed: npx claude-kit doctor --json, where every drift entry carries a diff.`,
+    `${dests.length} file(s) differ from what the kit last wrote, so they were kept. See what changed: npx agent-kit doctor --json, where every drift entry carries a diff.`,
   );
   const hint = formatterMangleHint(
     root,
     dests,
-    'Run `npx claude-kit update --force` to restore them',
+    'Run `npx agent-kit update --force` to restore them',
   );
   if (hint) ui.message(hint);
 }
@@ -76,7 +85,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   const manifest = ctx.claude.manifest;
   if (!manifest) {
     console.error(
-      'No .claude/kit-manifest.json — this repo has no kit install to update. Run: npx claude-kit init',
+      'No .claude/kit-manifest.json — this repo has no kit install to update. Run: npx agent-kit init',
     );
     return 1;
   }
@@ -88,7 +97,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   }
 
   ui.intro(
-    `claude-kit ${flags.kitVersion} — update (installed: v${manifest.kitVersion})`,
+    `agent-kit ${flags.kitVersion} — update (installed: v${manifest.kitVersion})`,
   );
 
   // Targets come from the user-edited kit.config.json when present: config is
@@ -186,7 +195,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   }
   if (addable.length)
     ui.message(
-      `New default module(s) available: ${addable.join(', ')} — enable with: npx claude-kit modules --modules=${addable.join(',')}`,
+      `New default module(s) available: ${addable.join(', ')} — enable with: npx agent-kit modules --modules=${addable.join(',')}`,
     );
 
   // A git-index migration, not a target-file write, so it lives here rather than in
@@ -206,6 +215,11 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     if (strayScripts.length)
       ui.message(
         `scripts: ${strayScripts.length} committed hook script(s) would be untracked from git (kept on disk).`,
+      );
+    const dryLedgers = strayLedgerSurfaces(root, ctx);
+    if (dryLedgers.length)
+      ui.message(
+        `ledgers: ${dryLedgers.length} committed rendered file(s) would be untracked from git (kept on disk).`,
       );
     showNextSteps(planResult.advisories, flags);
     ui.outro('Dry run — nothing written.');
@@ -239,6 +253,16 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   if (untrackedScripts)
     ui.message(
       `scripts: untracked ${untrackedScripts} hook script(s) from git — kept on disk; commit the staged removal to finish.`,
+    );
+
+  const strayLedgers = strayLedgerSurfaces(root, ctx);
+  const untrackedLedgers =
+    strayLedgers.length && untrackFromIndex(root, strayLedgers)
+      ? strayLedgers.length
+      : 0;
+  if (untrackedLedgers)
+    ui.message(
+      `ledgers: untracked ${untrackedLedgers} rendered file(s) from git — kept on disk; commit the staged removal to finish.`,
     );
 
   showNextSteps(planResult.advisories, flags);

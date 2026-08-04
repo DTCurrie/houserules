@@ -4,13 +4,23 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: [
+      // ctx-builder builds Ctx/Target/Answers/ModuleDef fixtures straight from this
+      // package's own src/, so it stays here rather than in the published test. This
+      // entry must come before the general #test/* one below, since vite resolves aliases
+      // in order and the general entry would otherwise shadow it.
+      {
+        find: '#test/ctx-builder',
+        replacement: `${fileURLToPath(new URL('./test/ctx-builder.ts', import.meta.url))}`,
+      },
       // Colocated suites live up to three directories deep, so a relative path to the shared
-      // testing modules reads as `../../../test/repo.js`. A prefix alias rather than one
-      // entry per module, so adding a module needs no config change. Kept out of package.json
-      // `imports`, which would publish a mapping pointing at files the package does not ship.
+      // testing modules reads as `../../../test/repo.js`. The `#test/*` alias reads the same
+      // either way, but now resolves through @agent-kit/test, a published package, rather
+      // than a relative path into this package's own `test/` directory. A prefix alias rather
+      // than one entry per module, so adding a module needs no config change here, only an
+      // export in that package.
       {
         find: /^#test\/(.*)$/,
-        replacement: `${fileURLToPath(new URL('./test/', import.meta.url))}$1.ts`,
+        replacement: '@agent-kit/test/$1',
       },
     ],
   },
@@ -22,7 +32,7 @@ export default defineConfig({
       'src/**/__test__/**/*.test.ts',
       'payload/**/__test__/**/*.test.ts',
     ],
-    globalSetup: ['test/global-setup.ts'],
+    globalSetup: ['@agent-kit/test/global-setup'],
     // Several suites shell out to the CLI against mkdtemp fixtures; the default
     // 5s timeout is not enough for an end-to-end init + update + doctor chain.
     testTimeout: 30_000,

@@ -61,7 +61,7 @@ try {
 
   if (failures.length) {
     process.stderr.write(
-      'claude-kit regen: a generator failed after your edit — fix the source, then it will re-run.\n',
+      'agent-kit regen: a generator failed after your edit — fix the source, then it will re-run.\n',
     );
     for (const f of failures) {
       process.stderr.write(`\n--- ${f.command} ---\n`);

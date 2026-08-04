@@ -20,7 +20,7 @@ const KIT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const FIXTURE_ROOT = join(KIT_ROOT, 'test/plugin-fixture');
 
 function ensureFixtureSelfLink(): void {
-  const link = join(FIXTURE_ROOT, 'node_modules', '@claude-kit', 'cli');
+  const link = join(FIXTURE_ROOT, 'node_modules', '@agent-kit', 'cli');
   if (existsSync(link)) return;
   mkdirSync(dirname(link), { recursive: true });
   symlinkSync(KIT_ROOT, link, 'dir');

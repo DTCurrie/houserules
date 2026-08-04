@@ -13,8 +13,8 @@ import type { Ctx } from '../detect.js';
  */
 export const PRETTIERIGNORE_REGION: RegionSpec = {
   id: 'prettierignore',
-  start: '# claude-kit:prettierignore start',
-  end: '# claude-kit:prettierignore end',
+  start: '# agent-kit:prettierignore start',
+  end: '# agent-kit:prettierignore end',
   anchor: 'eof',
 };
 
@@ -58,8 +58,8 @@ function protectedSubtrees(actions: Action[]): string[] {
 
 function prettierignoreBody(subtrees: string[]): string {
   return [
-    '# Installed by claude-kit and tracked by content hash. Formatting these rewrites',
-    '# bytes the kit owns, which makes `npx claude-kit update` skip them as your edits.',
+    '# Installed by agent-kit and tracked by content hash. Formatting these rewrites',
+    '# bytes the kit owns, which makes `npx agent-kit update` skip them as your edits.',
     ...subtrees,
   ].join('\n');
 }

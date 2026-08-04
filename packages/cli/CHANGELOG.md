@@ -1,4 +1,4 @@
-# @claude-kit/cli
+# @agent-kit/cli
 
 ## 0.1.0
 
@@ -16,6 +16,6 @@ Ships 15 core modules. Hooks guard destructive git commands, auto-fix changed pa
 inject session context. Skills cover planning, orchestration, diff-scoped verification, review,
 and cleanup.
 
-Plugins extend the kit through `@claude-kit/cli/plugin`. A plugin contributes modules that
+Plugins extend the kit through `@agent-kit/cli/plugin`. A plugin contributes modules that
 return the same declarative actions the built-ins do, and ships its own payload. The six
 first-party plugins carry the rules, ledgers, and output style that used to be built in.

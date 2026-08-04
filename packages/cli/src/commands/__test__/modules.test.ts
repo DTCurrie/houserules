@@ -176,11 +176,11 @@ describe('modules command on an initialized pnpm monorepo', () => {
 });
 
 describe('modules command on an uninitialized repo', () => {
-  it('refuses to run and points at `npx claude-kit init`', () => {
+  it('refuses to run and points at `npx agent-kit init`', () => {
     const root = useRepo('non-js');
     const r = runCli(['modules', root]);
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/npx claude-kit init/);
+    expect(r.stderr).toMatch(/npx agent-kit init/);
   });
 });
 

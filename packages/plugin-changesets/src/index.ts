@@ -2,7 +2,7 @@ import {
   definePlugin,
   hookFragment,
   scriptPermission,
-} from '@claude-kit/cli/plugin';
+} from '@agent-kit/cli/plugin';
 import type {
   Action,
   Answers,
@@ -10,7 +10,7 @@ import type {
   Ctx,
   ModuleDef,
   PluginApi,
-} from '@claude-kit/cli/plugin';
+} from '@agent-kit/cli/plugin';
 
 function renderChangesetConfig(ctx: Ctx): string {
   return `${JSON.stringify(

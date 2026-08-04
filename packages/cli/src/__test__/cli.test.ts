@@ -5,13 +5,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useRepo } from '#test/repo';
 import { runCli, type RunResult } from '#test/run';
 
-describe('claude-kit with no subcommand', () => {
+describe('agent-kit with no subcommand', () => {
   it('exits 1', () => {
     expect(runCli([]).status).toBe(1);
   });
 
   it('prints usage on stderr', () => {
-    expect(runCli([]).stderr).toMatch(/Usage: claude-kit/);
+    expect(runCli([]).stderr).toMatch(/Usage: agent-kit/);
   });
 
   it('leaves stdout empty', () => {
@@ -19,11 +19,11 @@ describe('claude-kit with no subcommand', () => {
   });
 });
 
-describe('claude-kit --help', () => {
+describe('agent-kit --help', () => {
   it('exits 0 and prints usage to stdout', () => {
     const r = runCli(['--help']);
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/Usage: claude-kit/);
+    expect(r.stdout).toMatch(/Usage: agent-kit/);
   });
 
   it('documents the exit-code contract', () => {
@@ -31,7 +31,7 @@ describe('claude-kit --help', () => {
   });
 });
 
-describe('claude-kit --version', () => {
+describe('agent-kit --version', () => {
   it('exits 0 and prints a semver on stdout', () => {
     const r = runCli(['--version']);
     expect(r.status).toBe(0);
