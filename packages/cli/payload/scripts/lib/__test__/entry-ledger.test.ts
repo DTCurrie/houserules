@@ -14,6 +14,7 @@ import {
   decodeBody,
   encodeBody,
   findSurfaceFiles,
+  impliedSurfaceFiles,
   ledgerDir,
   ledgerPath,
   normalizeSurfaceRef,
@@ -269,6 +270,18 @@ describe('resolveSurfaceArg', () => {
     expect(resolveIn('studio')).toBe('/repo/.claude/ledgers/studio.BACKLOG.md');
   });
 
+  it("treats an area's own surface filename as that area", () => {
+    expect(resolveIn('studio.BACKLOG.md')).toBe(
+      '/repo/.claude/ledgers/studio.BACKLOG.md',
+    );
+  });
+
+  it('collapses a surface filename that already carries the basename twice', () => {
+    expect(resolveIn('studio.BACKLOG.md.BACKLOG.md')).toBe(
+      '/repo/.claude/ledgers/studio.BACKLOG.md',
+    );
+  });
+
   it('routes a path matching a configured pathPrefix to that area in the ledger directory', () => {
     expect(resolveIn('games/tower-push/BACKLOG.md')).toBe(
       '/repo/.claude/ledgers/tower-push.BACKLOG.md',
@@ -305,6 +318,8 @@ describe('resolveSurfaceArg', () => {
     'studio',
     'BACKLOG.md',
     'docs/notes.md',
+    'studio.BACKLOG.md',
+    'studio.BACKLOG.md.BACKLOG.md',
   ])(
     'writes "%s" to the file the rebuild projection matches it to',
     (arg: string) => {
@@ -319,6 +334,84 @@ describe('resolveSurfaceArg', () => {
       ).toBe(surfaceRelFile(LEDGERS, written));
     },
   );
+});
+
+describe('normalizeSurfaceRef', () => {
+  const TARGETS = [{ name: 'tower-push', pathPrefix: 'games/tower-push/' }];
+
+  const normalize = (recorded: string) =>
+    normalizeSurfaceRef(recorded, 'DECISIONS.md', TARGETS);
+
+  it('leaves the root surface alone', () => {
+    expect(normalize('DECISIONS.md')).toBe('DECISIONS.md');
+  });
+
+  it('leaves a canonical area surface alone', () => {
+    expect(normalize('tower-push.DECISIONS.md')).toBe(
+      'tower-push.DECISIONS.md',
+    );
+  });
+
+  it('maps a repo-relative path onto the area its pathPrefix configures', () => {
+    expect(normalize('games/tower-push/DECISIONS.md')).toBe(
+      'tower-push.DECISIONS.md',
+    );
+  });
+
+  it('falls back to the trailing directory for a path matching no target', () => {
+    expect(normalize('apps/studio/DECISIONS.md')).toBe('studio.DECISIONS.md');
+  });
+
+  it('folds a doubled basename back onto the area it belongs to', () => {
+    expect(normalize('tower-push.DECISIONS.md.DECISIONS.md')).toBe(
+      'tower-push.DECISIONS.md',
+    );
+  });
+
+  it('folds a basename repeated more than twice', () => {
+    expect(normalize('tower-push.DECISIONS.md.DECISIONS.md.DECISIONS.md')).toBe(
+      'tower-push.DECISIONS.md',
+    );
+  });
+
+  it('leaves a bare area name alone, since it names no file yet', () => {
+    expect(normalize('tower-push')).toBe('tower-push');
+  });
+});
+
+describe('impliedSurfaceFiles', () => {
+  const TARGETS = [{ name: 'tower-push', pathPrefix: 'games/tower-push/' }];
+
+  it('implies a surface the ledger records but nothing has rendered', () => {
+    const dir = join(tempRoot(), 'ledgers');
+
+    expect(
+      impliedSurfaceFiles(dir, 'DECISIONS.md', ['tower-push'], TARGETS),
+    ).toEqual([join(dir, 'tower-push')]);
+  });
+
+  it('collapses a doubled surface left on disk onto the area it belongs to', () => {
+    const root = tempRoot();
+    writeAt(root, 'ledgers/tower-push.DECISIONS.md', '');
+    writeAt(root, 'ledgers/tower-push.DECISIONS.md.DECISIONS.md', '');
+
+    expect(
+      impliedSurfaceFiles(join(root, 'ledgers'), 'DECISIONS.md', [], TARGETS),
+    ).toEqual([join(root, 'ledgers/tower-push.DECISIONS.md')]);
+  });
+
+  it('collapses a doubled name recorded on a ledger entry', () => {
+    const dir = join(tempRoot(), 'ledgers');
+
+    expect(
+      impliedSurfaceFiles(
+        dir,
+        'DECISIONS.md',
+        ['tower-push.DECISIONS.md', 'tower-push.DECISIONS.md.DECISIONS.md'],
+        TARGETS,
+      ),
+    ).toEqual([join(dir, 'tower-push.DECISIONS.md')]);
+  });
 });
 
 describe('surfaceRelFile', () => {

@@ -1204,6 +1204,120 @@ describe('decision-log.mjs given an area named as a path rather than a bare word
   });
 });
 
+describe('decision-log.mjs given an area named by its own surface filename', () => {
+  const AREA_SURFACE = '.claude/ledgers/studio.DECISIONS.md';
+  const DOUBLED = '.claude/ledgers/studio.DECISIONS.md.DECISIONS.md';
+  let root: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+    run(root, ['decide', 'SIM', 'studio', 'first call', 'body', '--chat=none']);
+  });
+
+  it('records the decision on the area surface', () => {
+    const id = run(root, [
+      'decide',
+      'SIM',
+      'studio.DECISIONS.md',
+      'second call',
+      'body',
+      '--chat=none',
+    ]).stdout.trim();
+
+    expect(readFile(root, AREA_SURFACE)).toContain(id);
+  });
+
+  it('creates no surface carrying the basename twice', () => {
+    run(root, [
+      'decide',
+      'SIM',
+      'studio.DECISIONS.md',
+      'second call',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(existsSync(join(root, DOUBLED))).toBe(false);
+  });
+
+  it('records the decision against the area, not the doubled name', () => {
+    run(root, [
+      'decide',
+      'SIM',
+      'studio.DECISIONS.md',
+      'second call',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(logRecords(root).at(-1)?.file).toBe('studio.DECISIONS.md');
+  });
+});
+
+describe('decision-log.mjs given a ledger already carrying doubled surface names', () => {
+  const AREA_SURFACE = '.claude/ledgers/studio.DECISIONS.md';
+  const DOUBLED = '.claude/ledgers/studio.DECISIONS.md.DECISIONS.md';
+  let root: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+    seedLogAsCompleteHistory(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'SIM-aaaaaa',
+        action: 'decide',
+        file: 'studio.DECISIONS.md',
+        title: 'Recorded correctly',
+        chat: null,
+        content: encodeBody('body one'),
+      },
+      {
+        ts: '2026-01-02T00:00:00.000Z',
+        id: 'SIM-bbbbbb',
+        action: 'decide',
+        file: 'studio.DECISIONS.md.DECISIONS.md',
+        title: 'Recorded with a doubled name',
+        chat: null,
+        content: encodeBody('body two'),
+      },
+    ]);
+  });
+
+  it('renders both records onto the one area surface', () => {
+    run(root, ['render']);
+
+    expect(readFile(root, AREA_SURFACE)).toContain(
+      'Recorded with a doubled name',
+    );
+  });
+
+  it('keeps the correctly recorded sibling on that surface', () => {
+    run(root, ['render']);
+
+    expect(readFile(root, AREA_SURFACE)).toContain('Recorded correctly');
+  });
+
+  it('renders no surface carrying the basename twice', () => {
+    run(root, ['render']);
+
+    expect(existsSync(join(root, DOUBLED))).toBe(false);
+  });
+
+  it('lists the recovered record under the area surface', () => {
+    const r = run(root, ['list']);
+
+    expect(r.stdout).not.toContain('.DECISIONS.md.DECISIONS.md');
+  });
+
+  it('does not rebuild a doubled surface already sitting on disk', () => {
+    writeFile(root, DOUBLED, '# stale\n');
+
+    run(root, ['render']);
+
+    expect(readFile(root, DOUBLED)).toBe('# stale\n');
+  });
+});
+
 describe('decision-log.mjs, given a configured ledgers.dir', () => {
   let root: string;
 

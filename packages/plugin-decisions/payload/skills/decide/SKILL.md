@@ -72,8 +72,10 @@ CLAUDE.md still gets a record here, and the CLAUDE.md line cites its id.
 ## Where the file goes
 
 Every rendered `DECISIONS.md` lives in `.claude/ledgers/`, beside the ledger it is generated
-from. Pass `DECISIONS.md` as `<area>` for a repo-wide decision, or a bare area name such as
-`studio` for one scoped to that area, rendered as `.claude/ledgers/studio.DECISIONS.md`.
+from.
+
+`<area>` is a bare target name from `kit.config.json`. Pass `studio` and the decision renders
+to `.claude/ledgers/studio.DECISIONS.md`. For a repo-wide decision, pass `DECISIONS.md`.
 
 ## Steps
 

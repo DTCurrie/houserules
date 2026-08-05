@@ -9,9 +9,9 @@ Log a deferred work item without bloating the current diff. Arguments: $ARGUMENT
 
 1. Run: `node .claude/scripts/backlog-log.mjs add $ARGUMENTS`
    PREFIX is the area code, listed in the kit.config.json targets. The second argument says
-   where the entry lands: `BACKLOG.md` for the repo-wide backlog, or a bare target name such as
-   `studio` for one scoped to that area. Both resolve inside `.claude/ledgers/`. If the summary
-   is long, pipe it on stdin.
+   where the entry lands. Pass a bare target name such as `studio` and it resolves to
+   `.claude/ledgers/studio.BACKLOG.md`. For the repo-wide backlog, pass `BACKLOG.md`. If the
+   summary is long, pipe it on stdin.
 2. Capture the printed `<PREFIX>-<hex>` ID.
 3. Spawn the `backlog-reviewer` subagent on the new entry to validate format, dedupe, and
    gut-check whether it's worth tracking. Reconcile its verdict before continuing.

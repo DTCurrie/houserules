@@ -923,6 +923,62 @@ describe('backlog-log.mjs given an area named as a path rather than a bare word'
   });
 });
 
+describe('backlog-log.mjs given an area named by its own surface filename', () => {
+  const AREA_SURFACE = '.claude/ledgers/studio.BACKLOG.md';
+  const DOUBLED = '.claude/ledgers/studio.BACKLOG.md.BACKLOG.md';
+  let root: string;
+
+  beforeEach(() => {
+    root = stage();
+  });
+
+  it('records the entry on the area surface', () => {
+    const id = run(root, [
+      'add',
+      'TEST',
+      'studio.BACKLOG.md',
+      'An item',
+      'body',
+      '--chat=none',
+    ]).stdout.trim();
+
+    expect(readFile(root, AREA_SURFACE)).toContain(id);
+  });
+
+  it('creates no surface carrying the basename twice', () => {
+    run(root, [
+      'add',
+      'TEST',
+      'studio.BACKLOG.md',
+      'An item',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(existsSync(join(root, DOUBLED))).toBe(false);
+  });
+
+  it('renders a record already stamped with a doubled name onto the area surface', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: 'studio.BACKLOG.md.BACKLOG.md',
+        title: 'Doubled item',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    run(root, ['render']);
+
+    expect(readFile(root, AREA_SURFACE)).toContain(
+      '## [TEST-aaaaaa] Doubled item',
+    );
+  });
+});
+
 describe('backlog-log.mjs with a configured ledgers.dir', () => {
   it('writes the ledger and the area surface under the configured directory', () => {
     const root = stage();

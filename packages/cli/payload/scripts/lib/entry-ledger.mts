@@ -299,6 +299,26 @@ export function surfaceRelFile(dir: string, file: string): string {
 }
 
 /**
+ * Collapses a surface name that carries its basename more than once down to a single copy.
+ *
+ * `tower-push.DECISIONS.md` is the surface for the `tower-push` area, so passing that whole
+ * name where an area was expected glued a second basename on and produced
+ * `tower-push.DECISIONS.md.DECISIONS.md`. Nothing rejected it, the name has no separator, and
+ * a name with no separator reads as a legitimate area, so the doubled surface rendered as a
+ * distinct file and split one area's entries across two.
+ *
+ * Only a genuine repeat is collapsed. A name carrying the basename once is already canonical,
+ * and a bare area name is left alone for the caller to glue.
+ */
+function collapseRepeatedSuffix(name: string, basename: string): string {
+  const suffix = `.${basename}`;
+  let collapsed = name;
+  while (collapsed.endsWith(`${suffix}${suffix}`))
+    collapsed = collapsed.slice(0, -suffix.length);
+  return collapsed;
+}
+
+/**
  * The ledger-dir-relative surface name a recorded `file` value refers to today.
  *
  * Ledgers written before the surfaces moved into the ledger directory recorded a repo-relative
@@ -323,7 +343,7 @@ export function normalizeSurfaceRef(
   basename: string,
   targets: ReadonlyArray<{ name: string; pathPrefix?: string }>,
 ): string {
-  const clean = recorded.replace(/^\.\//, '');
+  const clean = collapseRepeatedSuffix(recorded.replace(/^\.\//, ''), basename);
   if (!clean.includes('/')) return clean;
   if (!clean.endsWith(`/${basename}`)) return clean;
 
@@ -340,7 +360,8 @@ export function normalizeSurfaceRef(
  *
  * Omitted, or the basename itself, means the repo-root surface inside the ledger directory. A
  * bare word names an area. A path ending in the surface basename names an area too, and routes
- * to the same canonical file the bare word would.
+ * to the same canonical file the bare word would. So does an area's own surface filename, so
+ * `tower-push` and `tower-push.BACKLOG.md` are one area rather than two.
  *
  * That last rule is why this takes `targets`. The argument goes through
  * {@link normalizeSurfaceRef}, the same projection the rebuild uses to decide which entries
@@ -366,7 +387,12 @@ export function resolveSurfaceArg(
   arg?: string,
 ): string {
   if (!arg || arg === basename) return surfacePath(dir, basename, null);
-  if (!arg.includes('/')) return surfacePath(dir, basename, arg);
+  if (!arg.includes('/')) {
+    const collapsed = collapseRepeatedSuffix(arg, basename);
+    return collapsed.endsWith(`.${basename}`)
+      ? resolve(dir, collapsed)
+      : surfacePath(dir, basename, collapsed);
+  }
 
   const normalized = normalizeSurfaceRef(arg, basename, targets);
   if (!normalized.includes('/')) return resolve(dir, normalized);
@@ -388,6 +414,11 @@ export function resolveSurfaceArg(
  * live entries still gets its header, and a surface every entry was removed from does not
  * silently vanish just because nothing wrote it since.
  *
+ * On-disk names go through the same projection as the recorded ones. A file left behind under
+ * a name that no longer projects to itself, such as a doubled `x.BACKLOG.md.BACKLOG.md`, would
+ * otherwise be rebuilt on every render with the content of the area it collapses to, leaving
+ * two files holding the same entries.
+ *
  * @param recordedFiles The raw `file` value off every ledger record, in any order, possibly
  *   holding `undefined` for records that predate the field.
  */
@@ -401,10 +432,10 @@ export function impliedSurfaceFiles(
   for (const recorded of recordedFiles) {
     if (recorded) names.add(normalizeSurfaceRef(recorded, basename, targets));
   }
-  const fromLedger = [...names].map((name) => resolve(dir, name));
-  return [
-    ...new Set([...findSurfaceFiles(dir, basename), ...fromLedger]),
-  ].sort();
+  for (const file of findSurfaceFiles(dir, basename)) {
+    names.add(normalizeSurfaceRef(relative(dir, file), basename, targets));
+  }
+  return [...new Set([...names].map((name) => resolve(dir, name)))].sort();
 }
 
 /** Every rendered surface with this basename in the ledger directory. */
