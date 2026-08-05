@@ -8,6 +8,7 @@ import {
   renderSettings,
   settingsSignature,
 } from './merge-settings.js';
+import { mergeManagedKeys } from './merge-config-keys.js';
 import { extractBody, hasLegacyRegion, upsertRegion } from './core/regions.js';
 import { classifyFrontmatter, splitFrontmatter } from './core/frontmatter.js';
 import { bodyHashes, wholeFileHash } from './core/manifest.js';
@@ -68,6 +69,7 @@ import type {
 export type EffectOp =
   | 'create'
   | 'update'
+  | 'merge'
   | 'skip-identical'
   | 'skip-exists'
   | 'skip-modified'
@@ -401,6 +403,24 @@ export function computeEffects(
 
     if (action.kind === 'seed') {
       if (!exists) pendingContent.set(action.dest, action.content);
+      // A seed with managedKeys reconciles those keys into a file that already exists. Every
+      // other byte, including the user's edits to the managed keys' neighbours, is preserved.
+      const mergedText =
+        exists && action.managedKeys?.length
+          ? mergeManagedKeys(
+              readFileSync(destAbs, 'utf8'),
+              action.content,
+              action.managedKeys,
+            )
+          : null;
+      if (mergedText !== null) {
+        effects.push({
+          action,
+          op: 'merge',
+          content: Buffer.from(mergedText, 'utf8'),
+        });
+        continue;
+      }
       effects.push({
         action,
         op: exists ? 'skip-exists' : 'create',

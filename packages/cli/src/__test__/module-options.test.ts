@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { KitError } from '../plan.js';
 import {
+  assertOptionsRecorded,
   parseModuleOptionFlags,
   resolveModuleOptions,
 } from '../module-options.js';
@@ -156,5 +157,75 @@ describe('resolveModuleOptions', () => {
         testing: ['typescript', 'rust'],
       }),
     ).toEqual({ testing: ['typescript'] });
+  });
+});
+
+describe('assertOptionsRecorded', () => {
+  const registry = registryOf([
+    moduleWithOptions('langs', ['alpha', 'beta'], ['alpha']),
+    {
+      id: 'plain',
+      title: 'plain',
+      group: 'optional',
+      hint: () => '',
+      defaultEnabled: () => true,
+      plan: () => [],
+    },
+  ]);
+
+  it('passes when the module has a recorded selection', () => {
+    expect(() =>
+      assertOptionsRecorded(registry, ['langs'], { langs: ['beta'] }),
+    ).not.toThrow();
+  });
+
+  it('passes when a selection is named on the command line this run', () => {
+    expect(() =>
+      assertOptionsRecorded(registry, ['langs'], undefined, {
+        langs: ['beta'],
+      }),
+    ).not.toThrow();
+  });
+
+  it('passes for an enabled module that declares no options', () => {
+    expect(() =>
+      assertOptionsRecorded(registry, ['plain'], undefined),
+    ).not.toThrow();
+  });
+
+  it('passes when the option-bearing module is not enabled', () => {
+    expect(() =>
+      assertOptionsRecorded(registry, ['plain'], { plain: [] }),
+    ).not.toThrow();
+  });
+
+  it('throws a KitError when an enabled option-bearing module has no recorded selection', () => {
+    expect(() => assertOptionsRecorded(registry, ['langs'], undefined)).toThrow(
+      KitError,
+    );
+  });
+
+  it('names the module whose selection is unrecorded', () => {
+    expect(() => assertOptionsRecorded(registry, ['langs'], {})).toThrow(
+      /No recorded option selection for: langs/,
+    );
+  });
+
+  it('quotes a runnable reconfigure command carrying the module defaults', () => {
+    expect(() => assertOptionsRecorded(registry, ['langs'], {})).toThrow(
+      /--reconfigure=langs --module-option langs=alpha/,
+    );
+  });
+
+  it('points at --force as the way to accept the defaults', () => {
+    expect(() => assertOptionsRecorded(registry, ['langs'], {})).toThrow(
+      /--force/,
+    );
+  });
+
+  it('treats a recorded empty selection as recorded, since choosing nothing is a choice', () => {
+    expect(() =>
+      assertOptionsRecorded(registry, ['langs'], { langs: [] }),
+    ).not.toThrow();
   });
 });

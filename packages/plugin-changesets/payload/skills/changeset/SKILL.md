@@ -22,6 +22,7 @@ feature is one bullet there, however many commits it took.
    The test is whether a reader needs both bullets. If the second one only extends, refines, or
    fixes the first, it is the same feature. Two features shipped in the same session are two
    changesets, and that is what `--amend` is not for.
+
 2. **Identify touched packages.** `git status --porcelain` and `git diff --name-only`, mapped
    through the targets in `.claude/kit.config.json`.
 3. **Pick the bump level per package** (semver):
@@ -47,21 +48,27 @@ installed, so files match the version; the zero-dep writer remains as fallback.`
    → `Changeset authoring uses the repo's installed changesets writer when available.`
 
 5. **Record it.** The script validates package names against the real workspace.
+
    ```
    node .claude/scripts/changeset-write.mjs --pkg <name>:<level> [--pkg <name>:<level> ...] --summary "<summary>"
    ```
+
    To fold this change into a pending changeset instead, name it with `--amend`:
+
    ```
    node .claude/scripts/changeset-write.mjs --amend <id> --summary "<rewritten summary>" [--pkg <name>:<level> ...]
    ```
+
    `--amend` rewrites that one file in place. The bumps it already declares are kept, and a
    `--pkg` for a package it already names raises the level but never lowers it, so pass only what
    the pending file is missing.
 
    Nothing release-worthy (tests, tooling, docs)? Record that decision instead:
+
    ```
    node .claude/scripts/changeset-write.mjs --empty --summary "<why no release is needed>"
    ```
+
 6. **Report** the `.changeset/*.md` path and what it declares, and say whether you created it or
    amended it.
 

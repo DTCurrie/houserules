@@ -15,6 +15,7 @@ import {
 } from './doctor/findings-report.js';
 import { checkInstallIntegrity } from './doctor/install-integrity.js';
 import { checkModuleHealth } from './doctor/module-health.js';
+import { checkPluginRegistration } from './doctor/plugin-registration.js';
 import { checkResidentSurface } from './doctor/resident-surface.js';
 import { checkSettingsWiring } from './doctor/settings-wiring.js';
 
@@ -88,6 +89,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     config,
     checkSettingsWiring(root, ctx),
     checkModuleHealth(root, ctx, config.registry),
+    checkPluginRegistration(root, ctx),
   ];
   // Non-null past the gate above: a null registry only accompanies a config problem,
   // and that path already returned.

@@ -1,13 +1,27 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { treeHash, useInstalledRepo, useRepo } from '#test/repo';
-import { runCli } from '#test/run';
-import { allHookCommands, manifestOf, settingsOf } from '#test/installed-tree';
-import { parseRequested } from '../modules.js';
+import { runCli, type RunResult } from '#test/run';
+import {
+  allHookCommands,
+  editKitConfig,
+  kitConfigPath,
+  manifestOf,
+  readJson,
+  settingsOf,
+} from '#test/installed-tree';
+import { optionBearingAdditions, parseRequested } from '../modules.js';
 import type { ModuleDef } from '../../module-def.js';
-import type { RegisteredModule } from '../../plugin-registry.js';
+import type { Registry, RegisteredModule } from '../../plugin-registry.js';
 
 function installedWithReadGuard(): string {
   const root = useInstalledRepo('npm-single', { modules: 'read-guard' });
@@ -323,5 +337,271 @@ describe('modules --disable', () => {
     expect(readFileSync(join(root, '.claude/settings.json'), 'utf8')).toBe(
       before,
     );
+  });
+});
+
+const KIT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const FIXTURE_PLUGIN = join(KIT_ROOT, 'test/plugin-fixture');
+const OPTION_MODULE = 'fixture/fixture-langs';
+
+function ensureFixtureSelfLink(): void {
+  const link = join(FIXTURE_PLUGIN, 'node_modules', '@agent-kit', 'cli');
+  if (existsSync(link)) return;
+  mkdirSync(dirname(link), { recursive: true });
+  symlinkSync(KIT_ROOT, link, 'dir');
+}
+
+describe('modules --yes --module-option, adding a module that declares options', () => {
+  let root: string;
+
+  beforeEach(() => {
+    ensureFixtureSelfLink();
+    root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    editKitConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: FIXTURE_PLUGIN, alias: 'fixture' },
+      ];
+    });
+  });
+
+  function addWithOptions(values: string): RunResult {
+    return runCli([
+      'modules',
+      '--yes',
+      `--modules=${OPTION_MODULE}`,
+      '--module-option',
+      `${OPTION_MODULE}=${values}`,
+      root,
+    ]);
+  }
+
+  it('honors the flag rather than silently installing the module defaults', () => {
+    addWithOptions('alpha,beta');
+
+    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+  });
+
+  it('persists the selection so a later update re-resolves to it', () => {
+    addWithOptions('alpha,beta');
+
+    expect(readJson(kitConfigPath(root)).moduleOptions).toEqual({
+      [OPTION_MODULE]: ['alpha', 'beta'],
+    });
+  });
+
+  it('installs only the selected values, not every declared choice', () => {
+    addWithOptions('beta');
+
+    expect(existsSync(join(root, '.claude/fixture-lang-alpha.md'))).toBe(false);
+  });
+
+  it('exits 1 naming the expected form when the flag has no "="', () => {
+    const result = runCli([
+      'modules',
+      '--yes',
+      `--modules=${OPTION_MODULE}`,
+      '--module-option',
+      'no-equals-sign',
+      root,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/Expected the form id=value1,value2/);
+  });
+
+  it('leaves the option-derived file in place across a later update', () => {
+    addWithOptions('alpha,beta');
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+  });
+});
+
+describe('optionBearingAdditions', () => {
+  function withOptions(id: string): RegisteredModule {
+    return {
+      id,
+      def: {
+        ...moduleDef(id),
+        options: {
+          prompt: 'Which?',
+          choices: [{ value: 'alpha', label: 'Alpha' }],
+          defaults: ['alpha'],
+        },
+      },
+      source: null,
+    };
+  }
+
+  function registryOf(modules: RegisteredModule[]): Registry {
+    return {
+      modules,
+      plugins: [],
+      get: (id) => modules.find((m) => m.id === id),
+    };
+  }
+
+  it('returns a chosen module that declares options', () => {
+    const registry = registryOf([withOptions('langs')]);
+
+    expect(
+      optionBearingAdditions(registry, ['langs']).map((m) => m.id),
+    ).toEqual(['langs']);
+  });
+
+  it('skips a chosen module that declares no options', () => {
+    const registry = registryOf([registeredModule('plain')]);
+
+    expect(optionBearingAdditions(registry, ['plain'])).toEqual([]);
+  });
+
+  it('skips an option-bearing module that this run is not adding', () => {
+    const registry = registryOf([withOptions('langs'), withOptions('other')]);
+
+    expect(
+      optionBearingAdditions(registry, ['langs']).map((m) => m.id),
+    ).toEqual(['langs']);
+  });
+
+  it('returns nothing when the run adds nothing', () => {
+    const registry = registryOf([withOptions('langs')]);
+
+    expect(optionBearingAdditions(registry, [])).toEqual([]);
+  });
+});
+
+describe('modules --reconfigure on an installed module that declares options', () => {
+  let root: string;
+
+  beforeEach(() => {
+    ensureFixtureSelfLink();
+    root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    editKitConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: FIXTURE_PLUGIN, alias: 'fixture' },
+      ];
+    });
+    runCli([
+      'modules',
+      '--yes',
+      `--modules=${OPTION_MODULE}`,
+      '--module-option',
+      `${OPTION_MODULE}=alpha`,
+      root,
+    ]);
+  });
+
+  function reconfigureTo(values: string, ...extra: string[]): RunResult {
+    return runCli([
+      'modules',
+      '--yes',
+      `--reconfigure=${OPTION_MODULE}`,
+      '--module-option',
+      `${OPTION_MODULE}=${values}`,
+      ...extra,
+      root,
+    ]);
+  }
+
+  it('installs the file the newly selected value produces', () => {
+    reconfigureTo('beta');
+
+    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+  });
+
+  it('retires the file whose value is no longer selected', () => {
+    reconfigureTo('beta');
+
+    expect(existsSync(join(root, '.claude/fixture-lang-alpha.md'))).toBe(false);
+  });
+
+  it('records the new selection so update re-resolves to it', () => {
+    reconfigureTo('beta');
+
+    expect(readJson(kitConfigPath(root)).moduleOptions).toEqual({
+      [OPTION_MODULE]: ['beta'],
+    });
+  });
+
+  it('leaves the module set untouched', () => {
+    reconfigureTo('beta');
+
+    expect(manifestOf(root).modules).toContain(OPTION_MODULE);
+  });
+
+  it('keeps a locally edited file instead of pruning it', () => {
+    writeFileSync(
+      join(root, '.claude/fixture-lang-alpha.md'),
+      'my own edits\n',
+    );
+
+    reconfigureTo('beta');
+
+    expect(existsSync(join(root, '.claude/fixture-lang-alpha.md'))).toBe(true);
+  });
+
+  it('writes nothing in --dry-run', () => {
+    const before = treeHash(root);
+
+    expect(reconfigureTo('beta', '--dry-run').status).toBe(0);
+
+    expect(treeHash(root)).toBe(before);
+  });
+
+  it('exits 1 when --yes is given without a --module-option for the module', () => {
+    const result = runCli([
+      'modules',
+      '--yes',
+      `--reconfigure=${OPTION_MODULE}`,
+      root,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--yes cannot prompt/);
+  });
+
+  it('exits 1 for a module id the registry does not know', () => {
+    const result = runCli([
+      'modules',
+      '--yes',
+      '--reconfigure=nope',
+      '--module-option',
+      'nope=x',
+      root,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/Unknown module/);
+  });
+
+  it('exits 1 for a known module that is not installed', () => {
+    const result = runCli([
+      'modules',
+      '--yes',
+      '--reconfigure=read-guard',
+      '--module-option',
+      'read-guard=x',
+      root,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/Not installed/);
+  });
+
+  it('exits 1 for an installed module that declares no options', () => {
+    const result = runCli([
+      'modules',
+      '--yes',
+      '--reconfigure=core',
+      '--module-option',
+      'core=x',
+      root,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/No options to configure/);
   });
 });

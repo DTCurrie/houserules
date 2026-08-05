@@ -7,6 +7,11 @@ export interface Flags {
   nextSteps: boolean;
   /** `modules` only: comma-separated ids to withdraw from the install. */
   disable: string;
+  /**
+   * `modules` only: comma-separated ids whose options to revisit. The module set is
+   * unchanged. Only its recorded option selections are replanned.
+   */
+  reconfigure: string;
   /** `init`/`modules` only: repeated `id=value1,value2` module option overrides. */
   moduleOption?: string[];
   /** `doctor` only: reconcile the drift found, instead of only reporting it. */

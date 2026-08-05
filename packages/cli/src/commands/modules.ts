@@ -1,7 +1,10 @@
 import { resolve } from 'node:path';
 
 import { detect } from '../detect.js';
-import { resolveModuleOptions } from '../module-options.js';
+import {
+  parseModuleOptionFlags,
+  resolveModuleOptions,
+} from '../module-options.js';
 import {
   MODULES,
   KitError,
@@ -42,6 +45,161 @@ export function parseRequested(
 }
 
 /**
+ * The modules this run is ADDING that declare options, and so have a question to ask.
+ *
+ * Keyed on what was just chosen, never on the whole enabled set. A module installed long ago
+ * has its options settled in `kit.config.json`, and re-asking on every `modules` run would
+ * turn a command about adding things into a settings editor. Changing a settled selection is
+ * `--reconfigure`.
+ */
+export function optionBearingAdditions(
+  registry: Registry,
+  chosen: string[],
+): RegisteredModule[] {
+  return registry.modules.filter((m) => chosen.includes(m.id) && m.def.options);
+}
+
+/**
+ * `--reconfigure=<ids>`: replan an installed module against a NEW option selection.
+ *
+ * The module set does not change. Only the selections do, so the plan gains the files the new
+ * values produce and retires the ones the old values did. Withdrawal runs through the same
+ * hash-guarded `computePrune` that `--disable` uses, so a guide you edited is kept and
+ * reported rather than deleted.
+ *
+ * A separate flag rather than an overload of `--module-option`, which already means "configure
+ * what I am adding". Making the same flag mean "reconfigure what I have" whenever `--modules`
+ * happens to be absent is an implicit mode switch, and the two operations prune differently.
+ */
+async function reconfigureModules(
+  root: string,
+  ctx: Ctx,
+  flags: Flags,
+  manifest: KitManifest,
+  installed: Set<string>,
+  registry: Registry,
+  optionOverrides: Record<string, string[]>,
+): Promise<number> {
+  const requested = flags.reconfigure
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const unknown = requested.filter((id) => !registry.get(id));
+  if (unknown.length) {
+    console.error(`Unknown module(s): ${unknown.join(', ')}`);
+    return 1;
+  }
+  const notInstalled = requested.filter((id) => !installed.has(id));
+  if (notInstalled.length) {
+    console.error(
+      `Not installed: ${notInstalled.join(', ')}. Add a module with --modules=<ids> before reconfiguring it.`,
+    );
+    return 1;
+  }
+  const optionless = requested.filter((id) => !registry.get(id)?.def.options);
+  if (optionless.length) {
+    console.error(
+      `No options to configure: ${optionless.join(', ')}. Only a module that declares options can be reconfigured.`,
+    );
+    return 1;
+  }
+  if (!requested.length) {
+    ui.outro('No modules named — nothing to reconfigure.');
+    return 0;
+  }
+
+  const moduleIds = [...installed];
+  const targets = ctx.claude.kitConfig?.targets?.length
+    ? ctx.claude.kitConfig.targets
+    : ctx.targets;
+
+  let moduleOptions = resolveModuleOptions(
+    registry,
+    moduleIds,
+    ctx.claude.kitConfig?.moduleOptions,
+    optionOverrides,
+  );
+  if (flags.yes) {
+    const unanswered = requested.filter((id) => !(id in optionOverrides));
+    if (unanswered.length) {
+      console.error(
+        `--yes cannot prompt. Pass --module-option <id>=<values> for: ${unanswered.join(', ')}`,
+      );
+      return 1;
+    }
+  } else {
+    const asked = registry.modules.filter((m) => requested.includes(m.id));
+    moduleOptions = await ui.selectModuleOptions(asked, moduleOptions);
+  }
+
+  let planResult: PlanResult;
+  try {
+    planResult = computeEffects(
+      root,
+      buildPlan(
+        ctx,
+        { moduleIds, targets, seedChangesetConfig: false, moduleOptions },
+        registry,
+      ),
+      { manifest },
+    );
+  } catch (e) {
+    if (e instanceof KitError) {
+      console.error(e.message);
+      return 1;
+    }
+    throw e;
+  }
+
+  const prune = computePrune(root, {
+    manifest,
+    plannedDests: planResult.plannedDests,
+    force: flags.force,
+  });
+
+  const label = `Reconfigure ${requested.join(', ')}`;
+  const lines = [
+    ui.renderPreview(planResult),
+    ...prune.deletes.map(
+      (d) => `- ${d.dest}${d.gone ? ' (already gone)' : ''}`,
+    ),
+    ...prune.kept.map(
+      (k) => `! ${k} — locally edited: kept (--force to remove)`,
+    ),
+  ].filter(Boolean);
+  ui.note(lines.join('\n'), flags.dryRun ? `${label} (dry run)` : label);
+
+  if (flags.dryRun) {
+    ui.outro('Dry run — nothing written.');
+    return 0;
+  }
+  if (!flags.yes) {
+    const go = await ui.confirm('Apply this selection?');
+    if (!go) {
+      ui.outro('Aborted — nothing written.');
+      return 1;
+    }
+  }
+
+  const { written } = apply(
+    root,
+    { ...planResult, prune },
+    {
+      kitVersion: flags.kitVersion,
+      moduleIds,
+      previousManifest: manifest,
+      plugins: registry.plugins,
+    },
+  );
+  ui.written(written);
+  ui.outro(
+    `Reconfigured ${requested.join(', ')}. Validate any time with: npx agent-kit doctor`,
+  );
+  return 0;
+}
+
+/**
  * `--disable=<ids>`: withdraw modules from an existing install. Files the reduced
  * plan no longer produces are pruned by the same hash-guarded path `update` uses
  * (a file you edited is kept and reported, not deleted), and the disabled modules'
@@ -54,6 +212,7 @@ async function disableModules(
   manifest: KitManifest,
   installed: Set<string>,
   registry: Registry,
+  optionOverrides: Record<string, string[]>,
 ): Promise<number> {
   const requested = flags.disable
     .split(',')
@@ -90,6 +249,7 @@ async function disableModules(
     registry,
     [...installed],
     ctx.claude.kitConfig?.moduleOptions,
+    optionOverrides,
   );
   const base = { targets, seedChangesetConfig: false, moduleOptions };
 
@@ -218,8 +378,41 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
 
   const installed = new Set(manifest.modules ?? ['core']);
 
+  let optionOverrides: Record<string, string[]>;
+  try {
+    optionOverrides = parseModuleOptionFlags(flags.moduleOption ?? []);
+  } catch (e) {
+    if (e instanceof KitError) {
+      console.error(e.message);
+      return 1;
+    }
+    throw e;
+  }
+
   if (flags.disable) {
-    return disableModules(root, ctx, flags, manifest, installed, registry);
+    return disableModules(
+      root,
+      ctx,
+      flags,
+      manifest,
+      installed,
+      registry,
+      optionOverrides,
+    );
+  }
+
+  // Before the every-module-installed early return below, since a fully installed repo is
+  // exactly where reconfiguring is the only thing left to do.
+  if (flags.reconfigure) {
+    return reconfigureModules(
+      root,
+      ctx,
+      flags,
+      manifest,
+      installed,
+      registry,
+      optionOverrides,
+    );
   }
 
   const available = registry.modules.filter(
@@ -273,11 +466,18 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
     ? ctx.claude.kitConfig.targets
     : ctx.targets;
 
-  const addedOptions = resolveModuleOptions(
+  let addedOptions = resolveModuleOptions(
     registry,
     moduleIds,
     ctx.claude.kitConfig?.moduleOptions,
+    optionOverrides,
   );
+  if (!flags.yes) {
+    addedOptions = await ui.selectModuleOptions(
+      optionBearingAdditions(registry, chosen),
+      addedOptions,
+    );
+  }
 
   const answers: Answers = {
     moduleIds,

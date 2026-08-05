@@ -43,6 +43,53 @@ export function parseModuleOptionFlags(
 }
 
 /**
+ * Refuses to plan while an enabled module's option selection is UNRECORDED.
+ *
+ * The failure this exists for is the upgrade path. An install made before selections were
+ * persisted has the files a real selection produced sitting on disk and in the manifest, and
+ * nothing in `kit.config.json` saying which selection that was. `resolveModuleOptions` then
+ * falls back to the module's `defaults`, the plan stops producing every non-default file, and
+ * `computePrune` retires them under the heading "retired by this kit version". That heading is
+ * false and the deletion is silent, which is the whole class of bug this guard closes.
+ *
+ * Deliberately NOT "never prune an options-derived file". A `--reconfigure` that drops a value
+ * is a real withdrawal and has to prune. The two are told apart by whether a selection is
+ * recorded at all, which is knowable here, before any plan exists.
+ *
+ * @param overrides Selections named on the command line this run, which count as recorded.
+ * @throws KitError naming each module and the command that settles it. Callers that mean to
+ *   accept the defaults pass `--force`, which skips this entirely.
+ */
+export function assertOptionsRecorded(
+  registry: Registry,
+  moduleIds: string[],
+  persisted: Record<string, string[]> | undefined,
+  overrides: Record<string, string[]> = {},
+): void {
+  const unrecorded = moduleIds.filter(
+    (id) =>
+      registry.get(id)?.def.options &&
+      !(id in (persisted ?? {})) &&
+      !(id in overrides),
+  );
+  if (!unrecorded.length) return;
+
+  const fixes = unrecorded
+    .map((id) => {
+      const values = registry.get(id)?.def.options?.defaults ?? [];
+      return `  npx agent-kit modules --reconfigure=${id} --module-option ${id}=${values.join(',')}`;
+    })
+    .join('\n');
+  throw new KitError(
+    `No recorded option selection for: ${unrecorded.join(', ')}.\n` +
+      'Planning would fall back to each module’s defaults and retire the files any other ' +
+      'selection installed, which reads as a deliberate removal but is not one.\n' +
+      `Record the selection you actually want, for example:\n${fixes}\n` +
+      'Re-run with --force to accept the defaults and let the prune proceed.',
+  );
+}
+
+/**
  * Settles each enabled module's option selections without asking anything.
  *
  * This is the path `update`, `doctor`, and any `--yes` run take, so it has to be total: every

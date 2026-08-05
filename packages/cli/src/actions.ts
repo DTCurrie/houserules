@@ -24,12 +24,25 @@ export interface WriteAction extends ActionBase {
   reason: string;
 }
 
-/** User-owned: written only when absent, never refreshed or overwritten. */
+/**
+ * User-owned: written whole only when absent, never refreshed or overwritten.
+ *
+ * `managedKeys` is the one narrow exception, and it exists because some of what the kit
+ * computes has to OUTLIVE the run that computed it. A module's resolved `options` are the
+ * case: `update` and `doctor` re-resolve them every run, so a selection that is never written
+ * down silently reverts to the module's defaults and takes its installed files with it.
+ *
+ * Naming the keys, rather than refreshing the file, is what keeps this from becoming a fourth
+ * ownership shape. The file stays the user's. The kit reconciles the listed keys and never
+ * reads or writes a byte of the rest. See {@link ./merge-config-keys.ts}.
+ */
 export interface SeedAction extends ActionBase {
   kind: 'seed';
   dest: string;
   content: string;
   reason: string;
+  /** JSON top-level keys the kit reconciles when the file already exists. */
+  managedKeys?: string[];
 }
 
 /**

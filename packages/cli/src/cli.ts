@@ -21,6 +21,7 @@ interface CommandOptions {
   yes?: boolean;
   modules?: string;
   disable?: string;
+  reconfigure?: string;
   moduleOption?: string[];
   fix?: boolean;
   prune?: boolean;
@@ -50,6 +51,7 @@ function flagsFrom(options: CommandOptions, command: Command): Flags {
     yes: (options.yes ?? false) || !process.stdout.isTTY,
     modules: options.modules ?? '',
     disable: options.disable ?? '',
+    reconfigure: options.reconfigure ?? '',
     moduleOption: options.moduleOption,
     fix: options.fix ?? false,
     prune: options.prune ?? false,
@@ -109,6 +111,10 @@ program
   .option(
     '--disable <list>',
     'withdraw these module ids (prunes their files, unwires their settings)',
+  )
+  .option(
+    '--reconfigure <list>',
+    'revisit these installed module ids’ options (with --yes, pass --module-option)',
   )
   .option(
     '--module-option <id=values>',

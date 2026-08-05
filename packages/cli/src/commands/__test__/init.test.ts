@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { treeHash, useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, type RunResult } from '#test/run';
@@ -9,6 +16,7 @@ import {
   REGION_START,
   allHookCommands,
   claudeMdPath,
+  editKitConfig,
   hookCommandsFor,
   kitConfigPath,
   manifestOf,
@@ -490,5 +498,76 @@ describe('init settings signature recorded in the manifest', () => {
   it('signs a non-empty set of permissions', () => {
     const manifest = manifestOf(root);
     expect(manifest.settings.permissions.length > 0).toBeTruthy();
+  });
+});
+
+const KIT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const FIXTURE_PLUGIN = join(KIT_ROOT, 'test/plugin-fixture');
+
+function ensureFixtureSelfLink(): void {
+  const link = join(FIXTURE_PLUGIN, 'node_modules', '@agent-kit', 'cli');
+  if (existsSync(link)) return;
+  mkdirSync(dirname(link), { recursive: true });
+  symlinkSync(KIT_ROOT, link, 'dir');
+}
+
+describe('init --module-option against a kit.config.json that already exists', () => {
+  const OPTION_MODULE = 'fixture/fixture-langs';
+  let root: string;
+
+  beforeEach(() => {
+    ensureFixtureSelfLink();
+    root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    editKitConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: FIXTURE_PLUGIN, alias: 'fixture' },
+      ];
+    });
+  });
+
+  function initWithOptions(values: string): RunResult {
+    return runCli([
+      'init',
+      '--yes',
+      `--modules=core,${OPTION_MODULE}`,
+      '--module-option',
+      `${OPTION_MODULE}=${values}`,
+      root,
+    ]);
+  }
+
+  it('persists the resolved selection rather than losing it with the skipped seed', () => {
+    initWithOptions('alpha,beta');
+
+    expect(readJson(kitConfigPath(root)).moduleOptions).toEqual({
+      [OPTION_MODULE]: ['alpha', 'beta'],
+    });
+  });
+
+  it('keeps the plugin declaration the user added by hand', () => {
+    initWithOptions('alpha,beta');
+
+    expect(readJson(kitConfigPath(root)).plugins).toEqual([
+      { name: FIXTURE_PLUGIN, alias: 'fixture' },
+    ]);
+  });
+
+  it('rewrites the selection when a later run chooses different values', () => {
+    initWithOptions('alpha,beta');
+
+    initWithOptions('beta');
+
+    expect(readJson(kitConfigPath(root)).moduleOptions).toEqual({
+      [OPTION_MODULE]: ['beta'],
+    });
+  });
+
+  it('keeps the option-derived file that a plain update would otherwise prune', () => {
+    initWithOptions('alpha,beta');
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
   });
 });

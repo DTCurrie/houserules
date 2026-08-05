@@ -10,7 +10,10 @@ import {
 } from '../detect.js';
 import type { Ctx } from '../detect.js';
 import { ledgerDirFor } from '../core/ledger-dir.js';
-import { resolveModuleOptions } from '../module-options.js';
+import {
+  assertOptionsRecorded,
+  resolveModuleOptions,
+} from '../module-options.js';
 import {
   assertNoRetiredModules,
   resolveRecordedModuleIds,
@@ -153,6 +156,15 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     // an id nothing supplies survives resolution unchanged, so it is still reported.
     updateModuleIds = resolveRecordedModuleIds(recordedModuleIds, registry);
     assertNoRetiredModules(updateModuleIds, registry);
+    // Same placement rule as the retired-module gate above: before any plan exists, so the
+    // prune below can never be computed from a fallback selection the user never chose.
+    if (!flags.force) {
+      assertOptionsRecorded(
+        registry,
+        updateModuleIds,
+        ctx.claude.kitConfig?.moduleOptions,
+      );
+    }
     const moduleOptions = resolveModuleOptions(
       registry,
       updateModuleIds,

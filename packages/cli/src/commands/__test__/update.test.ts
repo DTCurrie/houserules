@@ -2,17 +2,21 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   appendFileSync,
   existsSync,
+  mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn, type RunResult } from '#test/run';
 import {
   claudeMdPath,
+  editKitConfig,
   hookCommandsFor,
   readClaudeMd,
   readJson,
@@ -763,5 +767,78 @@ describe('update on a body-owned rule recorded with a legacy whole-file manifest
       body: expect.any(String),
       frontmatter: expect.any(String),
     });
+  });
+});
+
+const KIT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const FIXTURE_PLUGIN = join(KIT_ROOT, 'test/plugin-fixture');
+const OPTION_MODULE = 'fixture/fixture-langs';
+
+function ensureFixtureSelfLink(): void {
+  const link = join(FIXTURE_PLUGIN, 'node_modules', '@agent-kit', 'cli');
+  if (existsSync(link)) return;
+  mkdirSync(dirname(link), { recursive: true });
+  symlinkSync(KIT_ROOT, link, 'dir');
+}
+
+describe('update against an install whose option selection was never recorded', () => {
+  let root: string;
+
+  beforeEach(() => {
+    ensureFixtureSelfLink();
+    root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    editKitConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: FIXTURE_PLUGIN, alias: 'fixture' },
+      ];
+    });
+    runCli([
+      'modules',
+      '--yes',
+      `--modules=${OPTION_MODULE}`,
+      '--module-option',
+      `${OPTION_MODULE}=alpha,beta`,
+      root,
+    ]);
+    editKitConfig(root, (config) => {
+      delete (config as Record<string, unknown>).moduleOptions;
+    });
+  });
+
+  it('exits 1 rather than retiring files the fallback selection would not produce', () => {
+    expect(runCli(['update', root]).status).toBe(1);
+  });
+
+  it('leaves the file the unrecorded selection installed', () => {
+    runCli(['update', root]);
+
+    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+  });
+
+  it('names the module and a runnable command that settles it', () => {
+    const result = runCli(['update', root]);
+
+    expect(result.stderr).toMatch(/No recorded option selection/);
+    expect(result.stderr).toMatch(/--reconfigure=fixture\/fixture-langs/);
+  });
+
+  it('proceeds under --force, which accepts the defaults', () => {
+    expect(runCli(['update', '--force', root]).status).toBe(0);
+  });
+
+  it('proceeds once the selection is recorded, keeping every selected file', () => {
+    runCli([
+      'modules',
+      '--yes',
+      `--reconfigure=${OPTION_MODULE}`,
+      '--module-option',
+      `${OPTION_MODULE}=alpha,beta`,
+      root,
+    ]);
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
   });
 });

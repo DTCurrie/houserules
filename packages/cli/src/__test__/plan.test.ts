@@ -14,7 +14,7 @@ import {
   defaultModuleIds,
   resolveModuleIds,
 } from '../plan.js';
-import type { BodyAction } from '../actions.js';
+import type { BodyAction, SeedAction } from '../actions.js';
 import type { ModuleDef } from '../module-def.js';
 import type { Registry, RegisteredModule } from '../plugin-registry.js';
 import { makeAnswers, makeCtx, makeTarget } from '#test/ctx-builder';
@@ -940,5 +940,113 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     const written = effects[0].content!.toString();
     expect(written.startsWith('# Title\n')).toBe(true);
     expect(written.endsWith('\nUser prose below.\n')).toBe(true);
+  });
+});
+
+describe('computeEffects, given a "seed" action with managedKeys', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-seed-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  const CONFIG_DEST = '.claude/kit.config.json';
+  const SELECTION = { 'langs/fixture': ['beta'] };
+
+  function seedAction(): SeedAction {
+    return {
+      kind: 'seed',
+      module: 'core',
+      dest: CONFIG_DEST,
+      content: `${JSON.stringify({ version: 2, moduleOptions: SELECTION }, null, 2)}\n`,
+      reason: 'per-repo kit config',
+      managedKeys: ['moduleOptions'],
+    };
+  }
+
+  function writeExistingConfig(
+    root: string,
+    config: Record<string, unknown>,
+  ): void {
+    const abs = join(root, CONFIG_DEST);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, `${JSON.stringify(config, null, 2)}\n`);
+  }
+
+  it('creates the whole file when the config is absent', () => {
+    const root = tempDir();
+
+    const { effects } = computeEffects(root, [seedAction()]);
+
+    expect(effects[0].op).toBe('create');
+  });
+
+  it('reports a merge when the config exists, so the preview shows the write', () => {
+    const root = tempDir();
+    writeExistingConfig(root, { version: 2, packageManager: 'pnpm' });
+
+    const { effects } = computeEffects(root, [seedAction()]);
+
+    expect(effects[0].op).toBe('merge');
+  });
+
+  it('writes the resolved selection into a config the user already has', () => {
+    const root = tempDir();
+    writeExistingConfig(root, { version: 2, packageManager: 'pnpm' });
+
+    const { effects } = computeEffects(root, [seedAction()]);
+
+    const written = JSON.parse(effects[0].content!.toString());
+    expect(written.moduleOptions).toEqual(SELECTION);
+  });
+
+  it('preserves the keys the kit does not manage', () => {
+    const root = tempDir();
+    writeExistingConfig(root, {
+      version: 2,
+      packageManager: 'pnpm',
+      plugins: [{ name: '../p', alias: 'p' }],
+    });
+
+    const { effects } = computeEffects(root, [seedAction()]);
+
+    const written = JSON.parse(effects[0].content!.toString());
+    expect(written.packageManager).toBe('pnpm');
+    expect(written.plugins).toEqual([{ name: '../p', alias: 'p' }]);
+  });
+
+  it('leaves the file untouched when the managed key already matches', () => {
+    const root = tempDir();
+    writeExistingConfig(root, { version: 2, moduleOptions: SELECTION });
+
+    const { effects } = computeEffects(root, [seedAction()]);
+
+    expect(effects[0].op).toBe('skip-exists');
+  });
+
+  it('leaves a seed without managedKeys alone when the dest exists', () => {
+    const root = tempDir();
+    writeExistingConfig(root, { version: 2 });
+    const action = { ...seedAction(), managedKeys: undefined };
+
+    const { effects } = computeEffects(root, [action]);
+
+    expect(effects[0].op).toBe('skip-exists');
+  });
+
+  it('counts the config among plannedDests so prune never retires it', () => {
+    const root = tempDir();
+    writeExistingConfig(root, { version: 2 });
+
+    const { plannedDests } = computeEffects(root, [seedAction()]);
+
+    expect(plannedDests.has(CONFIG_DEST)).toBe(true);
   });
 });

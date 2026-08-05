@@ -111,7 +111,12 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
 
   it('rewrites the pending changeset in place when --amend names it, adding no second file', () => {
     const first = runScript(root, SCRIPT, {
-      args: ['--pkg', '@fix/cityville:minor', '--summary', 'Add road planning.'],
+      args: [
+        '--pkg',
+        '@fix/cityville:minor',
+        '--summary',
+        'Add road planning.',
+      ],
     }).stdout.trim();
     const before = new Set(readdirSync(join(root, '.changeset')));
 
@@ -134,7 +139,12 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
 
   it('keeps the packages the amended changeset already declared', () => {
     const first = runScript(root, SCRIPT, {
-      args: ['--pkg', '@fix/cityville:minor', '--summary', 'Add road planning.'],
+      args: [
+        '--pkg',
+        '@fix/cityville:minor',
+        '--summary',
+        'Add road planning.',
+      ],
     }).stdout.trim();
 
     runScript(root, SCRIPT, {

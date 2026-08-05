@@ -92,6 +92,9 @@ export function apply(
       continue;
     }
     if (content === null) continue;
+    // A merge rewrites a file the user owns, so it gets the same backup settings.json gets.
+    // Every other op here writes a file the kit owns and can regenerate.
+    if (op === 'merge') repo.backupOnce(action.dest);
     // Only copy/write carry a mode. A seed never does.
     const mode = 'mode' in action ? action.mode : undefined;
     repo.write(action.dest, content, mode);

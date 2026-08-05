@@ -25,6 +25,7 @@ find out whether it already has one.
 
    The test is whether a reader of the release notes needs both bullets. A change that extends,
    refines, or fixes what a pending changeset describes is the same feature.
+
 3. **Skip what doesn't ship.** Only user-visible package changes need a bump. For tests, CI,
    tooling, or docs-only changes, record the decision explicitly and stop:
    `node .claude/scripts/changeset-write.mjs --empty --summary "<why no release>"`.

@@ -151,6 +151,9 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     content: renderKitConfig(ctx, answers),
     module: id,
     reason: 'per-repo kit config (targets + toolchain)',
+    // Resolved option selections have to survive the run that computed them, or `update`
+    // re-resolves to each module's defaults and prunes whatever the real selection installed.
+    managedKeys: ['moduleOptions'],
   });
 
   // The seed must land BEFORE the region action below, so a brand-new repo gets the file

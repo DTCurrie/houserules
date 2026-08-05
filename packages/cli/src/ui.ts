@@ -325,6 +325,7 @@ export function renderPreview({
   const order: OpStyleKey[] = [
     'create',
     'update',
+    'merge',
     'skip-modified',
     'skip-exists',
     'skip-identical',
