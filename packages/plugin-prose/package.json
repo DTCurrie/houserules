@@ -1,7 +1,7 @@
 {
   "name": "@agent-kit/plugin-prose",
   "version": "0.0.0",
-  "description": "agent-kit plugin: comment discipline, writing voice, and a token-lean prose output style.",
+  "description": "agent-kit plugin: comment discipline, writing voice, and a terse prose output style.",
   "type": "module",
   "publishConfig": {
     "access": "public"

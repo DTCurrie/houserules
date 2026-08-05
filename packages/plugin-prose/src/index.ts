@@ -126,7 +126,7 @@ function outputProseModule(api: PluginApi): ModuleDef {
   const id = 'output-prose';
   return {
     id,
-    title: 'Prose output style (token-lean responses)',
+    title: 'Prose output style (short, dense replies)',
     group: 'optional',
     hint(): string {
       return 'markedly shorter replies at some readability cost: fragments, no preamble, exact content preserved. Activate via /config when wanted';

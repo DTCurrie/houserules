@@ -234,9 +234,38 @@ Each of these is a standing habit, not a script:
 
 ## 10. Output and input compression (what's real, as of mid-2026)
 
-- **Response-token compression is a style problem.** The kit's opt-in `output-prose` output style
-  (adapted from caveman, MIT) cuts ~50–70% of response tokens by dropping filler and prose, at a
-  readability cost. Good for grind sessions, wrong for explanations you'll reread.
+- **Shortening replies is a style problem. Cutting your bill is not.** The kit's opt-in
+  `output-prose` output style (adapted from caveman, MIT) drops filler and packaging for shorter
+  replies, at a readability cost. It does that well. **It does not reduce token spend.** The words
+  in a reply are a small part of what a session costs, next to the system prompt, the files read,
+  and the conversation replayed on every turn, and the style's own text is added to every request.
+  caveman's README says the same of theirs. Two structural limits compound it: an output style is
+  read once at session start, and it reaches the main thread only, since a subagent runs its own
+  system prompt. Route work through subagents and the style never touches it.
+- **A style that deletes can delete the answer.** An earlier version of this style dropped a fact
+  the user had explicitly asked for on an agentic task, while writing correct code and passing
+  tests. The unstyled model got it right and the styled one did not. Compression scales with tool
+  use, and so does the cost of over-compressing, because the reply is the only human-readable
+  record of what the tools did. The fix is a floor on the final message: it carries the outcome,
+  what changed, and where. Tracked as `AGENTKIT-7fd33a`.
+- **Compression rules delete function words, and some function words carry the claim.** A rule set
+  that cuts articles, subjects, and hedges is training a habit that does not distinguish "just"
+  from "not". A dropped negation inverts a sentence and still reads as clean terse output, so
+  nothing downstream catches it. Protect negations and units by name, alongside code and paths.
+- **Measure the artifact you ship, not the one you tested.** This style has been measured three
+  times. The first figure was never measured at all. The second used a broken metric. The third
+  described a version that a same-day edit had already replaced. Re-run after editing the
+  artifact, or the numbers quietly describe something else. **The kit publishes no savings
+  figure**, and the docs describe what to expect rather than what was measured.
+- **The withdrawn measurement is worth reading before building another one.** The harness summed
+  each API response's `output_tokens` once per transcript content-block record. Claude Code writes
+  one record per block and repeats the whole response's usage on each, so a response mixing prose
+  with a tool call had its tool-call tokens booked as prose. The bias was one-sided: the unstyled
+  arm writes a preamble before tool calls and the style suppresses exactly that, so the
+  contamination landed almost entirely on the control arm and inflated the apparent effect. The
+  premise was "checked" by scanning for records that mix text and `tool_use`, finding none, at the
+  one level where the per-block split makes that impossible. **A verification that cannot fail is
+  not a verification.** Tracked as `AGENTKIT-b0e8a1`.
 - **Authored prose is a separate lever.** `prose-voice` is a `paths:`-scoped rule covering the prose
   the agent writes (changesets, plans, docs, backlog entries, and the sentences inside code comments)
   rather than its chat replies, so it composes with any output style. It buys clarity more than

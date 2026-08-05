@@ -25,7 +25,7 @@ describe('output-prose', () => {
       'utf8',
     );
     expect(style).toMatch(/^---\nname: Prose\n/);
-    expect(style).toMatch(/Token-lean responses/);
+    expect(style).toMatch(/Short, dense replies/);
   });
 
   it('never activates the output style in settings.json', () => {

@@ -177,17 +177,26 @@ release time by `changeset version`. The module wires the agent side of that:
 Want commit-granular history _too_? Enable the `ledger` module. It writes to
 `.claude/changelogs/<target>.md`, never the `CHANGELOG.md` changesets owns.
 
-## Token/compression options
+## Token spend and response style
 
-`output-prose` and `prose-voice` below are shipped by `@agent-kit/plugin-prose`.
+Only the first of these three reduces token spend. The other two shape how the agent writes, which
+is worth having and is not the same thing. `output-prose` and `prose-voice` are shipped by
+`@agent-kit/plugin-prose`.
 
 - **Kit-native discipline** (free, always): lean CLAUDE.md, grep-don't-read rules, haiku/low
   subagents, hooks that emit residue not transcripts.
-- **`output-prose`** (opt-in): ~50–70% fewer response tokens via terse phrasing, at a
-  readability cost. Adapted from [caveman](https://github.com/JuliusBrussee/caveman) (MIT).
-  Activate with `/config` → Output style → **Prose**, or set `"outputStyle": "Prose"`
-  in `.claude/settings.local.json`. The value is the exact style name, **not** the `output-prose`
-  filename. A slug there silently falls back to Default with no error.
+- **`output-prose`** (opt-in): shorter, denser replies via terse phrasing, at a readability cost.
+  Adapted from [caveman](https://github.com/JuliusBrussee/caveman) (MIT). **It is a readability
+  setting, not a cost one.** It changes how the agent writes to you, not what it does, and it will
+  not reduce your token bill: the words in a reply are a small part of what a session spends, and
+  the style's own text is added to every request. Exact content, negations, and reported caveats
+  are preserved. What to expect is in `@agent-kit/plugin-prose`'s README.
+  Activate with `/config` → Output style → **Prose**, or
+  set `"outputStyle": "Prose"` in `.claude/settings.local.json`. The value is the exact style
+  name, **not** the `output-prose` filename. A slug there silently falls back to Default with
+  no error. An output style is read once at session start, so a change takes effect after
+  `/clear` or in the next session. It also applies to the main thread only, since a subagent
+  runs its own system prompt.
 - **`prose-voice`** (opt-in): a path-scoped rule that holds agent-authored prose to plain
   sentences, no semicolons, and no em dash where a period works. It shapes changesets, plans,
   docs, and the sentences inside code comments rather than chat responses, so it composes with
