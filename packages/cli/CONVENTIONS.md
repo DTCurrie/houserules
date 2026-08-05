@@ -214,6 +214,30 @@ module will absorb them:
 - **`kit.config.json` targets, prefixes, and verify commands.** Detection seeds them, but the file,
   not detection, is the contract.
 
+### The one exception: an external published standard
+
+"Domain knowledge stays yours" is about knowledge that differs per repo. A **published external
+standard** does not. WCAG 2.2 is the same 87 success criteria in every repo on earth, it is
+versioned by someone else, and no team's copy is more authoritative than another's. Shipping it
+is closer to shipping a lookup table than to shipping someone else's architecture decisions.
+
+`@agent-kit/plugin-accessibility` is the worked example, and it shows the shape such a plugin has
+to take:
+
+- **Generated from the upstream source at a pinned version, never hand-authored.** A hand-written
+  paraphrase of a standard is unverifiable and goes stale silently. Regenerating must be
+  byte-identical, and the generator must ship in the repo, not in the package.
+- **Pull-only** (§7). A standard is too big to auto-load, and almost none of it is relevant to any
+  one change.
+- **Routing is the actual product.** The corpus is inert without something that answers "which
+  part of this applies to my change". That router is the kit's own work, and it is the part worth
+  writing.
+- **The licence travels with it.** Check what redistribution the standard permits before shipping
+  a line of it, and carry the required notice in the generated file and the package `LICENSE`.
+
+The bar is: published, externally versioned, identical across repos, and licensed for
+redistribution. A standard that fails any of those is domain knowledge again, and it stays yours.
+
 Skills are the right home for a recurring multi-step workflow, since they move the recipe out of
 always-loaded CLAUDE.md into an on-demand `.claude/skills/<name>/SKILL.md`. Note that skills
 supersede flat `.claude/commands/*.md` files.

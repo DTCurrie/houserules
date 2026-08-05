@@ -5,3 +5,7 @@ pnpm-lock.yaml
 payload/kit-templates/
 CHANGELOG.md
 .claude/
+# Generated from the W3C source by `pnpm --filter @agent-kit/plugin-accessibility wcag:regen`.
+# Its acceptance is that regenerating produces a byte-identical file, so a formatter pass over
+# it would silently break reproducibility the next time the generator changes.
+packages/plugin-accessibility/payload/reference/wcag22.md

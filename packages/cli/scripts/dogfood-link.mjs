@@ -77,52 +77,88 @@ if (!existsSync(join(packageRoot, 'payload-dist', 'scripts'))) {
 }
 
 /**
- * Assembles one `.claude/<surface>/` directory by symlinking each entry from every package that
- * contributes to it.
+ * Maps each entry under `rel` to the one package that contributes it.
+ *
+ * Descends into a directory only when more than one package contributes that same name, which is
+ * how `scripts/lib/` merges the CLI's shared libs with a plugin's own. A directory only one
+ * package owns stays a single entry, so a file added inside it is live without re-running.
+ *
+ * @throws Error when two packages contribute the same FILE. That is a real id collision the
+ *   resolver would also reject, and silently letting one win would hide it.
+ */
+function resolveOwners(from, rel, packages) {
+  const byEntry = new Map();
+  for (const pkg of packages) {
+    const source = join(packagesDir, pkg, from, rel);
+    if (!existsSync(source)) continue;
+    for (const dirent of readdirSync(source, { withFileTypes: true })) {
+      if (!byEntry.has(dirent.name)) byEntry.set(dirent.name, []);
+      byEntry.get(dirent.name).push({ pkg, isDir: dirent.isDirectory() });
+    }
+  }
+
+  const owners = new Map();
+  for (const [entry, contributors] of byEntry) {
+    const entryRel = `${rel}/${entry}`;
+    if (contributors.length === 1) {
+      owners.set(entryRel, contributors[0].pkg);
+      continue;
+    }
+    // Two packages naming the same FILE is a real id collision the resolver would also reject.
+    // Two naming the same DIRECTORY is not: `scripts/lib/` legitimately merges the CLI's shared
+    // libs with a plugin's own, exactly as a real install's per-file copies do.
+    if (!contributors.every((contributor) => contributor.isDir)) {
+      const names = contributors
+        .map((contributor) => contributor.pkg)
+        .join(' and ');
+      throw new Error(
+        `both ${names} contribute ${entryRel} — resolve the collision before dogfooding`,
+      );
+    }
+    for (const [childRel, pkg] of resolveOwners(
+      from,
+      entryRel,
+      contributors.map((contributor) => contributor.pkg),
+    )) {
+      owners.set(childRel, pkg);
+    }
+  }
+  return owners;
+}
+
+/**
+ * Assembles one `.claude/<surface>/` directory from every package that contributes to it.
  *
  * Per-entry rather than one directory symlink, because a surface is no longer owned by a single
  * package. `.claude/rules/` draws from the CLI and from the prose and testing plugins at once,
  * and a directory symlink can only point at one of them.
- *
- * @throws Error when two packages contribute the same entry name. That is a real id collision
- *   the resolver would also reject, and silently letting one win would hide it.
  */
 function linkSurface({ name, from, mode }) {
-  const surfaceDir = join(claudeDir, name);
-  // Rebuilt every run. It holds nothing but symlinks this script created, so removing it cannot
-  // lose work, and a stale link to a moved payload is worse than a missing one.
-  rmSync(surfaceDir, { recursive: true, force: true });
-
-  const owners = new Map();
-  for (const pkg of payloadPackages()) {
-    const source = join(packagesDir, pkg, from, name);
-    if (!existsSync(source)) continue;
-    for (const entry of readdirSync(source)) {
-      const previous = owners.get(entry);
-      if (previous) {
-        throw new Error(
-          `both ${previous} and ${pkg} contribute ${name}/${entry} — resolve the collision before dogfooding`,
-        );
-      }
-      owners.set(entry, pkg);
-    }
-  }
-
+  // Resolved BEFORE anything is removed. This throws on a genuine collision, and a surface
+  // destroyed by a run that then aborted leaves the repo's own hooks pointing at files that no
+  // longer exist, which turns "dogfood refused" into "this session is broken".
+  const owners = resolveOwners(from, name, payloadPackages());
   if (owners.size === 0) return { action: 'empty', name };
 
+  const surfaceDir = join(claudeDir, name);
+  // Rebuilt every run. It holds nothing but links and copies this script created, so removing it
+  // cannot lose work, and a stale link to a moved payload is worse than a missing one.
+  rmSync(surfaceDir, { recursive: true, force: true });
   mkdirSync(surfaceDir, { recursive: true });
-  for (const [entry, pkg] of owners) {
-    const source = join(packagesDir, pkg, from, name, entry);
+
+  for (const [rel, pkg] of owners) {
+    const dest = join(claudeDir, rel);
+    mkdirSync(dirname(dest), { recursive: true });
     if (mode === 'copy') {
-      cpSync(source, join(surfaceDir, entry), { recursive: true });
+      cpSync(join(packagesDir, pkg, from, rel), dest, { recursive: true });
       continue;
     }
-    // Resolved from inside .claude/<surface>/, so two levels back up to the repo root.
-    symlinkSync(
-      `../../packages/${pkg}/${from}/${name}/${entry}`,
-      join(surfaceDir, entry),
-    );
+    // Resolved from the link's own directory, which sits `rel`-deep under the repo root once
+    // `.claude/` is counted, so a nested entry needs one more `..` than a top-level one.
+    const up = '../'.repeat(rel.split('/').length);
+    symlinkSync(`${up}packages/${pkg}/${from}/${rel}`, dest);
   }
+
   const packages = [...new Set(owners.values())];
   return {
     action: mode === 'copy' ? 'copied' : 'linked',

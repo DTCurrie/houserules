@@ -1,0 +1,49 @@
+{
+  "name": "@agent-kit/plugin-accessibility",
+  "version": "0.0.0",
+  "description": "agent-kit plugin: WCAG routing and lookup for agents editing HTML and HTML-like markup.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "payload-dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist payload-dist && tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "wcag:regen": "node scripts/build-wcag-reference.mjs",
+    "prepack": "npm run build",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@agent-kit/cli": "^0.1.0"
+  },
+  "devDependencies": {
+    "@agent-kit/cli": "workspace:*",
+    "@agent-kit/test": "workspace:*",
+    "@types/node": "^26.1.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agent-kit",
+    "agent-kit-plugin",
+    "accessibility",
+    "wcag",
+    "a11y"
+  ]
+}

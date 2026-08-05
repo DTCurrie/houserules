@@ -1,24 +1,43 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { MODULES } from '../../plan.js';
 import type { Ctx } from '../../detect.js';
+import type { Registry } from '../../plugin-registry.js';
 import { verifyDefaultsFor } from '../../render.js';
 import type { CheckResult, Finding } from './finding.js';
 
-/** Whether each installed module has what it needs to actually do its job. */
-export function checkModuleHealth(root: string, ctx: Ctx): CheckResult {
+/**
+ * Whether each installed module has what it needs to actually do its job.
+ *
+ * Iterates the REGISTRY, not the built-in `MODULES` array. `check` is public plugin API, so a
+ * plugin that ships one has to be asked for it. Reading the built-ins alone silently ignored
+ * every plugin's health check while the type surface advertised it.
+ */
+export function checkModuleHealth(
+  root: string,
+  ctx: Ctx,
+  registry: Registry | null,
+): CheckResult {
   const findings: Finding[] = [];
   const readouts: string[] = [];
   const manifest = ctx.claude.manifest;
   const config = ctx.claude.kitConfig;
   const installed = (id: string) => Boolean(manifest?.modules?.includes(id));
 
-  for (const module of MODULES) {
-    if (installed(module.id) && module.check) {
-      const result = module.check(ctx);
+  // Null on a repo with no kit installed, which is also a repo with no module to check.
+  for (const module of registry?.modules ?? []) {
+    if (!installed(module.id) || !module.def.check) continue;
+    // A plugin's check is third-party code running inside doctor. One that throws must not
+    // take the whole report down, so its failure is reported as a finding about that module.
+    try {
+      const result = module.def.check(ctx);
       findings.push(...result.findings);
       readouts.push(...result.readouts);
+    } catch (error) {
+      findings.push({
+        level: 'WARN',
+        msg: `module ${module.id} threw from its health check: ${(error as Error).message}`,
+      });
     }
   }
 

@@ -81,14 +81,15 @@ A plugin is a separate package that contributes more modules. Install it as a de
 and declare it in `.claude/kit.config.json` (see [Writing a plugin](#writing-a-plugin)) to
 select its modules.
 
-| Package                             | Modules it ships                                                                                                                 |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `@agent-kit/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`                                                                             |
-| `@agent-kit/plugin-testing`         | ships `testing` (plus opt-in `testing-typescript` and `testing-javascript` language guides, chosen through the module's options) |
-| `@agent-kit/plugin-changesets`      | ships `changesets`, `ledger`                                                                                                     |
-| `@agent-kit/plugin-backlog`         | ships `backlog`                                                                                                                  |
-| `@agent-kit/plugin-decisions`       | ships `decisions`                                                                                                                |
-| `@agent-kit/plugin-persona-auditor` | ships `persona-auditor`                                                                                                          |
+| Package                             | Modules it ships                                                                                                                                                                                    |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@agent-kit/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`                                                                                                                                                |
+| `@agent-kit/plugin-testing`         | ships `testing` (plus opt-in `testing-typescript` and `testing-javascript` language guides, chosen through the module's options)                                                                    |
+| `@agent-kit/plugin-changesets`      | ships `changesets`, `ledger`                                                                                                                                                                        |
+| `@agent-kit/plugin-backlog`         | ships `backlog`                                                                                                                                                                                     |
+| `@agent-kit/plugin-decisions`       | ships `decisions`                                                                                                                                                                                   |
+| `@agent-kit/plugin-persona-auditor` | ships `persona-auditor`                                                                                                                                                                             |
+| `@agent-kit/plugin-accessibility`   | ships `accessibility` (WCAG rule, pull-only criteria reference, and the `wcag.mjs` router, plus opt-in React/Svelte/Vue/HTML guides chosen through the module's options) and `accessibility-review` |
 
 Installing a plugin opts you into the plugin. Each module inside it still honors its own
 default: most default off, so you enable them individually with `--modules` or through

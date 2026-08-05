@@ -87,7 +87,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     checkInstallIntegrity(root, ctx, flags.kitVersion, config.registry),
     config,
     checkSettingsWiring(root, ctx),
-    checkModuleHealth(root, ctx),
+    checkModuleHealth(root, ctx, config.registry),
   ];
   // Non-null past the gate above: a null registry only accompanies a config problem,
   // and that path already returned.

@@ -221,6 +221,10 @@ export function useRepo(shape: RepoShape): string {
  * @param opts.config Merged into `.claude/kit.config.json` after `init`, for keys a fixture
  * needs set that neither `init`'s detection nor its module set determines. Part of the cache
  * key.
+ * @param opts.moduleOptions Passed through as repeated `--module-option <id>=<values>` flags,
+ * keyed by module id. This has to be a flag rather than a `config` key: `config` is patched in
+ * AFTER `init` has already planned, so a module whose `plan()` branches on its options would
+ * never see it. Part of the cache key.
  * @returns The repo root, removed after the current test.
  */
 export function useInstalledRepo(
@@ -229,13 +233,17 @@ export function useInstalledRepo(
     modules?: string;
     plugins?: Array<{ name: string; alias: string }>;
     config?: Record<string, unknown>;
+    moduleOptions?: Record<string, string[]>;
   } = {},
 ): string {
   const pluginTag = (opts.plugins ?? [])
     .map((p) => `${p.name}=${p.alias}`)
     .join(',');
   const configTag = opts.config ? JSON.stringify(opts.config) : '';
-  const key = `${shape}::${opts.modules ?? ''}::${pluginTag}::${configTag}`;
+  const optionTag = opts.moduleOptions
+    ? JSON.stringify(opts.moduleOptions)
+    : '';
+  const key = `${shape}::${opts.modules ?? ''}::${pluginTag}::${configTag}::${optionTag}`;
   const snapshot = join(snapshotRoot(), key.replace(/[^a-z0-9]+/gi, '_'));
 
   // On disk, not a module-level Map: vitest gives every test FILE a fresh module registry, so
@@ -298,6 +306,9 @@ export function useInstalledRepo(
 
     const args = ['init', '--yes'];
     if (opts.modules) args.push(`--modules=${opts.modules}`);
+    for (const [id, values] of Object.entries(opts.moduleOptions ?? {})) {
+      args.push('--module-option', `${id}=${values.join(',')}`);
+    }
     const result = runCli([...args, staging]);
     if (result.status !== 0) {
       rmSync(staging, { recursive: true, force: true });
