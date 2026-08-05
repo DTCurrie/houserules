@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +21,14 @@ function installChangesets(): string {
     modules: 'cs/changesets',
     plugins: [{ name: PLUGIN_ROOT, alias: 'cs' }],
   });
+}
+
+function commitRepoWithNoPendingChangesets(root: string): void {
+  for (const file of readdirSync(join(root, '.changeset'))) {
+    if (file.endsWith('.md')) rmSync(join(root, '.changeset', file));
+  }
+  runIn(root, 'git', ['add', '-A']);
+  runIn(root, 'git', ['commit', '-qm', 'chore: release everything pending']);
 }
 
 describe('changeset-check.mjs', () => {
@@ -33,6 +47,38 @@ describe('changeset-check.mjs', () => {
     expect(r.status, `expected nudge, got ${r.status}: ${r.stderr}`).toBe(2);
     expect(r.stderr).toMatch(/--pkg @fix\/cityville/);
     expect(r.stderr).toMatch(/--empty/);
+  });
+
+  it('points at the pending changesets and the --amend flag when the feature already has one committed', () => {
+    writeFileSync(
+      join(root, '.changeset/kit-abc123.md'),
+      '---\n"@fix/cityville": patch\n---\n\nMore.\n',
+    );
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'feat: more, with changeset']);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/changeset\(s\) already pending:.*kit-abc123\.md/);
+    expect(r.stderr).toMatch(/--amend <id>/);
+  });
+
+  it('omits the amend hint when nothing is pending', () => {
+    commitRepoWithNoPendingChangesets(root);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).not.toMatch(/--amend/);
   });
 
   it('stays silent once an untracked changeset covers the change', () => {

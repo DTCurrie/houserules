@@ -8,6 +8,7 @@
  * Usage:
  *   changeset-write.mjs --pkg <name>[:patch|minor|major] [--pkg ...] --summary "..."
  *   changeset-write.mjs --empty --summary "why no release is needed"
+ *   changeset-write.mjs --amend <id> --summary "..." [--pkg ...]
  *   echo "summary" | changeset-write.mjs --pkg <name>
  *
  * Options:
@@ -15,14 +16,17 @@
  *   --level <l>         default bump level for --pkg entries without one (patch).
  *   --summary "..."     changelog body; read from stdin when omitted and piped.
  *   --empty             record "no release needed" (no packages bumped).
+ *   --amend <id>        rewrite a pending .changeset/<id>.md in place instead of adding
+ *                       a new one, for a feature that already has a changeset. Its
+ *                       declared bumps are kept and merged with any --pkg given.
  *
  * Package names are validated against the packages that actually exist, the workspace
  * members or the root package in a single-package repo, never against a possibly-stale
  * kit.config.json.
  */
 
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { execSync } from 'node:child_process';
@@ -31,10 +35,17 @@ import { parseArgs } from 'node:util';
 import { listPublishablePackageNames } from './lib/workspaces.mjs';
 
 const LEVELS = new Set(['patch', 'minor', 'major']);
+const LEVEL_RANK: Record<string, number> = { patch: 0, minor: 1, major: 2 };
+const RELEASE_LINE = /^\s*['"]?([^'"]+?)['"]?\s*:\s*(patch|minor|major)\s*$/;
 
 interface Changeset {
   summary: string;
   releases: { name: string; type: string }[];
+}
+
+interface Release {
+  name: string;
+  level: string;
 }
 
 // Shape of the repo's own @changesets/write, resolved dynamically at runtime —
@@ -77,6 +88,7 @@ function usage(message?: string): never {
       'Usage:',
       '  changeset-write.mjs --pkg <name>[:patch|minor|major] [--pkg ...] --summary "..."',
       '  changeset-write.mjs --empty --summary "why no release is needed"',
+      '  changeset-write.mjs --amend <id> --summary "..." [--pkg ...]',
       '',
       'Summary comes from --summary or stdin. Multiple --pkg flags allowed.',
     ].join('\n'),
@@ -84,11 +96,55 @@ function usage(message?: string): never {
   process.exit(1);
 }
 
+// Accepts the id, the filename, or the path the script itself printed, so amending never
+// needs the caller to reshape what they were handed.
+function resolveAmendTarget(changesetDir: string, raw: string): string {
+  const name = basename(raw).replace(/\.md$/i, '');
+  if (!name || /^readme$/i.test(name)) {
+    console.error(`"${raw}" is not a changeset id.`);
+    process.exit(1);
+  }
+  const file = join(changesetDir, `${name}.md`);
+  if (!existsSync(file)) {
+    console.error(`No pending changeset at .changeset/${name}.md.`);
+    process.exit(1);
+  }
+  return file;
+}
+
+// The frontmatter @changesets/write emits is one `'name': level` per line between two
+// `---` fences, so a line scan reads it back without a parser dependency.
+function readReleases(file: string): Release[] {
+  const lines = readFileSync(file, 'utf8').split('\n');
+  if (lines[0]?.trim() !== '---') return [];
+  const releases: Release[] = [];
+  for (const line of lines.slice(1)) {
+    if (line.trim() === '---') break;
+    const match = RELEASE_LINE.exec(line);
+    if (match) releases.push({ name: match[1], level: match[2] });
+  }
+  return releases;
+}
+
+// An amended changeset covers the whole feature, so a package the pending file already
+// declares stays declared. On a conflict the higher bump wins, since the feature grew
+// into it.
+function mergeReleases(existing: Release[], incoming: Release[]): Release[] {
+  const byName = new Map(existing.map((r) => [r.name, r]));
+  for (const entry of incoming) {
+    const prior = byName.get(entry.name);
+    if (!prior || LEVEL_RANK[entry.level] > LEVEL_RANK[prior.level])
+      byName.set(entry.name, entry);
+  }
+  return [...byName.values()];
+}
+
 let values: {
   pkg?: string[];
   summary?: string;
   level?: string;
   empty?: boolean;
+  amend?: string;
 };
 try {
   ({ values } = parseArgs({
@@ -98,6 +154,7 @@ try {
       summary: { type: 'string' },
       level: { type: 'string' },
       empty: { type: 'boolean' },
+      amend: { type: 'string' },
     },
     allowPositionals: false,
   }));
@@ -140,7 +197,19 @@ if (!summary)
     'A non-empty --summary (or piped stdin) is required — it becomes the changelog entry.',
   );
 
-let entries: { name: string; level: string }[] = [];
+const dir = join(root, '.changeset');
+mkdirSync(dir, { recursive: true });
+if (!existsSync(join(dir, 'config.json'))) {
+  console.error(
+    'note: .changeset/config.json is missing — run `npx @changesets/cli init` before release time.',
+  );
+}
+
+const amendTarget = values.amend
+  ? resolveAmendTarget(dir, values.amend)
+  : undefined;
+
+let entries: Release[] = [];
 if (!empty) {
   const valid = listPublishablePackageNames(root);
   if (!valid.length) {
@@ -157,8 +226,14 @@ if (!empty) {
     const level = hasLevel ? raw.slice(at + 1) : defaultLevel;
     return { name, level };
   });
+  if (amendTarget) entries = mergeReleases(readReleases(amendTarget), entries);
   if (!entries.length) {
-    if (valid.length === 1) entries = [{ name: valid[0], level: defaultLevel }];
+    if (amendTarget)
+      usage(
+        'The amended changeset declares no packages. Pass --pkg, or --empty to keep it release-free.',
+      );
+    else if (valid.length === 1)
+      entries = [{ name: valid[0], level: defaultLevel }];
     else usage(`Specify --pkg. Valid packages: ${valid.join(', ')}`);
   }
   for (const entry of entries) {
@@ -169,14 +244,6 @@ if (!empty) {
       process.exit(1);
     }
   }
-}
-
-const dir = join(root, '.changeset');
-mkdirSync(dir, { recursive: true });
-if (!existsSync(join(dir, 'config.json'))) {
-  console.error(
-    'note: .changeset/config.json is missing — run `npx @changesets/cli init` before release time.',
-  );
 }
 
 const officialWrite = await loadOfficialWrite(root);
@@ -207,4 +274,13 @@ try {
   console.error(`@changesets/write failed: ${(e as Error)?.message ?? e}`);
   process.exit(1);
 }
-console.log(`.changeset/${id}.md`);
+
+// The official writer always mints its own human-id filename. Amending moves that output
+// onto the pending file, so the feature keeps one changeset at one stable path and the
+// rewrite reads as a modification rather than an add plus a delete.
+if (amendTarget) {
+  renameSync(join(dir, `${id}.md`), amendTarget);
+  console.log(`.changeset/${basename(amendTarget)}`);
+} else {
+  console.log(`.changeset/${id}.md`);
+}

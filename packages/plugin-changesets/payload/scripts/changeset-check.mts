@@ -12,7 +12,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  existsSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import { loadConfigSafe } from './lib/kit-config.mjs';
@@ -21,6 +27,7 @@ import { git, readStdinJson } from './lib/proc.mjs';
 
 const STATE_DIR = '.claude/state';
 const STATE_FILE = 'changeset-check.json';
+const MAX_LISTED_PENDING = 5;
 
 function signatureOf(paths: string[]): string {
   return createHash('sha256')
@@ -65,6 +72,20 @@ if (input.stop_hook_active) process.exit(0);
 
 const isChangesetMd = (p: string): boolean =>
   p.startsWith('.changeset/') && p.endsWith('.md') && !/\/readme\.md$/i.test(p);
+
+// Every changeset awaiting release, whether committed or not. The nudge fires when THIS
+// change has none of its own, which on the base branch includes a feature whose changeset
+// landed in an earlier commit. Naming them steers the next changeset into an --amend
+// instead of a second file for one feature.
+function listPendingChangesets(root: string): string[] {
+  try {
+    return readdirSync(join(root, '.changeset'))
+      .filter((f) => f.endsWith('.md') && !/^readme\.md$/i.test(f))
+      .sort();
+  } catch {
+    return [];
+  }
+}
 
 // Generated files are churn, not package source. A root-package target scopes every
 // top-level non-dotfile, so without this they would trip the nudge on their own.
@@ -154,10 +175,20 @@ try {
     ? names.map((n) => `--pkg ${n}`).join(' ')
     : '--pkg <package-name>';
 
+  const pending = listPendingChangesets(root);
+  const amendHint = pending.length
+    ? [
+        `${pending.length} changeset(s) already pending: ${pending.slice(0, MAX_LISTED_PENDING).join(', ')}${pending.length > MAX_LISTED_PENDING ? ', …' : ''}`,
+        'One changeset per feature. If this continues a feature one of them describes, amend that one:',
+        '  node .claude/scripts/changeset-write.mjs --amend <id> --summary "<summary for the whole feature>"',
+        'If it is a separate user-visible change, add one:',
+      ]
+    : ['If the change is user-visible, add one now:'];
+
   process.stderr.write(
     [
       `Package source changed (${srcChanged.length} file(s)) with no changeset recorded.`,
-      'If the change is user-visible, add one now:',
+      ...amendHint,
       `  node .claude/scripts/changeset-write.mjs ${pkgHint} --summary "<what changed and why>"`,
       'If no release is warranted (tests, tooling, docs), record that instead:',
       '  node .claude/scripts/changeset-write.mjs --empty --summary "<why no release>"',

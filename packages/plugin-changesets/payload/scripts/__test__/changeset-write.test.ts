@@ -109,6 +109,103 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
     );
   });
 
+  it('rewrites the pending changeset in place when --amend names it, adding no second file', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/cityville:minor', '--summary', 'Add road planning.'],
+    }).stdout.trim();
+    const before = new Set(readdirSync(join(root, '.changeset')));
+
+    const r = runScript(root, SCRIPT, {
+      args: [
+        '--amend',
+        first,
+        '--summary',
+        'Add road planning with zoning overlays.',
+      ],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.trim()).toBe(first);
+    expect(newChangesets(root, before)).toEqual([]);
+    expect(readFileSync(join(root, first), 'utf8')).toMatch(
+      /['"]@fix\/cityville['"]: minor\n---\n\nAdd road planning with zoning overlays\./,
+    );
+  });
+
+  it('keeps the packages the amended changeset already declared', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/cityville:minor', '--summary', 'Add road planning.'],
+    }).stdout.trim();
+
+    runScript(root, SCRIPT, {
+      args: ['--amend', first, '--pkg', '@fix/studio', '--summary', 'Grown.'],
+    });
+
+    const text = readFileSync(join(root, first), 'utf8');
+    expect(text, text).toMatch(/['"]@fix\/cityville['"]: minor/);
+    expect(text, text).toMatch(/['"]@fix\/studio['"]: patch/);
+  });
+
+  it('raises the bump when --amend passes a higher level than the pending one', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:patch', '--summary', 'Fix a typo.'],
+    }).stdout.trim();
+
+    runScript(root, SCRIPT, {
+      args: [
+        '--amend',
+        first,
+        '--pkg',
+        '@fix/studio:minor',
+        '--summary',
+        'Add a panel.',
+      ],
+    });
+
+    expect(readFileSync(join(root, first), 'utf8')).toMatch(
+      /['"]@fix\/studio['"]: minor/,
+    );
+  });
+
+  it('never lowers a bump the pending changeset already declared', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:minor', '--summary', 'Add a panel.'],
+    }).stdout.trim();
+
+    runScript(root, SCRIPT, {
+      args: [
+        '--amend',
+        first,
+        '--pkg',
+        '@fix/studio:patch',
+        '--summary',
+        'Add a panel and fix its label.',
+      ],
+    });
+
+    expect(readFileSync(join(root, first), 'utf8')).toMatch(
+      /['"]@fix\/studio['"]: minor/,
+    );
+  });
+
+  it('rejects --amend for a changeset that does not exist', () => {
+    const r = runScript(root, SCRIPT, {
+      args: ['--amend', 'no-such-changeset', '--summary', 'x'],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/No pending changeset at \.changeset\//);
+  });
+
+  it('rejects --amend on the .changeset README', () => {
+    const r = runScript(root, SCRIPT, {
+      args: ['--amend', 'README.md', '--summary', 'x'],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/not a changeset id/);
+  });
+
   it('reads the summary from stdin when --summary is not passed', () => {
     const before = new Set(readdirSync(join(root, '.changeset')));
     const r = runScript(root, SCRIPT, {
