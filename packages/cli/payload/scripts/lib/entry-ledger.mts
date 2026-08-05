@@ -284,29 +284,6 @@ export function surfaceScope(
 }
 
 /**
- * Resolves the `<file>` argument the ledger commands accept, one rule for every ledger.
- *
- * Omitted, or the basename itself, means the repo-root surface inside the ledger directory. A
- * bare word names an area. Anything with a separator is an explicit path, resolved against the
- * repo root rather than the process cwd, so a hook invoked from a subdirectory writes where the
- * caller meant.
- *
- * Lives here rather than in each script because the two ledgers diverged when they each owned a
- * copy: one sent the bare basename to the repo root and the other to the ledger directory, so the
- * same argument meant two different files.
- */
-export function resolveSurfaceArg(
-  repoRoot: string,
-  dir: string,
-  basename: string,
-  arg?: string,
-): string {
-  if (!arg || arg === basename) return surfacePath(dir, basename, null);
-  if (arg.includes('/')) return resolve(repoRoot, arg);
-  return surfacePath(dir, basename, arg);
-}
-
-/**
  * The path recorded on each entry's `file`, and matched against when rebuilding a surface.
  *
  * Relative to the LEDGER DIRECTORY, never the repo root. Two reasons, both load-bearing. A
@@ -356,6 +333,49 @@ export function normalizeSurfaceRef(
   );
   const area = match?.name ?? dir.split('/').filter(Boolean).pop();
   return area ? `${area}.${basename}` : clean;
+}
+
+/**
+ * Resolves the `<area>` argument the ledger commands accept, one rule for every ledger.
+ *
+ * Omitted, or the basename itself, means the repo-root surface inside the ledger directory. A
+ * bare word names an area. A path ending in the surface basename names an area too, and routes
+ * to the same canonical file the bare word would.
+ *
+ * That last rule is why this takes `targets`. The argument goes through
+ * {@link normalizeSurfaceRef}, the same projection the rebuild uses to decide which entries
+ * belong to a surface, so the file written is always the file the projection matched. While the
+ * two disagreed, `remove <id> games/tower-push/BACKLOG.md` rebuilt the surface into a stray file
+ * and left the canonical one still carrying the entry it had just removed, at exit code 0.
+ *
+ * Anything else with a separator stays an explicit path, resolved against the repo root rather
+ * than the process cwd, so a hook invoked from a subdirectory writes where the caller meant. A
+ * literal path that escapes the repo falls back to the root surface, the way {@link ledgerDir}
+ * refuses an escaping `ledgers.dir`, since no ledger command has reason to write outside the
+ * repo it is recording.
+ *
+ * Lives here rather than in each script because the two ledgers diverged when they each owned a
+ * copy: one sent the bare basename to the repo root and the other to the ledger directory, so the
+ * same argument meant two different files.
+ */
+export function resolveSurfaceArg(
+  repoRoot: string,
+  dir: string,
+  basename: string,
+  targets: ReadonlyArray<{ name: string; pathPrefix?: string }>,
+  arg?: string,
+): string {
+  if (!arg || arg === basename) return surfacePath(dir, basename, null);
+  if (!arg.includes('/')) return surfacePath(dir, basename, arg);
+
+  const normalized = normalizeSurfaceRef(arg, basename, targets);
+  if (!normalized.includes('/')) return resolve(dir, normalized);
+
+  const root = resolve(repoRoot);
+  const literal = resolve(root, arg);
+  return literal.startsWith(`${root}/`)
+    ? literal
+    : surfacePath(dir, basename, null);
 }
 
 /**

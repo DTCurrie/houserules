@@ -3,17 +3,22 @@
  * Backlog ledger helper.
  *
  * Usage:
- *   add    <prefix> <backlog-file> <title> [content]   # content from arg or stdin
- *   remove <id>     <backlog-file> <reason>
- *   update <id>     <backlog-file> <new-title> [content]
- *   show   <id>                                        # decoded history for one ID
- *   list   [<backlog-file>]                            # parsed entries from one or all backlogs
- *   render [<backlog-file>]                            # rebuild a surface from the ledger alone
+ *   add    <prefix> <area> <title> [content]  # content from arg or stdin
+ *   remove <id>     <area> <reason>
+ *   update <id>     <area> <new-title> [content]
+ *   show   <id>                               # decoded history for one ID
+ *   list   [<area>]                           # parsed entries from one or all backlogs
+ *   render [<area>]                           # rebuild a surface from the ledger alone
  *
  * Log: .claude/ledgers/backlog.jsonl, one JSON record per line. Body content is gzip+base64 to
  * keep the log compact while remaining decodable with `show`. The default rendered surface
  * lives beside it, at .claude/ledgers/BACKLOG.md, and a monorepo area renders alongside it as
  * .claude/ledgers/<target>.BACKLOG.md.
+ *
+ * Every `<area>` above is a bare target name, and omitting it means the repo-root surface. A
+ * path ending in BACKLOG.md names the same area and resolves to the same file, so
+ * `games/tower-push/BACKLOG.md` and `tower-push` both write
+ * .claude/ledgers/tower-push.BACKLOG.md.
  *
  * The ledger is the source of truth. add/remove/update append a record and then rewrite the
  * surface file from the ledger alone, rather than editing the file's text directly, so a repo
@@ -63,7 +68,13 @@ const LOG_FILE = ledgerPath(REPO_ROOT, 'backlog', CONFIG.ledgers?.dir);
 const SURFACE = 'BACKLOG.md';
 
 function resolveSurfaceArg(file?: string): string {
-  return resolveSurfaceArgSeam(REPO_ROOT, LEDGER_DIR, SURFACE, file);
+  return resolveSurfaceArgSeam(
+    REPO_ROOT,
+    LEDGER_DIR,
+    SURFACE,
+    CONFIG.targets ?? [],
+    file,
+  );
 }
 
 interface BacklogRecord {
@@ -235,16 +246,17 @@ function usage() {
   console.error(
     [
       'Usage:',
-      '  backlog-log.mjs add    <prefix> <backlog-file> <title> [content] [--chat <id>]',
-      '  backlog-log.mjs remove <id>     <backlog-file> <reason>',
-      '  backlog-log.mjs update <id>     <backlog-file> <new-title> [content]',
+      '  backlog-log.mjs add    <prefix> <area> <title> [content] [--chat <id>]',
+      '  backlog-log.mjs remove <id>     <area> <reason>',
+      '  backlog-log.mjs update <id>     <area> <new-title> [content]',
       '  backlog-log.mjs show   <id>',
-      '  backlog-log.mjs list   [<backlog-file>]',
-      '  backlog-log.mjs render [<backlog-file>]',
+      '  backlog-log.mjs list   [<area>]',
+      '  backlog-log.mjs render [<area>]',
       '',
       'When [content] is omitted for add/update, the body is read from stdin.',
-      '<backlog-file> is a path, or a bare target name (e.g. studio) that resolves',
-      "to that area's surface inside the ledger directory.",
+      "<area> is a bare target name (e.g. studio), resolving to that area's surface",
+      'inside the ledger directory. Omit it for the repo-root backlog. A path ending in',
+      'BACKLOG.md names the same area and resolves to the same file.',
       'add auto-detects the active Claude Code session ID; pass --chat <id> or',
       'set CLAUDE_SESSION_ID=<id> to override, or --chat=none to suppress.',
     ].join('\n'),

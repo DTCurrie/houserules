@@ -813,6 +813,116 @@ describe('backlog-log.mjs migrating a ledger written before the ledger-directory
   });
 });
 
+describe('backlog-log.mjs given an area named as a path rather than a bare word', () => {
+  const AREA_SURFACE = '.claude/ledgers/studio.BACKLOG.md';
+  const AREA_PATH = 'apps/studio/BACKLOG.md';
+  let root: string;
+
+  beforeEach(() => {
+    root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: 'studio.BACKLOG.md',
+        title: 'First item',
+        chat: null,
+        content: encodeBody('body one'),
+      },
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-bbbbbb',
+        action: 'add',
+        file: 'studio.BACKLOG.md',
+        title: 'Second item',
+        chat: null,
+        content: encodeBody('body two'),
+      },
+    ]);
+    run(root, ['render', 'studio']);
+  });
+
+  it('removes the entry from the canonical area surface', () => {
+    const r = run(root, [
+      'remove',
+      'TEST-aaaaaa',
+      AREA_PATH,
+      'shipped it',
+      '--chat=none',
+    ]);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFile(root, AREA_SURFACE)).not.toContain('TEST-aaaaaa');
+  });
+
+  it('leaves the sibling entry on the canonical area surface', () => {
+    run(root, [
+      'remove',
+      'TEST-aaaaaa',
+      AREA_PATH,
+      'shipped it',
+      '--chat=none',
+    ]);
+
+    expect(readFile(root, AREA_SURFACE)).toContain(
+      '## [TEST-bbbbbb] Second item',
+    );
+  });
+
+  it('creates no surface at the path it was given', () => {
+    run(root, [
+      'remove',
+      'TEST-aaaaaa',
+      AREA_PATH,
+      'shipped it',
+      '--chat=none',
+    ]);
+
+    expect(existsSync(join(root, AREA_PATH))).toBe(false);
+  });
+
+  it('records the removal against the canonical area, not the path', () => {
+    run(root, [
+      'remove',
+      'TEST-aaaaaa',
+      AREA_PATH,
+      'shipped it',
+      '--chat=none',
+    ]);
+
+    expect(logRecords(root).at(-1)?.file).toBe('studio.BACKLOG.md');
+  });
+
+  it('adds to the same surface the bare area name writes', () => {
+    const id = run(root, [
+      'add',
+      'TEST',
+      AREA_PATH,
+      'Third item',
+      'body three',
+      '--chat=none',
+    ]).stdout.trim();
+
+    expect(readFile(root, AREA_SURFACE)).toContain(id);
+  });
+
+  it('honors a path that names no surface as a literal write target', () => {
+    mkdirSync(join(root, 'docs'), { recursive: true });
+
+    run(root, [
+      'add',
+      'TEST',
+      'docs/deferred.md',
+      'Loose item',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(existsSync(join(root, 'docs/deferred.md'))).toBe(true);
+  });
+});
+
 describe('backlog-log.mjs with a configured ledgers.dir', () => {
   it('writes the ledger and the area surface under the configured directory', () => {
     const root = stage();

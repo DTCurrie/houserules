@@ -16,6 +16,7 @@ import {
   findSurfaceFiles,
   ledgerDir,
   ledgerPath,
+  normalizeSurfaceRef,
   parseEntries,
   readLog,
   rebuildWouldDropEntries,
@@ -250,44 +251,74 @@ describe('surfaceScope', () => {
 });
 
 describe('resolveSurfaceArg', () => {
+  const LEDGERS = '/repo/.claude/ledgers';
+  const TARGETS = [{ name: 'tower-push', pathPrefix: 'games/tower-push/' }];
+
+  const resolveIn = (arg?: string) =>
+    resolveSurfaceArg('/repo', LEDGERS, 'BACKLOG.md', TARGETS, arg);
+
   it('resolves an omitted argument to the root surface in the ledger directory', () => {
-    expect(
-      resolveSurfaceArg('/repo', '/repo/.claude/ledgers', 'BACKLOG.md'),
-    ).toBe('/repo/.claude/ledgers/BACKLOG.md');
+    expect(resolveIn()).toBe('/repo/.claude/ledgers/BACKLOG.md');
   });
 
   it('resolves the bare basename to the ledger directory rather than the repo root', () => {
-    expect(
-      resolveSurfaceArg(
-        '/repo',
-        '/repo/.claude/ledgers',
-        'BACKLOG.md',
-        'BACKLOG.md',
-      ),
-    ).toBe('/repo/.claude/ledgers/BACKLOG.md');
+    expect(resolveIn('BACKLOG.md')).toBe('/repo/.claude/ledgers/BACKLOG.md');
   });
 
   it('treats a bare word as an area name', () => {
-    expect(
-      resolveSurfaceArg(
-        '/repo',
-        '/repo/.claude/ledgers',
-        'BACKLOG.md',
-        'studio',
-      ),
-    ).toBe('/repo/.claude/ledgers/studio.BACKLOG.md');
+    expect(resolveIn('studio')).toBe('/repo/.claude/ledgers/studio.BACKLOG.md');
   });
 
-  it('resolves an explicit path against the repo root, not the process cwd', () => {
-    expect(
-      resolveSurfaceArg(
-        '/repo',
-        '/repo/.claude/ledgers',
-        'BACKLOG.md',
-        'docs/BACKLOG.md',
-      ),
-    ).toBe('/repo/docs/BACKLOG.md');
+  it('routes a path matching a configured pathPrefix to that area in the ledger directory', () => {
+    expect(resolveIn('games/tower-push/BACKLOG.md')).toBe(
+      '/repo/.claude/ledgers/tower-push.BACKLOG.md',
+    );
   });
+
+  it('routes a path matching no configured target to its trailing directory as the area', () => {
+    expect(resolveIn('apps/studio/BACKLOG.md')).toBe(
+      '/repo/.claude/ledgers/studio.BACKLOG.md',
+    );
+  });
+
+  it('routes a ledger-dir-relative path back to the area it names', () => {
+    expect(resolveIn('../../games/tower-push/BACKLOG.md')).toBe(
+      '/repo/.claude/ledgers/tower-push.BACKLOG.md',
+    );
+  });
+
+  it('resolves a path not naming a surface against the repo root, not the process cwd', () => {
+    expect(resolveIn('docs/notes.md')).toBe('/repo/docs/notes.md');
+  });
+
+  it('falls back to the root surface for a literal path escaping the repo', () => {
+    expect(resolveIn('../../elsewhere/notes.md')).toBe(
+      '/repo/.claude/ledgers/BACKLOG.md',
+    );
+  });
+
+  it.each([
+    'games/tower-push/BACKLOG.md',
+    'apps/studio/BACKLOG.md',
+    '../../games/tower-push/BACKLOG.md',
+    './BACKLOG.md',
+    'studio',
+    'BACKLOG.md',
+    'docs/notes.md',
+  ])(
+    'writes "%s" to the file the rebuild projection matches it to',
+    (arg: string) => {
+      const written = resolveIn(arg);
+
+      expect(
+        normalizeSurfaceRef(
+          surfaceRelFile(LEDGERS, written),
+          'BACKLOG.md',
+          TARGETS,
+        ),
+      ).toBe(surfaceRelFile(LEDGERS, written));
+    },
+  );
 });
 
 describe('surfaceRelFile', () => {

@@ -72,7 +72,7 @@ CLAUDE.md still gets a record here, and the CLAUDE.md line cites its id.
 ## Where the file goes
 
 Every rendered `DECISIONS.md` lives in `.claude/ledgers/`, beside the ledger it is generated
-from. Pass `DECISIONS.md` as `<file>` for a repo-wide decision, or a bare area name such as
+from. Pass `DECISIONS.md` as `<area>` for a repo-wide decision, or a bare area name such as
 `studio` for one scoped to that area, rendered as `.claude/ledgers/studio.DECISIONS.md`.
 
 ## Steps
@@ -80,6 +80,6 @@ from. Pass `DECISIONS.md` as `<file>` for a repo-wide decision, or a bare area n
 1. Check the bar above. If it does not pass, say so and stop.
 2. Draft Why, Rejected, In the code, Revisit when. If Rejected or Revisit when is missing,
    ask the user rather than inventing one.
-3. Run `node .claude/scripts/decision-log.mjs decide <prefix> <file> "<title>" "<body>"`
+3. Run `node .claude/scripts/decision-log.mjs decide <prefix> <area> "<title>" "<body>"`
    (or `supersede`/`amend` as appropriate).
 4. Spawn the `decision-reviewer` subagent on the new entry to check it against the bar.

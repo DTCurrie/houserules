@@ -61,7 +61,8 @@ with the `/backlog-add` skill, backed by `node .claude/scripts/backlog-log.mjs`.
 - Prefixes by area: `<PREFIX>` (`<path>`), ...
 - After every add, the skill spawns `backlog-reviewer` to validate, dedupe, and gut-check the
   entry. Reconcile its verdict first.
-- On resolving an item while shipping: `node .claude/scripts/backlog-log.mjs remove <ID> <file> "<resolution>"`.
+- On resolving an item while shipping: `node .claude/scripts/backlog-log.mjs remove <ID> <area> "<resolution>"`.
+  `<area>` is the bare target name, not a path. Omit it for the repo-root backlog.
 - No wishlist or vague items, and nothing already covered by an active plan.
 
 ### Debugging with end-to-end tracing

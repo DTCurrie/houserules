@@ -3,13 +3,13 @@
  * Decision ledger helper.
  *
  * Usage:
- *   decide    <prefix> <file> <title> [body] [--under <id>] [--supersedes <id>,<id>]
+ *   decide    <prefix> <area> <title> [body] [--under <id>] [--supersedes <id>,<id>]
  *             [--scope <path>,<path>] [--chat <id>]
- *   supersede <id> <file> <new-title> [body] [--scope <path>,<path>] [--chat <id>]
- *   amend     <id> <file> <new-body>
+ *   supersede <id> <area> <new-title> [body] [--scope <path>,<path>] [--chat <id>]
+ *   amend     <id> <area> <new-body>
  *   show      <id>
- *   list      [<file>]
- *   render    [<file>]
+ *   list      [<area>]
+ *   render    [<area>]
  *   ancestry  <id>
  *   current   <id>
  *   tree      <id>
@@ -20,9 +20,10 @@
  * superseded once its id appears in a later record's `supersedes` array, and `list`/
  * `render` derive that in one pass over the log.
  *
- * Every `<file>` above resolves against the ledger directory: the surface basename itself,
- * or omitted, means the repo-root surface (`<dir>/DECISIONS.md`); a bare word names an area
- * (`<dir>/<word>.DECISIONS.md`); anything containing a `/` is honored as a literal path.
+ * Every `<area>` above resolves against the ledger directory. Omitted, or the surface basename
+ * itself, means the repo-root surface at `<dir>/DECISIONS.md`. A bare word names an area, at
+ * `<dir>/<word>.DECISIONS.md`. A path ending in DECISIONS.md names the same area and resolves
+ * to the same file. Any other path is honored literally.
  *
  * ancestry/current/tree/scope walk the same in-memory projection and print one line per
  * node: id, title, status. ancestry and tree are indented by depth, since supersedes and
@@ -72,7 +73,13 @@ const LOG_FILE = ledgerPath(REPO_ROOT, 'decisions', CONFIG.ledgers?.dir);
 const SURFACE = 'DECISIONS.md';
 
 function resolveSurfaceFile(fileArg?: string): string {
-  return resolveSurfaceArg(REPO_ROOT, LEDGER_DIR, SURFACE, fileArg);
+  return resolveSurfaceArg(
+    REPO_ROOT,
+    LEDGER_DIR,
+    SURFACE,
+    CONFIG.targets ?? [],
+    fileArg,
+  );
 }
 
 /** The surface-relative path recorded on each entry: the file's location inside the ledger directory. */
@@ -396,19 +403,22 @@ function usage() {
   console.error(
     [
       'Usage:',
-      '  decision-log.mjs decide    <prefix> <file> <title> [body] [--under <id>]',
+      '  decision-log.mjs decide    <prefix> <area> <title> [body] [--under <id>]',
       '                             [--supersedes <id>,<id>] [--scope <path>,<path>] [--chat <id>]',
-      '  decision-log.mjs supersede <id> <file> <new-title> [body] [--scope <path>,<path>] [--chat <id>]',
-      '  decision-log.mjs amend     <id> <file> <new-body>',
+      '  decision-log.mjs supersede <id> <area> <new-title> [body] [--scope <path>,<path>] [--chat <id>]',
+      '  decision-log.mjs amend     <id> <area> <new-body>',
       '  decision-log.mjs show      <id>',
-      '  decision-log.mjs list      [<file>]',
-      '  decision-log.mjs render    [<file>]',
+      '  decision-log.mjs list      [<area>]',
+      '  decision-log.mjs render    [<area>]',
       '  decision-log.mjs ancestry  <id>',
       '  decision-log.mjs current   <id>',
       '  decision-log.mjs tree      <id>',
       '  decision-log.mjs scope     <path> [<path>...]',
       '',
       'When [body] is omitted, it is read from stdin.',
+      "<area> is a bare target name (e.g. studio), resolving to that area's surface",
+      'inside the ledger directory. Omit it for the repo-root decisions. A path ending in',
+      'DECISIONS.md names the same area and resolves to the same file.',
       'decide/supersede auto-detect the active Claude Code session ID; pass --chat <id> or',
       'set CLAUDE_SESSION_ID=<id> to override, or --chat=none to suppress.',
       'ancestry/current/tree/scope print one line per record, id/title/status, indented by',

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { gunzipSync, gzipSync } from 'node:zlib';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -1117,6 +1123,84 @@ describe('decision-log.mjs render, given a superseded entry', () => {
 
     const text = readFile(root, SURFACE);
     expect(text).not.toContain('Superseded by');
+  });
+});
+
+describe('decision-log.mjs given an area named as a path rather than a bare word', () => {
+  const AREA_SURFACE = '.claude/ledgers/studio.DECISIONS.md';
+  const AREA_PATH = 'apps/studio/DECISIONS.md';
+  let root: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+    run(root, ['decide', 'SIM', 'studio', 'first call', 'body', '--chat=none']);
+  });
+
+  it('records the decision on the canonical area surface', () => {
+    const id = run(root, [
+      'decide',
+      'SIM',
+      AREA_PATH,
+      'second call',
+      'body',
+      '--chat=none',
+    ]).stdout.trim();
+
+    expect(readFile(root, AREA_SURFACE)).toContain(id);
+  });
+
+  it('creates no surface at the path it was given', () => {
+    run(root, [
+      'decide',
+      'SIM',
+      AREA_PATH,
+      'second call',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(existsSync(join(root, AREA_PATH))).toBe(false);
+  });
+
+  it('keeps the earlier decision on the surface it rewrites', () => {
+    run(root, [
+      'decide',
+      'SIM',
+      AREA_PATH,
+      'second call',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(readFile(root, AREA_SURFACE)).toContain('first call');
+  });
+
+  it('records the decision against the canonical area, not the path', () => {
+    run(root, [
+      'decide',
+      'SIM',
+      AREA_PATH,
+      'second call',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(logRecords(root).at(-1)?.file).toBe('studio.DECISIONS.md');
+  });
+
+  it('honors a path that names no surface as a literal write target', () => {
+    mkdirSync(join(root, 'docs'), { recursive: true });
+
+    run(root, [
+      'decide',
+      'SIM',
+      'docs/calls.md',
+      'loose call',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(existsSync(join(root, 'docs/calls.md'))).toBe(true);
   });
 });
 
