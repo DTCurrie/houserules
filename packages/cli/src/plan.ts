@@ -28,6 +28,7 @@ import * as readGuard from './modules/read-guard.js';
 import * as regen from './modules/regen.js';
 import * as statusline from './modules/statusline.js';
 import * as codeCleanliness from './modules/code-cleanliness.js';
+import * as ciSettings from './modules/ci-settings.js';
 
 import { prettierGuardActions } from './modules/prettier-guard.js';
 
@@ -139,6 +140,7 @@ export const MODULES: ModuleDef[] = [
   regen,
   statusline,
   codeCleanliness,
+  ciSettings,
 ];
 
 export class KitError extends Error {}

@@ -1,6 +1,6 @@
 # @agent-kit/plugin-prose
 
-An agent-kit plugin contributing three modules:
+An agent-kit plugin contributing four modules:
 
 - `code-comments`: a path-scoped rule deciding whether a comment should exist and what form
   it takes. Default to no comment, TSDoc for exported API, `//` for everything else.
@@ -9,6 +9,10 @@ An agent-kit plugin contributing three modules:
 - `output-prose`: an opt-in output style, "Prose", for markedly shorter replies. Installing
   the file does not activate it. Enable it via `/config`. It is a readability setting, not a
   cost one. See below.
+- `pr-description`: a `/pr-description` skill that writes the pull request body. It reads the
+  branch diff rather than the session transcript, takes its section headings from the repo's
+  own layers, and returns pasteable markdown. A skill and not a rule, because a PR description
+  never enters the working set as a file, so a `paths:` trigger would have to be a proxy.
 
 ## What to expect from `output-prose`
 

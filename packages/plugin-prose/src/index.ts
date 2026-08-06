@@ -188,8 +188,47 @@ function outputProseModule(api: PluginApi): ModuleDef {
   };
 }
 
+/**
+ * The PR-description format, as a skill rather than a rule.
+ *
+ * A PR description is written into a chat reply or handed to `gh pr create`, so no file enters
+ * the working set and a `paths:`-scoped rule has no honest trigger. Scoping one to
+ * `.changeset/**` as a proxy for "about to open a PR" would fire only in repos that use
+ * changesets, and would be resident on every turn that merely reads a changeset. A skill costs
+ * nothing until it is invoked, which is what a recurring multi-step workflow wants.
+ */
+function prDescriptionModule(api: PluginApi): ModuleDef {
+  const id = 'pr-description';
+  return {
+    id,
+    title: 'PR description format (/pr-description)',
+    group: 'optional',
+    hint(): string {
+      return 'skill: reviewer-facing PR body, one section per layer touched, Testing last, pasteable markdown';
+    },
+    defaultEnabled(): boolean {
+      return false;
+    },
+    plan(): Action[] {
+      return [
+        api.payload.skill(
+          id,
+          'pr-description',
+          'reviewer-facing PR body, read from the diff rather than the transcript',
+        ),
+        {
+          kind: 'advise',
+          text: "PR description skill installed. Run /pr-description before opening a pull request, optionally with a base branch. It reads the branch diff rather than the session transcript, names the layers from this repo's own CLAUDE.md layout and kit.config.json targets, and returns the body as pasteable markdown. It creates or updates the PR only when you ask it to.",
+          module: id,
+        },
+      ];
+    },
+  };
+}
+
 export default definePlugin((api: PluginApi): ModuleDef[] => [
   codeCommentsModule(api),
   proseVoiceModule(api),
   outputProseModule(api),
+  prDescriptionModule(api),
 ]);

@@ -11,13 +11,15 @@ A pnpm workspace of seven packages. Every path in the Layout section below is re
 - `packages/cli` is `@agent-kit/cli`, the installer. It ships the binary **`agent-kit`**,
   so the package name and the command differ, the same split `@changesets/cli` uses for
   `changeset`. Install is `pnpm add -D @agent-kit/cli`, then `agent-kit <cmd>`. Its core
-  ships 15 built-in modules (`src/plan.ts`'s `MODULES` array): `core`, `lint-fix`,
+  ships 16 built-in modules (`src/plan.ts`'s `MODULES` array): `core`, `lint-fix`,
   `session-context`, `rename`, `reviewers`, `debug-session`, `plans`, `orchestrate`,
   `verify-changed`, `ready`, `sweep`, `read-guard`, `regen`, `statusline`,
-  `code-cleanliness`.
-- Six first-party plugins, each `packages/plugin-<name>`, hold the modules that moved out of
+  `code-cleanliness`, `ci-settings`.
+- Ten first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved out of
   the core: `plugin-prose`, `plugin-testing`, `plugin-changesets`, `plugin-backlog`,
-  `plugin-decisions`, `plugin-persona-auditor`. `src/retired-modules.ts`'s
+  `plugin-decisions`, `plugin-persona-auditor`. Four were authored as plugins and were never
+  in the core: `plugin-accessibility`, `plugin-typescript`, `plugin-three`, `plugin-svelte`.
+  `src/retired-modules.ts`'s
   `RETIRED_MODULES` maps every retired built-in id to the package that now ships it.
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
   workflows, `CLAUDE.md`, and the gitignored `.claude/`. Root
@@ -176,6 +178,11 @@ A pnpm workspace of seven packages. Every path in the Layout section below is re
   `KitError` handler. `assertNoRetiredModules` is that guard: it has to see the recorded
   module set before a plan is computed from it, and it throws `KitError` so the command
   aborts with nothing written rather than silently deleting the retired module's files.
+- **Edit from the file's current bytes.** Re-read before editing when your view of it is
+  second-hand (an earlier snapshot, a build or lint error, another tool's output) or the user may
+  have it open. A tool's report and the file on disk can disagree within seconds.
+- **Do not rewrite what is not yours to change.** When the user presents a file as their own
+  finished work, or has it open mid-edit, surface the problem and let them decide.
 - The user always handles `git commit` / `push` / PR-create.
 
 ## Cost & verification discipline
@@ -186,6 +193,11 @@ A pnpm workspace of seven packages. Every path in the Layout section below is re
   review the returned reports. Never pull a worker's diff into the main context.
 - Verify with static gates (`pnpm test`, lint) plus a short falsifiable acceptance checklist for
   the user. No browser/screenshot verification unless explicitly asked.
+- Run those gates in order: `pnpm format` first, since it rewrites in place and settles the
+  mechanical noise, then `pnpm lint:fix` so only real problems are left, then `pnpm check` and
+  `pnpm test`. Scope each to the packages you changed (`pnpm --filter <pkg>`).
+- **"Done" means every check passed, not that the edits were made.** Report a check that failed or
+  never ran, with its output. Never claim success over one you did not see pass.
 - Changes to generated prose (`src/render.ts`) need a rendered probe, not just a green suite.
   Run `init` against a fixture and read the output. Static tests do not catch a dropped sentence
   boundary.

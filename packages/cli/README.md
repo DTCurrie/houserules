@@ -55,7 +55,7 @@ not touch the file at all.
 
 ## Modules
 
-`@agent-kit/cli` ships exactly 15 modules. Everything else lives in a plugin package.
+`@agent-kit/cli` ships exactly 16 modules. Everything else lives in a plugin package.
 
 | Module             | Default                   | What you get                                                                                                                                                                                                                                                                                                                        |
 | ------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -74,6 +74,7 @@ not touch the file at all.
 | `regen`            | off                       | PostToolUse(Edit\|Write) hook: re-run a user-owned generator when an edited file matches a target's `regen { sourceGlob, command }`, so a generated reference snapshot never silently stales                                                                                                                                        |
 | `statusline`       | off                       | kit-aware `statusLine`: pending changeset debt + kit targets touched (wired only if you have no statusline of your own)                                                                                                                                                                                                             |
 | `code-cleanliness` | off                       | `.claude/rules/code-cleanliness.md`: intention-revealing names, functions under 20-30 lines, no magic values, no dead code. Path-scoped, plus `.claude/reference/design-principles.md` (SOLID, DRY, KISS, YAGNI, rule of three), pull-only and never auto-loaded, and the `/tidy` skill that audits a working diff against the rule |
+| `ci-settings`      | off                       | `.claude/settings.ci.json`: a deny list for unattended runs, blocking edits to `.github/**`, the lockfile, `dist/**`, and `.changeset/**`. Deliberately NOT merged into `settings.json`, since those denials would break interactive work. Opt in per run with `claude --settings .claude/settings.ci.json`                         |
 
 ## Plugins
 
@@ -83,13 +84,16 @@ select its modules.
 
 | Package                             | Modules it ships                                                                                                                                                                                    |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@agent-kit/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`                                                                                                                                                |
+| `@agent-kit/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`, `pr-description`                                                                                                                              |
 | `@agent-kit/plugin-testing`         | ships `testing` (plus opt-in `testing-typescript` and `testing-javascript` language guides, chosen through the module's options)                                                                    |
 | `@agent-kit/plugin-changesets`      | ships `changesets`, `ledger`                                                                                                                                                                        |
 | `@agent-kit/plugin-backlog`         | ships `backlog`                                                                                                                                                                                     |
 | `@agent-kit/plugin-decisions`       | ships `decisions`                                                                                                                                                                                   |
 | `@agent-kit/plugin-persona-auditor` | ships `persona-auditor`                                                                                                                                                                             |
+| `@agent-kit/plugin-typescript`      | ships `typescript` (a path-scoped rule for the type-system decisions with a right answer, deferring comments to `code-comments` and naming to `code-cleanliness`)                                   |
 | `@agent-kit/plugin-accessibility`   | ships `accessibility` (WCAG rule, pull-only criteria reference, and the `wcag.mjs` router, plus opt-in React/Svelte/Vue/HTML guides chosen through the module's options) and `accessibility-review` |
+| `@agent-kit/plugin-three`           | ships `three` (a path-scoped Three.js rule, plus opt-in Threlte and React Three Fiber guides chosen through the module's options)                                                                   |
+| `@agent-kit/plugin-svelte`          | ships `svelte` (a Svelte 5 rule plus an opt-in SvelteKit guide) and `svelte-mcp` (the Svelte MCP server configs, installed to `.claude/mcp/` for you to wire up)                                    |
 
 Installing a plugin opts you into the plugin. Each module inside it still honors its own
 default: most default off, so you enable them individually with `--modules` or through

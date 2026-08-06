@@ -308,6 +308,41 @@ describe('renderClaudeAdditions', () => {
     );
     expect(body).toMatch(/planned phase under `\/orchestrate`/);
   });
+
+  it('orders the verify gates so autofix runs before typecheck and test', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+
+    expect(body).toMatch(/format first/);
+    expect(body).toMatch(/lint with autofix/);
+    expect(body.indexOf('format first')).toBeLessThan(
+      body.indexOf('typecheck and test'),
+    );
+  });
+
+  it('states that done means every check passed', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+
+    expect(body).toMatch(/"Done" means every check passed/);
+  });
+
+  it('says the verify gates once, so the two bullets do not restate each other', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+
+    expect(body.match(/static gates/g)).toHaveLength(1);
+  });
+
+  it('tells the agent to re-read a file whose view is second-hand before editing', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+
+    expect(body).toMatch(/Re-read before editing/);
+    expect(body).toMatch(/second-hand/);
+  });
+
+  it('tells the agent to surface a problem in the user own work rather than fix it silently', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+
+    expect(body).toMatch(/Do not rewrite what is not yours to change/);
+  });
 });
 
 describe('renderClaudeMd', () => {

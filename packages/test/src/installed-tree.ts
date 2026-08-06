@@ -25,7 +25,9 @@ export interface HookGroup {
 }
 
 export interface Settings {
-  permissions?: { allow?: string[] };
+  // All three lists `merge-settings.ts` reconciles. A type carrying only `allow` makes a
+  // suite that asserts on a deny entry fail to typecheck while passing at runtime.
+  permissions?: { allow?: string[]; deny?: string[]; ask?: string[] };
   hooks?: Record<string, HookGroup[]>;
   [key: string]: any;
 }

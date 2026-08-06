@@ -223,6 +223,10 @@ const kitConfig = {
     { name: './packages/plugin-changesets', alias: 'cs' },
     { name: './packages/plugin-prose', alias: 'prose' },
     { name: './packages/plugin-testing', alias: 'testing' },
+    { name: './packages/plugin-accessibility', alias: 'a11y' },
+    { name: './packages/plugin-typescript', alias: 'ts' },
+    { name: './packages/plugin-three', alias: 'three' },
+    { name: './packages/plugin-svelte', alias: 'svelte' },
   ],
   targets: [
     {

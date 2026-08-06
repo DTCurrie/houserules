@@ -1,0 +1,46 @@
+{
+  "name": "@agent-kit/plugin-three",
+  "version": "0.0.0",
+  "description": "agent-kit plugin: Three.js authoring patterns, with opt-in Threlte and React Three Fiber guides.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "payload-dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist payload-dist && tsc -p tsconfig.build.json && node scripts/build-payload.mjs",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "prepack": "npm run build",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@agent-kit/cli": "^0.1.0"
+  },
+  "devDependencies": {
+    "@agent-kit/cli": "workspace:*",
+    "@agent-kit/test": "workspace:*",
+    "@types/node": "^26.1.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agent-kit",
+    "agent-kit-plugin",
+    "threejs"
+  ]
+}
