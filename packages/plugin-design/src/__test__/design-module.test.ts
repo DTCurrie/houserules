@@ -35,7 +35,7 @@ describe('design', () => {
     const root = installed();
 
     expect(
-      existsSync(join(root, '.claude/reference/design-principles.md')),
+      existsSync(join(root, '.claude/reference/design-visual-principles.md')),
     ).toBe(true);
     expect(existsSync(join(root, '.claude/scripts/design.mjs'))).toBe(true);
     expect(existsSync(join(root, '.claude/design/tokens.json'))).toBe(true);
@@ -59,7 +59,7 @@ describe('design', () => {
     expect(manifest.modules.includes('design/design')).toBe(true);
     expect(manifest.files['.claude/rules/design.md']).toBeTruthy();
     expect(
-      manifest.files['.claude/reference/design-principles.md'],
+      manifest.files['.claude/reference/design-visual-principles.md'],
     ).toBeTruthy();
     expect(manifest.files['.claude/scripts/design.mjs']).toBeTruthy();
     expect(manifest.files['.claude/design/tokens.json']).toBeUndefined();

@@ -65,7 +65,7 @@ rule stays small and the values stay current with whatever the repo has seeded.
 Three pull-only references sit alongside the script. They are not loaded until you read them, so
 read the one that answers the question in front of you.
 
-- **Contrast ratios, hit-target rules, type scale, spacing rhythm:** `../reference/design-principles.md`
+- **Contrast ratios, hit-target rules, type scale, spacing rhythm:** `../reference/design-visual-principles.md`
 - **Laying a screen out:** fluid grids, container queries, grouping related data, where to put the
   primary action. See `../reference/design-layout.md`.
 - **A design decision that might cost rendering performance:** which properties animate cheaply,

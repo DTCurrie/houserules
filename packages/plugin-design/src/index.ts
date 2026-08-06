@@ -55,9 +55,12 @@ function designModule(api: PluginApi): ModuleDef {
           'design',
           'path-scoped design rule, loaded only when UI code is in the working set',
         ),
+        // Not `design-principles`: the CLI's code-cleanliness module already owns that
+        // filename for a document about software structure, and the two would silently
+        // overwrite each other in any repo running both.
         api.payload.reference(
           id,
-          'design-principles',
+          'design-visual-principles',
           'pull-only design principles, the layer that holds across design systems',
         ),
         api.payload.reference(

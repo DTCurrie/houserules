@@ -1,20 +1,40 @@
 # @agent-kit/plugin-accessibility
 
+[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-accessibility.svg)](https://www.npmjs.com/package/@agent-kit/plugin-accessibility)
+[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-accessibility.svg)](https://www.npmjs.com/package/@agent-kit/plugin-accessibility)
+
 An agent editing markup gets accessibility wrong in predictable ways: a click handler on a
 `<div>`, an `<img>` with no `alt` decision, a label that is not associated with its control.
 This plugin does not answer that with more prose in always-loaded context. It ships a two-step
 lookup the agent can run: **decide which success criteria the change is subject to**, then
 **read only those criteria** from a local copy of WCAG 2.2.
 
-Two modules:
+## Install
 
-- `accessibility`: a path-scoped rule for HTML and HTML-like markup, the 87 WCAG 2.2 success
-  criteria as a pull-only reference, and `wcag.mjs`, which routes changed files to the criteria
-  in play and looks any of them up. Optional per-framework guides for React, Svelte, Vue, and
+```
+pnpm add -D @agent-kit/plugin-accessibility
+pnpm exec agent-kit init
+```
+
+Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+`init` is what writes the modules into `.claude/`. Both modules are off by default, so select
+them when `init` asks.
+
+## Modules
+
+- **`accessibility`** installs `.claude/rules/accessibility.md`, a path-scoped rule for HTML
+  and HTML-like markup, the 87 WCAG 2.2 success criteria as a pull-only reference at
+  `.claude/reference/wcag22.md`, and `wcag.mjs`, which routes changed files to the criteria in
+  play and looks any of them up. Optional per-framework guides for React, Svelte, Vue, and
   plain HTML or Astro install through the module's options.
-- `accessibility-review`: the `/accessibility-review` skill and a read-only
+
+  Scoped to `**/*.html`, `**/*.jsx`, `**/*.tsx`, `**/*.svelte`, `**/*.vue`, and `**/*.astro`
+  through its `paths:` frontmatter. Claude Code loads it only when a matching file is in the
+  working set. Keep that frontmatter. A rule file without `paths:` is loaded on every turn.
+
+- **`accessibility-review`** installs the `/accessibility-review` skill and a read-only
   `accessibility-reviewer` agent that audits a markup diff against the criteria the router
-  names.
+  names. Needs the `accessibility` module for the script and the reference corpus.
 
 ## The loop
 
@@ -61,3 +81,13 @@ It is used under the [W3C Document License](https://www.w3.org/copyright/documen
 which permits derivative works in supporting materials accompanying software. The MIT license
 covering the rest of this package does not cover that file. The full notice is in this package's
 `LICENSE`.
+
+## Part of agent-kit
+
+[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+infrastructure that keeps the agent's context lean. This is one of eleven first-party plugins.
+The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

@@ -47,6 +47,13 @@
   "engines": {
     "node": ">=22"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "directory": "packages/test"
+  },
+  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/test#readme",
+  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
   "peerDependencies": {
     "@agent-kit/cli": "^0.1.0",
     "vitest": "^4.1.10"

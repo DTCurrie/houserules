@@ -1,7 +1,7 @@
 # Design Layout
 
 How to lay a screen out: fluid grids, container queries, grouping, whitespace, sticky
-positioning, and target sizing. `design-principles.md` covers the checkable thresholds
+positioning, and target sizing. `design-visual-principles.md` covers the checkable thresholds
 (contrast, hit targets, type scale, spacing rhythm) that apply everywhere. This doc covers
 the layout decisions that produce a screen those thresholds get applied to.
 
@@ -98,7 +98,7 @@ Space between groups reduces the work of finding a boundary, the same way a para
 does in text. A reader scanning a screen uses the gap, not a rule or a background change, to
 tell where one group of related content ends and the next begins.
 
-Use the spacing scale for that gap, the same scale `design-principles.md`'s spacing rhythm
+Use the spacing scale for that gap, the same scale `design-visual-principles.md`'s spacing rhythm
 section covers. A gap that is off the scale reads as an accident whether or not it happens
 to look right, for the same reason any other off-scale value does.
 
@@ -129,7 +129,7 @@ Two WCAG criteria cover interactive target size, and they are not two versions o
 minimum.
 
 **WCAG 2.5.8 Target Size (Minimum)**, Level AA, sets the conformance floor at **24 by 24 CSS
-pixels**, with a spacing exception that can let a smaller target pass. `design-principles.md`
+pixels**, with a spacing exception that can let a smaller target pass. `design-visual-principles.md`
 documents this criterion and all four of its exceptions, and `design-checks.mts` enforces
 the 24px floor. Read that doc for the exceptions rather than re-deriving them here.
 

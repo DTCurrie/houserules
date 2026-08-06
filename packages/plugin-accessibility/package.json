@@ -28,6 +28,13 @@
   "engines": {
     "node": ">=22"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "directory": "packages/plugin-accessibility"
+  },
+  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-accessibility#readme",
+  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
   "peerDependencies": {
     "@agent-kit/cli": "^0.1.0"
   },
@@ -44,6 +51,7 @@
     "agent-kit-plugin",
     "accessibility",
     "wcag",
-    "a11y"
+    "a11y",
+    "claude-code"
   ]
 }

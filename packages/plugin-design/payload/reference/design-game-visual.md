@@ -1,7 +1,7 @@
 # Design Game Visual
 
 How a game's UI stays legible over a moving background and gives the player feedback fast
-enough to feel like their own action, not the machine's. `design-principles.md` covers the
+enough to feel like their own action, not the machine's. `design-visual-principles.md` covers the
 checkable thresholds that apply everywhere, including the contrast ratio formula.
 `design-performance.md` covers the compositor pipeline that this doc's motion advice depends
 on. This doc covers the decisions specific to a HUD sitting on top of gameplay.
@@ -74,7 +74,7 @@ for missing.
 
 ### Contrast
 
-`design-principles.md` owns the contrast ratio formula and the WCAG thresholds. Read that
+`design-visual-principles.md` owns the contrast ratio formula and the WCAG thresholds. Read that
 first. A HUD over a moving background is the case where a contrast pair calculated once against
 a single background color is least predictive of what the player actually sees, since the
 background under the HUD keeps changing while the ratio was computed against one frame of it.

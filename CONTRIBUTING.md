@@ -1,0 +1,97 @@
+# Contributing to agent-kit
+
+Thanks for looking at agent-kit. This file covers what a first-time contributor needs to
+get from a fresh clone to a reviewable pull request.
+
+## Prerequisites
+
+- Node `>=22`
+- pnpm, pinned via `packageManager` in the root `package.json` (currently `pnpm@11.5.0`).
+  Use [corepack](https://nodejs.org/api/corepack.html) to get the exact version, or install
+  pnpm directly.
+
+## Getting set up
+
+```sh
+git clone https://github.com/DTCurrie/agent-kit.git
+cd agent-kit
+pnpm install
+pnpm build
+```
+
+## Repo layout
+
+This is a pnpm workspace that publishes thirteen packages: `@agent-kit/cli` (the installer,
+which ships the `agent-kit` binary), eleven `@agent-kit/plugin-*` packages, and
+`@agent-kit/test`, a shared test library. Each package owns its own `src/`, tests, and, for
+the CLI and plugins, a `payload/` directory of files the installer copies into a user's repo.
+Root-level config (`prettier`, `eslint`, changesets, CI workflows) applies to the whole
+workspace, since no package defines its own lint script.
+
+## Running the checks
+
+Run these in order. Each rewrites or reports on the whole tree, so running them in sequence
+keeps later checks from flagging noise the earlier ones would have fixed.
+
+```sh
+pnpm format      # prettier --write, settles formatting first
+pnpm lint:fix    # eslint --fix, catches what formatting doesn't
+pnpm check       # tsc --noEmit across every package
+pnpm test        # the full test suite, including end-to-end fixtures
+```
+
+Scope any of these to the package you touched with `--filter`, for example:
+
+```sh
+pnpm --filter @agent-kit/cli test
+pnpm --filter @agent-kit/plugin-testing check
+```
+
+`pnpm build` runs a full build across the workspace and is required before probing anything
+under a package's `dist/`.
+
+## Dogfooding
+
+```sh
+pnpm dogfood
+```
+
+This wires this repo's own gitignored `.claude/` directory from every package's `payload/`,
+so the kit runs its own hooks, skills, and agents against itself. It is how changes to the
+kit get exercised the way a real install would use them. If you are iterating on a hook
+script (a `.mts` file under a package's `payload/scripts/`), run `pnpm dogfood:watch`
+instead, or re-run `pnpm dogfood` after each edit. A `.mts` edit is not live until it is
+compiled to `payload-dist/`.
+
+## Changesets
+
+```sh
+pnpm change
+```
+
+Run this for any user-visible change. It records a changeset describing what changed and
+which packages it affects, and that record is what drives the release PR and changelog.
+A PR that changes behavior without a changeset will need one added before merge.
+
+## Releases
+
+Releases are automated from the changesets you record, in two steps. Merging to `main` makes
+the release workflow open or update a "Version Packages" pull request, which applies the
+pending changesets, bumps versions, and writes the changelogs. Merging that PR publishes to
+npm.
+
+Publishing needs an `NPM_TOKEN` repository secret. Never hand-edit a `CHANGELOG.md`, because
+changesets owns those files and your edit is overwritten on the next version bump.
+
+## Opening a pull request
+
+1. Branch from `main`.
+2. Make your change, keeping it inside the package(s) it belongs to.
+3. Run the checks above, scoped to what you touched.
+4. Run `pnpm change` if the change is user-visible.
+5. Push and open a PR against `main`. Describe what changed and why, and link any related
+   issue.
+
+Please also read [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) before participating, and see
+[SECURITY.md](./SECURITY.md) if you're reporting a vulnerability rather than proposing a
+change.

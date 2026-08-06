@@ -1,19 +1,34 @@
 # agent-kit
 
-A portable kit of Claude Code infrastructure that keeps the agent's context lean. Install it
-and run `init` in any repo:
+[![npm](https://img.shields.io/npm/v/@agent-kit/cli.svg)](https://www.npmjs.com/package/@agent-kit/cli)
+[![downloads](https://img.shields.io/npm/dm/@agent-kit/cli.svg)](https://www.npmjs.com/package/@agent-kit/cli)
+[![CI](https://github.com/DTCurrie/agent-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/DTCurrie/agent-kit/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/@agent-kit/cli.svg)](https://github.com/DTCurrie/agent-kit/blob/main/LICENSE)
+[![node](https://img.shields.io/node/v/@agent-kit/cli.svg)](https://nodejs.org)
 
-```
-pnpm add -D @agent-kit/cli
-pnpm exec agent-kit init
-```
+A Claude Code session spends most of its budget on context it pays for every turn, and on
+conclusions it derives a second time because the first one was never written down. agent-kit
+is a portable kit of infrastructure that pushes that work off the main agent's context window.
 
-The package is `@agent-kit/cli` and the binary it installs is `agent-kit`, the same split
-`@changesets/cli` uses for `changeset`. Every later command is just `agent-kit <cmd>`, since
-the local binary is on the path once the package is a dependency.
+It installs hooks, skills, agents, and rules into any repo, detects what the repo already
+uses, and previews every write before making it.
 
-(Local checkout: `node /path/to/agent-kit/packages/cli/dist/cli.js init`. Non-interactive:
-add `--yes`. Preview only: add `--dry-run`.)
+## Table of contents
+
+- [The one idea](#the-one-idea)
+- [Install](#install)
+- [What `init` does](#what-init-does)
+- [Modules](#modules)
+- [Plugins](#plugins)
+- [After install](#after-install)
+- [Ledgers: what is committed and what is generated](#ledgers-what-is-committed-and-what-is-generated)
+- [Changesets are the canonical changelog](#changesets-are-the-canonical-changelog)
+- [Token spend and response style](#token-spend-and-response-style)
+- [Writing a plugin](#writing-a-plugin)
+- [Upgrading from a pre-split version](#upgrading-from-a-pre-split-version)
+- [Support matrix & port hazards](#support-matrix--port-hazards)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## The one idea
 
@@ -30,6 +45,22 @@ reading that produced them. Four levers:
   session-start header.
 - **Cost-not-count** (same tokens, cheaper rate): `model: haiku` and `effort: low` subagents,
   plus opt-in output compression.
+
+## Install
+
+```
+pnpm add -D @agent-kit/cli
+pnpm exec agent-kit init
+```
+
+The package is `@agent-kit/cli` and the binary it installs is `agent-kit`, the same split
+`@changesets/cli` uses for `changeset`. Every later command is just `agent-kit <cmd>`, since
+the local binary is on the path once the package is a dependency.
+
+Preview without writing with `--dry-run`. Skip the prompts with `--yes`. From a local
+checkout, run `node /path/to/agent-kit/packages/cli/dist/cli.js init`.
+
+Requires Node 22 or newer.
 
 ## What `init` does
 
@@ -99,121 +130,6 @@ select its modules.
 Installing a plugin opts you into the plugin. Each module inside it still honors its own
 default: most default off, so you enable them individually with `--modules` or through
 `modules` in the interactive prompt.
-
-## Upgrading from a pre-split version
-
-A module now shipped by a plugin used to be built into the CLI. If your `.claude/kit.config.json`
-or manifest still names one of those modules and the plugin isn't installed, `update` exits 1
-without changing anything:
-
-```
-This install uses modules that moved out of the CLI into plugins:
-  backlog moved to @agent-kit/plugin-backlog. Install it, then add
-  { "name": "@agent-kit/plugin-backlog", "alias": "<alias>" } to the "plugins" array in .claude/kit.config.json.
-Nothing was changed. Installing the plugin restores the module and its files.
-```
-
-The module's files on disk are never deleted by this error. Install the named package, add
-the `plugins` entry the message shows, and re-run `update` to pick the module back up. The
-recorded module ids are rewritten to their new namespaced form as part of that run, so this is
-a one-time step and a second `update` is a no-op.
-
-Three other things move in the same upgrade, and two of them need a command from you.
-
-**Your `CLAUDE.md` block is adopted automatically.** A pre-rename install carries
-`<!-- claude-kit:claude-md start -->`. `update` recognizes that pair, replaces it with the
-current one, and leaves every byte outside the markers untouched. No second block is created,
-and there is nothing to run.
-
-**The ledgers move to `.claude/ledgers/`, on first use rather than during `update`.** A ledger
-at `.claude/backlog.log` or `.claude/decisions.log` is renamed to
-`.claude/ledgers/<name>.jsonl` the first time a ledger command runs, not by `update` itself. Run
-any ledger command once to trigger it:
-
-```
-node .claude/scripts/backlog-log.mjs list
-```
-
-The rename is what makes the ledger committable. A `.log` extension is caught by the `*.log`
-pattern most repos already have, so the record was invisible to git. Commit
-`.claude/ledgers/` once it exists. The `.gitignore` written beside it keeps the generated
-`*.md` out, because the `.jsonl` is the record and the markdown is a view of it.
-
-**Rendered surfaces need one `render`.** Entries recorded before the move name their surface by
-repo-relative path, such as `games/tower-push/BACKLOG.md`. Those are matched to the area they
-belong to on read, so nothing is lost, but no markdown exists until you ask for it:
-
-```
-node .claude/scripts/backlog-log.mjs render
-```
-
-With no argument it writes every surface the ledger implies, including an area whose entries
-have all been resolved.
-
-A surface you committed at its old path is untracked for you, including a nested one such as
-`games/tower-push/BACKLOG.md`. The file stays on disk and the removal is staged, never committed,
-so you review it like any other change. Only a path the ledger itself records is offered, so a
-`BACKLOG.md` you wrote by hand and the kit never generated is left alone.
-
-## Changesets are the canonical changelog
-
-Shipped by `@agent-kit/plugin-changesets`. The kit treats
-[changesets](https://github.com/changesets/changesets) as the source of truth
-for "what shipped": one `.changeset/*.md` per meaningful change, `CHANGELOG.md` generated at
-release time by `changeset version`. The module wires the agent side of that:
-
-- **`changeset-write.mjs`** is a non-interactive changeset author for agents. It validates
-  package names against the _actual_ workspace, then writes via the repo's own
-  `@changesets/write`, the same writer `changeset add` uses. The official library is
-  **required**. If it isn't resolvable from the repo root, the script exits with install
-  instructions instead of hand-rolling a file. Supports `--empty` for "no release needed".
-  `--absorb` folds one or more pending changesets into an amended one, merging every package
-  bump at the highest level any of them named and deleting the absorbed files. Agents never
-  hand-write `.changeset/*.md`.
-- **`/changeset` skill + `changeset-writer` agent (haiku)** inspect the diff, pick
-  patch/minor/major (major always asks first), and record via the script.
-- **`/changeset-condense` skill** folds pending changesets that describe one feature into one
-  entry. Everything in `.changeset/` ships in the same release, so a later changeset that
-  supersedes, extends, or fixes an earlier one otherwise leaves a release note describing
-  something no user ever saw.
-- **`changeset-check.mjs`** (Stop hook) nudges once when package source changed with no
-  changeset alongside it. It is branch-aware, so a changeset already committed on the branch
-  counts. The kill-switch is `changesets.stopCheck: false` in `kit.config.json`, and it exits
-  silently on any git hiccup.
-- **Respects an existing setup.** If `.changeset/config.json` exists it is never touched. If
-  absent, a default is seeded, only with your consent. The kit never installs
-  `@changesets/cli` for you and prints the right command instead (pnpm-catalog-aware).
-  Authoring does require it as a root devDependency: a `pnpx`/`npx`-only root script covers
-  versioning and publishing but leaves nothing resolvable for `@changesets/write`.
-
-Want commit-granular history _too_? Enable the `ledger` module. It writes to
-`.claude/changelogs/<target>.md`, never the `CHANGELOG.md` changesets owns.
-
-## Token spend and response style
-
-Only the first of these three reduces token spend. The other two shape how the agent writes, which
-is worth having and is not the same thing. `output-prose` and `prose-voice` are shipped by
-`@agent-kit/plugin-prose`.
-
-- **Kit-native discipline** (free, always): lean CLAUDE.md, grep-don't-read rules, haiku/low
-  subagents, hooks that emit residue not transcripts.
-- **`output-prose`** (opt-in): shorter, denser replies via terse phrasing, at a readability cost.
-  Adapted from [caveman](https://github.com/JuliusBrussee/caveman) (MIT). **It is a readability
-  setting, not a cost one.** It changes how the agent writes to you, not what it does, and it will
-  not reduce your token bill: the words in a reply are a small part of what a session spends, and
-  the style's own text is added to every request. Exact content, negations, and reported caveats
-  are preserved. What to expect is in `@agent-kit/plugin-prose`'s README.
-  Activate with `/config` → Output style → **Prose**, or
-  set `"outputStyle": "Prose"` in `.claude/settings.local.json`. The value is the exact style
-  name, **not** the `output-prose` filename. A slug there silently falls back to Default with
-  no error. An output style is read once at session start, so a change takes effect after
-  `/clear` or in the next session. It also applies to the main thread only, since a subagent
-  runs its own system prompt.
-- **`prose-voice`** (opt-in): a path-scoped rule that holds agent-authored prose to plain
-  sentences, no semicolons, and no em dash where a period works. It shapes changesets, plans,
-  docs, and the sentences inside code comments rather than chat responses, so it composes with
-  any output style. It covers source files as well as markdown, which is what keeps one voice
-  across the repo instead of two.
 
 ## After install
 
@@ -344,6 +260,66 @@ node .claude/scripts/backlog-log.mjs add TEST BACKLOG.md "smoke" "remove me"
 node .claude/scripts/backlog-log.mjs list
 ```
 
+## Changesets are the canonical changelog
+
+Shipped by `@agent-kit/plugin-changesets`. The kit treats
+[changesets](https://github.com/changesets/changesets) as the source of truth
+for "what shipped": one `.changeset/*.md` per meaningful change, `CHANGELOG.md` generated at
+release time by `changeset version`. The module wires the agent side of that:
+
+- **`changeset-write.mjs`** is a non-interactive changeset author for agents. It validates
+  package names against the _actual_ workspace, then writes via the repo's own
+  `@changesets/write`, the same writer `changeset add` uses. The official library is
+  **required**. If it isn't resolvable from the repo root, the script exits with install
+  instructions instead of hand-rolling a file. Supports `--empty` for "no release needed".
+  `--absorb` folds one or more pending changesets into an amended one, merging every package
+  bump at the highest level any of them named and deleting the absorbed files. Agents never
+  hand-write `.changeset/*.md`.
+- **`/changeset` skill + `changeset-writer` agent (haiku)** inspect the diff, pick
+  patch/minor/major (major always asks first), and record via the script.
+- **`/changeset-condense` skill** folds pending changesets that describe one feature into one
+  entry. Everything in `.changeset/` ships in the same release, so a later changeset that
+  supersedes, extends, or fixes an earlier one otherwise leaves a release note describing
+  something no user ever saw.
+- **`changeset-check.mjs`** (Stop hook) nudges once when package source changed with no
+  changeset alongside it. It is branch-aware, so a changeset already committed on the branch
+  counts. The kill-switch is `changesets.stopCheck: false` in `kit.config.json`, and it exits
+  silently on any git hiccup.
+- **Respects an existing setup.** If `.changeset/config.json` exists it is never touched. If
+  absent, a default is seeded, only with your consent. The kit never installs
+  `@changesets/cli` for you and prints the right command instead (pnpm-catalog-aware).
+  Authoring does require it as a root devDependency: a `pnpx`/`npx`-only root script covers
+  versioning and publishing but leaves nothing resolvable for `@changesets/write`.
+
+Want commit-granular history _too_? Enable the `ledger` module. It writes to
+`.claude/changelogs/<target>.md`, never the `CHANGELOG.md` changesets owns.
+
+## Token spend and response style
+
+Only the first of these three reduces token spend. The other two shape how the agent writes, which
+is worth having and is not the same thing. `output-prose` and `prose-voice` are shipped by
+`@agent-kit/plugin-prose`.
+
+- **Kit-native discipline** (free, always): lean CLAUDE.md, grep-don't-read rules, haiku/low
+  subagents, hooks that emit residue not transcripts.
+- **`output-prose`** (opt-in): shorter, denser replies via terse phrasing, at a readability cost.
+  Adapted from [caveman](https://github.com/JuliusBrussee/caveman) (MIT). **It is a readability
+  setting, not a cost one.** It changes how the agent writes to you, not what it does, and it will
+  not reduce your token bill: the words in a reply are a small part of what a session spends, and
+  the style's own text is added to every request. Exact content, negations, and reported caveats
+  are preserved. What to expect is in `@agent-kit/plugin-prose`'s README.
+  Activate with `/config` → Output style → **Prose**, or
+  set `"outputStyle": "Prose"` in `.claude/settings.local.json`. The value is the exact style
+  name, **not** the `output-prose` filename. A slug there silently falls back to Default with
+  no error. An output style is read once at session start, so a change takes effect after
+  `/clear` or in the next session. It also applies to the main thread only, since a subagent
+  runs its own system prompt.
+- **`prose-voice`** (opt-in): a path-scoped rule that holds agent-authored prose to plain
+  sentences, no semicolons, and no em dash where a period works. It shapes changesets, plans,
+  docs, and the sentences inside code comments rather than chat responses, so it composes with
+  any output style. It covers source files as well as markdown, which is what keeps one voice
+  across the repo instead of two.
+
 ## Writing a plugin
 
 A plugin is a module provider. It contributes `ModuleDef`s, the same shape `core` and every
@@ -419,6 +395,61 @@ Your package builds its own `payload-dist/` from source, the same way `@agent-ki
 builds its own. `PluginApi.payload` reads from your plugin's `payload-dist/`, never from the
 CLI's, so ship one alongside your compiled `dist/`.
 
+## Upgrading from a pre-split version
+
+A module now shipped by a plugin used to be built into the CLI. If your `.claude/kit.config.json`
+or manifest still names one of those modules and the plugin isn't installed, `update` exits 1
+without changing anything:
+
+```
+This install uses modules that moved out of the CLI into plugins:
+  backlog moved to @agent-kit/plugin-backlog. Install it, then add
+  { "name": "@agent-kit/plugin-backlog", "alias": "<alias>" } to the "plugins" array in .claude/kit.config.json.
+Nothing was changed. Installing the plugin restores the module and its files.
+```
+
+The module's files on disk are never deleted by this error. Install the named package, add
+the `plugins` entry the message shows, and re-run `update` to pick the module back up. The
+recorded module ids are rewritten to their new namespaced form as part of that run, so this is
+a one-time step and a second `update` is a no-op.
+
+Three other things move in the same upgrade, and two of them need a command from you.
+
+**Your `CLAUDE.md` block is adopted automatically.** A pre-rename install carries
+`<!-- claude-kit:claude-md start -->`. `update` recognizes that pair, replaces it with the
+current one, and leaves every byte outside the markers untouched. No second block is created,
+and there is nothing to run.
+
+**The ledgers move to `.claude/ledgers/`, on first use rather than during `update`.** A ledger
+at `.claude/backlog.log` or `.claude/decisions.log` is renamed to
+`.claude/ledgers/<name>.jsonl` the first time a ledger command runs, not by `update` itself. Run
+any ledger command once to trigger it:
+
+```
+node .claude/scripts/backlog-log.mjs list
+```
+
+The rename is what makes the ledger committable. A `.log` extension is caught by the `*.log`
+pattern most repos already have, so the record was invisible to git. Commit
+`.claude/ledgers/` once it exists. The `.gitignore` written beside it keeps the generated
+`*.md` out, because the `.jsonl` is the record and the markdown is a view of it.
+
+**Rendered surfaces need one `render`.** Entries recorded before the move name their surface by
+repo-relative path, such as `games/tower-push/BACKLOG.md`. Those are matched to the area they
+belong to on read, so nothing is lost, but no markdown exists until you ask for it:
+
+```
+node .claude/scripts/backlog-log.mjs render
+```
+
+With no argument it writes every surface the ledger implies, including an area whose entries
+have all been resolved.
+
+A surface you committed at its old path is untracked for you, including a nested one such as
+`games/tower-push/BACKLOG.md`. The file stays on disk and the removal is staged, never committed,
+so you review it like any other change. Only a path the ledger itself records is offered, so a
+`BACKLOG.md` you wrote by hand and the kit never generated is left alone.
+
 ## Support matrix & port hazards
 
 - **git required.** Every script resolves paths from `git rev-parse --show-toplevel`.
@@ -434,24 +465,18 @@ CLI's, so ship one alongside your compiled `dist/`.
 - **Don't auto-load big docs.** Guardrail docs are read on a trigger, never `@-imported`.
   See [CONVENTIONS.md](CONVENTIONS.md).
 
-## Developing the kit itself
+## Contributing
 
-```
-pnpm install
-pnpm build                                 # tsc -> dist/, then publint
-pnpm dogfood                               # link the kit into .claude/ (gitignored) so this repo runs its own kit
-pnpm test                                  # vitest suite incl. end-to-end init on fixtures
-pnpm check                                 # tsc --noEmit over src/ + test/ + colocated __test__/
-node dist/cli.js init --dry-run --yes <some-repo>
-pnpm change                                # record a changeset for your change (dogfood)
-```
+Setup, the check order, and how to run the kit against itself are in
+[CONTRIBUTING.md](https://github.com/DTCurrie/agent-kit/blob/main/CONTRIBUTING.md).
 
-`src/` is TypeScript and may use dependencies. **Everything under `payload/` is copied into user
-repos and must stay zero-dependency node builtins.** Hook scripts are authored as `.mts` and
-compiled to plain `.mjs` in `payload-dist/`, which is what ships. Two tests enforce that promise:
-one parses every emitted script's imports, the other actually executes each one on bare node with
-no `node_modules` in reach. Editing a `.mts` needs a rebuild before the dogfooded hooks pick it
-up, and `pnpm dogfood:watch` covers that.
+One constraint is worth stating here, because it is the one a new contributor trips over.
+`src/` is TypeScript and may use dependencies. **Everything under `payload/` is copied into
+user repos and must stay zero-dependency node builtins.** Hook scripts are authored as `.mts`
+and compiled to plain `.mjs` in `payload-dist/`, which is what ships. Two tests enforce that
+promise. One parses every emitted script's imports, the other executes each one on bare node
+with no `node_modules` in reach.
 
-Releases: changesets → the release workflow opens a "Version Packages" PR → merging it publishes
-to npm (needs an `NPM_TOKEN` repo secret).
+## License
+
+MIT. See [LICENSE](https://github.com/DTCurrie/agent-kit/blob/main/LICENSE).

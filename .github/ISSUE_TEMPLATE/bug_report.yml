@@ -1,0 +1,65 @@
+name: Bug report
+description: Report something that is not working as expected.
+labels:
+  - bug
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the bug. Include the command you ran and its output.
+    validations:
+      required: true
+  - type: textarea
+    id: what-expected
+    attributes:
+      label: What you expected
+      description: Describe what should have happened instead.
+    validations:
+      required: false
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Steps to reproduce the bug, starting from a clean repo if possible.
+      placeholder: |
+        1. Run `agent-kit init`
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      description: Which package does this bug affect?
+      options:
+        - '@agent-kit/cli'
+        - '@agent-kit/plugin-accessibility'
+        - '@agent-kit/plugin-backlog'
+        - '@agent-kit/plugin-changesets'
+        - '@agent-kit/plugin-decisions'
+        - '@agent-kit/plugin-design'
+        - '@agent-kit/plugin-persona-auditor'
+        - '@agent-kit/plugin-prose'
+        - '@agent-kit/plugin-svelte'
+        - '@agent-kit/plugin-testing'
+        - '@agent-kit/plugin-three'
+        - '@agent-kit/plugin-typescript'
+        - '@agent-kit/test'
+        - Not sure
+    validations:
+      required: false
+  - type: input
+    id: agent-kit-version
+    attributes:
+      label: agent-kit version
+      description: Output of `agent-kit --version`, or the version pinned in your package.json.
+    validations:
+      required: false
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      description: Output of `node --version`.
+    validations:
+      required: false
