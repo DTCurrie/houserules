@@ -94,6 +94,7 @@ select its modules.
 | `@agent-kit/plugin-accessibility`   | ships `accessibility` (WCAG rule, pull-only criteria reference, and the `wcag.mjs` router, plus opt-in React/Svelte/Vue/HTML guides chosen through the module's options) and `accessibility-review` |
 | `@agent-kit/plugin-three`           | ships `three` (a path-scoped Three.js rule, plus opt-in Threlte and React Three Fiber guides chosen through the module's options)                                                                   |
 | `@agent-kit/plugin-svelte`          | ships `svelte` (a Svelte 5 rule plus an opt-in SvelteKit guide) and `svelte-mcp` (the Svelte MCP server configs, installed to `.claude/mcp/` for you to wire up)                                    |
+| `@agent-kit/plugin-design`          | ships `design` (a DTCG token set seeded to `.claude/design/tokens.json`, a path-scoped design rule, a pull-only principles reference, and the `design.mjs` query script)                            |
 
 Installing a plugin opts you into the plugin. Each module inside it still honors its own
 default: most default off, so you enable them individually with `--modules` or through

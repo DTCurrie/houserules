@@ -1,0 +1,56 @@
+MIT License
+
+Copyright (c) 2026 Devin T. Currie
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Third-party notices
+
+### Web Content Accessibility Guidelines (WCAG) 2.2
+
+The MIT license above does NOT cover `payload/reference/wcag22.md`. That file is generated
+from the W3C source and carries W3C's own terms.
+
+`payload/reference/wcag22.md` is derived from Web Content Accessibility Guidelines (WCAG) 2.2,
+W3C Recommendation, generated from the `w3c/wcag` repository at tag `WCAG22-20241212`.
+
+https://www.w3.org/TR/WCAG22/
+
+Copyright © 2023 W3C®. This software or document includes material copied from or derived
+from Web Content Accessibility Guidelines (WCAG) 2.2, https://www.w3.org/TR/WCAG22/.
+
+Used under the W3C Document License, which permits derivative works and portions of a W3C
+document to be prepared and distributed "in software, in supporting materials accompanying
+software, and in documentation of software" provided the notice above is included. Publishing
+a derivative work of that document for use as a technical specification is expressly
+prohibited, and this package does not do so. It reproduces the success criteria as a lookup
+reference for authors implementing them.
+
+https://www.w3.org/copyright/document-license-2023/
+
+THIS DOCUMENT IS PROVIDED "AS IS," AND COPYRIGHT HOLDERS MAKE NO REPRESENTATIONS OR
+WARRANTIES, EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, OR TITLE; THAT THE
+CONTENTS OF THE DOCUMENT ARE SUITABLE FOR ANY PURPOSE; NOR THAT THE IMPLEMENTATION OF SUCH
+CONTENTS WILL NOT INFRINGE ANY THIRD PARTY PATENTS, COPYRIGHTS, TRADEMARKS OR OTHER RIGHTS.
+COPYRIGHT HOLDERS WILL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, SPECIAL OR CONSEQUENTIAL
+DAMAGES ARISING OUT OF ANY USE OF THE DOCUMENT OR THE PERFORMANCE OR IMPLEMENTATION OF THE
+CONTENTS THEREOF.

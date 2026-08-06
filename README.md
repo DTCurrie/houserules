@@ -25,6 +25,7 @@ This is the workspace root. The product and its full documentation live in
 | `packages/plugin-typescript`      | `@agent-kit/plugin-typescript`      | A path-scoped TypeScript rule: interface vs type, and `unknown` over `any`.            |
 | `packages/plugin-three`           | `@agent-kit/plugin-three`           | Three.js authoring patterns, with opt-in Threlte and React Three Fiber guides.         |
 | `packages/plugin-svelte`          | `@agent-kit/plugin-svelte`          | Svelte 5 conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.     |
+| `packages/plugin-design`          | `@agent-kit/plugin-design`          | A DTCG design system an agent queries by name, plus the path-scoped design rule.       |
 
 ## Working on the kit
 

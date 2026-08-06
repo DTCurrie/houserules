@@ -227,6 +227,7 @@ const kitConfig = {
     { name: './packages/plugin-typescript', alias: 'ts' },
     { name: './packages/plugin-three', alias: 'three' },
     { name: './packages/plugin-svelte', alias: 'svelte' },
+    { name: './packages/plugin-design', alias: 'design' },
   ],
   targets: [
     {

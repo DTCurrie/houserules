@@ -5,7 +5,7 @@ Interactive installer for a portable Claude Code context-discipline kit. Read
 
 ## Workspace
 
-A pnpm workspace of seven packages. Every path in the Layout section below is relative to
+A pnpm workspace of thirteen packages. Every path in the Layout section below is relative to
 **`packages/cli/`** unless it starts with `packages/`.
 
 - `packages/cli` is `@agent-kit/cli`, the installer. It ships the binary **`agent-kit`**,
@@ -15,10 +15,11 @@ A pnpm workspace of seven packages. Every path in the Layout section below is re
   `session-context`, `rename`, `reviewers`, `debug-session`, `plans`, `orchestrate`,
   `verify-changed`, `ready`, `sweep`, `read-guard`, `regen`, `statusline`,
   `code-cleanliness`, `ci-settings`.
-- Ten first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved out of
+- Eleven first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved out of
   the core: `plugin-prose`, `plugin-testing`, `plugin-changesets`, `plugin-backlog`,
-  `plugin-decisions`, `plugin-persona-auditor`. Four were authored as plugins and were never
-  in the core: `plugin-accessibility`, `plugin-typescript`, `plugin-three`, `plugin-svelte`.
+  `plugin-decisions`, `plugin-persona-auditor`. Five were authored as plugins and were never
+  in the core: `plugin-accessibility`, `plugin-typescript`, `plugin-three`, `plugin-svelte`,
+  `plugin-design`.
   `src/retired-modules.ts`'s
   `RETIRED_MODULES` maps every retired built-in id to the package that now ships it.
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
