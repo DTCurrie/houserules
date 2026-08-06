@@ -20,6 +20,7 @@ import {
   settingsOf,
 } from '#test/installed-tree';
 import { optionBearingAdditions, parseRequested } from '../modules.js';
+import { MODULES } from '../../plan.js';
 import type { ModuleDef } from '../../module-def.js';
 import type { Registry, RegisteredModule } from '../../plugin-registry.js';
 
@@ -46,81 +47,127 @@ const registeredModule = (
   source: RegisteredModule['source'] = null,
 ): RegisteredModule => ({ id, def: moduleDef(id), source });
 
-const available: RegisteredModule[] = [
-  registeredModule('output-prose'),
-  registeredModule('changesets'),
-];
+const lockedModule = (id: string): RegisteredModule => ({
+  id,
+  def: { ...moduleDef(id), locked: true },
+  source: null,
+});
+
+function registryOf(modules: RegisteredModule[]): Registry {
+  return {
+    modules,
+    plugins: [],
+    get: (id) => modules.find((m) => m.id === id),
+  };
+}
 
 describe('parseRequested', () => {
+  const registry = registryOf([
+    lockedModule('core'),
+    registeredModule('output-prose'),
+    registeredModule('changesets'),
+    registeredModule('read-guard'),
+  ]);
+  const installed = new Set(['core', 'read-guard']);
+
   it.each([
     {
       name: 'undefined flag',
       flag: undefined,
       chosen: [],
-      unknown: [],
+      redundant: [],
+      unresolvable: [],
     },
     {
       name: 'empty string',
       flag: '',
       chosen: [],
-      unknown: [],
+      redundant: [],
+      unresolvable: [],
     },
     {
-      name: 'a single known id',
+      name: 'a single addable id',
       flag: 'output-prose',
       chosen: ['output-prose'],
-      unknown: [],
+      redundant: [],
+      unresolvable: [],
     },
     {
-      name: 'several comma-separated known ids',
+      name: 'several comma-separated addable ids',
       flag: 'output-prose,changesets',
       chosen: ['output-prose', 'changesets'],
-      unknown: [],
+      redundant: [],
+      unresolvable: [],
     },
     {
-      name: 'a single unknown id',
+      name: 'a single unresolvable id',
       flag: 'nope',
       chosen: [],
-      unknown: ['nope'],
+      redundant: [],
+      unresolvable: ['nope'],
     },
     {
-      name: 'a mix of known and unknown ids',
-      flag: 'output-prose,nope',
+      name: 'an already-installed id',
+      flag: 'read-guard',
+      chosen: [],
+      redundant: ['read-guard'],
+      unresolvable: [],
+    },
+    {
+      name: 'a locked id, which is installed by definition',
+      flag: 'core',
+      chosen: [],
+      redundant: ['core'],
+      unresolvable: [],
+    },
+    {
+      name: 'one id of each kind at once',
+      flag: 'output-prose,read-guard,nope',
       chosen: ['output-prose'],
-      unknown: ['nope'],
+      redundant: ['read-guard'],
+      unresolvable: ['nope'],
     },
     {
       name: 'whitespace around entries',
       flag: ' output-prose , changesets ',
       chosen: ['output-prose', 'changesets'],
-      unknown: [],
+      redundant: [],
+      unresolvable: [],
     },
     {
       name: 'a trailing comma',
       flag: 'output-prose,',
       chosen: ['output-prose'],
-      unknown: [],
+      redundant: [],
+      unresolvable: [],
     },
     {
       name: 'a doubled comma',
       flag: 'output-prose,,changesets',
       chosen: ['output-prose', 'changesets'],
-      unknown: [],
+      redundant: [],
+      unresolvable: [],
     },
     {
-      name: 'a repeated known id',
+      name: 'a repeated addable id',
       flag: 'output-prose,output-prose',
       chosen: ['output-prose'],
-      unknown: [],
+      redundant: [],
+      unresolvable: [],
     },
     {
-      name: 'a repeated unknown id',
+      name: 'a repeated unresolvable id',
       flag: 'nope,nope',
       chosen: [],
-      unknown: ['nope', 'nope'],
+      redundant: [],
+      unresolvable: ['nope'],
     },
-  ])('$name', ({ flag, chosen, unknown }) => {
-    expect(parseRequested(flag, available)).toEqual({ chosen, unknown });
+  ])('$name', ({ flag, chosen, redundant, unresolvable }) => {
+    expect(parseRequested(flag, registry, installed)).toEqual({
+      chosen,
+      redundant,
+      unresolvable,
+    });
   });
 });
 
@@ -186,6 +233,64 @@ describe('modules command on an initialized pnpm monorepo', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout, 'lists read-guard as available').toMatch(/read-guard/);
     expect(treeHash(root), 'listing writes nothing').toBe(before);
+  });
+});
+
+describe('modules given an id the registry cannot resolve', () => {
+  it('exits 1 naming the id even when every module is already installed', () => {
+    const root = useInstalledRepo('npm-single', {
+      modules: MODULES.map((m) => m.id).join(','),
+    });
+
+    const r = runCli(['modules', '--yes', '--modules=bogus/nope', root]);
+
+    expect(r.status, r.stdout).toBe(1);
+    expect(r.stderr).toMatch(/bogus\/nope/);
+  });
+
+  it('points at the kit.config.json plugins array, since an unregistered plugin looks identical', () => {
+    const root = useInstalledRepo('npm-single');
+
+    const r = runCli(['modules', '--yes', '--modules=bogus/nope', root]);
+
+    expect(r.stderr).toMatch(/plugins/);
+  });
+
+  it('exits 1 without --yes too, rather than silently ignoring the flag', () => {
+    const root = useInstalledRepo('npm-single');
+
+    const r = runCli(['modules', '--modules=bogus/nope', root]);
+
+    expect(r.status, r.stdout).toBe(1);
+  });
+
+  it('writes nothing', () => {
+    const root = useInstalledRepo('npm-single');
+    const before = treeHash(root);
+
+    runCli(['modules', '--yes', '--modules=read-guard,bogus/nope', root]);
+
+    expect(treeHash(root)).toBe(before);
+  });
+});
+
+describe('modules given an id that is already installed', () => {
+  it('reports it as installed rather than asking for a --modules flag the user just passed', () => {
+    const root = useInstalledRepo('npm-single', { modules: 'read-guard' });
+
+    const r = runCli(['modules', '--yes', '--modules=read-guard', root]);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/Already installed: read-guard/);
+  });
+
+  it('reports a locked module as installed rather than unresolvable', () => {
+    const root = useInstalledRepo('npm-single');
+
+    const r = runCli(['modules', '--yes', '--modules=core', root]);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/Already installed: core/);
   });
 });
 
@@ -432,14 +537,6 @@ describe('optionBearingAdditions', () => {
         },
       },
       source: null,
-    };
-  }
-
-  function registryOf(modules: RegisteredModule[]): Registry {
-    return {
-      modules,
-      plugins: [],
-      get: (id) => modules.find((m) => m.id === id),
     };
   }
 

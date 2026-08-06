@@ -29,6 +29,21 @@ function moduleWithOptions(
   };
 }
 
+function suggestionFor(registry: Registry, id: string): string {
+  try {
+    assertOptionsRecorded(registry, [id], {});
+  } catch (error) {
+    return (error as KitError).message;
+  }
+  throw new Error(`assertOptionsRecorded did not throw for "${id}"`);
+}
+
+function moduleOptionArgsIn(suggestion: string): string[] {
+  return [...suggestion.matchAll(/--module-option (\S+)/g)].map(
+    (match) => match[1],
+  );
+}
+
 function registryOf(defs: ModuleDef[]): Registry {
   const modules: RegisteredModule[] = defs.map((def) => ({
     id: def.id,
@@ -163,6 +178,7 @@ describe('resolveModuleOptions', () => {
 describe('assertOptionsRecorded', () => {
   const registry = registryOf([
     moduleWithOptions('langs', ['alpha', 'beta'], ['alpha']),
+    moduleWithOptions('none', ['alpha', 'beta'], []),
     {
       id: 'plain',
       title: 'plain',
@@ -227,5 +243,22 @@ describe('assertOptionsRecorded', () => {
     expect(() =>
       assertOptionsRecorded(registry, ['langs'], { langs: [] }),
     ).not.toThrow();
+  });
+
+  describe('the suggested fix command', () => {
+    it.each(['langs', 'none'])(
+      'carries a --module-option argument the flag parser accepts, for %s',
+      (id) => {
+        const suggestion = suggestionFor(registry, id);
+
+        expect(() =>
+          parseModuleOptionFlags(moduleOptionArgsIn(suggestion)),
+        ).not.toThrow();
+      },
+    );
+
+    it('drops --module-option entirely when the module declares no defaults', () => {
+      expect(suggestionFor(registry, 'none')).toMatch(/--reconfigure=none$/m);
+    });
   });
 });

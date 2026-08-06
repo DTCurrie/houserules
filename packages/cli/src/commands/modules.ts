@@ -27,21 +27,38 @@ import type { Answers } from '../module-def.js';
 import type { PlanResult } from '../plan.js';
 import type { Registry, RegisteredModule } from '../plugin-registry.js';
 
-// Headless selection, intersected with what is actually available.
+/**
+ * Splits a `--modules` list into the ids this run can act on and the ids it cannot.
+ *
+ * Resolution is against the whole REGISTRY, not against what happens to be installable right
+ * now, and that distinction is the point. An id the registry cannot resolve is a user error
+ * whatever the install state, while an id that is merely installed already is a no-op. Folding
+ * the two together is what let a typo, or a module whose plugin is missing from
+ * `kit.config.json`, read back as "you already have that".
+ *
+ * @param installed Module ids the manifest records, which make a request redundant.
+ */
 export function parseRequested(
   modulesFlag: string | undefined,
-  available: RegisteredModule[],
-): { chosen: string[]; unknown: string[] } {
-  const availIds = new Set(available.map((m) => m.id));
+  registry: Registry,
+  installed: Set<string>,
+): { chosen: string[]; redundant: string[]; unresolvable: string[] } {
   const chosen: string[] = [];
-  const unknown: string[] = [];
+  const redundant: string[] = [];
+  const unresolvable: string[] = [];
   for (const raw of (modulesFlag ?? '').split(',')) {
     const id = raw.trim();
     if (!id) continue;
-    if (availIds.has(id)) chosen.push(id);
-    else unknown.push(id);
+    const found = registry.get(id);
+    if (!found) unresolvable.push(id);
+    else if (found.def.locked || installed.has(id)) redundant.push(id);
+    else chosen.push(id);
   }
-  return { chosen: [...new Set(chosen)], unknown };
+  return {
+    chosen: [...new Set(chosen)],
+    redundant: [...new Set(redundant)],
+    unresolvable: [...new Set(unresolvable)],
+  };
 }
 
 /**
@@ -415,6 +432,19 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
     );
   }
 
+  // Ahead of both the status table and the nothing-to-add early return below. An id the
+  // registry cannot resolve is a user error regardless of what is installed, and a repo with
+  // every module installed used to return 0 before this was ever checked.
+  const requested = parseRequested(flags.modules, registry, installed);
+  if (requested.unresolvable.length) {
+    console.error(
+      `Unknown module(s): ${requested.unresolvable.join(', ')}\n` +
+        'If these come from a plugin, check the "plugins" array in .claude/kit.config.json. ' +
+        'Diagnose with: npx agent-kit doctor',
+    );
+    return 1;
+  }
+
   const available = registry.modules.filter(
     (m) => !m.def.locked && !installed.has(m.id),
   );
@@ -437,18 +467,12 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
 
   let chosen: string[];
   if (flags.yes) {
-    const { chosen: picked, unknown } = parseRequested(
-      flags.modules,
-      available,
-    );
-    if (unknown.length)
-      console.error(
-        `Ignoring unknown or already-installed module(s): ${unknown.join(', ')}`,
-      );
-    chosen = picked;
+    chosen = requested.chosen;
     if (!chosen.length) {
       ui.outro(
-        'Nothing to add — pass --modules=<id,...> to enable available modules headlessly.',
+        requested.redundant.length
+          ? `Already installed: ${requested.redundant.join(', ')} — nothing to add.`
+          : 'Nothing to add — pass --modules=<id,...> to enable available modules headlessly.',
       );
       return 0;
     }

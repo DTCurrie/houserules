@@ -77,7 +77,11 @@ export function assertOptionsRecorded(
   const fixes = unrecorded
     .map((id) => {
       const values = registry.get(id)?.def.options?.defaults ?? [];
-      return `  npx agent-kit modules --reconfigure=${id} --module-option ${id}=${values.join(',')}`;
+      // A module with empty `defaults` has nothing to put after the `=`, and an empty value
+      // list is the one thing parseModuleOptionFlags refuses. Bare --reconfigure prompts.
+      return values.length
+        ? `  npx agent-kit modules --reconfigure=${id} --module-option ${id}=${values.join(',')}`
+        : `  npx agent-kit modules --reconfigure=${id}`;
     })
     .join('\n');
   throw new KitError(
