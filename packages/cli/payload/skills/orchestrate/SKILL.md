@@ -71,7 +71,7 @@ A well-formed slice has:
 
 - **`owns`:** the exact paths/globs that worker may write. Nothing outside them.
 - **a falsifiable done:** a command whose output proves it, **scoped to the paths the slice owns**. A
-  named test file, a typecheck of the owned module, a grep that proves the change landed.
+  named test file, a typecheck of the owned project, a grep that proves the change landed.
 - **a brief that fits on one screen.** If it needs more than ~8 steps or touches more than ~6 files,
   split it.
 
@@ -80,6 +80,19 @@ runs its acceptance its siblings are mid-edit. A red full suite there says nothi
 and it pushes the worker to either report a spurious `BLOCKED` or reach outside its owned paths to
 fix a sibling's half-written file. Repo-wide verification is the wave barrier's job (§7), where the
 tree is quiet.
+
+**A green test run is not a green typecheck.** Most JS runners (vitest, bun, jest through babel) strip
+types rather than check them, so a slice passes its named test file and still fails the repo's `tsc` at
+the barrier. Where the repo typechecks as a separate step, give the slice both commands: the behavior
+check on the owned tests, and the typecheck on the owned project. The barrier catches this either way.
+It catches it after the wave closed, which costs a residue pass instead of the worker's own retry.
+
+**Pair the typecheck in only when its project is quiet.** `tsc` runs per project, not per file, so a
+package-scoped typecheck reads whatever a sibling is mid-write in that package, which is the same
+failure as the whole-suite run above. Slices in disjoint packages can each carry their own, and that
+is a reason to prefer slicing along package or tsconfig-project boundaries where the phase allows it.
+When slices in one wave share a project, leave the typecheck at the barrier and **say so in the
+brief**, so a worker does not add it back on its own.
 
 **File ownership is the parallelism constraint, not conceptual independence.** Two slices may run in
 the same wave **iff their `owns` sets are disjoint**. Two "unrelated" features that both edit a barrel
@@ -136,8 +149,8 @@ Each brief carries exactly:
 > You own **only** these paths: `<owns>`. Do not edit anything outside them.
 > Context you need: `<the seam file(s) + the 2–3 files worth reading first>`.
 > Steps: `<the ≤8 steps>`.
-> Acceptance: run `<command, scoped to your owned paths>` and include its last ~10 lines in your
-> report.
+> Acceptance: run `<command(s), scoped to your owned paths>` and include the last ~10 lines of each in
+> your report.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
 > Do **not** run lint/format/fix commands or the full suite. The orchestrator does that once per wave.
 > A failure originating outside your owned paths is not your slice. Note it and move on.
@@ -189,7 +202,9 @@ output tail, decisions and deviations, and anything blocked or out of scope. Mar
 `IN REVIEW` and judge it against the brief:
 
 - **Acceptance evidence present and passing?** No evidence, no approval. An unrun acceptance is a
-  `REVISE`, always. This is the one rule that keeps review from decaying into rubber-stamping.
+  `REVISE`, always. This is the one rule that keeps review from decaying into rubber-stamping. A brief
+  with two commands needs two tails. A test tail alone, where you also asked for a typecheck, is an
+  unrun acceptance.
 - **Deviations.** Did it depart from the seam, the constraints, or the plan's architecture?
 - **Ownership.** Did it touch anything outside `owns`? Confirm cheaply with
   `git diff --name-only` (names, not content).

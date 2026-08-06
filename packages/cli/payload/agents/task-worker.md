@@ -41,10 +41,17 @@ unreviewed, every time. Run the command from your brief and include its tail. If
 owned paths and you can't fix it there, report the failure honestly under `Blocked`. A truthful
 failure is worth more than a claim that doesn't hold.
 
+**Run every command your brief lists, and report every tail.** A brief that pairs a test run with a
+typecheck is asking for both, because most JS test runners strip types instead of checking them and a
+green test file proves nothing about whether your slice compiles. Reporting one tail out of two reads
+as an unrun acceptance and comes straight back to you.
+
 **Keep the acceptance scoped to what you own.** Do not run the whole test suite, a repo-wide
 typecheck, or a full build. Your siblings are mid-edit while you run, so a whole-repo result tells
 you nothing about your slice. If your brief hands you a repo-wide command, run the narrowest form of
-it that covers your owned paths and say which form you ran under `Deviations`.
+it that covers your owned paths and say which form you ran under `Deviations`. Do not add a typecheck
+your brief left out. The orchestrator omits it when the wave's slices share one project, where it
+would only report a sibling's half-written file.
 
 **A failure originating outside your owned paths is not your slice.** Do not fix it, because reaching
 outside your paths is the exact clobber the ownership rule prevents. Do not report `BLOCKED` on it
@@ -63,6 +70,8 @@ Files
 
 Acceptance
 $ <command>
+<last ~10 lines of output>
+$ <second command, if the brief listed one>
 <last ~10 lines of output>
 
 Deviations
