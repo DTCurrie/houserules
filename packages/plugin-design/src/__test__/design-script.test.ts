@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
+
+import { renderTokenSeed } from '../tokens-seed.js';
 
 const PLUGIN_DESIGN = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_DESIGN, alias: 'design' }];
@@ -101,5 +103,62 @@ describe('design.mjs', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toMatch(/no design tokens/i);
+  });
+
+  it('reads a token set from --tokens instead of .claude/design/tokens.json', () => {
+    const root = installed();
+    rmSync(join(root, '.claude/design/tokens.json'));
+    writeFileSync(
+      join(root, 'alt-tokens.json'),
+      JSON.stringify({
+        spacing: {
+          $type: 'dimension',
+          md: { $value: { value: 1, unit: 'rem' } },
+        },
+      }),
+    );
+
+    const result = design(
+      root,
+      'token',
+      'spacing.md',
+      '--tokens',
+      'alt-tokens.json',
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('value: 1rem');
+  });
+
+  it('warns on stderr that the token set is still the untouched seed', () => {
+    const root = installed();
+
+    const result = design(root, 'token', 'spacing.md');
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toMatch(/still the kit's placeholder seed/i);
+    expect(result.stderr).toMatch(/design\.mjs extract/);
+  });
+
+  it('warns on the exact bytes renderTokenSeed() produces, so the embedded seed hash tracks the source seed', () => {
+    const root = installed();
+    writeFileSync(join(root, '.claude/design/tokens.json'), renderTokenSeed());
+
+    const result = design(root, 'token', 'spacing.md');
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toMatch(/still the kit's placeholder seed/i);
+  });
+
+  it('does not warn about the seed once a value has been changed', () => {
+    const root = installed();
+    const tokensPath = join(root, '.claude/design/tokens.json');
+    const edited = readFileSync(tokensPath, 'utf8').replace('0.231', '0.5');
+    writeFileSync(tokensPath, edited);
+
+    const result = design(root, 'token', 'spacing.md');
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toMatch(/placeholder seed/i);
   });
 });

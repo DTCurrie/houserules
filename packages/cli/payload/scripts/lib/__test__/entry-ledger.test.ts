@@ -236,7 +236,15 @@ describe('surfaceScope', () => {
     expect(surfaceScope('/l/BACKLOG.md', 'BACKLOG.md', [])).toBe('repo root');
   });
 
-  it('maps a target name to its path prefix', () => {
+  it('prefers the target label, which stays true when the surface holds repo-wide entries', () => {
+    expect(
+      surfaceScope('/l/studio.BACKLOG.md', 'BACKLOG.md', [
+        { name: 'studio', label: 'Studio', pathPrefix: 'apps/studio/' },
+      ]),
+    ).toBe('Studio');
+  });
+
+  it('falls back to the path prefix for a target carrying no label', () => {
     expect(
       surfaceScope('/l/studio.BACKLOG.md', 'BACKLOG.md', [
         { name: 'studio', pathPrefix: 'apps/studio/' },

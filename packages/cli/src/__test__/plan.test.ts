@@ -14,9 +14,13 @@ import {
   defaultModuleIds,
   resolveModuleIds,
 } from '../plan.js';
-import type { BodyAction, SeedAction } from '../actions.js';
+import type { BodyAction, CopyAction, SeedAction } from '../actions.js';
 import type { ModuleDef } from '../module-def.js';
-import type { Registry, RegisteredModule } from '../plugin-registry.js';
+import type {
+  PluginSource,
+  Registry,
+  RegisteredModule,
+} from '../plugin-registry.js';
 import { makeAnswers, makeCtx, makeTarget } from '#test/ctx-builder';
 import { sha256 } from '#test/installed-tree';
 
@@ -646,6 +650,100 @@ describe('computeEffects, given a "body" action', () => {
     const action = bodyAction(join(tempDir(), 'nonexistent.md'));
 
     expect(() => computeEffects(root, [action])).toThrow(KitError);
+  });
+});
+
+describe('computeEffects, given a plugin-sourced action whose payload file is missing', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-broken-plugin-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  function pluginSource(
+    dir: string,
+    name = '@agent-kit/plugin-demo',
+  ): PluginSource {
+    return { name, alias: 'demo', version: '1.0.0', dir };
+  }
+
+  function missingAction(pluginDir: string): BodyAction {
+    return {
+      kind: 'body',
+      module: 'demo',
+      src: join(pluginDir, 'payload-dist', 'rules', 'missing.md'),
+      dest: 'rules/missing.md',
+      reason: 'test',
+    };
+  }
+
+  it('names the plugin that owns the missing payload file, instead of aborting', () => {
+    const root = tempDir();
+    const pluginDir = tempDir();
+    const action = missingAction(pluginDir);
+
+    const { brokenPlugins, effects } = computeEffects(root, [action], {
+      plugins: [pluginSource(pluginDir)],
+    });
+
+    expect(brokenPlugins).toHaveLength(1);
+    expect(brokenPlugins[0].plugin).toBe('@agent-kit/plugin-demo');
+    expect(brokenPlugins[0].message).toContain('@agent-kit/plugin-demo');
+    expect(brokenPlugins[0].message).toContain(action.src);
+    expect(effects).toHaveLength(0);
+  });
+
+  it('tells the user a payload build produces the missing file', () => {
+    const root = tempDir();
+    const pluginDir = tempDir();
+    const action = missingAction(pluginDir);
+
+    const { brokenPlugins } = computeEffects(root, [action], {
+      plugins: [pluginSource(pluginDir)],
+    });
+
+    expect(brokenPlugins[0].message).toMatch(/payload/i);
+    expect(brokenPlugins[0].message).toMatch(/build/i);
+  });
+
+  it("still renders a healthy sibling plugin's plan", () => {
+    const root = tempDir();
+    const brokenPluginDir = tempDir();
+    const healthyPluginDir = tempDir();
+    const healthySrc = join(healthyPluginDir, 'payload-dist', 'ok.md');
+    mkdirSync(dirname(healthySrc), { recursive: true });
+    writeFileSync(healthySrc, 'healthy content\n');
+    const brokenPluginAction = missingAction(brokenPluginDir);
+    const healthyAction: CopyAction = {
+      kind: 'copy',
+      module: 'ok',
+      src: healthySrc,
+      dest: 'ok.md',
+      reason: 'test',
+    };
+
+    const { brokenPlugins, effects } = computeEffects(
+      root,
+      [brokenPluginAction, healthyAction],
+      {
+        plugins: [
+          pluginSource(brokenPluginDir, '@agent-kit/plugin-broken'),
+          pluginSource(healthyPluginDir, '@agent-kit/plugin-ok'),
+        ],
+      },
+    );
+
+    expect(brokenPlugins).toHaveLength(1);
+    expect(effects).toHaveLength(1);
+    expect(effects[0].action.dest).toBe('ok.md');
+    expect(effects[0].op).toBe('create');
   });
 });
 

@@ -70,10 +70,14 @@ owns end to end.
 A well-formed slice has:
 
 - **`owns`:** the exact paths/globs that worker may write. Nothing outside them.
-- **a falsifiable done:** a command whose output proves it, **scoped to the paths the slice owns**. A
-  named test file, a typecheck of the owned project, a grep that proves the change landed.
+- **a falsifiable done:** a command at its narrowest form, e.g. `vitest run <file>`, reachable as
+  `pnpm --filter <pkg> test <path/to/file.test.ts>`.
 - **a brief that fits on one screen.** If it needs more than ~8 steps or touches more than ~6 files,
   split it.
+- **both bounds on a numeric or set-valued criterion.** A cap alone lets a worker satisfy the letter
+  with a degenerate answer, like one token used once.
+- **a named source for a criterion over observed values.** Without it, a browser's own defaults count
+  as violations too. Both are brief-authoring defects: fix the brief, not the model.
 
 **A whole-suite run is not a valid slice acceptance.** Workers in a wave run in parallel, so when one
 runs its acceptance its siblings are mid-edit. A red full suite there says nothing about the slice,
@@ -139,11 +143,11 @@ lags the truth is worse than none.
 
 Send every slice in the wave as parallel `Agent` calls **in a single message**, each with
 `subagent_type: task-worker` and `model: sonnet`. (No `task-worker` agent installed? Use
-`general-purpose` with `model: sonnet` and paste the brief contract below inline.)
+`general-purpose` with `model: sonnet` and paste `agents/task-worker.md` inline, ahead of the brief.)
 
 Mark the slices `DISPATCHED` before you send.
 
-Each brief carries exactly:
+`task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice:
 
 > **Slice `<id>` — `<name>`.** Objective: `<the falsifiable done>`.
 > You own **only** these paths: `<owns>`. Do not edit anything outside them.
@@ -152,10 +156,6 @@ Each brief carries exactly:
 > Acceptance: run `<command(s), scoped to your owned paths>` and include the last ~10 lines of each in
 > your report.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
-> Do **not** run lint/format/fix commands or the full suite. The orchestrator does that once per wave.
-> A failure originating outside your owned paths is not your slice. Note it and move on.
-> Out-of-scope discoveries: report them, do not fix them.
-> Reply with the REPORT format only. No diffs, no file dumps, no narration.
 
 Never hand a worker the whole plan. It gets its slice, its seam, and its constraints.
 

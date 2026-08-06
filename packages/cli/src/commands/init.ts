@@ -147,6 +147,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   try {
     planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
       manifest: installed,
+      plugins: registry.plugins,
     });
   } catch (e) {
     if (e instanceof KitError) {
@@ -154,6 +155,16 @@ export async function init(dir: string, flags: Flags): Promise<number> {
       return 1;
     }
     throw e;
+  }
+
+  // `plugins` is passed so a missing payload is attributed to its plugin rather than
+  // reported as a bare path. Unlike `update`, init refuses rather than installing what it
+  // can: `apply` records the chosen module ids in the manifest regardless of which effects
+  // ran, so a partial first install would claim modules whose files were never written.
+  if (planResult.brokenPlugins.length) {
+    for (const problem of planResult.brokenPlugins) ui.message(problem.message);
+    ui.outro('Nothing written — build the plugin above, then re-run init.');
+    return 1;
   }
 
   ui.note(

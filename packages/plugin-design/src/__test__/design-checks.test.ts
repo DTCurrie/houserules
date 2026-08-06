@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { checkDesign } from '../../payload/scripts/lib/design-checks.mts';
 import { parseColor } from '../../payload/scripts/lib/dtcg-normalize.mts';
@@ -289,6 +289,48 @@ describe('checkDesign, px declarations against a rem scale', () => {
     const { findings } = checkDesign(css, spacingTokenSet());
 
     expect(findings).toEqual([]);
+  });
+});
+
+describe('checkDesign, unparsed chunks', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('counts a declaration-shaped chunk with no colon as unparsed and reports it on stderr', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const css = `
+.card {
+  totally broken chunk;
+  color: #ffffff;
+}
+`;
+
+    const result = checkDesign(css, {});
+
+    expect(result.unparsedCount).toBe(1);
+    expect(
+      errorSpy.mock.calls.some((call) => String(call[0]).includes('1')),
+    ).toBe(true);
+  });
+
+  it('reports zero unparsed chunks and no stderr line for fully parseable CSS', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const css = `
+.card {
+  padding: 24px;
+  color: #ffffff;
+}
+`;
+
+    const result = checkDesign(css, {});
+
+    expect(result.unparsedCount).toBe(0);
+    expect(
+      errorSpy.mock.calls.some((call) =>
+        String(call[0]).includes('could not parse'),
+      ),
+    ).toBe(false);
   });
 });
 

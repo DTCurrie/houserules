@@ -159,7 +159,7 @@ async function reconfigureModules(
         { moduleIds, targets, seedChangesetConfig: false, moduleOptions },
         registry,
       ),
-      { manifest },
+      { manifest, plugins: registry.plugins },
     );
   } catch (e) {
     if (e instanceof KitError) {
@@ -168,6 +168,11 @@ async function reconfigureModules(
     }
     throw e;
   }
+
+  // Reported, not fatal. Reconfiguring changes module OPTIONS and never widens the recorded
+  // module set, and `plannedDests` already folds in the broken plugin's dests so its
+  // installed files are not pruned as retired.
+  for (const problem of planResult.brokenPlugins) ui.message(problem.message);
 
   const prune = computePrune(root, {
     manifest,
@@ -282,6 +287,7 @@ async function disableModules(
       buildPlan(ctx, { ...base, moduleIds: remaining }, registry),
       {
         manifest,
+        plugins: registry.plugins,
       },
     );
   } catch (e) {
@@ -291,6 +297,10 @@ async function disableModules(
     }
     throw e;
   }
+
+  // Reported, not fatal. Withdrawing a module must not be blocked by an unrelated plugin
+  // whose payload is unbuilt, since disabling is one of the ways out of a broken install.
+  for (const problem of planResult.brokenPlugins) ui.message(problem.message);
 
   const prune = computePrune(root, {
     manifest,
@@ -519,6 +529,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
   try {
     planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
       manifest,
+      plugins: registry.plugins,
     });
   } catch (e) {
     if (e instanceof KitError) {
@@ -526,6 +537,14 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
       return 1;
     }
     throw e;
+  }
+
+  // Same reasoning as init: the manifest records the chosen module ids whether or not their
+  // effects ran, so enabling a module from a plugin with no built payload must not write.
+  if (planResult.brokenPlugins.length) {
+    for (const problem of planResult.brokenPlugins) ui.message(problem.message);
+    ui.outro('Nothing written — build the plugin above, then re-run.');
+    return 1;
   }
 
   const label = `Add ${chosen.join(', ')}`;

@@ -10,6 +10,8 @@ export interface Finding {
 export interface CheckResult {
   findings: Finding[];
   coverageSummary: string;
+  /** Chunks the declaration splitter could not parse into a selector/property/value triple. */
+  unparsedCount: number;
 }
 
 /** Printed once per run. Names the plugin that owns everything `check` deliberately skips. */
@@ -137,14 +139,22 @@ function formatDimensionValue(value: number, unit: string): string {
 
 const DECLARATION_PATTERN = /^([a-zA-Z-]+)\s*:\s*(.+)$/;
 
+/** `parseDeclarations`'s result, plus a count of chunks it could not turn into a declaration. */
+interface ParsedDeclarations {
+  declarations: CssDeclaration[];
+  /** Non-empty chunks dropped because they were not a `property: value` pair inside a rule. */
+  unparsedCount: number;
+}
+
 /**
  * Not a full CSS parser: splits rules on `}` and declarations on `;` rather than assuming
  * one per line, so compactly formatted CSS scans the same as conventionally formatted CSS.
  * Line numbers are tracked as characters are consumed rather than read off the split, since
  * a chunk may start partway through a line or span several.
  */
-function parseDeclarations(source: string): CssDeclaration[] {
+function parseDeclarations(source: string): ParsedDeclarations {
   const declarations: CssDeclaration[] = [];
+  let unparsedCount = 0;
   let currentSelector: string | undefined;
   let line = 1;
   let buffer = '';
@@ -153,6 +163,7 @@ function parseDeclarations(source: string): CssDeclaration[] {
   const flushDeclaration = (): void => {
     const text = buffer.trim();
     buffer = '';
+    if (text.length === 0) return;
     const match = currentSelector ? DECLARATION_PATTERN.exec(text) : null;
     if (match) {
       declarations.push({
@@ -161,6 +172,8 @@ function parseDeclarations(source: string): CssDeclaration[] {
         value: match[2].trim(),
         line: bufferStartLine,
       });
+    } else {
+      unparsedCount += 1;
     }
   };
 
@@ -191,7 +204,10 @@ function parseDeclarations(source: string): CssDeclaration[] {
     if (buffer.length === 0 && /\s/.test(char)) continue;
     buffer += char;
   }
-  return declarations;
+  // A chunk left in the buffer with no closing `;` or `}` was never attempted, and is
+  // counted as unparsed rather than silently discarded, same as a chunk that failed to match.
+  if (buffer.trim().length > 0) unparsedCount += 1;
+  return { declarations, unparsedCount };
 }
 
 function groupBySelector(declarations: CssDeclaration[]): CssDeclaration[][] {
@@ -689,7 +705,7 @@ export function checkDesign(
   source: string,
   root: Record<string, unknown>,
 ): CheckResult {
-  const declarations = parseDeclarations(source);
+  const { declarations, unparsedCount } = parseDeclarations(source);
   const groups = groupBySelector(declarations);
   const colorEntries = collectGroupEntries(root, 'color');
   const spacingEntries = collectGroupEntries(root, 'spacing');
@@ -729,5 +745,11 @@ export function checkDesign(
     radiusEntries,
   );
 
-  return { findings, coverageSummary };
+  if (unparsedCount > 0) {
+    console.error(
+      `Parse coverage: read ${declarations.length} declaration(s), could not parse ${unparsedCount} chunk(s). Those chunks were skipped, not checked, and could hide violations.`,
+    );
+  }
+
+  return { findings, coverageSummary, unparsedCount };
 }

@@ -88,11 +88,17 @@ export function reconcileDrift(
         { moduleIds, targets, seedChangesetConfig: false, moduleOptions },
         registry,
       ),
-      { manifest: against, force },
+      { manifest: against, force, plugins: registry.plugins },
     );
 
   try {
     const planResult = planAgainst(manifest, flags.force);
+    // A plugin with no built payload is an ERROR finding naming that plugin, not a thrown
+    // KitError reported as "could not compute drift: <absolute path>". The rest of the drift
+    // report still renders, and `--fix` still applies, because the broken plugin's dests are
+    // folded into `plannedDests` and so appear in neither the drift set nor the prune set.
+    for (const problem of planResult.brokenPlugins)
+      findings.push({ level: 'ERROR', msg: problem.message });
     drift = computeDrift(root, planResult.effects, {
       manifest,
       prune: computePrune(root, {

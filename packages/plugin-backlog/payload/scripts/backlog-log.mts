@@ -6,6 +6,7 @@
  *   add    <prefix> <area> <title> [content]  # content from arg or stdin
  *   remove <id>     <area> <reason>
  *   update <id>     <area> <new-title> [content]
+ *   move   <id>     <to-area>                 # re-file an entry onto another surface
  *   show   <id>                               # decoded history for one ID
  *   list   [<area>]                           # parsed entries from one or all backlogs
  *   render [<area>]                           # rebuild a surface from the ledger alone
@@ -136,6 +137,10 @@ function projectBacklog(records: BacklogRecord[]): {
       if (!e) continue;
       if (r.title !== undefined) e.title = r.title;
       if (r.content !== undefined) e.content = r.content;
+    } else if (r.action === 'move') {
+      const e = entries.get(r.id);
+      if (!e) continue;
+      if (r.file !== undefined) e.file = r.file;
     } else if (r.action === 'remove') {
       removed.add(r.id);
     }
@@ -197,18 +202,36 @@ function projectFile(file: string): {
   return { surviving, removed };
 }
 
-/** Rebuilds one surface file from the log alone, in ledger append order. */
-function rerenderFile(file: string): void {
+/**
+ * Rebuilds one surface file from the log alone, in ledger append order.
+ *
+ * `extraDropped` names ids the caller is intentionally excising from this surface for a
+ * reason the ledger's `removed` set does not capture, such as a `move` off it, so the
+ * rewrite guard does not mistake the loss for an unrecorded one.
+ */
+function rerenderFile(
+  file: string,
+  extraDropped: ReadonlySet<string> = new Set(),
+): void {
   const { surviving, removed } = projectFile(file);
-  writeSurface(file, surviving, removed);
+  writeSurface(file, surviving, new Set([...removed, ...extraDropped]));
 }
 
-/** Every surface implied by the ledger's own recorded `file` values, plus every one on disk. */
+/**
+ * Every surface the ledger currently projects onto, plus every one on disk.
+ *
+ * Read off the SURVIVING entries rather than off every recorded `file`. A record's `file` is
+ * where the entry lived when that record was written, so an entry moved to another surface
+ * leaves its origin in the log forever. Deriving from history rebuilds that origin as a
+ * header-only stub on every render, which reads as an area that still exists and holds nothing.
+ */
 function allSurfaceFiles(): string[] {
+  const { entries, removed } = projectBacklog(readLog<BacklogRecord>(LOG_FILE));
+  const surviving = [...entries.values()].filter((e) => !removed.has(e.id));
   return impliedSurfaceFiles(
     LEDGER_DIR,
     SURFACE,
-    readLog<BacklogRecord>(LOG_FILE).map((r) => r.file),
+    surviving.map((e) => e.file),
     CONFIG.targets ?? [],
   );
 }
@@ -249,14 +272,16 @@ function usage() {
       '  backlog-log.mjs add    <prefix> <area> <title> [content] [--chat <id>]',
       '  backlog-log.mjs remove <id>     <area> <reason>',
       '  backlog-log.mjs update <id>     <area> <new-title> [content]',
+      '  backlog-log.mjs move   <id>     <to-area>',
       '  backlog-log.mjs show   <id>',
       '  backlog-log.mjs list   [<area>]',
       '  backlog-log.mjs render [<area>]',
       '',
       'When [content] is omitted for add/update, the body is read from stdin.',
-      "<area> is a bare target name (e.g. studio), resolving to that area's surface",
-      'inside the ledger directory. Omit it for the repo-root backlog. A path ending in',
-      'BACKLOG.md names the same area and resolves to the same file.',
+      '<area> is required and is a bare target name (e.g. studio), resolving to that',
+      "area's surface inside the ledger directory. Pass BACKLOG.md for the repo-root",
+      'backlog. A path ending in BACKLOG.md names the same area and resolves to the',
+      'same file.',
       'add auto-detects the active Claude Code session ID; pass --chat <id> or',
       'set CLAUDE_SESSION_ID=<id> to override, or --chat=none to suppress.',
     ].join('\n'),
@@ -352,6 +377,34 @@ switch (action) {
       content: encodeBody(body),
     });
     rerenderFile(surface);
+    break;
+  }
+
+  case 'move': {
+    const [id, toArea] = rest;
+    if (!id || !toArea) {
+      usage();
+      process.exit(1);
+    }
+    const destination = resolveSurfaceArg(toArea);
+    const { entries, removed } = projectBacklog(
+      readLog<BacklogRecord>(LOG_FILE),
+    );
+    const entry = entries.get(id);
+    if (!entry || removed.has(id))
+      entryNotFound(id, relativeToRoot(REPO_ROOT, LOG_FILE));
+    const source = resolveSurfaceArg(
+      normalizeSurfaceRef(entry.file, SURFACE, CONFIG.targets ?? []),
+    );
+    appendEvent(LOG_FILE, {
+      ts: nowIso(),
+      id,
+      action: 'move',
+      file: surfaceRelFile(LEDGER_DIR, destination),
+      chat: resolveChat(chatFlag, REPO_ROOT),
+    });
+    rerenderFile(source, new Set([id]));
+    rerenderFile(destination);
     break;
   }
 

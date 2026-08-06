@@ -7,6 +7,7 @@
  *             [--scope <path>,<path>] [--chat <id>]
  *   supersede <id> <area> <new-title> [body] [--scope <path>,<path>] [--chat <id>]
  *   amend     <id> <area> <new-body>
+ *   move      <id> <to-area>
  *   show      <id>
  *   list      [<area>]
  *   render    [<area>]
@@ -90,7 +91,7 @@ function surfaceRelFile(file: string): string {
 interface DecisionRecord {
   ts: string;
   id: string;
-  action: 'decide' | 'supersede' | 'amend';
+  action: 'decide' | 'supersede' | 'amend' | 'move';
   file?: string;
   title?: string;
   supersedes?: string[];
@@ -138,6 +139,9 @@ function projectDecisions(records: DecisionRecord[]): Projection {
     } else if (r.action === 'amend') {
       const existing = entries.get(r.id);
       if (existing && r.content !== undefined) existing.content = r.content;
+    } else if (r.action === 'move') {
+      const existing = entries.get(r.id);
+      if (existing && r.file !== undefined) existing.file = r.file;
     }
   }
   return { entries, superseded };
@@ -336,12 +340,20 @@ function projectFileEntries(file: string): {
   return { entries, superseded, supersededBy: supersededByOf(allEntries) };
 }
 
-/** Every surface implied by the ledger's own recorded `file` values, plus every one on disk. */
+/**
+ * Every surface the ledger currently projects onto, plus every one on disk.
+ *
+ * Read off the projected entries rather than off every recorded `file`. A record's `file` is
+ * where the decision lived when that record was written, so one moved to another surface leaves
+ * its origin in the log forever. Deriving from history rebuilds that origin as a header-only stub
+ * on every render, which reads as an area that still exists and holds nothing.
+ */
 function allSurfaceFiles(): string[] {
+  const { entries } = projectDecisions(readLog<DecisionRecord>(LOG_FILE));
   return impliedSurfaceFiles(
     LEDGER_DIR,
     SURFACE,
-    readLog<DecisionRecord>(LOG_FILE).map((r) => r.file),
+    [...entries.values()].map((e) => e.file),
     CONFIG.targets ?? [],
   );
 }
@@ -371,8 +383,17 @@ function listEntries(
   }));
 }
 
-/** Rebuilds one surface file from the log alone, in append order. */
-function rerenderFile(file: string): void {
+/**
+ * Rebuilds one surface file from the log alone, in append order.
+ *
+ * `intentionallyDropped` names ids the log records as no longer belonging to this file, such as
+ * a decision `move` sent elsewhere, so the append-only safety check does not mistake that for
+ * data loss.
+ */
+function rerenderFile(
+  file: string,
+  intentionallyDropped: Set<string> = new Set(),
+): void {
   const { entries, superseded, supersededBy } = projectFileEntries(file);
   const body = entries
     .map((e) =>
@@ -384,7 +405,7 @@ function rerenderFile(file: string): void {
     )
     .join('');
   const nextContent = decisionHeader(file) + body;
-  if (rebuildWouldDropEntries(file, nextContent)) {
+  if (rebuildWouldDropEntries(file, nextContent, intentionallyDropped)) {
     console.error(
       `Refusing to rewrite ${relativeToRoot(REPO_ROOT, file)}: the decision ` +
         `ledger at ${LOG_FILE} is missing or has fewer entries than the file ` +
@@ -407,6 +428,7 @@ function usage() {
       '                             [--supersedes <id>,<id>] [--scope <path>,<path>] [--chat <id>]',
       '  decision-log.mjs supersede <id> <area> <new-title> [body] [--scope <path>,<path>] [--chat <id>]',
       '  decision-log.mjs amend     <id> <area> <new-body>',
+      '  decision-log.mjs move      <id> <to-area>',
       '  decision-log.mjs show      <id>',
       '  decision-log.mjs list      [<area>]',
       '  decision-log.mjs render    [<area>]',
@@ -416,9 +438,10 @@ function usage() {
       '  decision-log.mjs scope     <path> [<path>...]',
       '',
       'When [body] is omitted, it is read from stdin.',
-      "<area> is a bare target name (e.g. studio), resolving to that area's surface",
-      'inside the ledger directory. Omit it for the repo-root decisions. A path ending in',
-      'DECISIONS.md names the same area and resolves to the same file.',
+      '<area> is required: a bare target name (e.g. studio), resolving to that',
+      "area's surface inside the ledger directory, or DECISIONS.md for the repo-root",
+      'decisions. A path ending in DECISIONS.md names the same area and resolves to',
+      'the same file.',
       'decide/supersede auto-detect the active Claude Code session ID; pass --chat <id> or',
       'set CLAUDE_SESSION_ID=<id> to override, or --chat=none to suppress.',
       'ancestry/current/tree/scope print one line per record, id/title/status, indented by',
@@ -562,6 +585,29 @@ switch (action) {
       content: encodeBody(body),
     });
     rerenderFile(file);
+    break;
+  }
+
+  case 'move': {
+    const [id, toArea] = rest;
+    if (!id || !toArea) {
+      usage();
+      process.exit(1);
+    }
+    const { entries } = projectDecisions(readLog<DecisionRecord>(LOG_FILE));
+    requireKnownId(entries, id, 'move');
+    const oldFile = resolve(LEDGER_DIR, entries.get(id)!.file);
+    const newFile = resolveSurfaceFile(toArea);
+    const chat = resolveChat(chatFlag, REPO_ROOT);
+    appendEvent(LOG_FILE, {
+      ts: nowIso(),
+      id,
+      action: 'move',
+      file: surfaceRelFile(newFile),
+      chat,
+    });
+    rerenderFile(oldFile, new Set([id]));
+    rerenderFile(newFile);
     break;
   }
 

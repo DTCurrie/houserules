@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * Assembles payload-dist/ for a plugin that ships `.mts` scripts alongside prose.
+ * Assembles payload-dist/ for a plugin that ships prose, and optionally `.mts` scripts.
  *
- * `tsconfig.payload.json` compiles the scripts before this runs, so this step only copies the
- * prose dirs through verbatim. `payload-dist` is the only root the resolver reads, so the
- * plugin must never ship a half-built mixture of sources and output.
+ * When payload/scripts exists, tsconfig.payload.json must compile it into payload-dist/scripts
+ * before this runs, so this step only copies the prose dirs through verbatim. A plugin with no
+ * payload/scripts has nothing to compile, and assembling its prose is the whole job.
+ * `payload-dist` is the only root the resolver reads, so the plugin must never ship a
+ * half-built mixture of sources and output.
  */
 
 import { cpSync, existsSync, rmSync } from 'node:fs';
@@ -17,7 +19,8 @@ const OUT = join(ROOT, 'payload-dist');
 
 const VERBATIM = ['rules', 'reference', 'skills', 'agents'];
 
-if (!existsSync(join(OUT, 'scripts'))) {
+const hasScriptSources = existsSync(join(SOURCE, 'scripts'));
+if (hasScriptSources && !existsSync(join(OUT, 'scripts'))) {
   console.error(
     'payload-dist/scripts is missing — run `tsc -p tsconfig.payload.json` first.',
   );
@@ -32,6 +35,5 @@ for (const dir of VERBATIM) {
   cpSync(from, to, { recursive: true });
 }
 
-console.log(
-  `Assembled payload-dist (${VERBATIM.join(', ')} + compiled scripts)`,
-);
+const parts = hasScriptSources ? [...VERBATIM, 'compiled scripts'] : VERBATIM;
+console.log(`Assembled payload-dist (${parts.join(', ')})`);

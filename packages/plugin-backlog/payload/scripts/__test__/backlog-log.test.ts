@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { gunzipSync, gzipSync } from 'node:zlib';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -120,11 +126,11 @@ describe('backlog-log.mjs add', () => {
     expect(existsSync(join(root, ROOT_SURFACE))).toBe(true);
   });
 
-  it('names the target area in the header of a per-area surface', () => {
+  it('names the target by its label in the header of a per-area surface', () => {
     run(root, ['add', 'TEST', 'studio', 'T', 'B', '--chat=none']);
 
     expect(readFile(root, '.claude/ledgers/studio.BACKLOG.md')).toMatch(
-      /^# Backlog — apps\/studio\n/,
+      /^# Backlog — Studio\n/,
     );
   });
 
@@ -491,6 +497,98 @@ describe('backlog-log.mjs update', () => {
 
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('no record of TEST-cccccc');
+  });
+});
+
+describe('backlog-log.mjs move', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: ROOT_RECORD_FILE,
+        title: 'First item',
+        chat: null,
+        content: encodeBody('body one'),
+      },
+    ]);
+  });
+
+  it('renders the entry on the destination surface', () => {
+    const r = run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFile(root, '.claude/ledgers/studio.BACKLOG.md')).toContain(
+      '## [TEST-aaaaaa] First item',
+    );
+  });
+
+  it('does not rebuild a surface that only the move history still names', () => {
+    run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
+    rmSync(join(root, ROOT_SURFACE));
+
+    run(root, ['render']);
+
+    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
+  });
+
+  it('removes the entry from the source surface', () => {
+    run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
+
+    expect(readFile(root, ROOT_SURFACE)).not.toContain('TEST-aaaaaa');
+  });
+
+  it('exits 1 when the id has no ledger record', () => {
+    const r = run(root, ['move', 'TEST-cccccc', 'studio', '--chat=none']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('no record of TEST-cccccc');
+  });
+
+  it('exits 0 when the source surface was already rendered to disk before the move', () => {
+    run(root, ['render', 'BACKLOG.md']);
+
+    const r = run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFile(root, ROOT_SURFACE)).not.toContain('TEST-aaaaaa');
+  });
+
+  it('exits 1 when the id was already removed', () => {
+    run(root, [
+      'remove',
+      'TEST-aaaaaa',
+      'BACKLOG.md',
+      'shipped it',
+      '--chat=none',
+    ]);
+
+    const r = run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('no record of TEST-aaaaaa');
+  });
+
+  it('keeps the entry on its new surface after a later update', () => {
+    run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
+
+    run(root, [
+      'update',
+      'TEST-aaaaaa',
+      'studio',
+      'New title',
+      'new body',
+      '--chat=none',
+    ]);
+
+    expect(readFile(root, '.claude/ledgers/studio.BACKLOG.md')).toContain(
+      '## [TEST-aaaaaa] New title',
+    );
+    expect(readFile(root, ROOT_SURFACE)).not.toContain('TEST-aaaaaa');
   });
 });
 

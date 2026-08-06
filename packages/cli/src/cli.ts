@@ -196,6 +196,18 @@ program
   );
 
 program
+  .command('probe')
+  .description(
+    'load a plugin package through the real resolver and report what it contributes',
+  )
+  .argument('<path>', 'path to the plugin package, relative to the cwd')
+  .option('--alias <name>', 'namespace to register the plugin under', 'probe')
+  .action(async (path: string, options: { alias: string }) => {
+    const { probe } = await import('./commands/probe.js');
+    exitCode = await probe(resolve(path), options.alias);
+  });
+
+program
   .command('report')
   .description("transcript telemetry for this repo's sessions (read-only)")
   .argument('[dir]', 'target repo root (default: current directory)')

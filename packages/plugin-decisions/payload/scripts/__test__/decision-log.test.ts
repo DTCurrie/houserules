@@ -597,6 +597,64 @@ describe('decision-log.mjs amend', () => {
   });
 });
 
+describe('decision-log.mjs move', () => {
+  const STUDIO_SURFACE = '.claude/ledgers/studio.DECISIONS.md';
+  let root: string;
+  let id: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+    id = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'navcat over recast',
+      'chose navcat',
+      '--chat=none',
+    ]).stdout.trim();
+  });
+
+  it('renders the moved decision on the destination surface', () => {
+    run(root, ['move', id, 'studio']);
+
+    expect(readFile(root, STUDIO_SURFACE)).toContain(
+      `[${id}] navcat over recast`,
+    );
+  });
+
+  it('removes the decision from the source surface', () => {
+    run(root, ['move', id, 'studio']);
+
+    expect(readFile(root, SURFACE)).not.toContain(id);
+  });
+
+  it('exits 1 when the id does not resolve in the log', () => {
+    const r = run(root, ['move', 'SIM-ffffff', 'studio']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('SIM-ffffff does not resolve');
+  });
+
+  it('keeps a supersede chain resolvable through ancestry after a member moves', () => {
+    const secondId = run(root, [
+      'supersede',
+      id,
+      'DECISIONS.md',
+      'navcat revisited',
+      'body',
+      '--chat=none',
+    ]).stdout.trim();
+
+    run(root, ['move', id, 'studio']);
+    const r = run(root, ['ancestry', secondId]);
+
+    expect(r.status, r.stderr).toBe(0);
+    const lines = r.stdout.trim().split('\n');
+    expect(lines[0]).toContain(`${secondId}  navcat revisited  accepted`);
+    expect(lines[1]).toContain(`${id}  navcat over recast  superseded`);
+  });
+});
+
 describe('decision-log.mjs show', () => {
   let root: string;
 

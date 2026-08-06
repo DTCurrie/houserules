@@ -128,10 +128,14 @@ export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
   }
 
   // A workspace member no target covers silently misses lint-fix, reviewer, and ledger
-  // coverage while doctor still reports healthy.
+  // coverage while doctor still reports healthy. A workspace package that a `plugins[]`
+  // entry resolves to is tooling for the kit, not reviewable product code, so it is
+  // exempt. Matched on the resolved directory, since a repo-relative `plugins[]` entry
+  // never carries the package name.
   const targeted = new Set((config.targets ?? []).map((t) => t.packageName));
+  const pluginDirs = new Set(registry.plugins.map((p) => p.dir));
   for (const p of workspacePackages) {
-    if (!targeted.has(p.name))
+    if (!targeted.has(p.name) && !pluginDirs.has(p.dir))
       findings.push({
         level: 'WARN',
         msg: `workspace package "${p.name}" (${p.relDir}) has no kit target — add one to .claude/kit.config.json targets[] by hand (re-running init skips the existing config)`,

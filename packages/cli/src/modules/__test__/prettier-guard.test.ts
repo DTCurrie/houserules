@@ -62,6 +62,18 @@ describe('prettierGuardActions, .prettierignore protection', () => {
     expect(region?.body).toContain('.claude/kit-manifest.json');
   });
 
+  it('protects .claude/kit.config.json even though it is a user-owned seed', () => {
+    const ctx = makeCtx({ prettier: true });
+
+    const actions = prettierGuardActions(ctx, []);
+
+    const region = actions.find(
+      (a): a is Extract<typeof a, { kind: 'region' }> =>
+        a.kind === 'region' && a.dest === '.prettierignore',
+    );
+    expect(region?.body).toContain('.claude/kit.config.json');
+  });
+
   it('plans no .prettierignore action for a repo without prettier', () => {
     const ctx = makeCtx({ prettier: false });
 

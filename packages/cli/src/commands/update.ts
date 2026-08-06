@@ -179,6 +179,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
       manifest,
       force: flags.force,
+      plugins: registry.plugins,
     });
   } catch (e) {
     if (e instanceof KitError) {
@@ -187,6 +188,12 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     }
     throw e;
   }
+
+  // A broken plugin's missing payload is reported against that plugin, but every other
+  // module's plan still renders and applies below. The command still fails, since the
+  // broken plugin's files were not refreshed.
+  for (const problem of planResult.brokenPlugins) ui.message(problem.message);
+  const hasBrokenPlugins = planResult.brokenPlugins.length > 0;
 
   // The hook removal folds into the same settings write the additive merge produces, so
   // settings.json is written once and never clobbers a user hook.
@@ -277,7 +284,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     showLegacyLedgerHint(root);
     showNextSteps(planResult.advisories, flags);
     ui.outro('Dry run — nothing written.');
-    return 0;
+    return hasBrokenPlugins ? 1 : 0;
   }
 
   const { written } = apply(
@@ -335,5 +342,5 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       .filter(Boolean)
       .join('; ') || 'Done.',
   );
-  return 0;
+  return hasBrokenPlugins ? 1 : 0;
 }

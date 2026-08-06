@@ -330,4 +330,27 @@ describe('checkConfigValidity, workspace coverage', () => {
 
     expect(messages(root, ctx)).toEqual([]);
   });
+
+  it('does not warn about a workspace package a repo-relative plugins[] entry resolves to', () => {
+    const root = useRepo('pnpm-monorepo');
+    writeFileSync(
+      join(root, 'games/cityville', 'package.json'),
+      JSON.stringify(
+        { name: '@fix/cityville', private: true, main: 'index.cjs' },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      join(root, 'games/cityville', 'index.cjs'),
+      'module.exports = () => [];\n',
+    );
+    const ctx = stageConfig(root, {
+      version: 2,
+      targets: [STUDIO_TARGET],
+      plugins: [{ name: './games/cityville', alias: 'cityville' }],
+    });
+
+    expect(messages(root, ctx)).toEqual([]);
+  });
 });

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 
 import {
@@ -35,6 +35,7 @@ import { prettierGuardActions } from './modules/prettier-guard.js';
 import type {
   Action,
   AdviseAction,
+  BodyAction,
   CopyAction,
   FileAction,
   SeedAction,
@@ -43,7 +44,7 @@ import type {
 import type { KitManifest } from './core/manifest.js';
 import type { Ctx } from './detect.js';
 import type { Answers, ModuleDef } from './module-def.js';
-import type { Registry } from './plugin-registry.js';
+import type { PluginSource, Registry } from './plugin-registry.js';
 import type {
   Settings,
   SettingsChange,
@@ -97,6 +98,25 @@ export interface Effect {
 export interface ComputeEffectsOptions {
   manifest?: KitManifest | null;
   force?: boolean;
+  /**
+   * Plugin sources, used to attribute a missing `payload-dist/` file to the plugin that
+   * owns it instead of aborting the whole plan. A caller that omits this still gets the
+   * old behavior: a missing payload file throws {@link KitError} unconditionally, since
+   * there is no way to tell a plugin's file from the kit's own.
+   */
+  plugins?: PluginSource[];
+}
+
+/**
+ * One plugin whose `payload-dist/` is missing one or more files a current action needs.
+ * Recorded instead of thrown, so a broken plugin does not block the plan of every other
+ * one.
+ */
+export interface BrokenPluginProblem {
+  /** The plugin's name, as configured in kit.config.json. */
+  plugin: string;
+  /** Human-readable, names the plugin, the missing file(s), and the fix. */
+  message: string;
 }
 
 export interface PlanResult {
@@ -106,6 +126,8 @@ export interface PlanResult {
   signature: SettingsSignature;
   /** Every dest the current plan produces. The reference set prune diffs against. */
   plannedDests: Set<string>;
+  /** Non-empty when a plugin's built payload is missing a file the plan needs. */
+  brokenPlugins: BrokenPluginProblem[];
 }
 
 export interface PruneDelete {
@@ -216,13 +238,56 @@ function sha256(content: Buffer | string): string {
 
 // A `region` action is absent here: its bytes depend on the host file, so it is
 // resolved inside computeEffects instead.
+//
+// A copy action's src is checked by the caller (checkPayloadMissing) before this runs, so
+// existence is already guaranteed here.
 function readAction(action: CopyAction | WriteAction | SeedAction): Buffer {
-  if (action.kind === 'copy') {
-    if (!existsSync(action.src))
-      throw new KitError(`Kit payload file missing: ${action.src}`);
-    return readFileSync(action.src);
-  }
+  if (action.kind === 'copy') return readFileSync(action.src);
   return Buffer.from(action.content, 'utf8');
+}
+
+/** Whether `src` resolves inside one of `plugins`' own package directories. */
+function findOwningPlugin(
+  src: string,
+  plugins: PluginSource[] | undefined,
+): PluginSource | undefined {
+  return plugins?.find((p) => src === p.dir || src.startsWith(p.dir + sep));
+}
+
+function formatBrokenPluginMessage(
+  pluginName: string,
+  missing: string[],
+): string {
+  const files = missing.map((src) => `  - ${src}`).join('\n');
+  return (
+    `plugin "${pluginName}" is missing its built payload. Run this plugin's payload ` +
+    `build (its package's \`build\` or \`build:payload\` script) to produce:\n${files}`
+  );
+}
+
+/**
+ * Checks a `copy` or `body` action's payload file. A built-in's missing file is a broken
+ * kit install and aborts immediately, since there is no owner to attribute it to and
+ * nothing else can produce it. A plugin's missing file is recorded against that plugin in
+ * `broken` and `brokenDests` instead, so the caller can skip this one action and keep
+ * planning everything else.
+ *
+ * @returns true when the action's effect should be skipped because its payload is missing.
+ */
+function checkPayloadMissing(
+  action: CopyAction | BodyAction,
+  plugins: PluginSource[] | undefined,
+  broken: Map<string, string[]>,
+  brokenDests: Set<string>,
+): boolean {
+  if (existsSync(action.src)) return false;
+  const plugin = findOwningPlugin(action.src, plugins);
+  if (!plugin) throw new KitError(`Kit payload file missing: ${action.src}`);
+  const missing = broken.get(plugin.name) ?? [];
+  missing.push(action.src);
+  broken.set(plugin.name, missing);
+  brokenDests.add(action.dest);
+  return true;
 }
 
 /**
@@ -263,7 +328,7 @@ export function classifyWrite(args: {
 export function computeEffects(
   root: string,
   actions: Action[],
-  { manifest = null, force = false }: ComputeEffectsOptions = {},
+  { manifest = null, force = false, plugins }: ComputeEffectsOptions = {},
 ): PlanResult {
   const effects: Effect[] = [];
   const advisories: AdviseAction[] = [];
@@ -271,6 +336,11 @@ export function computeEffects(
   // dest → the content an earlier action in THIS plan will have written there.
   // Only same-plan ordering matters: apply() executes effects in this order.
   const pendingContent = new Map<string, string>();
+  // Plugin name → its missing payload src paths, and the dests those actions would have
+  // produced. The dests are folded into plannedDests below so a broken plugin's
+  // already-installed files are not mistaken for retired ones and pruned.
+  const broken = new Map<string, string[]>();
+  const brokenDests = new Set<string>();
 
   for (const action of actions) {
     if (action.kind === 'advise') {
@@ -333,8 +403,7 @@ export function computeEffects(
     }
 
     if (action.kind === 'body') {
-      if (!existsSync(action.src))
-        throw new KitError(`Kit payload file missing: ${action.src}`);
+      if (checkPayloadMissing(action, plugins, broken, brokenDests)) continue;
       const shipped = readFileSync(action.src, 'utf8');
       const { frontmatter: shippedFrontmatter, body: canonicalBody } =
         splitFrontmatter(shipped);
@@ -432,6 +501,11 @@ export function computeEffects(
     }
 
     // copy | write: kit-owned
+    if (
+      action.kind === 'copy' &&
+      checkPayloadMissing(action, plugins, broken, brokenDests)
+    )
+      continue;
     const content = readAction(action);
     const hash = sha256(content);
     const op = classifyWrite({
@@ -481,15 +555,32 @@ export function computeEffects(
   const signature = settingsSignature(fragments);
 
   // `region` and `body` are included so a retired one stops being pruned as an orphan.
-  const plannedDests = new Set(
-    effects
+  // brokenDests too: a broken plugin's already-installed file did not get an effect this
+  // run, but it is still meant to exist, so it must not read as retired and get pruned.
+  const plannedDests = new Set([
+    ...effects
       .filter((e) =>
         ['copy', 'write', 'seed', 'region', 'body'].includes(e.action.kind),
       )
       .map((e) => e.action.dest),
+    ...brokenDests,
+  ]);
+
+  const brokenPlugins: BrokenPluginProblem[] = [...broken.entries()].map(
+    ([plugin, missing]) => ({
+      plugin,
+      message: formatBrokenPluginMessage(plugin, missing),
+    }),
   );
 
-  return { effects, settingsPlan, advisories, signature, plannedDests };
+  return {
+    effects,
+    settingsPlan,
+    advisories,
+    signature,
+    plannedDests,
+    brokenPlugins,
+  };
 }
 
 /**

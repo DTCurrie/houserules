@@ -268,19 +268,25 @@ export function surfacePath(
 
 /**
  * The area a rendered surface covers, for its header. Reads the target out of the filename and
- * maps it through the configured targets, so a file named `studio.BACKLOG.md` still renders as
- * `Backlog — apps/studio` rather than naming the directory it happens to sit in.
+ * maps it through the configured targets, so a file named `studio.BACKLOG.md` renders as
+ * `Backlog — Studio` rather than naming the directory it happens to sit in.
+ *
+ * The target's `label` wins over its `pathPrefix`. A surface named for a target does not have to
+ * hold only that target's entries: a repo whose whole product is one target files everything
+ * there, and rendering `pathPrefix` then claims a scope narrower than the entries below it. The
+ * label is the name the user chose for the area, so it stays true either way. `pathPrefix`
+ * remains the fallback for a target that somehow carries no label.
  */
 export function surfaceScope(
   file: string,
   basename: string,
-  targets: ReadonlyArray<{ name: string; pathPrefix?: string }>,
+  targets: ReadonlyArray<{ name: string; label?: string; pathPrefix?: string }>,
 ): string {
   const name = file.split('/').pop() ?? '';
   if (name === basename) return 'repo root';
   const target = name.slice(0, -(basename.length + 1));
   const match = targets.find((t) => t.name === target);
-  return match?.pathPrefix?.replace(/\/$/, '') || target;
+  return match?.label || match?.pathPrefix?.replace(/\/$/, '') || target;
 }
 
 /**

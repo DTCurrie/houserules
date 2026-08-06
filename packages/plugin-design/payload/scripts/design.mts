@@ -11,9 +11,15 @@
  *   design.mjs render <target>    render a URL or local HTML file in Chrome and report findings
  *
  * Reads the token set at `.claude/design/tokens.json`, resolved relative to the current
- * working directory. `token` follows DTCG `{group.token}` alias references and prints the
- * final `$type` and value, plus a hex conversion for colors. `$type` is inherited from the
- * nearest ancestor group when a token has none of its own, per the DTCG spec.
+ * working directory, or at the path given with `--tokens <path>` (also resolved relative to
+ * cwd), for every subcommand that reads tokens: `check`, `render`, `token`, `list`, `scales`.
+ * `token` follows DTCG `{group.token}` alias references and prints the final `$type` and
+ * value, plus a hex conversion for colors. `$type` is inherited from the nearest ancestor
+ * group when a token has none of its own, per the DTCG spec.
+ *
+ * Warns on stderr, without failing, when the loaded token set is still byte-identical to the
+ * kit's seeded placeholders, since every check that follows would measure real code against
+ * values nobody chose.
  *
  * `extract` never reads the token set. It walks the repo for a Tailwind v4 `@theme` block,
  * `:root` CSS custom properties, and raw style literals, in that priority order, and prints
@@ -34,6 +40,7 @@
  * findings were reported.
  */
 
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import type { Dirent } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
@@ -52,6 +59,11 @@ import { checkRenderedPage } from './lib/rendered-checks.mjs';
 import type { RenderedFinding } from './lib/rendered-checks.mjs';
 
 const TOKENS_PATH = '.claude/design/tokens.json';
+// Sha256 of the seed's trimmed serialized form, kept in sync with `renderTokenSeed()` in
+// packages/plugin-design/src/tokens-seed.ts by src/__test__/design-script.test.ts. A payload
+// script cannot import that module, since payload scripts are node-builtins-only.
+const SEED_TOKENS_SHA256 =
+  'bf974edf7ee0033bc5a9f572ababde403107396a36e7e9aed5c2eaf241ca9b83';
 const COLOR_CHANNEL_MAX = 255;
 const ALIAS_PATTERN = /^\{([^{}]+)\}$/;
 const SCALE_GROUPS = ['spacing', 'fontSize', 'radius'];
@@ -126,6 +138,8 @@ function usage(): void {
       '  design.mjs extract            scan the repo for design tokens and print a DTCG document',
       '  design.mjs check <files...>   report deterministic design-system findings for each file',
       '  design.mjs render <target>    render a URL or local HTML file in Chrome and report findings',
+      '',
+      '  --tokens <path>               read the token set from <path> instead of .claude/design/tokens.json',
     ].join('\n'),
   );
 }
@@ -163,12 +177,21 @@ function isFontFamily(value: unknown): value is string[] {
   );
 }
 
-function tokensPath(): string {
-  return resolve(process.cwd(), TOKENS_PATH);
+function tokensPath(override: string | undefined): string {
+  return resolve(process.cwd(), override ?? TOKENS_PATH);
 }
 
-function loadTokens(): Record<string, unknown> | undefined {
-  const path = tokensPath();
+function isUntouchedSeed(contents: string): boolean {
+  return (
+    createHash('sha256').update(contents.trimEnd(), 'utf8').digest('hex') ===
+    SEED_TOKENS_SHA256
+  );
+}
+
+function loadTokens(
+  override: string | undefined,
+): Record<string, unknown> | undefined {
+  const path = tokensPath(override);
   if (!existsSync(path)) {
     console.error(
       `No design tokens at ${path}. Run \`npx agent-kit init\` to seed one, or write it by hand.`,
@@ -192,6 +215,11 @@ function loadTokens(): Record<string, unknown> | undefined {
   if (!isRecord(parsed)) {
     console.error(`${path} does not contain a token object.`);
     return undefined;
+  }
+  if (isUntouchedSeed(contents)) {
+    console.error(
+      `${path} is still the kit's placeholder seed. Every check below measures against placeholders, not this repo's design. Bootstrap real values from existing code with \`node .claude/scripts/design.mjs extract\`.`,
+    );
   }
   return parsed;
 }
@@ -614,11 +642,32 @@ async function runRender(
   }
 }
 
-const [command, ...rest] = process.argv.slice(2);
+interface ParsedArgv {
+  tokensOverride: string | undefined;
+  rest: string[];
+}
+
+/** Pulls `--tokens <path>` out of `argv`, wherever it appears, leaving the rest in order. */
+function extractTokensFlag(argv: string[]): ParsedArgv {
+  const rest: string[] = [];
+  let tokensOverride: string | undefined;
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === '--tokens') {
+      tokensOverride = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    rest.push(argv[i]);
+  }
+  return { tokensOverride, rest };
+}
+
+const { tokensOverride, rest: argv } = extractTokensFlag(process.argv.slice(2));
+const [command, ...rest] = argv;
 
 switch (command) {
   case 'token': {
-    const root = loadTokens();
+    const root = loadTokens(tokensOverride);
     if (!root) process.exit(1);
     if (!rest[0]) {
       usage();
@@ -628,13 +677,13 @@ switch (command) {
     break;
   }
   case 'list': {
-    const root = loadTokens();
+    const root = loadTokens(tokensOverride);
     if (!root) process.exit(1);
     process.exit(runList(root, rest[0]));
     break;
   }
   case 'scales': {
-    const root = loadTokens();
+    const root = loadTokens(tokensOverride);
     if (!root) process.exit(1);
     process.exit(runScales(root));
     break;
@@ -648,7 +697,7 @@ switch (command) {
       usage();
       process.exit(1);
     }
-    const root = loadTokens();
+    const root = loadTokens(tokensOverride);
     if (!root) process.exit(1);
     process.exit(runCheck(root, rest));
     break;
@@ -658,7 +707,7 @@ switch (command) {
       usage();
       process.exit(1);
     }
-    const root = loadTokens();
+    const root = loadTokens(tokensOverride);
     if (!root) process.exit(1);
     runRender(root, rest[0]).then((exitCode) => process.exit(exitCode));
     break;

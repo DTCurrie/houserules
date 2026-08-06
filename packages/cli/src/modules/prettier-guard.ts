@@ -26,10 +26,18 @@ const HASH_TRACKED_KINDS = new Set(['copy', 'write', 'body']);
 
 const KIT_MANIFEST = '.claude/kit-manifest.json';
 
+// A seed, not tracked by whole-file hash, so `protectedSubtrees` never derives it. It still
+// belongs in the block: the kit rewrites this file in its own fixed style whenever `init` or
+// `modules` changes the module set, so the formatting is kit-owned even though the values
+// inside it are the user's. A repo whose prettier config disagrees with that style would
+// otherwise get churn on every run, undone by the next write.
+const KIT_CONFIG = '.claude/kit.config.json';
+
 /**
- * The `.claude/` subtrees the given plan actually writes and tracks by content hash.
- * Formatting any of them rewrites bytes the kit owns, and `update` then reads the whole
- * install as your local edits and refuses to refresh it.
+ * The `.claude/` subtrees the given plan actually writes and tracks by content hash, plus
+ * the fixed set of paths the kit formats its own way for reasons other than a content hash
+ * (`KIT_MANIFEST`, `KIT_CONFIG`). Formatting any of them rewrites bytes the kit owns, and
+ * `update` then reads the whole install as your local edits and refuses to refresh it.
  *
  * The first path segment under `.claude/`, not the full containing directory, because
  * `.claude/agents/` and `.claude/skills/` hold the user's own files beside the kit's and
@@ -42,7 +50,7 @@ const KIT_MANIFEST = '.claude/kit-manifest.json';
  * of drifting out of sync with a list nobody remembers to update.
  */
 function protectedSubtrees(actions: Action[]): string[] {
-  const entries = new Set<string>([KIT_MANIFEST]);
+  const entries = new Set<string>([KIT_MANIFEST, KIT_CONFIG]);
 
   for (const action of actions) {
     if (!HASH_TRACKED_KINDS.has(action.kind)) continue;

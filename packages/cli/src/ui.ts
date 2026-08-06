@@ -22,27 +22,40 @@ const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
 const visible = (s: string) => s.replace(ANSI, '').length;
 const hasAnsi = (s: string) => s.includes(`${ESC}[`);
 
+// A bullet or numbered marker opening a line. Held with its first word rather than treated
+// as a word of its own, so an over-long item cannot strand it on a line by itself.
+const LIST_MARKER = /^(?:[-*+]|\d+\.)[ \t]+/;
+
 /**
  * Word-wraps to `width`, measured on visible characters so ANSI codes do not count. A
  * token is never split, because paths, commands, and flags have to stay copy-pasteable,
  * so an over-long word just overflows its line. A break inside a coloured span is closed
  * with a reset so the colour cannot bleed into the rest of the output.
+ *
+ * A list marker stays on the same line as its first word, and continuation lines hang
+ * under that word. Treating the marker as an ordinary word let an item longer than `width`
+ * push its text to the next line, leaving a bare `-` above it that reads as truncated
+ * output. An absolute path in a bullet does that on any normal terminal.
  */
 export function wrap(text: string, width = messageWidth()): string {
   return String(text)
     .split('\n')
     .flatMap((line) => {
       const lead = /^[ \t]*/.exec(line)![0];
-      const words = line.slice(lead.length).split(/\s+/).filter(Boolean);
-      if (!words.length) return [''];
+      const body = line.slice(lead.length);
+      const marker = LIST_MARKER.exec(body)?.[0] ?? '';
+      const words = body.slice(marker.length).split(/\s+/).filter(Boolean);
+      if (!words.length) return marker ? [(lead + marker).trimEnd()] : [''];
+      // Continuation lines align under the first word, not under the marker.
+      const hang = lead + ' '.repeat(visible(marker));
       const out: string[] = [];
-      let current = lead + words[0];
+      let current = lead + marker + words[0];
       for (const word of words.slice(1)) {
         if (visible(current) + 1 + visible(word) <= width)
           current += ` ${word}`;
         else {
           out.push(hasAnsi(current) ? `${current}${ESC}[0m` : current);
-          current = lead + word;
+          current = hang + word;
         }
       }
       out.push(current);

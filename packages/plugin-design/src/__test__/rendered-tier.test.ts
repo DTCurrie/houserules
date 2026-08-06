@@ -61,7 +61,7 @@ describe('design.mjs render', () => {
     const elapsedMs = Date.now() - startedAt;
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/^No such file: .*does-not-exist\.html\n$/);
+    expect(result.stderr).toMatch(/No such file: .*does-not-exist\.html\n/);
     expect(elapsedMs).toBeLessThan(5000);
   });
 

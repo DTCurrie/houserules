@@ -395,6 +395,77 @@ Your package builds its own `payload-dist/` from source, the same way `@agent-ki
 builds its own. `PluginApi.payload` reads from your plugin's `payload-dist/`, never from the
 CLI's, so ship one alongside your compiled `dist/`.
 
+### Authoring outside this workspace
+
+The rest of this section assumes you are inside the `agent-kit` workspace. Most plugin
+authors are not. Here is the same path from a plain repo with no `workspace:*` protocol
+available.
+
+**Depend on a published `@agent-kit/cli`.** Add it the normal way:
+
+```
+npm install --save-dev @agent-kit/cli
+```
+
+and keep the `peerDependencies` range from the "Building it" section above. If your plugin
+lives in a repo that keeps a checkout of this workspace beside it, for example while you
+develop against an unreleased CLI change, point at that checkout with a `link:` or `file:`
+dependency instead:
+
+```json
+"devDependencies": { "@agent-kit/cli": "link:../agent-kit/packages/cli" }
+```
+
+**Prefer the type-only import.** `definePlugin` is a value import, so using it gives your
+plugin a runtime dependency on `@agent-kit/cli`. `Plugin` is exported as a type, so importing
+only that type costs nothing at runtime and keeps `@agent-kit/cli` a genuine peer dependency:
+
+```ts
+import type { Plugin } from '@agent-kit/cli/plugin';
+
+const plugin: Plugin = (api) => [
+  // ...
+];
+
+export default plugin;
+```
+
+Use `definePlugin` when you want the identity wrapper for readability and do not mind the
+runtime import. Use the type-only form when you want zero runtime dependency on the CLI,
+which is the better default for a published plugin.
+
+**Know what the payload build actually does.** A plugin builds its own `payload-dist/` from
+`payload/`, the same way `@agent-kit/cli` builds its own. A prose-only plugin, one that ships
+only rules, reference docs, skills, agents, or output styles, has no compile step at all: it
+needs no `tsconfig.payload.json` and no `tsc` invocation, since none of those file types are
+compiled. A `tsconfig.payload.json`, a `tsc -p tsconfig.payload.json` build step, and a
+`build-payload.mjs` copy step exist only for a plugin that ships `.mts` scripts under
+`payload/scripts/`. If you copy `packages/plugin-accessibility/tsconfig.payload.json` as a
+starting point, delete its `rootDirs` entry: it points into this workspace and means nothing
+in your repo.
+
+**Verify the plugin loads.** Run:
+
+```
+agent-kit probe <path-to-plugin-package> [--alias <name>]
+```
+
+It exits 0 and lists each module your plugin contributes along with the actions it plans, or
+exits 1 with the resolver's message. This catches problems a build does not: a bad entry
+point, a `payload-dist/` you forgot to build, a peer-range mismatch against the installed
+CLI, a module id that collides with another plugin, and a payload `src` path that escapes
+your package directory.
+
+**Two failure modes every first-time author hits:**
+
+- **Forgetting the payload build.** If your `.claude/kit.config.json` names the plugin but
+  its `payload-dist/` is missing the file a module plans, `update` reports the plugin by name,
+  says its payload build produces the missing file, and exits non-zero.
+- **`doctor` no longer warns that a plugin package "has no kit target".** It skips that check
+  for any package a `plugins[]` entry resolves to. The warning still fires for an ordinary
+  workspace package with no target, which is the case it exists for. If an older CLI told you
+  to silence it by adding a target for your plugin, delete that target.
+
 ## Upgrading from a pre-split version
 
 A module now shipped by a plugin used to be built into the CLI. If your `.claude/kit.config.json`

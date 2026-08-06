@@ -60,14 +60,17 @@ A pnpm workspace of thirteen packages. Every path in the Layout section below is
     (one file per doctor check), `payload/scripts/__test__/`, `payload/scripts/lib/__test__/`,
     and `payload/__test__/` for the two invariants over the whole built tree (`dependencies`,
     `execution`).
-  - **`test/` holds no tests**, only the shared testing modules, one per artifact: `repo`
-    (builds the synthetic repos), `run` (`runCli`, `runScript`, `runIn`), `installed-tree`,
-    `doctor-report`, `runner-stub`, `hook-input`, `ctx-builder`, plus `global-setup`. Named
-    `test/` and not `__test__/` because the latter means "tests live here" and none do. They
-    get **no tests of their own**: every suite that imports one exercises it.
-  - Import them via the **`#test/*` alias**, mapped in `vitest.config.ts` (`resolve.alias`, a
-    regex prefix so a new module needs no config change) and `tsconfig.json` (`paths`). Not in
-    `package.json` `imports`, which would publish a mapping to files the package does not ship.
+  - **The shared testing modules live in `packages/test`, published as `@agent-kit/test`**, one
+    per artifact: `repo` (builds the synthetic repos), `run` (`runCli`, `runScript`, `runIn`),
+    `installed-tree`, `doctor-report`, `runner-stub`, `hook-input`, plus `global-setup`. It holds
+    **no tests of its own**: every suite that imports one exercises it. `vitest` is a
+    peerDependency, so its tarball ships an import of it on purpose.
+  - Import them via the **`#test/*` alias**, which resolves into that package. Mapped in each
+    consumer's `vitest.config.ts` (`resolve.alias`, a regex prefix so a new module needs no
+    config change) and `tsconfig.json` (`paths`). `packages/cli` keeps one local module,
+    `ctx-builder`, under its own `test/`, so its config maps `#test/ctx-builder` ahead of the
+    general prefix. Not in `package.json` `imports`, which would publish a mapping to files the
+    package does not ship.
   - Stage with `useInstalledRepo()`, which copies a cached post-`init` snapshot, rather than
     running `init` in a test that is not about `init`. Otherwise one `init` regression fails
     twenty unrelated suites and names the wrong thing. `useRepo()` gives a bare repo.

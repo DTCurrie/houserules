@@ -1,14 +1,17 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   appendFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -840,5 +843,109 @@ describe('update against an install whose option selection was never recorded', 
     expect(runCli(['update', root]).status).toBe(0);
 
     expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+  });
+});
+
+describe('update, given a plugin module whose payload-dist file is missing', () => {
+  const unwrap = (text: string): string => text.replace(/\s+/g, ' ');
+  let root: string;
+  let pluginCopy: string;
+  let missingRuleSrc: string;
+  let result: RunResult;
+
+  beforeEach(() => {
+    ensureFixtureSelfLink();
+    pluginCopy = mkdtempSync(join(tmpdir(), 'kit-broken-plugin-'));
+    cpSync(FIXTURE_PLUGIN, pluginCopy, { recursive: true });
+    root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    editKitConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: pluginCopy, alias: 'fixture' },
+      ];
+    });
+    expect(
+      runCli(['modules', '--yes', '--modules=fixture/fixture-core', root])
+        .status,
+    ).toBe(0);
+    missingRuleSrc = join(pluginCopy, 'payload-dist/rules/fixture-rule.md');
+    rmSync(missingRuleSrc);
+    result = runCli(['update', root]);
+  });
+
+  afterEach(() => {
+    rmSync(pluginCopy, { recursive: true, force: true });
+  });
+
+  it('exits 1, since the plugin was not fully refreshed', () => {
+    expect(result.status).toBe(1);
+  });
+
+  it('names the plugin that owns the missing payload file', () => {
+    expect(unwrap(result.stdout)).toContain(pluginCopy);
+  });
+
+  it('says a payload build produces the missing file', () => {
+    expect(unwrap(result.stdout)).toMatch(/payload/i);
+    expect(unwrap(result.stdout)).toMatch(/build/i);
+  });
+
+  it('keeps the missing payload path in the message byte for byte', () => {
+    expect(result.stdout).toContain(missingRuleSrc);
+  });
+
+  it("still renders the healthy built-in modules' plan instead of aborting everything", () => {
+    expect(unwrap(result.stdout)).toContain('kit files already up to date');
+  });
+
+  it('keeps the missing path on the same line as its list marker', () => {
+    expect(result.stdout).toContain(`- ${missingRuleSrc}`);
+  });
+});
+
+describe('init, given a plugin module whose payload-dist file is missing', () => {
+  const unwrap = (text: string): string => text.replace(/\s+/g, ' ');
+  let root: string;
+  let pluginCopy: string;
+  let result: RunResult;
+
+  beforeEach(() => {
+    ensureFixtureSelfLink();
+    pluginCopy = mkdtempSync(join(tmpdir(), 'kit-broken-plugin-init-'));
+    cpSync(FIXTURE_PLUGIN, pluginCopy, { recursive: true });
+    rmSync(join(pluginCopy, 'payload-dist/rules/fixture-rule.md'));
+    root = useRepo('npm-single');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/kit.config.json'),
+      JSON.stringify({
+        version: 2,
+        packageManager: 'npm',
+        plugins: [{ name: pluginCopy, alias: 'fixture' }],
+        targets: [],
+      }),
+    );
+    result = runCli([
+      'init',
+      '--yes',
+      '--modules=core,fixture/fixture-core',
+      root,
+    ]);
+  });
+
+  afterEach(() => {
+    rmSync(pluginCopy, { recursive: true, force: true });
+  });
+
+  it('exits 1 rather than installing what it can', () => {
+    expect(result.status).toBe(1);
+  });
+
+  it('names the plugin that owns the missing payload file', () => {
+    expect(unwrap(result.stdout)).toContain(pluginCopy);
+  });
+
+  it('writes no manifest, so no module is recorded as installed without its files', () => {
+    expect(existsSync(join(root, '.claude/kit-manifest.json'))).toBe(false);
   });
 });
