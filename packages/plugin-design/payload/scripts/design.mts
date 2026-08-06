@@ -8,6 +8,7 @@
  *   design.mjs scales             print the spacing, fontSize, and radius scales in order
  *   design.mjs extract            scan the repo for design tokens and print a DTCG document
  *   design.mjs check <files...>   report deterministic design-system findings for each file
+ *   design.mjs render <target>    render a URL or local HTML file in Chrome and report findings
  *
  * Reads the token set at `.claude/design/tokens.json`, resolved relative to the current
  * working directory. `token` follows DTCG `{group.token}` alias references and prints the
@@ -20,9 +21,17 @@
  * the next-step hint, goes to stderr, so `design.mjs extract > tokens.json` yields a clean
  * file. It never writes to disk.
  *
+ * `render` accepts an `http(s)://` URL or a path to a local `.html` file, resolved against the
+ * current working directory and converted to a `file://` URL. It launches a locally discovered
+ * headless Chrome, loads the target, and reports the same rendered findings `check` cannot see
+ * from source alone: composited text contrast, rendered hit-target size, and computed-value
+ * drift. It never starts a dev server and never runs a package-manager command. Findings go to
+ * stdout, everything else to stderr, and the Chrome session is always closed, even on failure.
+ *
  * Exits 0 on success, 1 when the token set is missing or invalid, the requested token or
- * group does not exist, an alias chain cycles back on itself, or (for `extract`) no candidate
- * files exist in the repo.
+ * group does not exist, an alias chain cycles back on itself, (for `extract`) no candidate
+ * files exist in the repo, or (for `render`) the target is missing, no Chrome is available, or
+ * findings were reported.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -38,6 +47,9 @@ import {
 import { readCssCustomProperties } from './lib/css-custom-properties.mjs';
 import { collectStyleTokenCandidates } from './lib/style-literals.mjs';
 import { checkDesign, ACCESSIBILITY_SCOPE_NOTE } from './lib/design-checks.mjs';
+import { launchSession } from './lib/cdp-session.mjs';
+import { checkRenderedPage } from './lib/rendered-checks.mjs';
+import type { RenderedFinding } from './lib/rendered-checks.mjs';
 
 const TOKENS_PATH = '.claude/design/tokens.json';
 const COLOR_CHANNEL_MAX = 255;
@@ -113,6 +125,7 @@ function usage(): void {
       '  design.mjs scales             print the spacing, fontSize, and radius scales in order',
       '  design.mjs extract            scan the repo for design tokens and print a DTCG document',
       '  design.mjs check <files...>   report deterministic design-system findings for each file',
+      '  design.mjs render <target>    render a URL or local HTML file in Chrome and report findings',
     ].join('\n'),
   );
 }
@@ -545,6 +558,62 @@ function runCheck(root: Record<string, unknown>, files: string[]): number {
   return hasFailure ? 1 : 0;
 }
 
+const URL_PREFIX_PATTERN = /^https?:\/\//;
+
+type TargetResolution = { url: string } | { error: string };
+
+/** Converts a render target to a URL. A local path is resolved against cwd and must exist. */
+function resolveRenderTarget(target: string): TargetResolution {
+  if (URL_PREFIX_PATTERN.test(target)) return { url: target };
+  const absolutePath = resolve(process.cwd(), target);
+  if (!existsSync(absolutePath)) {
+    return { error: `No such file: ${absolutePath}` };
+  }
+  return { url: `file://${absolutePath}` };
+}
+
+function reportRenderFindings(findings: RenderedFinding[]): void {
+  for (const finding of findings) {
+    console.log(`${finding.selector}  ${finding.message}`);
+  }
+  console.error(
+    findings.length > 0
+      ? `${findings.length} finding(s).`
+      : 'No rendered findings.',
+  );
+}
+
+async function runRender(
+  root: Record<string, unknown>,
+  target: string,
+): Promise<number> {
+  const resolved = resolveRenderTarget(target);
+  if ('error' in resolved) {
+    console.error(resolved.error);
+    return 1;
+  }
+
+  const sessionResult = await launchSession();
+  if (!sessionResult.ok) {
+    console.error(sessionResult.error);
+    return 1;
+  }
+
+  const session = sessionResult.value;
+  try {
+    const navigated = await session.navigate(resolved.url);
+    if (!navigated.ok) {
+      console.error(navigated.error);
+      return 1;
+    }
+    const result = await checkRenderedPage(session, root);
+    reportRenderFindings(result.findings);
+    return result.findings.length > 0 ? 1 : 0;
+  } finally {
+    await session.close();
+  }
+}
+
 const [command, ...rest] = process.argv.slice(2);
 
 switch (command) {
@@ -582,6 +651,16 @@ switch (command) {
     const root = loadTokens();
     if (!root) process.exit(1);
     process.exit(runCheck(root, rest));
+    break;
+  }
+  case 'render': {
+    if (!rest[0]) {
+      usage();
+      process.exit(1);
+    }
+    const root = loadTokens();
+    if (!root) process.exit(1);
+    runRender(root, rest[0]).then((exitCode) => process.exit(exitCode));
     break;
   }
   default:

@@ -4,6 +4,13 @@ import type { Action, ModuleDef, PluginApi } from '@agent-kit/cli/plugin';
 const FRAMEWORK_GUIDES = ['threlte', 'r3f'];
 
 /**
+ * Option values that install a pull-only reference rather than a path-scoped rule. Renderer
+ * performance is reference material because it is read when a frame budget is the problem, not
+ * on every turn that touches the Three.js layer.
+ */
+const REFERENCE_GUIDES = ['performance'];
+
+/**
  * Ships the path-scoped Three.js rule, plus opt-in Threlte and React Three Fiber guides. The
  * guides are option values of the base module rather than modules of their own, because each
  * one is a dangling pointer without the base rule installed alongside it.
@@ -29,6 +36,10 @@ function threeModule(api: PluginApi): ModuleDef {
       choices: [
         { value: 'threlte', label: 'Threlte (Svelte)' },
         { value: 'r3f', label: 'React Three Fiber' },
+        {
+          value: 'performance',
+          label: 'Renderer performance reference (pull-only)',
+        },
       ],
       defaults: [],
     },
@@ -44,12 +55,30 @@ function threeModule(api: PluginApi): ModuleDef {
           ),
         ];
       });
+      const referenceActions = chosen.flatMap((guide): Action[] => {
+        if (!REFERENCE_GUIDES.includes(guide)) return [];
+        return [
+          api.payload.reference(
+            id,
+            'three-performance',
+            'pull-only renderer performance reference, opt-in via three options',
+          ),
+        ];
+      });
       return [
         ...guideActions,
+        ...referenceActions,
         api.payload.rule(
           id,
           'three',
           'path-scoped Three.js extension-pattern rule, loaded only when the Three.js layer is in the working set',
+        ),
+        // Unconditional, unlike the performance reference, because the base rule links it. An
+        // option value would leave that link dangling in every install that skipped the option.
+        api.payload.reference(
+          id,
+          'three-upstream-docs',
+          'pull-only pointer to the upstream llms.txt docs for Three.js, Threlte, and R3F',
         ),
         {
           kind: 'advise',

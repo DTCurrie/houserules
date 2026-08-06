@@ -1,5 +1,6 @@
 import { definePlugin, scriptPermission } from '@agent-kit/cli/plugin';
 
+import { checkChromeAvailable } from './chrome-check.js';
 import { checkDesignTokens, TOKENS_PATH } from './seed-check.js';
 import { renderTokenSeed } from './tokens-seed.js';
 
@@ -59,6 +60,16 @@ function designModule(api: PluginApi): ModuleDef {
           'design-principles',
           'pull-only design principles, the layer that holds across design systems',
         ),
+        api.payload.reference(
+          id,
+          'design-layout',
+          'pull-only layout guide: fluid grids, container queries, grouping, target sizing',
+        ),
+        api.payload.reference(
+          id,
+          'design-performance',
+          'pull-only guide to the design decisions that cost rendering performance',
+        ),
         api.payload.script(
           id,
           'design.mjs',
@@ -71,6 +82,8 @@ function designModule(api: PluginApi): ModuleDef {
         api.payload.lib(id, 'css-custom-properties.mjs'),
         api.payload.lib(id, 'style-literals.mjs'),
         api.payload.lib(id, 'design-checks.mjs'),
+        api.payload.lib(id, 'cdp-session.mjs'),
+        api.payload.lib(id, 'rendered-checks.mjs'),
         {
           kind: 'seed',
           dest: TOKENS_PATH,
@@ -93,7 +106,12 @@ function designModule(api: PluginApi): ModuleDef {
       ];
     },
     check(ctx: Ctx): CheckResult {
-      return checkDesignTokens(ctx);
+      const tokens = checkDesignTokens(ctx);
+      const chrome = checkChromeAvailable();
+      return {
+        findings: [...tokens.findings, ...chrome.findings],
+        readouts: [...tokens.readouts, ...chrome.readouts],
+      };
     },
   };
 }
@@ -142,7 +160,68 @@ function designReviewModule(api: PluginApi): ModuleDef {
   };
 }
 
+/** The game reference documents, each an option value rather than a module of its own. */
+const GAME_GUIDES = ['hud', 'visual'];
+
+/**
+ * Game UI reference material, all pull-only and all off by default.
+ *
+ * One module with options rather than one module per document, because module ids are permanent
+ * once shipped (see `src/retired-modules.ts`) and this is one theme with facets.
+ *
+ * Deliberately no rule. "This repo is a game" is not detectable from a file extension, so a
+ * path-scoped game rule would load on every React or Svelte turn in every non-game repo. The
+ * design rule's routing table is how a reader finds these instead.
+ */
+function designGameModule(api: PluginApi): ModuleDef {
+  const id = 'design-game';
+  return {
+    id,
+    title: 'Game UI references (.claude/reference/design-game-*.md)',
+    group: 'optional',
+    hint(): string {
+      return 'pull-only references for game interfaces: DOM-over-canvas HUD layering, and game visual hierarchy, color, and motion';
+    },
+    defaultEnabled(): boolean {
+      return false;
+    },
+    options: {
+      prompt: 'Which game UI references should install?',
+      choices: [
+        { value: 'hud', label: 'HUD and canvas layering' },
+        { value: 'visual', label: 'Game visual hierarchy, color, and motion' },
+      ],
+      // Neither is true of a repo the installer knows nothing about, and `defaults` is what
+      // every `--yes` run gets. A game reference is an explicit choice.
+      defaults: [],
+    },
+    plan(_ctx, answers): Action[] {
+      const chosen = answers.moduleOptions[`${api.alias}/${id}`] ?? [];
+      const guideActions = chosen.flatMap((guide): Action[] => {
+        if (!GAME_GUIDES.includes(guide)) return [];
+        return [
+          api.payload.reference(
+            id,
+            `design-game-${guide}`,
+            `pull-only game ${guide} reference, opt-in via design-game options`,
+          ),
+        ];
+      });
+      if (guideActions.length === 0) return [];
+      return [
+        ...guideActions,
+        {
+          kind: 'advise',
+          text: 'Game UI references installed under .claude/reference/. They are PULL-ONLY, so they cost nothing until something reads them. There is deliberately no game rule: whether a repo is a game cannot be detected from a file extension, so a path-scoped rule would load on every component turn in a repo that is not one. The design rule does NOT link them either, because a rule pointing at an optional file dangles wherever that option was not chosen. Read them directly when you are building a HUD, or add your own pointer to the frontmatter-owned half of a rule if this repo is a game.',
+          module: id,
+        },
+      ];
+    },
+  };
+}
+
 export default definePlugin((api: PluginApi): ModuleDef[] => [
   designModule(api),
   designReviewModule(api),
+  designGameModule(api),
 ]);

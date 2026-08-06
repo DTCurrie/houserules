@@ -11,6 +11,12 @@ A repo's Three.js layer is **pure Three.js**: no framework bindings, no Svelte, 
 extends Three.js classes or builds reusable geometry and material utilities. Framework
 components consume what it exports, never rebuild it declaratively.
 
+## Check the upstream docs before writing an unfamiliar API
+
+Three.js, Threlte, and React Three Fiber all publish their documentation in `llms.txt` form. The
+URLs are in `../reference/three-upstream-docs.md`. Fetch the relevant one rather than recalling a
+signature, since much of the Three.js material on the web predates the current API.
+
 ## Extend Three.js classes directly
 
 Subclass the closest Three.js type instead of wrapping it, so the result hands straight to a

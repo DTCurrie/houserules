@@ -231,6 +231,67 @@ describe('checkDesign, hit targets', () => {
   });
 });
 
+describe('checkDesign, compact single-line CSS', () => {
+  it('produces the same findings as the equivalent expanded CSS', () => {
+    const compact = `.card { padding: 24px; background: #ffffff; border-radius: 8px; }\n.label { color: #adb5bd; font-size: 13px; }`;
+    const expanded = `
+.card {
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 8px;
+}
+.label {
+  color: #adb5bd;
+  font-size: 13px;
+}
+`;
+
+    const compactResult = checkDesign(compact, {});
+    const expandedResult = checkDesign(expanded, {});
+
+    expect(compactResult.findings.map((finding) => finding.message)).toEqual(
+      expandedResult.findings.map((finding) => finding.message),
+    );
+    expect(compactResult.findings.length).toBeGreaterThan(0);
+  });
+
+  it('reports accurate line numbers for declarations packed onto one line', () => {
+    const css = `.card {\n  color: #ff00ff;\n}\n.label { color: #ff00ff; font-size: 13px; }`;
+
+    const { findings } = checkDesign(css, {});
+    const label = findings.filter((finding) => finding.line === 4);
+
+    expect(label.length).toBeGreaterThan(0);
+  });
+});
+
+describe('checkDesign, px declarations against a rem scale', () => {
+  it('flags a px font-size that is off a rem type scale', () => {
+    const css = `
+.label {
+  font-size: 13px;
+}
+`;
+
+    const { findings } = checkDesign(css, fontSizeTokenSet());
+    const finding = findings.find((entry) => entry.message.includes('13px'));
+
+    expect(finding?.message).toContain('off the font size scale');
+  });
+
+  it('does not flag a px padding that equals a rem spacing scale value', () => {
+    const css = `
+.card {
+  padding: 24px;
+}
+`;
+
+    const { findings } = checkDesign(css, spacingTokenSet());
+
+    expect(findings).toEqual([]);
+  });
+});
+
 describe('checkDesign, var()-only stylesheets', () => {
   it('reports nothing when every value is a var() reference', () => {
     const css = `

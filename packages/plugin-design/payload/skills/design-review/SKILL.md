@@ -15,10 +15,40 @@ Review the design-system fit of a working-tree change. Arguments (optional file 
 2. **Run the checker.** `node .claude/scripts/design.mjs check <files>` finds hardcoded
    literals, off-scale spacing and type, contrast failures, and undersized hit targets, each
    with an exact number and the token that should replace it.
-3. **Read only what it reported.** For a token the check names, run
+3. **Reach for the rendered tier only when the source pass cannot settle it.** This step is
+   conditional, not routine. Run it when `check` raised something only a render can decide,
+   such as a contrast ratio against a background painted by another layer, or when the
+   change is visual enough to warrant a look. `node .claude/scripts/design.mjs render
+<target>` takes an `http(s)://` URL or a path to a local `.html` file. It never starts a
+   dev server, so point it at something already running or at a file on disk. It reports
+   composited contrast and rendered geometry as text. It captures no screenshot, so there is
+   no image to handle. With no Chrome installed it prints one line and exits
+   non-zero, and that is a valid outcome: fall back to "cannot determine from source".
+
+   To check one component with nothing running, write a temporary HTML file that embeds the
+   component's markup, the CSS under review, and the token values it depends on, then render
+   that file:
+
+   ```html
+   <!doctype html>
+   <style>
+     /* the CSS under review, with the token values it depends on inlined */
+   </style>
+   <div class="component-under-review"><!-- the component's markup --></div>
+   ```
+
+   Delete the temporary file once the render finishes.
+
+   **Run this step inside a subagent and bring back only the verdict.** A render launches a
+   browser and can report a finding per element on a busy page, and a review touching several
+   components pays that repeatedly. The subagent absorbs the launch and the raw output, and
+   the main context gets the verdict. This is the same discipline `/verify-changed` and
+   `blast-radius` use.
+
+4. **Read only what it reported.** For a token the check names, run
    `node .claude/scripts/design.mjs token <name>` to confirm it. Never read
    `.claude/design/tokens.json` whole.
-4. **Layer judgment for what the script cannot compute:**
+5. **Layer judgment for what the script cannot compute:**
    - Whether an existing component is being reinvented. Run
      `node .claude/scripts/design.mjs list [group]` before treating a value as uncovered.
    - Whether a new value needs a new token or an existing one already fits. Reuse is the
@@ -26,12 +56,13 @@ Review the design-system fit of a working-tree change. Arguments (optional file 
    - Whether visual emphasis lands on the primary action.
    - Calibrate the depth of this to the size of the change. A one-line tweak does not need a
      full critique.
-5. **Report in two groups.** Mechanical findings from `design.mjs check` first, each with
-   file, line, and the exact token or scale value. Judgment findings second. Do not merge
-   the two lists, since they carry different confidence. If nothing is wrong, say so plainly.
-   "Nothing to report" is a valid and expected outcome, not a failure to find something. For
-   anything that depends on rendered output, say "cannot determine from source" instead of
-   guessing.
+6. **Report in two groups.** Mechanical findings first: everything `design.mjs check` named,
+   plus anything `design.mjs render` computed, each with file, line, and the exact token or
+   scale value. Judgment findings second. Do not merge the two lists, since they carry
+   different confidence. If nothing is wrong, say so plainly. "Nothing to report" is a valid
+   and expected outcome, not a failure to find something. For anything that depends on
+   rendered output and the rendered tier was not run, say "cannot determine from source"
+   instead of guessing.
 
 ## Accessibility is a separate review
 

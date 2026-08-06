@@ -62,6 +62,16 @@ rule stays small and the values stay current with whatever the repo has seeded.
 - **Find out what exists before inventing a name:** `node .claude/scripts/design.mjs list [group]`
 - **Check a literal against the spacing, type, and radius scales:** `node .claude/scripts/design.mjs scales`
 
+Three pull-only references sit alongside the script. They are not loaded until you read them, so
+read the one that answers the question in front of you.
+
+- **Contrast ratios, hit-target rules, type scale, spacing rhythm:** `../reference/design-principles.md`
+- **Laying a screen out:** fluid grids, container queries, grouping related data, where to put the
+  primary action. See `../reference/design-layout.md`.
+- **A design decision that might cost rendering performance:** which properties animate cheaply,
+  what a blur or a shadow costs, fonts and layout shift, image format. See
+  `../reference/design-performance.md`.
+
 ## Where other rules apply
 
 - Contrast is also a WCAG success criterion. If `accessibility.md` is installed, it owns the

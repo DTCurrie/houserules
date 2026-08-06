@@ -28,7 +28,11 @@ interface TokenEntry {
   value: unknown;
 }
 
-interface DtcgColorValue {
+/**
+ * A DTCG color `$value`. Exported because `rendered-checks.mts` computes contrast against
+ * colors read from a live DOM and must use this module's formula, not a second copy of it.
+ */
+export interface DtcgColorValue {
   colorSpace: string;
   components: number[];
   alpha?: number;
@@ -61,7 +65,7 @@ const CONTRAST_OFFSET = 0.05;
 const CONTRAST_MINIMUM = 4.5;
 
 const HIT_TARGET_MINIMUM_PX = 24;
-const REM_TO_PX = 16;
+const REM_BASE_PX = 16;
 const INTERACTIVE_SELECTOR_KEYWORDS = [
   'button',
   'btn',
@@ -131,30 +135,62 @@ function formatDimensionValue(value: number, unit: string): string {
   return `${value}${unit}`;
 }
 
-// Line-based, not a full CSS parser: assumes one selector opener/closer and one
-// declaration per line, which every formatted stylesheet this ships against uses.
+const DECLARATION_PATTERN = /^([a-zA-Z-]+)\s*:\s*(.+)$/;
+
+/**
+ * Not a full CSS parser: splits rules on `}` and declarations on `;` rather than assuming
+ * one per line, so compactly formatted CSS scans the same as conventionally formatted CSS.
+ * Line numbers are tracked as characters are consumed rather than read off the split, since
+ * a chunk may start partway through a line or span several.
+ */
 function parseDeclarations(source: string): CssDeclaration[] {
   const declarations: CssDeclaration[] = [];
-  let currentSelector = '';
-  source.split('\n').forEach((rawLine, index) => {
-    const line = rawLine.trim();
-    if (line.endsWith('{')) {
-      currentSelector = line.slice(0, -1).trim();
-      return;
+  let currentSelector: string | undefined;
+  let line = 1;
+  let buffer = '';
+  let bufferStartLine = line;
+
+  const flushDeclaration = (): void => {
+    const text = buffer.trim();
+    buffer = '';
+    const match = currentSelector ? DECLARATION_PATTERN.exec(text) : null;
+    if (match) {
+      declarations.push({
+        selector: currentSelector as string,
+        property: match[1],
+        value: match[2].trim(),
+        line: bufferStartLine,
+      });
     }
-    if (line === '}') {
-      currentSelector = '';
-      return;
+  };
+
+  for (const char of source.replace(/\r/g, '')) {
+    if (char === '\n') {
+      line += 1;
+      if (buffer.length === 0) bufferStartLine = line;
+      else buffer += ' ';
+      continue;
     }
-    const match = /^([a-zA-Z-]+)\s*:\s*([^;]+);?$/.exec(line);
-    if (!match || !currentSelector) return;
-    declarations.push({
-      selector: currentSelector,
-      property: match[1],
-      value: match[2].trim(),
-      line: index + 1,
-    });
-  });
+    if (char === '{') {
+      currentSelector = buffer.trim();
+      buffer = '';
+      bufferStartLine = line;
+      continue;
+    }
+    if (char === '}') {
+      flushDeclaration();
+      currentSelector = undefined;
+      bufferStartLine = line;
+      continue;
+    }
+    if (char === ';') {
+      flushDeclaration();
+      bufferStartLine = line;
+      continue;
+    }
+    if (buffer.length === 0 && /\s/.test(char)) continue;
+    buffer += char;
+  }
   return declarations;
 }
 
@@ -260,15 +296,21 @@ function isRadiusProperty(property: string): boolean {
   return property === 'border-radius';
 }
 
-function scaleValuesForUnit(entries: TokenEntry[], unit: string): number[] {
+/**
+ * Every scale value, in pixels regardless of the unit it was authored in, so a `px`
+ * declaration can be checked against a `rem`-authored scale instead of being dropped.
+ */
+function scaleValuesInPixels(entries: TokenEntry[]): number[] {
   const values = entries
     .map((entry) => entry.value)
-    .filter(
-      (value): value is DtcgDimensionValue =>
-        isDimensionValue(value) && value.unit === unit,
-    )
-    .map((value) => value.value);
+    .filter(isDimensionValue)
+    .map(toPixels)
+    .filter((value): value is number => value !== undefined);
   return [...new Set(values)].sort((left, right) => left - right);
+}
+
+function pixelsToUnit(pixels: number, unit: string): number {
+  return unit === 'rem' ? pixels / REM_BASE_PX : pixels;
 }
 
 function findNearestValue(target: number, candidates: number[]): number {
@@ -310,22 +352,30 @@ function checkOffScaleDimension(
   scaleLabel: string,
 ): Finding[] {
   const findings: Finding[] = [];
+  const scalePx = scaleValuesInPixels(scaleEntries);
+  if (scalePx.length === 0) return findings;
   for (const declaration of declarations) {
     if (!isTargetProperty(declaration.property)) continue;
     if (parseCssVarReference(declaration.value)) continue;
     for (const token of declaration.value.split(/\s+/)) {
       const dimension = parseDimension(token);
       if (!dimension) continue;
-      const scale = scaleValuesForUnit(scaleEntries, dimension.unit);
-      if (scale.length === 0 || scale.includes(dimension.value)) continue;
-      const nearest = findNearestValue(dimension.value, scale);
+      const targetPx = toPixels(dimension);
+      if (targetPx === undefined || scalePx.includes(targetPx)) continue;
+      const nearestPx = findNearestValue(targetPx, scalePx);
       findings.push({
         line: declaration.line,
-        message: `${token} is off the ${scaleLabel} scale (${scale
-          .map((value) => formatDimensionValue(value, dimension.unit))
-          .join(
-            ', ',
-          )}). Nearest is ${formatDimensionValue(nearest, dimension.unit)}.`,
+        message: `${token} is off the ${scaleLabel} scale (${scalePx
+          .map((pxValue) =>
+            formatDimensionValue(
+              pixelsToUnit(pxValue, dimension.unit),
+              dimension.unit,
+            ),
+          )
+          .join(', ')}). Nearest is ${formatDimensionValue(
+          pixelsToUnit(nearestPx, dimension.unit),
+          dimension.unit,
+        )}.`,
       });
     }
   }
@@ -338,7 +388,8 @@ function linearizeChannel(channel: number): number {
     : ((channel + SRGB_GAMMA_OFFSET) / SRGB_GAMMA_SCALE) ** SRGB_GAMMA_EXPONENT;
 }
 
-function relativeLuminance(color: DtcgColorValue): number {
+/** WCAG relative luminance. Exported so the rendered tier shares one implementation. */
+export function relativeLuminance(color: DtcgColorValue): number {
   const [r, g, b] = color.components;
   return (
     LUMINANCE_WEIGHT_R * linearizeChannel(r) +
@@ -347,7 +398,8 @@ function relativeLuminance(color: DtcgColorValue): number {
   );
 }
 
-function contrastRatio(a: DtcgColorValue, b: DtcgColorValue): number {
+/** WCAG contrast ratio between two colors. Exported so the rendered tier shares one copy. */
+export function contrastRatio(a: DtcgColorValue, b: DtcgColorValue): number {
   const luminanceA = relativeLuminance(a);
   const luminanceB = relativeLuminance(b);
   const lighter = Math.max(luminanceA, luminanceB);
@@ -447,7 +499,7 @@ function checkTokenPairContrast(
 
 function toPixels(dimension: DtcgDimensionValue): number | undefined {
   if (dimension.unit === 'px') return dimension.value;
-  if (dimension.unit === 'rem') return dimension.value * REM_TO_PX;
+  if (dimension.unit === 'rem') return dimension.value * REM_BASE_PX;
   return undefined;
 }
 
