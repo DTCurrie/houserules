@@ -33,6 +33,19 @@ const RESIDENT_MEMORY_FILES = [
   'CLAUDE.local.md',
 ];
 
+/**
+ * Strips YAML quoting and any trailing inline comment from one sequence entry.
+ *
+ * A quoted entry is taken up to its closing quote, so a `#` inside a glob survives. An
+ * unquoted one loses whitespace-then-`#` to the end, which is where YAML ends a scalar.
+ */
+function cleanGlob(raw: string): string {
+  const trimmed = raw.trim();
+  const quoted = /^(['"])(.*?)\1/.exec(trimmed);
+  const value = quoted ? quoted[2] : trimmed.replace(/\s+#.*$/, '');
+  return value.replace(/\/\*\*$/, '');
+}
+
 // A globbed rule loads only when a matching file is in the working set, so an empty
 // result here means "resident every turn". A list of only `**` counts as unscoped.
 export function ruleGlobs(text: string): string[] {
@@ -45,19 +58,17 @@ export function ruleGlobs(text: string): string[] {
   const raw = inline ? inline.replace(/^\[|\]$/g, '').split(',') : [];
   if (!inline) {
     for (let i = at + 1; i < lines.length; i++) {
+      // A comment or blank line is legal inside a YAML block sequence and does not end it.
+      // Breaking on one truncates the list, and drops it entirely when the comment sits
+      // between `paths:` and the first entry, which then reads as a globless always-loaded
+      // rule and spends the resident budget that is not actually being spent.
+      if (/^[ \t]*(#|$)/.test(lines[i])) continue;
       const item = /^[ \t]*-[ \t]*(.+)$/.exec(lines[i]);
-      if (!item) break; // next key or blank line ends the list
+      if (!item) break; // the next key ends the list
       raw.push(item[1]);
     }
   }
-  return raw
-    .map((g) =>
-      g
-        .trim()
-        .replace(/^['"]|['"]$/g, '')
-        .replace(/\/\*\*$/, ''),
-    )
-    .filter((g) => g && g !== '**');
+  return raw.map(cleanGlob).filter((g) => g && g !== '**');
 }
 
 // Globless (= always-loaded) rule files under .claude/rules/, repo-relative.

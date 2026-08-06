@@ -90,6 +90,48 @@ describe('ruleGlobs', () => {
       ),
     ).toEqual(['a', 'b']);
   });
+
+  it('keeps reading past a comment between entries', () => {
+    expect(
+      ruleGlobs('---\npaths:\n  - a/**\n  # why b is here\n  - b/**\n---\n'),
+    ).toEqual(['a', 'b']);
+  });
+
+  it('reads the list when a comment sits before the first entry', () => {
+    expect(
+      ruleGlobs('---\npaths:\n  # why these globs\n  - a/**\n  - b/**\n---\n'),
+      'an empty result here reads as a globless rule and spends the resident budget',
+    ).toEqual(['a', 'b']);
+  });
+
+  it('keeps reading past a blank line between entries', () => {
+    expect(ruleGlobs('---\npaths:\n  - a/**\n\n  - b/**\n---\n')).toEqual([
+      'a',
+      'b',
+    ]);
+  });
+
+  it('drops a trailing inline comment from an unquoted entry', () => {
+    expect(ruleGlobs('---\npaths:\n  - a/** # only a\n---\n')).toEqual(['a']);
+  });
+
+  it('drops a trailing inline comment from a quoted entry', () => {
+    expect(ruleGlobs("---\npaths:\n  - 'a/**' # only a\n---\n")).toEqual(['a']);
+  });
+
+  it('keeps a # that is inside a quoted glob', () => {
+    expect(ruleGlobs('---\npaths:\n  - "src/#special/**"\n---\n')).toEqual([
+      'src/#special',
+    ]);
+  });
+
+  it('still stops at the next key when a comment precedes it', () => {
+    expect(
+      ruleGlobs(
+        '---\npaths:\n  - a/**\n  # trailing note\ndescription: "next key"\n  - b/**\n---\n',
+      ),
+    ).toEqual(['a']);
+  });
 });
 
 describe('frontmatterDescription', () => {
