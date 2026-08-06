@@ -21,7 +21,9 @@ feature is one bullet there, however many commits it took.
 
    The test is whether a reader needs both bullets. If the second one only extends, refines, or
    fixes the first, it is the same feature. Two features shipped in the same session are two
-   changesets, and that is what `--amend` is not for.
+   changesets, and that is what `--amend` is not for. When several pending changesets already
+   describe one tangled feature, run `/changeset-condense` instead of amending them one at a
+   time.
 
 2. **Identify touched packages.** `git status --porcelain` and `git diff --name-only`, mapped
    through the targets in `.claude/kit.config.json`.

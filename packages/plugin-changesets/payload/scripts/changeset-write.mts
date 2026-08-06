@@ -9,6 +9,7 @@
  *   changeset-write.mjs --pkg <name>[:patch|minor|major] [--pkg ...] --summary "..."
  *   changeset-write.mjs --empty --summary "why no release is needed"
  *   changeset-write.mjs --amend <id> --summary "..." [--pkg ...]
+ *   changeset-write.mjs --amend <keep> --absorb <id> [--absorb ...] --summary "..."
  *   echo "summary" | changeset-write.mjs --pkg <name>
  *
  * Options:
@@ -19,13 +20,23 @@
  *   --amend <id>        rewrite a pending .changeset/<id>.md in place instead of adding
  *                       a new one, for a feature that already has a changeset. Its
  *                       declared bumps are kept and merged with any --pkg given.
+ *   --absorb <id>       fold another pending changeset into --amend and delete it;
+ *                       repeatable. Requires --amend. The survivor's bumps are the
+ *                       union of its own, every absorbed file's, and any --pkg given,
+ *                       at the highest level named for each package.
  *
  * Package names are validated against the packages that actually exist, the workspace
  * members or the root package in a single-package repo, never against a possibly-stale
  * kit.config.json.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+} from 'node:fs';
 import { basename, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -89,6 +100,7 @@ function usage(message?: string): never {
       '  changeset-write.mjs --pkg <name>[:patch|minor|major] [--pkg ...] --summary "..."',
       '  changeset-write.mjs --empty --summary "why no release is needed"',
       '  changeset-write.mjs --amend <id> --summary "..." [--pkg ...]',
+      '  changeset-write.mjs --amend <keep> --absorb <id> [--absorb ...] --summary "..."',
       '',
       'Summary comes from --summary or stdin. Multiple --pkg flags allowed.',
     ].join('\n'),
@@ -145,6 +157,7 @@ let values: {
   level?: string;
   empty?: boolean;
   amend?: string;
+  absorb?: string[];
 };
 try {
   ({ values } = parseArgs({
@@ -155,6 +168,7 @@ try {
       level: { type: 'string' },
       empty: { type: 'boolean' },
       amend: { type: 'string' },
+      absorb: { type: 'string', multiple: true },
     },
     allowPositionals: false,
   }));
@@ -209,6 +223,24 @@ const amendTarget = values.amend
   ? resolveAmendTarget(dir, values.amend)
   : undefined;
 
+const absorbArgs = values.absorb ?? [];
+if (absorbArgs.length && !amendTarget)
+  usage('--absorb requires --amend <id> to name the changeset that survives.');
+if (absorbArgs.length && empty)
+  usage(
+    '--empty cannot be combined with --absorb. The absorbed bumps would be discarded.',
+  );
+
+const absorbTargets: string[] = [];
+for (const raw of absorbArgs) {
+  const file = resolveAmendTarget(dir, raw);
+  if (file === amendTarget) {
+    console.error(`Cannot absorb "${raw}" into itself.`);
+    process.exit(1);
+  }
+  absorbTargets.push(file);
+}
+
 let entries: Release[] = [];
 if (!empty) {
   const valid = listPublishablePackageNames(root);
@@ -226,13 +258,19 @@ if (!empty) {
     const level = hasLevel ? raw.slice(at + 1) : defaultLevel;
     return { name, level };
   });
-  if (amendTarget) entries = mergeReleases(readReleases(amendTarget), entries);
+  if (amendTarget) {
+    let merged = readReleases(amendTarget);
+    for (const file of absorbTargets)
+      merged = mergeReleases(merged, readReleases(file));
+    entries = mergeReleases(merged, entries);
+  }
   if (!entries.length) {
-    if (amendTarget)
-      usage(
-        'The amended changeset declares no packages. Pass --pkg, or --empty to keep it release-free.',
-      );
-    else if (valid.length === 1)
+    if (amendTarget) {
+      if (!absorbTargets.length)
+        usage(
+          'The amended changeset declares no packages. Pass --pkg, or --empty to keep it release-free.',
+        );
+    } else if (valid.length === 1)
       entries = [{ name: valid[0], level: defaultLevel }];
     else usage(`Specify --pkg. Valid packages: ${valid.join(', ')}`);
   }
@@ -280,6 +318,7 @@ try {
 // rewrite reads as a modification rather than an add plus a delete.
 if (amendTarget) {
   renameSync(join(dir, `${id}.md`), amendTarget);
+  for (const file of absorbTargets) unlinkSync(file);
   console.log(`.changeset/${basename(amendTarget)}`);
 } else {
   console.log(`.changeset/${id}.md`);

@@ -198,6 +198,191 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
     );
   });
 
+  it("absorbs a second changeset's packages into the survivor and deletes the absorbed file", () => {
+    const first = runScript(root, SCRIPT, {
+      args: [
+        '--pkg',
+        '@fix/cityville:minor',
+        '--summary',
+        'Add road planning.',
+      ],
+    }).stdout.trim();
+    const second = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:patch', '--summary', 'Fix a typo.'],
+    }).stdout.trim();
+    const before = new Set(readdirSync(join(root, '.changeset')));
+
+    const r = runScript(root, SCRIPT, {
+      args: [
+        '--amend',
+        first,
+        '--absorb',
+        second,
+        '--summary',
+        'Add road planning and fix a typo.',
+      ],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.trim()).toBe(first);
+    expect(newChangesets(root, before)).toEqual([]);
+    expect(existsSync(join(root, second)), 'absorbed file is deleted').toBe(
+      false,
+    );
+    const text = readFileSync(join(root, first), 'utf8');
+    expect(text, text).toMatch(/['"]@fix\/cityville['"]: minor/);
+    expect(text, text).toMatch(/['"]@fix\/studio['"]: patch/);
+  });
+
+  it('takes the higher bump when the survivor and an absorbed changeset name the same package at different levels', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:patch', '--summary', 'Fix a typo.'],
+    }).stdout.trim();
+    const second = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:major', '--summary', 'Rework the API.'],
+    }).stdout.trim();
+
+    const r = runScript(root, SCRIPT, {
+      args: [
+        '--amend',
+        first,
+        '--absorb',
+        second,
+        '--summary',
+        'Rework the API.',
+      ],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFileSync(join(root, first), 'utf8')).toMatch(
+      /['"]@fix\/studio['"]: major/,
+    );
+  });
+
+  it('absorbs more than one changeset in a single call', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/cityville:patch', '--summary', 'Fix a typo.'],
+    }).stdout.trim();
+    const second = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:patch', '--summary', 'Fix another typo.'],
+    }).stdout.trim();
+    const third = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:minor', '--summary', 'Add a panel.'],
+    }).stdout.trim();
+
+    const r = runScript(root, SCRIPT, {
+      args: [
+        '--amend',
+        first,
+        '--absorb',
+        second,
+        '--absorb',
+        third,
+        '--summary',
+        'Fix typos and add a panel.',
+      ],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(existsSync(join(root, second))).toBe(false);
+    expect(existsSync(join(root, third))).toBe(false);
+    const text = readFileSync(join(root, first), 'utf8');
+    expect(text, text).toMatch(/['"]@fix\/cityville['"]: patch/);
+    expect(text, text).toMatch(/['"]@fix\/studio['"]: minor/);
+  });
+
+  it('absorbs a release-free changeset, which contributes no bumps and still disappears', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:patch', '--summary', 'Fix a typo.'],
+    }).stdout.trim();
+    const second = runScript(root, SCRIPT, {
+      args: ['--empty', '--summary', 'tooling only — no release'],
+    }).stdout.trim();
+
+    const r = runScript(root, SCRIPT, {
+      args: ['--amend', first, '--absorb', second, '--summary', 'Fix a typo.'],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(existsSync(join(root, second))).toBe(false);
+    expect(readFileSync(join(root, first), 'utf8')).toMatch(
+      /['"]@fix\/studio['"]: patch/,
+    );
+  });
+
+  it('rejects --absorb with no --amend, writing and deleting nothing', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:patch', '--summary', 'Fix a typo.'],
+    }).stdout.trim();
+    const before = readdirSync(join(root, '.changeset')).sort();
+
+    const r = runScript(root, SCRIPT, {
+      args: ['--absorb', first, '--summary', 'x'],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/--absorb requires --amend/);
+    expect(readdirSync(join(root, '.changeset')).sort()).toEqual(before);
+  });
+
+  it('rejects --absorb naming the amend target, writing and deleting nothing', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:patch', '--summary', 'Fix a typo.'],
+    }).stdout.trim();
+    const before = readdirSync(join(root, '.changeset')).sort();
+
+    const r = runScript(root, SCRIPT, {
+      args: ['--amend', first, '--absorb', first, '--summary', 'x'],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/Cannot absorb/);
+    expect(readdirSync(join(root, '.changeset')).sort()).toEqual(before);
+  });
+
+  it('rejects --empty combined with --absorb', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:patch', '--summary', 'Fix a typo.'],
+    }).stdout.trim();
+    const second = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/cityville:patch', '--summary', 'Fix another.'],
+    }).stdout.trim();
+    const before = readdirSync(join(root, '.changeset')).sort();
+
+    const r = runScript(root, SCRIPT, {
+      args: ['--amend', first, '--absorb', second, '--empty', '--summary', 'x'],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/--empty cannot be combined with --absorb/);
+    expect(readdirSync(join(root, '.changeset')).sort()).toEqual(before);
+  });
+
+  it("rejects an absorbed id with no file, leaving the survivor's summary intact", () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio:patch', '--summary', 'Original summary.'],
+    }).stdout.trim();
+    const before = readdirSync(join(root, '.changeset')).sort();
+
+    const r = runScript(root, SCRIPT, {
+      args: [
+        '--amend',
+        first,
+        '--absorb',
+        'no-such-changeset',
+        '--summary',
+        'Would replace it.',
+      ],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/No pending changeset at \.changeset\//);
+    expect(readdirSync(join(root, '.changeset')).sort()).toEqual(before);
+    expect(readFileSync(join(root, first), 'utf8')).toMatch(
+      /Original summary\./,
+    );
+  });
+
   it('rejects --amend for a changeset that does not exist', () => {
     const r = runScript(root, SCRIPT, {
       args: ['--amend', 'no-such-changeset', '--summary', 'x'],

@@ -110,6 +110,11 @@ function changesetsModule(api: PluginApi): ModuleDef {
           'changeset',
           'record a changeset for the packages a change touched',
         ),
+        api.payload.skill(
+          id,
+          'changeset-condense',
+          'merge redundant pending changesets into one entry',
+        ),
         api.payload.agent(
           id,
           'changeset-writer',

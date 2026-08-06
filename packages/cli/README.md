@@ -166,9 +166,15 @@ release time by `changeset version`. The module wires the agent side of that:
   `@changesets/write`, the same writer `changeset add` uses. The official library is
   **required**. If it isn't resolvable from the repo root, the script exits with install
   instructions instead of hand-rolling a file. Supports `--empty` for "no release needed".
-  Agents never hand-write `.changeset/*.md`.
+  `--absorb` folds one or more pending changesets into an amended one, merging every package
+  bump at the highest level any of them named and deleting the absorbed files. Agents never
+  hand-write `.changeset/*.md`.
 - **`/changeset` skill + `changeset-writer` agent (haiku)** inspect the diff, pick
   patch/minor/major (major always asks first), and record via the script.
+- **`/changeset-condense` skill** folds pending changesets that describe one feature into one
+  entry. Everything in `.changeset/` ships in the same release, so a later changeset that
+  supersedes, extends, or fixes an earlier one otherwise leaves a release note describing
+  something no user ever saw.
 - **`changeset-check.mjs`** (Stop hook) nudges once when package source changed with no
   changeset alongside it. It is branch-aware, so a changeset already committed on the branch
   counts. The kill-switch is `changesets.stopCheck: false` in `kit.config.json`, and it exits
