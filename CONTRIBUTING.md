@@ -50,6 +50,14 @@ pnpm --filter @agent-kit/plugin-testing check
 `pnpm build` runs a full build across the workspace and is required before probing anything
 under a package's `dist/`.
 
+Every `build`, `check`, and `test` script runs through
+[wireit](https://github.com/google/wireit), which means two things day to day. A script whose
+inputs have not changed is skipped, so re-running a command you just ran is close to free. And
+a `--filter`ed command pulls in whatever it depends on, so
+`pnpm --filter @agent-kit/plugin-design test` builds the CLI first if it needs to, with no
+separate step. Running `npx vitest` directly, outside the `test` script, does still need a
+prior `pnpm build`.
+
 ## Dogfooding
 
 ```sh
@@ -58,10 +66,13 @@ pnpm dogfood
 
 This wires this repo's own gitignored `.claude/` directory from every package's `payload/`,
 so the kit runs its own hooks, skills, and agents against itself. It is how changes to the
-kit get exercised the way a real install would use them. If you are iterating on a hook
-script (a `.mts` file under a package's `payload/scripts/`), run `pnpm dogfood:watch`
-instead, or re-run `pnpm dogfood` after each edit. A `.mts` edit is not live until it is
-compiled to `payload-dist/`.
+kit get exercised the way a real install would use them.
+
+If you are iterating on a hook script (a `.mts` file under a package's `payload/scripts/`),
+run `pnpm dogfood:watch`. `.claude/scripts` is a copy of `payload-dist/`, not a symlink, so an
+edit has to be compiled and then re-copied before it is live. The watch does both. **Deleting
+a script is the one case the watch does not cover, so re-run `pnpm dogfood` after removing
+one.**
 
 ## Changesets
 

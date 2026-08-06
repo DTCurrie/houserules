@@ -19,10 +19,53 @@
     "payload-dist"
   ],
   "scripts": {
-    "build": "rm -rf dist payload-dist && tsc -p tsconfig.build.json && node scripts/build-payload.mjs",
-    "check": "tsc --noEmit -p tsconfig.json",
+    "build": "wireit",
+    "check": "wireit",
     "prepack": "npm run build",
-    "test": "vitest run"
+    "test": "wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsc -p tsconfig.build.json && node scripts/build-payload.mjs",
+      "dependencies": [
+        "../cli:build:ts"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "!src/**/__test__/**",
+        "tsconfig.build.json",
+        "payload/**",
+        "scripts/build-payload.mjs"
+      ],
+      "output": [
+        "dist/**",
+        "payload-dist/**"
+      ]
+    },
+    "check": {
+      "command": "tsc --noEmit -p tsconfig.json",
+      "dependencies": [
+        "../cli:build:ts",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "tsconfig.json"
+      ],
+      "output": []
+    },
+    "test": {
+      "command": "vitest run",
+      "dependencies": [
+        "build",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "vitest.config.ts"
+      ],
+      "output": []
+    }
   },
   "engines": {
     "node": ">=22"
@@ -42,7 +85,8 @@
     "@agent-kit/test": "workspace:*",
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wireit": "^0.14.13"
   },
   "license": "MIT",
   "keywords": [

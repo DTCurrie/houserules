@@ -20,8 +20,13 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+      # Shares wireit's fingerprint cache across runs, so an unchanged package is restored
+      # rather than rebuilt. Sets WIREIT_CACHE=github, which is what re-enables caching under
+      # CI=true. Needs wireit >= 0.14.12 for the current Actions cache backend.
+      - uses: google/wireit@setup-github-actions-caching/v2
       - run: pnpm install --frozen-lockfile
-      # The end-to-end suites probe dist/, so the build has to land first.
+      # Kept as its own step even though `pnpm test` now depends on the builds through wireit.
+      # A build failure reads as a build failure in the log instead of as a test failure.
       - run: pnpm build
       - run: pnpm test
 
@@ -36,6 +41,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      # This job runs in parallel with `test`, so it does not inherit that job's build. The
+      # shared wireit cache is what keeps it from repeating the same compilation from scratch.
+      - uses: google/wireit@setup-github-actions-caching/v2
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm lint

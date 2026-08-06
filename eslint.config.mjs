@@ -4,7 +4,13 @@ import ts from 'typescript-eslint';
 
 export default ts.config(
   {
-    ignores: ['.claude/', '**/dist/', '**/payload-dist/', '**/coverage/'],
+    ignores: [
+      '.claude/',
+      '**/dist/',
+      '**/payload-dist/',
+      '**/coverage/',
+      '**/.wireit/',
+    ],
   },
   js.configs.recommended,
   {

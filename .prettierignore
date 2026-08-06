@@ -1,6 +1,8 @@
 node_modules
 dist
 payload-dist
+.wireit
+.eslintcache
 pnpm-lock.yaml
 payload/kit-templates/
 CHANGELOG.md

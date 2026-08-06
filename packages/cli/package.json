@@ -25,15 +25,124 @@
     "./schema": "./schema/kit.config.schema.json"
   },
   "scripts": {
-    "build": "npm run build:payload && rm -rf dist && tsc -p tsconfig.build.json && node scripts/generate-schema.mjs && publint",
-    "schema": "node scripts/generate-schema.mjs",
-    "check": "npm run build:payload && tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "dogfood": "npm run build:payload && node scripts/dogfood-link.mjs",
+    "build": "wireit",
+    "schema": "wireit",
+    "check": "wireit",
+    "test": "wireit",
+    "test:watch": "wireit",
+    "dogfood": "wireit",
     "prepack": "npm run build",
-    "build:payload": "rm -rf payload-dist && tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
-    "dogfood:watch": "tsc -p tsconfig.payload.json --watch"
+    "build:payload": "wireit",
+    "build:ts": "wireit",
+    "dogfood:watch": "WIREIT_WATCH=true npm run dogfood"
+  },
+  "wireit": {
+    "build": {
+      "command": "publint",
+      "dependencies": [
+        "schema"
+      ],
+      "files": [
+        "package.json",
+        "kit.config.example.json",
+        "CONVENTIONS.md"
+      ],
+      "output": []
+    },
+    "build:payload": {
+      "command": "tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
+      "files": [
+        "payload/**",
+        "!payload/**/__test__/**",
+        "tsconfig.payload.json",
+        "scripts/build-payload.mjs"
+      ],
+      "output": [
+        "payload-dist/**"
+      ]
+    },
+    "build:ts": {
+      "command": "tsc -p tsconfig.build.json",
+      "dependencies": [
+        "build:payload"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "!src/**/__test__/**",
+        "tsconfig.build.json"
+      ],
+      "output": [
+        "dist/**"
+      ]
+    },
+    "schema": {
+      "command": "node scripts/generate-schema.mjs",
+      "dependencies": [
+        "build:ts"
+      ],
+      "files": [
+        "scripts/generate-schema.mjs",
+        "../../.prettierrc.json"
+      ],
+      "output": [
+        "schema/kit.config.schema.json"
+      ]
+    },
+    "check": {
+      "command": "tsc --noEmit -p tsconfig.json",
+      "dependencies": [
+        "build:payload",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "!test/**/node_modules/**",
+        "payload/**/__test__/**/*.ts",
+        "tsconfig.json"
+      ],
+      "output": []
+    },
+    "test": {
+      "command": "vitest run",
+      "dependencies": [
+        "build:ts",
+        "build:payload",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "test/**",
+        "!test/**/node_modules/**",
+        "payload/**",
+        "vitest.config.ts",
+        "kit.config.example.json"
+      ],
+      "output": []
+    },
+    "test:watch": {
+      "command": "vitest",
+      "dependencies": [
+        "build:ts",
+        "build:payload",
+        "../test:build"
+      ]
+    },
+    "dogfood": {
+      "//": "No `output`. This writes into the repo root's .claude/, outside the package, and wireit rejects output paths that escape the package directory. With `files` and no `output` it re-runs whenever an input changes, which is what WIREIT_WATCH wants.",
+      "command": "node scripts/dogfood-link.mjs",
+      "dependencies": [
+        "build:payload",
+        "../plugin-accessibility:build",
+        "../plugin-backlog:build",
+        "../plugin-changesets:build",
+        "../plugin-decisions:build",
+        "../plugin-design:build"
+      ],
+      "files": [
+        "scripts/dogfood-link.mjs"
+      ]
+    }
   },
   "engines": {
     "node": ">=22"
@@ -76,6 +185,7 @@
     "type-fest": "^5.8.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wireit": "^0.14.13"
   }
 }

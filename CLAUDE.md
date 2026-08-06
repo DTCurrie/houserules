@@ -23,10 +23,14 @@ A pnpm workspace of thirteen packages. Every path in the Layout section below is
   `src/retired-modules.ts`'s
   `RETIRED_MODULES` maps every retired built-in id to the package that now ships it.
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
-  workflows, `CLAUDE.md`, and the gitignored `.claude/`. Root
-  `pnpm build|test|check` delegate with `pnpm -r`. `pnpm lint` and `pnpm lint:fix` run
-  `eslint` directly against the whole workspace, since lint lives at the root and no
-  package has its own lint script.
+  workflows, `CLAUDE.md`, and the gitignored `.claude/`. Root `pnpm build|test|check` are
+  wireit aggregators that depend on each package's script by path, replacing `pnpm -r`. The
+  `test` aggregator lists **eleven** packages, not thirteen, because `@agent-kit/test` and
+  `plugin-testing` ship no `test` script and naming a script that does not exist is a wireit
+  error rather than the no-op `pnpm -r` gave you. Root `lint` is also wireit, and `lint:fix`,
+  `format`, and `format:check` stay plain scripts. A fixer mutates its own inputs, so caching
+  it is wrong, and a repo-wide formatter's input set is `.prettierignore`, which should not be
+  restated in `package.json` where the two would drift.
 - **`.claude/` stays at the workspace root**, because that is where Claude Code looks, while
   each package's payload lives with that package. `scripts/dogfood-link.mjs` bridges the two.
 
@@ -82,13 +86,34 @@ A pnpm workspace of thirteen packages. Every path in the Layout section below is
   shipped test would carry a `vitest` import into a user's install. `tsconfig.json` clears the
   inherited exclude so `pnpm check` still typechecks them. Verify with a real
   `pnpm pack` and grep the tarball, not with `find` over `dist/`.
+- **Every package uses that same two-tsconfig split, and one tsconfig may never do both jobs.**
+  `tsconfig.build.json` is the EMIT config: it excludes tests so they stay out of `dist/`.
+  `tsconfig.json` is the CHECK config: it `extends` the build one, sets `noEmit` and
+  `rootDir: "."`, clears the exclude with `exclude: []`, and lists **both** test locations in
+  `include`, `src/**/*.ts` and `payload/**/__test__/**/*.ts`. Drop the payload glob and the
+  hook-script suites silently go unchecked, which is not hypothetical: four packages had
+  drifted off this pattern and `pnpm check` was skipping five suites entirely. Vitest strips
+  types rather than checking them, so nothing else would have caught it. A package's wireit
+  `build.files` names `tsconfig.build.json` and its `check.files` names both.
 
 ## Commands
 
-- `pnpm build`: clear `dist/` + `payload-dist/` (so a deleted source ships no orphan), `tsc` →
-  `dist/`, regenerate the JSON Schema, then `publint`. Required before any `dist/` probe.
+- Every `build`, `check`, and `test` script runs through **[wireit](https://github.com/google/wireit)**,
+  which owns the dependency graph and the incremental skipping. Each script declares its
+  `dependencies`, its input `files`, and its `output` in a `wireit` block in the same
+  `package.json`. Two consequences worth internalizing. A script whose inputs are unchanged is
+  **skipped**, so a second `pnpm test` costs about 0.3s rather than 26s, and a `--filter`ed
+  command pulls that package's upstream builds in on its own. And a `files` glob that misses a
+  real input fails **silently**, by skipping work that should have run, so add the glob the
+  same day you add the input.
+- `pnpm build`: `tsc` → `dist/`, assemble `payload-dist/`, regenerate the JSON Schema, then
+  `publint`. Wireit's declared `output` plus its default `clean: true` is what guarantees a
+  deleted source ships no orphan, replacing the old `rm -rf` prefixes. Required before any
+  `dist/` probe.
 - `pnpm check`: `tsc --noEmit` over `src/` + `test/` + colocated `__test__/` dirs.
-- `pnpm test`: full suite, including end-to-end init/update/doctor on fixtures.
+- `pnpm test`: full suite, including end-to-end init/update/doctor on fixtures. A bare `npx
+vitest`, outside the script, now needs a prior `pnpm build`, since the shared vitest global
+  setup no longer builds the CLI itself.
 - `node packages/cli/dist/cli.js init --yes --dry-run <repo>`: safe manual probe against any
   repo.
 - `pnpm change`: record a changeset. Required for any user-visible change, and dogfooded.
@@ -100,13 +125,21 @@ A pnpm workspace of thirteen packages. Every path in the Layout section below is
   symlinks** across all of them, not one directory symlink, because `.claude/rules/` now
   draws from the CLI plus the prose and testing plugins at once. It throws if two packages
   contribute the same entry name. Idempotent, so re-run after pulling.
-  **`.claude/scripts` still points at BUILD OUTPUT (`payload-dist/`), so a `.mts` edit is NOT
-  live until it is compiled.** Run `pnpm dogfood:watch` (a `tsc --watch` on the payload) while
-  working on hook scripts, or re-run `pnpm dogfood`. The prose/rules/agents/output-styles/
-  reference dirs link straight to each package's `payload/` and are live on save.
-  `build:payload` removes `payload-dist/` before compiling, so a deleted `.mts` no longer
-  leaves a stale `.mjs` behind. `dogfood:watch` is the exception, since a watch never cleans.
-  Run `pnpm dogfood` after deleting a script.
+  **`.claude/scripts` is a COPY taken from `payload-dist/`, not a symlink** (a linked script
+  cannot resolve `./lib/` from the symlink's real path), so a `.mts` edit has to be compiled
+  AND re-copied before it is live. The prose/rules/agents/output-styles/reference dirs link
+  straight to each package's `payload/` and are live on save.
+- `pnpm dogfood:watch`: `WIREIT_WATCH=true` over the `dogfood` graph, so editing or adding a
+  payload `.mts` recompiles it and re-copies it into `.claude/scripts/` with no second command.
+  It covers every package that ships payload scripts, not just the CLI. This replaced a bare
+  `tsc --watch` on the payload, which compiled to `payload-dist/` and stopped, leaving the copy
+  under `.claude/scripts/` stale. Anyone following the old instructions was editing a hook and
+  testing the previous version of it.
+  **DELETING a script is still not covered. Re-run `pnpm dogfood`.** The watcher does fire, but
+  that run treats `build:payload` as fresh and does not re-restore its output, so the orphaned
+  `.mjs` survives in both `payload-dist/` and `.claude/scripts/` until a new wireit process
+  runs. Verified, not assumed. Outside the watch a deletion is handled correctly, because
+  wireit restores the cached output for the reverted fingerprint.
 
 ## Rules
 
@@ -199,7 +232,10 @@ A pnpm workspace of thirteen packages. Every path in the Layout section below is
   the user. No browser/screenshot verification unless explicitly asked.
 - Run those gates in order: `pnpm format` first, since it rewrites in place and settles the
   mechanical noise, then `pnpm lint:fix` so only real problems are left, then `pnpm check` and
-  `pnpm test`. Scope each to the packages you changed (`pnpm --filter <pkg>`).
+  `pnpm test`. Scope each to the packages you changed (`pnpm --filter <pkg>`), which under
+  wireit also pulls in that package's upstream builds, so the scoped run is complete rather
+  than merely narrow. The unscoped gates are cheap too now, since anything unchanged is
+  skipped, so prefer the full run when you are unsure what you touched.
 - **"Done" means every check passed, not that the edits were made.** Report a check that failed or
   never ran, with its output. Never claim success over one you did not see pass.
 - Changes to generated prose (`src/render.ts`) need a rendered probe, not just a green suite.

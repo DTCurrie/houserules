@@ -9,19 +9,89 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm -r build",
-    "check": "pnpm -r check",
-    "test": "pnpm -r test",
-    "lint": "eslint .",
+    "build": "wireit",
+    "check": "wireit",
+    "test": "wireit",
+    "lint": "wireit",
     "lint:fix": "eslint . --fix",
     "schema": "pnpm --filter @agent-kit/cli schema",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --cache --write .",
+    "format:check": "prettier --cache --check .",
     "change": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish",
     "dogfood": "pnpm --filter @agent-kit/cli dogfood",
     "dogfood:watch": "pnpm --filter @agent-kit/cli dogfood:watch"
+  },
+  "wireit": {
+    "lint": {
+      "//": "node_modules is excluded because packages/cli/test/plugin-fixture/node_modules/@agent-kit/cli symlinks back to packages/cli, and a glob that follows it recurses until wireit runs out of heap.",
+      "command": "eslint --cache --cache-location .eslintcache .",
+      "files": [
+        "eslint.config.mjs",
+        "packages/*/src/**/*.ts",
+        "packages/*/test/**/*.ts",
+        "packages/*/payload/**/*.mts",
+        "packages/*/payload/**/__test__/**/*.ts",
+        "packages/*/scripts/**/*.mjs",
+        "packages/*/*.ts",
+        "scripts/**/*.mjs",
+        "*.ts",
+        "*.mjs",
+        "!**/node_modules/**"
+      ],
+      "output": []
+    },
+    "build": {
+      "dependencies": [
+        "./packages/cli:build",
+        "./packages/plugin-accessibility:build",
+        "./packages/plugin-backlog:build",
+        "./packages/plugin-changesets:build",
+        "./packages/plugin-decisions:build",
+        "./packages/plugin-design:build",
+        "./packages/plugin-persona-auditor:build",
+        "./packages/plugin-prose:build",
+        "./packages/plugin-svelte:build",
+        "./packages/plugin-testing:build",
+        "./packages/plugin-three:build",
+        "./packages/plugin-typescript:build",
+        "./packages/test:build"
+      ]
+    },
+    "check": {
+      "dependencies": [
+        "./packages/cli:check",
+        "./packages/plugin-accessibility:check",
+        "./packages/plugin-backlog:check",
+        "./packages/plugin-changesets:check",
+        "./packages/plugin-decisions:check",
+        "./packages/plugin-design:check",
+        "./packages/plugin-persona-auditor:check",
+        "./packages/plugin-prose:check",
+        "./packages/plugin-svelte:check",
+        "./packages/plugin-testing:check",
+        "./packages/plugin-three:check",
+        "./packages/plugin-typescript:check",
+        "./packages/test:check"
+      ]
+    },
+    "test": {
+      "//": "Eleven entries, not thirteen. @agent-kit/test and plugin-testing ship no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
+      "dependencies": [
+        "./packages/cli:test",
+        "./packages/plugin-accessibility:test",
+        "./packages/plugin-backlog:test",
+        "./packages/plugin-changesets:test",
+        "./packages/plugin-decisions:test",
+        "./packages/plugin-design:test",
+        "./packages/plugin-persona-auditor:test",
+        "./packages/plugin-prose:test",
+        "./packages/plugin-svelte:test",
+        "./packages/plugin-three:test",
+        "./packages/plugin-typescript:test"
+      ]
+    }
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
@@ -30,6 +100,7 @@
     "globals": "^17.7.0",
     "prettier": "^3.9.4",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.65.0",
+    "wireit": "^0.14.13"
   }
 }

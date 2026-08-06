@@ -1,6 +1,10 @@
 node_modules/
 dist/
 payload-dist/
+# wireit's per-script fingerprints and local cache. Build state, regenerated on demand.
+.wireit/
+# eslint's own cache. Prettier's default cache already sits under node_modules/.cache.
+.eslintcache
 *.log
 .DS_Store
 *.tgz

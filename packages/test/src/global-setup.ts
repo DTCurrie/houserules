@@ -1,28 +1,19 @@
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-
-// The CLI's package root, found by resolving its package.json rather than a relative path
-// into a sibling package. Any suite that pulls in @agent-kit/test, in this workspace or
-// installed from npm by a plugin author, builds the same CLI the same way.
-const require = createRequire(import.meta.url);
-const CLI_ROOT = dirname(require.resolve('@agent-kit/cli/package.json'));
+import { join } from 'node:path';
 
 /**
- * Builds the CLI before any suite runs. The end-to-end suites spawn `dist/cli.js` rather
- * than the sources, so the build has to exist first. Doing it here rather than in the
- * `test` script keeps `vitest` and `vitest run` self-sufficient, and avoids stale-dist
- * failures that look like test bugs.
+ * Per-run temp state for the suites in this workspace and in any plugin that consumes this
+ * package.
+ *
+ * Building the CLI is NOT this function's job. Every `test` script declares a wireit
+ * dependency on `../cli:build:ts`, so `dist/` is present and current before vitest starts,
+ * and a consumer installing `@agent-kit/cli` from npm gets `dist/` prebuilt in the tarball.
+ * This used to shell out to `tsc` here, which cost a full CLI compile once per package per
+ * run, ten of them across the workspace. It could also never have worked outside this
+ * workspace, since the published package ships neither `src/` nor `tsconfig.build.json`.
  */
 export default function setup(): () => void {
-  execFileSync(
-    'node',
-    ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.build.json'],
-    { cwd: CLI_ROOT, stdio: 'inherit' },
-  );
-
   // Where useInstalledRepo() keeps its per-(shape, modules) snapshots. Created here so
   // teardown can remove it: worker processes cannot clean up after each other, and the
   // snapshots must not outlive the run or they would go stale against a rebuilt CLI.

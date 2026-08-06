@@ -40,9 +40,36 @@
     }
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json",
-    "check": "tsc --noEmit -p tsconfig.json",
+    "build": "wireit",
+    "check": "wireit",
     "prepack": "npm run build"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsc -p tsconfig.json",
+      "dependencies": [
+        "../cli:build:ts"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "!src/**/__test__/**",
+        "tsconfig.json"
+      ],
+      "output": [
+        "dist/**"
+      ]
+    },
+    "check": {
+      "command": "tsc --noEmit -p tsconfig.json",
+      "dependencies": [
+        "../cli:build:ts"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "tsconfig.json"
+      ],
+      "output": []
+    }
   },
   "engines": {
     "node": ">=22"
@@ -62,7 +89,8 @@
     "@agent-kit/cli": "workspace:*",
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wireit": "^0.14.13"
   },
   "license": "MIT",
   "keywords": [

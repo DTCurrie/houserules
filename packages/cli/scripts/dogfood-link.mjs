@@ -37,15 +37,17 @@ const packagesDir = join(repoRoot, 'packages');
 const claudeDir = join(repoRoot, '.claude');
 
 // The surfaces Claude Code reads, and which payload root each is assembled from. `scripts`
-// comes from BUILD OUTPUT, so a .mts edit is not live until `pnpm dogfood:watch` compiles it.
+// comes from BUILD OUTPUT and is COPIED, so a .mts edit needs both a recompile and a re-copy.
+// `pnpm dogfood:watch` does both. Deleting a script still needs a manual `pnpm dogfood`.
 // Everything else links straight at sources and is live on save.
 const SURFACES = [
   // Scripts are COPIED, not linked. A payload script imports its siblings relatively
   // (`./lib/kit-config.mjs`), and node resolves that from the symlink's real path, not from
   // where the link sits. A plugin deliberately ships no `lib/`, since core installs it, so a
   // linked plugin script cannot find the substrate. A real install copies files, which puts
-  // them side by side. Copying here reproduces that. Nothing is lost: scripts are build output
-  // and already need a recompile plus a re-run to go live.
+  // them side by side. Copying here reproduces that. The cost is that a recompile alone does
+  // not reach `.claude/scripts`, which is why `dogfood:watch` watches this script's whole
+  // wireit graph rather than running a bare `tsc --watch`.
   { name: 'scripts', from: 'payload-dist', mode: 'copy' },
   { name: 'skills', from: 'payload', mode: 'link' },
   { name: 'agents', from: 'payload', mode: 'link' },

@@ -19,8 +19,8 @@ Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/pack
 
 ## Usage
 
-Point `vitest`'s `globalSetup` at `@agent-kit/test/global-setup` so the CLI is built before any
-suite runs, then stage a repo with the kit already installed and assert against the result:
+Point `vitest`'s `globalSetup` at `@agent-kit/test/global-setup` so each run gets its own temp
+state, then stage a repo with the kit already installed and assert against the result:
 
 ```ts
 // vitest.config.ts
@@ -84,8 +84,10 @@ every test, so a regression in `init` fails one suite instead of every suite tha
 - **`@agent-kit/test/runner-stub`**: `stubRunner` writes a fake package-manager runner that
   records every invocation instead of running one. `recordedCalls` reads back the argv each
   call passed.
-- **`@agent-kit/test/global-setup`**: a Vitest `globalSetup` that builds the CLI before any
-  suite runs, so end-to-end suites that spawn `dist/cli.js` never hit a stale or missing build.
+- **`@agent-kit/test/global-setup`**: a Vitest `globalSetup` that creates the per-run temp
+  directory `useInstalledRepo` snapshots into, and removes it on teardown. It does not build
+  the CLI. Installing `@agent-kit/cli` from npm gives you `dist/` prebuilt, and inside this
+  workspace each `test` script declares a wireit dependency on the CLI's build instead.
 - **`@agent-kit/test/hook-input`**: `hookInput`, `readToolInput`, and `promptInput` build the
   JSON payloads `runScript` expects on stdin for hook-style scripts.
 

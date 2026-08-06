@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  // Colocated unit tests live under src/ but must never be emitted. They import vitest,
+  // a devDependency, and package.json ships dist/, so an emitted test is a broken import
+  // in an installed copy of the package. This package has none today, and the exclude is
+  // what keeps that true the day someone adds one.
+  "exclude": ["src/**/__test__/**"]
+}
