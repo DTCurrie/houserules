@@ -25,6 +25,55 @@ Vitest and TypeScript, but the principles they illustrate apply to any test runn
 
 ## Examples
 
+**Bad — one assertion that cannot fail, one that restates the implementation:**
+
+```ts
+it('calculates the total', () => {
+  const items = [{ price: 3 }, { price: 4 }];
+
+  const total = calculateTotal(items);
+
+  expect(total).toBeDefined();
+  expect(total).toBe(items.reduce((sum, item) => sum + item.price, 0));
+});
+```
+
+**Good — the expected value written out:**
+
+```ts
+it('sums the item prices', () => {
+  expect(calculateTotal([{ price: 3 }, { price: 4 }])).toBe(7);
+});
+```
+
+`7` is a fact about the behavior. The `reduce` was a second copy of the implementation, so it
+agreed with the code even when both were wrong, and `toBeDefined` passed on `NaN`.
+
+**Bad — asserting the call instead of the result:**
+
+```ts
+it('applies the discount', () => {
+  const applyDiscount = vi.spyOn(pricing, 'applyDiscount');
+
+  checkout({ items: [{ price: 100 }] }, { coupon: 'SAVE10' });
+
+  expect(applyDiscount).toHaveBeenCalledWith(100, 10);
+});
+```
+
+**Good — asserting what the caller gets:**
+
+```ts
+it('takes 10 percent off the total for a SAVE10 coupon', () => {
+  const result = checkout({ items: [{ price: 100 }] }, { coupon: 'SAVE10' });
+
+  expect(result.total).toBe(90);
+});
+```
+
+The first test passes when `applyDiscount` returns the wrong number, and fails when the discount
+moves into a helper with a different name. The second is the reverse on both counts.
+
 **Bad — prefixed name, comments carrying the meaning, four behaviors in one test:**
 
 ```ts

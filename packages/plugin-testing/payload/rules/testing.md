@@ -14,7 +14,8 @@ paths:
 
 # Testing
 
-This rule decides where a test lives, what it covers, and how it is named. It applies to any
+This rule decides whether a test is worth writing, where it lives, what it covers, and how it
+is named. It applies to any
 test runner with a `describe`/`it` shape. For suffix conventions, build-exclusion advice, and
 runnable examples, see `testing-typescript.md` or `testing-javascript.md`, whichever guide
 this repo installed.
@@ -23,6 +24,39 @@ The rule assumes a test you are writing. When you are changing behavior instead,
 that covers it is part of the change, not a follow-up.
 
 ## Rule — follow without deliberation
+
+### Whether the test is worth writing
+
+- **A test earns its place by failing when the behavior breaks.** That is the whole bar. Check
+  it: introduce the bug the test is supposed to catch, run the test, confirm it goes red, then
+  revert. A test that stays green under a deliberate bug is not weak coverage, it is zero
+  coverage, and deleting it loses nothing.
+- **Never write a test to move the coverage number.** Coverage reports which lines ran, not
+  which behaviors are pinned, and a line runs fine under a test that asserts nothing about it.
+  Find the decision nothing covers and test that. The number follows.
+- **Assert the value, not that a value exists.** `toBeDefined`, `toBeTruthy`, and `length > 0`
+  pass on almost every wrong answer. Name the result you expect. If you cannot say what it
+  should be, you do not yet understand the behavior well enough to pin it.
+- **Write the expected value as a literal.** Computing it with the same expression the code
+  uses, or by calling the same library the code calls, makes the test agree with the
+  implementation by construction. It then passes on every bug the two share, which is most of
+  them.
+- **Do not test code you did not write.** That a validation library rejects a malformed string,
+  or that a framework fires its own lifecycle hook, is covered by that project's suite. Test the
+  schema you declared and what your code does with the result.
+- **Skip the passthrough.** A getter that returns a field, a re-export, a wrapper that forwards
+  its arguments unchanged. There is no decision to get wrong, so there is nothing to pin. A
+  wrapper that supplies a default, reorders arguments, or swallows an error is not a
+  passthrough, and that decision is worth a test.
+- **Asserting that a mock was called is not an assertion about behavior.** `toHaveBeenCalledWith`
+  pins how the code reached its result, so it breaks on a refactor that kept the result correct
+  and passes when the collaborator's contract changed underneath. Assert what the caller
+  observes. Keep the call check only where making the call IS the observable effect, such as a
+  request that has to reach a server.
+- **When a test fails, fix the code or rewrite the test deliberately.** Loosening an assertion
+  until it passes turns one real failure into permanent green, and the next reader cannot tell
+  that happened. If the behavior genuinely changed, state the new behavior in the name and in
+  the assertion.
 
 ### Placement
 

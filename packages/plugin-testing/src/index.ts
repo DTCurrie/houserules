@@ -9,7 +9,8 @@ import type {
 
 /**
  * The base rule holds everything that applies to any test runner with a `describe`/`it`
- * shape: placement, what to test, structure, naming, and the Never list. The language
+ * shape: whether a test is worth writing, placement, what to test, structure, naming, and
+ * the Never list. The language
  * guides are the residue that differs per language: the concrete suffix list, the Vitest
  * and TypeScript examples, and the build-exclusion advice. They ship as option values of
  * this one module rather than as separate `ModuleDef`s, since a language guide is
@@ -26,7 +27,7 @@ function testingModule(api: PluginApi): ModuleDef {
     title: 'Testing discipline rule (.claude/rules/testing.md)',
     group: 'optional',
     hint(): string {
-      return 'path-scoped rule: colocate unit tests in `__test__`, prefer units over end-to-end, behavioral test names, no comments explaining assertions';
+      return 'path-scoped rule: a test must fail when the behavior breaks, no coverage-chasing, colocate unit tests in `__test__`, prefer units over end-to-end, behavioral test names, no comments explaining assertions';
     },
     defaultEnabled(): boolean {
       return false;
