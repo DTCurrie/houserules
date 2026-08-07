@@ -1,0 +1,8 @@
+name: 'CodeQL config'
+
+# Every package's dist/ and payload-dist/ are gitignored build output, not source. Scanning
+# them wastes analysis time and reports findings against generated code.
+paths-ignore:
+  - '**/dist/**'
+  - '**/payload-dist/**'
+  - '**/node_modules/**'

@@ -21,11 +21,12 @@
   "scripts": {
     "build": "wireit",
     "check": "wireit",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "attw": "wireit"
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && node scripts/build-payload.mjs",
+      "command": "tsc -p tsconfig.build.json && node scripts/build-payload.mjs && publint",
       "dependencies": [
         "../cli:build:ts"
       ],
@@ -52,6 +53,16 @@
         "tsconfig.build.json"
       ],
       "output": []
+    },
+    "attw": {
+      "command": "attw --pack . --profile esm-only",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "package.json"
+      ],
+      "output": []
     }
   },
   "engines": {
@@ -69,11 +80,14 @@
   },
   "devDependencies": {
     "@agent-kit/cli": "workspace:*",
-    "@types/node": "^26.1.2",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@types/node": "^22.20.1",
+    "publint": "^0.3.23",
     "typescript": "^6.0.3",
     "wireit": "^0.14.13"
   },
   "license": "MIT",
+  "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "keywords": [
     "agent-kit",
     "agent-kit-plugin",

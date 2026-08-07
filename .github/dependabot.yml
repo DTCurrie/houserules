@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directories:
+      - '/'
+      - '/packages/*'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    groups:
+      # group-by dependency-name collapses one bump across all thirteen
+      # workspace packages into a single PR instead of one per directory.
+      dev-dependencies:
+        dependency-type: 'development'
+        group-by: 'dependency-name'
+      production-dependencies:
+        dependency-type: 'production'
+        group-by: 'dependency-name'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    groups:
+      github-actions:
+        patterns:
+          - '*'

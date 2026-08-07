@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/@agent-kit/cli.svg)](https://www.npmjs.com/package/@agent-kit/cli)
 [![downloads](https://img.shields.io/npm/dm/@agent-kit/cli.svg)](https://www.npmjs.com/package/@agent-kit/cli)
 [![CI](https://github.com/DTCurrie/agent-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/DTCurrie/agent-kit/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DTCurrie/agent-kit/badge)](https://scorecard.dev/viewer/?uri=github.com/DTCurrie/agent-kit)
 [![license](https://img.shields.io/npm/l/@agent-kit/cli.svg)](./LICENSE)
 [![node](https://img.shields.io/node/v/@agent-kit/cli.svg)](https://nodejs.org)
 

@@ -1,9 +1,10 @@
 {
   "name": "agent-kit-workspace",
   "version": "0.0.0",
+  "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "private": true,
   "description": "Workspace root for agent-kit and its first-party plugins. Not published.",
-  "packageManager": "pnpm@11.5.0",
+  "packageManager": "pnpm@11.20.0",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -21,7 +22,9 @@
     "version-packages": "changeset version",
     "release": "changeset publish",
     "dogfood": "pnpm --filter @agent-kit/cli dogfood",
-    "dogfood:watch": "pnpm --filter @agent-kit/cli dogfood:watch"
+    "dogfood:watch": "pnpm --filter @agent-kit/cli dogfood:watch",
+    "attw": "wireit",
+    "verify:packages": "node scripts/verify-packages.mjs"
   },
   "wireit": {
     "lint": {
@@ -91,16 +94,33 @@
         "./packages/plugin-three:test",
         "./packages/plugin-typescript:test"
       ]
+    },
+    "attw": {
+      "dependencies": [
+        "./packages/cli:attw",
+        "./packages/plugin-accessibility:attw",
+        "./packages/plugin-backlog:attw",
+        "./packages/plugin-changesets:attw",
+        "./packages/plugin-decisions:attw",
+        "./packages/plugin-design:attw",
+        "./packages/plugin-persona-auditor:attw",
+        "./packages/plugin-prose:attw",
+        "./packages/plugin-svelte:attw",
+        "./packages/plugin-testing:attw",
+        "./packages/plugin-three:attw",
+        "./packages/plugin-typescript:attw",
+        "./packages/test:attw"
+      ]
     }
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^2.31.1",
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.6.0",
-    "globals": "^17.7.0",
-    "prettier": "^3.9.4",
+    "eslint": "^10.8.0",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.65.0",
+    "typescript-eslint": "^8.66.0",
     "wireit": "^0.14.13"
   }
 }
