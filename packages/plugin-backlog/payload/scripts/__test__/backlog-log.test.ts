@@ -277,6 +277,15 @@ describe('backlog-log.mjs remove', () => {
     expect(readFile(root, ROOT_SURFACE)).not.toContain('TEST-aaaaaa');
   });
 
+  it('deletes the root surface once its last entry is removed', () => {
+    for (const id of ['TEST-aaaaaa', 'TEST-bbbbbb'])
+      run(root, ['remove', id, 'BACKLOG.md', 'shipped it', '--chat=none']);
+
+    // The root area is not a configured target, so it leaves no header-only stub behind. That
+    // stub was unclearable: every later render rebuilt it from the ledger.
+    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
+  });
+
   it('leaves the sibling entry intact', () => {
     run(root, [
       'remove',
@@ -529,7 +538,7 @@ describe('backlog-log.mjs move', () => {
 
   it('does not rebuild a surface that only the move history still names', () => {
     run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
-    rmSync(join(root, ROOT_SURFACE));
+    rmSync(join(root, ROOT_SURFACE), { force: true });
 
     run(root, ['render']);
 
@@ -539,7 +548,9 @@ describe('backlog-log.mjs move', () => {
   it('removes the entry from the source surface', () => {
     run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
 
-    expect(readFile(root, ROOT_SURFACE)).not.toContain('TEST-aaaaaa');
+    // That was the root area's last entry, and the root area is not a configured target, so the
+    // surface goes rather than lingering as a header-only stub.
+    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
   });
 
   it('exits 1 when the id has no ledger record', () => {
@@ -555,7 +566,7 @@ describe('backlog-log.mjs move', () => {
     const r = run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
 
     expect(r.status, r.stderr).toBe(0);
-    expect(readFile(root, ROOT_SURFACE)).not.toContain('TEST-aaaaaa');
+    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
   });
 
   it('exits 1 when the id was already removed', () => {
@@ -588,7 +599,7 @@ describe('backlog-log.mjs move', () => {
     expect(readFile(root, '.claude/ledgers/studio.BACKLOG.md')).toContain(
       '## [TEST-aaaaaa] New title',
     );
-    expect(readFile(root, ROOT_SURFACE)).not.toContain('TEST-aaaaaa');
+    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
   });
 });
 

@@ -1,7 +1,7 @@
 ---
 name: decide
 description: Record a decision to the decision ledger, with the rejected alternative and revisit trigger that make it worth keeping. Use when a discussion settles a design question, when recording why we chose one option over another, or when a new decision supersedes a prior one.
-argument-hint: decide|supersede|amend <args...>
+argument-hint: decide|supersede|amend|rescope <args...>
 allowed-tools: Bash(node .claude/scripts/decision-log.mjs:*), Agent
 ---
 
@@ -50,6 +50,23 @@ not a second record. Two decisions on one question is how a log stops being answ
 Nothing else can answer this. The recorded scope only exists in the ledger, and grepping the
 rendered `DECISIONS.md` cannot match a file against a directory scope.
 
+## Repair a stale scope after a move
+
+A scope holds literal paths, and a rename updates none of them. `scope` warns on stderr when an
+accepted record names a path that is gone from disk. Clear it by pointing the record at where
+the code went:
+
+```
+node .claude/scripts/decision-log.mjs rescope <id> --scope <new-path>,<new-path>
+```
+
+Do this whenever you move a file a decision governs, in the same change as the move. Leaving it
+is not a cosmetic debt: `scope <new-path>` returns nothing, which reads as "no decision governs
+this file" and is indistinguishable from the truth.
+
+`rescope` is not `supersede`. A move re-decides nothing, so the record keeps its id, its
+content, and its status. Supersede only when the decision itself changed.
+
 ## Commands, from `.claude/scripts/decision-log.mjs`
 
 - `scope <path> [<path>...]`. Which decisions govern these paths. Run this before recording.
@@ -60,6 +77,8 @@ rendered `DECISIONS.md` cannot match a file against a directory scope.
   new record. It never edits the old one. Nothing is ever deleted.
 - `amend <id> <file> <new-body>`. Corrects a record's wording without changing its outcome.
   The log keeps both versions, so use `supersede` when the decision itself changed.
+- `rescope <id> --scope <path>,<path>`. Re-points a record at where its files moved to. It
+  changes paths only, so a move is not recorded as a re-decision.
 
 When `[body]` is omitted, pipe it on stdin.
 

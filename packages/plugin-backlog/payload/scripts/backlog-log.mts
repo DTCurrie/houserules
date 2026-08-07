@@ -34,7 +34,7 @@
  * CLAUDE_SESSION_ID to silence that.
  */
 
-import { existsSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 
 import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
 import { makeId } from './lib/backlog-id.mjs';
@@ -57,6 +57,7 @@ import {
   renderMetadata,
   resolveChat,
   resolveSurfaceArg as resolveSurfaceArgSeam,
+  surfaceIsResidue,
   surfaceRelFile,
   surfaceScope,
   takeChatFlag,
@@ -177,6 +178,12 @@ function writeSurface(
   const nextContent = renderSurface(file, entries);
   if (rebuildWouldDropEntries(file, nextContent, intentionallyDropped))
     failRebuild(relFile);
+  // After the drop guard, never before it. An undeclared area losing its last entry is residue,
+  // but a file on disk carrying entries the ledger cannot account for is still a refusal.
+  if (surfaceIsResidue(file, SURFACE, entries.length, CONFIG.targets ?? [])) {
+    rmSync(file, { force: true });
+    return;
+  }
   writeFileSync(file, nextContent);
 }
 

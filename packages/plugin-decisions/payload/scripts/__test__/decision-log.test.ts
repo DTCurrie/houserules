@@ -625,7 +625,17 @@ describe('decision-log.mjs move', () => {
   it('removes the decision from the source surface', () => {
     run(root, ['move', id, 'studio']);
 
-    expect(readFile(root, SURFACE)).not.toContain(id);
+    // The root area is not a configured target, so emptying it deletes the surface rather than
+    // leaving a header-only stub that no later command could clear.
+    expect(existsSync(join(root, SURFACE))).toBe(false);
+  });
+
+  it('keeps an emptied surface that belongs to a configured target', () => {
+    run(root, ['move', id, 'studio']);
+    run(root, ['move', id, 'cityville']);
+
+    expect(existsSync(join(root, STUDIO_SURFACE))).toBe(true);
+    expect(readFile(root, STUDIO_SURFACE)).not.toContain(id);
   });
 
   it('exits 1 when the id does not resolve in the log', () => {
@@ -652,6 +662,278 @@ describe('decision-log.mjs move', () => {
     const lines = r.stdout.trim().split('\n');
     expect(lines[0]).toContain(`${secondId}  navcat revisited  accepted`);
     expect(lines[1]).toContain(`${id}  navcat over recast  superseded`);
+  });
+});
+
+describe('decision-log.mjs rescope', () => {
+  let root: string;
+  let id: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+    id = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'navcat over recast',
+      'chose navcat',
+      '--scope',
+      'src/render/nav.ts',
+      '--chat=none',
+    ]).stdout.trim();
+  });
+
+  function rescopeTo(scope: string) {
+    return run(root, ['rescope', id, '--scope', scope, '--chat=none']);
+  }
+
+  it('finds the record under the path it was re-pointed to', () => {
+    rescopeTo('src/design/nav.ts');
+
+    const r = run(root, ['scope', 'src/design/nav.ts']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain(id);
+  });
+
+  it('stops finding the record under the path it was re-pointed away from', () => {
+    rescopeTo('src/design/nav.ts');
+
+    expect(run(root, ['scope', 'src/render/nav.ts']).stdout).not.toContain(id);
+  });
+
+  it('re-points every path at once when given a list', () => {
+    rescopeTo('src/design/nav.ts,src/design/agent.ts');
+
+    expect(run(root, ['scope', 'src/design/agent.ts']).stdout).toContain(id);
+  });
+
+  it('renders the new scope on the surface', () => {
+    rescopeTo('src/design/nav.ts');
+
+    expect(readFile(root, SURFACE)).toContain('**Scope:** `src/design/nav.ts`');
+  });
+
+  it('drops the old scope from the surface', () => {
+    rescopeTo('src/design/nav.ts');
+
+    expect(readFile(root, SURFACE)).not.toContain('src/render/nav.ts');
+  });
+
+  it('leaves the title and body unchanged', () => {
+    rescopeTo('src/design/nav.ts');
+
+    const text = readFile(root, SURFACE);
+    expect(text).toContain(`[${id}] navcat over recast`);
+    expect(text).toContain('chose navcat');
+  });
+
+  it('leaves the record accepted rather than superseding it', () => {
+    rescopeTo('src/design/nav.ts');
+
+    expect(readFile(root, SURFACE)).toContain('**Status:** accepted');
+  });
+
+  it('keeps the original decide event in the log beside the rescope event', () => {
+    rescopeTo('src/design/nav.ts');
+
+    const [decideRecord, rescopeRecord] = logRecords(root);
+    expect(decideRecord).toMatchObject({
+      action: 'decide',
+      scope: ['src/render/nav.ts'],
+    });
+    expect(rescopeRecord).toMatchObject({
+      id,
+      action: 'rescope',
+      scope: ['src/design/nav.ts'],
+    });
+  });
+
+  it('records no body on the rescope event', () => {
+    rescopeTo('src/design/nav.ts');
+
+    expect(logRecords(root)[1].content).toBeUndefined();
+  });
+
+  it('shows the original scope and the new one as separate records', () => {
+    rescopeTo('src/design/nav.ts');
+
+    const r = run(root, ['show', id]);
+
+    expect(r.stdout).toContain('scope: src/render/nav.ts');
+    expect(r.stdout).toContain('scope: src/design/nav.ts');
+  });
+
+  it('exits 1 when the id does not resolve in the log', () => {
+    const r = run(root, [
+      'rescope',
+      'SIM-ffffff',
+      '--scope',
+      'src/design/nav.ts',
+      '--chat=none',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('SIM-ffffff does not resolve');
+  });
+
+  it('exits 1 when no scope is given, rather than clearing the one recorded', () => {
+    const r = run(root, ['rescope', id, '--chat=none']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Usage:');
+  });
+});
+
+describe('decision-log.mjs rescope, given a decision recorded on an area surface', () => {
+  const STUDIO_SURFACE = '.claude/ledgers/studio.DECISIONS.md';
+  let root: string;
+  let id: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+    id = run(root, [
+      'decide',
+      'SIM',
+      'studio',
+      'studio call',
+      'body',
+      '--scope',
+      'apps/studio/render/nav.ts',
+      '--chat=none',
+    ]).stdout.trim();
+  });
+
+  it('renders the new scope onto the area surface the record already lives on', () => {
+    run(root, [
+      'rescope',
+      id,
+      '--scope',
+      'apps/studio/design/nav.ts',
+      '--chat=none',
+    ]);
+
+    expect(readFile(root, STUDIO_SURFACE)).toContain(
+      '**Scope:** `apps/studio/design/nav.ts`',
+    );
+  });
+
+  it('creates no repo-root surface for a record that never lived there', () => {
+    run(root, [
+      'rescope',
+      id,
+      '--scope',
+      'apps/studio/design/nav.ts',
+      '--chat=none',
+    ]);
+
+    expect(existsSync(join(root, SURFACE))).toBe(false);
+  });
+});
+
+describe('decision-log.mjs scope, given a record whose scope path is gone from disk', () => {
+  let root: string;
+  let id: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+    id = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'navcat over recast',
+      'body',
+      '--scope',
+      'src/render/nav.ts',
+      '--chat=none',
+    ]).stdout.trim();
+  });
+
+  it('names the record and the missing path', () => {
+    const r = run(root, ['scope', 'src/design/nav.ts']);
+
+    expect(r.stderr).toContain(`${id}  src/render/nav.ts`);
+  });
+
+  it('points at rescope as the repair', () => {
+    const r = run(root, ['scope', 'src/design/nav.ts']);
+
+    expect(r.stderr).toContain('rescope <id> --scope <path>,<path>');
+  });
+
+  it('exits 0, since the query itself succeeded', () => {
+    expect(run(root, ['scope', 'src/design/nav.ts']).status).toBe(0);
+  });
+
+  it('warns even when the queried path matches nothing at all', () => {
+    const r = run(root, ['scope', 'docs/unrelated.md']);
+
+    expect(r.stdout.trim()).toBe('');
+    expect(r.stderr).toContain(id);
+  });
+
+  it('goes quiet once the record is rescoped onto a path that exists', () => {
+    writeFile(root, 'src/design/nav.ts', 'export {};\n');
+
+    run(root, ['rescope', id, '--scope', 'src/design/nav.ts', '--chat=none']);
+
+    expect(run(root, ['scope', 'src/design/nav.ts']).stderr).not.toContain(id);
+  });
+
+  it('omits a superseded record, whose scope describes the tree as it was', () => {
+    run(root, [
+      'supersede',
+      id,
+      'DECISIONS.md',
+      'navcat revisited',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(run(root, ['scope', 'src/design/nav.ts']).stderr).not.toContain(id);
+  });
+});
+
+describe('decision-log.mjs scope, given every scope path present on disk', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+    writeFile(root, 'src/render/nav.ts', 'export {};\n');
+    run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'navcat over recast',
+      'body',
+      '--scope',
+      'src/render/nav.ts',
+      '--chat=none',
+    ]);
+  });
+
+  it('emits no stale-scope warning', () => {
+    expect(run(root, ['scope', 'src/render/nav.ts']).stderr).not.toContain(
+      'warning:',
+    );
+  });
+
+  it('matches a directory scope whose directory exists', () => {
+    const id = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'render layout',
+      'body',
+      '--scope',
+      'src/render',
+      '--chat=none',
+    ]).stdout.trim();
+
+    const r = run(root, ['scope', 'src/render/nav.ts']);
+
+    expect(r.stdout).toContain(id);
+    expect(r.stderr).not.toContain('warning:');
   });
 });
 

@@ -267,6 +267,31 @@ export function surfacePath(
 }
 
 /**
+ * Whether a surface with zero live entries should be deleted rather than left as a bare header.
+ *
+ * A surface is written for any area the ledger has ever recorded against, so an area whose
+ * entries were all removed kept rendering as a header-only stub that no `remove` could ever
+ * clear. The repo-root area collects every entry logged without an `<area>`, which makes it the
+ * one that accumulates stubs by accident.
+ *
+ * A configured target is exempt. Its surface is declared in `kit.config.json`, so an empty one
+ * reads as "this area has nothing open" rather than as residue, and deleting it would churn a
+ * file the repo means to have. An area with no target and no entries is residue, so it goes.
+ */
+export function surfaceIsResidue(
+  file: string,
+  basename: string,
+  entryCount: number,
+  targets: readonly { name?: string }[],
+): boolean {
+  if (entryCount > 0) return false;
+  const name = file.split('/').pop() ?? '';
+  if (name === basename) return true;
+  const target = name.slice(0, -(basename.length + 1));
+  return !targets.some((t) => t.name === target);
+}
+
+/**
  * The area a rendered surface covers, for its header. Reads the target out of the filename and
  * maps it through the configured targets, so a file named `studio.BACKLOG.md` renders as
  * `Backlog — Studio` rather than naming the directory it happens to sit in.

@@ -8,6 +8,7 @@
  *   supersede <id> <area> <new-title> [body] [--scope <path>,<path>] [--chat <id>]
  *   amend     <id> <area> <new-body>
  *   move      <id> <to-area>
+ *   rescope   <id> --scope <path>,<path>
  *   show      <id>
  *   list      [<area>]
  *   render    [<area>]
@@ -31,6 +32,12 @@
  * under can each branch. No traversal prints a body; `show` is the only command that does,
  * and only for one id.
  *
+ * `scope` also warns when an accepted record names a path that is gone from disk. A scope holds
+ * literal paths and nothing tracks a rename, so the query would otherwise answer "no decision
+ * governs this" for a file a decision does govern, which reads the same as the truth. `rescope`
+ * re-points those paths. It appends rather than rewrites, so the log still shows which paths the
+ * decision was originally written against.
+ *
  * The ledger mechanics live in lib/entry-ledger.mjs, shared with backlog-log.mjs. This
  * script owns what is specific to a decision: the record shape, the edges, and the verbs.
  *
@@ -38,7 +45,7 @@
  * Claude Code. Pass --chat=none or set CLAUDE_SESSION_ID to override.
  */
 
-import { existsSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
 import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
@@ -62,6 +69,7 @@ import {
   renderMetadata,
   resolveChat,
   resolveSurfaceArg,
+  surfaceIsResidue,
   surfaceScope,
   takeChatFlag,
   todayDate,
@@ -91,7 +99,7 @@ function surfaceRelFile(file: string): string {
 interface DecisionRecord {
   ts: string;
   id: string;
-  action: 'decide' | 'supersede' | 'amend' | 'move';
+  action: 'decide' | 'supersede' | 'amend' | 'move' | 'rescope';
   file?: string;
   title?: string;
   supersedes?: string[];
@@ -142,6 +150,9 @@ function projectDecisions(records: DecisionRecord[]): Projection {
     } else if (r.action === 'move') {
       const existing = entries.get(r.id);
       if (existing && r.file !== undefined) existing.file = r.file;
+    } else if (r.action === 'rescope') {
+      const existing = entries.get(r.id);
+      if (existing && r.scope !== undefined) existing.scope = r.scope;
     }
   }
   return { entries, superseded };
@@ -241,6 +252,32 @@ function scopesOverlap(recorded: string, queried: string): boolean {
   return (
     queried.startsWith(`${recorded}/`) || recorded.startsWith(`${queried}/`)
   );
+}
+
+/**
+ * Accepted records naming a scope path that is no longer on disk, paired with those paths.
+ *
+ * A scope holds literal paths, and a rename or a move updates none of them. The `scope` query
+ * then returns nothing for the new path, and "no decision governs this file" is exactly what a
+ * reader concludes. That answer is wrong and looks identical to the right one, so the drift
+ * accumulates until someone goes looking. Reporting it is what makes it findable at all.
+ *
+ * Superseded records are skipped. Their scope describes the tree as it stood when the decision
+ * still applied, so a path that has since gone is history rather than drift.
+ */
+function staleScopes(
+  entries: Map<string, DecisionEntry>,
+  superseded: Set<string>,
+): { id: string; missing: string[] }[] {
+  const stale: { id: string; missing: string[] }[] = [];
+  for (const e of entries.values()) {
+    if (superseded.has(e.id)) continue;
+    const missing = e.scope.filter(
+      (p) => !existsSync(resolve(REPO_ROOT, normalizeScopePath(p))),
+    );
+    if (missing.length) stale.push({ id: e.id, missing });
+  }
+  return stale;
 }
 
 function splitList(flag: string | null): string[] {
@@ -417,6 +454,12 @@ function rerenderFile(
     );
     process.exit(1);
   }
+  // After the drop guard, never before it. An undeclared area losing its last entry is residue,
+  // but a file on disk carrying entries the ledger cannot account for is still a refusal.
+  if (surfaceIsResidue(file, SURFACE, entries.length, CONFIG.targets ?? [])) {
+    rmSync(file, { force: true });
+    return;
+  }
   writeFileSync(file, nextContent);
 }
 
@@ -429,6 +472,7 @@ function usage() {
       '  decision-log.mjs supersede <id> <area> <new-title> [body] [--scope <path>,<path>] [--chat <id>]',
       '  decision-log.mjs amend     <id> <area> <new-body>',
       '  decision-log.mjs move      <id> <to-area>',
+      '  decision-log.mjs rescope   <id> --scope <path>,<path>',
       '  decision-log.mjs show      <id>',
       '  decision-log.mjs list      [<area>]',
       '  decision-log.mjs render    [<area>]',
@@ -446,6 +490,8 @@ function usage() {
       'set CLAUDE_SESSION_ID=<id> to override, or --chat=none to suppress.',
       'ancestry/current/tree/scope print one line per record, id/title/status, indented by',
       'depth for ancestry and tree. No traversal prints a body; use show for that.',
+      'rescope re-points a record after a file move, and scope warns about the records whose',
+      'paths have gone stale. It changes paths only, so use supersede when the decision changed.',
     ].join('\n'),
   );
 }
@@ -611,6 +657,28 @@ switch (action) {
     break;
   }
 
+  case 'rescope': {
+    const [id] = rest;
+    const scope = splitList(scopeFlag);
+    if (!id || !scope.length) {
+      usage();
+      process.exit(1);
+    }
+    const { entries } = projectDecisions(readLog<DecisionRecord>(LOG_FILE));
+    requireKnownId(entries, id, 'rescope');
+    const file = resolveSurfaceFile(entries.get(id)!.file);
+    appendEvent(LOG_FILE, {
+      ts: nowIso(),
+      id,
+      action: 'rescope',
+      file: surfaceRelFile(file),
+      scope,
+      chat: resolveChat(chatFlag, REPO_ROOT),
+    });
+    rerenderFile(file);
+    break;
+  }
+
   case 'show': {
     const [id] = rest;
     if (!id) {
@@ -744,6 +812,19 @@ switch (action) {
         )
       )
         printEntryLine(e, superseded, 0);
+    }
+    const stale = staleScopes(entries, superseded);
+    if (stale.length) {
+      console.error(
+        'warning: these accepted decisions name a scope path that is no longer on disk, so ' +
+          'a query for wherever it moved to finds nothing:',
+      );
+      for (const { id, missing } of stale) {
+        console.error(`  ${id}  ${missing.join(', ')}`);
+      }
+      console.error(
+        'Re-point one with: decision-log.mjs rescope <id> --scope <path>,<path>',
+      );
     }
     break;
   }

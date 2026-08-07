@@ -30,7 +30,9 @@ that don't belong in the log, or that duplicate one already there, before they a
    decision already covers it, say which id and whether the new record should instead be a
    `supersede` of it or an `amend`.
 4. **Scope paths.** Any path under the record's `Scope:` must still exist. A record naming paths
-   that are already gone is stale on arrival.
+   that are already gone is stale on arrival. `scope` warns about these on stderr, so run it and
+   read both streams. The repair is `rescope <id> --scope <new-path>`, not a supersede, since a
+   file move re-decides nothing.
 
 ## Output
 
