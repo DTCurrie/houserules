@@ -79,6 +79,15 @@ A well-formed slice has:
 - **a named source for a criterion over observed values.** Without it, a browser's own defaults count
   as violations too. Both are brief-authoring defects: fix the brief, not the model.
 
+**Reconcile the phase's acceptance against the slices', before you dispatch.** Read the sub-plan's own
+"done when" list and check each criterion against the union of the slice acceptances you just wrote.
+Assign every orphan to the slice that owns the code it covers, and add it to that brief's steps. Every
+slice can pass its own acceptance while the phase quietly fails its own, because a slice is scoped by
+file ownership and an acceptance criterion is not. A criterion no slice tests is one you write
+yourself at the barrier, in the most expensive context available, after the cheap workers with the
+right files already open have finished and gone. §8 checks the same list at phase close, and that is
+the backstop rather than the plan.
+
 **A whole-suite run is not a valid slice acceptance.** Workers in a wave run in parallel, so when one
 runs its acceptance its siblings are mid-edit. A red full suite there says nothing about the slice,
 and it pushes the worker to either report a spurious `BLOCKED` or reach outside its owned paths to
