@@ -1,11 +1,17 @@
 import { definePlugin, scriptPermission } from '@agent-kit/cli/plugin';
 
 import { checkChromeAvailable } from './chrome-check.js';
-import { checkDesignTokens, TOKENS_PATH } from './seed-check.js';
+import {
+  checkDesignTokens,
+  checkStaleTokenSeed,
+  TOKENS_PATH,
+} from './seed-check.js';
+import { checkTailwindAvailable } from './tailwind-check.js';
 import { renderTokenSeed } from './tokens-seed.js';
 
 import type {
   Action,
+  Answers,
   CheckResult,
   Ctx,
   ModuleDef,
@@ -48,7 +54,24 @@ function designModule(api: PluginApi): ModuleDef {
     defaultEnabled(): boolean {
       return false;
     },
-    plan(): Action[] {
+    plan(_ctx: Ctx, answers: Answers): Action[] {
+      const tailwindSelected = answers.moduleIds.includes(
+        `${api.alias}/design-tailwind`,
+      );
+      const seedAction: Action[] = tailwindSelected
+        ? []
+        : [
+            {
+              kind: 'seed',
+              dest: TOKENS_PATH,
+              content: renderTokenSeed(),
+              module: id,
+              reason: 'DTCG design system, yours to replace',
+            },
+          ];
+      const adviseText = tailwindSelected
+        ? `Design system driven by the Tailwind theme, so no ${TOKENS_PATH} was seeded. Queries answer from this repo's own \`@theme\` block merged with Tailwind's defaults. Query it with \`node .claude/scripts/design.mjs token <name>\`, list names with \`list\`, and print the spacing, type, and radius scales with \`scales\`. See the design-tailwind advisory for the full Tailwind flow. The rule installs at .claude/rules/design.md, path-scoped via its \`paths:\` frontmatter so Claude Code loads it only when UI code is in the working set. Trim \`paths:\` to what this repo actually has, and keep the frontmatter, since a rule WITHOUT \`paths:\` is loaded on every turn. The rule covers ${STYLED_GLOBS.length} extensions by default: ${STYLED_GLOBS.join(', ')}.`
+        : `Design system seeded at ${TOKENS_PATH} in W3C DTCG format (Design Tokens Format Module 2025.10). It is YOURS: the kit writes it once and never refreshes it, and the values it ships are brand-neutral placeholders. Replace them before trusting any design check, because a check against placeholders returns confident nonsense. Query it with \`node .claude/scripts/design.mjs token <name>\`, list names with \`list\`, and print the spacing, type, and radius scales with \`scales\`. The rule installs at .claude/rules/design.md, path-scoped via its \`paths:\` frontmatter so Claude Code loads it only when UI code is in the working set. Trim \`paths:\` to what this repo actually has, and keep the frontmatter, since a rule WITHOUT \`paths:\` is loaded on every turn. The rule covers ${STYLED_GLOBS.length} extensions by default: ${STYLED_GLOBS.join(', ')}.`;
       return [
         api.payload.rule(
           id,
@@ -87,13 +110,7 @@ function designModule(api: PluginApi): ModuleDef {
         api.payload.lib(id, 'design-checks.mjs'),
         api.payload.lib(id, 'cdp-session.mjs'),
         api.payload.lib(id, 'rendered-checks.mjs'),
-        {
-          kind: 'seed',
-          dest: TOKENS_PATH,
-          content: renderTokenSeed(),
-          module: id,
-          reason: 'DTCG design system, yours to replace',
-        },
+        ...seedAction,
         {
           kind: 'merge-settings',
           module: id,
@@ -103,13 +120,21 @@ function designModule(api: PluginApi): ModuleDef {
         },
         {
           kind: 'advise',
-          text: `Design system seeded at ${TOKENS_PATH} in W3C DTCG format (Design Tokens Format Module 2025.10). It is YOURS: the kit writes it once and never refreshes it, and the values it ships are brand-neutral placeholders. Replace them before trusting any design check, because a check against placeholders returns confident nonsense. Query it with \`node .claude/scripts/design.mjs token <name>\`, list names with \`list\`, and print the spacing, type, and radius scales with \`scales\`. The rule installs at .claude/rules/design.md, path-scoped via its \`paths:\` frontmatter so Claude Code loads it only when UI code is in the working set. Trim \`paths:\` to what this repo actually has, and keep the frontmatter, since a rule WITHOUT \`paths:\` is loaded on every turn. The rule covers ${STYLED_GLOBS.length} extensions by default: ${STYLED_GLOBS.join(', ')}.`,
+          text: adviseText,
           module: id,
         },
       ];
     },
     check(ctx: Ctx): CheckResult {
-      const tokens = checkDesignTokens(ctx);
+      // Which question to ask depends on where tokens come from. With design-tailwind
+      // installed there is deliberately no token file, so checkDesignTokens would warn about
+      // the correct state on every run, and a check that cries wolf is a check people stop
+      // reading.
+      const tokens = ctx.claude.manifest?.modules?.includes(
+        `${api.alias}/design-tailwind`,
+      )
+        ? checkStaleTokenSeed(ctx)
+        : checkDesignTokens(ctx);
       const chrome = checkChromeAvailable();
       return {
         findings: [...tokens.findings, ...chrome.findings],
@@ -133,7 +158,7 @@ function designReviewModule(api: PluginApi): ModuleDef {
   const id = 'design-review';
   return {
     id,
-    title: 'Design review (/design-review + art-director agent)',
+    title: 'Design review (/design-review + design-reviewer agent)',
     group: 'optional',
     hint(): string {
       return 'check a UI diff against the design system: exact contrast ratios, nearest scale values, and the token a literal should have been';
@@ -150,15 +175,70 @@ function designReviewModule(api: PluginApi): ModuleDef {
         ),
         api.payload.agent(
           id,
-          'art-director',
+          'design-reviewer',
           'read-only design-system auditor',
         ),
         {
           kind: 'advise',
-          text: 'Design review installed. Run /design-review after changing UI code. It runs `node .claude/scripts/design.mjs check` over the changed files, which computes exact contrast ratios, the nearest value on each scale, and which token a hardcoded literal should have been. The art-director agent then covers only what the script cannot compute. It needs the design module for the script and the token set. Accessibility stays with the accessibility plugin, and this review defers to it rather than duplicating WCAG coverage.',
+          text: 'Design review installed. Run /design-review after changing UI code. It runs `node .claude/scripts/design.mjs check` over the changed files, which computes exact contrast ratios, the nearest value on each scale, and which token a hardcoded literal should have been. The design-reviewer agent then covers only what the script cannot compute. It needs the design module for the script and the token set. Accessibility stays with the accessibility plugin, and this review defers to it rather than duplicating WCAG coverage.',
           module: id,
         },
       ];
+    },
+  };
+}
+
+/**
+ * Makes the repo's own Tailwind v4 theme the design system `design.mjs` queries and audits,
+ * in place of the DTCG token seed. Depends on nothing from the `design` module: a repo can
+ * install this alone and still get the doctor check and the payload libs, though the query
+ * commands stay inert without `design` installed for the script itself.
+ */
+function designTailwindModule(api: PluginApi): ModuleDef {
+  const id = 'design-tailwind';
+  return {
+    id,
+    title:
+      'Tailwind design system (query the repo theme instead of a token file)',
+    group: 'optional',
+    hint(): string {
+      return "the repo's own Tailwind v4 theme becomes the design system the plugin queries and audits";
+    },
+    // Detectable from `ctx.rootPkg`, unlike `design-game`, but `defaultEnabled(ctx)` cannot
+    // see `answers.moduleIds` and this module's whole value depends on `design` also being
+    // selected. Auto-enabling here would install libs for a script that may not be installed.
+    defaultEnabled(): boolean {
+      return false;
+    },
+    plan(): Action[] {
+      return [
+        // Every lib these scripts import has to be listed here. One left out installs a
+        // script that fails with ERR_MODULE_NOT_FOUND in the user's repo, which no unit
+        // test catches.
+        api.payload.lib(id, 'tailwind-host-packages.mjs'),
+        api.payload.lib(id, 'tailwind-design-system.mjs'),
+        api.payload.lib(id, 'tailwind-theme-to-dtcg.mjs'),
+        api.payload.lib(id, 'tailwind-candidates.mjs'),
+        api.payload.lib(id, 'tailwind-checks.mjs'),
+        api.payload.template(
+          id,
+          'tailwind-theme.css.template',
+          'starter @theme to copy into your own entry stylesheet',
+        ),
+        api.payload.reference(
+          id,
+          'design-tailwind-theming',
+          'pull-only guide to extending Tailwind into a design system and building a runtime theme',
+        ),
+        {
+          kind: 'advise',
+          text: `Tailwind theme wired as the design system. No ${TOKENS_PATH} is seeded, and design.mjs answers token, list, and scales queries from this repo's own @theme block merged with Tailwind's defaults. It reads whichever stylesheet imports Tailwind, or the one you name with --theme <path>. \`check\` also scans each file's class names with \`@tailwindcss/oxide\` and judges them against the same theme, alongside any \`<style>\` block declarations, naming an arbitrary value's nearest theme step and reporting a contrast finding for a \`bg-*\`/\`text-*\` pairing on one element. That half needs \`@tailwindcss/oxide\` installed separately from \`tailwindcss\`, and \`check\` says so rather than reporting a clean file when it is missing. The kit never writes into the Tailwind compile path, so your entry stylesheet and build config are untouched. A starter \`@theme\` installs at .claude/kit-templates/tailwind-theme.css.template, a reference to copy from, not a file the kit ever writes into your CSS. See .claude/reference/design-tailwind-theming.md for how to extend it and build a runtime theme. It needs the design module for the script itself. If this repo already had ${TOKENS_PATH} from an earlier install, nothing reads it now and the kit will not delete it, since a seed is yours. Remove it yourself, and \`agent-kit doctor\` will remind you while it is still there.`,
+          module: id,
+        },
+      ];
+    },
+    check(ctx: Ctx): CheckResult {
+      return checkTailwindAvailable(ctx);
     },
   };
 }
@@ -226,5 +306,6 @@ function designGameModule(api: PluginApi): ModuleDef {
 export default definePlugin((api: PluginApi): ModuleDef[] => [
   designModule(api),
   designReviewModule(api),
+  designTailwindModule(api),
   designGameModule(api),
 ]);

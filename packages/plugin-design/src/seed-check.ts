@@ -61,6 +61,36 @@ export function checkDesignTokens(ctx: Ctx): CheckResult {
   return { findings, readouts };
 }
 
+/**
+ * The token-file check for a repo where the Tailwind theme is the design system instead.
+ *
+ * A missing token file is the CORRECT state here, so {@link checkDesignTokens}'s warning would
+ * be backwards. What is worth reporting is the opposite case: a `tokens.json` left over from
+ * before `design-tailwind` was installed. Nothing reads it any more, and the kit will never
+ * remove it, because a seed is never manifest-tracked and so `computePrune` cannot reach it.
+ * Left unsaid, it sits there looking like the design system while every query answers from the
+ * theme.
+ */
+export function checkStaleTokenSeed(ctx: Ctx): CheckResult {
+  if (!existsSync(join(ctx.root, TOKENS_PATH))) {
+    return {
+      findings: [],
+      readouts: [
+        'design: token source is the Tailwind theme, so no token file is expected',
+      ],
+    };
+  }
+  return {
+    findings: [
+      {
+        level: 'WARN',
+        msg: `design: ${TOKENS_PATH} predates design-tailwind and nothing reads it now, since queries answer from the Tailwind theme. The kit will not delete it, because a seed belongs to you. Remove it yourself, or drop the design-tailwind module to go back to it.`,
+      },
+    ],
+    readouts: [],
+  };
+}
+
 function readTokenFile(absolute: string): string | undefined {
   try {
     return readFileSync(absolute, 'utf8');

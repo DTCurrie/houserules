@@ -17,20 +17,22 @@ function installed(): string {
 }
 
 describe('design-review', () => {
-  it('installs the art-director agent and the design-review skill', () => {
+  it('installs the design-reviewer agent and the design-review skill', () => {
     const root = installed();
 
-    expect(existsSync(join(root, '.claude/agents/art-director.md'))).toBe(true);
+    expect(existsSync(join(root, '.claude/agents/design-reviewer.md'))).toBe(
+      true,
+    );
     expect(
       existsSync(join(root, '.claude/skills/design-review/SKILL.md')),
     ).toBe(true);
   });
 
-  it('declares the art-director agent read-only, without Write or Edit', () => {
+  it('declares the design-reviewer agent read-only, without Write or Edit', () => {
     const root = installed();
 
     const agentText = readFileSync(
-      join(root, '.claude/agents/art-director.md'),
+      join(root, '.claude/agents/design-reviewer.md'),
       'utf8',
     );
     const toolsLine = agentText.match(/^tools:\s*(.+)$/m)?.[1] ?? '';
@@ -58,7 +60,7 @@ describe('design-review', () => {
     const manifest = manifestOf(root);
 
     expect(manifest.modules.includes('design/design-review')).toBe(false);
-    expect(existsSync(join(root, '.claude/agents/art-director.md'))).toBe(
+    expect(existsSync(join(root, '.claude/agents/design-reviewer.md'))).toBe(
       false,
     );
   });

@@ -94,6 +94,30 @@ function parseRgb(raw: string): DtcgColor | undefined {
   return color;
 }
 
+/** oklch()'s chroma reference range: a chroma of 100% is 0.4 per CSS Color 4. */
+const OKLCH_CHROMA_REFERENCE = 0.4;
+const PERCENTAGE_PATTERN = /^(-?[0-9]*\.?[0-9]+)%$/;
+
+/**
+ * Parses one of oklch()'s three positional components. Lightness's `100%` is `1`. Chroma's
+ * `100%` is {@link OKLCH_CHROMA_REFERENCE}. Hue is an angle and has no percentage form, so a
+ * percentage there is invalid notation and parses to `NaN`.
+ */
+function parseOklchComponent(part: string, index: number): number {
+  const percentageMatch = PERCENTAGE_PATTERN.exec(part);
+  if (!percentageMatch) return Number(part);
+  const percentage = Number(percentageMatch[1]);
+  if (index === 0) return percentage / 100;
+  if (index === 1) return (percentage / 100) * OKLCH_CHROMA_REFERENCE;
+  return NaN;
+}
+
+/** Parses oklch()'s alpha argument, where `50%` means `0.5`, same as every other CSS alpha. */
+function parseAlphaComponent(part: string): number {
+  const percentageMatch = PERCENTAGE_PATTERN.exec(part);
+  return percentageMatch ? Number(percentageMatch[1]) / 100 : Number(part);
+}
+
 /**
  * Kept in the oklch color space rather than converted to sRGB. Tailwind v4's default palette is
  * authored in oklch, and DTCG carries the color space, so converting would lose gamut for no gain.
@@ -101,15 +125,20 @@ function parseRgb(raw: string): DtcgColor | undefined {
 function parseOklch(raw: string): DtcgColor | undefined {
   const match = OKLCH_PATTERN.exec(raw);
   if (!match) return undefined;
-  const parts = splitArguments(match[1]).map(Number);
-  if (parts.length < 3 || parts.slice(0, 3).some(Number.isNaN))
-    return undefined;
+  const parts = splitArguments(match[1]);
+  if (parts.length < 3) return undefined;
+  const components = parts
+    .slice(0, 3)
+    .map((part, index) => parseOklchComponent(part, index));
+  if (components.some(Number.isNaN)) return undefined;
   const color: DtcgColor = {
     colorSpace: 'oklch',
-    components: parts.slice(0, 3).map(round),
+    components: components.map(round),
   };
-  if (parts.length > 3 && !Number.isNaN(parts[3]))
-    color.alpha = round(parts[3]);
+  if (parts.length > 3) {
+    const alpha = parseAlphaComponent(parts[3]);
+    if (!Number.isNaN(alpha)) color.alpha = round(alpha);
+  }
   return color;
 }
 
@@ -117,6 +146,103 @@ function parseOklch(raw: string): DtcgColor | undefined {
 export function parseColor(raw: string): DtcgColor | undefined {
   const trimmed = raw.trim();
   return parseHex(trimmed) ?? parseRgb(trimmed) ?? parseOklch(trimmed);
+}
+
+const DEGREES_TO_RADIANS = Math.PI / 180;
+
+/**
+ * Oklab to LMS' cube-root coefficients, from Björn Ottosson's oklab derivation (CSS Color 4
+ * §10.2). Each row is `[L, a, b]`.
+ */
+const OKLAB_TO_LMS_PRIME = {
+  l: [1, 0.3963377774, 0.2158037573],
+  m: [1, -0.1055613458, -0.0638541728],
+  s: [1, -0.0894841775, -1.291485548],
+} as const;
+
+/** LMS to linear sRGB coefficients, the other half of the same round trip. Rows are `[l, m, s]`. */
+const LMS_TO_LINEAR_SRGB = {
+  r: [4.0767416621, -3.3077115913, 0.2309699292],
+  g: [-1.2684380046, 2.6097574011, -0.3413193965],
+  b: [-0.0041960863, -0.7034186147, 1.707614701],
+} as const;
+
+/** sRGB gamma-encode transfer function constants (the inverse of the WCAG decode formula). */
+const SRGB_ENCODE_LINEAR_THRESHOLD = 0.0031308;
+const SRGB_ENCODE_LINEAR_SCALE = 12.92;
+const SRGB_ENCODE_GAMMA_SCALE = 1.055;
+const SRGB_ENCODE_GAMMA_OFFSET = 0.055;
+const SRGB_ENCODE_GAMMA_EXPONENT = 1 / 2.4;
+
+function dotProduct(coefficients: readonly number[], values: number[]): number {
+  return coefficients.reduce(
+    (sum, coefficient, index) => sum + coefficient * values[index],
+    0,
+  );
+}
+
+// An out-of-gamut oklch color converts to a linear channel outside [0, 1], including
+// negative values a fractional gamma exponent cannot accept. Clamping here is what keeps
+// the contrast ratio real rather than NaN.
+function encodeSrgbChannel(linear: number): number {
+  const clamped = Math.min(1, Math.max(0, linear));
+  return clamped <= SRGB_ENCODE_LINEAR_THRESHOLD
+    ? clamped * SRGB_ENCODE_LINEAR_SCALE
+    : SRGB_ENCODE_GAMMA_SCALE * clamped ** SRGB_ENCODE_GAMMA_EXPONENT -
+        SRGB_ENCODE_GAMMA_OFFSET;
+}
+
+/** Converts oklch's `[lightness, chroma, hue]`, already decimal per {@link parseOklchComponent}, to gamma-encoded sRGB. */
+function convertOklchToSrgb(components: number[]): number[] {
+  const [lightness, chroma, hueDegrees] = components;
+  const hueRadians = hueDegrees * DEGREES_TO_RADIANS;
+  const oklab = [
+    lightness,
+    chroma * Math.cos(hueRadians),
+    chroma * Math.sin(hueRadians),
+  ];
+
+  const lmsPrime = [
+    dotProduct(OKLAB_TO_LMS_PRIME.l, oklab),
+    dotProduct(OKLAB_TO_LMS_PRIME.m, oklab),
+    dotProduct(OKLAB_TO_LMS_PRIME.s, oklab),
+  ];
+  const lms = lmsPrime.map((component) => component ** 3);
+
+  return [
+    encodeSrgbChannel(dotProduct(LMS_TO_LINEAR_SRGB.r, lms)),
+    encodeSrgbChannel(dotProduct(LMS_TO_LINEAR_SRGB.g, lms)),
+    encodeSrgbChannel(dotProduct(LMS_TO_LINEAR_SRGB.b, lms)),
+  ];
+}
+
+/** The shape a color needs to be measured for contrast: a color space name and its components. */
+export interface MeasurableColor {
+  colorSpace: string;
+  components: number[];
+}
+
+/**
+ * Converts a color to gamma-encoded sRGB for a contrast measurement, without touching how the
+ * color is stored. A token keeps the color space it was authored in, since `design.mjs token`
+ * and `list` print what the repo actually wrote, so this conversion belongs only at the point a
+ * check measures luminance.
+ *
+ * @returns The color unchanged when it is already sRGB, its sRGB conversion when it is oklch,
+ *   or undefined for a color space this function has no conversion for, so the caller can
+ *   report an explicit skip rather than treating an unknown space as sRGB.
+ */
+export function toMeasurableSrgb(
+  color: MeasurableColor,
+): MeasurableColor | undefined {
+  if (color.colorSpace === 'srgb') return color;
+  if (color.colorSpace === 'oklch') {
+    return {
+      colorSpace: 'srgb',
+      components: convertOklchToSrgb(color.components),
+    };
+  }
+  return undefined;
 }
 
 /** A DTCG dimension `$value`. Only `px` and `rem` are representable, so anything else is dropped. */

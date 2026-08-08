@@ -71,6 +71,8 @@ read the one that answers the question in front of you.
 - **A design decision that might cost rendering performance:** which properties animate cheaply,
   what a blur or a shadow costs, fonts and layout shift, image format. See
   `../reference/design-performance.md`.
+- **Extending Tailwind into a design system, or building a theme that switches at runtime:**
+  see `../reference/design-tailwind-theming.md`.
 
 ## Where other rules apply
 

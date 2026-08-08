@@ -55,9 +55,12 @@
       ],
       "files": [
         "src/**/*.ts",
+        "test/**/*.ts",
+        "!test/**/node_modules/**",
         "tsconfig.json",
         "tsconfig.build.json",
         "payload/**/*.mts",
+        "payload/**/__test__/**/*.ts",
         "tsconfig.payload.json"
       ],
       "output": []
@@ -70,6 +73,8 @@
       ],
       "files": [
         "src/**/*.ts",
+        "test/**",
+        "!test/**/node_modules/**",
         "payload/**",
         "vitest.config.ts"
       ],
@@ -103,8 +108,10 @@
     "@agent-kit/cli": "workspace:*",
     "@agent-kit/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
+    "@tailwindcss/oxide": "^4.3.3",
     "@types/node": "^26.1.2",
     "publint": "^0.3.23",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "wireit": "^0.14.13"

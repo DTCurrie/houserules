@@ -4,6 +4,7 @@ import {
   normalizeToDtcg,
   parseColor,
   parseDimension,
+  toMeasurableSrgb,
 } from '../../payload/scripts/lib/dtcg-normalize.mts';
 import {
   extractTailwindThemeCandidates,
@@ -55,6 +56,71 @@ describe('parseColor', () => {
     const color = parseColor('oklch(0.7 0.1 250)');
 
     expect(color).toEqual({ colorSpace: 'oklch', components: [0.7, 0.1, 250] });
+  });
+
+  it('reads a percentage lightness as a decimal', () => {
+    const color = parseColor('oklch(63.7% 0.237 25.331)');
+
+    expect(color).toEqual({
+      colorSpace: 'oklch',
+      components: [0.637, 0.237, 25.331],
+    });
+  });
+
+  it('reads a percentage lightness with a percentage alpha', () => {
+    const color = parseColor('oklch(63.7% 0.237 25.331 / 50%)');
+
+    expect(color).toEqual({
+      colorSpace: 'oklch',
+      components: [0.637, 0.237, 25.331],
+      alpha: 0.5,
+    });
+  });
+
+  it('produces the same components for a decimal and a percentage lightness of the same color', () => {
+    const decimal = parseColor('oklch(0.637 0.237 25.331)');
+    const percentage = parseColor('oklch(63.7% 0.237 25.331)');
+
+    expect(percentage).toEqual(decimal);
+  });
+});
+
+describe('toMeasurableSrgb', () => {
+  it('returns an srgb color unchanged', () => {
+    const color = parseColor('#3b5bdb')!;
+
+    expect(toMeasurableSrgb(color)).toEqual(color);
+  });
+
+  it('converts a decimal-lightness oklch color to the sRGB a browser renders for it', () => {
+    const color = parseColor('oklch(0.55 0.2 265)')!;
+
+    const measurable = toMeasurableSrgb(color)!;
+
+    expect(measurable.colorSpace).toBe('srgb');
+    expect(measurable.components[0]).toBeCloseTo(54 / 255, 2);
+    expect(measurable.components[1]).toBeCloseTo(101 / 255, 2);
+    expect(measurable.components[2]).toBeCloseTo(228 / 255, 2);
+  });
+
+  it('converts a percentage-lightness oklch color to the same sRGB as its decimal form', () => {
+    const color = parseColor('oklch(63.7% 0.237 25.331)')!;
+
+    const measurable = toMeasurableSrgb(color)!;
+
+    expect(measurable.colorSpace).toBe('srgb');
+    expect(measurable.components[0]).toBeCloseTo(251 / 255, 2);
+    expect(measurable.components[1]).toBeCloseTo(44 / 255, 2);
+    expect(measurable.components[2]).toBeCloseTo(54 / 255, 2);
+  });
+
+  it('returns undefined for a color space it has no conversion for', () => {
+    expect(
+      toMeasurableSrgb({
+        colorSpace: 'display-p3',
+        components: [0.5, 0.2, 0.3],
+      }),
+    ).toBeUndefined();
   });
 });
 
@@ -139,6 +205,33 @@ describe('extractTailwindThemeCandidates', () => {
   it('skips a commented-out declaration', () => {
     const candidates = extractTailwindThemeCandidates(
       '@theme { /* --color-brand: #3b5bdb; */ --spacing-md: 1rem; }',
+    );
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].name).toBe('md');
+  });
+
+  it('reads a @theme default block', () => {
+    const candidates = extractTailwindThemeCandidates(
+      '@theme default { --spacing-md: 1rem; }',
+    );
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].name).toBe('md');
+  });
+
+  it('reads a @theme static block', () => {
+    const candidates = extractTailwindThemeCandidates(
+      '@theme static { --spacing-md: 1rem; }',
+    );
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].name).toBe('md');
+  });
+
+  it('reads a @theme block with two modifiers together', () => {
+    const candidates = extractTailwindThemeCandidates(
+      '@theme default static { --spacing-md: 1rem; }',
     );
 
     expect(candidates).toHaveLength(1);

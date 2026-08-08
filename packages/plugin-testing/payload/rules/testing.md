@@ -31,6 +31,13 @@ that covers it is part of the change, not a follow-up.
   it: introduce the bug the test is supposed to catch, run the test, confirm it goes red, then
   revert. A test that stays green under a deliberate bug is not weak coverage, it is zero
   coverage, and deleting it loses nothing.
+- **Do not run that check when the bug would kill the process instead of failing an
+  assertion.** A guard against a native panic, a stack overflow, or an out-of-memory has that
+  shape. Removing it ends the run rather than reddening a test, so it proves nothing a reader
+  can distinguish from an unrelated crash, and the revert may never happen because the process
+  that would have done it is gone. Pin the guard's observable result instead: that the call
+  returns the error, with the test surviving to assert it. That version is falsifiable the
+  ordinary way, because deleting the guard changes a returned value.
 - **Never write a test to move the coverage number.** Coverage reports which lines ran, not
   which behaviors are pinned, and a line runs fine under a test that asserts nothing about it.
   Find the decision nothing covers and test that. The number follows.

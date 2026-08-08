@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { checkDesign } from '../../payload/scripts/lib/design-checks.mts';
 import { parseColor } from '../../payload/scripts/lib/dtcg-normalize.mts';
@@ -143,6 +143,79 @@ describe('checkDesign, declared-pair contrast', () => {
     expect(
       findings.some((finding) => finding.message.includes('the 4.5:1 minimum')),
     ).toBe(false);
+  });
+
+  it('computes 3.83:1 for an oklch foreground on an oklch background', () => {
+    const css = `
+.oklch-pair {
+  color: oklch(0.55 0.2 265);
+  background: oklch(0.9 0.05 150);
+}
+`;
+
+    const { findings } = checkDesign(css, {});
+
+    expect(findings.some((finding) => finding.message.includes('3.83:1'))).toBe(
+      true,
+    );
+  });
+
+  it('computes 2.86:1 for a percentage-lightness oklch foreground on a hex background', () => {
+    const css = `
+.oklch-percent {
+  color: oklch(63.7% 0.237 25.331);
+  background: #7a1116;
+}
+`;
+
+    const { findings } = checkDesign(css, {});
+
+    expect(findings.some((finding) => finding.message.includes('2.86:1'))).toBe(
+      true,
+    );
+  });
+
+  it('computes 1.02:1 for a hex foreground on an oklch background, the reverse direction', () => {
+    const css = `
+.hex-on-oklch {
+  color: #dedede;
+  background: oklch(0.9 0.05 150);
+}
+`;
+
+    const { findings } = checkDesign(css, {});
+
+    expect(findings.some((finding) => finding.message.includes('1.02:1'))).toBe(
+      true,
+    );
+  });
+
+  it('reports an explicit skip, naming the color space, for a token in a space it cannot convert', () => {
+    const css = `
+.unsupported-space {
+  color: var(--color-brand-weird);
+  background: #ffffff;
+}
+`;
+    const root = {
+      color: {
+        brand: {
+          weird: {
+            $value: { colorSpace: 'display-p3', components: [0.5, 0.2, 0.3] },
+          },
+        },
+      },
+    };
+
+    const { findings } = checkDesign(css, root);
+
+    expect(
+      findings.find((finding) =>
+        finding.message.includes('var(--color-brand-weird)'),
+      )?.message,
+    ).toBe(
+      'var(--color-brand-weird) on #ffffff could not be checked for contrast: unsupported color space display-p3.',
+    );
   });
 });
 
@@ -293,12 +366,7 @@ describe('checkDesign, px declarations against a rem scale', () => {
 });
 
 describe('checkDesign, unparsed chunks', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('counts a declaration-shaped chunk with no colon as unparsed and reports it on stderr', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('counts a declaration-shaped chunk with no colon as unparsed', () => {
     const css = `
 .card {
   totally broken chunk;
@@ -306,16 +374,10 @@ describe('checkDesign, unparsed chunks', () => {
 }
 `;
 
-    const result = checkDesign(css, {});
-
-    expect(result.unparsedCount).toBe(1);
-    expect(
-      errorSpy.mock.calls.some((call) => String(call[0]).includes('1')),
-    ).toBe(true);
+    expect(checkDesign(css, {}).unparsedCount).toBe(1);
   });
 
-  it('reports zero unparsed chunks and no stderr line for fully parseable CSS', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('counts zero unparsed chunks for fully parseable CSS', () => {
     const css = `
 .card {
   padding: 24px;
@@ -323,14 +385,36 @@ describe('checkDesign, unparsed chunks', () => {
 }
 `;
 
-    const result = checkDesign(css, {});
+    expect(checkDesign(css, {}).unparsedCount).toBe(0);
+  });
 
-    expect(result.unparsedCount).toBe(0);
-    expect(
-      errorSpy.mock.calls.some((call) =>
-        String(call[0]).includes('could not parse'),
-      ),
-    ).toBe(false);
+  it('writes nothing to stderr, since reporting belongs to the script that knows what else ran', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    checkDesign('.card {\n  totally broken chunk;\n}\n', {});
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+});
+
+describe('checkDesign, declaration count', () => {
+  it('counts the declarations it read, so a caller can tell an unstyled file from an unchecked one', () => {
+    const css = `
+.card {
+  padding: 24px;
+  color: #ffffff;
+}
+`;
+
+    expect(checkDesign(css, {}).declarationCount).toBe(2);
+  });
+
+  it('is zero for a component whose styling is entirely class names', () => {
+    const jsx =
+      'export const C = () => <div className="bg-brand-500 p-4" />;\n';
+
+    expect(checkDesign(jsx, {}).declarationCount).toBe(0);
   });
 });
 
@@ -348,5 +432,44 @@ describe('checkDesign, var()-only stylesheets', () => {
     const { findings } = checkDesign(css, {});
 
     expect(findings).toEqual([]);
+  });
+});
+
+describe('checkDesign, a var() reference against either token-name shape', () => {
+  const black = { colorSpace: 'srgb', components: [0, 0, 0] };
+
+  const lowContrastPair = `
+.cta {
+  color: var(--color-brand-500);
+  background-color: #000000;
+}
+`;
+
+  function contrastMessages(root: Record<string, unknown>): string[] {
+    return checkDesign(lowContrastPair, root)
+      .findings.map((finding) => finding.message)
+      .filter((message) => message.includes('for this declared pair'));
+  }
+
+  it('resolves a flat hyphenated key, which is how a Tailwind theme names a token', () => {
+    expect(
+      contrastMessages({
+        color: { $type: 'color', 'brand-500': { $value: black } },
+      }),
+    ).toEqual([
+      'var(--color-brand-500) on #000000 is 1.00:1, under the 4.5:1 minimum for this declared pair. A rendered page composites more than these two declarations, so this is not what a user necessarily sees.',
+    ]);
+  });
+
+  it('resolves a nested path, which is how the seeded DTCG file names a token', () => {
+    expect(
+      contrastMessages({
+        color: { $type: 'color', brand: { 500: { $value: black } } },
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('reports no contrast finding when neither shape holds the token', () => {
+    expect(contrastMessages({ color: { $type: 'color' } })).toEqual([]);
   });
 });

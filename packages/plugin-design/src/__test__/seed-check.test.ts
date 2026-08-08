@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { checkDesignTokens, TOKENS_PATH } from '../seed-check.js';
+import {
+  checkDesignTokens,
+  checkStaleTokenSeed,
+  TOKENS_PATH,
+} from '../seed-check.js';
 import { renderTokenSeed } from '../tokens-seed.js';
 
 import type { Ctx } from '@agent-kit/cli/plugin';
@@ -63,5 +67,29 @@ describe('checkDesignTokens', () => {
     expect(result.findings).toHaveLength(0);
     expect(result.readouts).toHaveLength(1);
     expect(result.readouts[0]).toContain(TOKENS_PATH);
+  });
+});
+
+describe('checkStaleTokenSeed', () => {
+  it('treats a missing token file as the expected state rather than a warning', () => {
+    const result = checkStaleTokenSeed(ctxAt(tempRoot()));
+
+    expect(result.findings).toHaveLength(0);
+    expect(result.readouts).toEqual([
+      'design: token source is the Tailwind theme, so no token file is expected',
+    ]);
+  });
+
+  it('warns that a leftover token file is unread and will never be deleted for you', () => {
+    const root = tempRoot();
+    mkdirSync(join(root, '.claude/design'), { recursive: true });
+    writeFileSync(join(root, TOKENS_PATH), renderTokenSeed());
+
+    const result = checkStaleTokenSeed(ctxAt(root));
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]?.level).toBe('WARN');
+    expect(result.findings[0]?.msg).toContain('nothing reads it now');
+    expect(result.readouts).toHaveLength(0);
   });
 });

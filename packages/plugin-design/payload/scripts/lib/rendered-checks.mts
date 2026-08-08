@@ -9,7 +9,11 @@
  */
 
 import { contrastRatio } from './design-checks.mjs';
-import { parseColor, parseDimension } from './dtcg-normalize.mjs';
+import {
+  parseColor,
+  parseDimension,
+  toMeasurableSrgb,
+} from './dtcg-normalize.mjs';
 import type { TokenGroup } from './dtcg-normalize.mjs';
 import type { RenderSession } from './cdp-session.mjs';
 
@@ -96,19 +100,23 @@ function collectTokenEntries<TValue>(
   return entries;
 }
 
+// `color` is a measured value in gamma-encoded sRGB, already converted by the caller. A token
+// may still be authored in oklch, so it is converted here at the point of comparison.
 function colorMatchesAnyToken(
   color: ColorValue,
   tokens: TokenEntry<ColorValue>[],
 ): boolean {
-  return tokens.some(
-    (entry) =>
-      entry.value.colorSpace === color.colorSpace &&
-      entry.value.components.length === color.components.length &&
-      entry.value.components.every(
+  return tokens.some((entry) => {
+    const measurableToken = toMeasurableSrgb(entry.value);
+    return (
+      measurableToken !== undefined &&
+      measurableToken.components.length === color.components.length &&
+      measurableToken.components.every(
         (component, index) =>
           Math.abs(component - color.components[index]) <= COLOR_MATCH_EPSILON,
-      ),
-  );
+      )
+    );
+  });
 }
 
 function findNearestPixels(target: number, candidates: number[]): number {
@@ -124,6 +132,34 @@ function dimensionScalePixels(entries: TokenEntry<DimensionValue>[]): number[] {
     .filter((entry) => entry.value.unit === 'px')
     .map((entry) => entry.value.value);
   return [...new Set(values)].sort((left, right) => left - right);
+}
+
+function parseAlphaArgument(raw: string): number {
+  return raw.trim().endsWith('%') ? parseFloat(raw) / 100 : parseFloat(raw);
+}
+
+/**
+ * Whether a computed `backgroundColor` is opaque enough to composite text against, decided by
+ * alpha rather than by which color function wrote it. `rgb`, `oklch`, `lab`, and `color()` all
+ * resolve to one of two computed-style shapes: legacy comma alpha in `rgba(...)`, or a slash
+ * alpha in every modern syntax. A background this can't read as either is treated as opaque,
+ * matching a plain `rgb()` with no alpha argument at all.
+ *
+ * Its source, not a second copy, is what runs inside the page: {@link buildTextContrastExpression}
+ * inlines it with `Function.prototype.toString`, so this module's own tests exercise the exact
+ * text the browser evaluates.
+ */
+export function backgroundAlpha(background: string): number {
+  const trimmed = background.trim();
+  if (trimmed === 'transparent') return 0;
+  const slashMatch = /\/\s*([\d.]+%?)\s*\)$/.exec(trimmed);
+  if (slashMatch) return parseAlphaArgument(slashMatch[1]);
+  const commaMatch = /^rgba?\(([^)]+)\)$/i.exec(trimmed);
+  if (commaMatch) {
+    const parts = commaMatch[1].split(',').map((part) => part.trim());
+    if (parts.length > 3) return parseAlphaArgument(parts[3]);
+  }
+  return 1;
 }
 
 function describeElementScript(): string {
@@ -156,16 +192,15 @@ function buildTextContrastExpression(maxElements: number): string {
       return style.visibility !== 'hidden' && style.display !== 'none';
     }
 
+    ${parseAlphaArgument.toString()}
+
+    ${backgroundAlpha.toString()}
+
     function effectiveBackground(el) {
       let current = el;
       while (current) {
         const background = getComputedStyle(current).backgroundColor;
-        const match = /^rgba?\\(([^)]+)\\)$/i.exec(background.trim());
-        if (match) {
-          const parts = match[1].split(',').map((part) => parseFloat(part));
-          const alpha = parts.length > 3 ? parts[3] : 1;
-          if (alpha > 0) return background;
-        }
+        if (backgroundAlpha(background) > 0) return background;
         current = current.parentElement;
       }
       return 'rgb(255, 255, 255)';
@@ -198,9 +233,19 @@ function buildContrastFinding(
   const foreground = parseColor(candidate.color);
   const background = parseColor(candidate.background);
   if (!foreground || !background) return undefined;
-  if (foreground.colorSpace !== 'srgb' || background.colorSpace !== 'srgb')
-    return undefined;
-  const ratio = contrastRatio(foreground, background);
+  const measurableForeground = toMeasurableSrgb(foreground);
+  const measurableBackground = toMeasurableSrgb(background);
+  if (!measurableForeground || !measurableBackground) {
+    const unsupportedSpaces = [
+      !measurableForeground ? foreground.colorSpace : undefined,
+      !measurableBackground ? background.colorSpace : undefined,
+    ].filter((space): space is string => space !== undefined);
+    return {
+      selector: candidate.selector,
+      message: `${candidate.color} on effective background ${candidate.background} could not be checked for contrast: unsupported color space ${unsupportedSpaces.join(', ')}.`,
+    };
+  }
+  const ratio = contrastRatio(measurableForeground, measurableBackground);
   if (ratio >= CONTRAST_MINIMUM) return undefined;
   return {
     selector: candidate.selector,
@@ -384,9 +429,16 @@ function checkSampleColor(
   const raw = sample[property];
   if (raw === undefined) return undefined;
   const parsed = parseColor(raw);
-  if (!parsed || parsed.colorSpace !== 'srgb') return undefined;
+  if (!parsed) return undefined;
   if (parsed.alpha === 0) return undefined;
-  if (colorMatchesAnyToken(parsed, colorTokens)) return undefined;
+  const measurable = toMeasurableSrgb(parsed);
+  if (!measurable) {
+    return {
+      selector: sample.selector,
+      message: `computed ${property} ${raw} could not be checked against the token set: unsupported color space ${parsed.colorSpace}.`,
+    };
+  }
+  if (colorMatchesAnyToken(measurable, colorTokens)) return undefined;
   return {
     selector: sample.selector,
     message: `computed ${property} ${raw} matches no token. This is a new value and needs a design decision before it joins the token set.`,

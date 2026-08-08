@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 
 import type { TokenCandidate, TokenGroup } from './dtcg-normalize.mjs';
 
-const THEME_BLOCK_START = /@theme(?:\s+inline)?\s*\{/g;
+const THEME_BLOCK_START = /@theme(?:\s+(?:default|static|inline))*\s*\{/g;
 const COMMENT_PATTERN = /\/\*[\s\S]*?\*\//g;
 const DECLARATION_PATTERN = /--([a-zA-Z0-9-]+)\s*:\s*([^;]+);/g;
 const TAILWIND_SOURCE = 'tailwind @theme';

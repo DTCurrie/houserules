@@ -73,7 +73,7 @@ concerns. This skill reports the design-system angle only and does not duplicate
 
 ## Off-context reviews
 
-For a large diff, run this review through the `art-director` agent instead of in this
+For a large diff, run this review through the `design-reviewer` agent instead of in this
 context. Hand it the changed files and let it run the checker and read the tokens. Only the
 diff and the check output stay in the subagent. The main context gets back a verdict, not a
 transcript.

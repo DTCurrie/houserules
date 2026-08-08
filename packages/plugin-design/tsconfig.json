@@ -13,11 +13,15 @@
     // @agent-kit/test's published subpaths. Kept out of tsconfig.build.json: nothing under
     // src/ that ships may reference it.
     "paths": {
+      "#test/tailwind-fixture": ["./test/tailwind-fixture.ts"],
       "#test/*": ["./node_modules/@agent-kit/test/dist/*.d.ts"]
     }
   },
   // tsconfig.build.json excludes colocated tests so they stay out of dist/. Typechecking
   // must still see them, so the inherited exclude is cleared here.
   "exclude": [],
-  "include": ["src/**/*.ts"]
+  // Both test locations. Dropping the payload glob is how four packages ended up with suites
+  // that `pnpm check` never read, and vitest strips types rather than checking them, so nothing
+  // else would catch it.
+  "include": ["src/**/*.ts", "test/**/*.ts", "payload/**/__test__/**/*.ts"]
 }

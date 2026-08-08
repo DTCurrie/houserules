@@ -15,7 +15,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE = join(ROOT, 'payload');
 const OUT = join(ROOT, 'payload-dist');
 
-const VERBATIM = ['rules', 'reference', 'skills', 'agents'];
+const VERBATIM = ['rules', 'reference', 'skills', 'agents', 'kit-templates'];
 
 if (!existsSync(join(OUT, 'scripts'))) {
   console.error(

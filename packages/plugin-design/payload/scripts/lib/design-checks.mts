@@ -1,4 +1,8 @@
-import { parseColor, parseDimension } from './dtcg-normalize.mjs';
+import {
+  parseColor,
+  parseDimension,
+  toMeasurableSrgb,
+} from './dtcg-normalize.mjs';
 
 /** One deterministic design-system violation, tied to the line that caused it. */
 export interface Finding {
@@ -12,6 +16,12 @@ export interface CheckResult {
   coverageSummary: string;
   /** Chunks the declaration splitter could not parse into a selector/property/value triple. */
   unparsedCount: number;
+  /**
+   * Declarations the splitter did read. Zero on a component file whose styling is entirely
+   * class names, which is what lets a caller tell "nothing to report here" apart from
+   * "nothing was checked here".
+   */
+  declarationCount: number;
 }
 
 /** Printed once per run. Names the plugin that owns everything `check` deliberately skips. */
@@ -229,7 +239,17 @@ function parseCssVarReference(value: string): string | undefined {
   return match ? match[1] : undefined;
 }
 
-function cssVarNameToTokenPath(varName: string): string | undefined {
+/**
+ * The token paths a CSS custom property name could name, most specific first.
+ *
+ * Two token sources shape their names differently and both are legitimate. A hand-authored DTCG
+ * file nests, so `--color-brand-primary` is `color.brand.primary`. A Tailwind theme does not,
+ * because `brand-500` is one key in Tailwind's own `--color` namespace and splitting it would
+ * invent structure the theme does not have. Returning both readings is what lets one checker
+ * serve a repo on either source, and the flat one is tried first because a theme key that
+ * happens to contain a hyphen is the more specific match.
+ */
+function cssVarNameToTokenPaths(varName: string): string[] {
   const segments = varName.replace(/^--/, '').split('-');
   for (const prefix of CSS_VAR_GROUP_PREFIXES) {
     const matchesPrefix = prefix.segments.every(
@@ -238,7 +258,20 @@ function cssVarNameToTokenPath(varName: string): string | undefined {
     if (!matchesPrefix) continue;
     const rest = segments.slice(prefix.segments.length);
     if (rest.length === 0) continue;
-    return `${prefix.group}.${rest.join('.')}`;
+    const flat = `${prefix.group}.${rest.join('-')}`;
+    const nested = `${prefix.group}.${rest.join('.')}`;
+    return flat === nested ? [flat] : [flat, nested];
+  }
+  return [];
+}
+
+function resolveTokenByVarName(
+  root: Record<string, unknown>,
+  varName: string,
+): unknown {
+  for (const path of cssVarNameToTokenPaths(varName)) {
+    const value = resolveTokenValue(root, path);
+    if (value !== undefined) return value;
   }
   return undefined;
 }
@@ -446,8 +479,7 @@ function resolveDeclaredColor(
 ): DtcgColorValue | undefined {
   const varName = parseCssVarReference(raw);
   if (varName) {
-    const path = cssVarNameToTokenPath(varName);
-    const value = path ? resolveTokenValue(root, path) : undefined;
+    const value = resolveTokenByVarName(root, varName);
     return isColorValue(value) ? value : undefined;
   }
   return parseHexPrecise(raw) ?? parseColor(raw);
@@ -501,9 +533,20 @@ function checkTokenPairContrast(
     const foreground = resolveDeclaredColor(root, colorDeclaration.value);
     const background = resolveDeclaredColor(root, backgroundDeclaration.value);
     if (!foreground || !background) continue;
-    if (foreground.colorSpace !== 'srgb' || background.colorSpace !== 'srgb')
+    const measurableForeground = toMeasurableSrgb(foreground);
+    const measurableBackground = toMeasurableSrgb(background);
+    if (!measurableForeground || !measurableBackground) {
+      const unsupportedSpaces = [
+        !measurableForeground ? foreground.colorSpace : undefined,
+        !measurableBackground ? background.colorSpace : undefined,
+      ].filter((space): space is string => space !== undefined);
+      findings.push({
+        line: colorDeclaration.line,
+        message: `${colorDeclaration.value} on ${backgroundDeclaration.value} could not be checked for contrast: unsupported color space ${unsupportedSpaces.join(', ')}.`,
+      });
       continue;
-    const ratio = contrastRatio(foreground, background);
+    }
+    const ratio = contrastRatio(measurableForeground, measurableBackground);
     if (ratio >= CONTRAST_MINIMUM) continue;
     findings.push({
       line: colorDeclaration.line,
@@ -651,8 +694,7 @@ function isTokenBacked(
 ): boolean {
   const varName = parseCssVarReference(declaration.value);
   if (varName) {
-    const path = cssVarNameToTokenPath(varName);
-    return path !== undefined && resolveTokenValue(root, path) !== undefined;
+    return resolveTokenByVarName(root, varName) !== undefined;
   }
   if (COLOR_PROPERTY_PATTERN.test(declaration.property)) {
     return isColorDeclarationTokenBacked(declaration, colorEntries);
@@ -676,6 +718,7 @@ function checkTokenCoverage(
   spacingEntries: TokenEntry[],
   fontSizeEntries: TokenEntry[],
   radiusEntries: TokenEntry[],
+  unitLabel: string,
 ): string {
   const relevant = declarations.filter(isDesignRelevantDeclaration);
   const covered = relevant.filter((declaration) =>
@@ -692,18 +735,26 @@ function checkTokenCoverage(
     relevant.length === 0
       ? 0
       : Math.round((covered.length / relevant.length) * PERCENTAGE_MULTIPLIER);
-  return `Token coverage: ${covered.length}/${relevant.length} design-relevant declarations use a token (${percentage}%).`;
+  return `Token coverage: ${covered.length}/${relevant.length} design-relevant ${unitLabel} use a token (${percentage}%).`;
 }
+
+/** What the coverage summary counts when the source is a file's own CSS. */
+export const DECLARATION_COVERAGE_UNIT = 'declarations';
 
 /**
  * Runs every deterministic design check against one file's CSS text.
  *
  * @param source The file's raw text.
  * @param root The parsed DTCG token document, as read from `.claude/design/tokens.json`.
+ * @param coverageUnit What the coverage summary should call the things it counted. A caller that
+ * synthesized this CSS from something else, as the Tailwind class path does, has to say so, or a
+ * reader sees a count of declarations for a file that has none and trusts the number over the
+ * findings printed above it.
  */
 export function checkDesign(
   source: string,
   root: Record<string, unknown>,
+  coverageUnit: string = DECLARATION_COVERAGE_UNIT,
 ): CheckResult {
   const { declarations, unparsedCount } = parseDeclarations(source);
   const groups = groupBySelector(declarations);
@@ -743,13 +794,13 @@ export function checkDesign(
     spacingEntries,
     fontSizeEntries,
     radiusEntries,
+    coverageUnit,
   );
 
-  if (unparsedCount > 0) {
-    console.error(
-      `Parse coverage: read ${declarations.length} declaration(s), could not parse ${unparsedCount} chunk(s). Those chunks were skipped, not checked, and could hide violations.`,
-    );
-  }
-
-  return { findings, coverageSummary, unparsedCount };
+  return {
+    findings,
+    coverageSummary,
+    unparsedCount,
+    declarationCount: declarations.length,
+  };
 }
