@@ -66,8 +66,13 @@ const INSUFFICIENT_PERMISSION_MESSAGE =
   'on this repository, which this account does not have. Open an issue on the issues tab ' +
   'instead, or ask a maintainer to run /backlog-adopt on it once it lands.';
 
+const READ_INSUFFICIENT_PERMISSION_MESSAGE =
+  'Could not read the project board. This account has no read access on this repository, so ' +
+  'there is nothing to compare the local ledger against.';
+
 /**
- * The gate decision, from data alone.
+ * The WRITE gate decision, from data alone. See {@link evaluateReadGate} for the weaker gate
+ * that covers operations that only read the board.
  *
  * Order matters. The cheapest and most common denial comes first, and `no-token` outranks
  * everything because it is the clone-without-bootstrap case: a contributor should never see a
@@ -102,6 +107,41 @@ export function evaluateGate(inputs: GateInputs): GateVerdict {
 }
 
 /**
+ * The READ gate decision, for operations that only read the project board, such as `pull`.
+ * Weaker than {@link evaluateGate} on purpose: it does not require the local enable token,
+ * since a contributor who cannot push should still be able to hold a local index.
+ */
+export function evaluateReadGate(inputs: GateInputs): GateVerdict {
+  if (inputs.autoSync === false) {
+    return {
+      allowed: false,
+      reason: 'auto-sync-disabled',
+      message: AUTO_SYNC_DISABLED_MESSAGE,
+    };
+  }
+  if (inputs.permissions === null) {
+    return {
+      allowed: false,
+      reason: 'permission-unknown',
+      message: PERMISSION_UNKNOWN_MESSAGE,
+    };
+  }
+  const canRead =
+    inputs.permissions.pull ||
+    inputs.permissions.push ||
+    inputs.permissions.maintain ||
+    inputs.permissions.admin;
+  if (!canRead) {
+    return {
+      allowed: false,
+      reason: 'insufficient-permission',
+      message: READ_INSUFFICIENT_PERMISSION_MESSAGE,
+    };
+  }
+  return { allowed: true };
+}
+
+/**
  * Gathers {@link GateInputs} from disk and from GitHub.
  *
  * The permission call is skipped when a local condition already denies, so the common case
@@ -118,11 +158,17 @@ export function evaluateGate(inputs: GateInputs): GateVerdict {
 export function readGateInputs(
   ledgerDirectory: string,
   autoSync: boolean | undefined,
+  { requireToken = true }: { requireToken?: boolean } = {},
 ): GateInputs {
   const tokenPath = resolve(ledgerDirectory, ENABLE_TOKEN_BASENAME);
   const hasEnableToken = existsSync(tokenPath);
 
-  if (!hasEnableToken || autoSync === false) {
+  // The write gate skips the permission call when there is no token, because the token is
+  // already disqualifying and the round trip would be wasted. A read gate does not care about
+  // the token at all, so skipping there would report `permission-unknown` for exactly the
+  // contributor this whole path exists to serve. Hence `requireToken: false` for `pull`.
+  const tokenBlocks = requireToken && !hasEnableToken;
+  if (tokenBlocks || autoSync === false) {
     return { hasEnableToken, autoSync, permissions: null };
   }
 

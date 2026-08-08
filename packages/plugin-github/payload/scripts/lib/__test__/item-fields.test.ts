@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PushOp } from '../push-queue.mjs';
-import {
-  areaFromSurface,
-  fieldValueLiteral,
-  fieldValuesFor,
-} from '../item-fields.mjs';
+import { fieldValueLiteral, fieldValuesFor } from '../item-fields.mjs';
+import { areaForSurface } from '../project-shape.mjs';
 
 const backlogOpBase = {
   entryId: 'TEST-abc123',
@@ -13,6 +10,8 @@ const backlogOpBase = {
   surface: 'BACKLOG.md',
   title: 'Fix the thing',
   body: 'Body text.',
+  date: '2026-01-01',
+  chat: null,
 };
 
 const decisionOpBase = {
@@ -21,23 +20,25 @@ const decisionOpBase = {
   surface: 'DECISIONS.md',
   title: 'Adopt the thing',
   body: 'Decision body.',
+  date: '2026-01-01',
+  chat: null,
 };
 
-describe('areaFromSurface', () => {
+describe('areaForSurface', () => {
   it('strips a target-prefixed backlog surface to the target name', () => {
-    expect(areaFromSurface('agent-kit.BACKLOG.md')).toBe('agent-kit');
+    expect(areaForSurface('agent-kit.BACKLOG.md')).toBe('agent-kit');
   });
 
   it('names the bare backlog surface as the repo root', () => {
-    expect(areaFromSurface('BACKLOG.md')).toBe('repo root');
+    expect(areaForSurface('BACKLOG.md')).toBe('repo root');
   });
 
   it('strips a target-prefixed decisions surface to the target name', () => {
-    expect(areaFromSurface('agent-kit.DECISIONS.md')).toBe('agent-kit');
+    expect(areaForSurface('agent-kit.DECISIONS.md')).toBe('agent-kit');
   });
 
   it('names the bare decisions surface as the repo root', () => {
-    expect(areaFromSurface('DECISIONS.md')).toBe('repo root');
+    expect(areaForSurface('DECISIONS.md')).toBe('repo root');
   });
 });
 
@@ -107,7 +108,6 @@ describe('fieldValuesFor, given a decision op', () => {
     const op: PushOp = {
       ...decisionOpBase,
       op: 'create-draft',
-      decided: '2026-08-07',
       supersedes: [],
       chat: null,
       scope: [],
@@ -139,7 +139,6 @@ describe('fieldValuesFor, given a decision op', () => {
     const op: PushOp = {
       ...decisionOpBase,
       op: 'create-draft',
-      decided: '2026-08-07',
       supersedes: [],
       chat: null,
       scope: [],
@@ -154,7 +153,6 @@ describe('fieldValuesFor, given a decision op', () => {
     const op: PushOp = {
       ...decisionOpBase,
       op: 'create-draft',
-      decided: '2026-08-07',
       supersedes: ['TEST-a', 'TEST-b'],
       chat: null,
       scope: [],
@@ -171,7 +169,6 @@ describe('fieldValuesFor, given a decision op', () => {
     const op: PushOp = {
       ...decisionOpBase,
       op: 'create-draft',
-      decided: '2026-08-07',
       supersedes: [],
       chat: null,
       scope: [],
@@ -186,7 +183,6 @@ describe('fieldValuesFor, given a decision op', () => {
     const op: PushOp = {
       ...decisionOpBase,
       op: 'create-draft',
-      decided: '2026-08-07',
       supersedes: [],
       chat: 'https://claude.ai/chat/abc',
       scope: [],
@@ -206,6 +202,7 @@ describe('fieldValuesFor, given a report-move op', () => {
       ...backlogOpBase,
       op: 'report-move',
       issue: 12,
+      itemId: null,
       toSurface: 'other.BACKLOG.md',
     };
 
@@ -285,6 +282,8 @@ describe('mark-superseded', () => {
       surface: 'agent-kit.DECISIONS.md',
       title: 'Old decision',
       body: '',
+      date: '2026-01-01',
+      chat: null,
       itemId: 'PVTI_old',
       successorId: 'DEC-new',
     });
@@ -294,5 +293,49 @@ describe('mark-superseded', () => {
       kind: 'text',
       value: 'DEC-new',
     });
+  });
+});
+
+describe('provenance a pulled index cannot derive from the item', () => {
+  const BASE = {
+    entryId: 'B-1',
+    kind: 'backlog' as const,
+    surface: 'cli.BACKLOG.md',
+    title: 'Fix it',
+    body: 'body',
+    date: '2026-08-08',
+    chat: 'chat-abc' as string | null,
+  };
+
+  function backlogOp(
+    op: 'create-issue' | 'attach-issue' | 'update-issue',
+  ): PushOp {
+    if (op === 'create-issue') return { ...BASE, op };
+    return { ...BASE, op, issue: 12 };
+  }
+
+  it.each(['create-issue', 'attach-issue', 'update-issue'] as const)(
+    '%s writes Filed, so the entry does not read ????-??-?? once the queue drains',
+    (op) => {
+      expect(fieldValuesFor(backlogOp(op))).toContainEqual({
+        field: 'Filed',
+        kind: 'date',
+        value: '2026-08-08',
+      });
+    },
+  );
+
+  it('writes Chat alongside it', () => {
+    expect(fieldValuesFor(backlogOp('create-issue'))).toContainEqual({
+      field: 'Chat',
+      kind: 'text',
+      value: 'chat-abc',
+    });
+  });
+
+  it('omits Chat rather than writing an empty one when there is no session', () => {
+    const op: PushOp = { ...BASE, chat: null, op: 'create-issue' };
+
+    expect(fieldValuesFor(op).filter((v) => v.field === 'Chat')).toEqual([]);
   });
 });

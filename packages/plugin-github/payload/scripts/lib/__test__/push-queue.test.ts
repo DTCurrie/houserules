@@ -60,6 +60,8 @@ describe('buildPushQueue', () => {
         surface: 'BACKLOG.md',
         title: 'Fix the thing',
         body: 'original body',
+        date: '2026-01-01',
+        chat: null,
         op: 'create-issue',
       },
     ]);
@@ -98,6 +100,8 @@ describe('buildPushQueue', () => {
         surface: 'BACKLOG.md',
         title: 'Fix the other thing',
         body: 'revised body',
+        date: '2026-01-01',
+        chat: null,
         op: 'update-issue',
         issue: 42,
       },
@@ -127,6 +131,8 @@ describe('buildPushQueue', () => {
         surface: 'BACKLOG.md',
         title: 'Fix the thing',
         body: 'original body',
+        date: '2026-01-01',
+        chat: null,
         op: 'close-issue',
         issue: 7,
         reason: 'resolved upstream',
@@ -162,6 +168,8 @@ describe('buildPushQueue', () => {
         surface: 'BACKLOG.md',
         title: 'Fix the thing',
         body: 'original body',
+        date: '2026-01-01',
+        chat: null,
         op: 'attach-issue',
         issue: 99,
       },
@@ -190,8 +198,11 @@ describe('buildPushQueue', () => {
         surface: 'studio.BACKLOG.md',
         title: 'Fix the thing',
         body: 'original body',
+        date: '2026-01-01',
+        chat: null,
         op: 'report-move',
         issue: 42,
+        itemId: null,
         toSurface: 'studio.BACKLOG.md',
       },
     ]);
@@ -220,10 +231,10 @@ describe('buildPushQueue', () => {
         surface: 'DECISIONS.md',
         title: 'Use pnpm workspaces strictly',
         body: 'because drift',
-        op: 'create-draft',
-        decided: '2026-01-03',
-        supersedes: ['DEC-1'],
+        date: '2026-01-03',
         chat: null,
+        op: 'create-draft',
+        supersedes: ['DEC-1'],
         scope: [],
       },
       {
@@ -232,6 +243,8 @@ describe('buildPushQueue', () => {
         surface: 'DECISIONS.md',
         title: 'Use pnpm',
         body: 'because workspaces',
+        date: '2026-01-01',
+        chat: null,
         op: 'mark-superseded',
         itemId: 'PVTI_1',
         successorId: 'DEC-2',
@@ -261,10 +274,10 @@ describe('buildPushQueue', () => {
         surface: 'DECISIONS.md',
         title: 'Use pnpm',
         body: 'because workspaces',
-        op: 'create-draft',
-        decided: '2026-01-01',
-        supersedes: [],
+        date: '2026-01-01',
         chat: null,
+        op: 'create-draft',
+        supersedes: [],
         scope: [],
       },
       {
@@ -273,10 +286,10 @@ describe('buildPushQueue', () => {
         surface: 'DECISIONS.md',
         title: 'Use pnpm workspaces strictly',
         body: 'because drift',
-        op: 'create-draft',
-        decided: '2026-01-03',
-        supersedes: ['DEC-1'],
+        date: '2026-01-03',
         chat: null,
+        op: 'create-draft',
+        supersedes: ['DEC-1'],
         scope: [],
       },
       {
@@ -285,6 +298,8 @@ describe('buildPushQueue', () => {
         surface: 'DECISIONS.md',
         title: 'Use pnpm',
         body: 'because workspaces',
+        date: '2026-01-01',
+        chat: null,
         op: 'mark-superseded',
         itemId: null,
         successorId: 'DEC-2',
@@ -358,10 +373,10 @@ describe('buildPushQueue', () => {
         surface: 'DECISIONS.md',
         title: 'Use pnpm workspaces strictly',
         body: 'because drift',
-        op: 'create-draft',
-        decided: '2026-01-03',
-        supersedes: ['DEC-1'],
+        date: '2026-01-03',
         chat: null,
+        op: 'create-draft',
+        supersedes: ['DEC-1'],
         scope: [],
       },
     ]);
@@ -390,6 +405,8 @@ describe('buildPushQueue', () => {
         surface: 'DECISIONS.md',
         title: 'Use pnpm',
         body: 'because workspaces',
+        date: '2026-01-01',
+        chat: null,
         op: 'update-draft',
         itemId: 'PVTI_1',
         scope: ['packages/plugin-github'],
@@ -410,10 +427,10 @@ describe('buildPushQueue', () => {
         surface: 'DECISIONS.md',
         title: 'Adopt shared prefix',
         body: 'why',
-        op: 'create-draft',
-        decided: '2026-01-01',
-        supersedes: [],
+        date: '2026-01-01',
         chat: null,
+        op: 'create-draft',
+        supersedes: [],
         scope: [],
       },
     ]);
@@ -429,6 +446,8 @@ describe('summarizeQueue', () => {
         surface: 'BACKLOG.md',
         title: 'a',
         body: 'b',
+        date: '2026-01-01',
+        chat: null,
         op: 'create-issue',
       },
       {
@@ -437,8 +456,11 @@ describe('summarizeQueue', () => {
         surface: 'BACKLOG.md',
         title: 'a',
         body: 'b',
+        date: '2026-01-01',
+        chat: null,
         op: 'report-move',
         issue: 1,
+        itemId: null,
         toSurface: 'studio.BACKLOG.md',
       },
       {
@@ -447,10 +469,10 @@ describe('summarizeQueue', () => {
         surface: 'DECISIONS.md',
         title: 'a',
         body: 'b',
-        op: 'create-draft',
-        decided: '2026-01-01',
-        supersedes: [],
+        date: '2026-01-01',
         chat: null,
+        op: 'create-draft',
+        supersedes: [],
         scope: [],
       },
     ];
@@ -469,6 +491,8 @@ describe('summarizeQueue', () => {
         surface: 'DECISIONS.md',
         title: 'a',
         body: 'b',
+        date: '2026-01-01',
+        chat: null,
         op: 'mark-superseded',
         itemId: null,
         successorId: 'DEC-2',
@@ -497,6 +521,8 @@ describe('syncedRecord', () => {
       surface: 'BACKLOG.md',
       title: 'a',
       body: 'b',
+      date: '2026-01-01',
+      chat: null,
       op: 'create-issue',
     };
 
@@ -516,10 +542,10 @@ describe('syncedRecord', () => {
       surface: 'DECISIONS.md',
       title: 'a',
       body: 'b',
-      op: 'create-draft',
-      decided: '2026-01-01',
-      supersedes: [],
+      date: '2026-01-01',
       chat: null,
+      op: 'create-draft',
+      supersedes: [],
       scope: [],
     };
 
@@ -701,5 +727,211 @@ describe('close-issue idempotency', () => {
     ];
 
     expect(buildPushQueue(acknowledged, [])).toEqual([]);
+  });
+});
+
+describe('an entry that exists only in the index, its queue records long gone', () => {
+  function indexed(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'D-1',
+      itemId: 'item-1',
+      issue: null,
+      title: 'Adopt wireit',
+      body: 'because',
+      surface: 'cli.DECISIONS.md',
+      date: '2026-08-06',
+      chat: null,
+      status: 'Accepted',
+      scope: ['packages/cli'],
+      under: null,
+      supersedes: [],
+      supersededBy: null,
+      ...overrides,
+    };
+  }
+
+  it('emits nothing when the queue is empty, so a synced entry is not re-pushed', () => {
+    expect(buildPushQueue([], [], [], [indexed()])).toEqual([]);
+  });
+
+  it('flips to Superseded when a queue-only decision supersedes it', () => {
+    const queue = [
+      {
+        ts: '2026-08-08T00:00:00Z',
+        id: 'D-2',
+        action: 'supersede',
+        file: 'cli.DECISIONS.md',
+        title: 'Replaced it',
+        content: 'why',
+        supersedes: ['D-1'],
+      },
+    ];
+
+    const ops = buildPushQueue([], queue, [], [indexed()]);
+
+    expect(ops).toContainEqual(
+      expect.objectContaining({
+        op: 'mark-superseded',
+        entryId: 'D-1',
+        itemId: 'item-1',
+        successorId: 'D-2',
+      }),
+    );
+  });
+
+  it('does not re-flip one the board already reports as Superseded', () => {
+    const queue = [
+      {
+        ts: '2026-08-08T00:00:00Z',
+        id: 'D-2',
+        action: 'supersede',
+        file: 'cli.DECISIONS.md',
+        title: 'Replaced it',
+        content: 'why',
+        supersedes: ['D-1'],
+      },
+    ];
+
+    const ops = buildPushQueue(
+      [],
+      queue,
+      [],
+      [indexed({ status: 'Superseded' })],
+    );
+
+    expect(ops.filter((op) => op.op === 'mark-superseded')).toEqual([]);
+  });
+
+  it('amends an index-only decision against the item id the board recorded', () => {
+    const queue = [
+      {
+        ts: '2026-08-08T00:00:00Z',
+        id: 'D-1',
+        action: 'amend',
+        content: 'revised body',
+      },
+    ];
+
+    expect(buildPushQueue([], queue, [], [indexed()])).toContainEqual(
+      expect.objectContaining({
+        op: 'update-draft',
+        entryId: 'D-1',
+        itemId: 'item-1',
+      }),
+    );
+  });
+
+  it('closes an index-only backlog entry against the issue the board recorded', () => {
+    const backlogIndex = [
+      indexed({
+        id: 'B-1',
+        issue: 42,
+        itemId: '',
+        surface: 'cli.BACKLOG.md',
+        status: 'Todo',
+      }),
+    ];
+    const queue = [
+      {
+        ts: '2026-08-08T00:00:00Z',
+        id: 'B-1',
+        action: 'remove',
+        reason: 'done',
+      },
+    ];
+
+    expect(buildPushQueue(queue, [], backlogIndex, [])).toContainEqual(
+      expect.objectContaining({ op: 'close-issue', entryId: 'B-1', issue: 42 }),
+    );
+  });
+
+  it('does not re-close one the board already reports as Done', () => {
+    const backlogIndex = [
+      indexed({ id: 'B-1', issue: 42, itemId: '', status: 'Done' }),
+    ];
+    const queue = [
+      {
+        ts: '2026-08-08T00:00:00Z',
+        id: 'B-1',
+        action: 'remove',
+        reason: 'done',
+      },
+    ];
+
+    expect(buildPushQueue(queue, [], backlogIndex, [])).toEqual([]);
+  });
+});
+
+describe('an entry present in BOTH the index and the queue', () => {
+  function indexedDecision(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'D-1',
+      itemId: 'item-1',
+      issue: null,
+      title: 'Adopt wireit',
+      body: 'because',
+      surface: 'cli.DECISIONS.md',
+      date: '2026-08-06',
+      chat: null,
+      status: 'Accepted',
+      scope: ['packages/cli'],
+      under: null,
+      supersedes: [],
+      supersededBy: null,
+      ...overrides,
+    };
+  }
+
+  const birth = {
+    ts: '2026-08-06T00:00:00Z',
+    id: 'D-1',
+    action: 'decide',
+    file: 'cli.DECISIONS.md',
+    title: 'Adopt wireit',
+    content: 'because',
+    scope: ['packages/cli'],
+  };
+
+  it('is not created a second time, because its birth record is still in the queue', () => {
+    expect(buildPushQueue([], [birth], [], [indexedDecision()])).toEqual([]);
+  });
+
+  it('updates rather than creates when the queue body differs from the board', () => {
+    const revised = { ...birth, content: 'revised reasoning' };
+
+    const ops = buildPushQueue([], [revised], [], [indexedDecision()]);
+
+    expect(ops).toEqual([
+      expect.objectContaining({
+        op: 'update-draft',
+        entryId: 'D-1',
+        itemId: 'item-1',
+      }),
+    ]);
+  });
+
+  it('does the same for a backlog entry, so an add in the queue never duplicates an issue', () => {
+    const backlogBirth = {
+      ts: '2026-08-06T00:00:00Z',
+      id: 'B-1',
+      action: 'add',
+      file: 'cli.BACKLOG.md',
+      title: 'Fix it',
+      content: 'body',
+    };
+    const index = [
+      indexedDecision({
+        id: 'B-1',
+        issue: 42,
+        itemId: '',
+        title: 'Fix it',
+        body: 'body',
+        surface: 'cli.BACKLOG.md',
+        status: 'Todo',
+        scope: [],
+      }),
+    ];
+
+    expect(buildPushQueue([backlogBirth], [], index, [])).toEqual([]);
   });
 });

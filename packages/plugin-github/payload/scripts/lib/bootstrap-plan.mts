@@ -9,7 +9,7 @@
  * with no creations, and that is the property the phase's acceptance turns on.
  */
 
-import { fieldsFor, projectTitle, targetSegment } from './project-shape.mjs';
+import { fieldsFor, projectTitle } from './project-shape.mjs';
 import type { FieldSpec, LedgerKind } from './project-shape.mjs';
 
 const LEDGER_KINDS: readonly LedgerKind[] = ['backlog', 'decisions'];
@@ -22,22 +22,10 @@ export interface ExistingProject {
   fieldNames: readonly string[];
 }
 
-/**
- * One target the kit tracks. Null `name` is the repo root.
- *
- * `pathPrefix` is what names the target on its board, via {@link targetSegment}, so a target
- * whose name does not resemble its directory still reads correctly.
- */
-export interface BootstrapTarget {
-  name: string | null;
-  pathPrefix?: string;
-}
-
 /** One project the plan will create from scratch, then populate. */
 export interface CreateProjectStep {
   action: 'create';
   kind: LedgerKind;
-  targetName: string | null;
   title: string;
   fields: readonly FieldSpec[];
 }
@@ -51,7 +39,6 @@ export interface CreateProjectStep {
 export interface AdoptProjectStep {
   action: 'adopt';
   kind: LedgerKind;
-  targetName: string | null;
   title: string;
   number: number;
   id: string;
@@ -61,32 +48,31 @@ export interface AdoptProjectStep {
 export type BootstrapStep = CreateProjectStep | AdoptProjectStep;
 
 /**
- * Every step a `bootstrap` run needs, one per (ledger kind, target) pair.
+ * Every step a `bootstrap` run needs, one per ledger kind.
  *
- * Matching is by exact title, which is why {@link projectTitle} has to be deterministic. A
- * fuzzy match would adopt the wrong board, and no match at all would create a duplicate on
- * every run.
+ * Two boards per repo, not two per target. A target is carried by each item's `Area` field, so a
+ * fourteen-package workspace still gets two boards rather than twenty-eight.
  *
- * @param targets Every tracked target. The caller includes the repo root as `{ name: null }`.
+ * Matching is by exact title, which is why {@link projectTitle} has to be deterministic. A fuzzy
+ * match would adopt the wrong board, and no match at all would create a duplicate on every run.
+ *
  * @param existing Every project already under the owner, however it got there.
  */
 export function planBootstrap(
   repoName: string,
-  targets: readonly BootstrapTarget[],
   existing: readonly ExistingProject[],
 ): BootstrapStep[] {
   const steps: BootstrapStep[] = [];
 
-  for (const target of targets) {
+  {
     for (const kind of LEDGER_KINDS) {
-      const title = projectTitle(repoName, kind, targetSegment(target));
+      const title = projectTitle(repoName, kind);
       const match = existing.find((project) => project.title === title);
 
       if (match === undefined) {
         steps.push({
           action: 'create',
           kind,
-          targetName: target.name,
           title,
           fields: fieldsFor(kind),
         });
@@ -100,7 +86,6 @@ export function planBootstrap(
       steps.push({
         action: 'adopt',
         kind,
-        targetName: target.name,
         title,
         number: match.number,
         id: match.id,

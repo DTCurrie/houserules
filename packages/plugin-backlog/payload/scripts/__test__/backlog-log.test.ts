@@ -14,6 +14,34 @@ import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 import { editKitConfig } from '#test/installed-tree';
 
+// Mirrors `LedgerEntry`/`LedgerIndex` from @agent-kit/cli's `lib/ledger-index.mjs`, the seam a
+// pulled board index is written through. Declared locally rather than imported: that seam is
+// bridged into a payload script by `tsconfig.payload.json`'s `rootDirs`, which excludes this
+// test directory, so a real import here has no path to resolve under `tsc --noEmit`.
+interface LedgerEntry {
+  id: string;
+  itemId: string;
+  issue: number | null;
+  title: string;
+  body: string;
+  surface: string;
+  date: string;
+  chat: string | null;
+  status: string | null;
+  scope: string[];
+  under: string | null;
+  supersedes: string[];
+  supersededBy: string | null;
+}
+
+interface LedgerIndex {
+  version: number;
+  kind: 'backlog' | 'decisions';
+  pulledAt: string;
+  projects: number[];
+  entries: LedgerEntry[];
+}
+
 const LOG = '.claude/scripts/backlog-log.mjs';
 const PLUGIN_DIR = fileURLToPath(new URL('../../..', import.meta.url));
 const ROOT_SURFACE = '.claude/ledgers/BACKLOG.md';
@@ -71,6 +99,40 @@ function seedLog(root: string, records: Partial<LogRecord>[]) {
     root,
     '.claude/ledgers/backlog.jsonl',
     records.map((r) => JSON.stringify(r)).join('\n') + '\n',
+  );
+}
+
+function ledgerEntry(overrides: Partial<LedgerEntry> = {}): LedgerEntry {
+  return {
+    id: 'TEST-index01',
+    itemId: 'item-1',
+    issue: 7,
+    title: 'From the board',
+    body: 'The board body.',
+    surface: ROOT_RECORD_FILE,
+    date: '2026-01-01',
+    chat: null,
+    status: 'Todo',
+    scope: [],
+    under: null,
+    supersedes: [],
+    supersededBy: null,
+    ...overrides,
+  };
+}
+
+function seedIndex(root: string, entries: LedgerEntry[]) {
+  const index: LedgerIndex = {
+    version: 1,
+    kind: 'backlog',
+    pulledAt: '2026-01-01T00:00:00.000Z',
+    projects: [1],
+    entries,
+  };
+  writeFile(
+    root,
+    '.claude/ledgers/backlog.index.json',
+    `${JSON.stringify(index, null, 2)}\n`,
   );
 }
 
@@ -1219,5 +1281,198 @@ describe('backlog-log.mjs with no recognized action', () => {
 
   it('exits 0 when invoked with no arguments at all', () => {
     expect(run(root, []).status).toBe(0);
+  });
+});
+
+describe('backlog-log.mjs reading the local index merged with the queue', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = stage();
+  });
+
+  it('renders an entry that exists only in the index, with no queue record at all', () => {
+    seedIndex(root, [
+      ledgerEntry({ id: 'TEST-index01', title: 'Index-only item' }),
+    ]);
+
+    const r = run(root, ['render']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFile(root, ROOT_SURFACE)).toContain(
+      '## [TEST-index01] Index-only item',
+    );
+  });
+
+  it('renders an entry that exists only in the queue, with no index at all', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-queue01',
+        action: 'add',
+        file: ROOT_RECORD_FILE,
+        title: 'Queue-only item',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    const r = run(root, ['render']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFile(root, ROOT_SURFACE)).toContain(
+      '## [TEST-queue01] Queue-only item',
+    );
+  });
+
+  it('renders the queue title over the index title for an id recorded in both', () => {
+    seedIndex(root, [
+      ledgerEntry({ id: 'TEST-both01', title: 'Title from the board' }),
+    ]);
+    seedLog(root, [
+      {
+        ts: '2026-01-02T00:00:00.000Z',
+        id: 'TEST-both01',
+        action: 'update',
+        file: ROOT_RECORD_FILE,
+        title: 'Title from the queue',
+        chat: null,
+      },
+    ]);
+
+    run(root, ['render']);
+
+    const surface = readFile(root, ROOT_SURFACE);
+    expect(surface).toContain('## [TEST-both01] Title from the queue');
+    expect(surface).not.toContain('Title from the board');
+  });
+
+  it('hides an entry the queue records as removed even though the index still lists it', () => {
+    seedIndex(root, [
+      ledgerEntry({ id: 'TEST-removed01', title: 'Removed item' }),
+    ]);
+    seedLog(root, [
+      {
+        ts: '2026-01-02T00:00:00.000Z',
+        id: 'TEST-removed01',
+        action: 'remove',
+        file: ROOT_RECORD_FILE,
+        reason: 'shipped it',
+        chat: null,
+      },
+    ]);
+
+    run(root, ['render']);
+
+    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
+  });
+
+  it('renders queue entries alone when no index file exists yet', () => {
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-noindex01',
+        action: 'add',
+        file: ROOT_RECORD_FILE,
+        title: 'No index at all',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    const r = run(root, ['render']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFile(root, ROOT_SURFACE)).toContain(
+      '## [TEST-noindex01] No index at all',
+    );
+  });
+});
+
+describe('backlog-log.mjs add given an area kit.config.json does not configure', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = stage();
+  });
+
+  it('rejects the area, naming it and listing the valid ones', () => {
+    const r = run(root, ['add', 'TEST', 'cli', 'T', 'B', '--chat=none']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "cli"');
+    expect(r.stderr).toContain('studio');
+  });
+
+  it('writes no surface for the rejected area', () => {
+    run(root, ['add', 'TEST', 'cli', 'T', 'B', '--chat=none']);
+
+    expect(existsSync(join(root, '.claude/ledgers/cli.BACKLOG.md'))).toBe(
+      false,
+    );
+  });
+
+  it('accepts an area a target configures', () => {
+    const r = run(root, ['add', 'TEST', 'studio', 'T', 'B', '--chat=none']);
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('accepts the repo-root surface', () => {
+    const r = run(root, ['add', 'TEST', 'BACKLOG.md', 'T', 'B', '--chat=none']);
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+});
+
+describe('a backlog entry the board reports as Done', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = stage();
+  });
+
+  it('is kept out of list, so dropping it locally and pulling it back does not reopen it', () => {
+    seedIndex(root, [
+      ledgerEntry({ id: 'TEST-done01', status: 'Done', title: 'Finished' }),
+    ]);
+
+    expect(run(root, ['list']).stdout).not.toContain('TEST-done01');
+  });
+
+  it('is listed while the board still reports it as Todo', () => {
+    seedIndex(root, [
+      ledgerEntry({ id: 'TEST-open01', status: 'Todo', title: 'Open work' }),
+    ]);
+
+    expect(run(root, ['list']).stdout).toContain('TEST-open01');
+  });
+
+  it('stays resolvable by show, so a decision citing a closed id still finds it', () => {
+    seedIndex(root, [
+      ledgerEntry({ id: 'TEST-done02', status: 'Done', title: 'Finished' }),
+    ]);
+
+    const shown = run(root, ['show', 'TEST-done02']);
+
+    expect(shown.status).toBe(0);
+    expect(shown.stdout).toContain('Finished');
+    expect(shown.stdout).toContain('status: Done');
+  });
+
+  it('never renders onto a surface, so a closed entry cannot resurrect one', () => {
+    seedIndex(root, [
+      ledgerEntry({
+        id: 'TEST-done03',
+        status: 'Done',
+        surface: 'studio.BACKLOG.md',
+      }),
+    ]);
+
+    run(root, ['render']);
+
+    expect(existsSync(join(root, '.claude/ledgers/studio.BACKLOG.md'))).toBe(
+      false,
+    );
   });
 });

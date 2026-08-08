@@ -64,79 +64,77 @@ function syncedDraft(id: string, itemId: string): LedgerRecord {
   };
 }
 
-function compactBoth(backlog: LedgerRecord[], decisions: LedgerRecord[]) {
-  const pending = pendingEntryIds(buildPushQueue(backlog, decisions));
-  return {
-    backlog: compactBacklog(backlog, pending),
-    decisions: compactDecisions(decisions, pending),
-  };
+function onBoard(ids: string[]) {
+  return ids.map((id) => ({
+    id,
+    itemId: 'item-' + id,
+    issue: 7,
+    title: 'On the board',
+    body: 'body',
+    surface: 'BACKLOG.md',
+    date: '2026-01-01',
+    chat: null,
+    status: 'Todo',
+    scope: [],
+    under: null,
+    supersedes: [],
+    supersededBy: null,
+  }));
 }
 
 function queueSurvivesCompaction(
   backlog: LedgerRecord[],
   decisions: LedgerRecord[],
+  backlogIndex = onBoard([]),
+  decisionsIndex = onBoard([]),
 ): boolean {
-  const compacted = compactBoth(backlog, decisions);
+  const pending = pendingEntryIds(
+    buildPushQueue(backlog, decisions, backlogIndex, decisionsIndex),
+  );
+  const b = compactBacklog(backlog, pending, backlogIndex);
+  const d = compactDecisions(decisions, pending, decisionsIndex);
   return (
     JSON.stringify(
-      buildPushQueue(compacted.backlog.records, compacted.decisions.records),
-    ) === JSON.stringify(buildPushQueue(backlog, decisions))
+      buildPushQueue(b.records, d.records, backlogIndex, decisionsIndex),
+    ) ===
+    JSON.stringify(
+      buildPushQueue(backlog, decisions, backlogIndex, decisionsIndex),
+    )
   );
 }
 
 describe('compactBacklog', () => {
-  it('drops an entry removed before it ever reached the board', () => {
+  it('keeps an entry the board has never seen, however finished it looks locally', () => {
     const records = [
       backlogAdd('A'),
       { ts: '2026-01-03T00:00:00Z', id: 'A', action: 'remove', reason: 'moot' },
     ];
 
-    const result = compactBacklog(records, new Set());
+    const result = compactBacklog(records, new Set(), onBoard([]));
 
-    expect(result.dropped).toEqual(['A']);
-    expect(result.records).toEqual([]);
+    expect(result.dropped).toEqual([]);
+    expect(result.kept).toEqual(['A']);
   });
 
-  it('drops an entry whose close already reached the board', () => {
-    const records = [
-      backlogAdd('A'),
-      syncedIssue('A', 7),
-      { ts: '2026-01-03T00:00:00Z', id: 'A', action: 'remove', reason: 'done' },
-      {
-        ts: '2026-01-04T00:00:00Z',
-        id: 'A',
-        action: 'synced',
-        op: 'close-issue',
-      },
-    ];
+  it('drops an entry the index confirms is on the board', () => {
+    const records = [backlogAdd('A'), syncedIssue('A', 7)];
 
-    const result = compactBacklog(records, new Set());
+    const result = compactBacklog(records, new Set(), onBoard(['A']));
 
-    expect(result.dropped).toEqual(['A']);
+    expect(result.dropped).toEqual([{ id: 'A', title: 'Fix the thing' }]);
     expect(result.records).toEqual([]);
   });
 
   it('keeps every record of an entry a push still owes something', () => {
     const records = [backlogAdd('A'), syncedIssue('A', 7)];
 
-    const result = compactBacklog(records, new Set(['A']));
+    const result = compactBacklog(records, new Set(['A']), onBoard(['A']));
 
     expect(result.kept).toEqual(['A']);
     expect(result.records).toEqual(records);
   });
 
-  it('folds a synced entry to one record carrying its issue number', () => {
-    const records = [backlogAdd('A'), syncedIssue('A', 7)];
-
-    const result = compactBacklog(records, new Set());
-
-    expect(result.folded).toEqual(['A']);
-    expect(result.records).toEqual([
-      { ...backlogAdd('A'), checkpoint: { issue: 7 } },
-    ]);
-  });
-
-  it('folds the latest title and body into the surviving record', () => {
+  it('drops the title the entry last carried, not the one it was filed with', () => {
     const records = [
       backlogAdd('A'),
       syncedIssue('A', 7),
@@ -145,139 +143,66 @@ describe('compactBacklog', () => {
         id: 'A',
         action: 'update',
         title: 'Fix it properly',
-        content: 'revised body',
       },
       { ...syncedIssue('A', 7), op: 'update-issue' },
     ];
 
-    const [record] = compactBacklog(records, new Set()).records;
-
-    expect(record.title).toBe('Fix it properly');
-    expect(record.content).toBe('revised body');
+    expect(compactBacklog(records, new Set(), onBoard(['A'])).dropped).toEqual([
+      { id: 'A', title: 'Fix it properly' },
+    ]);
   });
 
-  it('folds the surface an entry was moved to, not the one it was filed under', () => {
-    const records = [
-      backlogAdd('A', { file: 'core.BACKLOG.md' }),
-      syncedIssue('A', 7),
-      {
-        ts: '2026-01-06T00:00:00Z',
-        id: 'A',
-        action: 'move',
-        file: 'cli.BACKLOG.md',
-      },
-      { ...syncedIssue('A', 7), op: 'report-move' },
-    ];
-
-    const [record] = compactBacklog(records, new Set()).records;
-
-    expect(record.file).toBe('cli.BACKLOG.md');
-  });
-
-  it('preserves the order surviving entries were filed in', () => {
+  it('empties the ledger entirely when the board confirms every entry', () => {
     const records = [
       backlogAdd('A'),
       syncedIssue('A', 1),
       backlogAdd('B'),
-      { ts: '2026-01-03T00:00:00Z', id: 'B', action: 'remove', reason: 'moot' },
-      backlogAdd('C'),
-      syncedIssue('C', 3),
+      syncedIssue('B', 2),
     ];
 
-    const result = compactBacklog(records, new Set());
-
-    expect(result.records.map((record) => record.id)).toEqual(['A', 'C']);
+    expect(
+      compactBacklog(records, new Set(), onBoard(['A', 'B'])).records,
+    ).toEqual([]);
   });
 });
 
 describe('compactDecisions', () => {
-  it('folds a synced decision to one record carrying its item id', () => {
+  it('drops a decision the index confirms', () => {
     const records = [decide('D'), syncedDraft('D', 'item-1')];
 
-    const result = compactDecisions(records, new Set());
+    const result = compactDecisions(records, new Set(), onBoard(['D']));
 
-    expect(result.records).toEqual([
-      { ...decide('D'), checkpoint: { itemId: 'item-1' } },
-    ]);
+    expect(result.records).toEqual([]);
+    expect(result.dropped).toEqual([{ id: 'D', title: 'Use the thing' }]);
   });
 
-  it('records that a supersede flip already landed, so it is not re-emitted', () => {
-    const records = [
-      decide('D'),
-      syncedDraft('D', 'item-1'),
-      {
-        ts: '2026-02-05T00:00:00Z',
-        id: 'D',
-        action: 'synced',
-        op: 'mark-superseded',
-      },
-    ];
-
-    const [record] = compactDecisions(records, new Set()).records;
-
-    expect(record.checkpoint).toEqual({
-      itemId: 'item-1',
-      markedSuperseded: true,
-    });
-  });
-
-  it('never drops a decision, because a later supersede resolves targets by id', () => {
+  it('keeps one the index has not confirmed, even with a synced record present', () => {
     const records = [decide('D'), syncedDraft('D', 'item-1')];
 
-    const result = compactDecisions(records, new Set());
+    const result = compactDecisions(records, new Set(), onBoard([]));
 
-    expect(result.dropped).toEqual([]);
-  });
-
-  it('preserves fields the push fold has no type for', () => {
-    const records: LedgerRecord[] = [
-      { ...decide('D'), under: 'PARENT-1' } as LedgerRecord,
-      syncedDraft('D', 'item-1'),
-    ];
-
-    const [record] = compactDecisions(records, new Set()).records;
-
-    expect((record as unknown as Record<string, unknown>).under).toBe(
-      'PARENT-1',
-    );
-  });
-
-  it('keeps the birth timestamp, which is what the decided date is read from', () => {
-    const records = [decide('D'), syncedDraft('D', 'item-1')];
-
-    const [record] = compactDecisions(records, new Set()).records;
-
-    expect(record.ts).toBe('2026-02-03T00:00:00Z');
+    expect(result.kept).toEqual(['D']);
+    expect(result.records).toEqual(records);
   });
 });
 
 describe('the push queue built from compacted records', () => {
-  it('is unchanged when every entry is already synced', () => {
+  it('is unchanged when every entry is on the board', () => {
     const backlog = [backlogAdd('A'), syncedIssue('A', 7)];
     const decisions = [decide('D'), syncedDraft('D', 'item-1')];
 
-    expect(queueSurvivesCompaction(backlog, decisions)).toBe(true);
+    expect(
+      queueSurvivesCompaction(
+        backlog,
+        decisions,
+        onBoard(['A']),
+        onBoard(['D']),
+      ),
+    ).toBe(true);
   });
 
   it('is unchanged when an entry has never been pushed', () => {
-    const backlog = [backlogAdd('A')];
-
-    expect(queueSurvivesCompaction(backlog, [])).toBe(true);
-  });
-
-  it('is unchanged when a synced entry was edited after its push', () => {
-    const backlog = [
-      backlogAdd('A'),
-      syncedIssue('A', 7),
-      {
-        ts: '2026-01-05T00:00:00Z',
-        id: 'A',
-        action: 'update',
-        content: 'revised',
-      },
-    ];
-
-    expect(queueSurvivesCompaction(backlog, [])).toBe(true);
+    expect(queueSurvivesCompaction([backlogAdd('A')], [])).toBe(true);
   });
 
   it('is unchanged when a synced entry is awaiting its close', () => {
@@ -287,65 +212,18 @@ describe('the push queue built from compacted records', () => {
       { ts: '2026-01-06T00:00:00Z', id: 'A', action: 'remove', reason: 'done' },
     ];
 
-    expect(queueSurvivesCompaction(backlog, [])).toBe(true);
-  });
-
-  it('is unchanged when one decision supersedes another that already synced', () => {
-    const decisions = [
-      decide('D'),
-      syncedDraft('D', 'item-1'),
-      decide('E', { action: 'supersede', supersedes: ['D'] }),
-    ];
-
-    expect(queueSurvivesCompaction([], decisions)).toBe(true);
-  });
-
-  it('is unchanged when a supersede and its flip have both landed', () => {
-    const decisions = [
-      decide('D'),
-      syncedDraft('D', 'item-1'),
-      {
-        ts: '2026-02-05T00:00:00Z',
-        id: 'D',
-        action: 'synced',
-        op: 'mark-superseded',
-      },
-      decide('E', { action: 'supersede', supersedes: ['D'] }),
-      syncedDraft('E', 'item-2'),
-    ];
-
-    expect(queueSurvivesCompaction([], decisions)).toBe(true);
-  });
-
-  it('does not resurrect an adopted issue as a second attach', () => {
-    const backlog = [
-      backlogAdd('A', { issue: 42 }),
-      { ...syncedIssue('A', 42), op: 'attach-issue' },
-    ];
-
-    expect(queueSurvivesCompaction(backlog, [])).toBe(true);
-    expect(
-      buildPushQueue(compactBacklog(backlog, new Set()).records, []),
-    ).toEqual([]);
+    expect(queueSurvivesCompaction(backlog, [], onBoard(['A']), [])).toBe(true);
   });
 });
 
 describe('compacting an already compacted ledger', () => {
   it('changes nothing', () => {
     const backlog = [backlogAdd('A'), syncedIssue('A', 7)];
-    const once = compactBacklog(backlog, new Set()).records;
-    const twice = compactBacklog(once, new Set());
+    const once = compactBacklog(backlog, new Set(), onBoard(['A'])).records;
 
-    expect(compactionIsNoop(once, twice)).toBe(true);
-  });
-
-  it('reports a fully compacted ledger as unchanged rather than as work', () => {
-    const decisions = [decide('D'), syncedDraft('D', 'item-1')];
-    const once = compactDecisions(decisions, new Set()).records;
-
-    expect(compactionIsNoop(once, compactDecisions(once, new Set()))).toBe(
-      true,
-    );
+    expect(
+      compactionIsNoop(once, compactBacklog(once, new Set(), onBoard(['A']))),
+    ).toBe(true);
   });
 });
 
@@ -354,29 +232,20 @@ describe('serializeLedger', () => {
     const text = serializeLedger([backlogAdd('A')]);
 
     expect(text.endsWith('\n')).toBe(true);
-    expect(text.trimEnd().split('\n')).toHaveLength(1);
     expect(JSON.parse(text.trimEnd())).toEqual(backlogAdd('A'));
-  });
-
-  it('round-trips a body that is still gzipped and base64 encoded', () => {
-    const encoded = 'H4sIAAAAAAAAA0tMSlZILC4uzc0BAKgSWJENAAAA';
-    const text = serializeLedger([backlogAdd('A', { content: encoded })]);
-
-    expect(JSON.parse(text.trimEnd()).content).toBe(encoded);
   });
 });
 
 describe('describeCompaction', () => {
-  it('names the counts for each of the three outcomes', () => {
+  it('names how many were dropped and how many are still queued', () => {
     const result = {
       records: [backlogAdd('A')],
-      dropped: ['B', 'C'],
-      folded: ['A'],
-      kept: [],
+      dropped: [{ id: 'B', title: 'Gone' }],
+      kept: ['A'],
     };
 
-    expect(describeCompaction('backlog', 9, result)).toBe(
-      'backlog: 9 records -> 1 (2 finished entries dropped, 1 folded, 0 pending kept)',
+    expect(describeCompaction('backlog', 4, result)).toBe(
+      'backlog: 4 records -> 1 (1 on the board and dropped, 1 still queued)',
     );
   });
 });

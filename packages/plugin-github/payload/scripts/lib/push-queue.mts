@@ -11,6 +11,11 @@
  */
 
 import type { LedgerKind } from './project-shape.mjs';
+import type { LedgerEntry } from '@agent-kit/cli/payload/ledger-index';
+
+/** The board `Status` values that mean an entry is finished, per kind. */
+const CLOSED_BACKLOG_STATUS = 'Done';
+const SUPERSEDED_DECISION_STATUS = 'Superseded';
 
 /** One line of either ledger, loosely typed because both shapes flow through this module. */
 export interface LedgerRecord {
@@ -37,23 +42,6 @@ export interface LedgerRecord {
    * as the draft, which is what they were.
    */
   op?: string;
-  /**
-   * Present only on a birth record rewritten by {@link compactLedger}, where it carries the sync
-   * state the `synced` records it replaced used to hold.
-   *
-   * Its own object rather than loose fields, because `synced` is already an `action` value and a
-   * sibling key of that name would read as two different things on two kinds of record. Its
-   * presence alone means "this entry reached the board", so the fold never has to ask whether an
-   * `issue` came from an adoption or from a push.
-   */
-  checkpoint?: LedgerCheckpoint;
-}
-
-/** The board coordinates a compacted birth record carries in place of its `synced` records. */
-export interface LedgerCheckpoint {
-  issue?: number;
-  itemId?: string;
-  markedSuperseded?: boolean;
 }
 
 /**
@@ -65,10 +53,19 @@ export interface LedgerCheckpoint {
 export interface PushOpBase {
   entryId: string;
   kind: LedgerKind;
-  /** The ledger-dir-relative surface the entry belongs to, which selects the target board. */
+  /** The ledger-dir-relative surface the entry belongs to, which becomes the item's `Area`. */
   surface: string;
   title: string;
   body: string;
+  /**
+   * The day the entry was filed, which the board keeps as `Filed` or `Decided`.
+   *
+   * On the base rather than per op because both ledgers need it and an item's own `Created` is a
+   * different date, often much later. An entry pushed without it reads `????-??-??` once the
+   * queue drains and the index is the only source left.
+   */
+  date: string;
+  chat: string | null;
 }
 
 export type PushOp =
@@ -78,9 +75,7 @@ export type PushOp =
   | (PushOpBase & { op: 'close-issue'; issue: number; reason: string })
   | (PushOpBase & {
       op: 'create-draft';
-      decided: string;
       supersedes: string[];
-      chat: string | null;
       scope: string[];
     })
   | (PushOpBase & { op: 'update-draft'; itemId: string; scope: string[] })
@@ -102,17 +97,17 @@ export type PushOp =
       successorId: string;
     })
   /**
-   * An entry whose surface changed after it was already synced. Produces no mutation on its own.
+   * An entry whose surface changed after it was already synced.
    *
-   * A backlog entry that moved is still the same issue, so the executor adds that issue to the
-   * new target's board and leaves the old item alone. Closing and recreating would burn the
-   * issue number and its comment history, which people link to. A decision draft cannot move
-   * between projects at all, so it is reported and skipped. Either way the run says so rather
-   * than dropping it silently, which is the failure the plan called out.
+   * With one board per ledger this never moves an item between boards. It re-files it in place by
+   * setting `Area`, which is what scopes an item now. The entry keeps its issue number and its
+   * comment history, which people link to.
    */
   | (PushOpBase & {
       op: 'report-move';
       issue: number | null;
+      /** The draft's board item id, for a decision, which has no issue to find it by. */
+      itemId: string | null;
       toSurface: string;
     });
 
@@ -126,6 +121,8 @@ export interface BacklogState {
   file: string;
   title: string;
   content: string;
+  date: string;
+  chat: string | null;
   issue: number | undefined;
   synced: boolean;
   syncedIssue: number | undefined;
@@ -144,23 +141,59 @@ export interface BacklogState {
 }
 
 function newBacklogState(r: LedgerRecord): BacklogState {
-  // `issue` means two different things depending on the checkpoint. On an ordinary `add` it is an
-  // adoption, an issue that exists and has not been attached yet. On a compacted record it is the
-  // issue the entry already landed as. Reading it as the latter without the checkpoint would make
-  // every adopted entry look synced and skip the attach.
-  const checkpoint = r.checkpoint;
+  // `issue` here is always an adoption: an issue that exists and has not been attached yet. An
+  // entry that already reached the board is seeded from the index instead, never from a record.
   return {
     file: r.file ?? '',
     title: r.title ?? '',
     content: r.content ?? '',
-    issue: checkpoint ? undefined : r.issue,
-    synced: checkpoint !== undefined,
-    syncedIssue: checkpoint?.issue,
+    date: r.ts.slice(0, 10),
+    chat: r.chat ?? null,
+    issue: r.issue,
+    synced: false,
+    syncedIssue: undefined,
     removed: false,
     removeReason: '',
     closed: false,
     contentDirty: false,
     fileDirty: false,
+  };
+}
+
+/**
+ * `next` carrying whatever `seeded` already knew about the board.
+ *
+ * A birth record replaces an entry's CONTENT, because the queue is newer than the index. It must
+ * not replace where the entry already is, or an entry the board holds looks unsynced and is
+ * created a second time. That is not hypothetical: it duplicated 43 decision drafts on the live
+ * board the first time this fold seeded from an index.
+ */
+function withBacklogSyncState(
+  next: BacklogState,
+  seeded: BacklogState | undefined,
+): BacklogState {
+  if (!seeded?.synced) return next;
+  return {
+    ...next,
+    synced: true,
+    syncedIssue: seeded.syncedIssue,
+    closed: seeded.closed,
+  };
+}
+
+function withDecisionSyncState(
+  next: DecisionState,
+  seeded: DecisionState | undefined,
+): DecisionState {
+  if (!seeded?.synced) return next;
+  return {
+    ...next,
+    synced: true,
+    syncedItemId: seeded.syncedItemId,
+    markedSuperseded: seeded.markedSuperseded,
+    contentDirty: next.content !== seeded.content,
+    scopeDirty: JSON.stringify(next.scope) !== JSON.stringify(seeded.scope),
+    fileDirty: next.file !== seeded.file,
   };
 }
 
@@ -199,6 +232,8 @@ function backlogOpsFor(id: string, state: BacklogState): PushOp[] {
     surface: state.file,
     title: state.title,
     body: state.content,
+    date: state.date,
+    chat: state.chat,
   };
 
   if (state.removed) {
@@ -233,6 +268,7 @@ function backlogOpsFor(id: string, state: BacklogState): PushOp[] {
       ...base,
       op: 'report-move' as const,
       issue: state.syncedIssue!,
+      itemId: null,
       toSurface: state.file,
     });
   }
@@ -258,17 +294,47 @@ export function isBacklogTerminal(state: BacklogState): boolean {
  * folds of one ledger would drift, and the drift would show up as an entry that compaction
  * believes is finished and push believes is pending.
  */
-export function foldBacklog(records: readonly LedgerRecord[]): {
+function backlogStateFromIndex(entry: LedgerEntry): BacklogState {
+  const closed = entry.status === CLOSED_BACKLOG_STATUS;
+  return {
+    file: entry.surface,
+    title: entry.title,
+    content: entry.body,
+    date: entry.date,
+    chat: entry.chat,
+    issue: undefined,
+    synced: true,
+    syncedIssue: entry.issue ?? undefined,
+    removed: closed,
+    removeReason: '',
+    closed,
+    contentDirty: false,
+    fileDirty: false,
+  };
+}
+
+export function foldBacklog(
+  records: readonly LedgerRecord[],
+  index: readonly LedgerEntry[] = [],
+): {
   entries: Map<string, BacklogState>;
   order: string[];
 } {
   const entries = new Map<string, BacklogState>();
   const order: string[] = [];
 
+  for (const entry of index) {
+    entries.set(entry.id, backlogStateFromIndex(entry));
+    order.push(entry.id);
+  }
+
   for (const r of records) {
     if (r.action === 'add') {
-      entries.set(r.id, newBacklogState(r));
-      order.push(r.id);
+      entries.set(
+        r.id,
+        withBacklogSyncState(newBacklogState(r), entries.get(r.id)),
+      );
+      if (!order.includes(r.id)) order.push(r.id);
       continue;
     }
     applyBacklogRecord(entries, r);
@@ -277,8 +343,11 @@ export function foldBacklog(records: readonly LedgerRecord[]): {
   return { entries, order };
 }
 
-function buildBacklogQueue(records: readonly LedgerRecord[]): PushOp[] {
-  const { entries, order } = foldBacklog(records);
+function buildBacklogQueue(
+  records: readonly LedgerRecord[],
+  index: readonly LedgerEntry[],
+): PushOp[] {
+  const { entries, order } = foldBacklog(records, index);
   return order.flatMap((id) => backlogOpsFor(id, entries.get(id)!));
 }
 
@@ -306,7 +375,6 @@ export interface DecisionState {
 }
 
 function newDecisionState(r: LedgerRecord): DecisionState {
-  const checkpoint = r.checkpoint;
   return {
     file: r.file ?? '',
     title: r.title ?? '',
@@ -315,9 +383,9 @@ function newDecisionState(r: LedgerRecord): DecisionState {
     supersedesList: r.supersedes ?? [],
     chat: r.chat ?? null,
     scope: r.scope ?? [],
-    synced: checkpoint !== undefined,
-    syncedItemId: checkpoint?.itemId,
-    markedSuperseded: checkpoint?.markedSuperseded === true,
+    synced: false,
+    syncedItemId: undefined,
+    markedSuperseded: false,
     contentDirty: false,
     scopeDirty: false,
     fileDirty: false,
@@ -359,6 +427,8 @@ function decisionPrimaryOps(id: string, state: DecisionState): PushOp[] {
     surface: state.file,
     title: state.title,
     body: state.content,
+    date: state.decided,
+    chat: state.chat,
   };
 
   if (!state.synced) {
@@ -366,9 +436,7 @@ function decisionPrimaryOps(id: string, state: DecisionState): PushOp[] {
       {
         ...base,
         op: 'create-draft' as const,
-        decided: state.decided,
         supersedes: state.supersedesList,
-        chat: state.chat,
         scope: state.scope,
       },
     ];
@@ -388,6 +456,7 @@ function decisionPrimaryOps(id: string, state: DecisionState): PushOp[] {
       ...base,
       op: 'report-move' as const,
       issue: null,
+      itemId: state.syncedItemId ?? null,
       toSurface: state.file,
     });
   }
@@ -420,6 +489,8 @@ function markSupersededOps(
       surface: target.file,
       title: target.title,
       body: target.content,
+      date: target.decided,
+      chat: target.chat,
       op: 'mark-superseded',
       itemId: target.synced ? (target.syncedItemId ?? null) : null,
       successorId,
@@ -435,7 +506,28 @@ function markSupersededOps(
  * terminal: a synced, unedited one emits nothing, but `markSupersededOps` still resolves supersede
  * targets out of this map, so dropping one would silently strand a later flip.
  */
-export function foldDecisions(records: readonly LedgerRecord[]): {
+function decisionStateFromIndex(entry: LedgerEntry): DecisionState {
+  return {
+    file: entry.surface,
+    title: entry.title,
+    content: entry.body,
+    decided: entry.date,
+    supersedesList: entry.supersedes,
+    chat: entry.chat,
+    scope: entry.scope,
+    synced: true,
+    syncedItemId: entry.itemId || undefined,
+    markedSuperseded: entry.status === SUPERSEDED_DECISION_STATUS,
+    contentDirty: false,
+    scopeDirty: false,
+    fileDirty: false,
+  };
+}
+
+export function foldDecisions(
+  records: readonly LedgerRecord[],
+  index: readonly LedgerEntry[] = [],
+): {
   entries: Map<string, DecisionState>;
   order: string[];
   pendingTargets: Map<string, string[]>;
@@ -444,10 +536,18 @@ export function foldDecisions(records: readonly LedgerRecord[]): {
   const order: string[] = [];
   const pendingTargets = new Map<string, string[]>();
 
+  for (const entry of index) {
+    entries.set(entry.id, decisionStateFromIndex(entry));
+    order.push(entry.id);
+  }
+
   for (const r of records) {
     if (r.action === 'decide' || r.action === 'supersede') {
-      entries.set(r.id, newDecisionState(r));
-      order.push(r.id);
+      entries.set(
+        r.id,
+        withDecisionSyncState(newDecisionState(r), entries.get(r.id)),
+      );
+      if (!order.includes(r.id)) order.push(r.id);
       if (r.action === 'supersede') {
         pendingTargets.set(r.id, r.supersedes ?? []);
       }
@@ -459,8 +559,11 @@ export function foldDecisions(records: readonly LedgerRecord[]): {
   return { entries, order, pendingTargets };
 }
 
-function buildDecisionsQueue(records: readonly LedgerRecord[]): PushOp[] {
-  const { entries, order, pendingTargets } = foldDecisions(records);
+function buildDecisionsQueue(
+  records: readonly LedgerRecord[],
+  index: readonly LedgerEntry[],
+): PushOp[] {
+  const { entries, order, pendingTargets } = foldDecisions(records, index);
 
   return order.flatMap((id) => [
     ...decisionPrimaryOps(id, entries.get(id)!),
@@ -474,14 +577,22 @@ function buildDecisionsQueue(records: readonly LedgerRecord[]): PushOp[] {
  * Ledger order matters: a decision's `supersede` has to reach the board after the record it
  * supersedes, or the `mark-superseded` op names an item that does not exist yet.
  *
- * @param backlog Every record from the backlog ledger, in append order.
- * @param decisions Every record from the decision ledger, in append order.
+ * @param backlog Every record from the backlog queue, in append order.
+ * @param decisions Every record from the decision queue, in append order.
+ * @param backlogIndex The board's own backlog entries, which seed state for anything already
+ *   synced. Empty means no index, which is a fresh clone and not an error.
+ * @param decisionsIndex The same for decisions.
  */
 export function buildPushQueue(
   backlog: readonly LedgerRecord[],
   decisions: readonly LedgerRecord[],
+  backlogIndex: readonly LedgerEntry[] = [],
+  decisionsIndex: readonly LedgerEntry[] = [],
 ): PushOp[] {
-  return [...buildBacklogQueue(backlog), ...buildDecisionsQueue(decisions)];
+  return [
+    ...buildBacklogQueue(backlog, backlogIndex),
+    ...buildDecisionsQueue(decisions, decisionsIndex),
+  ];
 }
 
 /** Pending counts per ledger, without building the full queue. */

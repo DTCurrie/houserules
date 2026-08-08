@@ -4,8 +4,16 @@
  *
  * Usage:
  *   bootstrap [--dry-run]  # create or adopt one project per (backlog, decisions) x target
- *   push [--dry-run]       # drain the push queue to the live boards
+ *   push [--dry-run]       # drain the push queue to the live boards, then compact
+ *   pull [--dry-run]       # rebuild the local index from the boards
+ *   backfill [--dry-run]   # bring an existing board up to the current field schema
+ *   compact [--dry-run]    # shrink the local ledgers to what a push still owes
  *   status                 # print the resolved project per ledger and target, and gate state
+ *
+ * Two gates, not one. `bootstrap`, `push`, and `backfill` WRITE to a board and need both the
+ * local enable token and maintain or admin on the repository. `pull` only reads, so it needs
+ * neither: a contributor who cannot sync can still hold an index and answer `scope` offline,
+ * which is the whole reason the read gate exists separately.
  *
  * bootstrap writes the resolved project numbers and node ids to
  * <ledger dir>/.projects.json. That file is the local sync enable token: nothing else in
@@ -28,7 +36,6 @@
  */
 
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -36,9 +43,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
-import type { ConfigTarget } from './lib/kit-config.mjs';
 import {
   appendEvent,
   ledgerDir,
@@ -60,22 +67,27 @@ import type { GhResult } from './lib/gh.mjs';
 import {
   ENABLE_TOKEN_BASENAME,
   evaluateGate,
+  evaluateReadGate,
   readGateInputs,
 } from './lib/sync-gate.mjs';
+import {
+  emptyIndex,
+  indexBasename,
+  loadIndex,
+  serializeIndex,
+} from './lib/ledger-index.mjs';
+import type { LedgerIndex } from './lib/ledger-index.mjs';
 import {
   describeStep,
   planBootstrap,
   planIsNoop,
 } from './lib/bootstrap-plan.mjs';
-import type {
-  BootstrapStep,
-  BootstrapTarget,
-  ExistingProject,
-} from './lib/bootstrap-plan.mjs';
+import type { BootstrapStep, ExistingProject } from './lib/bootstrap-plan.mjs';
 import {
   appendMarker,
+  areaForSurface,
   fieldsFor,
-  targetSegment,
+  projectTitle,
 } from './lib/project-shape.mjs';
 import type { FieldSpec, LedgerKind } from './lib/project-shape.mjs';
 import {
@@ -95,6 +107,14 @@ import {
   serializeLedger,
 } from './lib/ledger-compaction.mjs';
 import type { CompactionResult } from './lib/ledger-compaction.mjs';
+import { projectBoardItems } from './lib/board-projection.mjs';
+import type { BoardEntry, BoardItem } from './lib/board-projection.mjs';
+import {
+  backfillIsNoop,
+  describeBackfillOp,
+  planBackfill,
+} from './lib/backfill-plan.mjs';
+import type { BackfillOp, LocalEntry } from './lib/backfill-plan.mjs';
 
 const REPO_ROOT = repoRoot();
 const CONFIG = loadConfigSafe();
@@ -105,18 +125,14 @@ function autoSyncSetting(): boolean | undefined {
   return (CONFIG.projects as { autoSync?: boolean } | undefined)?.autoSync;
 }
 
-function configTargets(): BootstrapTarget[] {
-  return [
-    { name: null },
-    ...(CONFIG.targets as ConfigTarget[]).map((target) => ({
-      name: target.name,
-      pathPrefix: target.pathPrefix,
-    })),
-  ];
-}
-
-function projectKey(kind: LedgerKind, targetName: string | null): string {
-  return targetName === null ? kind : `${kind}:${targetName}`;
+/**
+ * The key one board is stored under in `.projects.json`.
+ *
+ * The ledger kind alone. There is one board per kind per repo, and a target is carried by each
+ * item's `Area` field rather than by which board it sits on.
+ */
+function projectKey(kind: LedgerKind): string {
+  return kind;
 }
 
 /** Confirms `gh` is usable and returns the GitHub owner and repo `origin` points at. */
@@ -188,6 +204,26 @@ function checkGate(action: string, owner: string, repo: string): void {
     console.error(
       'bootstrap needs maintain or admin access on this repository. Ask a maintainer to run it.',
     );
+    process.exit(1);
+  }
+}
+
+/**
+ * Denies unless the caller passes the READ gate. Weaker than {@link checkGate}: `pull` needs no
+ * local enable token and no maintain access, only ordinary read access to the repository, since
+ * the point of `pull` is to let a contributor without write access hold a local index.
+ *
+ * The permission call is skipped when `autoSync` already denies, the same short circuit
+ * {@link readGateInputs} uses, so the common case costs no network round trip.
+ */
+function checkReadGate(): void {
+  const verdict = evaluateReadGate(
+    readGateInputs(LEDGER_DIRECTORY, autoSyncSetting(), {
+      requireToken: false,
+    }),
+  );
+  if (!verdict.allowed) {
+    console.error(verdict.message);
     process.exit(1);
   }
 }
@@ -437,11 +473,7 @@ function runBootstrap(dryRun: boolean): void {
   const repositoryId = fetchRepositoryId(owner, repo);
   if (!repositoryId.ok) failStep(repositoryId.message);
 
-  const steps = planBootstrap(
-    repo,
-    configTargets(),
-    ownerProjects.value.projects,
-  );
+  const steps = planBootstrap(repo, ownerProjects.value.projects);
 
   if (dryRun) {
     if (planIsNoop(steps)) {
@@ -457,7 +489,7 @@ function runBootstrap(dryRun: boolean): void {
   const resolved: Record<string, ResolvedProject> = {};
   for (const step of steps) {
     console.log(describeStep(step));
-    resolved[projectKey(step.kind, step.targetName)] = executeStep(
+    resolved[projectKey(step.kind)] = executeStep(
       step,
       ownerProjects.value.ownerId,
       repositoryId.value,
@@ -505,11 +537,66 @@ function readDecodedLog(path: string): LedgerRecord[] {
   });
 }
 
+/**
+ * The ops a push would send, from the queue merged with the index.
+ *
+ * The index is what lets an operation land on an entry that already left the queue: a supersede
+ * needs the target's draft item id, an amend needs the same, and a close needs the issue number.
+ * Without it, emptying the queue would silently make every synced entry uneditable.
+ */
 function readPushQueue(): PushOp[] {
   return buildPushQueue(
     readDecodedLog(backlogLedgerPath()),
     readDecodedLog(decisionsLedgerPath()),
+    loadIndex(LEDGER_DIRECTORY, 'backlog')?.entries ?? [],
+    loadIndex(LEDGER_DIRECTORY, 'decisions')?.entries ?? [],
   );
+}
+
+/**
+ * `--under` on a `decide` record, which {@link LedgerRecord} carries no field for because
+ * nothing else in this package reads it. Backfill is the one place that does.
+ */
+function recordUnder(record: LedgerRecord): string | null {
+  return (record as unknown as { under?: string }).under ?? null;
+}
+
+/**
+ * Every entry the local ledger knows, folded the same way {@link foldBacklog} and
+ * {@link foldDecisions} fold a push queue: a birth record starts the entry, and `file`, `title`,
+ * and `scope` take the last value any later record set.
+ *
+ * A backlog entry's birth action is `add`. A decision's is `decide` or `supersede`, since a
+ * superseding decision is itself a new entry on the board.
+ */
+function localEntriesFromLedger(
+  kind: LedgerKind,
+  records: readonly LedgerRecord[],
+): LocalEntry[] {
+  const birthActions = kind === 'backlog' ? ['add'] : ['decide', 'supersede'];
+  const entries = new Map<string, LocalEntry>();
+
+  for (const record of records) {
+    if (birthActions.includes(record.action)) {
+      entries.set(record.id, {
+        id: record.id,
+        title: record.title ?? '',
+        surface: record.file ?? '',
+        date: record.ts.slice(0, 10),
+        chat: record.chat ?? null,
+        scope: record.scope ?? [],
+        under: kind === 'decisions' ? recordUnder(record) : null,
+      });
+      continue;
+    }
+    const entry = entries.get(record.id);
+    if (!entry) continue;
+    if (record.file !== undefined) entry.surface = record.file;
+    if (record.title !== undefined) entry.title = record.title;
+    if (record.scope !== undefined) entry.scope = record.scope;
+  }
+
+  return Array.from(entries.values());
 }
 
 interface LedgerCompaction {
@@ -542,11 +629,25 @@ function planCompaction(): {
   const backlogBefore = readLog<LedgerRecord>(backlogPath);
   const decisionsBefore = readLog<LedgerRecord>(decisionsPath);
 
-  const queueBefore = buildPushQueue(backlogBefore, decisionsBefore);
+  const backlogIndex = loadIndex(LEDGER_DIRECTORY, 'backlog')?.entries ?? [];
+  const decisionsIndex =
+    loadIndex(LEDGER_DIRECTORY, 'decisions')?.entries ?? [];
+
+  const queueBefore = buildPushQueue(
+    backlogBefore,
+    decisionsBefore,
+    backlogIndex,
+    decisionsIndex,
+  );
   const pending = pendingEntryIds(queueBefore);
-  const backlog = compactBacklog(backlogBefore, pending);
-  const decisions = compactDecisions(decisionsBefore, pending);
-  const queueAfter = buildPushQueue(backlog.records, decisions.records);
+  const backlog = compactBacklog(backlogBefore, pending, backlogIndex);
+  const decisions = compactDecisions(decisionsBefore, pending, decisionsIndex);
+  const queueAfter = buildPushQueue(
+    backlog.records,
+    decisions.records,
+    backlogIndex,
+    decisionsIndex,
+  );
 
   return {
     ledgers: [
@@ -571,18 +672,17 @@ function planCompaction(): {
 }
 
 /**
- * Replaces a ledger with its compacted records, keeping a one-generation backup beside it.
+ * Replaces a ledger with its compacted records.
  *
- * The backup is taken before anything is replaced, and the new file lands by rename, so an
- * interruption at any point leaves either the original or a complete replacement and never a
- * half-written ledger. This is the only code in the kit that destroys ledger history, which is
- * what earns it both precautions.
+ * No backup is kept beside it. A one-generation `.bak` used to be written here, but the next
+ * compaction overwrote it before anyone could read it, so it promised a recovery it could never
+ * deliver. The temp-plus-rename below is the real safety: an interruption at any point leaves
+ * either the original or a complete replacement and never a half-written ledger.
  */
 function writeCompactedLedger(
   path: string,
   records: readonly LedgerRecord[],
 ): void {
-  copyFileSync(path, `${path}.bak`);
   const temporary = `${path}.compacting`;
   writeFileSync(temporary, serializeLedger(records));
   renameSync(temporary, path);
@@ -608,6 +708,9 @@ function runCompaction(dryRun: boolean): void {
     console.log(
       describeCompaction(ledger.kind, ledger.before.length, ledger.result),
     );
+    for (const entry of ledger.result.dropped) {
+      console.log(`  dropped ${entry.id}  ${entry.title}`);
+    }
     if (!dryRun) writeCompactedLedger(ledger.path, ledger.result.records);
   }
 }
@@ -640,46 +743,27 @@ function runStatus(): void {
     return;
   }
 
-  for (const target of configTargets()) {
-    // The same segment the board is titled with, so status names a board the way GitHub does.
-    // Reading `target.name` here instead printed `agent-kit/agent-kit` for a board called
-    // `agent-kit/cli`.
-    const segment = targetSegment(target);
-    const label = segment === null ? repo : `${repo}/${segment}`;
-    for (const kind of LEDGER_KINDS) {
-      const project = resolved[projectKey(kind, target.name)];
-      console.log(
-        project
-          ? `${label} ${kind}: #${project.number}`
-          : `${label} ${kind}: not bootstrapped`,
-      );
-    }
+  for (const kind of LEDGER_KINDS) {
+    const project = resolved[projectKey(kind)];
+    console.log(
+      project
+        ? `${repo} ${kind}: #${project.number}`
+        : `${repo} ${kind}: not bootstrapped`,
+    );
   }
 }
 
 /**
- * The board segment a push op's surface implies, derived the same way {@link targetSegment}
- * derives one from a configured target. Null means the repo root.
+ * The board an op belongs on.
+ *
+ * One per kind, so the surface plays no part in choosing it. The surface becomes the item's `Area`
+ * value instead, which is what scopes an item within the single board.
  */
-function targetNameFromSurface(
-  kind: LedgerKind,
-  surface: string,
-): string | null {
-  const basename = kind === 'backlog' ? 'BACKLOG.md' : 'DECISIONS.md';
-  if (surface === basename) return null;
-  return surface.endsWith(`.${basename}`)
-    ? surface.slice(0, -(basename.length + 1))
-    : surface;
-}
-
 function resolveBoard(
   kind: LedgerKind,
-  surface: string,
   resolved: Record<string, ResolvedProject>,
 ): ResolvedProject | null {
-  return (
-    resolved[projectKey(kind, targetNameFromSurface(kind, surface))] ?? null
-  );
+  return resolved[projectKey(kind)] ?? null;
 }
 
 function fetchIssueNodeId(
@@ -878,6 +962,79 @@ function projectFields(
   return fetched;
 }
 
+const BOARD_ITEMS_PAGE_SIZE = 100;
+
+interface BoardItemsPage {
+  nodes: BoardItem[];
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
+function fetchBoardItemsPage(
+  projectId: string,
+  cursor: string | null,
+): GhResult<BoardItemsPage> {
+  const after = cursor ? `, after: ${JSON.stringify(cursor)}` : '';
+  const query = `query { node(id: ${JSON.stringify(projectId)}) { ... on ProjectV2 { items(first: ${BOARD_ITEMS_PAGE_SIZE}${after}) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      id
+      content {
+        __typename
+        ... on Issue { number title body state }
+        ... on DraftIssue { title body }
+      }
+      fieldValues(first: 20) { nodes {
+        __typename
+        ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldNumberValue { field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldIterationValue { field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldLabelValue { field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldMilestoneValue { field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldMultiSelectValue { field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldPullRequestValue { field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldRepositoryValue { field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldReviewerValue { field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldUserValue { field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemIssueFieldValue { field { ... on ProjectV2FieldCommon { name } } }
+      } }
+    }
+  } } } }`;
+
+  const result = ghGraphql<{
+    node: {
+      items: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        nodes: BoardItem[];
+      };
+    } | null;
+  }>(query);
+  if (!result.ok) return result;
+  const items = result.value.node?.items;
+  if (!items) return ghErr(`GitHub has no project ${projectId}`);
+  return ghOk({
+    nodes: items.nodes,
+    hasNextPage: items.pageInfo.hasNextPage,
+    endCursor: items.pageInfo.endCursor,
+  });
+}
+
+/** Every item on `projectId`'s board, paged until GitHub reports no page remains. */
+function fetchBoardItems(projectId: string): GhResult<BoardItem[]> {
+  const all: BoardItem[] = [];
+  let cursor: string | null = null;
+  for (;;) {
+    const page = fetchBoardItemsPage(projectId, cursor);
+    if (!page.ok) return page;
+    all.push(...page.value.nodes);
+    if (!page.value.hasNextPage) break;
+    cursor = page.value.endCursor;
+  }
+  return ghOk(all);
+}
+
 /**
  * Sets every field `values` names on `itemId`, resolving each field and, for a single select,
  * its option, by name against `project`. A field or option name the board does not carry is
@@ -1036,7 +1193,14 @@ function handleCreateDraft(
   project: ResolvedProject,
   ctx: PushContext,
 ): GhResult<SyncResult> {
-  const created = addDraftIssueMutation(project.id, op.title, op.body);
+  // The marker is what lets `pull` recognise this draft as ours later. Creating without one is
+  // how all 41 existing drafts ended up unmappable: the issue paths appended it and this one did
+  // not, so a decision reached the board and then vanished from every projection of it.
+  const created = addDraftIssueMutation(
+    project.id,
+    op.title,
+    appendMarker(op.body, op.entryId),
+  );
   if (!created.ok) return created;
   const fields = setFieldValues(project, created.value, fieldValuesFor(op));
   if (!fields.ok) return fields;
@@ -1126,31 +1290,55 @@ function toOutcome(result: GhResult<SyncResult>): OpOutcome {
  * is still the same issue. A decision `report-move` mutates nothing: a draft cannot move
  * between boards, so this only reports the surface it cannot reach and leaves the entry as is.
  */
+/**
+ * Re-files an entry that moved to another surface.
+ *
+ * With one board per ledger a move never changes which board an item sits on, so this sets the
+ * item's `Area` and nothing else. It used to add the issue to a second board, and to refuse a
+ * decision move outright with "a decision cannot move between project boards", both of which were
+ * true only while a board existed per target.
+ *
+ * A backlog item is found by its issue. A decision draft has no issue, so it is found by the item
+ * id the index recorded, which is why this op is one of the reasons push reads the index at all.
+ */
 function executeReportMove(
   op: Extract<PushOp, { op: 'report-move' }>,
   resolved: Record<string, ResolvedProject>,
   ctx: PushContext,
 ): OpOutcome {
-  if (op.issue === null) {
-    console.log(
-      `${op.entryId} moved to ${op.toSurface}, but a decision cannot move between project boards. Move it by hand.`,
-    );
-    return { kind: 'skipped' };
-  }
-
-  const target = resolveBoard(op.kind, op.toSurface, resolved);
-  if (!target) {
+  const project = resolveBoard(op.kind, resolved);
+  if (!project) {
     return {
       kind: 'failed',
       status: null,
-      message: `no board configured for surface "${op.toSurface}"`,
+      message: `no board configured for ${op.kind}`,
     };
   }
-  const issueId = fetchIssueNodeId(ctx.owner, ctx.repo, op.issue);
-  if (!issueId.ok) return toOutcome(issueId);
-  const added = addIssueToProject(target.id, issueId.value);
-  if (!added.ok) return toOutcome(added);
-  return { kind: 'synced', result: { issue: op.issue } };
+
+  const area: FieldValue[] = [
+    { field: 'Area', kind: 'text', value: areaForSurface(op.toSurface) },
+  ];
+
+  if (op.issue !== null) {
+    const issueId = fetchIssueNodeId(ctx.owner, ctx.repo, op.issue);
+    if (!issueId.ok) return toOutcome(issueId);
+    const added = addIssueToProject(project.id, issueId.value);
+    if (!added.ok) return toOutcome(added);
+    const fields = setFieldValues(project, added.value, area);
+    if (!fields.ok) return toOutcome(fields);
+    return { kind: 'synced', result: { issue: op.issue } };
+  }
+
+  const itemId = op.itemId ?? ctx.createdDraftItems.get(op.entryId);
+  if (!itemId) {
+    console.log(
+      `${op.entryId} moved to ${op.toSurface}, but it is not on the board yet, so there is nothing to re-file.`,
+    );
+    return { kind: 'skipped' };
+  }
+  const fields = setFieldValues(project, itemId, area);
+  if (!fields.ok) return toOutcome(fields);
+  return { kind: 'synced', result: { itemId } };
 }
 
 function executeOp(
@@ -1160,7 +1348,7 @@ function executeOp(
 ): OpOutcome {
   if (op.op === 'report-move') return executeReportMove(op, resolved, ctx);
 
-  const project = resolveBoard(op.kind, op.surface, resolved);
+  const project = resolveBoard(op.kind, resolved);
   if (!project) {
     return {
       kind: 'failed',
@@ -1238,10 +1426,331 @@ function runPush(dryRun: boolean): void {
   else if (dryRun) for (const op of queue) console.log(describeOp(op));
   else executePushQueue(queue, resolved, owner, repo);
 
-  // Also on the nothing-to-push path. An entry filed and removed between two pushes never reaches
-  // the board and so never appears in a queue, and it is exactly the record that would otherwise
-  // accumulate forever.
+  // Push, then pull, then drain, and the order is load bearing. Draining before the pull would
+  // remove entries the index has not learned about yet, and the drain refuses to remove anything
+  // the index cannot confirm, so a stale index costs a slower drain rather than a lost entry.
+  if (!dryRun) runPull(false);
   runCompaction(dryRun);
+}
+
+interface ItemContent {
+  kind: 'draft' | 'issue';
+  id: string;
+}
+
+/** Which project field names on the boards this plugin creates hold a date rather than text. */
+const DATE_FIELD_NAMES: ReadonlySet<string> = new Set(['Filed', 'Decided']);
+
+function backfillFieldValue(field: string, value: string): FieldValue {
+  return DATE_FIELD_NAMES.has(field)
+    ? { field, kind: 'date', value }
+    : { field, kind: 'text', value };
+}
+
+/**
+ * The content id and shape behind one project item, so `append-marker` knows which mutation to
+ * send. A backfilled board mixes issues and draft issues on the same field set, and only the
+ * item's own content answers which one a given `itemId` is.
+ */
+function fetchItemContentId(itemId: string): GhResult<ItemContent> {
+  const query = `query { node(id: ${JSON.stringify(itemId)}) { ... on ProjectV2Item { content {
+    __typename
+    ... on DraftIssue { id }
+    ... on Issue { id }
+  } } } }`;
+  const result = ghGraphql<{
+    node: { content: { __typename: string; id: string } | null } | null;
+  }>(query);
+  if (!result.ok) return result;
+  const content = result.value.node?.content;
+  if (!content) return ghErr(`project item ${itemId} has no content`);
+  if (content.__typename === 'DraftIssue')
+    return ghOk({ kind: 'draft', id: content.id });
+  if (content.__typename === 'Issue')
+    return ghOk({ kind: 'issue', id: content.id });
+  return ghErr(`project item ${itemId} is neither an issue nor a draft issue`);
+}
+
+function handleAppendMarker(
+  op: Extract<BackfillOp, { op: 'append-marker' }>,
+): GhResult<void> {
+  const content = fetchItemContentId(op.itemId);
+  if (!content.ok) return content;
+  const marked = appendMarker(op.body, op.entryId);
+  return content.value.kind === 'draft'
+    ? updateDraftIssueMutation(content.value.id, marked)
+    : updateIssueBodyMutation(content.value.id, marked);
+}
+
+function handleSetField(
+  op: Extract<BackfillOp, { op: 'set-field' }>,
+  project: ResolvedProject,
+): GhResult<void> {
+  const fields = projectFields(project.id);
+  if (!fields.ok) return fields;
+  const field = fields.value.get(op.field);
+  if (!field) return ghErr(`project has no field named "${op.field}"`);
+  return updateFieldValueMutation(
+    project.id,
+    op.itemId,
+    field.id,
+    fieldValueLiteral(backfillFieldValue(op.field, op.value)),
+  );
+}
+
+function executeBackfillOp(
+  op: BackfillOp,
+  project: ResolvedProject,
+): GhResult<void> {
+  return op.op === 'append-marker'
+    ? handleAppendMarker(op)
+    : handleSetField(op, project);
+}
+
+/**
+ * Backfills one board: plans against its items plus the local entries, reports what it finds,
+ * and executes the plan unless `dryRun`.
+ *
+ * Warnings for unmatched items and ambiguous titles print even when the plan is otherwise a
+ * no-op, since those are exactly the items backfill silently leaves untouched.
+ */
+function runBackfillForBoard(
+  kind: LedgerKind,
+  project: ResolvedProject,
+  local: readonly LocalEntry[],
+  repo: string,
+  dryRun: boolean,
+): void {
+  const items = fetchBoardItems(project.id);
+  if (!items.ok) failStep(items.message);
+  const projection = projectBoardItems(kind, items.value);
+  const plan = planBackfill(kind, local, [
+    ...projection.entries,
+    ...projection.unmarked,
+  ]);
+
+  const label = repo;
+
+  for (const itemId of plan.unmatched) {
+    console.log(
+      `${label} ${kind}: warning: item ${itemId} has no matching local entry, skipped`,
+    );
+  }
+  for (const title of plan.ambiguous) {
+    console.log(
+      `${label} ${kind}: warning: title "${title}" matches more than one local entry, skipped`,
+    );
+  }
+
+  if (backfillIsNoop(plan)) {
+    console.log(`${label} ${kind}: already current.`);
+    return;
+  }
+
+  for (const op of plan.ops) {
+    console.log(`${label} ${kind}: ${describeBackfillOp(op)}`);
+  }
+  if (dryRun) return;
+
+  for (const op of plan.ops) {
+    const outcome = executeBackfillOp(op, project);
+    if (!outcome.ok) {
+      failStep(`${describeBackfillOp(op)}: ${outcome.message}`);
+    }
+  }
+}
+
+function runBackfill(dryRun: boolean): void {
+  const { owner, repo } = preflight();
+  checkGate('backfill', owner, repo);
+
+  const resolved = readEnableToken();
+  if (!resolved) {
+    console.error('No local project mapping yet. Run `bootstrap` first.');
+    process.exit(1);
+  }
+
+  const localByKind: Record<LedgerKind, LocalEntry[]> = {
+    backlog: localEntriesFromLedger(
+      'backlog',
+      readDecodedLog(backlogLedgerPath()),
+    ),
+    decisions: localEntriesFromLedger(
+      'decisions',
+      readDecodedLog(decisionsLedgerPath()),
+    ),
+  };
+
+  for (const kind of LEDGER_KINDS) {
+    const project = resolved[projectKey(kind)];
+    if (!project) continue;
+    runBackfillForBoard(kind, project, localByKind[kind], repo, dryRun);
+  }
+}
+
+/** The board the enable token names for `kind`, as a list so `pull` reads one shape. */
+function boardsForKind(
+  kind: LedgerKind,
+  resolved: Record<string, ResolvedProject>,
+): ResolvedProject[] {
+  const prefix = `${kind}:`;
+  return Object.entries(resolved)
+    .filter(([key]) => key === kind || key.startsWith(prefix))
+    .map(([, project]) => project);
+}
+
+/**
+ * Writes `index` atomically, the same temp-plus-rename `writeCompactedLedger` uses. A half
+ * written index read by the `UserPromptSubmit` hook is worse than no index at all.
+ */
+function writeIndex(kind: LedgerKind, index: LedgerIndex): void {
+  const path = resolve(LEDGER_DIRECTORY, indexBasename(kind));
+  const temporary = `${path}.pulling`;
+  mkdirSync(LEDGER_DIRECTORY, { recursive: true });
+  writeFileSync(temporary, serializeIndex(index));
+  renameSync(temporary, path);
+  console.log(`Wrote ${path}`);
+}
+
+/**
+ * Every entry `kind`'s boards hold, read from each board the enable token names.
+ *
+ * A board that no longer exists is reported and skipped rather than ending the run, since one
+ * stale row must not cost the whole index. `unmarked` and `skipped` items are dropped: an
+ * unmarked item is not ours, and `pull` only reads what the ledger can already recognize.
+ */
+function pullKind(
+  kind: LedgerKind,
+  resolved: Record<string, ResolvedProject>,
+): LedgerIndex {
+  const boards = boardsForKind(kind, resolved);
+  const entries: BoardEntry[] = [];
+  const projects: number[] = [];
+
+  for (const board of boards) {
+    const items = fetchBoardItems(board.id);
+    if (!items.ok) {
+      console.error(
+        `${kind} #${board.number}: could not read this board, skipped (${items.message})`,
+      );
+      continue;
+    }
+    const projection = projectBoardItems(kind, items.value);
+    entries.push(...projection.entries);
+    projects.push(board.number);
+  }
+
+  return { ...emptyIndex(kind, nowIso()), projects, entries };
+}
+
+/**
+ * Every board `pull` can read, by title, for a contributor with no enable token.
+ *
+ * Fetches the owner's projects once for the whole run and matches each (kind, target) pair by
+ * the same deterministic title `bootstrap` adopts by, so a contributor with read access but no
+ * token still resolves the real boards rather than guessing at them. A title that matches
+ * nothing is skipped and printed, since a repo nobody has bootstrapped yet is not an error.
+ */
+function resolveBoardsByTitle(
+  owner: string,
+  repo: string,
+): Record<string, ResolvedProject> {
+  const ownerProjects = fetchOwnerProjects(owner);
+  if (!ownerProjects.ok) {
+    console.error(
+      `could not list projects for ${owner}: ${ownerProjects.message}`,
+    );
+    return {};
+  }
+
+  const resolved: Record<string, ResolvedProject> = {};
+  for (const kind of LEDGER_KINDS) {
+    const title = projectTitle(repo, kind);
+    const match = ownerProjects.value.projects.find(
+      (project) => project.title === title,
+    );
+    if (!match) {
+      console.log(`${kind}: no board titled "${title}", skipped`);
+      continue;
+    }
+    resolved[projectKey(kind)] = { number: match.number, id: match.id };
+  }
+  return resolved;
+}
+
+/**
+ * Every board `pull` should read, in the same shape {@link boardsForKind} consumes.
+ *
+ * The enable token is authoritative and costs no API call, so it wins whenever it exists. Only
+ * when there is none, meaning nobody with maintain access has bootstrapped this repo for this
+ * account to adopt, does `pull` fall back to resolving boards by title.
+ */
+function resolveBoardsForPull(
+  owner: string,
+  repo: string,
+): Record<string, ResolvedProject> {
+  const token = readEnableToken();
+  return token ?? resolveBoardsByTitle(owner, repo);
+}
+
+/** The ledger script that renders one kind's markdown surfaces, if that module is installed. */
+const RENDERER: Record<LedgerKind, string> = {
+  backlog: 'backlog-log.mjs',
+  decisions: 'decision-log.mjs',
+};
+
+/**
+ * Rebuilds the markdown surfaces from the freshly written index.
+ *
+ * The rendered `<target>.BACKLOG.md` files are how someone reads the ledger without leaving the
+ * codebase, and once the queue empties the index is the only thing they can be built from. Without
+ * this they would freeze at whatever the last local write left behind.
+ *
+ * Best effort by design. The backlog and decisions modules are optional, so a repo may have one,
+ * the other, or neither, and a render failing must never fail the pull that already succeeded.
+ */
+function renderSurfaces(kind: LedgerKind): void {
+  const script = resolve(REPO_ROOT, '.claude/scripts', RENDERER[kind]);
+  if (!existsSync(script)) return;
+  const result = spawnSync(process.execPath, [script, 'render'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    console.error(
+      `${kind}: surfaces not re-rendered, the index is still current.`,
+    );
+  }
+}
+
+function runPull(dryRun: boolean): void {
+  const { owner, repo } = preflight();
+  checkReadGate();
+
+  const resolved = resolveBoardsForPull(owner, repo);
+  if (Object.keys(resolved).length === 0) {
+    console.log(
+      'No project boards were found for this repo. A maintainer runs `bootstrap` once to create them.',
+    );
+    return;
+  }
+
+  for (const kind of LEDGER_KINDS) {
+    const index = pullKind(kind, resolved);
+    const boardList =
+      index.projects.length === 0
+        ? 'no boards'
+        : index.projects.map((number) => `#${number}`).join(', ');
+    if (dryRun) {
+      console.log(
+        `${kind}: would write ${index.entries.length} entries from ${boardList}`,
+      );
+      continue;
+    }
+    console.log(`${kind}: ${index.entries.length} entries from ${boardList}`);
+    writeIndex(kind, index);
+    renderSurfaces(kind);
+  }
 }
 
 function usage(): void {
@@ -1251,6 +1760,8 @@ function usage(): void {
       '  projects-sync.mjs bootstrap [--dry-run]',
       '  projects-sync.mjs push [--dry-run]',
       '  projects-sync.mjs compact [--dry-run]',
+      '  projects-sync.mjs backfill [--dry-run]',
+      '  projects-sync.mjs pull [--dry-run]',
       '  projects-sync.mjs status',
       '',
       'bootstrap creates or adopts one GitHub Project per (backlog, decisions) x target,',
@@ -1260,8 +1771,14 @@ function usage(): void {
       'compacts.',
       'compact shrinks the local ledgers to what a push still owes the board: entries that',
       'landed collapse to one record each, and entries removed before they ever landed are',
-      'dropped. It runs at the end of every push, and needs no network. The previous ledger',
-      'is kept beside the new one as <name>.jsonl.bak.',
+      'dropped. It runs at the end of every push, and needs no network.',
+      'backfill brings an existing board up to the current field schema, by matching each',
+      'board item to a local ledger entry, by marker where one exists and by title where it',
+      "does not, and filling in whatever the item's fields are missing.",
+      'pull reads every item off both boards and writes a local index at',
+      '<ledger dir>/<kind>.index.json, which `scope` and prompt injection read instead of',
+      'the boards themselves. It needs only read access on the repository, not the enable',
+      'token backfill and push require.',
       '--dry-run runs every read but prints each planned step instead of executing it.',
     ].join('\n'),
   );
@@ -1284,6 +1801,14 @@ switch (action) {
   // gate answers who may write to the board, not who may tidy their own working copy.
   case 'compact':
     runCompaction(dryRun);
+    break;
+
+  case 'backfill':
+    runBackfill(dryRun);
+    break;
+
+  case 'pull':
+    runPull(dryRun);
     break;
 
   case 'status':

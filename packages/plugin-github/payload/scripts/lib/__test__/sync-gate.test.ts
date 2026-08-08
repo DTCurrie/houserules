@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   evaluateGate,
+  evaluateReadGate,
   type GateInputs,
   type GateVerdict,
 } from '../sync-gate.mjs';
@@ -29,6 +30,14 @@ const ADMIN: RepoPermissions = {
   push: true,
   triage: true,
   pull: true,
+};
+
+const NO_ACCESS: RepoPermissions = {
+  admin: false,
+  maintain: false,
+  push: false,
+  triage: false,
+  pull: false,
 };
 
 const PERMISSION_CASES: {
@@ -199,5 +208,85 @@ describe('evaluateGate', () => {
     if (verdict.allowed) throw new Error('unreachable');
     expect(verdict.message).toMatch(/issues tab/);
     expect(verdict.message).toMatch(/\/backlog-adopt/);
+  });
+});
+
+describe('evaluateReadGate', () => {
+  it('allows a pull-only account with no local enable token', () => {
+    const verdict = evaluateReadGate({
+      hasEnableToken: false,
+      autoSync: undefined,
+      permissions: PUSH_ONLY,
+    });
+
+    expect(verdict).toEqual({ allowed: true });
+  });
+
+  it('allows maintain permission', () => {
+    const verdict = evaluateReadGate({
+      hasEnableToken: false,
+      autoSync: undefined,
+      permissions: MAINTAIN,
+    });
+
+    expect(verdict).toEqual({ allowed: true });
+  });
+
+  it('denies with auto-sync-disabled when autoSync is false', () => {
+    const verdict = evaluateReadGate({
+      hasEnableToken: false,
+      autoSync: false,
+      permissions: ADMIN,
+    });
+
+    expect(verdict).toEqual({
+      allowed: false,
+      reason: 'auto-sync-disabled',
+      message: expect.any(String),
+    });
+  });
+
+  it('denies with permission-unknown when permissions is null', () => {
+    const verdict = evaluateReadGate({
+      hasEnableToken: false,
+      autoSync: undefined,
+      permissions: null,
+    });
+
+    expect(verdict).toEqual({
+      allowed: false,
+      reason: 'permission-unknown',
+      message: expect.any(String),
+    });
+  });
+
+  it('denies with insufficient-permission when the account has no repository access', () => {
+    const verdict = evaluateReadGate({
+      hasEnableToken: false,
+      autoSync: undefined,
+      permissions: NO_ACCESS,
+    });
+
+    expect(verdict).toEqual({
+      allowed: false,
+      reason: 'insufficient-permission',
+      message: expect.any(String),
+    });
+  });
+
+  it('does not require the local enable token to allow a read', () => {
+    const withToken = evaluateReadGate({
+      hasEnableToken: true,
+      autoSync: undefined,
+      permissions: PUSH_ONLY,
+    });
+    const withoutToken = evaluateReadGate({
+      hasEnableToken: false,
+      autoSync: undefined,
+      permissions: PUSH_ONLY,
+    });
+
+    expect(withToken).toEqual({ allowed: true });
+    expect(withoutToken).toEqual({ allowed: true });
   });
 });

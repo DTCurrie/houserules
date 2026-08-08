@@ -37,7 +37,14 @@
  * the existing issue to the board instead of creating a duplicate.
  */
 
-import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
 import { makeId } from './lib/backlog-id.mjs';
@@ -65,12 +72,15 @@ import {
   surfaceScope,
   takeChatFlag,
 } from './lib/entry-ledger.mjs';
+import { findEntry, loadIndex } from './lib/ledger-index.mjs';
+import type { LedgerEntry, LedgerIndex } from './lib/ledger-index.mjs';
 
 const REPO_ROOT = repoRoot();
 const CONFIG = loadConfigSafe();
 const LEDGER_DIR = ledgerDir(REPO_ROOT, CONFIG.ledgers?.dir);
 const LOG_FILE = ledgerPath(REPO_ROOT, 'backlog', CONFIG.ledgers?.dir);
 const SURFACE = 'BACKLOG.md';
+const BACKLOG_INDEX = loadIndex(LEDGER_DIR, 'backlog');
 
 function resolveSurfaceArg(file?: string): string {
   return resolveSurfaceArgSeam(
@@ -119,13 +129,51 @@ function renderEntry(
   return `## [${id}] ${title}\n\n${meta}\n\n${body.trim()}\n\n${SEPARATOR}\n\n`;
 }
 
-/** The latest title and content per id, plus which ids a later record removed. */
-function projectBacklog(records: BacklogRecord[]): {
+/**
+ * `entry` as a {@link BacklogEntry}.
+ *
+ * The board holds a decoded body, but every other reader of `BacklogEntry.content` in this file
+ * expects the gzip+base64 shape a queue record carries, so this re-encodes it rather than
+ * changing what `decodeBody` is fed downstream.
+ */
+function backlogEntryFromLedgerEntry(entry: LedgerEntry): BacklogEntry {
+  return {
+    id: entry.id,
+    file: entry.surface,
+    title: entry.title,
+    date: entry.date,
+    chat: entry.chat,
+    content: encodeBody(entry.body),
+  };
+}
+
+/** The board `Status` a finished backlog item carries. */
+const CLOSED_BOARD_STATUS = 'Done';
+
+/**
+ * The latest title and content per id, plus which ids a later record removed.
+ *
+ * Starts from `index`'s entries, the board's own state, then replays the queue's records over
+ * them in append order. A queue record always wins over the index for the same id, because the
+ * queue is what has not reached the board yet.
+ */
+export function projectBacklog(
+  records: BacklogRecord[],
+  index: LedgerIndex | null,
+): {
   entries: Map<string, BacklogEntry>;
   removed: Set<string>;
 } {
   const entries = new Map<string, BacklogEntry>();
   const removed = new Set<string>();
+  for (const entry of index?.entries ?? []) {
+    entries.set(entry.id, backlogEntryFromLedgerEntry(entry));
+    // A Done item is finished work the board still holds. It stays in `entries`, so `show` and
+    // prompt injection can still resolve the id, and it goes straight into `removed`, so no list
+    // or render ever shows it. Without this, dropping a resolved entry locally and pulling it
+    // back reopens it, and after the queue empties that happens to every entry ever closed.
+    if (entry.status === CLOSED_BOARD_STATUS) removed.add(entry.id);
+  }
   for (const r of records) {
     if (r.action === 'add') {
       entries.set(r.id, {
@@ -205,7 +253,10 @@ function projectFile(file: string): {
     SURFACE,
     CONFIG.targets ?? [],
   );
-  const { entries, removed } = projectBacklog(readLog<BacklogRecord>(LOG_FILE));
+  const { entries, removed } = projectBacklog(
+    readLog<BacklogRecord>(LOG_FILE),
+    BACKLOG_INDEX,
+  );
   const surviving = [...entries.values()].filter(
     (e) =>
       normalizeSurfaceRef(e.file, SURFACE, CONFIG.targets ?? []) === relFile &&
@@ -238,7 +289,10 @@ function rerenderFile(
  * header-only stub on every render, which reads as an area that still exists and holds nothing.
  */
 function allSurfaceFiles(): string[] {
-  const { entries, removed } = projectBacklog(readLog<BacklogRecord>(LOG_FILE));
+  const { entries, removed } = projectBacklog(
+    readLog<BacklogRecord>(LOG_FILE),
+    BACKLOG_INDEX,
+  );
   const surviving = [...entries.values()].filter((e) => !removed.has(e.id));
   return impliedSurfaceFiles(
     LEDGER_DIR,
@@ -275,6 +329,42 @@ function entryNotFound(id: string, file: string): never {
     `The backlog ledger has no record of ${id}. The ledger is the source of truth, so an entry only present in ${file} does not exist.`,
   );
   process.exit(1);
+}
+
+/**
+ * The bare area name `file` refers to, or null when `resolveSurfaceArg` would not resolve it
+ * against a per-target surface at all: the repo-root surface, or a literal path escape hatch
+ * (a path with a separator that does not name a configured target's area).
+ *
+ * Mirrors `resolveSurfaceArg`'s own branching on the same argument, so a name checked here is
+ * the same name the surface would actually resolve to.
+ */
+export function resolveAreaName(
+  file: string,
+  basename: string,
+  targets: readonly { name: string; pathPrefix?: string }[],
+): string | null {
+  if (!file || file === basename) return null;
+  if (!file.includes('/')) {
+    const normalized = normalizeSurfaceRef(file, basename, targets);
+    if (normalized === basename) return null;
+    return normalized.endsWith(`.${basename}`)
+      ? normalized.slice(0, -(basename.length + 1))
+      : normalized;
+  }
+  const normalized = normalizeSurfaceRef(file, basename, targets);
+  if (normalized.includes('/')) return null;
+  return normalized.endsWith(`.${basename}`)
+    ? normalized.slice(0, -(basename.length + 1))
+    : normalized;
+}
+
+/** Whether `area` names the repo-root surface or a target `kit.config.json` configures. */
+export function isKnownArea(
+  area: string | null,
+  targets: readonly { name: string }[],
+): boolean {
+  return area === null || targets.some((t) => t.name === area);
 }
 
 function parseIssueFlag(value: string | undefined): number {
@@ -331,180 +421,219 @@ function usage() {
   );
 }
 
-const argv = process.argv.slice(2);
-const chatFlag = takeChatFlag(argv);
-const issueFlag = takeIssueFlag(argv);
-const [action, ...rest] = argv;
+function main(): void {
+  const argv = process.argv.slice(2);
+  const chatFlag = takeChatFlag(argv);
+  const issueFlag = takeIssueFlag(argv);
+  const [action, ...rest] = argv;
 
-switch (action) {
-  case 'add': {
-    const [prefix, file, title, content] = rest;
-    if (!prefix || !file || !title) {
-      usage();
-      process.exit(1);
-    }
-    if (!/^[A-Z][A-Z0-9]*$/.test(prefix)) {
-      console.error(
-        `Invalid prefix "${prefix}" — must be uppercase ASCII (e.g. SIM, DATA, RULES).`,
-      );
-      process.exit(1);
-    }
-    const body = readContentArg(content);
-    if (!body) {
-      console.error(
-        'Empty body. Pass content as the 4th arg or pipe via stdin.',
-      );
-      process.exit(1);
-    }
-    const surface = resolveSurfaceArg(file);
-    const id = makeId(prefix, title, nowIso());
-    const chat = resolveChat(chatFlag, REPO_ROOT);
-    appendEvent(LOG_FILE, {
-      ts: nowIso(),
-      id,
-      action: 'add',
-      file: surfaceRelFile(LEDGER_DIR, surface),
-      title,
-      chat,
-      content: encodeBody(body),
-      ...(issueFlag !== null ? { issue: issueFlag } : {}),
-    });
-    rerenderFile(surface);
-    console.log(id);
-    if (chat) console.log(`chat: ${chat}`);
-    else if (chatFlag !== 'none')
-      console.error(
-        'warning: no active Claude session detected; entry written without chat ID.',
-      );
-    break;
-  }
-
-  case 'remove': {
-    const [id, file, reason] = rest;
-    if (!id || !file || !reason) {
-      usage();
-      process.exit(1);
-    }
-    const surface = resolveSurfaceArg(file);
-    const { surviving } = projectFile(surface);
-    if (!surviving.some((e) => e.id === id))
-      entryNotFound(id, relativeToRoot(REPO_ROOT, surface));
-    appendEvent(LOG_FILE, {
-      ts: nowIso(),
-      id,
-      action: 'remove',
-      file: surfaceRelFile(LEDGER_DIR, surface),
-      reason,
-      chat: resolveChat(chatFlag, REPO_ROOT),
-    });
-    rerenderFile(surface);
-    break;
-  }
-
-  case 'update': {
-    const [id, file, newTitle, content] = rest;
-    if (!id || !file || !newTitle) {
-      usage();
-      process.exit(1);
-    }
-    const body = readContentArg(content);
-    const surface = resolveSurfaceArg(file);
-    const { surviving } = projectFile(surface);
-    if (!surviving.some((e) => e.id === id))
-      entryNotFound(id, relativeToRoot(REPO_ROOT, surface));
-    appendEvent(LOG_FILE, {
-      ts: nowIso(),
-      id,
-      action: 'update',
-      file: surfaceRelFile(LEDGER_DIR, surface),
-      title: newTitle,
-      chat: resolveChat(chatFlag, REPO_ROOT),
-      content: encodeBody(body),
-    });
-    rerenderFile(surface);
-    break;
-  }
-
-  case 'move': {
-    const [id, toArea] = rest;
-    if (!id || !toArea) {
-      usage();
-      process.exit(1);
-    }
-    const destination = resolveSurfaceArg(toArea);
-    const { entries, removed } = projectBacklog(
-      readLog<BacklogRecord>(LOG_FILE),
-    );
-    const entry = entries.get(id);
-    if (!entry || removed.has(id))
-      entryNotFound(id, relativeToRoot(REPO_ROOT, LOG_FILE));
-    const source = resolveSurfaceArg(
-      normalizeSurfaceRef(entry.file, SURFACE, CONFIG.targets ?? []),
-    );
-    appendEvent(LOG_FILE, {
-      ts: nowIso(),
-      id,
-      action: 'move',
-      file: surfaceRelFile(LEDGER_DIR, destination),
-      chat: resolveChat(chatFlag, REPO_ROOT),
-    });
-    rerenderFile(source, new Set([id]));
-    rerenderFile(destination);
-    break;
-  }
-
-  case 'show': {
-    const [id] = rest;
-    if (!id) {
-      usage();
-      process.exit(1);
-    }
-    if (!existsSync(LOG_FILE)) {
-      console.error('No backlog log yet.');
-      process.exit(0);
-    }
-    let found = 0;
-    for (const r of readLog<BacklogRecord>(LOG_FILE)) {
-      if (r.id !== id) continue;
-      found++;
-      console.log(
-        `[${r.ts}] ${r.action}${r.title ? ` — ${r.title}` : ''}${r.file ? ` (${r.file})` : ''}`,
-      );
-      if (r.chat) console.log(`chat: ${r.chat}`);
-      if (r.content) console.log(decodeBody(r.content));
-      if (r.reason) console.log(`reason: ${r.reason}`);
-      console.log('---');
-    }
-    if (!found) {
-      console.error(`No log entries for ${id}.`);
-      process.exit(1);
-    }
-    break;
-  }
-
-  case 'list': {
-    const [file] = rest;
-    const files = file ? [resolveSurfaceArg(file)] : allSurfaceFiles();
-    for (const f of files) {
-      const entries = listEntries(f);
-      if (!entries.length) continue;
-      console.log(`# ${relativeToRoot(REPO_ROOT, f)}`);
-      for (const e of entries) {
-        console.log(`  ${e.id}  ${e.logged}  ${e.title}`);
+  switch (action) {
+    case 'add': {
+      const [prefix, file, title, content] = rest;
+      if (!prefix || !file || !title) {
+        usage();
+        process.exit(1);
       }
-      console.log('');
+      if (!/^[A-Z][A-Z0-9]*$/.test(prefix)) {
+        console.error(
+          `Invalid prefix "${prefix}" — must be uppercase ASCII (e.g. SIM, DATA, RULES).`,
+        );
+        process.exit(1);
+      }
+      const body = readContentArg(content);
+      if (!body) {
+        console.error(
+          'Empty body. Pass content as the 4th arg or pipe via stdin.',
+        );
+        process.exit(1);
+      }
+      const area = resolveAreaName(file, SURFACE, CONFIG.targets ?? []);
+      if (!isKnownArea(area, CONFIG.targets ?? [])) {
+        const known = (CONFIG.targets ?? []).map((t) => t.name);
+        console.error(
+          `Unknown area "${file}" — no target named "${area}" is configured in kit.config.json.\n` +
+            `Valid areas: ${['(repo root)', ...known].join(', ')}.`,
+        );
+        process.exit(1);
+      }
+      const surface = resolveSurfaceArg(file);
+      const id = makeId(prefix, title, nowIso());
+      const chat = resolveChat(chatFlag, REPO_ROOT);
+      appendEvent(LOG_FILE, {
+        ts: nowIso(),
+        id,
+        action: 'add',
+        file: surfaceRelFile(LEDGER_DIR, surface),
+        title,
+        chat,
+        content: encodeBody(body),
+        ...(issueFlag !== null ? { issue: issueFlag } : {}),
+      });
+      rerenderFile(surface);
+      console.log(id);
+      if (chat) console.log(`chat: ${chat}`);
+      else if (chatFlag !== 'none')
+        console.error(
+          'warning: no active Claude session detected; entry written without chat ID.',
+        );
+      break;
     }
-    break;
-  }
 
-  case 'render': {
-    const [file] = rest;
-    const files = file ? [resolveSurfaceArg(file)] : allSurfaceFiles();
-    for (const f of files) rerenderFile(f);
-    break;
-  }
+    case 'remove': {
+      const [id, file, reason] = rest;
+      if (!id || !file || !reason) {
+        usage();
+        process.exit(1);
+      }
+      const surface = resolveSurfaceArg(file);
+      const { surviving } = projectFile(surface);
+      if (!surviving.some((e) => e.id === id))
+        entryNotFound(id, relativeToRoot(REPO_ROOT, surface));
+      appendEvent(LOG_FILE, {
+        ts: nowIso(),
+        id,
+        action: 'remove',
+        file: surfaceRelFile(LEDGER_DIR, surface),
+        reason,
+        chat: resolveChat(chatFlag, REPO_ROOT),
+      });
+      rerenderFile(surface);
+      break;
+    }
 
-  default:
-    usage();
-    process.exit(action ? 1 : 0);
+    case 'update': {
+      const [id, file, newTitle, content] = rest;
+      if (!id || !file || !newTitle) {
+        usage();
+        process.exit(1);
+      }
+      const body = readContentArg(content);
+      const surface = resolveSurfaceArg(file);
+      const { surviving } = projectFile(surface);
+      if (!surviving.some((e) => e.id === id))
+        entryNotFound(id, relativeToRoot(REPO_ROOT, surface));
+      appendEvent(LOG_FILE, {
+        ts: nowIso(),
+        id,
+        action: 'update',
+        file: surfaceRelFile(LEDGER_DIR, surface),
+        title: newTitle,
+        chat: resolveChat(chatFlag, REPO_ROOT),
+        content: encodeBody(body),
+      });
+      rerenderFile(surface);
+      break;
+    }
+
+    case 'move': {
+      const [id, toArea] = rest;
+      if (!id || !toArea) {
+        usage();
+        process.exit(1);
+      }
+      const destination = resolveSurfaceArg(toArea);
+      const { entries, removed } = projectBacklog(
+        readLog<BacklogRecord>(LOG_FILE),
+        BACKLOG_INDEX,
+      );
+      const entry = entries.get(id);
+      if (!entry || removed.has(id))
+        entryNotFound(id, relativeToRoot(REPO_ROOT, LOG_FILE));
+      const source = resolveSurfaceArg(
+        normalizeSurfaceRef(entry.file, SURFACE, CONFIG.targets ?? []),
+      );
+      appendEvent(LOG_FILE, {
+        ts: nowIso(),
+        id,
+        action: 'move',
+        file: surfaceRelFile(LEDGER_DIR, destination),
+        chat: resolveChat(chatFlag, REPO_ROOT),
+      });
+      rerenderFile(source, new Set([id]));
+      rerenderFile(destination);
+      break;
+    }
+
+    case 'show': {
+      const [id] = rest;
+      if (!id) {
+        usage();
+        process.exit(1);
+      }
+      // Not gated on the log existing. Once an entry syncs it leaves the queue, so the queue
+      // being absent entirely is an ordinary state and the index is where the answer lives.
+      let found = 0;
+      for (const r of existsSync(LOG_FILE)
+        ? readLog<BacklogRecord>(LOG_FILE)
+        : []) {
+        if (r.id !== id) continue;
+        found++;
+        console.log(
+          `[${r.ts}] ${r.action}${r.title ? ` — ${r.title}` : ''}${r.file ? ` (${r.file})` : ''}`,
+        );
+        if (r.chat) console.log(`chat: ${r.chat}`);
+        if (r.content) console.log(decodeBody(r.content));
+        if (r.reason) console.log(`reason: ${r.reason}`);
+        console.log('---');
+      }
+      if (!found) {
+        // The queue no longer holds it, which is the ordinary state for anything already synced.
+        // The index still does, so a closed id a decision cites stays resolvable.
+        const cached = findEntry(BACKLOG_INDEX, id);
+        if (!cached && !existsSync(LOG_FILE)) {
+          console.error('No backlog log yet.');
+          process.exit(0);
+        }
+        if (!cached) {
+          console.error(`No log entries for ${id}.`);
+          process.exit(1);
+        }
+        console.log(
+          `[${cached.date}] on the board — ${cached.title} (${cached.surface})`,
+        );
+        if (cached.status) console.log(`status: ${cached.status}`);
+        if (cached.chat) console.log(`chat: ${cached.chat}`);
+        console.log(cached.body);
+        console.log('---');
+      }
+      break;
+    }
+
+    case 'list': {
+      const [file] = rest;
+      const files = file ? [resolveSurfaceArg(file)] : allSurfaceFiles();
+      for (const f of files) {
+        const entries = listEntries(f);
+        if (!entries.length) continue;
+        console.log(`# ${relativeToRoot(REPO_ROOT, f)}`);
+        for (const e of entries) {
+          console.log(`  ${e.id}  ${e.logged}  ${e.title}`);
+        }
+        console.log('');
+      }
+      break;
+    }
+
+    case 'render': {
+      const [file] = rest;
+      const files = file ? [resolveSurfaceArg(file)] : allSurfaceFiles();
+      for (const f of files) rerenderFile(f);
+      break;
+    }
+
+    default:
+      usage();
+      process.exit(action ? 1 : 0);
+  }
+}
+
+// Both sides go through `realpathSync` before comparing. `process.argv[1]` stays the literal
+// invocation path, but `import.meta.url` for the entry module resolves through any symlink in
+// its ancestry (macOS's /tmp -> /private/tmp among them), so comparing the raw strings missed
+// on any repo staged under a symlinked temp dir and this script never ran as the CLI.
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+) {
+  main();
 }

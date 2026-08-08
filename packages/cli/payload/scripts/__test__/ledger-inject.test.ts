@@ -8,7 +8,38 @@ import { runScript } from '#test/run';
 import { hookCommandsFor, settingsOf } from '#test/installed-tree';
 import { promptInput } from '#test/hook-input';
 
+import { resolveEntries } from '../ledger-inject.mjs';
+import { emptyIndex, serializeIndex } from '../lib/ledger-index.mjs';
+import type { LedgerEntry, LedgerIndex } from '../lib/ledger-index.mjs';
+
 const INJECT = '.claude/scripts/ledger-inject.mjs';
+
+function ledgerEntry(overrides: Partial<LedgerEntry> = {}): LedgerEntry {
+  return {
+    id: 'BACKLOG-abc123',
+    itemId: 'item-1',
+    issue: 42,
+    title: 'Fix the thing',
+    body: 'The report body.',
+    surface: 'BACKLOG.md',
+    date: '2026-08-03',
+    chat: null,
+    status: 'Todo',
+    scope: [],
+    under: null,
+    supersedes: [],
+    supersededBy: null,
+    ...overrides,
+  };
+}
+
+function filledIndex(entries: LedgerEntry[]): LedgerIndex {
+  return {
+    ...emptyIndex('backlog', '2026-08-03T00:00:00.000Z'),
+    projects: [7],
+    entries,
+  };
+}
 
 interface BacklogRecord {
   id: string;
@@ -68,6 +99,58 @@ function decideEntry(
     content: encodeBody(body),
   } satisfies DecisionRecord);
 }
+
+describe('resolveEntries', () => {
+  it('resolves an id found only in the index', () => {
+    const index = filledIndex([ledgerEntry({ id: 'BACKLOG-only-index' })]);
+
+    const resolved = resolveEntries(['BACKLOG-only-index'], [], index);
+
+    expect(resolved.get('BACKLOG-only-index')?.title).toBe('Fix the thing');
+  });
+
+  it('resolves an id found only in the queue', () => {
+    const queued = [
+      ledgerEntry({ id: 'BACKLOG-only-queue', title: 'Queued only' }),
+    ];
+
+    const resolved = resolveEntries(['BACKLOG-only-queue'], queued, null);
+
+    expect(resolved.get('BACKLOG-only-queue')?.title).toBe('Queued only');
+  });
+
+  it('takes the queue version when an id is in both', () => {
+    const index = filledIndex([
+      ledgerEntry({ id: 'BACKLOG-shared', title: 'Indexed title' }),
+    ]);
+    const queued = [
+      ledgerEntry({ id: 'BACKLOG-shared', title: 'Freshly queued title' }),
+    ];
+
+    const resolved = resolveEntries(['BACKLOG-shared'], queued, index);
+
+    expect(resolved.get('BACKLOG-shared')?.title).toBe('Freshly queued title');
+  });
+
+  it('leaves an unknown id out of the result', () => {
+    const resolved = resolveEntries(['BACKLOG-nope'], [], filledIndex([]));
+
+    expect(resolved.has('BACKLOG-nope')).toBe(false);
+  });
+
+  it('resolves only queued ids when the index is null', () => {
+    const queued = [ledgerEntry({ id: 'BACKLOG-present', title: 'Present' })];
+
+    const resolved = resolveEntries(
+      ['BACKLOG-present', 'BACKLOG-absent'],
+      queued,
+      null,
+    );
+
+    expect(resolved.get('BACKLOG-present')?.title).toBe('Present');
+    expect(resolved.has('BACKLOG-absent')).toBe(false);
+  });
+});
 
 describe('ledger-inject.mjs ancestry of a merge', () => {
   it('names every superseded parent, not just the first', () => {
@@ -253,6 +336,66 @@ describe('ledger-inject.mjs', () => {
 
       expect(r.status, r.stderr).toBe(0);
       expect(r.stdout).toMatch(/legacy located entry/);
+    });
+  });
+  describe('a synced entry resolved from the local index', () => {
+    it('injects an id that has left the queue and only lives in the index', () => {
+      const root = useInstalledRepo('pnpm-monorepo');
+      const dir = join(root, '.claude/ledgers');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, 'backlog.index.json'),
+        serializeIndex(
+          filledIndex([
+            ledgerEntry({
+              id: 'SIM-abcdef',
+              title: 'Already on the board',
+              body: 'synced body text',
+              surface: 'BACKLOG.md',
+            }),
+          ]),
+        ),
+      );
+
+      const r = runScript(
+        root,
+        INJECT,
+        promptInput('what is SIM-abcdef about'),
+      );
+
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toMatch(/Already on the board/);
+      expect(r.stdout).toMatch(/synced body text/);
+    });
+
+    it('exits 0 and prints nothing when the index file is corrupt', () => {
+      const root = useInstalledRepo('pnpm-monorepo');
+      const dir = join(root, '.claude/ledgers');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'backlog.index.json'), '{');
+
+      const r = runScript(root, INJECT, promptInput('what about SIM-abcdef'));
+
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout.trim()).toBe('');
+    });
+
+    it('still injects a queued entry when the index file is corrupt', () => {
+      const root = useInstalledRepo('pnpm-monorepo');
+      const dir = join(root, '.claude/ledgers');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'backlog.index.json'), '{');
+      addBacklogEntry(
+        root,
+        'TEST-c0ffee',
+        'Still works',
+        'queue still injects',
+      );
+
+      const r = runScript(root, INJECT, promptInput('what about TEST-c0ffee'));
+
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toMatch(/Still works/);
     });
   });
 });

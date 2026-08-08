@@ -53,6 +53,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     'kit-config.mjs',
     'backlog-id.mjs',
     'entry-ledger.mjs',
+    'ledger-index.mjs',
     'workspaces.mjs',
     'proc.mjs',
   ]) {

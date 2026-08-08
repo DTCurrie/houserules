@@ -146,6 +146,18 @@ A pnpm workspace of fourteen packages. Every path in the Layout section below is
   drifted off this pattern and `pnpm check` was skipping five suites entirely. Vitest strips
   types rather than checking them, so nothing else would have caught it. A package's wireit
   `build.files` names `tsconfig.build.json` and its `check.files` names both.
+- **A package that ships payload scripts has a THIRD tsconfig, and `check` must run it too.**
+  `tsconfig.payload.json` compiles `payload/**/*.mts` to `payload-dist/`, and its options are
+  genuinely different: its own `rootDir` and `outDir`, plus a `rootDirs` pairing
+  `./payload/scripts` with `../cli/payload-dist/scripts` so a plugin script can import a lib the
+  CLI ships. Those cannot be folded into the check config, so `check` runs both projects:
+  `tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json`. Its `files` names
+  `payload/**/*.mts` and `tsconfig.payload.json`, and its `dependencies` names
+  `../cli:build:payload`, without which the `rootDirs` half resolves nothing.
+  Not hypothetical either: six plugins ran `check` over `src/` alone, so 26 payload sources
+  including the largest script in the workspace were never typechecked by it. `build` caught them,
+  which is why nothing was broken, but `check` is the gate that runs first and it was reporting
+  green on files it had not read.
 
 ## Commands
 
@@ -213,6 +225,21 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   a file-existence guard that `exec`s node. `exec` is load-bearing, since a plain `node` would
   let any non-zero exit fall through to the fallback echo and swallow the code (changeset-check
   exits 2 on purpose).
+- **A payload LIB cannot import a core lib. Only a payload SCRIPT can.** `tsconfig.payload.json`'s
+  `rootDirs` bridges `./lib/entry-ledger.mjs` from a script at the scripts root, the form
+  `projects-sync.mts` uses, and it does not bridge a sibling import from inside `lib/`. Measured
+  both ways, including with both `lib/` directories added to `rootDirs`, which does not help.
+  There are two ways across and they are not interchangeable.
+  - **A type** comes by package name:
+    `import type { LedgerEntry } from '@agent-kit/cli/payload/ledger-index'`. The `./payload/*`
+    export is deliberately **types only, with no runtime entry**, so a value import through it
+    fails with `ERR_PACKAGE_PATH_NOT_EXPORTED` rather than shipping a payload that breaks in a
+    user's repo. `import type` erases before emit, so the zero-dependency invariant holds by
+    construction and not by exception: `payload/__test__/dependencies.test.ts` scans the emitted
+    `.mjs`, where nothing remains to find.
+  - **A value** is passed in. A lib needing config or IO takes it as a parameter from the script
+    that called it, which is what `readGateInputs(ledgerDirectory, autoSync)` already does and
+    why. The script is the composition root, and a pure lib should not be reaching for config.
 - Every shared lib a payload script imports must be listed in `src/modules/core.ts`'s copy
   manifest. A script installed without its lib fails with ERR_MODULE_NOT_FOUND in the user's repo,
   which no unit test catches.

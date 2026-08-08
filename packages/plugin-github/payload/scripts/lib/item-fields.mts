@@ -5,6 +5,26 @@
  * decides WHICH entries move, this one decides WHAT each item's fields say once it is there.
  */
 
+import { areaForSurface } from './project-shape.mjs';
+
+/**
+ * `values` plus the provenance a backlog item needs to be rebuilt from the board alone.
+ *
+ * `Filed` and `Chat` were added as columns and only ever written by `backfill`, so anything
+ * created after that migration reached the board without them and rendered `????-??-??` once the
+ * queue drained. A column the index reads has to be written by the path that creates the item,
+ * not only by the one that repairs it.
+ */
+function withProvenance(
+  op: { date: string; chat: string | null },
+  values: FieldValue[],
+): FieldValue[] {
+  const out = [...values];
+  if (op.date) out.push({ field: 'Filed', kind: 'date', value: op.date });
+  if (op.chat !== null)
+    out.push({ field: 'Chat', kind: 'text', value: op.chat });
+  return out;
+}
 import type { PushOp } from './push-queue.mjs';
 
 /**
@@ -40,19 +60,20 @@ export function fieldValuesFor(op: PushOp): FieldValue[] {
     case 'create-issue':
     case 'attach-issue':
     case 'update-issue':
-      return [
+      return withProvenance(op, [
         { field: 'Status', kind: 'single-select', option: 'Todo' },
-        { field: 'Area', kind: 'text', value: areaFromSurface(op.surface) },
-      ];
+        { field: 'Area', kind: 'text', value: areaForSurface(op.surface) },
+      ]);
     case 'close-issue':
       return [
         { field: 'Status', kind: 'single-select', option: 'Done' },
-        { field: 'Area', kind: 'text', value: areaFromSurface(op.surface) },
+        { field: 'Area', kind: 'text', value: areaForSurface(op.surface) },
       ];
     case 'create-draft': {
       const values: FieldValue[] = [
         { field: 'Status', kind: 'single-select', option: 'Accepted' },
-        { field: 'Decided', kind: 'date', value: op.decided },
+        { field: 'Decided', kind: 'date', value: op.date },
+        { field: 'Area', kind: 'text', value: areaForSurface(op.surface) },
       ];
       if (op.supersedes.length > 0) {
         values.push({
@@ -67,7 +88,10 @@ export function fieldValuesFor(op: PushOp): FieldValue[] {
       return values;
     }
     case 'update-draft':
-      return [{ field: 'Status', kind: 'single-select', option: 'Accepted' }];
+      return [
+        { field: 'Status', kind: 'single-select', option: 'Accepted' },
+        { field: 'Area', kind: 'text', value: areaForSurface(op.surface) },
+      ];
     case 'mark-superseded':
       return [
         { field: 'Status', kind: 'single-select', option: 'Superseded' },
@@ -106,10 +130,4 @@ export function fieldValueLiteral(
       }
       return `{ singleSelectOptionId: ${JSON.stringify(optionId)} }`;
   }
-}
-
-/** The `Area` value for a surface, with the `.BACKLOG.md` style suffix stripped. */
-export function areaFromSurface(surface: string): string {
-  const match = surface.match(/^(.+)\.(BACKLOG|DECISIONS)\.md$/);
-  return match ? match[1] : 'repo root';
 }

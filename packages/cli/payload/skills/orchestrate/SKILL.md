@@ -91,6 +91,12 @@ the barrier. Where the repo typechecks as a separate step, give the slice both c
 check on the owned tests, and the typecheck on the owned project. The barrier catches this either way.
 It catches it after the wave closed, which costs a residue pass instead of the worker's own retry.
 
+Two commands is the ceiling, not a starting point. Each one a slice carries is paid by every worker
+in the wave at once, so a package-wide typecheck handed to four slices is four package-wide
+typechecks. Prefer the narrowest command that could actually fail on this slice's changes, and say
+**once** in the brief. Without that word a worker re-runs a green command to reassure itself, which
+is the most expensive habit in a fan out and the easiest to prevent.
+
 **Pair the typecheck in only when its project is quiet.** `tsc` runs per project, not per file, so a
 package-scoped typecheck reads whatever a sibling is mid-write in that package, which is the same
 failure as the whole-suite run above. Slices in disjoint packages can each carry their own, and that
@@ -153,8 +159,8 @@ Mark the slices `DISPATCHED` before you send.
 > You own **only** these paths: `<owns>`. Do not edit anything outside them.
 > Context you need: `<the seam file(s) + the 2–3 files worth reading first>`.
 > Steps: `<the ≤8 steps>`.
-> Acceptance: run `<command(s), scoped to your owned paths>` and include the last ~10 lines of each in
-> your report.
+> Acceptance: run `<command(s), scoped to your owned paths>` **once, at the end**, and include the
+> last ~10 lines of each in your report.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
 
 Never hand a worker the whole plan. It gets its slice, its seam, and its constraints.

@@ -9,9 +9,9 @@ GitHub integrations for agent-kit. Every module this plugin ships is selected as
 ## `github/projects`
 
 Syncs the agent-kit backlog and decision ledgers to GitHub Projects, so the durable record
-lives on a board instead of in a committed `.jsonl`. The local ledger becomes a gitignored
-push queue that holds only what has not reached the board yet. A push turns backlog entries
-into real issues on a linked project, and decisions into draft items.
+lives on a board instead of in a committed `.jsonl`. A push turns backlog entries into real
+issues on a linked project, and decisions into draft items. A pull rebuilds a local index
+from those boards, so every local query answers offline while the queue itself stays empty.
 
 ## Prerequisite
 
@@ -66,10 +66,12 @@ there with the `backlog-adopt` skill.
 
 ## What bootstrap creates
 
-One project per ledger per target, plus the repo root, each linked to the repository.
-Titles are `<repo> Backlog` and `<repo>/<target> Backlog` for the backlog ledger, and the
-same pattern with `Decisions` for the decision ledger. The `<target>` segment is the
-basename of that target's `pathPrefix` in `kit.config.json`, not the target's own `name`.
+Two projects, `<repo> Backlog` and `<repo> Decisions`, both linked to the repository, no
+matter how many targets the repo declares. See **Areas, not boards per package** below.
+
+It also creates the fields each board needs, including the ones that exist so a board can
+rebuild the local index: `Area`, `Filed`, and `Chat` on backlog, and `Area`, `Scope`, and
+`Under` on decisions. Adoption never deletes a field you added yourself.
 
 The title is the adoption key. A second `bootstrap` run matches an existing project by exact
 title and adopts it rather than creating a duplicate. Renaming a board by hand breaks that
@@ -91,30 +93,61 @@ process. It is silent on every opt-out path: no sync token, `autoSync: false`, o
 push queue all return with no output and no log line. A spawned push's own output lands in
 `.claude/state/projects-sync.log`.
 
-## What the local ledger holds
+## Two local artifacts, and what each is for
 
-Only what a push still owes the board. The `.jsonl` files are append-only while work is in
-flight, and every push ends by compacting them:
+The board is the durable record. Locally there are two files per ledger and neither is a
+source of truth.
 
-- An entry that reached the board and has not been touched since collapses to a single
-  record carrying its issue number or draft item id.
-- An entry removed before it ever reached the board is dropped outright, along with every
-  record it wrote. Nothing on the board describes it, so nothing local needs to.
-- An entry a push still owes something is left exactly as it was.
+**The queue**, `.claude/ledgers/<kind>.jsonl`, holds only what has not reached the board.
+A synced repo's queue is **zero bytes**. An entry is removed from it once two things both
+hold: the push owes it nothing, and the index confirms the board actually has it. The
+second is what makes the first safe, because a push that recorded success without its board
+write landing would otherwise eat the only remaining copy.
 
-Without this the ledger grows with the work done rather than the work outstanding. In this
-repo's own ledger that was 204 records describing two open entries, because 85 entries had
-been filed and closed since the file was created.
+**The index**, `.claude/ledgers/<kind>.index.json`, is a cache of what the boards hold. It
+is what `scope`, `list`, `show`, and prompt injection read, so those answer offline and
+instantly. Delete it and one `pull` rebuilds it.
 
-Compaction is local and needs no network, so `compact` runs for contributors who cannot
-push. It rewrites the ledger, so it keeps the previous copy beside it as
-`<name>.jsonl.bak`, and it refuses to write at all if the compacted records would produce a
-different push queue than the originals.
+The rendered `<area>.BACKLOG.md` and `<area>.DECISIONS.md` files are a readable view for
+anyone who would rather not leave the codebase. `pull` re-renders them, so they track the
+board rather than freezing at the last local write.
 
-Run it by hand with `node .claude/scripts/projects-sync.mjs compact [--dry-run]`.
+Nothing outside the board is load-bearing. Deleting the index and every rendered surface,
+then running `pull`, restores all of them.
 
-The rendered `BACKLOG.md` and `DECISIONS.md` are unaffected. A checkpoint record carries the
-entry's folded state, so both surfaces render byte for byte the same before and after.
+## Reading a closed entry
+
+A finished backlog entry stays on the board as a closed issue and stays in the index. It is
+filtered out of `list` and out of every rendered surface, and it still resolves through
+`show` and through prompt injection, so a decision that cites a closed backlog id keeps
+working.
+
+## Areas, not boards per package
+
+A repo gets exactly two boards, `<repo> Backlog` and `<repo> Decisions`, however many
+targets it declares. Which package an entry belongs to is the `Area` field on the item.
+A board per target multiplies: fourteen packages would mean twenty-eight boards, and moving
+from a single package to a workspace would be a board migration rather than a config edit.
+
+The repo name stays in the title because one account holds boards for many repos.
+
+## Upgrading an existing install
+
+Boards created before this version are missing the columns a pull needs, and their decision
+drafts carry no entry marker, so nothing can map an item back to the entry it came from.
+Two commands, in this order:
+
+```
+node .claude/scripts/projects-sync.mjs bootstrap   # adds the new fields
+node .claude/scripts/projects-sync.mjs backfill    # fills them from the local ledger
+```
+
+`backfill` reads the LOCAL ledger and writes the board, which is the opposite direction from
+everything else here, and it works only while the local ledger is still complete. Run it
+before anything drains the queue. `--dry-run` prints the plan first, and a second run is a
+no-op.
+
+An item it cannot match to a local entry is reported and skipped rather than guessed at.
 
 ## Config
 
@@ -124,10 +157,14 @@ Setting it to `false` forbids sync repo-wide regardless of who runs it.
 
 ## Known limits
 
-- Saved project views are not reproducible through the GitHub API. `bootstrap` creates
-  fields only, matching what `createProjectV2` can actually configure.
-- There is no pull direction. Nothing reads a board back down into the ledger, so edits made
-  directly on GitHub Projects do not reach `.claude/ledgers/`.
+- `bootstrap` creates fields only. It does not configure the board's saved view, so a new
+  board opens as a default table of every field. Setting the view up is reproducible through
+  the API and simply is not done yet.
+- `pull` is a projection, not a merge. It rebuilds the local index from the boards, and an
+  edit made directly on GitHub Projects reaches the index on the next pull. It does not
+  write back into the queue, so the board wins and there is no conflict to resolve.
+- An item added to a board by hand carries no entry marker, so `pull` skips it. Adopt a
+  reported issue with the `backlog-adopt` skill instead of adding it to the board directly.
 
 ## Part of agent-kit
 

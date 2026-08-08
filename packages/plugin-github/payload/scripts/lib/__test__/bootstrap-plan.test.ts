@@ -4,7 +4,6 @@ import { describeStep, planBootstrap, planIsNoop } from '../bootstrap-plan.mjs';
 import type { ExistingProject } from '../bootstrap-plan.mjs';
 
 const REPO_NAME = 'schoolyard-games';
-const TARGETS = [{ name: null }, { name: 'studio' }];
 
 const BACKLOG_FIELD_NAMES = [
   'Status',
@@ -12,6 +11,8 @@ const BACKLOG_FIELD_NAMES = [
   'Estimate',
   'Priority',
   'Area',
+  'Filed',
+  'Chat',
 ];
 const DECISIONS_FIELD_NAMES = [
   'Status',
@@ -19,6 +20,9 @@ const DECISIONS_FIELD_NAMES = [
   'Supersedes',
   'Superseded by',
   'Chat',
+  'Scope',
+  'Under',
+  'Area',
 ];
 
 function completeProject(
@@ -30,33 +34,23 @@ function completeProject(
 }
 
 describe('planBootstrap', () => {
-  it('creates one step per ledger kind per target when nothing exists', () => {
-    const steps = planBootstrap(REPO_NAME, TARGETS, []);
+  it('creates exactly two steps when nothing exists, one per ledger kind', () => {
+    const steps = planBootstrap(REPO_NAME, []);
 
-    expect(steps).toHaveLength(4);
+    expect(steps).toHaveLength(2);
     expect(steps.every((step) => step.action === 'create')).toBe(true);
     expect(planIsNoop(steps)).toBe(false);
   });
 
-  it('adopts every project with nothing missing when all fields are already present', () => {
+  it('adopts both projects with nothing missing when all fields are already present', () => {
     const existing: ExistingProject[] = [
       completeProject('schoolyard-games Backlog', 1, BACKLOG_FIELD_NAMES),
       completeProject('schoolyard-games Decisions', 2, DECISIONS_FIELD_NAMES),
-      completeProject(
-        'schoolyard-games/studio Backlog',
-        3,
-        BACKLOG_FIELD_NAMES,
-      ),
-      completeProject(
-        'schoolyard-games/studio Decisions',
-        4,
-        DECISIONS_FIELD_NAMES,
-      ),
     ];
 
-    const steps = planBootstrap(REPO_NAME, TARGETS, existing);
+    const steps = planBootstrap(REPO_NAME, existing);
 
-    expect(steps).toHaveLength(4);
+    expect(steps).toHaveLength(2);
     expect(steps.every((step) => step.action === 'adopt')).toBe(true);
     expect(
       steps.every(
@@ -71,7 +65,7 @@ describe('planBootstrap', () => {
       completeProject('schoolyard-games Backlog', 7, BACKLOG_FIELD_NAMES),
     ];
 
-    const steps = planBootstrap(REPO_NAME, [{ name: null }], existing);
+    const steps = planBootstrap(REPO_NAME, existing);
     const backlogStep = steps.find((step) => step.kind === 'backlog');
 
     expect(backlogStep?.action).toBe('adopt');
@@ -85,10 +79,12 @@ describe('planBootstrap', () => {
         'Iteration',
         'Estimate',
         'Area',
+        'Filed',
+        'Chat',
       ]),
     ];
 
-    const steps = planBootstrap(REPO_NAME, [{ name: null }], existing);
+    const steps = planBootstrap(REPO_NAME, existing);
     const backlogStep = steps.find((step) => step.kind === 'backlog');
 
     expect(backlogStep?.action).toBe('adopt');
@@ -109,7 +105,7 @@ describe('planBootstrap', () => {
       completeProject('schoolyard-games Decisions', 2, DECISIONS_FIELD_NAMES),
     ];
 
-    const steps = planBootstrap(REPO_NAME, [{ name: null }], existing);
+    const steps = planBootstrap(REPO_NAME, existing);
     const backlogStep = steps.find((step) => step.kind === 'backlog');
 
     expect(backlogStep?.action).toBe('adopt');
@@ -119,7 +115,14 @@ describe('planBootstrap', () => {
     expect(planIsNoop(steps)).toBe(true);
   });
 
-  it('does not adopt a project whose title merely contains the target title', () => {
+  it('plans two boards regardless of how many targets the repo declares', () => {
+    expect(planBootstrap(REPO_NAME, []).map((step) => step.title)).toEqual([
+      'schoolyard-games Backlog',
+      'schoolyard-games Decisions',
+    ]);
+  });
+
+  it('does not adopt a project whose title merely contains the board title', () => {
     const existing: ExistingProject[] = [
       completeProject(
         'schoolyard-games Backlog Archive',
@@ -128,7 +131,7 @@ describe('planBootstrap', () => {
       ),
     ];
 
-    const steps = planBootstrap(REPO_NAME, [{ name: null }], existing);
+    const steps = planBootstrap(REPO_NAME, existing);
     const backlogStep = steps.find((step) => step.kind === 'backlog');
 
     expect(backlogStep?.action).toBe('create');
@@ -141,7 +144,7 @@ describe('planIsNoop', () => {
   });
 
   it('is false when any step is a create', () => {
-    const steps = planBootstrap(REPO_NAME, [{ name: null }], []);
+    const steps = planBootstrap(REPO_NAME, []);
 
     expect(planIsNoop(steps)).toBe(false);
   });
@@ -149,11 +152,11 @@ describe('planIsNoop', () => {
 
 describe('describeStep', () => {
   it('describes a create step with its title and field count', () => {
-    const steps = planBootstrap(REPO_NAME, [{ name: null }], []);
+    const steps = planBootstrap(REPO_NAME, []);
     const backlogStep = steps.find((step) => step.kind === 'backlog');
 
     expect(backlogStep && describeStep(backlogStep)).toBe(
-      'create "schoolyard-games Backlog" with 5 fields',
+      'create "schoolyard-games Backlog" with 7 fields',
     );
   });
 
@@ -164,10 +167,12 @@ describe('describeStep', () => {
         'Iteration',
         'Estimate',
         'Area',
+        'Filed',
+        'Chat',
       ]),
     ];
 
-    const steps = planBootstrap(REPO_NAME, [{ name: null }], existing);
+    const steps = planBootstrap(REPO_NAME, existing);
     const backlogStep = steps.find((step) => step.kind === 'backlog');
 
     expect(backlogStep && describeStep(backlogStep)).toBe(

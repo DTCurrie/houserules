@@ -50,6 +50,7 @@ import { relative, resolve } from 'node:path';
 
 import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
 import { makeId } from './lib/backlog-id.mjs';
+import { findEntry, loadIndex, type LedgerEntry } from './lib/ledger-index.mjs';
 import {
   SEPARATOR,
   appendEvent,
@@ -96,6 +97,11 @@ function surfaceRelFile(file: string): string {
   return relative(LEDGER_DIR, resolve(file));
 }
 
+/** The synced entries cached locally, or none for a fresh clone that has never pulled. */
+function decisionsIndexEntries(): LedgerEntry[] {
+  return loadIndex(LEDGER_DIR, 'decisions')?.entries ?? [];
+}
+
 interface DecisionRecord {
   ts: string;
   id: string;
@@ -126,10 +132,44 @@ interface Projection {
   superseded: Set<string>;
 }
 
-/** One pass over the log: the latest content per id, and which ids a later record superseded. */
-function projectDecisions(records: DecisionRecord[]): Projection {
+/**
+ * Adapts one synced index entry into the shape every verb already works in.
+ *
+ * `content` stays gzip+base64, matching what a queue record's `content` carries, so every
+ * downstream `decodeBody` call works unchanged regardless of which half an entry came from.
+ */
+function indexEntryToDecisionEntry(entry: LedgerEntry): DecisionEntry {
+  return {
+    id: entry.id,
+    file: entry.surface,
+    title: entry.title,
+    date: entry.date,
+    supersedes: entry.supersedes,
+    under: entry.under,
+    scope: entry.scope,
+    chat: entry.chat,
+    content: encodeBody(entry.body),
+  };
+}
+
+/**
+ * Starts from the synced `indexEntries`, then replays the queue's `records` over them in log
+ * order.
+ *
+ * The queue wins on any id present in both, since it holds edits the board has not seen yet:
+ * a `decide`/`supersede` record fully replaces whatever the index seeded, and `amend`/`move`/
+ * `rescope` patch whichever base, index or queue, is already in the map. `superseded` is
+ * derived in one pass over the fully merged entries, the same rule for both halves, so there
+ * is only ever one source of truth for supersession.
+ */
+function projectDecisions(
+  indexEntries: readonly LedgerEntry[],
+  records: DecisionRecord[],
+): Projection {
   const entries = new Map<string, DecisionEntry>();
-  const superseded = new Set<string>();
+  for (const entry of indexEntries) {
+    entries.set(entry.id, indexEntryToDecisionEntry(entry));
+  }
   for (const r of records) {
     if (r.action === 'decide' || r.action === 'supersede') {
       entries.set(r.id, {
@@ -143,7 +183,6 @@ function projectDecisions(records: DecisionRecord[]): Projection {
         chat: r.chat ?? null,
         content: r.content ?? '',
       });
-      for (const target of r.supersedes ?? []) superseded.add(target);
     } else if (r.action === 'amend') {
       const existing = entries.get(r.id);
       if (existing && r.content !== undefined) existing.content = r.content;
@@ -154,6 +193,10 @@ function projectDecisions(records: DecisionRecord[]): Projection {
       const existing = entries.get(r.id);
       if (existing && r.scope !== undefined) existing.scope = r.scope;
     }
+  }
+  const superseded = new Set<string>();
+  for (const e of entries.values()) {
+    for (const target of e.supersedes) superseded.add(target);
   }
   return { entries, superseded };
 }
@@ -368,6 +411,7 @@ function projectFileEntries(file: string): {
     CONFIG.targets ?? [],
   );
   const { entries: allEntries, superseded } = projectDecisions(
+    decisionsIndexEntries(),
     readLog<DecisionRecord>(LOG_FILE),
   );
   const entries = [...allEntries.values()].filter(
@@ -386,7 +430,10 @@ function projectFileEntries(file: string): {
  * on every render, which reads as an area that still exists and holds nothing.
  */
 function allSurfaceFiles(): string[] {
-  const { entries } = projectDecisions(readLog<DecisionRecord>(LOG_FILE));
+  const { entries } = projectDecisions(
+    decisionsIndexEntries(),
+    readLog<DecisionRecord>(LOG_FILE),
+  );
   return impliedSurfaceFiles(
     LEDGER_DIR,
     SURFACE,
@@ -521,6 +568,7 @@ switch (action) {
       process.exit(1);
     }
     const { entries, superseded } = projectDecisions(
+      decisionsIndexEntries(),
       readLog<DecisionRecord>(LOG_FILE),
     );
     const supersedeIds = splitList(supersedesFlag);
@@ -574,6 +622,7 @@ switch (action) {
       process.exit(1);
     }
     const { entries, superseded } = projectDecisions(
+      decisionsIndexEntries(),
       readLog<DecisionRecord>(LOG_FILE),
     );
     requireKnownId(entries, targetId, 'supersede');
@@ -619,7 +668,10 @@ switch (action) {
       );
       process.exit(1);
     }
-    const { entries } = projectDecisions(readLog<DecisionRecord>(LOG_FILE));
+    const { entries } = projectDecisions(
+      decisionsIndexEntries(),
+      readLog<DecisionRecord>(LOG_FILE),
+    );
     requireKnownId(entries, id, 'amend');
     const chat = resolveChat(chatFlag, REPO_ROOT);
     const relFile = surfaceRelFile(file);
@@ -641,7 +693,10 @@ switch (action) {
       usage();
       process.exit(1);
     }
-    const { entries } = projectDecisions(readLog<DecisionRecord>(LOG_FILE));
+    const { entries } = projectDecisions(
+      decisionsIndexEntries(),
+      readLog<DecisionRecord>(LOG_FILE),
+    );
     requireKnownId(entries, id, 'move');
     const oldFile = resolve(LEDGER_DIR, entries.get(id)!.file);
     const newFile = resolveSurfaceFile(toArea);
@@ -665,7 +720,10 @@ switch (action) {
       usage();
       process.exit(1);
     }
-    const { entries } = projectDecisions(readLog<DecisionRecord>(LOG_FILE));
+    const { entries } = projectDecisions(
+      decisionsIndexEntries(),
+      readLog<DecisionRecord>(LOG_FILE),
+    );
     requireKnownId(entries, id, 'rescope');
     const file = resolveSurfaceFile(entries.get(id)!.file);
     appendEvent(LOG_FILE, {
@@ -686,7 +744,8 @@ switch (action) {
       usage();
       process.exit(1);
     }
-    if (!existsSync(LOG_FILE)) {
+    const index = loadIndex(LEDGER_DIR, 'decisions');
+    if (!existsSync(LOG_FILE) && !index) {
       console.error('No decision log yet.');
       process.exit(0);
     }
@@ -704,6 +763,23 @@ switch (action) {
       if (r.scope?.length) console.log(`scope: ${r.scope.join(', ')}`);
       if (r.content) console.log(decodeBody(r.content));
       console.log('---');
+    }
+    if (!found) {
+      const indexEntry = findEntry(index, id);
+      if (indexEntry) {
+        found++;
+        console.log(
+          `[${indexEntry.date}] decide${indexEntry.title ? ` — ${indexEntry.title}` : ''}${indexEntry.surface ? ` (${indexEntry.surface})` : ''}`,
+        );
+        if (indexEntry.chat) console.log(`chat: ${indexEntry.chat}`);
+        if (indexEntry.supersedes.length)
+          console.log(`supersedes: ${indexEntry.supersedes.join(', ')}`);
+        if (indexEntry.under) console.log(`under: ${indexEntry.under}`);
+        if (indexEntry.scope.length)
+          console.log(`scope: ${indexEntry.scope.join(', ')}`);
+        if (indexEntry.body) console.log(indexEntry.body);
+        console.log('---');
+      }
     }
     if (!found) {
       console.error(`No log entries for ${id}.`);
@@ -741,6 +817,7 @@ switch (action) {
       process.exit(1);
     }
     const { entries, superseded } = projectDecisions(
+      decisionsIndexEntries(),
       readLog<DecisionRecord>(LOG_FILE),
     );
     requireKnownId(entries, id, 'ancestry');
@@ -761,6 +838,7 @@ switch (action) {
       process.exit(1);
     }
     const { entries, superseded } = projectDecisions(
+      decisionsIndexEntries(),
       readLog<DecisionRecord>(LOG_FILE),
     );
     requireKnownId(entries, id, 'current');
@@ -782,6 +860,7 @@ switch (action) {
       process.exit(1);
     }
     const { entries, superseded } = projectDecisions(
+      decisionsIndexEntries(),
       readLog<DecisionRecord>(LOG_FILE),
     );
     requireKnownId(entries, id, 'tree');
@@ -803,6 +882,7 @@ switch (action) {
       process.exit(1);
     }
     const { entries, superseded } = projectDecisions(
+      decisionsIndexEntries(),
       readLog<DecisionRecord>(LOG_FILE),
     );
     const queries = paths.map(normalizeScopePath);

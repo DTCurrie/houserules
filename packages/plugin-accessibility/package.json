@@ -47,15 +47,18 @@
       ]
     },
     "check": {
-      "command": "tsc --noEmit -p tsconfig.json",
+      "command": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json",
       "dependencies": [
         "../cli:build:ts",
-        "../test:build"
+        "../test:build",
+        "../cli:build:payload"
       ],
       "files": [
         "src/**/*.ts",
         "tsconfig.json",
-        "tsconfig.build.json"
+        "tsconfig.build.json",
+        "payload/**/*.mts",
+        "tsconfig.payload.json"
       ],
       "output": []
     },

@@ -46,6 +46,13 @@ typecheck is asking for both, because most JS test runners strip types instead o
 green test file proves nothing about whether your slice compiles. Reporting one tail out of two reads
 as an unrun acceptance and comes straight back to you.
 
+**Run each acceptance command once, at the end, and stop when it passes.** Once it is green, report
+the tail and finish. Do not run it again to confirm, do not re-run it after an unrelated edit, and do
+not alternate between two commands looking for reassurance. A second green run costs the same as the
+first and tells you nothing the first did not. This is the single largest source of waste in a fan
+out, because every worker pays it in parallel. Iterating while a command is still RED is the job.
+Iterating after it turns green is not.
+
 **Keep the acceptance scoped to what you own.** Do not run the whole test suite, a repo-wide
 typecheck, or a full build. Your siblings are mid-edit while you run, so a whole-repo result tells
 you nothing about your slice. If your brief hands you a repo-wide command, run the narrowest form of

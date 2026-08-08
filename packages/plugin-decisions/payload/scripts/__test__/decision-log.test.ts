@@ -79,6 +79,157 @@ function seedLogAsCompleteHistory(root: string, records: Partial<LogRecord>[]) {
   seedLog(root, records);
 }
 
+const INDEX = '.claude/ledgers/decisions.index.json';
+
+interface IndexEntryFixture {
+  id: string;
+  title: string;
+  body?: string;
+  surface?: string;
+  date?: string;
+  chat?: string | null;
+  scope?: string[];
+  under?: string | null;
+  supersedes?: string[];
+}
+
+function indexEntry(fixture: IndexEntryFixture) {
+  return {
+    id: fixture.id,
+    itemId: '',
+    issue: null,
+    title: fixture.title,
+    body: fixture.body ?? 'body',
+    surface: fixture.surface ?? 'DECISIONS.md',
+    date: fixture.date ?? '2026-01-01',
+    chat: fixture.chat ?? null,
+    status: null,
+    scope: fixture.scope ?? [],
+    under: fixture.under ?? null,
+    supersedes: fixture.supersedes ?? [],
+    supersededBy: null,
+  };
+}
+
+function seedIndex(root: string, entries: ReturnType<typeof indexEntry>[]) {
+  writeFile(
+    root,
+    INDEX,
+    JSON.stringify(
+      {
+        version: 1,
+        kind: 'decisions',
+        pulledAt: '2026-01-01T00:00:00.000Z',
+        projects: [],
+        entries,
+      },
+      null,
+      2,
+    ) + '\n',
+  );
+}
+
+describe('decision-log.mjs, given a local index of synced decisions', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+  });
+
+  it('lists an entry that exists only in the index', () => {
+    seedIndex(root, [
+      indexEntry({ id: 'SIM-aaaaaa', title: 'Index-only decision' }),
+    ]);
+
+    const r = run(root, ['list', 'DECISIONS.md']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('SIM-aaaaaa');
+    expect(r.stdout).toContain('Index-only decision');
+  });
+
+  it('lists an entry the queue records when the index exists but does not carry it', () => {
+    seedIndex(root, []);
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'SIM-bbbbbb',
+        action: 'decide',
+        file: 'DECISIONS.md',
+        title: 'Queue-only decision',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    const r = run(root, ['list', 'DECISIONS.md']);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('SIM-bbbbbb');
+    expect(r.stdout).toContain('Queue-only decision');
+  });
+
+  it('prefers the queue title over the index title for an id recorded in both', () => {
+    seedIndex(root, [indexEntry({ id: 'SIM-cccccc', title: 'Synced title' })]);
+    seedLog(root, [
+      {
+        ts: '2026-01-02T00:00:00.000Z',
+        id: 'SIM-cccccc',
+        action: 'decide',
+        file: 'DECISIONS.md',
+        title: 'Unsynced edit',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    const r = run(root, ['list', 'DECISIONS.md']);
+
+    expect(r.stdout).toContain('Unsynced edit');
+    expect(r.stdout).not.toContain('Synced title');
+  });
+
+  it('shows an index-only decision as superseded by a queue-only supersede record', () => {
+    seedIndex(root, [
+      indexEntry({ id: 'SIM-dddddd', title: 'Original decision' }),
+    ]);
+    seedLog(root, [
+      {
+        ts: '2026-01-02T00:00:00.000Z',
+        id: 'SIM-eeeeee',
+        action: 'supersede',
+        file: 'DECISIONS.md',
+        title: 'Replacement decision',
+        supersedes: ['SIM-dddddd'],
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    const r = run(root, ['list', 'DECISIONS.md']);
+
+    const line = r.stdout.split('\n').find((l) => l.includes('SIM-dddddd'));
+    expect(line).toContain('superseded');
+  });
+
+  it('behaves the same as before any index file existed, when none is on disk', () => {
+    const id = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'navcat over recast',
+      'chose navcat',
+      '--chat=none',
+    ]).stdout.trim();
+
+    const r = run(root, ['list', 'DECISIONS.md']);
+
+    expect(r.stdout).toContain(
+      `${id}  ${new Date().toISOString().slice(0, 10)}  accepted  navcat over recast`,
+    );
+  });
+});
+
 describe('decision-log.mjs decide', () => {
   let root: string;
 

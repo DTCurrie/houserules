@@ -13,12 +13,19 @@
  */
 
 import { gunzipSync } from 'node:zlib';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
 import { BACKLOG_ID } from './lib/backlog-id.mjs';
 import { readStdinJson } from './lib/proc.mjs';
-import { ledgerPath, readLog } from './lib/entry-ledger.mjs';
+import { ledgerDir, ledgerPath, readLog } from './lib/entry-ledger.mjs';
+import {
+  loadIndex,
+  mergeWithQueue,
+  type LedgerEntry,
+  type LedgerIndex,
+} from './lib/ledger-index.mjs';
 
 interface PromptPayload {
   prompt?: string;
@@ -105,12 +112,67 @@ function projectDecisions(logFile: string): {
   return { entries, superseded };
 }
 
+function backlogRecordToEntry(id: string, record: BacklogRecord): LedgerEntry {
+  return {
+    id,
+    itemId: '',
+    issue: null,
+    title: record.title ?? '',
+    body: decodeBody(record.content),
+    surface: record.file ?? '',
+    date: '',
+    chat: null,
+    status: null,
+    scope: [],
+    under: null,
+    supersedes: [],
+    supersededBy: null,
+  };
+}
+
+function decisionEntryToLedgerEntry(entry: DecisionEntry): LedgerEntry {
+  return {
+    id: entry.id,
+    itemId: '',
+    issue: null,
+    title: entry.title,
+    body: decodeBody(entry.content),
+    surface: entry.file,
+    date: '',
+    chat: null,
+    status: null,
+    scope: [],
+    under: null,
+    supersedes: entry.supersedes,
+    supersededBy: null,
+  };
+}
+
+/**
+ * The entries in `ids` resolved against `queued` first and `index` second, queue winning on
+ * any id in both, because the queue holds edits the board has not seen yet. An id in neither
+ * is left out of the result rather than injecting nothing for it explicitly.
+ */
+export function resolveEntries(
+  ids: readonly string[],
+  queued: readonly LedgerEntry[],
+  index: LedgerIndex | null,
+): Map<string, LedgerEntry> {
+  const byId = new Map(mergeWithQueue(index, queued).map((e) => [e.id, e]));
+  const resolved = new Map<string, LedgerEntry>();
+  for (const id of ids) {
+    const entry = byId.get(id);
+    if (entry) resolved.set(id, entry);
+  }
+  return resolved;
+}
+
 /**
  * One line per ancestor, walking `supersedes` upward and indenting by depth. Titles only,
  * never bodies. A merge has several parents, so this branches rather than following one.
  */
 function ancestryLines(
-  entries: Map<string, DecisionEntry>,
+  entries: Map<string, LedgerEntry>,
   superseded: Set<string>,
   id: string,
 ): string[] {
@@ -133,51 +195,99 @@ function ancestryLines(
   return lines;
 }
 
-try {
-  const input = readStdinJson<PromptPayload>();
-  // Claude Code has used both `prompt` and `prompt_text` for this event across
-  // versions — accept either so the injector doesn't silently no-op on one build.
-  const prompt = String(input?.prompt ?? input?.prompt_text ?? '');
-  if (!prompt) process.exit(0);
-
-  const ids = [...new Set(prompt.match(BACKLOG_ID) ?? [])];
-  if (!ids.length) process.exit(0);
-
-  const root = repoRoot();
-  const ledgerDirName = loadConfigSafe().ledgers?.dir;
-  const backlog = projectBacklog(ledgerPath(root, 'backlog', ledgerDirName));
-  const { entries: decisions, superseded } = projectDecisions(
-    ledgerPath(root, 'decisions', ledgerDirName),
-  );
-
-  const blocks: string[] = [];
-  for (const id of ids) {
-    const b = backlog.get(id);
-    if (b) {
-      const body = decodeBody(b.content);
-      blocks.push(
-        `[kit backlog] ${id} — ${b.title ?? '(untitled)'}${b.file ? ` (${b.file})` : ''}\n${body}`.trim(),
-      );
-      continue;
+function main(): void {
+  try {
+    const input = readStdinJson<PromptPayload>();
+    // Claude Code has used both `prompt` and `prompt_text` for this event across
+    // versions — accept either so the injector doesn't silently no-op on one build.
+    const prompt = String(input?.prompt ?? input?.prompt_text ?? '');
+    if (!prompt) {
+      process.exit(0);
+      return;
     }
 
-    const d = decisions.get(id);
-    if (!d) continue; // unknown id → inject nothing
-    const status = superseded.has(id) ? 'superseded' : 'accepted';
-    const body = decodeBody(d.content);
-    const ancestry = ancestryLines(decisions, superseded, id);
-    const header = `[kit decision] ${id} — ${d.title || '(untitled)'} (${status})${d.file ? ` (${d.file})` : ''}`;
-    const parts = [header];
-    if (ancestry.length) parts.push(`ancestry:\n${ancestry.join('\n')}`);
-    if (body) parts.push(body);
-    blocks.push(parts.join('\n\n').trim());
-  }
+    const ids = [...new Set(prompt.match(BACKLOG_ID) ?? [])];
+    if (!ids.length) {
+      process.exit(0);
+      return;
+    }
 
-  if (blocks.length)
-    process.stdout.write(
-      `Referenced ledger item(s), decoded from the kit's logs:\n\n${blocks.join('\n\n')}\n`,
+    const root = repoRoot();
+    const ledgerDirName = loadConfigSafe().ledgers?.dir;
+    const dir = ledgerDir(root, ledgerDirName);
+
+    const backlogQueue = projectBacklog(
+      ledgerPath(root, 'backlog', ledgerDirName),
     );
-} catch {
-  /* never block a prompt */
+    const { entries: decisionsQueue } = projectDecisions(
+      ledgerPath(root, 'decisions', ledgerDirName),
+    );
+
+    const backlogQueueEntries = [...backlogQueue].map(([id, r]) =>
+      backlogRecordToEntry(id, r),
+    );
+    const decisionQueueEntries = [...decisionsQueue.values()].map(
+      decisionEntryToLedgerEntry,
+    );
+
+    const backlogIndex = loadIndex(dir, 'backlog');
+    const decisionsIndex = loadIndex(dir, 'decisions');
+
+    const resolvedBacklog = resolveEntries(
+      ids,
+      backlogQueueEntries,
+      backlogIndex,
+    );
+    const decisions = new Map(
+      mergeWithQueue(decisionsIndex, decisionQueueEntries).map((e) => [
+        e.id,
+        e,
+      ]),
+    );
+    const superseded = new Set<string>();
+    for (const entry of decisions.values())
+      for (const target of entry.supersedes) superseded.add(target);
+
+    const blocks: string[] = [];
+    for (const id of ids) {
+      const b = resolvedBacklog.get(id);
+      if (b) {
+        blocks.push(
+          `[kit backlog] ${id} — ${b.title || '(untitled)'}${b.surface ? ` (${b.surface})` : ''}\n${b.body}`.trim(),
+        );
+        continue;
+      }
+
+      const d = decisions.get(id);
+      if (!d) continue; // unknown id → inject nothing
+      const status = superseded.has(id) ? 'superseded' : 'accepted';
+      const ancestry = ancestryLines(decisions, superseded, id);
+      const header = `[kit decision] ${id} — ${d.title || '(untitled)'} (${status})${d.surface ? ` (${d.surface})` : ''}`;
+      const parts = [header];
+      if (ancestry.length) parts.push(`ancestry:\n${ancestry.join('\n')}`);
+      if (d.body) parts.push(d.body);
+      blocks.push(parts.join('\n\n').trim());
+    }
+
+    if (blocks.length)
+      process.stdout.write(
+        `Referenced ledger item(s), decoded from the kit's logs:\n\n${blocks.join('\n\n')}\n`,
+      );
+  } catch {
+    /* never block a prompt */
+  }
+  process.exit(0);
 }
-process.exit(0);
+
+function isMainModule(): boolean {
+  try {
+    return (
+      !!process.argv[1] &&
+      fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
+    );
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) main();

@@ -5,92 +5,83 @@ import {
   fieldsFor,
   formatMarker,
   parseMarker,
+  areaForSurface,
   projectTitle,
-  targetSegment,
+  surfaceForArea,
 } from '../project-shape.mjs';
 
 describe('projectTitle', () => {
-  it('names the root backlog project after the repo', () => {
-    expect(projectTitle('schoolyard-games', 'backlog', null)).toBe(
+  it('names the backlog project after the repo', () => {
+    expect(projectTitle('schoolyard-games', 'backlog')).toBe(
       'schoolyard-games Backlog',
     );
   });
 
-  it('names the root decisions project after the repo', () => {
-    expect(projectTitle('schoolyard-games', 'decisions', null)).toBe(
+  it('names the decisions project after the repo', () => {
+    expect(projectTitle('schoolyard-games', 'decisions')).toBe(
       'schoolyard-games Decisions',
     );
   });
 
-  it('names a target backlog project by repo slash target', () => {
-    expect(projectTitle('schoolyard-games', 'backlog', 'studio')).toBe(
-      'schoolyard-games/studio Backlog',
-    );
-  });
+  it('gives one repo exactly two titles, however many targets it declares', () => {
+    const titles = new Set([
+      projectTitle('agent-kit', 'backlog'),
+      projectTitle('agent-kit', 'decisions'),
+    ]);
 
-  it('names a target decisions project by repo slash target', () => {
-    expect(projectTitle('schoolyard-games', 'decisions', 'studio')).toBe(
-      'schoolyard-games/studio Decisions',
-    );
+    expect([...titles]).toEqual(['agent-kit Backlog', 'agent-kit Decisions']);
   });
 });
 
-describe('targetSegment', () => {
-  it('has no segment for the repo root', () => {
-    expect(targetSegment({ name: null })).toBe(null);
+describe('areaForSurface and surfaceForArea', () => {
+  it('reads a target name off a backlog surface', () => {
+    expect(areaForSurface('studio.BACKLOG.md')).toBe('studio');
   });
 
-  it('takes the last directory of pathPrefix rather than the target name', () => {
-    expect(
-      targetSegment({ name: 'agent-kit', pathPrefix: 'packages/cli/' }),
-    ).toBe('cli');
+  it('reads a target name off a decisions surface', () => {
+    expect(areaForSurface('studio.DECISIONS.md')).toBe('studio');
   });
 
-  it('keeps a package directory name that carries dashes', () => {
-    expect(
-      targetSegment({ name: 'prose', pathPrefix: 'packages/plugin-prose/' }),
-    ).toBe('plugin-prose');
+  it('names the repo root surface readably rather than as an empty string', () => {
+    expect(areaForSurface('BACKLOG.md')).toBe('repo root');
   });
 
-  it('tolerates a pathPrefix with no trailing slash', () => {
-    expect(targetSegment({ name: 'test', pathPrefix: 'packages/test' })).toBe(
-      'test',
-    );
+  it.each([
+    { surface: 'studio.BACKLOG.md', kind: 'backlog' as const },
+    { surface: 'studio.DECISIONS.md', kind: 'decisions' as const },
+    { surface: 'BACKLOG.md', kind: 'backlog' as const },
+    { surface: 'DECISIONS.md', kind: 'decisions' as const },
+  ])('round-trips $surface through its area', ({ surface, kind }) => {
+    expect(surfaceForArea(areaForSurface(surface), kind)).toBe(surface);
   });
 
-  it('falls back to the target name when pathPrefix is empty', () => {
-    expect(targetSegment({ name: 'studio', pathPrefix: '' })).toBe('studio');
-  });
-
-  it('falls back to the target name when pathPrefix is absent', () => {
-    expect(targetSegment({ name: 'studio' })).toBe('studio');
-  });
-
-  it('distinguishes a target from the root when the two share a name', () => {
-    const root = projectTitle(
-      'agent-kit',
-      'backlog',
-      targetSegment({ name: null }),
-    );
-    const cli = projectTitle(
-      'agent-kit',
-      'backlog',
-      targetSegment({ name: 'agent-kit', pathPrefix: 'packages/cli/' }),
-    );
-
-    expect([root, cli]).toEqual(['agent-kit Backlog', 'agent-kit/cli Backlog']);
+  it('treats an empty area as the repo root, for an item whose field was never set', () => {
+    expect(surfaceForArea('', 'decisions')).toBe('DECISIONS.md');
   });
 });
 
 describe('fieldsFor backlog', () => {
-  it('carries the five backlog fields in order', () => {
+  it('carries the seven backlog fields in order', () => {
     expect(fieldsFor('backlog').map((f) => f.name)).toEqual([
       'Status',
       'Iteration',
       'Estimate',
       'Priority',
       'Area',
+      'Filed',
+      'Chat',
     ]);
+  });
+
+  it('carries a Filed date and a Chat text field, which the index cannot derive from an item', () => {
+    expect(fieldsFor('backlog')).toContainEqual({
+      name: 'Filed',
+      dataType: 'DATE',
+    });
+    expect(fieldsFor('backlog')).toContainEqual({
+      name: 'Chat',
+      dataType: 'TEXT',
+    });
   });
 
   it('offers Todo, In Progress, and Done for Status', () => {
@@ -145,14 +136,25 @@ describe('fieldsFor backlog', () => {
 });
 
 describe('fieldsFor decisions', () => {
-  it('carries the five decisions fields in order', () => {
+  it('carries the eight decisions fields in order', () => {
     expect(fieldsFor('decisions').map((f) => f.name)).toEqual([
       'Status',
       'Decided',
       'Supersedes',
       'Superseded by',
       'Chat',
+      'Scope',
+      'Under',
+      'Area',
     ]);
+  });
+
+  it('carries Scope, Under, and Area, without which a pulled index cannot answer a scope query', () => {
+    expect(
+      fieldsFor('decisions')
+        .filter((f) => ['Scope', 'Under', 'Area'].includes(f.name))
+        .map((f) => f.dataType),
+    ).toEqual(['TEXT', 'TEXT', 'TEXT']);
   });
 
   it('offers Accepted and Superseded for Status', () => {
@@ -186,6 +188,16 @@ describe('fieldsFor decisions', () => {
       name: 'Chat',
       dataType: 'TEXT',
     });
+  });
+
+  it('names its target column Area, the same as backlog does, since one board holds every target', () => {
+    expect(fieldsFor('decisions')).toContainEqual({
+      name: 'Area',
+      dataType: 'TEXT',
+    });
+    expect(fieldsFor('decisions').some((f) => f.name === 'Surface')).toBe(
+      false,
+    );
   });
 
   it('carries no iteration field', () => {

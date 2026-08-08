@@ -6,7 +6,11 @@
  * and push paths cannot disagree about what they are looking for.
  */
 
-export type LedgerKind = 'backlog' | 'decisions';
+// Core declares this, and it is re-exported so every board module keeps naming project-shape as
+// where its vocabulary comes from. A type-only import, which erases before emit.
+import type { LedgerKind } from '@agent-kit/cli/payload/ledger-index';
+
+export type { LedgerKind };
 
 /**
  * One choice on a single-select field.
@@ -50,51 +54,47 @@ const KIND_LABEL: Record<LedgerKind, string> = {
 };
 
 /**
- * The segment that names one target on its board, so a monorepo reads `repo/cli` and
- * `repo/plugin-prose` rather than repeating whatever the target happens to be called.
+ * The deterministic project title for one ledger.
  *
- * Derived from `pathPrefix`, not from `name`. A target's `name` is user-chosen and need not
- * resemble the directory it governs. This repo's sole target is named `agent-kit` while
- * governing `packages/cli/`, which titled its board `agent-kit/agent-kit`, indistinguishable
- * from the repo root's.
+ * One board per ledger per REPO, not per target. A target is carried by the {@link areaForSurface}
+ * value on each item instead. Boards per target multiply: this repo declared one target and still
+ * produced four boards, and a fourteen-package workspace would produce twenty-eight.
  *
- * Renaming the target instead would have been the obvious fix and is the expensive one. The
- * ledgers key their surfaces off the target name, and {@link normalizeSurfaceRef} returns a
- * recorded name carrying no slash unchanged, so `agent-kit.BACKLOG.md` would keep resolving to
- * itself while new entries went to `cli.BACKLOG.md`. Deriving the board segment here leaves
- * every recorded entry where it is.
+ * The repo name stays in the title because one GitHub account holds boards for many repos, and a
+ * bare `Backlog` is ambiguous across them.
  *
- * @returns Null for the repo root. Otherwise the last path segment, falling back to `name` for
- *   a target with no `pathPrefix`, which is how a single-package repo declares itself.
+ * Deterministic because it is also the adoption key: `bootstrap` looks for an existing project by
+ * exact title before creating one, so a second run adopts rather than duplicates.
  */
-export function targetSegment(target: {
-  name: string | null;
-  pathPrefix?: string;
-}): string | null {
-  if (target.name === null) return null;
-  const trimmed = (target.pathPrefix ?? '').replace(/\/+$/, '');
-  const basename = trimmed.split('/').filter(Boolean).pop();
-  return basename ?? target.name;
+export function projectTitle(repoName: string, kind: LedgerKind): string {
+  return `${repoName} ${KIND_LABEL[kind]}`;
 }
 
 /**
- * The deterministic project title for one ledger and one target.
+ * The `Area` value for the repo-root surface, which has no target name to carry.
  *
- * Deterministic because it is also the adoption key: `bootstrap` looks for an existing project
- * by exact title before creating one, so a second run adopts rather than duplicates. A title
- * that varied by run would create a new board every time, and a title changed after the fact
- * orphans the board it used to name.
- *
- * @param segment The target's board segment from {@link targetSegment}, or null for the root.
+ * A readable sentinel rather than an empty string, because this is a column people read on the
+ * board. {@link surfaceForArea} maps it back, and the pair is the contract.
  */
-export function projectTitle(
-  repoName: string,
-  kind: LedgerKind,
-  segment: string | null,
-): string {
-  const label = KIND_LABEL[kind];
-  const subject = segment === null ? repoName : `${repoName}/${segment}`;
-  return `${subject} ${label}`;
+export const AREA_REPO_ROOT = 'repo root';
+
+/**
+ * The `Area` value for a surface: the bare target name, or {@link AREA_REPO_ROOT}.
+ *
+ * Kept beside its inverse deliberately. These two lived in different files and drifted, so the
+ * backlog board stored `agent-kit` while the projection read it straight back as the surface and
+ * the `.BACKLOG.md` suffix was silently lost. One file, one pair, one round trip.
+ */
+export function areaForSurface(surface: string): string {
+  const match = surface.match(/^(.+)\.(BACKLOG|DECISIONS)\.md$/);
+  return match ? match[1] : AREA_REPO_ROOT;
+}
+
+/** The surface an `Area` names, the exact inverse of {@link areaForSurface}. */
+export function surfaceForArea(area: string, kind: LedgerKind): string {
+  const basename = kind === 'backlog' ? 'BACKLOG.md' : 'DECISIONS.md';
+  if (area === AREA_REPO_ROOT || area === '') return basename;
+  return `${area}.${basename}`;
 }
 
 /**
@@ -137,6 +137,12 @@ const BACKLOG_FIELDS: readonly FieldSpec[] = [
     ],
   },
   { name: 'Area', dataType: 'TEXT' },
+  // Below here: columns that exist so the board can rebuild the local index. A rendered entry
+  // shows its filing date and the chat it came from, and neither is derivable from the item.
+  // `Created` is when the item reached the board, which is a different date and often a much
+  // later one.
+  { name: 'Filed', dataType: 'DATE' },
+  { name: 'Chat', dataType: 'TEXT' },
 ];
 
 const DECISIONS_FIELDS: readonly FieldSpec[] = [
@@ -159,10 +165,35 @@ const DECISIONS_FIELDS: readonly FieldSpec[] = [
   // superseded row navigable forward to the decision that is actually current.
   { name: 'Superseded by', dataType: 'TEXT' },
   { name: 'Chat', dataType: 'TEXT' },
+  // Below here: columns that exist so the board can rebuild the local index. Without them a
+  // pulled index answers `scope <path>` with nothing, because the scope list is on 38 of this
+  // repo's 41 records and lived only in the local ledger.
+  { name: 'Scope', dataType: 'TEXT' },
+  { name: 'Under', dataType: 'TEXT' },
+  { name: 'Area', dataType: 'TEXT' },
 ];
 
 export function fieldsFor(kind: LedgerKind): readonly FieldSpec[] {
   return kind === 'backlog' ? BACKLOG_FIELDS : DECISIONS_FIELDS;
+}
+
+/**
+ * How a list-valued field is stored in a project TEXT column, and read back.
+ *
+ * Comma-space, matching how `Supersedes` was already written before this existed. Declared here so
+ * the backfill writer and the board reader cannot disagree, which is the failure that would show
+ * up as a scope query silently matching nothing.
+ */
+export function joinListField(values: readonly string[]): string {
+  return values.join(', ');
+}
+
+export function splitListField(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 /**

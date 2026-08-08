@@ -96,11 +96,13 @@ describe('projects plugin', () => {
     expect(module?.defaultEnabled(CTX)).toBe(false);
   });
 
-  it('plans the sync script, its seven libs, the hook, both skills, and both settings fragments', () => {
+  it('plans the sync script, its nine libs, the hook, both skills, and both settings fragments', () => {
     const [module] = plugin(buildApi());
     const actions = module?.plan(CTX, ANSWERS) ?? [];
 
     expect(actions.map((action) => action.kind)).toEqual([
+      'copy',
+      'copy',
       'copy',
       'copy',
       'copy',
@@ -126,6 +128,8 @@ describe('projects plugin', () => {
       '.claude/scripts/lib/push-queue.mjs',
       '.claude/scripts/lib/item-fields.mjs',
       '.claude/scripts/lib/ledger-compaction.mjs',
+      '.claude/scripts/lib/board-projection.mjs',
+      '.claude/scripts/lib/backfill-plan.mjs',
       '.claude/scripts/projects-sync-hook.mjs',
       '.claude/skills/ledger-sync/SKILL.md',
       '.claude/skills/backlog-adopt/SKILL.md',
@@ -149,7 +153,11 @@ describe('projects plugin', () => {
       (match) => match[1],
     );
 
-    const shippedByCore = ['kit-config.mjs', 'entry-ledger.mjs'];
+    const shippedByCore = [
+      'kit-config.mjs',
+      'entry-ledger.mjs',
+      'ledger-index.mjs',
+    ];
     const owed = [...new Set(imported)].filter(
       (lib) => !shippedByCore.includes(lib),
     );

@@ -22,6 +22,9 @@
       "types": "./dist/plugin.d.ts",
       "default": "./dist/plugin.js"
     },
+    "./payload/*": {
+      "types": "./payload-dist/scripts/lib/*.d.mts"
+    },
     "./schema": "./schema/kit.config.schema.json"
   },
   "scripts": {
