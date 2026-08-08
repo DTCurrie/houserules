@@ -84,10 +84,18 @@ function fixArgs(pkg: string, script: string): string[] {
   return [...RUN_PREFIX, script];
 }
 
+// Comfortably under the 600s Stop default, applied per spawnSync call so a hung git
+// or fix command fails fast rather than consuming the whole event budget. SIGKILL
+// because a hung formatter/linter may not respond to the default SIGTERM.
+const GIT_TIMEOUT_MS = 15_000;
+const FIX_TIMEOUT_MS = 120_000;
+
 function changedPaths(cwd: string): string[] {
   const r = spawnSync('git', ['status', '--porcelain'], {
     encoding: 'utf-8',
     cwd,
+    timeout: GIT_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
   });
   if (r.status !== 0 || !r.stdout) return [];
   return r.stdout
@@ -124,10 +132,16 @@ function runStep(
     encoding: 'utf-8',
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: FIX_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
   });
+  const timedOut = r.signal !== null && r.status === null;
   return {
     ok: r.status === 0,
-    output: (r.stdout || '') + (r.stderr || ''),
+    output:
+      (timedOut ? `Timed out after ${FIX_TIMEOUT_MS}ms.\n` : '') +
+      (r.stdout || '') +
+      (r.stderr || ''),
   };
 }
 

@@ -227,12 +227,8 @@ function changesetsSection(ctx: Ctx, answers: Answers): string[] {
   return [
     '### Recording changes (changesets)',
     '',
-    'After completing a meaningful change to a package, record a changeset **before the commit**.',
-    'Run the `/changeset` skill, or spawn the `changeset-writer` agent. It inspects the diff,',
-    'picks patch/minor/major per package, and writes `.changeset/*.md` via',
-    '`node .claude/scripts/changeset-write.mjs`. Never hand-edit `CHANGELOG.md`, which releases',
-    'generate from changesets (`changeset version`). If nothing user-facing changed, record',
-    'that too: `node .claude/scripts/changeset-write.mjs --empty --summary "<why no release>"`.',
+    'After completing a meaningful change to a package, record a changeset **before the commit**,',
+    'via the `/changeset` skill. See that skill for what it does and when to run it.',
     '',
   ];
 }
@@ -245,14 +241,8 @@ function backlogSection(ctx: Ctx, answers: Answers): string[] {
   return [
     '### Tracking out-of-scope work',
     '',
-    'Discover a real issue outside the current scope? **Do not fix it inline.** Log it and move on',
-    'with the `/backlog-add` skill, backed by `node .claude/scripts/backlog-log.mjs`.',
-    `Prefixes by area: ${prefixes}.`,
-    'On resolving an item while shipping, remove it: `node .claude/scripts/backlog-log.mjs remove <ID> <area> "<resolution>"`.',
-    '`<area>` is the bare target name, not a path. Omit it for the repo-root backlog.',
-    'The append-only ledger at `.claude/ledgers/backlog.jsonl` is committed and is the record. The',
-    '`BACKLOG.md` beside it is generated and gitignored, so never hand-edit it: a hand edit does not',
-    'survive the next write, and `render` rebuilds the file from the ledger.',
+    'Discover a real issue outside the current scope? **Do not fix it inline.** Log it with the',
+    `\`/backlog-add\` skill instead. Prefixes by area: ${prefixes}.`,
     '',
   ];
 }
@@ -263,18 +253,7 @@ function decisionsSection(ctx: Ctx, answers: Answers): string[] {
     '### Recording decisions',
     '',
     'Settled a design question that the code does not explain on its own? Record it with the',
-    '`/decide` skill, backed by `node .claude/scripts/decision-log.mjs`. The record lands in the',
-    'append-only ledger at `.claude/ledgers/decisions.jsonl`, which is committed, so the reasoning',
-    'outlives the transcript. The `DECISIONS.md` beside it is generated from that ledger and is',
-    'gitignored, so never hand-edit it: rebuild it any time with `render`.',
-    'Record only what clears the bar: not obvious from the code, a competent person could have chosen',
-    'otherwise, and re-deriving it costs real time. Every record needs the alternative you rejected',
-    'and the trigger that would make you revisit it.',
-    'A decision never changes in place. When one is replaced, `supersede` writes a new record and',
-    'links back, so the chain of reasoning stays readable.',
-    'Before reworking an area, ask whether a decision already governs it:',
-    '`node .claude/scripts/decision-log.mjs scope <path>`. It answers in a few lines, matches a',
-    'file against any directory scope above it, and is the only way to ask that question.',
+    '`/decide` skill. See that skill for the bar a decision has to clear and what a record needs.',
     '',
   ];
 }
@@ -284,13 +263,9 @@ function plansSection(ctx: Ctx, answers: Answers): string[] {
   return [
     '### Planning large, multi-phase work',
     '',
-    'For an implementation too big to hold in one plan (3+ independently-landing phases, or work',
-    'you expect to pause and resume), run the `/plan-project` skill. It persists the plan to a gitignored',
-    '`.claude/plans/<name>/` workspace holding a `PLAN.md` overview, a living `ROADMAP.md`, and one',
-    'sub-plan per phase, and it keeps ROADMAP status current in place as each phase lands.',
-    'It plans only, and stops there. Starting phase 1 is a separate, explicit step.',
-    '**Resuming such work?** Read `.claude/plans/<name>/ROADMAP.md` first for live status. Grep its',
-    'status lines instead of re-deriving scope from the transcript.',
+    'For an implementation too big to hold in one plan, run the `/plan-project` skill. It persists',
+    'to `.claude/plans/<name>/`, keeping `ROADMAP.md` current as each phase lands. See the skill',
+    'for the full scaffold and when to use it.',
     '',
   ];
 }
@@ -302,11 +277,8 @@ function orchestrateSection(ctx: Ctx, answers: Answers): string[] {
   return [
     '### Executing a planned phase',
     '',
-    'To implement a phase from `.claude/plans/<slug>/`, run `/orchestrate [<plan-slug>] [<phase>|all]`.',
-    'The slug is optional when only one plan is live, and it stops between phases unless you pass `--auto`.',
-    'It slices the phase by **file ownership**, writes the shared seam first, dispatches one `task-worker`',
-    'subagent per slice in waves, and reviews each worker’s **report**, never its diff. Workers never run',
-    'lint/format/fix. The orchestrator does that once per wave, after every worker has reported.',
+    'To implement a phase from `.claude/plans/<slug>/`, run `/orchestrate`. See that skill for how',
+    'it slices work and reviews it.',
     '',
   ];
 }

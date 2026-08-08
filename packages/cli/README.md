@@ -310,10 +310,11 @@ is worth having and is not the same thing. `output-prose` and `prose-voice` are 
   are preserved. What to expect is in `@agent-kit/plugin-prose`'s README.
   Activate with `/config` → Output style → **Prose**, or
   set `"outputStyle": "Prose"` in `.claude/settings.local.json`. The value is the exact style
-  name, **not** the `output-prose` filename. A slug there silently falls back to Default with
-  no error. An output style is read once at session start, so a change takes effect after
-  `/clear` or in the next session. It also applies to the main thread only, since a subagent
-  runs its own system prompt.
+  `name` frontmatter field, **not** the `output-prose` filename, since this style's frontmatter
+  sets a `name:` that differs from its slug. An output style is read once at session start, so a
+  change takes effect after `/clear` or in the next session. It also applies to the main thread
+  only, since a subagent runs its own system prompt (a fork is the one exception, since it
+  inherits the parent's).
 - **`prose-voice`** (opt-in): a path-scoped rule that holds agent-authored prose to plain
   sentences, no semicolons, and no em dash where a period works. It shapes changesets, plans,
   docs, and the sentences inside code comments rather than chat responses, so it composes with

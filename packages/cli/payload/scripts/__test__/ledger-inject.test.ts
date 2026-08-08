@@ -8,7 +8,11 @@ import { runScript } from '#test/run';
 import { hookCommandsFor, settingsOf } from '#test/installed-tree';
 import { promptInput } from '#test/hook-input';
 
-import { resolveEntries } from '../ledger-inject.mjs';
+import {
+  capInjectedText,
+  MAX_INJECTED_CHARS,
+  resolveEntries,
+} from '../ledger-inject.mjs';
 import { emptyIndex, serializeIndex } from '../lib/ledger-index.mjs';
 import type { LedgerEntry, LedgerIndex } from '../lib/ledger-index.mjs';
 
@@ -149,6 +153,36 @@ describe('resolveEntries', () => {
 
     expect(resolved.get('BACKLOG-present')?.title).toBe('Present');
     expect(resolved.has('BACKLOG-absent')).toBe(false);
+  });
+});
+
+describe('capInjectedText', () => {
+  it('returns text unchanged when under the cap', () => {
+    expect(capInjectedText('short body', 100)).toBe('short body');
+  });
+
+  it('truncates to the cap and appends a notice when text exceeds it', () => {
+    const result = capInjectedText('a'.repeat(500), 200);
+
+    expect(result.length).toBe(200);
+    expect(result).toContain('[kit] truncated');
+  });
+});
+
+describe('ledger-inject.mjs injected size cap', () => {
+  it('caps stdout and signals elision when a matched body exceeds the shared budget', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    addBacklogEntry(root, 'TEST-0ff1ce', 'Huge entry', 'x'.repeat(20_000));
+
+    const r = runScript(
+      root,
+      INJECT,
+      promptInput('please look at TEST-0ff1ce'),
+    );
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.length).toBeLessThanOrEqual(MAX_INJECTED_CHARS);
+    expect(r.stdout).toContain('[kit] truncated');
   });
 });
 

@@ -87,9 +87,11 @@ one.
 
 ## Auto-sync
 
-A `SessionEnd` hook spawns `projects-sync.mjs push` detached and returns in milliseconds. It
-fires on session end, on `/clear`, and on `/resume`, so it can run several times per CLI
-process. It is silent on every opt-out path: no sync token, `autoSync: false`, or an empty
+A `SessionEnd` hook spawns `projects-sync.mjs push` as a detached, unreferenced child process.
+On the node side this is measured: the parent exits in about 0.02s against an 8-second child.
+Whether Claude Code itself waits on that child before finishing session teardown has not been
+confirmed. It fires on session end, on `/clear`, and on `/resume`, so it can run several times
+per CLI process. It is silent on every opt-out path: no sync token, `autoSync: false`, or an empty
 push queue all return with no output and no log line. A spawned push's own output lands in
 `.claude/state/projects-sync.log`.
 

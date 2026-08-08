@@ -49,3 +49,6 @@ Collect the verdicts into one table of area → OK / Conflict / Gap, with a one-
   authoritative source filled in before its verdict means anything, and `npx agent-kit doctor` flags
   any still-DRAFT reviewer. A DRAFT reviewer's verdict is not trustworthy, so treat it as unreviewed.
 - This dispatches reviewers. It does not run tests. For scoped verification, use `/verify-changed`.
+- This is the general per-target dispatcher, not a design or accessibility specialist. A change
+  that touches markup or styled components is better served by `/accessibility-review` or
+  `/design-review`, which own those verdicts directly.

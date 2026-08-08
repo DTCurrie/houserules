@@ -17,6 +17,7 @@ JavaScript test files, with the type annotations dropped.
 
 - **Pick one suffix per repo, `.test.js` or `.spec.js`, and never mix them.** Two conventions
   mean every glob in the repo has to list both, and one of them eventually gets missed.
-- **Exclude tests from the build.** A test under a compiled source root is emitted into the
-  published output and imports the test runner, which is a dev dependency. Add the exclude to
-  the build config, then check the output directory for a `__test__` after building.
+
+## Where other rules apply
+
+- Excluding tests from the build: see `testing-typescript.md` if that rule is installed.

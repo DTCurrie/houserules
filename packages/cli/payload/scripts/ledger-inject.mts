@@ -32,6 +32,20 @@ interface PromptPayload {
   prompt_text?: string;
 }
 
+// The harness caps hookSpecificOutput.additionalContext at 10,000 characters, shared
+// across every hook firing on the same event. Capped well under that so headroom
+// remains for any other UserPromptSubmit hook a repo adds later.
+export const MAX_INJECTED_CHARS = 6_000;
+const TRUNCATION_NOTICE =
+  '\n\n[kit] truncated: additional matched ledger content omitted to stay under the shared context budget.';
+
+/** Truncates `text` to `maxChars`, appending a notice when truncation happens. */
+export function capInjectedText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  const keep = Math.max(0, maxChars - TRUNCATION_NOTICE.length);
+  return text.slice(0, keep) + TRUNCATION_NOTICE;
+}
+
 interface BacklogRecord {
   id?: string;
   action?: string;
@@ -269,10 +283,10 @@ function main(): void {
       blocks.push(parts.join('\n\n').trim());
     }
 
-    if (blocks.length)
-      process.stdout.write(
-        `Referenced ledger item(s), decoded from the kit's logs:\n\n${blocks.join('\n\n')}\n`,
-      );
+    if (blocks.length) {
+      const body = `Referenced ledger item(s), decoded from the kit's logs:\n\n${blocks.join('\n\n')}\n`;
+      process.stdout.write(capInjectedText(body, MAX_INJECTED_CHARS));
+    }
   } catch {
     /* never block a prompt */
   }

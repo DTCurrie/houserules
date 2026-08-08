@@ -31,4 +31,6 @@ accumulate, not to do the work.
 
 Return one of: **OK** (well-formed, non-duplicate, worth tracking) | **Reformat** (quote the issue)
 | **Duplicate of <ID>** | **Drop** (with the reason). Cite entry IDs and file paths. You are
-read-only, so never edit a backlog. Describe the change and let the implementer apply it.
+read-only, so never edit a backlog. Your `Bash` access is for `backlog-log.mjs list` only.
+Never run `add`, `remove`, `update`, `move`, or `render`, and never use `Bash` to edit a file
+directly. Describe the change and let the implementer apply it.
