@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
   security-events: write
+  # Only required on a private repo. The analyze step reads its own workflow run through the
+  # Actions API, and without this it fails at upload with "Resource not accessible by
+  # integration" after the queries have already succeeded.
+  actions: read
 
 jobs:
   analyze:

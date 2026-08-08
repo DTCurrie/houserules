@@ -7,6 +7,12 @@ updates:
     schedule:
       interval: 'weekly'
     open-pull-requests-limit: 10
+    # Workaround for dependabot/dependabot-core#15698, open upstream. Refreshing a pull request
+    # that spans multiple directories crashes the updater with "Assertion failed: Current
+    # directory not set", so every push to main fails a Dependabot run. The create path is
+    # unaffected and the pull requests themselves are correct. Only the rebase is broken, so
+    # turning the rebase off is what stops the failures. Drop this once the bug is fixed.
+    rebase-strategy: 'disabled'
     groups:
       # group-by dependency-name collapses one bump across all thirteen
       # workspace packages into a single PR instead of one per directory.

@@ -1,6 +1,10 @@
 node_modules/
 dist/
 payload-dist/
+# The plugin fixture's payload-dist is hand-authored test data, not build output, and the rule
+# above matches a directory of that name at any depth. Negate the directory itself and not the
+# files under it, because git cannot re-include a path whose parent directory is excluded.
+!packages/cli/test/plugin-fixture/payload-dist/
 # wireit's per-script fingerprints and local cache. Build state, regenerated on demand.
 .wireit/
 # eslint's own cache. Prettier's default cache already sits under node_modules/.cache.

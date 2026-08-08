@@ -15,6 +15,11 @@ jobs:
   analysis:
     runs-on: ubuntu-latest
     permissions:
+      # A job-level permissions block REPLACES the workflow-level one rather than merging with
+      # it, so the contents: read above does not carry down here. Without this line checkout
+      # gets a 404 on a private repo, which reads as "repository not found" and not as a
+      # permission error.
+      contents: read
       # Needed to upload the SARIF results to the code-scanning dashboard.
       security-events: write
       # Needed for the GitHub OIDC token that publish_results: true requires.
