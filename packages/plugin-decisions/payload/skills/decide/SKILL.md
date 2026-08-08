@@ -24,8 +24,9 @@ bar is what separates a decision log from a diary. If it does not clearly pass, 
 - **Why.** Stops the same argument from happening twice.
 - **Rejected.** The alternative considered and passed over. This is the highest-value field
   and the one no other artifact holds.
-- **In the code.** The paths that exist because of this decision, so the record is auditable
-  against the tree.
+- **In the code.** The paths this decision governs, so the record is auditable against the
+  tree. A decision to build something is scoped to the code it produced. A decision NOT to
+  build something has no such code, so scope it by the section below.
 - **Revisit when.** A falsifiable trigger. A decision with no stated exit becomes dogma.
 
 ## Refuse without a rejected alternative or a revisit trigger
@@ -34,6 +35,23 @@ Those two fields are the ones everyone skips, and the ones that carry the value.
 cannot state a genuine rejected alternative or a genuine revisit trigger, do not invent a
 plausible-sounding one to pass the check. That is worse than refusing. Ask the user for the
 missing piece, or conclude this is not actually a decision and drop it.
+
+## Scope a prohibition to where the violation would be written
+
+A record is only reachable from the paths its scope covers, and `scope <path>` is what an
+agent runs before working in an area. A decision to build something scopes itself, because
+the code it produced is right there. A decision not to build something has no such code, and
+scoping it to the file it protects hides it from whoever builds the thing.
+
+Take a decision to keep a baked asset and its generator uncompared, scoped to
+`src/sim/debugLevel.ts`. The code that would violate it is a test, and that test gets written
+at `src/sim/__test__/levelBake.test.ts`. `scope` on that path returns nothing, which reads as
+"no decision governs this file" and is indistinguishable from the truth. Scoping the record to
+`src/sim` reaches both.
+
+So ask where the violating code would land, and cover that path too. Usually it means naming
+the containing directory rather than the one file, since a path matches any directory scope
+above it.
 
 ## Check for an existing decision first
 

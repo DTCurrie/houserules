@@ -10,8 +10,8 @@ GitHub integrations for agent-kit. Every module this plugin ships is selected as
 
 Syncs the agent-kit backlog and decision ledgers to GitHub Projects, so the durable record
 lives on a board instead of in a committed `.jsonl`. The local ledger becomes a gitignored
-push queue. A push turns backlog entries into real issues on a linked project, and decisions
-into draft items.
+push queue that holds only what has not reached the board yet. A push turns backlog entries
+into real issues on a linked project, and decisions into draft items.
 
 ## Prerequisite
 
@@ -90,6 +90,31 @@ fires on session end, on `/clear`, and on `/resume`, so it can run several times
 process. It is silent on every opt-out path: no sync token, `autoSync: false`, or an empty
 push queue all return with no output and no log line. A spawned push's own output lands in
 `.claude/state/projects-sync.log`.
+
+## What the local ledger holds
+
+Only what a push still owes the board. The `.jsonl` files are append-only while work is in
+flight, and every push ends by compacting them:
+
+- An entry that reached the board and has not been touched since collapses to a single
+  record carrying its issue number or draft item id.
+- An entry removed before it ever reached the board is dropped outright, along with every
+  record it wrote. Nothing on the board describes it, so nothing local needs to.
+- An entry a push still owes something is left exactly as it was.
+
+Without this the ledger grows with the work done rather than the work outstanding. In this
+repo's own ledger that was 204 records describing two open entries, because 85 entries had
+been filed and closed since the file was created.
+
+Compaction is local and needs no network, so `compact` runs for contributors who cannot
+push. It rewrites the ledger, so it keeps the previous copy beside it as
+`<name>.jsonl.bak`, and it refuses to write at all if the compacted records would produce a
+different push queue than the originals.
+
+Run it by hand with `node .claude/scripts/projects-sync.mjs compact [--dry-run]`.
+
+The rendered `BACKLOG.md` and `DECISIONS.md` are unaffected. A checkpoint record carries the
+entry's folded state, so both surfaces render byte for byte the same before and after.
 
 ## Config
 

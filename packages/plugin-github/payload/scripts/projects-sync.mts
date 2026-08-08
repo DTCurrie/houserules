@@ -27,7 +27,14 @@
  * push op, or any `gh` error.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
 
 import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
@@ -79,6 +86,15 @@ import {
 import type { LedgerRecord, PushOp } from './lib/push-queue.mjs';
 import { fieldValueLiteral, fieldValuesFor } from './lib/item-fields.mjs';
 import type { FieldValue } from './lib/item-fields.mjs';
+import {
+  compactBacklog,
+  compactDecisions,
+  compactionIsNoop,
+  describeCompaction,
+  pendingEntryIds,
+  serializeLedger,
+} from './lib/ledger-compaction.mjs';
+import type { CompactionResult } from './lib/ledger-compaction.mjs';
 
 const REPO_ROOT = repoRoot();
 const CONFIG = loadConfigSafe();
@@ -494,6 +510,106 @@ function readPushQueue(): PushOp[] {
     readDecodedLog(backlogLedgerPath()),
     readDecodedLog(decisionsLedgerPath()),
   );
+}
+
+interface LedgerCompaction {
+  kind: LedgerKind;
+  path: string;
+  before: LedgerRecord[];
+  result: CompactionResult;
+}
+
+/**
+ * What compaction would do to both ledgers, and whether applying it is safe.
+ *
+ * Reads the ledgers RAW, which is the one place here that does not go through
+ * {@link readDecodedLog}. Compaction rewrites the file, and the ledgers store `content` gzipped
+ * and base64'd, so writing decoded records back would corrupt every body it touched. Nothing in
+ * the fold depends on what a body says, only on whether one changed, so raw records classify
+ * identically.
+ *
+ * `unsafe` is the guard that makes a destructive rewrite acceptable: the queue built from the
+ * compacted records has to equal the one built from the originals, op for op. Compaction that
+ * turned finished work back into pending work would duplicate board items, and compaction that
+ * hid pending work would strand it forever with no error.
+ */
+function planCompaction(): {
+  ledgers: LedgerCompaction[];
+  unsafe: string | null;
+} {
+  const backlogPath = backlogLedgerPath();
+  const decisionsPath = decisionsLedgerPath();
+  const backlogBefore = readLog<LedgerRecord>(backlogPath);
+  const decisionsBefore = readLog<LedgerRecord>(decisionsPath);
+
+  const queueBefore = buildPushQueue(backlogBefore, decisionsBefore);
+  const pending = pendingEntryIds(queueBefore);
+  const backlog = compactBacklog(backlogBefore, pending);
+  const decisions = compactDecisions(decisionsBefore, pending);
+  const queueAfter = buildPushQueue(backlog.records, decisions.records);
+
+  return {
+    ledgers: [
+      {
+        kind: 'backlog',
+        path: backlogPath,
+        before: backlogBefore,
+        result: backlog,
+      },
+      {
+        kind: 'decisions',
+        path: decisionsPath,
+        before: decisionsBefore,
+        result: decisions,
+      },
+    ],
+    unsafe:
+      JSON.stringify(queueAfter) === JSON.stringify(queueBefore)
+        ? null
+        : `it would change the push queue, from ${queueBefore.length} operations to ${queueAfter.length}`,
+  };
+}
+
+/**
+ * Replaces a ledger with its compacted records, keeping a one-generation backup beside it.
+ *
+ * The backup is taken before anything is replaced, and the new file lands by rename, so an
+ * interruption at any point leaves either the original or a complete replacement and never a
+ * half-written ledger. This is the only code in the kit that destroys ledger history, which is
+ * what earns it both precautions.
+ */
+function writeCompactedLedger(
+  path: string,
+  records: readonly LedgerRecord[],
+): void {
+  copyFileSync(path, `${path}.bak`);
+  const temporary = `${path}.compacting`;
+  writeFileSync(temporary, serializeLedger(records));
+  renameSync(temporary, path);
+}
+
+function runCompaction(dryRun: boolean): void {
+  const { ledgers, unsafe } = planCompaction();
+  if (unsafe) {
+    console.error(`Skipping ledger compaction, because ${unsafe}.`);
+    console.error('Both ledgers are unchanged. Please report this.');
+    return;
+  }
+
+  const changed = ledgers.filter(
+    (ledger) => !compactionIsNoop(ledger.before, ledger.result),
+  );
+  if (changed.length === 0) {
+    console.log('Ledgers are already compact.');
+    return;
+  }
+
+  for (const ledger of changed) {
+    console.log(
+      describeCompaction(ledger.kind, ledger.before.length, ledger.result),
+    );
+    if (!dryRun) writeCompactedLedger(ledger.path, ledger.result.records);
+  }
 }
 
 function printGateState(): void {
@@ -1118,17 +1234,14 @@ function runPush(dryRun: boolean): void {
   }
 
   const queue = readPushQueue();
-  if (queue.length === 0) {
-    console.log('Nothing to push.');
-    return;
-  }
+  if (queue.length === 0) console.log('Nothing to push.');
+  else if (dryRun) for (const op of queue) console.log(describeOp(op));
+  else executePushQueue(queue, resolved, owner, repo);
 
-  if (dryRun) {
-    for (const op of queue) console.log(describeOp(op));
-    return;
-  }
-
-  executePushQueue(queue, resolved, owner, repo);
+  // Also on the nothing-to-push path. An entry filed and removed between two pushes never reaches
+  // the board and so never appears in a queue, and it is exactly the record that would otherwise
+  // accumulate forever.
+  runCompaction(dryRun);
 }
 
 function usage(): void {
@@ -1137,12 +1250,18 @@ function usage(): void {
       'Usage:',
       '  projects-sync.mjs bootstrap [--dry-run]',
       '  projects-sync.mjs push [--dry-run]',
+      '  projects-sync.mjs compact [--dry-run]',
       '  projects-sync.mjs status',
       '',
       'bootstrap creates or adopts one GitHub Project per (backlog, decisions) x target,',
       'and writes the resolved project numbers to <ledger dir>/.projects.json. That file',
       'is the local token that enables pushing entries to the board.',
-      'push drains the queue of ledger entries that have not reached the board yet.',
+      'push drains the queue of ledger entries that have not reached the board yet, then',
+      'compacts.',
+      'compact shrinks the local ledgers to what a push still owes the board: entries that',
+      'landed collapse to one record each, and entries removed before they ever landed are',
+      'dropped. It runs at the end of every push, and needs no network. The previous ledger',
+      'is kept beside the new one as <name>.jsonl.bak.',
       '--dry-run runs every read but prints each planned step instead of executing it.',
     ].join('\n'),
   );
@@ -1159,6 +1278,12 @@ switch (action) {
 
   case 'push':
     runPush(dryRun);
+    break;
+
+  // No preflight and no gate. Compaction is a local rewrite that never reaches GitHub, and the
+  // gate answers who may write to the board, not who may tidy their own working copy.
+  case 'compact':
+    runCompaction(dryRun);
     break;
 
   case 'status':

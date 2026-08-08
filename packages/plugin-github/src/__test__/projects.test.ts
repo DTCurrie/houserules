@@ -96,11 +96,12 @@ describe('projects plugin', () => {
     expect(module?.defaultEnabled(CTX)).toBe(false);
   });
 
-  it('plans the sync script, its six libs, the hook, both skills, and both settings fragments', () => {
+  it('plans the sync script, its seven libs, the hook, both skills, and both settings fragments', () => {
     const [module] = plugin(buildApi());
     const actions = module?.plan(CTX, ANSWERS) ?? [];
 
     expect(actions.map((action) => action.kind)).toEqual([
+      'copy',
       'copy',
       'copy',
       'copy',
@@ -124,6 +125,7 @@ describe('projects plugin', () => {
       '.claude/scripts/lib/bootstrap-plan.mjs',
       '.claude/scripts/lib/push-queue.mjs',
       '.claude/scripts/lib/item-fields.mjs',
+      '.claude/scripts/lib/ledger-compaction.mjs',
       '.claude/scripts/projects-sync-hook.mjs',
       '.claude/skills/ledger-sync/SKILL.md',
       '.claude/skills/backlog-adopt/SKILL.md',

@@ -1,7 +1,7 @@
 ---
 name: ledger-sync
 description: Push the local backlog and decisions ledgers to GitHub Projects, syncing backlog entries to issues and decisions to draft items on the project board. Use when the user asks to sync, push, or upload the ledger, backlog, or decisions to GitHub Projects or the project board, or asks why an entry has not shown up there.
-argument-hint: status|push [--dry-run]
+argument-hint: status|push|compact [--dry-run]
 allowed-tools: Bash(node .claude/scripts/projects-sync.mjs:*)
 ---
 
@@ -18,6 +18,17 @@ Push the backlog and decision ledgers to the linked GitHub Project boards.
    `node .claude/scripts/projects-sync.mjs push --dry-run`
 3. Push for real:
    `node .claude/scripts/projects-sync.mjs push`
+
+## If the ledger looks larger than the work outstanding
+
+Every push ends by compacting the ledgers down to what a push still owes the board, so this
+usually needs nothing. Run it on its own when a lot of entries were filed and closed without
+a push in between:
+`node .claude/scripts/projects-sync.mjs compact`
+
+Compaction touches no network and needs no sync token, so it works for a contributor whose
+pushes are blocked. Do not hand-edit a `.jsonl` to shrink it. The previous copy is kept as
+`<name>.jsonl.bak` if you need to compare.
 
 ## If a push fails partway
 

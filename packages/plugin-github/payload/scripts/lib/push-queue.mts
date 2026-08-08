@@ -37,6 +37,23 @@ export interface LedgerRecord {
    * as the draft, which is what they were.
    */
   op?: string;
+  /**
+   * Present only on a birth record rewritten by {@link compactLedger}, where it carries the sync
+   * state the `synced` records it replaced used to hold.
+   *
+   * Its own object rather than loose fields, because `synced` is already an `action` value and a
+   * sibling key of that name would read as two different things on two kinds of record. Its
+   * presence alone means "this entry reached the board", so the fold never has to ask whether an
+   * `issue` came from an adoption or from a push.
+   */
+  checkpoint?: LedgerCheckpoint;
+}
+
+/** The board coordinates a compacted birth record carries in place of its `synced` records. */
+export interface LedgerCheckpoint {
+  issue?: number;
+  itemId?: string;
+  markedSuperseded?: boolean;
 }
 
 /**
@@ -105,7 +122,7 @@ export interface QueueSummary {
   decisionsPending: number;
 }
 
-interface BacklogState {
+export interface BacklogState {
   file: string;
   title: string;
   content: string;
@@ -127,13 +144,18 @@ interface BacklogState {
 }
 
 function newBacklogState(r: LedgerRecord): BacklogState {
+  // `issue` means two different things depending on the checkpoint. On an ordinary `add` it is an
+  // adoption, an issue that exists and has not been attached yet. On a compacted record it is the
+  // issue the entry already landed as. Reading it as the latter without the checkpoint would make
+  // every adopted entry look synced and skip the attach.
+  const checkpoint = r.checkpoint;
   return {
     file: r.file ?? '',
     title: r.title ?? '',
     content: r.content ?? '',
-    issue: r.issue,
-    synced: false,
-    syncedIssue: undefined,
+    issue: checkpoint ? undefined : r.issue,
+    synced: checkpoint !== undefined,
+    syncedIssue: checkpoint?.issue,
     removed: false,
     removeReason: '',
     closed: false,
@@ -217,7 +239,29 @@ function backlogOpsFor(id: string, state: BacklogState): PushOp[] {
   return ops;
 }
 
-function buildBacklogQueue(records: readonly LedgerRecord[]): PushOp[] {
+/**
+ * Whether this entry can never produce another operation, no matter what happens next.
+ *
+ * A removed entry that was never synced has nothing on the board to close, and one whose close
+ * already landed has nothing left to do. Both are dead weight in the ledger forever, and they are
+ * the whole of its unbounded growth: a repo that files and closes entries accumulates them at the
+ * rate it works. Nothing can revive one, because `remove` has no inverse.
+ */
+export function isBacklogTerminal(state: BacklogState): boolean {
+  return state.removed && (state.closed || !state.synced);
+}
+
+/**
+ * Every backlog entry's final state, in first-`add` order.
+ *
+ * Exported so compaction decides what to drop from the same fold the queue is built from. Two
+ * folds of one ledger would drift, and the drift would show up as an entry that compaction
+ * believes is finished and push believes is pending.
+ */
+export function foldBacklog(records: readonly LedgerRecord[]): {
+  entries: Map<string, BacklogState>;
+  order: string[];
+} {
   const entries = new Map<string, BacklogState>();
   const order: string[] = [];
 
@@ -230,10 +274,15 @@ function buildBacklogQueue(records: readonly LedgerRecord[]): PushOp[] {
     applyBacklogRecord(entries, r);
   }
 
+  return { entries, order };
+}
+
+function buildBacklogQueue(records: readonly LedgerRecord[]): PushOp[] {
+  const { entries, order } = foldBacklog(records);
   return order.flatMap((id) => backlogOpsFor(id, entries.get(id)!));
 }
 
-interface DecisionState {
+export interface DecisionState {
   file: string;
   title: string;
   content: string;
@@ -257,6 +306,7 @@ interface DecisionState {
 }
 
 function newDecisionState(r: LedgerRecord): DecisionState {
+  const checkpoint = r.checkpoint;
   return {
     file: r.file ?? '',
     title: r.title ?? '',
@@ -265,9 +315,9 @@ function newDecisionState(r: LedgerRecord): DecisionState {
     supersedesList: r.supersedes ?? [],
     chat: r.chat ?? null,
     scope: r.scope ?? [],
-    synced: false,
-    syncedItemId: undefined,
-    markedSuperseded: false,
+    synced: checkpoint !== undefined,
+    syncedItemId: checkpoint?.itemId,
+    markedSuperseded: checkpoint?.markedSuperseded === true,
     contentDirty: false,
     scopeDirty: false,
     fileDirty: false,
@@ -378,7 +428,18 @@ function markSupersededOps(
   return ops;
 }
 
-function buildDecisionsQueue(records: readonly LedgerRecord[]): PushOp[] {
+/**
+ * Every decision's final state, in first-birth order, with the supersede targets each one names.
+ *
+ * The counterpart to {@link foldBacklog}, and exported for the same reason. A decision is never
+ * terminal: a synced, unedited one emits nothing, but `markSupersededOps` still resolves supersede
+ * targets out of this map, so dropping one would silently strand a later flip.
+ */
+export function foldDecisions(records: readonly LedgerRecord[]): {
+  entries: Map<string, DecisionState>;
+  order: string[];
+  pendingTargets: Map<string, string[]>;
+} {
   const entries = new Map<string, DecisionState>();
   const order: string[] = [];
   const pendingTargets = new Map<string, string[]>();
@@ -394,6 +455,12 @@ function buildDecisionsQueue(records: readonly LedgerRecord[]): PushOp[] {
     }
     applyDecisionRecord(entries, r);
   }
+
+  return { entries, order, pendingTargets };
+}
+
+function buildDecisionsQueue(records: readonly LedgerRecord[]): PushOp[] {
+  const { entries, order, pendingTargets } = foldDecisions(records);
 
   return order.flatMap((id) => [
     ...decisionPrimaryOps(id, entries.get(id)!),
