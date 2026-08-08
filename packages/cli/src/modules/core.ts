@@ -122,26 +122,28 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     });
   }
 
-  // The ledgers' `.jsonl` is the committed source of truth and the `.md` beside it is a
-  // generated view, so only the markdown is ignored. Owned by core rather than by either
+  // GitHub Projects holds the durable record now. The `.jsonl` here is a local push queue
+  // that `projects-sync.mjs push` drains, and `.projects.json` is the local sync enable
+  // token, so nothing in this directory is committed. Owned by core rather than by either
   // ledger plugin, because both write into this one directory and two modules cannot own the
-  // same dest. The repo root is refused upstream: `*.md` there would hide every document.
+  // same dest. The repo root is refused upstream: `*` there would hide every document.
   const ledgerDir = ledgerDirFor(ctx);
   if (ledgerDir) {
     actions.push({
       kind: 'write',
       dest: `${ledgerDir}/.gitignore`,
       content: [
-        '# Rendered from the .jsonl ledgers beside this file by `backlog-log.mjs` and',
-        '# `decision-log.mjs`. Generated, not source, so it is not committed and hand-edits',
-        '# do not survive the next write. The .jsonl IS committed: it is the record.',
-        '# Rebuild any time with `render`.',
-        '*.md',
+        '# This whole directory is local. GitHub Projects is the durable record, the .jsonl',
+        '# ledgers here are a push queue drained by `projects-sync.mjs push`, and the .md',
+        '# files are a rendered view. The .gitignore itself stays tracked so this rule',
+        '# travels with a clone.',
+        '*',
+        '!.gitignore',
         '',
       ].join('\n'),
       module: id,
       reason:
-        'rendered ledgers are generated; the .jsonl beside them stays committed',
+        'the ledger directory is a local push queue; GitHub Projects is the durable record',
     });
   }
 

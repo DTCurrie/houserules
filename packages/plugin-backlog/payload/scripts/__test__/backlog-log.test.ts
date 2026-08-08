@@ -28,6 +28,7 @@ interface LogRecord {
   reason?: string;
   chat: string | null;
   content?: string;
+  issue?: number;
 }
 
 function stage(): string {
@@ -234,6 +235,97 @@ describe('backlog-log.mjs add', () => {
 
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('Usage:');
+  });
+
+  it('records the issue number on the add record when --issue is given', () => {
+    run(root, [
+      'add',
+      'TEST',
+      'BACKLOG.md',
+      'T',
+      'B',
+      '--chat=none',
+      '--issue',
+      '42',
+    ]);
+
+    expect(logRecords(root)[0].issue).toBe(42);
+  });
+
+  it('accepts --issue before the positional arguments', () => {
+    run(root, [
+      'add',
+      '--issue',
+      '42',
+      'TEST',
+      'BACKLOG.md',
+      'T',
+      'B',
+      '--chat=none',
+    ]);
+
+    expect(logRecords(root)[0].issue).toBe(42);
+  });
+
+  it('omits the issue key entirely when --issue is not given', () => {
+    run(root, ['add', 'TEST', 'BACKLOG.md', 'T', 'B', '--chat=none']);
+
+    expect('issue' in logRecords(root)[0]).toBe(false);
+  });
+
+  it('does not change the rendered surface when the record carries an issue number', () => {
+    const root2 = stage();
+    const record = {
+      ts: '2026-01-01T00:00:00.000Z',
+      id: 'TEST-aaaaaa',
+      action: 'add',
+      file: ROOT_RECORD_FILE,
+      title: 'T',
+      chat: null,
+      content: encodeBody('B'),
+    };
+
+    seedLog(root, [record]);
+    seedLog(root2, [{ ...record, issue: 42 }]);
+    run(root, ['render']);
+    run(root2, ['render']);
+
+    expect(readFile(root2, ROOT_SURFACE)).toBe(readFile(root, ROOT_SURFACE));
+  });
+
+  it('rejects a non-numeric --issue value, naming it', () => {
+    const r = run(root, [
+      'add',
+      'TEST',
+      'BACKLOG.md',
+      'T',
+      'B',
+      '--chat=none',
+      '--issue',
+      'abc',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('"abc"');
+  });
+
+  it.each([
+    { value: '0', reason: 'zero' },
+    { value: '-1', reason: 'negative' },
+  ])('rejects an --issue value of $reason', ({ value }) => {
+    const r = run(root, [
+      'add',
+      'TEST',
+      'BACKLOG.md',
+      'T',
+      'B',
+      '--chat=none',
+      '--issue',
+      value,
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain(`"${value}"`);
   });
 });
 

@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 
 import {
   detect,
+  trackedLedgerLogs,
   trackedLedgerSurfaces,
   trackedScriptFiles,
   trackedTemplateFiles,
@@ -42,6 +43,12 @@ import type { PlanResult, PruneResult } from '../plan.js';
 function strayLedgerSurfaces(root: string, ctx: Ctx): string[] {
   const dir = ledgerDirFor(ctx);
   return ctx.git.isRepo && dir ? trackedLedgerSurfaces(root, dir) : [];
+}
+
+/** Committed ledger `.jsonl` logs, or nothing when the kit must not manage that directory. */
+function strayLedgerLogs(root: string, ctx: Ctx): string[] {
+  const dir = ledgerDirFor(ctx);
+  return ctx.git.isRepo && dir ? trackedLedgerLogs(root, dir) : [];
 }
 
 /** Ledger scripts with a log still at the pre-split `.claude/` path, not the ledger dir. */
@@ -281,6 +288,11 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       ui.message(
         `ledgers: ${dryLedgers.length} committed rendered file(s) would be untracked from git (kept on disk).`,
       );
+    const dryLedgerLogs = strayLedgerLogs(root, ctx);
+    if (dryLedgerLogs.length)
+      ui.message(
+        `ledgers: ${dryLedgerLogs.length} committed ledger log(s) would be untracked from git (kept on disk). The GitHub Project is now the durable record, once \`projects-sync.mjs push\` has run.`,
+      );
     showLegacyLedgerHint(root);
     showNextSteps(planResult.advisories, flags);
     ui.outro('Dry run — nothing written.');
@@ -326,6 +338,16 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   if (untrackedLedgers)
     ui.message(
       `ledgers: untracked ${untrackedLedgers} rendered file(s) from git — kept on disk; commit the staged removal to finish.`,
+    );
+
+  const strayLogs = strayLedgerLogs(root, ctx);
+  const untrackedLedgerLogs =
+    strayLogs.length && untrackFromIndex(root, strayLogs)
+      ? strayLogs.length
+      : 0;
+  if (untrackedLedgerLogs)
+    ui.message(
+      `ledgers: untracked ${untrackedLedgerLogs} ledger log(s) from git — kept on disk; commit the staged removal to finish. The record now lives in the GitHub Project once \`projects-sync.mjs push\` has run.`,
     );
 
   showLegacyLedgerHint(root);

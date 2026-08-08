@@ -33,12 +33,17 @@ when `init` asks.
   gut-checks whether a fresh entry is worth tracking before the skill continues.
 
   A repo-wide entry renders to `.claude/ledgers/BACKLOG.md`. An entry scoped to a target
-  named in `kit.config.json` renders to `.claude/ledgers/<target>.BACKLOG.md`.
+  named in `kit.config.json` renders to `.claude/ledgers/<target>.BACKLOG.md`. The rendered
+  file is generated from the ledger, so a hand edit to it does not survive the next entry.
+
+  The ledger directory is local to the repo and gitignored. `@agent-kit/plugin-github` is an
+  optional companion that syncs it to a GitHub Project, which gives the ledger a durable home
+  outside the repo.
 
 ## Part of agent-kit
 
 [agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
-infrastructure that keeps the agent's context lean. This is one of eleven first-party plugins.
+infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
 The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
 
 ## License

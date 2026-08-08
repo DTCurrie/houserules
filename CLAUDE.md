@@ -1,11 +1,62 @@
 # agent-kit
 
+<!-- agent-kit:claude-md start -->
+
+### agent-kit sections
+
+This block is maintained by `npx agent-kit update`. Content outside the markers around it
+is yours and never touched. For a fuller from-scratch skeleton to compare structure against, see
+`.claude/kit-templates/CLAUDE.md.template`, a gitignored reference that `npx agent-kit update`
+restores if absent.
+
+### Recording changes (changesets)
+
+After completing a meaningful change to a package, record a changeset **before the commit**.
+Run the `/changeset` skill, or spawn the `changeset-writer` agent. It inspects the diff,
+picks patch/minor/major per package, and writes `.changeset/*.md` via
+`node .claude/scripts/changeset-write.mjs`. Never hand-edit `CHANGELOG.md`, which releases
+generate from changesets (`changeset version`). If nothing user-facing changed, record
+that too: `node .claude/scripts/changeset-write.mjs --empty --summary "<why no release>"`.
+
+### Conventions
+
+- **The user always handles `git commit` / `push` / PR-create.** Describe what is ready and stop.
+  (Enforced by `.claude/scripts/guard-bash.mjs`.)
+- **Edit from the file's current bytes.** Re-read before editing when your view of it is
+  second-hand (an earlier snapshot, a build or lint error, another tool's output) or the user may
+  have it open. A tool's report and the file on disk can disagree within seconds.
+- **Do not rewrite what is not yours to change.** When the user presents a file as their own
+  finished work, or has it open mid-edit, surface the problem and let them decide.
+
+### Cost & verification discipline
+
+- Stage-sized work (≤ a handful of files): implement directly in-context, with no implementation
+  subagents. Reserve subagents for genuinely parallel or unbounded work (wide sweeps, migrations).
+- Verify with static gates (tests, typecheck, lint) plus a short falsifiable acceptance checklist
+  for the user. No browser/screenshot verification unless explicitly asked.
+- Run those gates in order: format first, since it rewrites in place and settles the mechanical
+  noise, then lint with autofix so only real problems are left, then typecheck and test. Scope
+  each command to the packages you actually changed.
+- **"Done" means every check passed, not that the edits were made.** Report a check that failed
+  or never ran, with its output. Never claim success over one you did not see pass.
+- Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.
+- On AskUserQuestion timeout, stop and re-ask later. Never carry tentative selections forward.
+- Read the repo's own docs + targeted greps before fanning out Explore/Plan agents.
+
+### Tool-use efficiency
+
+- `grep -n` to locate, then `Read` with `offset`/`limit`. Never read big files whole.
+- Never `git stash` to baseline-check. Use `git diff --name-only` / `git show HEAD:<path>`.
+- Pipe long command output through `grep`, and batch related greps into one call.
+
+<!-- agent-kit:claude-md end -->
+
 Interactive installer for a portable Claude Code context-discipline kit. Read
 `packages/cli/README.md` for the product story. This file is for working on the kit itself.
 
 ## Workspace
 
-A pnpm workspace of thirteen packages. Every path in the Layout section below is relative to
+A pnpm workspace of fourteen packages. Every path in the Layout section below is relative to
 **`packages/cli/`** unless it starts with `packages/`.
 
 - `packages/cli` is `@agent-kit/cli`, the installer. It ships the binary **`agent-kit`**,
@@ -15,17 +66,17 @@ A pnpm workspace of thirteen packages. Every path in the Layout section below is
   `session-context`, `rename`, `reviewers`, `debug-session`, `plans`, `orchestrate`,
   `verify-changed`, `ready`, `sweep`, `read-guard`, `regen`, `statusline`,
   `code-cleanliness`, `ci-settings`.
-- Eleven first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved out of
+- Twelve first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved out of
   the core: `plugin-prose`, `plugin-testing`, `plugin-changesets`, `plugin-backlog`,
-  `plugin-decisions`, `plugin-persona-auditor`. Five were authored as plugins and were never
+  `plugin-decisions`, `plugin-persona-auditor`. Six were authored as plugins and were never
   in the core: `plugin-accessibility`, `plugin-typescript`, `plugin-three`, `plugin-svelte`,
-  `plugin-design`.
+  `plugin-design`, `plugin-github`.
   `src/retired-modules.ts`'s
   `RETIRED_MODULES` maps every retired built-in id to the package that now ships it.
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
   workflows, `CLAUDE.md`, and the gitignored `.claude/`. Root `pnpm build|test|check` are
   wireit aggregators that depend on each package's script by path, replacing `pnpm -r`. The
-  `test` aggregator lists **eleven** packages, not thirteen, because `@agent-kit/test` and
+  `test` aggregator lists **twelve** packages, not fourteen, because `@agent-kit/test` and
   `plugin-testing` ship no `test` script and naming a script that does not exist is a wireit
   error rather than the no-op `pnpm -r` gave you. Root `lint` is also wireit, and `lint:fix`,
   `format`, and `format:check` stay plain scripts. A fixer mutates its own inputs, so caching

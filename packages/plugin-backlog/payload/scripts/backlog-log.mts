@@ -3,7 +3,7 @@
  * Backlog ledger helper.
  *
  * Usage:
- *   add    <prefix> <area> <title> [content]  # content from arg or stdin
+ *   add    <prefix> <area> <title> [content] [--issue <n>]  # content from arg or stdin
  *   remove <id>     <area> <reason>
  *   update <id>     <area> <new-title> [content]
  *   move   <id>     <to-area>                 # re-file an entry onto another surface
@@ -32,6 +32,9 @@
  * Chat provenance stamps the active session and is the one Claude-Code-specific part. It
  * degrades to a chat:null warning in any other harness. Pass --chat=none or set
  * CLAUDE_SESSION_ID to silence that.
+ *
+ * --issue <n> on add records the GitHub issue an entry was adopted from. A push then attaches
+ * the existing issue to the board instead of creating a duplicate.
  */
 
 import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -88,6 +91,7 @@ interface BacklogRecord {
   reason?: string;
   chat?: string | null;
   content?: string;
+  issue?: number;
 }
 
 interface BacklogEntry {
@@ -162,9 +166,10 @@ function failRebuild(relFile: string): never {
   console.error(
     `Refusing to rewrite ${relFile}: the backlog ledger at ${LOG_FILE} does not ` +
       `account for every entry ${relFile} already carries. Rewriting now would ` +
-      'silently drop entries the ledger has not recorded as removed. Restore the ' +
-      'ledger with `git checkout -- .claude/ledgers/backlog.jsonl`, or copy it from ' +
-      'another checkout, then retry.',
+      'silently drop entries the ledger has not recorded as removed. The ledger is not ' +
+      'tracked by git, so do not overwrite it blind. If a projects sync is configured, ' +
+      'run `projects-sync.mjs push` first to land any unsynced entries on the board, ' +
+      'then copy a good ledger from another checkout or machine before retrying.',
   );
   process.exit(1);
 }
@@ -272,11 +277,40 @@ function entryNotFound(id: string, file: string): never {
   process.exit(1);
 }
 
+function parseIssueFlag(value: string | undefined): number {
+  const n = Number(value);
+  if (!value || !Number.isInteger(n) || n <= 0) {
+    console.error(
+      `Invalid --issue "${value ?? ''}". Must be a positive integer.`,
+    );
+    process.exit(1);
+  }
+  return n;
+}
+
+/** Splices `--issue <n>` or `--issue=<n>` out of argv, wherever it appears, and returns the value. */
+function takeIssueFlag(argv: string[]): number | null {
+  const eq = '--issue=';
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--issue') {
+      const v = argv[i + 1];
+      argv.splice(i, 2);
+      return parseIssueFlag(v);
+    }
+    if (a?.startsWith(eq)) {
+      argv.splice(i, 1);
+      return parseIssueFlag(a.slice(eq.length));
+    }
+  }
+  return null;
+}
+
 function usage() {
   console.error(
     [
       'Usage:',
-      '  backlog-log.mjs add    <prefix> <area> <title> [content] [--chat <id>]',
+      '  backlog-log.mjs add    <prefix> <area> <title> [content] [--chat <id>] [--issue <n>]',
       '  backlog-log.mjs remove <id>     <area> <reason>',
       '  backlog-log.mjs update <id>     <area> <new-title> [content]',
       '  backlog-log.mjs move   <id>     <to-area>',
@@ -291,12 +325,15 @@ function usage() {
       'same file.',
       'add auto-detects the active Claude Code session ID; pass --chat <id> or',
       'set CLAUDE_SESSION_ID=<id> to override, or --chat=none to suppress.',
+      'add --issue <n> records the GitHub issue this entry was adopted from, so a later',
+      'push attaches that issue instead of creating a new one.',
     ].join('\n'),
   );
 }
 
 const argv = process.argv.slice(2);
 const chatFlag = takeChatFlag(argv);
+const issueFlag = takeIssueFlag(argv);
 const [action, ...rest] = argv;
 
 switch (action) {
@@ -330,6 +367,7 @@ switch (action) {
       title,
       chat,
       content: encodeBody(body),
+      ...(issueFlag !== null ? { issue: issueFlag } : {}),
     });
     rerenderFile(surface);
     console.log(id);

@@ -51,7 +51,7 @@ when `init` asks.
 ## Part of agent-kit
 
 [agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
-infrastructure that keeps the agent's context lean. This is one of eleven first-party plugins.
+infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
 The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
 
 ## License

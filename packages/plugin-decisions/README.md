@@ -40,13 +40,18 @@ when `init` asks.
 
   A repo-wide decision renders to `.claude/ledgers/DECISIONS.md`. A decision scoped to a
   target named in `kit.config.json` renders to `.claude/ledgers/<target>.DECISIONS.md`. The
-  rendered file is not auto-loaded into context. An agent reaches a decision through the
-  skill, the reviewer, or an id cited in a prompt.
+  rendered file is generated from the ledger, so a hand edit to it does not survive the next
+  record. It is not auto-loaded into context. An agent reaches a decision through the skill,
+  the reviewer, or an id cited in a prompt.
+
+  The ledger directory is local to the repo and gitignored. `@agent-kit/plugin-github` is an
+  optional companion that syncs it to a GitHub Project, which gives the ledger a durable home
+  outside the repo.
 
 ## Part of agent-kit
 
 [agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
-infrastructure that keeps the agent's context lean. This is one of eleven first-party plugins.
+infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
 The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
 
 ## License

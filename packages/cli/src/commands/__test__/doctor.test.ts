@@ -507,6 +507,32 @@ describe('doctor committed rendered ledger detection', () => {
   });
 });
 
+describe('doctor committed ledger log detection', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+  });
+
+  it('says nothing on a fresh install, where the ledger log is gitignored', () => {
+    const r = runCli(['doctor', root]);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).not.toMatch(/ledger log\(s\)/);
+  });
+
+  it('warns with the untrack command when a ledger log is committed', () => {
+    seedLedger(root);
+    runIn(root, 'git', ['add', '-f', '.claude/ledgers/backlog.jsonl']);
+
+    const r = runCli(['doctor', root]);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).toMatch(/ledger log\(s\) are committed/);
+    expect(r.stdout).toMatch(/git rm --cached/);
+  });
+});
+
 function seedLedger(root: string): void {
   const dir = join(root, '.claude/ledgers');
   mkdirSync(dir, { recursive: true });

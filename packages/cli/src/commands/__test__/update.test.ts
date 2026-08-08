@@ -252,6 +252,58 @@ describe('update on reference templates committed before they were gitignored', 
   });
 });
 
+describe('update on a ledger .jsonl committed before it was gitignored', () => {
+  let root: string;
+  const ledgerLog = '.claude/ledgers/backlog.jsonl';
+  let onDiskBefore: string;
+  let result: RunResult;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+    mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
+    writeFileSync(
+      join(root, ledgerLog),
+      `${JSON.stringify({ id: 'B1', file: 'BACKLOG.md' })}\n`,
+    );
+    runIn(root, 'git', ['add', '-f', ledgerLog]);
+    runIn(root, 'git', ['commit', '-qm', 'committed ledger log']);
+    onDiskBefore = readFileSync(join(root, ledgerLog), 'utf8');
+    result = runCli(['update', root]);
+  });
+
+  it('exits 0', () => {
+    expect(result.status, result.stderr).toBe(0);
+  });
+
+  it('untracks the ledger log from git', () => {
+    expect(runIn(root, 'git', ['ls-files', ledgerLog]).trim()).toBe('');
+  });
+
+  it('leaves the ledger log on disk byte-for-byte', () => {
+    expect(readFileSync(join(root, ledgerLog), 'utf8')).toBe(onDiskBefore);
+  });
+
+  it('stages the untrack without committing it', () => {
+    expect(runIn(root, 'git', ['status', '--porcelain']).trim()).not.toBe('');
+  });
+
+  it('reports where the durable record lives now', () => {
+    expect(result.stdout.replace(/\s+/g, ' ')).toContain(
+      'ledgers: untracked 1 ledger log(s) from git — kept on disk; commit the staged removal to finish. The record now lives in the GitHub Project once `projects-sync.mjs push` has run.',
+    );
+  });
+});
+
+describe('update on a ledger .jsonl that is already untracked', () => {
+  it('reports nothing about a ledger log', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+
+    const result = runCli(['update', root]);
+
+    expect(result.stdout).not.toContain('ledger log');
+  });
+});
+
 describe('init on a fresh pnpm monorepo', () => {
   it('gitignores .claude/scripts so compiled scripts are never committed', () => {
     const root = useRepo('pnpm-monorepo');

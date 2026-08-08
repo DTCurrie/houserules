@@ -7,6 +7,7 @@ import {
   detectFixCommands,
   detectVerifyCommands,
   suggestPrefix,
+  trackedLedgerLogs,
   trackedLedgerSurfaces,
   trackedScriptFiles,
   untrackFromIndex,
@@ -419,6 +420,76 @@ describe('trackedLedgerSurfaces, nested per-area surfaces', () => {
 
     expect(trackedLedgerSurfaces(root, '.claude/ledgers')).toEqual([
       'games/tower-push/BACKLOG.md',
+    ]);
+  });
+});
+
+describe('trackedLedgerLogs', () => {
+  it('reports both committed ledger jsonl files by repo-relative path', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/ledgers/backlog.jsonl'),
+      `${JSON.stringify({ id: 'B1', file: 'BACKLOG.md' })}\n`,
+    );
+    writeFileSync(
+      join(root, '.claude/ledgers/decisions.jsonl'),
+      `${JSON.stringify({ id: 'D1', file: 'DECISIONS.md' })}\n`,
+    );
+    commitAll(root);
+
+    expect(trackedLedgerLogs(root, '.claude/ledgers').sort()).toEqual(
+      [
+        '.claude/ledgers/backlog.jsonl',
+        '.claude/ledgers/decisions.jsonl',
+      ].sort(),
+    );
+  });
+
+  it('reports nothing for jsonl files that exist on disk but are not tracked by git', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/ledgers/backlog.jsonl'),
+      `${JSON.stringify({ id: 'B1', file: 'BACKLOG.md' })}\n`,
+    );
+
+    expect(trackedLedgerLogs(root, '.claude/ledgers')).toEqual([]);
+  });
+
+  it('leaves a committed markdown surface for trackedLedgerSurfaces to own', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/ledgers/backlog.jsonl'),
+      `${JSON.stringify({ id: 'B1', file: 'BACKLOG.md' })}\n`,
+    );
+    writeFileSync(join(root, '.claude/ledgers/BACKLOG.md'), '# Backlog\n');
+    commitAll(root);
+
+    expect(trackedLedgerLogs(root, '.claude/ledgers')).toEqual([
+      '.claude/ledgers/backlog.jsonl',
+    ]);
+  });
+
+  it('returns an empty array when the ledger directory does not exist', () => {
+    const root = useRepo('non-js');
+
+    expect(trackedLedgerLogs(root, '.claude/ledgers')).toEqual([]);
+  });
+
+  it('ignores a jsonl file committed outside the ledger directory', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/ledgers/backlog.jsonl'),
+      `${JSON.stringify({ id: 'B1', file: 'BACKLOG.md' })}\n`,
+    );
+    writeFileSync(join(root, 'other.jsonl'), '{}\n');
+    commitAll(root);
+
+    expect(trackedLedgerLogs(root, '.claude/ledgers')).toEqual([
+      '.claude/ledgers/backlog.jsonl',
     ]);
   });
 });

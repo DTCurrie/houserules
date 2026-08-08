@@ -1,0 +1,115 @@
+/**
+ * The project field values one pushed entry carries, and the GraphQL literal that sets them.
+ *
+ * Pure. Separated from {@link push-queue} because the two answer different questions: that one
+ * decides WHICH entries move, this one decides WHAT each item's fields say once it is there.
+ */
+
+import type { PushOp } from './push-queue.mjs';
+
+/**
+ * One field assignment, named rather than keyed by id.
+ *
+ * Names, because the executor resolves a name to its field id and, for a single select, its
+ * option id at push time. A project the maintainer customized may carry different ids than the
+ * one that created them, and the name is what survives that.
+ */
+export type FieldValue =
+  | { field: string; kind: 'text'; value: string }
+  | { field: string; kind: 'number'; value: number }
+  | { field: string; kind: 'date'; value: string }
+  | { field: string; kind: 'single-select'; option: string };
+
+/**
+ * The field values `op` implies for its board item.
+ *
+ * Returns an empty list for an op that sets no fields, such as `report-move`. An op whose fields
+ * are empty must still be treated as successful, since not every operation touches the board's
+ * columns.
+ *
+ * Backlog items get `Status` and `Area`. `Status` is `Todo` for a fresh entry and `Done` for a
+ * closed one. `Area` records the surface the entry came from, which is provenance rather than
+ * routing: the surface already picked the board.
+ *
+ * Decision items get `Status`, `Decided`, `Supersedes`, and `Chat`. `Status` is `Accepted`
+ * unless the op is `mark-superseded`. `Supersedes` is a comma-joined id list, empty when the
+ * record supersedes nothing.
+ */
+export function fieldValuesFor(op: PushOp): FieldValue[] {
+  switch (op.op) {
+    case 'create-issue':
+    case 'attach-issue':
+    case 'update-issue':
+      return [
+        { field: 'Status', kind: 'single-select', option: 'Todo' },
+        { field: 'Area', kind: 'text', value: areaFromSurface(op.surface) },
+      ];
+    case 'close-issue':
+      return [
+        { field: 'Status', kind: 'single-select', option: 'Done' },
+        { field: 'Area', kind: 'text', value: areaFromSurface(op.surface) },
+      ];
+    case 'create-draft': {
+      const values: FieldValue[] = [
+        { field: 'Status', kind: 'single-select', option: 'Accepted' },
+        { field: 'Decided', kind: 'date', value: op.decided },
+      ];
+      if (op.supersedes.length > 0) {
+        values.push({
+          field: 'Supersedes',
+          kind: 'text',
+          value: op.supersedes.join(', '),
+        });
+      }
+      if (op.chat !== null) {
+        values.push({ field: 'Chat', kind: 'text', value: op.chat });
+      }
+      return values;
+    }
+    case 'update-draft':
+      return [{ field: 'Status', kind: 'single-select', option: 'Accepted' }];
+    case 'mark-superseded':
+      return [
+        { field: 'Status', kind: 'single-select', option: 'Superseded' },
+        { field: 'Superseded by', kind: 'text', value: op.successorId },
+      ];
+    case 'report-move':
+      return [];
+  }
+}
+
+/**
+ * The `updateProjectV2ItemFieldValue` `value:` literal for one field.
+ *
+ * Built as a GraphQL literal rather than passed as a variable, matching how the bootstrap path
+ * builds its field inputs, because `gh api graphql` variables carry only scalars.
+ *
+ * @param optionId Required for a single select and ignored otherwise. The executor resolves it
+ *   from the field's options by name, since option ids are per-project.
+ */
+export function fieldValueLiteral(
+  value: FieldValue,
+  optionId?: string,
+): string {
+  switch (value.kind) {
+    case 'text':
+      return `{ text: ${JSON.stringify(value.value)} }`;
+    case 'number':
+      return `{ number: ${value.value} }`;
+    case 'date':
+      return `{ date: ${JSON.stringify(value.value)} }`;
+    case 'single-select':
+      if (!optionId) {
+        throw new Error(
+          `fieldValueLiteral: missing optionId for single select field "${value.field}"`,
+        );
+      }
+      return `{ singleSelectOptionId: ${JSON.stringify(optionId)} }`;
+  }
+}
+
+/** The `Area` value for a surface, with the `.BACKLOG.md` style suffix stripped. */
+export function areaFromSurface(surface: string): string {
+  const match = surface.match(/^(.+)\.(BACKLOG|DECISIONS)\.md$/);
+  return match ? match[1] : 'repo root';
+}

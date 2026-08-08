@@ -54,6 +54,7 @@
         "./packages/plugin-decisions:build",
         "./packages/plugin-design:build",
         "./packages/plugin-persona-auditor:build",
+        "./packages/plugin-github:build",
         "./packages/plugin-prose:build",
         "./packages/plugin-svelte:build",
         "./packages/plugin-testing:build",
@@ -71,6 +72,7 @@
         "./packages/plugin-decisions:check",
         "./packages/plugin-design:check",
         "./packages/plugin-persona-auditor:check",
+        "./packages/plugin-github:check",
         "./packages/plugin-prose:check",
         "./packages/plugin-svelte:check",
         "./packages/plugin-testing:check",
@@ -80,7 +82,7 @@
       ]
     },
     "test": {
-      "//": "Eleven entries, not thirteen. @agent-kit/test and plugin-testing ship no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
+      "//": "Twelve entries, not fourteen. @agent-kit/test and plugin-testing ship no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
       "dependencies": [
         "./packages/cli:test",
         "./packages/plugin-accessibility:test",
@@ -89,6 +91,7 @@
         "./packages/plugin-decisions:test",
         "./packages/plugin-design:test",
         "./packages/plugin-persona-auditor:test",
+        "./packages/plugin-github:test",
         "./packages/plugin-prose:test",
         "./packages/plugin-svelte:test",
         "./packages/plugin-three:test",
@@ -104,6 +107,7 @@
         "./packages/plugin-decisions:attw",
         "./packages/plugin-design:attw",
         "./packages/plugin-persona-auditor:attw",
+        "./packages/plugin-github:attw",
         "./packages/plugin-prose:attw",
         "./packages/plugin-svelte:attw",
         "./packages/plugin-testing:attw",

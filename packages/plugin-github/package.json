@@ -1,0 +1,120 @@
+{
+  "name": "@agent-kit/plugin-github",
+  "version": "0.0.0",
+  "author": "Devin T. Currie (https://github.com/DTCurrie)",
+  "description": "agent-kit plugin: GitHub integrations. Ships a projects module that syncs the backlog and decision ledgers to GitHub Projects.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "payload-dist"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "check": "wireit",
+    "prepack": "npm run build",
+    "test": "wireit",
+    "attw": "wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
+      "dependencies": [
+        "../cli:build:ts"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "!src/**/__test__/**",
+        "payload/**",
+        "!payload/**/__test__/**",
+        "tsconfig.build.json",
+        "tsconfig.payload.json",
+        "scripts/build-payload.mjs"
+      ],
+      "output": [
+        "dist/**",
+        "payload-dist/**"
+      ]
+    },
+    "check": {
+      "command": "tsc --noEmit -p tsconfig.json",
+      "dependencies": [
+        "../cli:build:ts",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "payload/**/__test__/**",
+        "tsconfig.json",
+        "tsconfig.build.json"
+      ],
+      "output": []
+    },
+    "test": {
+      "command": "vitest run",
+      "dependencies": [
+        "build",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "payload/**",
+        "vitest.config.ts"
+      ],
+      "output": []
+    },
+    "attw": {
+      "command": "attw --pack . --profile esm-only",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "package.json"
+      ],
+      "output": []
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "directory": "packages/plugin-github"
+  },
+  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-github#readme",
+  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
+  "peerDependencies": {
+    "@agent-kit/cli": "^0.1.0"
+  },
+  "devDependencies": {
+    "@agent-kit/cli": "workspace:*",
+    "@agent-kit/test": "workspace:*",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@types/node": "^22.20.1",
+    "publint": "^0.3.23",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "wireit": "^0.14.13"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agent-kit",
+    "agent-kit-plugin",
+    "claude-code",
+    "github",
+    "github-projects",
+    "backlog",
+    "ledger"
+  ]
+}

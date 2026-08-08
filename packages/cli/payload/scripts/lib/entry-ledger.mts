@@ -149,9 +149,11 @@ export function readLog<TRecord>(logFile: string): TRecord[] {
  * The append-only ledger for `name`, at `.claude/ledgers/<name>.jsonl`.
  *
  * Its own directory rather than `.claude/state/`, which the changesets module already owns for
- * ephemeral cache and self-gitignores with `*`. A ledger is the committed source of truth, so
- * the two need opposite ignore rules and cannot share a directory. `.jsonl` and not `.log`,
- * because `*.log` is a common ignore pattern and this file must stay tracked.
+ * ephemeral cache and self-gitignores with `*` because none of it needs to survive being
+ * deleted. The ledger is a local write-ahead queue that `projects-sync.mjs push` drains to
+ * GitHub Projects, so an entry not yet pushed exists nowhere else, and the two directories need
+ * different ignore rules and cannot share one. `.jsonl` and not `.log`, because `*.log` is a
+ * common ignore pattern this file must avoid.
  *
  * Older trees are migrated in place, newest layout first, so there is one path afterwards and
  * never a split ledger. A rename that fails leaves the older file authoritative rather than
@@ -357,9 +359,9 @@ function collapseRepeatedSuffix(name: string, basename: string): string {
  * {@link surfaceRelFile} now yields `tower-push.BACKLOG.md`, so every such entry silently stops
  * matching its surface and the ledger renders empty.
  *
- * Normalizing on READ rather than rewriting the ledger is deliberate. The ledger is append-only
- * and is the committed source of truth, so a migration that rewrote historical `file` fields
- * would edit records that already shipped. This is a pure projection instead, it is idempotent,
+ * Normalizing on READ rather than rewriting the ledger is deliberate. The ledger is append-only,
+ * so a migration that rewrote historical `file` fields would edit records already appended and
+ * possibly already pushed to the board. This is a pure projection instead, it is idempotent,
  * and a repo can roll back to an older kit without its history having been altered.
  *
  * The area is taken from the configured targets first, since that is authoritative. The trailing

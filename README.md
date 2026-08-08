@@ -45,6 +45,7 @@ The package is `@agent-kit/cli` and the binary is `agent-kit`, the same split
 | `packages/plugin-three`           | `@agent-kit/plugin-three`           | Three.js authoring patterns, with opt-in Threlte and React Three Fiber guides.          |
 | `packages/plugin-svelte`          | `@agent-kit/plugin-svelte`          | Svelte 5 conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.      |
 | `packages/plugin-design`          | `@agent-kit/plugin-design`          | A DTCG design system an agent queries by name, plus the path-scoped design rule.        |
+| `packages/plugin-github`          | `@agent-kit/plugin-github`          | Syncs the backlog and decision ledgers to GitHub Projects, with adopt and sync skills.  |
 | `packages/test`                   | `@agent-kit/test`                   | Shared testing modules for driving the CLI against synthetic repos. For plugin authors. |
 
 Every package has its own README. Plugins are independent, so install only the ones a repo

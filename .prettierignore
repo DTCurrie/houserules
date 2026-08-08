@@ -11,3 +11,16 @@ CHANGELOG.md
 # Its acceptance is that regenerating produces a byte-identical file, so a formatter pass over
 # it would silently break reproducibility the next time the generator changes.
 packages/plugin-accessibility/payload/reference/wcag22.md
+
+# agent-kit:prettierignore start
+# Installed by agent-kit and tracked by content hash. Formatting these rewrites
+# bytes the kit owns, which makes `npx agent-kit update` skip them as your edits.
+.claude/agents/
+.claude/kit-manifest.json
+.claude/kit-templates/
+.claude/kit.config.json
+.claude/ledgers/
+.claude/scripts/
+.claude/skills/
+.claude/state/
+# agent-kit:prettierignore end

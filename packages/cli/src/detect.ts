@@ -216,6 +216,24 @@ function ledgerRecordedFiles(ledgerFile: string): Set<string> {
 }
 
 /**
+ * Committed ledger `.jsonl` logs, which are no longer the durable record.
+ *
+ * They were, until the projects integration moved that role to a GitHub Project and left the
+ * local file as a gitignored push queue. A repo that installed the kit before that has them
+ * tracked, and `update` untracks them the same way it already untracks the rendered markdown.
+ *
+ * Separate from {@link trackedLedgerSurfaces} rather than folded into it, because the two mean
+ * different things to the person reading the message. A committed `.md` is a generated view that
+ * should never have been committed. A committed `.jsonl` was correct until the day it was not,
+ * and the message has to say where the record lives now.
+ *
+ * Returns only what git actually tracks, so a repo that already ignores them reports nothing.
+ */
+export function trackedLedgerLogs(root: string, ledgerDir: string): string[] {
+  return trackedFilesUnder(root, ledgerDir).filter((p) => p.endsWith('.jsonl'));
+}
+
+/**
  * Committed ledger markdown, which is a generated view of the `.jsonl` beside it.
  *
  * Covers the ledger directory and the repo root, because an install predating the move kept

@@ -448,9 +448,10 @@ function rerenderFile(
         `ledger at ${LOG_FILE} is missing or has fewer entries than the file ` +
         'already on disk. Rewriting now would destroy the entries it already ' +
         'carries. Decisions are append-only, so the ledger should never hold ' +
-        `less than the file it renders. The ledger is committed, so restore it ` +
-        `with \`git checkout -- ${relativeToRoot(REPO_ROOT, LOG_FILE)}\`, or ` +
-        'copy it from another checkout, then retry.',
+        'less than the file it renders. The ledger is not tracked by git, so do not ' +
+        'overwrite it blind. If a projects sync is configured, run `projects-sync.mjs ' +
+        'push` first to land any unsynced entries on the board, then copy a good ' +
+        'ledger from another checkout or machine before retrying.',
     );
     process.exit(1);
   }

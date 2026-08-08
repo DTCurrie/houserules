@@ -170,13 +170,27 @@ export const KitConfigSchema = z.strictObject({
 
   decisions: z.strictObject({ enabled: z.boolean().optional() }).optional(),
 
+  projects: z
+    .strictObject({
+      autoSync: z
+        .boolean()
+        .optional()
+        .describe(
+          'Set false to forbid ledger syncing repo-wide. True only permits it: a push still needs a local .claude/ledgers/.projects.json, which only `bootstrap` writes, and maintain or admin on the repository.',
+        ),
+    })
+    .optional()
+    .describe(
+      "Read at runtime by the projects plugin's scripts. Top level rather than inside its `plugins[].config` entry, because a payload script does not know the alias its own plugin was declared under, so it cannot find that entry.",
+    ),
+
   ledgers: z
     .strictObject({
       dir: z
         .string()
         .optional()
         .describe(
-          'Where the backlog and decision ledgers live, relative to the repo root. Holds both the committed `.jsonl` source of truth and the generated markdown rendered from it. Defaults to `.claude/ledgers`. One directory per repo: a monorepo distinguishes areas by filename, such as `studio.BACKLOG.md`, not by nesting.',
+          'Where the backlog and decision ledgers live, relative to the repo root. Holds the `.jsonl` logs and the markdown rendered from them. The whole directory is gitignored. Defaults to `.claude/ledgers`. One directory per repo: a monorepo distinguishes areas by filename, such as `studio.BACKLOG.md`, not by nesting.',
         ),
     })
     .optional(),

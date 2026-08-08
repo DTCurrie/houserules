@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { ledgerDirFor } from '../../core/ledger-dir.js';
 import { MANIFEST_PATH } from '../../core/manifest.js';
 import {
+  trackedLedgerLogs,
   trackedLedgerSurfaces,
   trackedScriptFiles,
   trackedTemplateFiles,
@@ -89,6 +90,17 @@ export function checkInstallIntegrity(
     findings.push({
       level: 'WARN',
       msg: `${strayLedgers.length} rendered ledger file(s) are committed (generated from the .jsonl beside them). Untrack, keeping them on disk: npx agent-kit update — or: git rm --cached ${strayLedgers.join(' ')}`,
+    });
+  }
+
+  // The .jsonl itself used to be the durable record. A GitHub Project now holds that role,
+  // and the local file is a gitignored push queue, so a committed one predates the move.
+  const strayLedgerLogs =
+    ctx.git.isRepo && ledgerDir ? trackedLedgerLogs(root, ledgerDir) : [];
+  if (strayLedgerLogs.length) {
+    findings.push({
+      level: 'WARN',
+      msg: `${strayLedgerLogs.length} ledger log(s) are committed. The GitHub Project is the durable record now, once \`projects-sync.mjs push\` has run, and the file stays on disk as a push queue. Untrack it: npx agent-kit update — or: git rm --cached ${strayLedgerLogs.join(' ')}`,
     });
   }
 
