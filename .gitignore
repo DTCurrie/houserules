@@ -15,9 +15,13 @@ payload-dist/
 .notes/
 
 # This repo dogfoods the kit, so .claude/ is assembled by `pnpm dogfood` and is not source.
-# `.claude/ledgers/` is the exception: it holds the append-only ledgers behind
-# agent-kit.DECISIONS.md and agent-kit.BACKLOG.md, and losing them loses every recorded entry.
-# `.claude/*` rather than `.claude/`,
-# because git cannot re-include a path whose parent directory is itself excluded.
+# `.claude/*` rather than `.claude/`, because git cannot re-include a path whose parent
+# directory is itself excluded.
+#
+# `.claude/ledgers/` is re-included for one reason only: so the .gitignore INSIDE it stays
+# tracked and travels with a clone. That nested file ignores the directory's whole contents.
+# Nothing under here is committed. GitHub Projects holds the durable record, and the local
+# .jsonl is a push queue that `projects-sync.mjs` compacts down to what has not reached a
+# board yet.
 .claude/*
 !.claude/ledgers/
