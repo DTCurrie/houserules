@@ -1,0 +1,6 @@
+{
+  "name": "@agent-kit/plugin-fixture-libs",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs"
+}

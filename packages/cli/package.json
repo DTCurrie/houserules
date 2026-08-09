@@ -7,7 +7,8 @@
     "access": "public"
   },
   "bin": {
-    "agent-kit": "dist/cli.js"
+    "agent-kit": "dist/cli.js",
+    "agent-kit-payload": "dist/payload-build-bin.js"
   },
   "files": [
     "dist",

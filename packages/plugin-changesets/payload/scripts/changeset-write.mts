@@ -43,7 +43,7 @@ import { pathToFileURL } from 'node:url';
 import { execSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
-import { listPublishablePackageNames } from './lib/workspaces.mjs';
+import { listPublishablePackageNames } from '@agent-kit/cli/payload/workspaces';
 
 const LEVELS = new Set(['patch', 'minor', 'major']);
 const LEVEL_RANK: Record<string, number> = { patch: 0, minor: 1, major: 2 };

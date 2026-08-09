@@ -48,12 +48,17 @@
 import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
-import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
-import { makeId } from './lib/backlog-id.mjs';
-import { findEntry, loadIndex, type LedgerEntry } from './lib/ledger-index.mjs';
+import { loadConfigSafe, repoRoot } from '@agent-kit/cli/payload/kit-config';
+import { makeId } from '@agent-kit/cli/payload/backlog-id';
+import {
+  findEntry,
+  loadIndex,
+  type LedgerEntry,
+} from '@agent-kit/cli/payload/ledger-index';
 import {
   SEPARATOR,
   appendEvent,
+  areaNamesOf,
   decodeBody,
   encodeBody,
   impliedSurfaceFiles,
@@ -74,7 +79,8 @@ import {
   surfaceScope,
   takeChatFlag,
   todayDate,
-} from './lib/entry-ledger.mjs';
+  unknownAreaMessage,
+} from '@agent-kit/cli/payload/entry-ledger';
 
 const REPO_ROOT = repoRoot();
 const CONFIG = loadConfigSafe();
@@ -90,6 +96,20 @@ function resolveSurfaceFile(fileArg?: string): string {
     CONFIG.targets ?? [],
     fileArg,
   );
+}
+
+/**
+ * Rejects an `<area>` argument that names neither a configured target nor an existing surface,
+ * before the caller resolves or writes anywhere.
+ */
+function requireKnownArea(arg: string | undefined): void {
+  const message = unknownAreaMessage(
+    arg,
+    SURFACE,
+    CONFIG.targets ?? [],
+    areaNamesOf(allSurfaceFiles(), LEDGER_DIR, SURFACE, CONFIG.targets ?? []),
+  );
+  if (message) fail(message);
 }
 
 /** The surface-relative path recorded on each entry: the file's location inside the ledger directory. */
@@ -558,6 +578,7 @@ switch (action) {
       usage();
       process.exit(1);
     }
+    requireKnownArea(fileArg);
     const file = resolveSurfaceFile(fileArg);
     validatePrefix(prefix);
     const body = readContentArg(content);
@@ -613,6 +634,7 @@ switch (action) {
       usage();
       process.exit(1);
     }
+    requireKnownArea(fileArg);
     const file = resolveSurfaceFile(fileArg);
     const body = readContentArg(content);
     if (!body) {
@@ -660,6 +682,7 @@ switch (action) {
       usage();
       process.exit(1);
     }
+    requireKnownArea(fileArg);
     const file = resolveSurfaceFile(fileArg);
     const body = readContentArg(content);
     if (!body) {
@@ -693,6 +716,7 @@ switch (action) {
       usage();
       process.exit(1);
     }
+    requireKnownArea(toArea);
     const { entries } = projectDecisions(
       decisionsIndexEntries(),
       readLog<DecisionRecord>(LOG_FILE),
@@ -790,6 +814,7 @@ switch (action) {
 
   case 'list': {
     const [file] = rest;
+    if (file) requireKnownArea(file);
     const files = file ? [resolveSurfaceFile(file)] : allSurfaceFiles();
     for (const f of files) {
       const entries = listEntries(f);
@@ -805,6 +830,7 @@ switch (action) {
 
   case 'render': {
     const [file] = rest;
+    if (file) requireKnownArea(file);
     const files = file ? [resolveSurfaceFile(file)] : allSurfaceFiles();
     for (const f of files) rerenderFile(f);
     break;

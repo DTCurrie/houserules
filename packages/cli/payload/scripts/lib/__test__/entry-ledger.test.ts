@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  areaNamesOf,
   decodeBody,
   encodeBody,
   findSurfaceFiles,
@@ -22,7 +23,9 @@ import {
   readLog,
   rebuildWouldDropEntries,
   renderMetadata,
+  resolveAreaName,
   resolveSurfaceArg,
+  unknownAreaMessage,
   surfacePath,
   surfaceRelFile,
   surfaceScope,
@@ -342,6 +345,110 @@ describe('resolveSurfaceArg', () => {
       ).toBe(surfaceRelFile(LEDGERS, written));
     },
   );
+});
+
+describe('resolveAreaName', () => {
+  const TARGETS = [{ name: 'tower-push', pathPrefix: 'games/tower-push/' }];
+
+  const areaOf = (arg: string) => resolveAreaName(arg, 'BACKLOG.md', TARGETS);
+
+  it('reads a bare word as that area', () => {
+    expect(areaOf('studio')).toBe('studio');
+  });
+
+  it("reads an area's own surface filename as that area", () => {
+    expect(areaOf('studio.BACKLOG.md')).toBe('studio');
+  });
+
+  it('reads a path matching a configured pathPrefix as that target', () => {
+    expect(areaOf('games/tower-push/BACKLOG.md')).toBe('tower-push');
+  });
+
+  it('reads a path matching no target as its trailing directory', () => {
+    expect(areaOf('apps/studio/BACKLOG.md')).toBe('studio');
+  });
+
+  it('returns null for the bare basename, which names the repo-root surface', () => {
+    expect(areaOf('BACKLOG.md')).toBeNull();
+  });
+
+  it('returns null for a dot-slash basename, which resolves to the root surface too', () => {
+    expect(areaOf('./BACKLOG.md')).toBeNull();
+  });
+
+  it('returns null for a literal path that names no surface, since it escapes area resolution', () => {
+    expect(areaOf('docs/notes.md')).toBeNull();
+  });
+});
+
+describe('areaNamesOf', () => {
+  const TARGETS = [{ name: 'tower-push', pathPrefix: 'games/tower-push/' }];
+
+  it('names the area each per-area surface file stands for', () => {
+    const files = [
+      '/repo/.claude/ledgers/tower-push.BACKLOG.md',
+      '/repo/.claude/ledgers/retired.BACKLOG.md',
+    ];
+
+    expect([
+      ...areaNamesOf(files, '/repo/.claude/ledgers', 'BACKLOG.md', TARGETS),
+    ]).toEqual(['tower-push', 'retired']);
+  });
+
+  it('skips the repo-root surface, which is not an area', () => {
+    const files = ['/repo/.claude/ledgers/BACKLOG.md'];
+
+    expect(
+      areaNamesOf(files, '/repo/.claude/ledgers', 'BACKLOG.md', TARGETS).size,
+    ).toBe(0);
+  });
+});
+
+describe('unknownAreaMessage', () => {
+  const TARGETS = [{ name: 'tower-push', pathPrefix: 'games/tower-push/' }];
+
+  const complaintFor = (arg?: string, existing: string[] = []) =>
+    unknownAreaMessage(arg, 'BACKLOG.md', TARGETS, new Set(existing));
+
+  it('names the area, the config file, and every valid area', () => {
+    expect(complaintFor('cli')).toBe(
+      'Unknown area "cli". No target named "cli" is configured in kit.config.json, ' +
+        'and no surface for it exists yet.\n' +
+        'Valid areas: (repo root), tower-push.',
+    );
+  });
+
+  it('accepts a configured target', () => {
+    expect(complaintFor('tower-push')).toBeNull();
+  });
+
+  it('accepts a path that resolves to a configured target', () => {
+    expect(complaintFor('games/tower-push/BACKLOG.md')).toBeNull();
+  });
+
+  it('accepts an omitted argument, which means the repo-root surface', () => {
+    expect(complaintFor()).toBeNull();
+  });
+
+  it('accepts an area the config no longer lists but whose surface still exists', () => {
+    expect(complaintFor('retired', ['retired'])).toBeNull();
+  });
+
+  it('lists an existing unconfigured area among the valid ones', () => {
+    expect(complaintFor('cli', ['retired'])).toBe(
+      'Unknown area "cli". No target named "cli" is configured in kit.config.json, ' +
+        'and no surface for it exists yet.\n' +
+        'Valid areas: (repo root), tower-push, retired.',
+    );
+  });
+
+  it('rejects a path whose trailing directory names no target', () => {
+    expect(complaintFor('apps/studio/BACKLOG.md')).toBe(
+      'Unknown area "apps/studio/BACKLOG.md". No target named "studio" is configured in kit.config.json, ' +
+        'and no surface for it exists yet.\n' +
+        'Valid areas: (repo root), tower-push.',
+    );
+  });
 });
 
 describe('normalizeSurfaceRef', () => {

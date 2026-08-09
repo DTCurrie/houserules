@@ -44,6 +44,18 @@ function decide(
   };
 }
 
+function removed(id: string, reason: string): LedgerRecord {
+  return { ts: '2026-01-03T00:00:00Z', id, action: 'remove', reason };
+}
+
+function updatedTitle(id: string, title: string): LedgerRecord {
+  return { ts: '2026-01-05T00:00:00Z', id, action: 'update', title };
+}
+
+function amended(id: string, content: string): LedgerRecord {
+  return { ts: '2026-02-05T00:00:00Z', id, action: 'amend', content };
+}
+
 function syncedIssue(id: string, issue: number): LedgerRecord {
   return {
     ts: '2026-01-02T00:00:00Z',
@@ -104,16 +116,47 @@ function queueSurvivesCompaction(
 }
 
 describe('compactBacklog', () => {
-  it('keeps an entry the board has never seen, however finished it looks locally', () => {
-    const records = [
-      backlogAdd('A'),
-      { ts: '2026-01-03T00:00:00Z', id: 'A', action: 'remove', reason: 'moot' },
-    ];
+  it('drops an entry removed before it ever reached the board', () => {
+    const records = [backlogAdd('A'), removed('A', 'moot')];
 
     const result = compactBacklog(records, new Set(), onBoard([]));
 
-    expect(result.dropped).toEqual([]);
+    expect(result.dropped).toEqual([{ id: 'A', title: 'Fix the thing' }]);
+    expect(result.records).toEqual([]);
+  });
+
+  it('keeps an unsynced entry the index has not confirmed, since it is still owed a push', () => {
+    const result = compactBacklog([backlogAdd('A')], new Set(), onBoard([]));
+
     expect(result.kept).toEqual(['A']);
+    expect(result.dropped).toEqual([]);
+  });
+
+  it('keeps an entry the caller calls pending, even when it looks removed before sync', () => {
+    const records = [backlogAdd('A'), removed('A', 'moot')];
+
+    const result = compactBacklog(records, new Set(['A']), onBoard([]));
+
+    expect(result.kept).toEqual(['A']);
+    expect(result.records).toEqual(records);
+  });
+
+  it('keeps the records of an on-board entry whose add record an earlier compaction dropped', () => {
+    const records = [updatedTitle('A', 'Fix it properly')];
+
+    const result = compactBacklog(records, new Set(['A']), onBoard(['A']));
+
+    expect(result.kept).toEqual(['A']);
+    expect(result.records).toEqual(records);
+  });
+
+  it('leaves a board entry that contributed no records out of both manifests', () => {
+    const records = [backlogAdd('A'), syncedIssue('A', 7)];
+
+    const result = compactBacklog(records, new Set(), onBoard(['A', 'B']));
+
+    expect(result.dropped).toEqual([{ id: 'A', title: 'Fix the thing' }]);
+    expect(result.kept).toEqual([]);
   });
 
   it('drops an entry the index confirms is on the board', () => {
@@ -184,6 +227,15 @@ describe('compactDecisions', () => {
     expect(result.kept).toEqual(['D']);
     expect(result.records).toEqual(records);
   });
+
+  it('keeps the records of an on-board decision whose birth record an earlier compaction dropped', () => {
+    const records = [amended('D', 'revised')];
+
+    const result = compactDecisions(records, new Set(['D']), onBoard(['D']));
+
+    expect(result.kept).toEqual(['D']);
+    expect(result.records).toEqual(records);
+  });
 });
 
 describe('the push queue built from compacted records', () => {
@@ -211,6 +263,18 @@ describe('the push queue built from compacted records', () => {
       syncedIssue('A', 7),
       { ts: '2026-01-06T00:00:00Z', id: 'A', action: 'remove', reason: 'done' },
     ];
+
+    expect(queueSurvivesCompaction(backlog, [], onBoard(['A']), [])).toBe(true);
+  });
+
+  it('is unchanged when an entry was removed before it ever synced', () => {
+    const backlog = [backlogAdd('A'), removed('A', 'moot')];
+
+    expect(queueSurvivesCompaction(backlog, [])).toBe(true);
+  });
+
+  it('is unchanged when an on-board entry has an unpushed edit and no add record left', () => {
+    const backlog = [updatedTitle('A', 'Fix it properly')];
 
     expect(queueSurvivesCompaction(backlog, [], onBoard(['A']), [])).toBe(true);
   });
@@ -245,7 +309,7 @@ describe('describeCompaction', () => {
     };
 
     expect(describeCompaction('backlog', 4, result)).toBe(
-      'backlog: 4 records -> 1 (1 on the board and dropped, 1 still queued)',
+      'backlog: 4 records -> 1 (1 finished and dropped, 1 still queued)',
     );
   });
 });

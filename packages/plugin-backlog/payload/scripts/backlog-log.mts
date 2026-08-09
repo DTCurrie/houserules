@@ -46,11 +46,12 @@ import {
 } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
-import { makeId } from './lib/backlog-id.mjs';
+import { loadConfigSafe, repoRoot } from '@agent-kit/cli/payload/kit-config';
+import { makeId } from '@agent-kit/cli/payload/backlog-id';
 import {
   SEPARATOR,
   appendEvent,
+  areaNamesOf,
   decodeBody,
   encodeBody,
   impliedSurfaceFiles,
@@ -71,9 +72,13 @@ import {
   surfaceRelFile,
   surfaceScope,
   takeChatFlag,
-} from './lib/entry-ledger.mjs';
-import { findEntry, loadIndex } from './lib/ledger-index.mjs';
-import type { LedgerEntry, LedgerIndex } from './lib/ledger-index.mjs';
+  unknownAreaMessage,
+} from '@agent-kit/cli/payload/entry-ledger';
+import { findEntry, loadIndex } from '@agent-kit/cli/payload/ledger-index';
+import type {
+  LedgerEntry,
+  LedgerIndex,
+} from '@agent-kit/cli/payload/ledger-index';
 
 const REPO_ROOT = repoRoot();
 const CONFIG = loadConfigSafe();
@@ -90,6 +95,22 @@ function resolveSurfaceArg(file?: string): string {
     CONFIG.targets ?? [],
     file,
   );
+}
+
+/**
+ * Exits with the shared unknown-area message when `file` names an area no target configures.
+ * Every command that resolves a surface from an `<area>` argument calls this first.
+ */
+function requireKnownArea(file: string | undefined): void {
+  const message = unknownAreaMessage(
+    file,
+    SURFACE,
+    CONFIG.targets ?? [],
+    areaNamesOf(allSurfaceFiles(), LEDGER_DIR, SURFACE, CONFIG.targets ?? []),
+  );
+  if (message === null) return;
+  console.error(message);
+  process.exit(1);
 }
 
 interface BacklogRecord {
@@ -331,42 +352,6 @@ function entryNotFound(id: string, file: string): never {
   process.exit(1);
 }
 
-/**
- * The bare area name `file` refers to, or null when `resolveSurfaceArg` would not resolve it
- * against a per-target surface at all: the repo-root surface, or a literal path escape hatch
- * (a path with a separator that does not name a configured target's area).
- *
- * Mirrors `resolveSurfaceArg`'s own branching on the same argument, so a name checked here is
- * the same name the surface would actually resolve to.
- */
-export function resolveAreaName(
-  file: string,
-  basename: string,
-  targets: readonly { name: string; pathPrefix?: string }[],
-): string | null {
-  if (!file || file === basename) return null;
-  if (!file.includes('/')) {
-    const normalized = normalizeSurfaceRef(file, basename, targets);
-    if (normalized === basename) return null;
-    return normalized.endsWith(`.${basename}`)
-      ? normalized.slice(0, -(basename.length + 1))
-      : normalized;
-  }
-  const normalized = normalizeSurfaceRef(file, basename, targets);
-  if (normalized.includes('/')) return null;
-  return normalized.endsWith(`.${basename}`)
-    ? normalized.slice(0, -(basename.length + 1))
-    : normalized;
-}
-
-/** Whether `area` names the repo-root surface or a target `kit.config.json` configures. */
-export function isKnownArea(
-  area: string | null,
-  targets: readonly { name: string }[],
-): boolean {
-  return area === null || targets.some((t) => t.name === area);
-}
-
 function parseIssueFlag(value: string | undefined): number {
   const n = Number(value);
   if (!value || !Number.isInteger(n) || n <= 0) {
@@ -447,15 +432,7 @@ function main(): void {
         );
         process.exit(1);
       }
-      const area = resolveAreaName(file, SURFACE, CONFIG.targets ?? []);
-      if (!isKnownArea(area, CONFIG.targets ?? [])) {
-        const known = (CONFIG.targets ?? []).map((t) => t.name);
-        console.error(
-          `Unknown area "${file}" — no target named "${area}" is configured in kit.config.json.\n` +
-            `Valid areas: ${['(repo root)', ...known].join(', ')}.`,
-        );
-        process.exit(1);
-      }
+      requireKnownArea(file);
       const surface = resolveSurfaceArg(file);
       const id = makeId(prefix, title, nowIso());
       const chat = resolveChat(chatFlag, REPO_ROOT);
@@ -485,6 +462,7 @@ function main(): void {
         usage();
         process.exit(1);
       }
+      requireKnownArea(file);
       const surface = resolveSurfaceArg(file);
       const { surviving } = projectFile(surface);
       if (!surviving.some((e) => e.id === id))
@@ -507,6 +485,7 @@ function main(): void {
         usage();
         process.exit(1);
       }
+      requireKnownArea(file);
       const body = readContentArg(content);
       const surface = resolveSurfaceArg(file);
       const { surviving } = projectFile(surface);
@@ -531,6 +510,7 @@ function main(): void {
         usage();
         process.exit(1);
       }
+      requireKnownArea(toArea);
       const destination = resolveSurfaceArg(toArea);
       const { entries, removed } = projectBacklog(
         readLog<BacklogRecord>(LOG_FILE),
@@ -539,9 +519,13 @@ function main(): void {
       const entry = entries.get(id);
       if (!entry || removed.has(id))
         entryNotFound(id, relativeToRoot(REPO_ROOT, LOG_FILE));
-      const source = resolveSurfaceArg(
-        normalizeSurfaceRef(entry.file, SURFACE, CONFIG.targets ?? []),
+      const sourceArea = normalizeSurfaceRef(
+        entry.file,
+        SURFACE,
+        CONFIG.targets ?? [],
       );
+      requireKnownArea(sourceArea);
+      const source = resolveSurfaceArg(sourceArea);
       appendEvent(LOG_FILE, {
         ts: nowIso(),
         id,
@@ -601,6 +585,7 @@ function main(): void {
 
     case 'list': {
       const [file] = rest;
+      requireKnownArea(file);
       const files = file ? [resolveSurfaceArg(file)] : allSurfaceFiles();
       for (const f of files) {
         const entries = listEntries(f);
@@ -616,6 +601,7 @@ function main(): void {
 
     case 'render': {
       const [file] = rest;
+      requireKnownArea(file);
       const files = file ? [resolveSurfaceArg(file)] : allSurfaceFiles();
       for (const f of files) rerenderFile(f);
       break;

@@ -11,13 +11,17 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished } from 'vitest';
 
+import type { CopyAction } from '../actions.js';
 import type { KitConfig } from '../core/config.js';
 import type { Answers, ModuleDef } from '../module-def.js';
+import { payloadPath } from '../paths.js';
 import { PluginResolutionError } from '../plugin-registry.js';
 import { buildRegistry } from '../plugin-resolver.js';
 
 const KIT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const FIXTURE_ROOT = join(KIT_ROOT, 'test/plugin-fixture');
+const LIBS_FIXTURE = join(FIXTURE_ROOT, 'libs');
+const BAD_LIB_FIXTURE = join(FIXTURE_ROOT, 'bad-lib');
 
 function ensureFixtureSelfLink(): void {
   const link = join(FIXTURE_ROOT, 'node_modules', '@agent-kit', 'cli');
@@ -243,5 +247,107 @@ describe('buildRegistry', () => {
     const config = buildConfig([{ name: dir, alias: 'peerbadrange' }]);
 
     expect(() => buildRegistry(makeRoot(), config, [])).toThrow(/unparseable/);
+  });
+
+  it('plans a copy of the CLI lib a plugin script imports, sourced from the CLI payload', () => {
+    const config = buildConfig([{ name: LIBS_FIXTURE, alias: 'libs' }]);
+
+    const registry = buildRegistry(makeRoot(), config, []);
+    const actions = runPlan(registry.get('libs/libs')!.def);
+    const derived = actions.find(
+      (action) =>
+        action.kind === 'copy' &&
+        action.dest === '.claude/scripts/lib/entry-ledger.mjs',
+    );
+
+    expect(derived).toEqual({
+      kind: 'copy',
+      src: payloadPath('scripts', 'lib', 'entry-ledger.mjs'),
+      dest: '.claude/scripts/lib/entry-ledger.mjs',
+      module: 'libs',
+      reason: 'shared script library',
+    });
+  });
+
+  it('plans one lib copy when two scripts in the same module import it', () => {
+    const config = buildConfig([{ name: LIBS_FIXTURE, alias: 'libs' }]);
+
+    const registry = buildRegistry(makeRoot(), config, []);
+    const actions = runPlan(registry.get('libs/libs')!.def);
+    const libCopies = actions.filter(
+      (action) =>
+        action.kind === 'copy' &&
+        action.dest === '.claude/scripts/lib/entry-ledger.mjs',
+    );
+
+    expect(libCopies).toHaveLength(1);
+  });
+
+  it('plans nothing extra for a script with no entry in the sidecar', () => {
+    const config = buildConfig([{ name: LIBS_FIXTURE, alias: 'libs' }]);
+
+    const registry = buildRegistry(makeRoot(), config, []);
+    const actions = runPlan(registry.get('libs/libs')!.def);
+    const libDests = actions
+      .filter((action) => action.kind === 'copy')
+      .map((action) => action.dest)
+      .filter((dest) => dest.startsWith('.claude/scripts/lib/'));
+
+    expect(libDests).toEqual(['.claude/scripts/lib/entry-ledger.mjs']);
+  });
+
+  it('plans no lib copies for a plugin whose payload has no import sidecar', () => {
+    ensureFixtureSelfLink();
+    const config = buildConfig([
+      { name: FIXTURE_ROOT, alias: 'fixture', config: {} },
+    ]);
+
+    const registry = buildRegistry(makeRoot(), config, []);
+    const actions = runPlan(registry.get('fixture/fixture-core')!.def);
+    const libDests = actions
+      .filter((action) => action.kind === 'copy')
+      .map((action) => action.dest)
+      .filter((dest) => dest.startsWith('.claude/scripts/lib/'));
+
+    expect(libDests).toEqual([]);
+  });
+
+  it("resolves a derived lib copy inside the CLI's own payload-dist, not the plugin's package", () => {
+    const config = buildConfig([{ name: LIBS_FIXTURE, alias: 'libs' }]);
+
+    const registry = buildRegistry(makeRoot(), config, []);
+    const actions = runPlan(registry.get('libs/libs')!.def);
+    const derived = actions.find(
+      (action): action is CopyAction =>
+        action.kind === 'copy' &&
+        action.dest === '.claude/scripts/lib/entry-ledger.mjs',
+    );
+
+    expect(derived?.src).toBe(
+      payloadPath('scripts', 'lib', 'entry-ledger.mjs'),
+    );
+    expect(derived?.src.endsWith('.mjs')).toBe(true);
+    expect(existsSync(derived!.src)).toBe(true);
+  });
+
+  it('plans a copy from a lib name the CLI payload does not actually ship, rather than dropping it', () => {
+    const config = buildConfig([{ name: BAD_LIB_FIXTURE, alias: 'badlib' }]);
+
+    const registry = buildRegistry(makeRoot(), config, []);
+    const actions = runPlan(registry.get('badlib/bad-lib')!.def);
+    const derived = actions.find(
+      (action): action is CopyAction =>
+        action.kind === 'copy' &&
+        action.dest === '.claude/scripts/lib/nonexistent-lib.mjs',
+    );
+
+    expect(derived).toEqual({
+      kind: 'copy',
+      src: payloadPath('scripts', 'lib', 'nonexistent-lib.mjs'),
+      dest: '.claude/scripts/lib/nonexistent-lib.mjs',
+      module: 'bad-lib',
+      reason: 'shared script library',
+    });
+    expect(existsSync(derived!.src)).toBe(false);
   });
 });

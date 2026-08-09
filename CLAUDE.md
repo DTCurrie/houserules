@@ -148,12 +148,15 @@ A pnpm workspace of fourteen packages. Every path in the Layout section below is
   `build.files` names `tsconfig.build.json` and its `check.files` names both.
 - **A package that ships payload scripts has a THIRD tsconfig, and `check` must run it too.**
   `tsconfig.payload.json` compiles `payload/**/*.mts` to `payload-dist/`, and its options are
-  genuinely different: its own `rootDir` and `outDir`, plus a `rootDirs` pairing
-  `./payload/scripts` with `../cli/payload-dist/scripts` so a plugin script can import a lib the
-  CLI ships. Those cannot be folded into the check config, so `check` runs both projects:
+  genuinely different: its own `rootDir` and `outDir`. Those cannot be folded into the check config,
+  so `check` runs both projects:
   `tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json`. Its `files` names
   `payload/**/*.mts` and `tsconfig.payload.json`, and its `dependencies` names
-  `../cli:build:payload`, without which the `rootDirs` half resolves nothing.
+  `../cli:build:payload`, without which a `@agent-kit/cli/payload/*` import resolves nothing. **No
+  plugin carries a `rootDirs` line any more.** Six of them did, each pairing `./payload/scripts` with
+  `../cli/payload-dist/scripts`, a relative path into a sibling's build output that existed only
+  inside this monorepo and that a third-party author had no way to write. Package-name imports plus
+  the `agent-kit-payload` rewrite replaced all six. Do not add one back.
   Not hypothetical either: six plugins ran `check` over `src/` alone, so 26 payload sources
   including the largest script in the workspace were never typechecked by it. `build` caught them,
   which is why nothing was broken, but `check` is the gate that runs first and it was reporting
@@ -225,24 +228,32 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   a file-existence guard that `exec`s node. `exec` is load-bearing, since a plain `node` would
   let any non-zero exit fall through to the fallback echo and swallow the code (changeset-check
   exits 2 on purpose).
-- **A payload LIB cannot import a core lib. Only a payload SCRIPT can.** `tsconfig.payload.json`'s
-  `rootDirs` bridges `./lib/entry-ledger.mjs` from a script at the scripts root, the form
-  `projects-sync.mts` uses, and it does not bridge a sibling import from inside `lib/`. Measured
-  both ways, including with both `lib/` directories added to `rootDirs`, which does not help.
-  There are two ways across and they are not interchangeable.
-  - **A type** comes by package name:
-    `import type { LedgerEntry } from '@agent-kit/cli/payload/ledger-index'`. The `./payload/*`
-    export is deliberately **types only, with no runtime entry**, so a value import through it
-    fails with `ERR_PACKAGE_PATH_NOT_EXPORTED` rather than shipping a payload that breaks in a
-    user's repo. `import type` erases before emit, so the zero-dependency invariant holds by
-    construction and not by exception: `payload/__test__/dependencies.test.ts` scans the emitted
-    `.mjs`, where nothing remains to find.
-  - **A value** is passed in. A lib needing config or IO takes it as a parameter from the script
-    that called it, which is what `readGateInputs(ledgerDirectory, autoSync)` already does and
-    why. The script is the composition root, and a pure lib should not be reaching for config.
-- Every shared lib a payload script imports must be listed in `src/modules/core.ts`'s copy
-  manifest. A script installed without its lib fails with ERR_MODULE_NOT_FOUND in the user's repo,
-  which no unit test catches.
+- **Payload code crosses packages by PACKAGE NAME, and the build rewrites it.** Decision
+  `AGENTKIT-deb26c`. Any payload file, script or lib, reaches a CLI lib as
+  `import { nowIso } from '@agent-kit/cli/payload/entry-ledger'`, for values and types alike. There
+  is one form, not two. The six CLI libs are `backlog-id`, `entry-ledger`, `kit-config`,
+  `ledger-index`, `proc`, and `workspaces`. Anything else under `./lib/` is the package's own and
+  stays a relative import.
+  - **`agent-kit-payload` is what makes it safe**, a bin the CLI publishes that each plugin runs
+    after its `tsc`. It rewrites those specifiers in the emitted `.mjs` to the relative form the
+    flattened `.claude/scripts/` layout needs, and records what it rewrote in
+    `payload-dist/payload-imports.json`. Install reads that sidecar and copies each named lib from
+    the CLI's own `payload-dist`, so a plugin no longer relies on the `core` module happening to
+    ship what its scripts import. A plugin declares nothing and cannot forget.
+  - **Never let a bare `@agent-kit/*` specifier reach an emitted `.mjs`.** The payload is a copy
+    target, not a dependency: it is copied into a user's repo and runs standalone on bare node, on
+    every hook. `payload/__test__/dependencies.test.ts` fails on a surviving specifier, and that
+    test is the guard now, replacing the types-only exports map that used to fail such an import at
+    runtime by accident.
+  - **A value a lib needs is still passed in.** `readGateInputs(ledgerDirectory, autoSync)` is the
+    pattern. The script is the composition root, and a pure lib should not reach for config. That
+    is a design rule about coupling, not a resolution limit.
+  - The old rule here said a payload lib could not import a CLI lib. That was measured false on two
+    packages, and a name collision fails loudly at build with TS2305 rather than shadowing
+    silently. Do not reintroduce the prohibition.
+- A lib the CLI's OWN scripts import must still be listed in `src/modules/core.ts`'s copy manifest.
+  A plugin's cross-package imports are derived from its sidecar instead, so only the CLI's own
+  manifest is hand-maintained now.
 - Two readers of kit.config.json, one shape: the CLI validates strictly via zod
   (`src/core/config.ts`), and the payload reads it defensively and **dependency-free**
   (`loadConfigSafe()`). They share only the inferred `KitConfig` type. Never make the payload

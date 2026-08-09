@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 
-import type { BodyAction, CopyAction } from '../actions.js';
+import type { Action, BodyAction, CopyAction } from '../actions.js';
 import { payloadPath } from '../paths.js';
+import type { PayloadImports } from '../payload-imports.js';
 
 /**
  * The action builders bound to one payload root. The kit binds them to its own payload, and
@@ -156,3 +157,34 @@ export const reference = kitBuilders.reference;
 
 export const template = kitBuilders.template;
 export const file = kitBuilders.file;
+
+/**
+ * The lib copies `actions` imply, given the sidecar a plugin's payload build wrote for it.
+ *
+ * A copy action's `dest` mirrors the payload root one-for-one, so `.claude/scripts/foo.mjs`
+ * corresponds to the sidecar key `scripts/foo.mjs`. Every lib basename `sidecar` names for that
+ * key gets ONE copy from the CLI's own payload, deduplicated across every action passed in, and
+ * attributed to the module that declared the action which named it.
+ *
+ * Empty when `sidecar` names nothing, which is the compatibility path for a plugin published
+ * before this mechanism existed.
+ */
+export function deriveLibActions(
+  actions: Action[],
+  sidecar: PayloadImports,
+): CopyAction[] {
+  const seen = new Set<string>();
+  const derived: CopyAction[] = [];
+  for (const action of actions) {
+    if (action.kind !== 'copy') continue;
+    const key = action.dest.startsWith('.claude/')
+      ? action.dest.slice('.claude/'.length)
+      : action.dest;
+    for (const name of sidecar.libs[key] ?? []) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+      derived.push(lib(action.module, name));
+    }
+  }
+  return derived;
+}

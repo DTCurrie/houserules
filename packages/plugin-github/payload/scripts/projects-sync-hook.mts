@@ -27,9 +27,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
-import { readStdinJson } from './lib/proc.mjs';
-import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
-import { ledgerDir, readLog } from './lib/entry-ledger.mjs';
+import { readStdinJson } from '@agent-kit/cli/payload/proc';
+import { loadConfigSafe, repoRoot } from '@agent-kit/cli/payload/kit-config';
+import { ledgerDir, readLog } from '@agent-kit/cli/payload/entry-ledger';
 import { ENABLE_TOKEN_BASENAME } from './lib/sync-gate.mjs';
 import { buildPushQueue, summarizeQueue } from './lib/push-queue.mjs';
 import type { LedgerRecord } from './lib/push-queue.mjs';

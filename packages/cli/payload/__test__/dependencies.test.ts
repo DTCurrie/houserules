@@ -70,6 +70,22 @@ describe('the emitted payload script tree', () => {
       'payload is copied into user repos and must run on bare node',
     ).toEqual([]);
   });
+
+  it('rewrites every @agent-kit/cli/payload/ specifier before emit, leaving none behind', () => {
+    const offenders: string[] = [];
+    for (const file of scripts) {
+      const rel = file.slice(EMITTED_SCRIPTS_DIR.length + 1);
+      for (const spec of importAndExportSpecifiersOf(
+        readFileSync(file, 'utf8'),
+      )) {
+        if (spec.startsWith('@agent-kit/')) offenders.push(`${rel} → ${spec}`);
+      }
+    }
+    expect(
+      offenders,
+      'an emitted script must never import a workspace package by name, since it is copied into a user repo where that package does not resolve',
+    ).toEqual([]);
+  });
 });
 
 describe('lib/kit-config.mjs, the highest-blast-radius file since every hook calls it', () => {

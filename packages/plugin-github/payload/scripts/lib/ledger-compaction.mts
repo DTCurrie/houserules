@@ -4,10 +4,11 @@
  * The ledgers are a QUEUE. An entry the board holds is removed from them entirely, so a synced
  * repo's `.jsonl` is empty and its size tracks work outstanding rather than work done.
  *
- * Two conditions must BOTH hold before an entry is dropped, and the second is what makes the first
- * safe. The push queue must owe it nothing, and the index must confirm the board actually has it.
- * A push that wrote its `synced` record but whose board write did not land would otherwise eat the
- * only remaining copy.
+ * The push queue must owe an entry nothing before it can be dropped, and that alone is not enough.
+ * One of two further things has to be true. Either the index confirms the board actually has it, so
+ * a push that wrote its `synced` record but whose board write did not land cannot have the only
+ * remaining copy eaten. Or the entry never synced at all, in which case there is no board copy for
+ * the index to confirm and waiting on confirmation would keep it forever.
  *
  * Entirely pure, like {@link push-queue}. It never reads or writes a file, and the executor in
  * `projects-sync.mts` is what applies the result.
@@ -21,8 +22,12 @@
  *    whole entries, so a field this module has no type for cannot be lost by rewriting one.
  */
 
-import { foldBacklog, foldDecisions } from './push-queue.mjs';
-import type { LedgerRecord, PushOp } from './push-queue.mjs';
+import {
+  foldBacklog,
+  foldDecisions,
+  isRemovedBeforeSync,
+} from './push-queue.mjs';
+import type { BacklogState, LedgerRecord, PushOp } from './push-queue.mjs';
 import type { LedgerEntry } from '@agent-kit/cli/payload/ledger-index';
 
 /** An entry removed outright, identified for a manifest of what compaction dropped. */
@@ -58,26 +63,38 @@ function recordsFor(
   return records.filter((record) => record.id === id);
 }
 
-export function compactBacklog(
+/**
+ * The fold-agnostic half of compaction: walk the folded order, keep or drop each entry whole.
+ *
+ * Both ledgers share this. What differs between them is the fold and the survival rule, so those
+ * are the two parameters, and neither ledger gets to grow its own copy of the loop.
+ *
+ * An id that contributed no records is skipped outright rather than counted either way. Folding
+ * with the index puts every board entry in `order`, including ones whose records a previous
+ * compaction already dropped, and those are neither kept nor dropped by a pass over records.
+ * Counting them would inflate both manifests with entries this run did not touch.
+ */
+function compactLedger<TState extends { title: string }>(
   records: readonly LedgerRecord[],
-  pending: ReadonlySet<string>,
-  index: readonly LedgerEntry[] = [],
+  fold: { entries: Map<string, TState>; order: readonly string[] },
+  survives: (id: string, state: TState) => boolean,
 ): CompactionResult {
-  const { entries, order } = foldBacklog(records);
-  const onBoard = new Set(index.map((entry) => entry.id));
   const result: CompactionResult = {
     records: [],
     dropped: [],
     kept: [],
   };
 
-  for (const id of order) {
-    const state = entries.get(id);
+  for (const id of fold.order) {
+    const state = fold.entries.get(id);
     if (!state) continue;
 
-    if (pending.has(id) || !onBoard.has(id)) {
+    const own = recordsFor(records, id);
+    if (own.length === 0) continue;
+
+    if (survives(id, state)) {
       result.kept.push(id);
-      result.records.push(...recordsFor(records, id));
+      result.records.push(...own);
       continue;
     }
     result.dropped.push({ id, title: state.title });
@@ -86,32 +103,55 @@ export function compactBacklog(
   return result;
 }
 
+/**
+ * Whether every record for this backlog entry must survive the rewrite.
+ *
+ * Three cases, and their ORDER is load-bearing. `pending` comes from the caller rather than from
+ * this fold, so the two can disagree about one entry, and the queue is the half that must win. It
+ * is the invariant the executor checks before it rewrites anything. Asking the local state first
+ * would let a fold that reads an entry as finished delete the records an op in the queue is built
+ * from.
+ */
+function backlogEntrySurvives(
+  id: string,
+  state: BacklogState,
+  pending: ReadonlySet<string>,
+  onBoard: ReadonlySet<string>,
+): boolean {
+  if (pending.has(id)) return true;
+  if (isRemovedBeforeSync(state)) return false;
+  return !onBoard.has(id);
+}
+
+export function compactBacklog(
+  records: readonly LedgerRecord[],
+  pending: ReadonlySet<string>,
+  index: readonly LedgerEntry[] = [],
+): CompactionResult {
+  const onBoard = new Set(index.map((entry) => entry.id));
+
+  return compactLedger(records, foldBacklog(records, index), (id, state) =>
+    backlogEntrySurvives(id, state, pending, onBoard),
+  );
+}
+
+/**
+ * No decisions counterpart to {@link isRemovedBeforeSync}, because a decision is never terminal.
+ * It has no `remove`, and `markSupersededOps` resolves supersede targets out of the same fold, so
+ * an entry that emits nothing itself can still be named by a later flip.
+ */
 export function compactDecisions(
   records: readonly LedgerRecord[],
   pending: ReadonlySet<string>,
   index: readonly LedgerEntry[] = [],
 ): CompactionResult {
-  const { entries, order } = foldDecisions(records);
   const onBoard = new Set(index.map((entry) => entry.id));
-  const result: CompactionResult = {
-    records: [],
-    dropped: [],
-    kept: [],
-  };
 
-  for (const id of order) {
-    const state = entries.get(id);
-    if (!state) continue;
-
-    if (pending.has(id) || !onBoard.has(id)) {
-      result.kept.push(id);
-      result.records.push(...recordsFor(records, id));
-      continue;
-    }
-    result.dropped.push({ id, title: state.title });
-  }
-
-  return result;
+  return compactLedger(
+    records,
+    foldDecisions(records, index),
+    (id) => pending.has(id) || !onBoard.has(id),
+  );
 }
 
 /** One line per ledger, for `compact` and for the tail of a push that compacted something. */
@@ -123,7 +163,7 @@ export function describeCompaction(
   const after = result.records.length;
   return (
     `${kind}: ${before} records -> ${after} ` +
-    `(${result.dropped.length} on the board and dropped, ` +
+    `(${result.dropped.length} finished and dropped, ` +
     `${result.kept.length} still queued)`
   );
 }

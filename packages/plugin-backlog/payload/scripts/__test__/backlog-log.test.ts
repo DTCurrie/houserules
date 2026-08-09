@@ -1425,6 +1425,147 @@ describe('backlog-log.mjs add given an area kit.config.json does not configure',
   });
 });
 
+describe('backlog-log.mjs remove given an area kit.config.json does not configure', () => {
+  it('rejects the area and leaves the entry on its real surface', () => {
+    const root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: ROOT_RECORD_FILE,
+        title: 'First item',
+        chat: null,
+        content: encodeBody('body one'),
+      },
+    ]);
+    run(root, ['render', 'BACKLOG.md']);
+
+    const r = run(root, [
+      'remove',
+      'TEST-aaaaaa',
+      'cli',
+      'shipped it',
+      '--chat=none',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "cli"');
+    expect(readFile(root, ROOT_SURFACE)).toContain('TEST-aaaaaa');
+  });
+});
+
+describe('backlog-log.mjs update given an area kit.config.json does not configure', () => {
+  it('rejects the area without recording an update event', () => {
+    const root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: ROOT_RECORD_FILE,
+        title: 'Old title',
+        chat: null,
+        content: encodeBody('old body'),
+      },
+    ]);
+
+    const r = run(root, [
+      'update',
+      'TEST-aaaaaa',
+      'cli',
+      'New title',
+      'new body',
+      '--chat=none',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "cli"');
+    expect(logRecords(root)).toHaveLength(1);
+  });
+});
+
+describe('backlog-log.mjs move given an area kit.config.json does not configure', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: ROOT_RECORD_FILE,
+        title: 'First item',
+        chat: null,
+        content: encodeBody('body one'),
+      },
+    ]);
+    run(root, ['render', 'BACKLOG.md']);
+  });
+
+  it('rejects an unconfigured destination area', () => {
+    const r = run(root, ['move', 'TEST-aaaaaa', 'cli', '--chat=none']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "cli"');
+    expect(existsSync(join(root, '.claude/ledgers/cli.BACKLOG.md'))).toBe(
+      false,
+    );
+  });
+
+  it('leaves the entry on its source surface when the destination is rejected', () => {
+    run(root, ['move', 'TEST-aaaaaa', 'cli', '--chat=none']);
+
+    expect(readFile(root, ROOT_SURFACE)).toContain('TEST-aaaaaa');
+  });
+});
+
+describe('backlog-log.mjs list given an area kit.config.json does not configure', () => {
+  it('rejects the area rather than reporting an empty result', () => {
+    const root = stage();
+
+    const r = run(root, ['list', 'cli']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "cli"');
+  });
+});
+
+describe('backlog-log.mjs render given an area kit.config.json does not configure', () => {
+  it('rejects the area and writes no surface file', () => {
+    const root = stage();
+
+    const r = run(root, ['render', 'cli']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "cli"');
+    expect(existsSync(join(root, '.claude/ledgers/cli.BACKLOG.md'))).toBe(
+      false,
+    );
+  });
+
+  it('rejects a typo naming neither a configured target nor an existing surface', () => {
+    const root = stage();
+    seedLog(root, [
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'TEST-aaaaaa',
+        action: 'add',
+        file: ROOT_RECORD_FILE,
+        title: 'Root item',
+        chat: null,
+        content: encodeBody('body'),
+      },
+    ]);
+
+    const r = run(root, ['render', 'stuido']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "stuido"');
+  });
+});
+
 describe('a backlog entry the board reports as Done', () => {
   let root: string;
 

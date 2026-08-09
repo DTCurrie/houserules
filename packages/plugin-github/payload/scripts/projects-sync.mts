@@ -45,7 +45,7 @@ import {
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
+import { loadConfigSafe, repoRoot } from '@agent-kit/cli/payload/kit-config';
 import {
   appendEvent,
   ledgerDir,
@@ -53,7 +53,7 @@ import {
   nowIso,
   decodeBody,
   readLog,
-} from './lib/entry-ledger.mjs';
+} from '@agent-kit/cli/payload/entry-ledger';
 import {
   ghErr,
   ghExists,
@@ -75,8 +75,8 @@ import {
   indexBasename,
   loadIndex,
   serializeIndex,
-} from './lib/ledger-index.mjs';
-import type { LedgerIndex } from './lib/ledger-index.mjs';
+} from '@agent-kit/cli/payload/ledger-index';
+import type { LedgerIndex } from '@agent-kit/cli/payload/ledger-index';
 import {
   describeStep,
   planBootstrap,
@@ -1769,9 +1769,9 @@ function usage(): void {
       'is the local token that enables pushing entries to the board.',
       'push drains the queue of ledger entries that have not reached the board yet, then',
       'compacts.',
-      'compact shrinks the local ledgers to what a push still owes the board: entries that',
-      'landed collapse to one record each, and entries removed before they ever landed are',
-      'dropped. It runs at the end of every push, and needs no network.',
+      'compact shrinks the local ledgers to what a push still owes the board: entries the',
+      'index confirms landed are dropped, and so are entries removed before they ever',
+      'landed. It runs at the end of every push, and needs no network.',
       'backfill brings an existing board up to the current field schema, by matching each',
       'board item to a local ledger entry, by marker where one exists and by title where it',
       "does not, and filling in whatever the item's fields are missing.",

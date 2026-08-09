@@ -61,8 +61,18 @@ for (const registered of registry.modules) {
   for (const action of registered.def.plan(ctx, answers)) {
     const target = action.dest ?? action.kind;
     console.log(`  ${action.kind} ${target}`);
-    if (action.src && !action.src.startsWith(resolve(repoRoot, packagePath))) {
-      console.error(`  !! src escapes the plugin package: ${action.src}`);
+    if (!action.src) continue;
+    // A plugin's own files must resolve inside its package. A CLI lib must not: a plugin that
+    // imports substrate by package name gets those copies derived for it, resolved from the CLI's
+    // own payload, and rejecting them here would fail every migrated plugin.
+    const allowedRoots = [
+      resolve(repoRoot, packagePath),
+      resolve(repoRoot, 'packages/cli/payload-dist'),
+    ];
+    if (!allowedRoots.some((allowed) => action.src.startsWith(allowed))) {
+      console.error(
+        `  !! src escapes both the plugin package and the CLI payload: ${action.src}`,
+      );
       process.exit(1);
     }
   }

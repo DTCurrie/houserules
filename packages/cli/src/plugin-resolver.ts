@@ -4,9 +4,14 @@ import { createRequire } from 'node:module';
 import { satisfies, validRange } from 'semver';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
-import type { ModuleDef } from './module-def.js';
-import { createPayloadBuilders } from './modules/copy-actions.js';
+import type { Answers, ModuleDef } from './module-def.js';
+import {
+  createPayloadBuilders,
+  deriveLibActions,
+} from './modules/copy-actions.js';
 import { KIT_ROOT } from './paths.js';
+import { readPayloadImports, type PayloadImports } from './payload-imports.js';
+import type { Ctx } from './detect.js';
 import type { Plugin, PluginApi } from './plugin.js';
 import {
   namespacedId,
@@ -184,6 +189,28 @@ function checkPeerRange(
   }
 }
 
+/**
+ * Wraps `def.plan` so every planned copy of one of its payload files also plans a copy of the
+ * CLI libs that file imports, resolved from the CLI's own payload rather than the plugin's.
+ * A plugin declares nothing extra for this and cannot forget it.
+ *
+ * A no-op when `sidecar` is empty, which is the compatibility path for a plugin published
+ * before this mechanism existed.
+ */
+function withDerivedLibActions(
+  def: ModuleDef,
+  sidecar: PayloadImports,
+): ModuleDef {
+  if (Object.keys(sidecar.libs).length === 0) return def;
+  return {
+    ...def,
+    plan(ctx: Ctx, answers: Answers) {
+      const actions = def.plan(ctx, answers);
+      return [...actions, ...deriveLibActions(actions, sidecar)];
+    },
+  };
+}
+
 function readCliVersion(): string {
   const raw = readFileSync(join(KIT_ROOT, 'package.json'), 'utf8');
   return (JSON.parse(raw) as { version: string }).version;
@@ -225,15 +252,17 @@ export const buildRegistry: BuildRegistry = (root, config, builtIns) => {
     };
     plugins.push(source);
 
+    const pluginPayloadRoot = join(dir, 'payload-dist');
     const mod = loadEntryPoint(dir, entry.name);
     const plugin = extractPluginFn(mod, entry.name);
     const api: PluginApi = {
-      payload: createPayloadBuilders(join(dir, 'payload-dist')),
+      payload: createPayloadBuilders(pluginPayloadRoot),
       packageName: entry.name,
       alias: entry.alias,
       config: entry.config,
     };
     const defs = invokePlugin(plugin, api, entry.name);
+    const sidecar = readPayloadImports(pluginPayloadRoot);
 
     for (const def of defs) {
       const id = namespacedId(entry.alias, def.id);
@@ -244,7 +273,7 @@ export const buildRegistry: BuildRegistry = (root, config, builtIns) => {
         );
       }
       ids.add(id);
-      modules.push({ id, def, source });
+      modules.push({ id, def: withDerivedLibActions(def, sidecar), source });
     }
   }
 

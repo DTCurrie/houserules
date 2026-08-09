@@ -28,9 +28,10 @@
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && node scripts/build-payload.mjs && publint",
+      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload && node scripts/build-payload.mjs && publint",
       "dependencies": [
-        "../cli:build:ts"
+        "../cli:build:ts",
+        "../cli:build:payload"
       ],
       "files": [
         "src/**/*.ts",

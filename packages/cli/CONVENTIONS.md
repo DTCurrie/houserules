@@ -330,3 +330,39 @@ plugin payload scripts import those libs instead of vendoring copies (see the de
 package ships substrate that plugins build on", which
 `node .claude/scripts/decision-log.mjs list` will find). A signature change to a lib
 function follows this same minor/major split.
+
+## 12. How a plugin's payload reaches a CLI lib
+
+Import it by package name, for values as well as types:
+
+```ts
+import { repoRoot } from '@agent-kit/cli/payload/kit-config';
+import type { LedgerEntry } from '@agent-kit/cli/payload/ledger-index';
+```
+
+Then run `agent-kit-payload` after your `tsc`, which is a bin this package publishes:
+
+```json
+"build": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload"
+```
+
+It takes your payload root, defaulting to `payload-dist`, and does two things. It rewrites every
+`@agent-kit/cli/payload/*` specifier in your emitted `.mjs` to the relative path the installed
+layout needs, since everything flattens into one `.claude/scripts/lib/` directory in the target
+repo. And it writes `payload-dist/payload-imports.json` recording which libs each emitted file
+imports, which the installer reads to copy those libs from the CLI's own payload. You declare no lib
+copies yourself, and you cannot forget one.
+
+Three things worth knowing:
+
+- **A type import costs nothing.** It erases before emit, so it never reaches the `.mjs` and no lib
+  is copied for it. Keep `import type` as `import type`.
+- **A misspelled lib fails your build**, naming the file and the lib, rather than shipping a script
+  that dies with `ERR_MODULE_NOT_FOUND` in someone's repo.
+- **Never hand-write the rewritten form.** Import by package name and let the tool do it. A bare
+  `@agent-kit/*` specifier surviving into an emitted `.mjs` would try to resolve from
+  `.claude/scripts/` in a user's repo on every hook, which is why the CLI's own test suite fails on
+  one.
+
+Your own libs are a different case. A payload file importing a lib from its OWN package uses an
+ordinary relative path, and nothing rewrites it.

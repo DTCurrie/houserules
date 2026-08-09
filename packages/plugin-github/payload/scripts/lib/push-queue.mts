@@ -276,15 +276,20 @@ function backlogOpsFor(id: string, state: BacklogState): PushOp[] {
 }
 
 /**
- * Whether this entry can never produce another operation, no matter what happens next.
+ * Whether this entry was removed before any push ever reached the board.
  *
- * A removed entry that was never synced has nothing on the board to close, and one whose close
- * already landed has nothing left to do. Both are dead weight in the ledger forever, and they are
- * the whole of its unbounded growth: a repo that files and closes entries accumulates them at the
- * rate it works. Nothing can revive one, because `remove` has no inverse.
+ * It has nothing on the board to close, so `backlogOpsFor` returns nothing for it and nothing can
+ * revive it, because `remove` has no inverse. It is dead weight in the ledger forever, and it is
+ * the whole of the ledger's unbounded growth: a repo that files and drops entries locally
+ * accumulates them at the rate it works.
+ *
+ * Deliberately NOT true of an entry whose close already landed, which is equally finished. That
+ * one has a board copy, so compaction defers to the index to confirm the copy exists before
+ * dropping the local record of it. An entry that never synced has no board copy to confirm, so
+ * the index can never say anything about it and waiting for confirmation keeps it forever.
  */
-export function isBacklogTerminal(state: BacklogState): boolean {
-  return state.removed && (state.closed || !state.synced);
+export function isRemovedBeforeSync(state: BacklogState): boolean {
+  return state.removed && !state.synced;
 }
 
 /**

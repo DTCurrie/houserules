@@ -149,20 +149,15 @@ describe('projects plugin', () => {
       join(PACKAGE_ROOT, 'payload/scripts/projects-sync.mts'),
       'utf8',
     );
-    const imported = [...script.matchAll(/from '\.\/lib\/([\w-]+\.mjs)'/g)].map(
-      (match) => match[1],
-    );
-
-    const shippedByCore = [
-      'kit-config.mjs',
-      'entry-ledger.mjs',
-      'ledger-index.mjs',
+    const imported = [
+      ...new Set(
+        [...script.matchAll(/from '\.\/lib\/([\w-]+\.mjs)'/g)].map(
+          (match) => match[1],
+        ),
+      ),
     ];
-    const owed = [...new Set(imported)].filter(
-      (lib) => !shippedByCore.includes(lib),
-    );
 
-    expect(owed.filter((lib) => !copiedLibs.includes(lib))).toEqual([]);
+    expect(imported.filter((lib) => !copiedLibs.includes(lib))).toEqual([]);
   });
 
   it('allows the sync script in the merge-settings permission fragment', () => {

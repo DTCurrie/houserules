@@ -1969,6 +1969,130 @@ describe('decision-log.mjs render, given a ledger written before the ledger-dire
   });
 });
 
+describe('decision-log.mjs, given an area no target configures', () => {
+  const UNKNOWN_SURFACE = '.claude/ledgers/nope.DECISIONS.md';
+  let root: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+  });
+
+  it('rejects decide with an unknown area and creates no surface for it', () => {
+    const r = run(root, [
+      'decide',
+      'SIM',
+      'nope',
+      'navcat over recast',
+      'chose navcat',
+      '--chat=none',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "nope"');
+    expect(existsSync(join(root, UNKNOWN_SURFACE))).toBe(false);
+  });
+
+  it('rejects supersede with an unknown area', () => {
+    const id = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'navcat over recast',
+      'chose navcat',
+      '--chat=none',
+    ]).stdout.trim();
+
+    const r = run(root, [
+      'supersede',
+      id,
+      'nope',
+      'navcat revisited',
+      'body',
+      '--chat=none',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "nope"');
+  });
+
+  it('rejects amend with an unknown area', () => {
+    const id = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'navcat over recast',
+      'chose navcat',
+      '--chat=none',
+    ]).stdout.trim();
+
+    const r = run(root, ['amend', id, 'nope', 'clarified rationale']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "nope"');
+  });
+
+  it('rejects move to an unknown area and leaves the source surface intact', () => {
+    const id = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'navcat over recast',
+      'chose navcat',
+      '--chat=none',
+    ]).stdout.trim();
+
+    const r = run(root, ['move', id, 'nope']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "nope"');
+    expect(existsSync(join(root, UNKNOWN_SURFACE))).toBe(false);
+    expect(readFile(root, SURFACE)).toContain(id);
+  });
+
+  it('rejects list with an unknown area', () => {
+    const r = run(root, ['list', 'nope']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "nope"');
+  });
+
+  it('rejects render with an unknown area and writes no file', () => {
+    const r = run(root, ['render', 'nope']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "nope"');
+    expect(existsSync(join(root, UNKNOWN_SURFACE))).toBe(false);
+  });
+
+  it('rejects a bare word naming an area with no surface on disk and no target', () => {
+    expect(existsSync(join(root, UNKNOWN_SURFACE))).toBe(false);
+
+    const r = run(root, ['render', 'nope']);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Unknown area "nope"');
+  });
+
+  it('still lets a configured area through decide, list, and render', () => {
+    const id = run(root, [
+      'decide',
+      'SIM',
+      'studio',
+      'navcat over recast',
+      'chose navcat',
+      '--chat=none',
+    ]).stdout.trim();
+
+    const listResult = run(root, ['list', 'studio']);
+    const renderResult = run(root, ['render', 'studio']);
+
+    expect(listResult.status, listResult.stderr).toBe(0);
+    expect(listResult.stdout).toContain(id);
+    expect(renderResult.status, renderResult.stderr).toBe(0);
+    expect(readFile(root, '.claude/ledgers/studio.DECISIONS.md')).toContain(id);
+  });
+});
+
 describe('decision-log.mjs with no recognized action', () => {
   let root: string;
 

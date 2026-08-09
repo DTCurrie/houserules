@@ -438,6 +438,89 @@ export function resolveSurfaceArg(
 }
 
 /**
+ * The bare area name an `<area>` argument refers to, or null when {@link resolveSurfaceArg} would
+ * not resolve it against a per-target surface at all: the repo-root surface, or a literal path
+ * escape hatch, meaning a path with a separator that does not name a configured target's area.
+ *
+ * Mirrors {@link resolveSurfaceArg}'s branching on the same argument, so a name checked here is the
+ * name the surface would actually resolve to.
+ */
+export function resolveAreaName(
+  arg: string,
+  basename: string,
+  targets: ReadonlyArray<{ name: string; pathPrefix?: string }>,
+): string | null {
+  if (!arg || arg === basename) return null;
+  const normalized = normalizeSurfaceRef(arg, basename, targets);
+  if (normalized === basename) return null;
+  if (normalized.includes('/')) return null;
+  return normalized.endsWith(`.${basename}`)
+    ? normalized.slice(0, -(basename.length + 1))
+    : normalized;
+}
+
+/**
+ * The area names a list of surface files stands for, skipping the repo-root surface.
+ *
+ * Takes the file list rather than reading the directory, so this stays pure and the script that
+ * already knows its surfaces is the one that supplies them.
+ */
+export function areaNamesOf(
+  surfaceFiles: readonly string[],
+  dir: string,
+  basename: string,
+  targets: ReadonlyArray<{ name: string; pathPrefix?: string }>,
+): Set<string> {
+  const names = new Set<string>();
+  for (const file of surfaceFiles) {
+    const area = resolveAreaName(surfaceRelFile(dir, file), basename, targets);
+    if (area !== null) names.add(area);
+  }
+  return names;
+}
+
+/**
+ * Why this `<area>` argument cannot be used, or null when it names an area that exists.
+ *
+ * Every ledger command that takes an area calls this BEFORE it appends or renders anything. An area
+ * nothing knows about is not a harmless typo. It renders a surface file nobody asked for, and the
+ * ledger then carries entries filed against a surface no board is configured for, so the mistake
+ * surfaces one or more pushes later as `no board configured for surface "<area>.BACKLOG.md"`, far
+ * from the command that caused it.
+ *
+ * An area counts as existing if a target configures it OR a surface for it is already on disk.
+ * `existingAreas` is what carries the second half, and dropping it would break the fallback
+ * {@link normalizeSurfaceRef} exists for: an area whose target the config no longer lists still
+ * has its entries, and `render <that area>` has to keep resolving rather than being called a typo.
+ * A genuine typo matches neither half.
+ *
+ * Returns the message rather than exiting, because the two ledger scripts own their own exits. It
+ * returns the message rather than a boolean so the wording cannot drift between them, which is the
+ * same reason {@link resolveSurfaceArg} lives here.
+ */
+export function unknownAreaMessage(
+  arg: string | undefined,
+  basename: string,
+  targets: ReadonlyArray<{ name: string; pathPrefix?: string }>,
+  existingAreas: ReadonlySet<string>,
+): string | null {
+  if (!arg) return null;
+  const area = resolveAreaName(arg, basename, targets);
+  if (area === null || existingAreas.has(area)) return null;
+  if (targets.some((target) => target.name === area)) return null;
+
+  const valid = [
+    '(repo root)',
+    ...new Set([...targets.map((target) => target.name), ...existingAreas]),
+  ];
+  return (
+    `Unknown area "${arg}". No target named "${area}" is configured in kit.config.json, ` +
+    `and no surface for it exists yet.\n` +
+    `Valid areas: ${valid.join(', ')}.`
+  );
+}
+
+/**
  * Every surface the ledger implies, union'd with every surface already on disk.
  *
  * The `.jsonl` is the source of truth and the markdown is a generated view, so a freshly
