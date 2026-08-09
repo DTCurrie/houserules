@@ -405,8 +405,11 @@ export function computeEffects(
     if (action.kind === 'body') {
       if (checkPayloadMissing(action, plugins, broken, brokenDests)) continue;
       const shipped = readFileSync(action.src, 'utf8');
-      const { frontmatter: shippedFrontmatter, body: canonicalBody } =
+      const { frontmatter: shippedFrontmatter, body: payloadBody } =
         splitFrontmatter(shipped);
+      // The kit-owned body is the payload's plus whatever the module computed from the
+      // user's selections, so the hash covers both and a changed selection refreshes it.
+      const canonicalBody = payloadBody + (action.appendBody ?? '');
       const hash = sha256(canonicalBody);
       const frontmatterHash = sha256(shippedFrontmatter);
 
@@ -414,7 +417,7 @@ export function computeEffects(
         effects.push({
           action,
           op: 'create',
-          content: Buffer.from(shipped, 'utf8'),
+          content: Buffer.from(shippedFrontmatter + canonicalBody, 'utf8'),
           hash,
           frontmatterHash,
         });

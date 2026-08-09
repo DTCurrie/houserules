@@ -14,7 +14,17 @@ export interface PayloadBuilders {
   lib(module: string, name: string): CopyAction;
   skill(module: string, name: string, reason: string): CopyAction;
   agent(module: string, name: string, reason: string): CopyAction;
-  rule(module: string, name: string, reason: string): BodyAction;
+  /**
+   * `appendBody` is routing text composed from the user's selections, appended below the
+   * payload rule's own body. Use it to link an OPTIONAL file, since a link shipped in the
+   * payload dangles wherever that option was not chosen.
+   */
+  rule(
+    module: string,
+    name: string,
+    reason: string,
+    appendBody?: string,
+  ): BodyAction;
   reference(module: string, name: string, reason: string): CopyAction;
   template(module: string, rel: string, reason?: string): CopyAction;
   /**
@@ -84,14 +94,16 @@ export function createPayloadBuilders(payloadRoot: string): PayloadBuilders {
       };
     },
 
-    rule(module, name, reason) {
-      return {
+    rule(module, name, reason, appendBody) {
+      const action: BodyAction = {
         kind: 'body',
         src: at('rules', `${name}.md`),
         dest: `.claude/rules/${name}.md`,
         module,
         reason,
       };
+      if (appendBody) action.appendBody = appendBody;
+      return action;
     },
 
     reference(module, name, reason) {

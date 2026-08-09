@@ -43,4 +43,3 @@ edit, move, or delete a file.
 
 Budget yourself to roughly 10 tool calls: one `wcag.mjs applies` call, one `grep -n` per
 criterion to locate it in the reference, and a bounded `Read` to confirm each one.
-</content>

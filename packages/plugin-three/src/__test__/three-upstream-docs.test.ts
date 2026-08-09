@@ -74,4 +74,25 @@ describe('three upstream docs reference', () => {
       { link: '../reference/three-upstream-docs.md', installed: true },
     ]);
   });
+
+  it('links the performance reference too when the performance option is chosen', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'three/three',
+      plugins: PLUGINS,
+      moduleOptions: { 'three/three': ['performance'] },
+    });
+    const rulePath = join(root, RULE_PATH);
+
+    const resolution = referenceLinksIn(readFileSync(rulePath, 'utf8')).map(
+      (link) => ({
+        link,
+        installed: existsSync(resolve(dirname(rulePath), link)),
+      }),
+    );
+
+    expect(resolution).toEqual([
+      { link: '../reference/three-upstream-docs.md', installed: true },
+      { link: '../reference/three-performance.md', installed: true },
+    ]);
+  });
 });

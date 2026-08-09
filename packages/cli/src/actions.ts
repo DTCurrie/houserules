@@ -82,6 +82,17 @@ export interface BodyAction extends ActionBase {
   /** Repo-relative destination. */
   dest: string;
   reason: string;
+  /**
+   * Text appended below the payload file's own body, composed by the module from what the
+   * user selected. The kit owns it exactly as it owns the rest of the body, so the recorded
+   * body hash covers both and `update` refreshes the pair together.
+   *
+   * This is what lets a rule point at an OPTIONAL file. A link that ships in the payload
+   * dangles wherever that option was not chosen, so the pointer has to be as conditional as
+   * the file it points at. Keep it to routing. A rule whose substance depends on this is a
+   * rule that should have been two.
+   */
+  appendBody?: string;
 }
 
 /** A fragment folded into .claude/settings.json. */

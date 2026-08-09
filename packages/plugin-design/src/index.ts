@@ -34,6 +34,48 @@ const STYLED_GLOBS = [
 ] as const;
 
 /**
+ * What each opt-in game reference answers, keyed by its `design-game` option value.
+ *
+ * The authority on which guides exist. `GAME_GUIDES` derives its values from these keys, so a
+ * new guide cannot be installed without also getting the routing line that makes it reachable,
+ * which is the whole point of linking them conditionally.
+ */
+const GAME_GUIDE_QUESTIONS: Record<string, string> = {
+  hud: 'Building a HUD with DOM elements over canvas',
+  visual: 'Game visual hierarchy, color, and motion',
+};
+
+/**
+ * The design rule's routing table can only link a reference file that this install actually
+ * ships. `design-tailwind-theming.md` and the game guides are option-gated, so their links are
+ * appended to the rule body from here instead of living in the payload file, where they would
+ * dangle whenever the option was not chosen.
+ */
+function designRuleAppendBody(
+  tailwindSelected: boolean,
+  chosenGameGuides: string[],
+): string | undefined {
+  const links: Array<{ question: string; name: string }> = [];
+  if (tailwindSelected) {
+    links.push({
+      question:
+        'Extending Tailwind into a design system, or building a theme that switches at runtime',
+      name: 'design-tailwind-theming',
+    });
+  }
+  for (const guide of chosenGameGuides) {
+    const question = GAME_GUIDE_QUESTIONS[guide];
+    if (!question) continue;
+    links.push({ question, name: `design-game-${guide}` });
+  }
+  if (links.length === 0) return undefined;
+  const bullets = links
+    .map((link) => `- **${link.question}:** \`../reference/${link.name}.md\`\n`)
+    .join('');
+  return `\n## Also installed in this repo\n\n${bullets}`;
+}
+
+/**
  * The design system, and the guidance for an agent editing UI code.
  *
  * The token set is a SEED, never a copy. The values belong to the repo, so `update` must not
@@ -58,6 +100,12 @@ function designModule(api: PluginApi): ModuleDef {
       const tailwindSelected = answers.moduleIds.includes(
         `${api.alias}/design-tailwind`,
       );
+      const chosenGuides =
+        answers.moduleOptions[`${api.alias}/design-game`] ?? [];
+      const ruleAppendBody = designRuleAppendBody(
+        tailwindSelected,
+        chosenGuides,
+      );
       const seedAction: Action[] = tailwindSelected
         ? []
         : [
@@ -77,6 +125,7 @@ function designModule(api: PluginApi): ModuleDef {
           id,
           'design',
           'path-scoped design rule, loaded only when UI code is in the working set',
+          ruleAppendBody,
         ),
         // Not `design-principles`: the CLI's code-cleanliness module already owns that
         // filename for a document about software structure, and the two would silently
@@ -244,7 +293,7 @@ function designTailwindModule(api: PluginApi): ModuleDef {
 }
 
 /** The game reference documents, each an option value rather than a module of its own. */
-const GAME_GUIDES = ['hud', 'visual'];
+const GAME_GUIDES = Object.keys(GAME_GUIDE_QUESTIONS);
 
 /**
  * Game UI reference material, all pull-only and all off by default.
@@ -254,7 +303,8 @@ const GAME_GUIDES = ['hud', 'visual'];
  *
  * Deliberately no rule. "This repo is a game" is not detectable from a file extension, so a
  * path-scoped game rule would load on every React or Svelte turn in every non-game repo. The
- * design rule's routing table is how a reader finds these instead.
+ * design module's rule links whichever guide this module installs instead, via the `design`
+ * module's `appendBody`.
  */
 function designGameModule(api: PluginApi): ModuleDef {
   const id = 'design-game';
@@ -295,7 +345,7 @@ function designGameModule(api: PluginApi): ModuleDef {
         ...guideActions,
         {
           kind: 'advise',
-          text: 'Game UI references installed under .claude/reference/. They are PULL-ONLY, so they cost nothing until something reads them. There is deliberately no game rule: whether a repo is a game cannot be detected from a file extension, so a path-scoped rule would load on every component turn in a repo that is not one. The design rule does NOT link them either, because a rule pointing at an optional file dangles wherever that option was not chosen. Read them directly when you are building a HUD, or add your own pointer to the frontmatter-owned half of a rule if this repo is a game.',
+          text: 'Game UI references installed under .claude/reference/. They are PULL-ONLY, so they cost nothing until something reads them. There is deliberately no game rule: whether a repo is a game cannot be detected from a file extension, so a path-scoped rule would load on every component turn in a repo that is not one. If the design module is also installed, its rule links each guide you chose here under "Also installed in this repo", so you do not need your own pointer.',
           module: id,
         },
       ];

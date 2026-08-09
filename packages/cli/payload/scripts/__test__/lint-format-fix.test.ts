@@ -133,6 +133,89 @@ describe('lint-format-fix.mjs seeded kit.config.json', () => {
   });
 });
 
+describe('lint-format-fix.mjs in a workspace whose fix scripts live at the root', () => {
+  let root: string;
+
+  function touchBothPackages(): void {
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const x = 9;\n',
+    );
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const y = 9;\n',
+    );
+  }
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+    stubRunner(root);
+    setRunner(root, { filterFlag: '' });
+  });
+
+  it('runs each distinct root script once, not once per affected package', () => {
+    touchBothPackages();
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual(['run fix']);
+  });
+
+  it('drops the package name from the argv, since the root script takes none', () => {
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const x = 9;\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual(['run fix']);
+  });
+});
+
+describe('lint-format-fix.mjs when a target sets fixCommands to null', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+    stubRunner(root);
+    setRunner(root);
+    editKitConfig(root, (config: InstalledKitConfig) => {
+      for (const target of config.targets)
+        if (target.name === 'cityville') target.fixCommands = null;
+    });
+  });
+
+  it('runs nothing for a change confined to that target', () => {
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const x = 9;\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(
+      existsSync(join(root, 'runner-calls.txt')),
+      'a null fixCommands still ran the global commands',
+    ).toBe(false);
+  });
+
+  it('still fixes a sibling target that declares its own commands', () => {
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const y = 9;\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual(['--filter @fix/studio fix']);
+  });
+});
+
 describe('lint-format-fix.mjs in a single-package repo (no filter flag)', () => {
   let root: string;
 

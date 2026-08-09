@@ -65,6 +65,9 @@ function threeModule(api: PluginApi): ModuleDef {
           ),
         ];
       });
+      const performanceLink = chosen.includes('performance')
+        ? '\n## Also installed in this repo\n\n- **Renderer performance is a problem:** `../reference/three-performance.md`\n'
+        : undefined;
       return [
         ...guideActions,
         ...referenceActions,
@@ -72,9 +75,11 @@ function threeModule(api: PluginApi): ModuleDef {
           id,
           'three',
           'path-scoped Three.js extension-pattern rule, loaded only when the Three.js layer is in the working set',
+          performanceLink,
         ),
-        // Unconditional, unlike the performance reference, because the base rule links it. An
-        // option value would leave that link dangling in every install that skipped the option.
+        // Unconditional, unlike the performance reference, because the base rule links it from
+        // its own payload body rather than from `appendBody`. An option value would leave that
+        // link dangling in every install that skipped the option.
         api.payload.reference(
           id,
           'three-upstream-docs',

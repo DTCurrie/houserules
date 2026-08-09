@@ -2,6 +2,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
+  resolveTargetCommands,
+  runsAtRepoRoot,
+} from '../../../payload-dist/scripts/lib/kit-config.mjs';
+import {
   listWorkspacePackages,
   readJson,
 } from '../../../payload-dist/scripts/lib/workspaces.mjs';
@@ -79,6 +83,17 @@ export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
 
   const workspacePackages = listWorkspacePackages(root);
   const workspaceNames = new Set(workspacePackages.map((p) => p.name));
+  // In the repo-root shape both runners drop the package name from the argv, so which
+  // target contributed a command stops mattering and the distinct commands are checked
+  // once, below the loop, against the root package.json.
+  const fixAtRoot = runsAtRepoRoot(config.fix);
+  const verifyAtRoot = runsAtRepoRoot(config.verify);
+  const verifyInstalled = Boolean(
+    manifest?.modules?.includes('verify-changed'),
+  );
+  const rootFixCommands = new Set<string>();
+  const rootVerifyCommands = new Set<string>();
+  let anyVerifyCommand = Boolean(config.verify?.commands?.length);
   for (const target of config.targets ?? []) {
     if (target.pathPrefix && !existsSync(join(root, target.pathPrefix))) {
       findings.push({
@@ -104,28 +119,58 @@ export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
     }
     const pkgDir = target.pathPrefix ? join(root, target.pathPrefix) : root;
     const scripts = readJson(join(pkgDir, 'package.json'))?.scripts ?? {};
-    const fixCommands =
-      target.fixCommands ??
-      (config.fix?.commands as string[] | undefined) ??
-      [];
+    const fixCommands = resolveTargetCommands(
+      target.fixCommands,
+      config.fix?.commands as string[] | undefined,
+    );
     for (const cmd of fixCommands) {
-      if (!scripts[cmd])
+      if (fixAtRoot) rootFixCommands.add(cmd);
+      else if (!scripts[cmd])
         findings.push({
           level: 'WARN',
           msg: `target "${target.name}": fix script "${cmd}" not in ${target.pathPrefix || './'}package.json`,
         });
     }
     // Only a target's EXPLICIT verifyCommands, never the global `verify` fallback,
-    // which sub-packages routinely lack because they rely on a root verify.
-    if (manifest?.modules?.includes('verify-changed'))
+    // which sub-packages routinely lack because they rely on a root verify. A `null`
+    // reads the same as absent here, since either way there is nothing named to check.
+    if (target.verifyCommands?.length) anyVerifyCommand = true;
+    if (verifyInstalled)
       for (const cmd of target.verifyCommands ?? []) {
-        if (!scripts[cmd])
+        if (verifyAtRoot) rootVerifyCommands.add(cmd);
+        else if (!scripts[cmd])
           findings.push({
             level: 'WARN',
             msg: `target "${target.name}": verify script "${cmd}" not in ${target.pathPrefix || './'}package.json`,
           });
       }
   }
+
+  if (rootFixCommands.size || rootVerifyCommands.size) {
+    const rootScripts = readJson(join(root, 'package.json'))?.scripts ?? {};
+    for (const cmd of rootFixCommands)
+      if (!rootScripts[cmd])
+        findings.push({
+          level: 'WARN',
+          msg: `fix script "${cmd}" not in the root package.json — fix.filterFlag is empty, so every fix command runs as a root script`,
+        });
+    for (const cmd of rootVerifyCommands)
+      if (!rootScripts[cmd])
+        findings.push({
+          level: 'WARN',
+          msg: `verify script "${cmd}" not in the root package.json — verify.filterFlag is empty, so every verify command runs as a root script`,
+        });
+  }
+
+  // The per-target loop above walks only NAMED verify commands, so a repo that names none
+  // anywhere is exactly the repo it says nothing about. That is the one that breaks:
+  // verify-changed.mts falls back to a `verify` script most repos do not have, and the
+  // failure surfaces at use time as ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT.
+  if (verifyInstalled && !anyVerifyCommand)
+    findings.push({
+      level: 'WARN',
+      msg: 'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/kit.config.json, or "verifyCommands" to each target. Without one the helper falls back to a "verify" script and fails when you run it.',
+    });
 
   // A workspace member no target covers silently misses lint-fix, reviewer, and ledger
   // coverage while doctor still reports healthy. A workspace package that a `plugins[]`

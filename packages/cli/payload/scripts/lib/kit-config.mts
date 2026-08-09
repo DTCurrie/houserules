@@ -63,6 +63,36 @@ export interface KitConfig {
   [key: string]: unknown;
 }
 
+/** What `filterFlag` means when a runner block omits it: a workspace, filtered per package. */
+export const DEFAULT_FILTER_FLAG = '--filter';
+
+/**
+ * The commands that actually run for one target, from its own override and the block's list.
+ *
+ * `null` and `undefined` are different answers, which is why this is not a bare `??`. An
+ * absent override inherits the block's commands. An explicit `null` means this target has
+ * none, the escape hatch for a package the runner should skip entirely.
+ */
+export function resolveTargetCommands(
+  override: string[] | null | undefined,
+  blockCommands: string[] | undefined,
+): string[] {
+  if (override === null) return [];
+  return override ?? blockCommands ?? [];
+}
+
+/**
+ * Whether a runner block's commands run as REPO-ROOT scripts rather than once per package.
+ *
+ * An empty `filterFlag` is how a single-package repo, or a workspace whose lint and format
+ * live at the root, is spelled. Both runners drop the package name from the argv in that
+ * shape, so the script that has to exist is the ROOT one no matter which target contributed
+ * the command.
+ */
+export function runsAtRepoRoot(block: RunnerBlock | undefined): boolean {
+  return !(block?.filterFlag ?? DEFAULT_FILTER_FLAG);
+}
+
 export function repoRoot(): string {
   return execSync('git rev-parse --show-toplevel', {
     stdio: ['ignore', 'pipe', 'ignore'],

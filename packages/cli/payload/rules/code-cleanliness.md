@@ -196,5 +196,3 @@ src/
     index.ts
     checkout-types.ts   // the types only checkout uses, beside checkout
 ```
-
-</content>

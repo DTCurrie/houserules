@@ -75,4 +75,3 @@ edit a token file, a stylesheet, or any other file directly.
 Budget yourself to roughly 8 tool calls: one `design.mjs check` call, one `design.mjs list`
 call if reuse is in question, a `design.mjs token` call per token the check named, and one
 `design.mjs render` call if a rendered check is warranted.
-</content>

@@ -94,7 +94,6 @@ Three claims are checkable rather than a matter of taste:
   shared edge are read as related, and elements spaced apart or misaligned are read as
   unrelated, independent of any color or size difference between them.
 - **Contrast is the emphasis lever.** Of the properties available (size, weight, color,
-spacing), contrast against the surrounding content is what a reader's eye is drawn to
-first. Everything else on a page competing for that same contrast flattens the hierarchy
-back to nothing standing out.
-</content>
+  spacing), contrast against the surrounding content is what a reader's eye is drawn to
+  first. Everything else on a page competing for that same contrast flattens the hierarchy
+  back to nothing standing out.

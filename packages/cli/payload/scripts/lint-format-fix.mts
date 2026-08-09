@@ -20,7 +20,13 @@
 
 import { spawnSync } from 'node:child_process';
 
-import { loadConfigSafe, type RunnerBlock } from './lib/kit-config.mjs';
+import {
+  DEFAULT_FILTER_FLAG,
+  loadConfigSafe,
+  resolveTargetCommands,
+  runsAtRepoRoot,
+  type RunnerBlock,
+} from './lib/kit-config.mjs';
 import { readStdinJson, repoRoot, tail } from './lib/proc.mjs';
 
 interface HookInput {
@@ -54,7 +60,8 @@ const GENERATED_FILE_RE = new RegExp(
 
 const fix: RunnerBlock = config.fix ?? {};
 const RUNNER = fix.runner ?? config.packageManager ?? 'pnpm';
-const FILTER_FLAG = fix.filterFlag ?? '--filter'; // '' / null for a single-package repo
+const FILTER_FLAG = fix.filterFlag ?? DEFAULT_FILTER_FLAG; // '' / null for a single-package repo
+const RUNS_AT_ROOT = runsAtRepoRoot(fix);
 const RUN_PREFIX = fix.runScriptPrefix ?? []; // e.g. ['run'] for npm/yarn
 const COMMANDS = fix.commands ?? ['lint:fix', 'format:fix'];
 // An optional gate, off by default, running a command only when a changed file carries
@@ -69,13 +76,15 @@ const gatePasses = (script: string, exts: Set<string>): boolean => {
 };
 
 // targets[].fixCommands overrides the global fix.commands per package, because real
-// repos diverge. A wireit root exposes `fix` while its packages expose `lint:fix`.
+// repos diverge. A wireit root exposes `fix` while its packages expose `lint:fix`. An
+// explicit null is the escape hatch: that target resolves to no commands, so a change
+// confined to it runs nothing.
 const PACKAGE_BY_PATH = config.targets
   .filter((t) => t.packageName !== undefined && t.pathPrefix !== undefined)
   .map((t) => ({
     prefix: t.pathPrefix as string,
     name: t.packageName as string,
-    commands: t.fixCommands ?? COMMANDS,
+    commands: resolveTargetCommands(t.fixCommands, COMMANDS),
   }));
 
 // Monorepo: <runner> <filterFlag> <pkg> <script>. Single-package: <runner> <runScriptPrefix...> <script>.
@@ -123,6 +132,43 @@ function affectedPackages(
   return [...pkgs.entries()].map(([name, v]) => [name, v.commands, v.exts]);
 }
 
+/** What the error report calls a step that ran once for the whole repo. */
+const ROOT_STEP_LABEL = '(root)';
+
+/**
+ * One entry per command actually worth spawning, as [package, script, extensions].
+ *
+ * Per package in the filtered shape, which is what the argv encodes there. In the
+ * repo-root shape the package name never reaches the argv, so N affected packages would
+ * otherwise spawn the same root script N times. Those collapse to one entry per distinct
+ * script, carrying the union of the changed extensions so a gated command still runs when
+ * any affected package matched it.
+ */
+function plannedSteps(
+  pkgs: [name: string, commands: string[], exts: Set<string>][],
+): [pkg: string, script: string, exts: Set<string>][] {
+  if (!RUNS_AT_ROOT)
+    return pkgs.flatMap(([pkg, commands, exts]) =>
+      commands.map((script): [string, string, Set<string>] => [
+        pkg,
+        script,
+        exts,
+      ]),
+    );
+  const byScript = new Map<string, Set<string>>();
+  for (const [, commands, exts] of pkgs)
+    for (const script of commands) {
+      const union = byScript.get(script) ?? new Set<string>();
+      for (const ext of exts) union.add(ext);
+      byScript.set(script, union);
+    }
+  return [...byScript.entries()].map(([script, exts]) => [
+    ROOT_STEP_LABEL,
+    script,
+    exts,
+  ]);
+}
+
 function runStep(
   pkg: string,
   script: string,
@@ -160,12 +206,10 @@ function main() {
 
   const errors: { pkg: string; step: string; output: string }[] = [];
 
-  for (const [pkg, commands, exts] of pkgs) {
-    for (const script of commands) {
-      if (!gatePasses(script, exts)) continue; // no matching extension changed
-      const r = runStep(pkg, script, cwd);
-      if (!r.ok) errors.push({ pkg, step: script, output: r.output });
-    }
+  for (const [pkg, script, exts] of plannedSteps(pkgs)) {
+    if (!gatePasses(script, exts)) continue; // no matching extension changed
+    const r = runStep(pkg, script, cwd);
+    if (!r.ok) errors.push({ pkg, step: script, output: r.output });
   }
 
   if (errors.length > 0) {

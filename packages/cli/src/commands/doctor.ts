@@ -4,6 +4,7 @@ import type { Flags } from '../cli-contract.js';
 import { EXIT } from '../cli-contract.js';
 import { driftedFiles, isLocalEdit, type FileDrift } from '../core/drift.js';
 import { detect } from '../detect.js';
+import { checkAgentToolScope } from './doctor/agent-tool-scope.js';
 import { checkConfigValidity } from './doctor/config-validity.js';
 import { reconcileDrift } from './doctor/drift-reconcile.js';
 import { checkEnvironment } from './doctor/environment.js';
@@ -16,6 +17,7 @@ import {
 import { checkInstallIntegrity } from './doctor/install-integrity.js';
 import { checkModuleHealth } from './doctor/module-health.js';
 import { checkPluginRegistration } from './doctor/plugin-registration.js';
+import { checkReferenceReachability } from './doctor/reference-reachability.js';
 import { checkResidentSurface } from './doctor/resident-surface.js';
 import { checkSettingsWiring } from './doctor/settings-wiring.js';
 
@@ -84,6 +86,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   // as the user left it.
   const checks: CheckResult[] = [
     checkResidentSurface(root),
+    checkAgentToolScope(root),
+    checkReferenceReachability(root, ctx),
     checkEnvironment(ctx),
     checkInstallIntegrity(root, ctx, flags.kitVersion, config.registry),
     config,

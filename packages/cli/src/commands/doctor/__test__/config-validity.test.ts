@@ -242,6 +242,71 @@ describe('checkConfigValidity, target reality', () => {
     );
   });
 
+  it('treats an explicit null fixCommands as no commands rather than inheriting the global ones', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(root, {
+      version: 2,
+      fix: {
+        runner: 'pnpm',
+        filterFlag: '--filter',
+        runScriptPrefix: ['run'],
+        commands: ['nope:fix'],
+      },
+      targets: [
+        { ...STUDIO_TARGET, fixCommands: null },
+        { ...CITYVILLE_TARGET, fixCommands: null },
+      ],
+    });
+
+    expect(messages(root, ctx)).toEqual([]);
+  });
+});
+
+describe('checkConfigValidity, when fix.filterFlag is empty', () => {
+  const ROOT_FIX = {
+    runner: 'pnpm',
+    filterFlag: '',
+    runScriptPrefix: ['run'],
+    commands: ['fix'],
+  };
+
+  it('checks each fix command once against the root package.json instead of once per target', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(root, {
+      version: 2,
+      fix: { ...ROOT_FIX, commands: ['nope:fix'] },
+      targets: [STUDIO_TARGET, CITYVILLE_TARGET],
+    });
+
+    expect(messages(root, ctx)).toEqual([
+      'fix script "nope:fix" not in the root package.json — fix.filterFlag is empty, so every fix command runs as a root script',
+    ]);
+  });
+
+  it('accepts a fix command the root package.json declares, even though no target package does', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(root, {
+      version: 2,
+      fix: ROOT_FIX,
+      targets: [STUDIO_TARGET, CITYVILLE_TARGET],
+    });
+
+    expect(messages(root, ctx)).toEqual([]);
+  });
+
+  it('reports one finding per distinct missing command, not per command per target', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(root, {
+      version: 2,
+      fix: { ...ROOT_FIX, commands: ['nope:fix', 'also-nope'] },
+      targets: [STUDIO_TARGET, CITYVILLE_TARGET],
+    });
+
+    expect(messages(root, ctx)).toHaveLength(2);
+  });
+});
+
+describe('checkConfigValidity, verify commands', () => {
   it('ignores a missing verify script while verify-changed is not installed', () => {
     const root = useRepo('pnpm-monorepo');
     const ctx = stageConfig(root, {
@@ -272,6 +337,64 @@ describe('checkConfigValidity, target reality', () => {
     expect(messages(root, ctx)).toContain(
       'target "studio": verify script "nope:verify" not in apps/studiopackage.json',
     );
+  });
+
+  it('warns when verify-changed is installed and no verify command is named anywhere', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(
+      root,
+      { version: 2, targets: [STUDIO_TARGET, CITYVILLE_TARGET] },
+      ['core', 'verify-changed'],
+    );
+
+    expect(messages(root, ctx)).toEqual([
+      'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/kit.config.json, or "verifyCommands" to each target. Without one the helper falls back to a "verify" script and fails when you run it.',
+    ]);
+  });
+
+  it('stays quiet when a global verify block names the commands', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(
+      root,
+      {
+        version: 2,
+        verify: {
+          runner: 'pnpm',
+          filterFlag: '--filter',
+          runScriptPrefix: ['run'],
+          commands: ['verify'],
+        },
+        targets: [STUDIO_TARGET, CITYVILLE_TARGET],
+      },
+      ['core', 'verify-changed'],
+    );
+
+    expect(messages(root, ctx)).toEqual([]);
+  });
+
+  it('checks a verify command against the root package.json when verify.filterFlag is empty', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(
+      root,
+      {
+        version: 2,
+        verify: {
+          runner: 'pnpm',
+          filterFlag: '',
+          runScriptPrefix: ['run'],
+          commands: ['verify'],
+        },
+        targets: [
+          { ...STUDIO_TARGET, verifyCommands: ['nope:verify'] },
+          CITYVILLE_TARGET,
+        ],
+      },
+      ['core', 'verify-changed'],
+    );
+
+    expect(messages(root, ctx)).toEqual([
+      'verify script "nope:verify" not in the root package.json — verify.filterFlag is empty, so every verify command runs as a root script',
+    ]);
   });
 });
 

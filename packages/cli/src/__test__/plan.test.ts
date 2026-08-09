@@ -413,6 +413,35 @@ describe('computeEffects, given a "body" action', () => {
     expect(effects[0].frontmatterHash).toBe(sha256(SHIPPED_FRONTMATTER));
   });
 
+  it('appends appendBody below the payload body and hashes the pair together', () => {
+    const payloadDir = tempDir();
+    const root = tempDir();
+    const src = writeFile(payloadDir, 'example.md', SHIPPED);
+    const tail = '\n## Also installed\n\n- `../reference/optional.md`\n';
+    const action = { ...bodyAction(src), appendBody: tail };
+
+    const { effects } = computeEffects(root, [action]);
+
+    expect(effects[0].content?.toString('utf8')).toBe(SHIPPED + tail);
+    expect(effects[0].hash).toBe(sha256(SHIPPED_BODY + tail));
+    expect(effects[0].frontmatterHash).toBe(sha256(SHIPPED_FRONTMATTER));
+  });
+
+  it('refreshes an installed rule whose appendBody changed, since the selection that composed it did', () => {
+    const payloadDir = tempDir();
+    const root = tempDir();
+    const src = writeFile(payloadDir, 'example.md', SHIPPED);
+    writeFile(root, 'rules/example.md', SHIPPED);
+    const action = { ...bodyAction(src), appendBody: '\nnew routing line\n' };
+
+    const { effects } = computeEffects(root, [action]);
+
+    expect(effects[0].op).toBe('update');
+    expect(effects[0].content?.toString('utf8')).toBe(
+      SHIPPED + '\nnew routing line\n',
+    );
+  });
+
   it('skips as identical when the disk body matches the canonical body, whatever the disk frontmatter says', () => {
     const payloadDir = tempDir();
     const root = tempDir();

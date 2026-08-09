@@ -83,4 +83,3 @@ transcript.
 Fix anything mechanical the checker named: a literal that maps to an existing token, an
 off-scale spacing or type value. For a finding that needs a design decision, such as whether
 a new token is warranted, say so and hand it back rather than inventing one.
-</content>

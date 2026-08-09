@@ -75,11 +75,26 @@ describe('design game references', () => {
     ).not.toMatch(/^---/);
   });
 
-  it('does not link either game reference from the design rule, since they are optional', () => {
+  it('links each chosen game reference from the design rule', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'design/design,design/design-game',
       plugins: PLUGINS,
       moduleOptions: { 'design/design-game': ['hud', 'visual'] },
+    });
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/design.md'),
+      'utf8',
+    );
+
+    expect(ruleText).toContain('../reference/design-game-hud.md');
+    expect(ruleText).toContain('../reference/design-game-visual.md');
+  });
+
+  it('does not link a game reference from the design rule when only design is installed', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'design/design',
+      plugins: PLUGINS,
     });
 
     const ruleText = readFileSync(

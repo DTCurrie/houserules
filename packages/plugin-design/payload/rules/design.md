@@ -71,8 +71,6 @@ read the one that answers the question in front of you.
 - **A design decision that might cost rendering performance:** which properties animate cheaply,
   what a blur or a shadow costs, fonts and layout shift, image format. See
   `../reference/design-performance.md`.
-- **Extending Tailwind into a design system, or building a theme that switches at runtime:**
-  see `../reference/design-tailwind-theming.md`.
 
 ## Where other rules apply
 
@@ -80,4 +78,3 @@ read the one that answers the question in front of you.
   broader WCAG obligations for markup, and this rule's contrast guidance is the design-system
   half of the same requirement.
 - How the sentence inside any prose you write here reads: see `prose-voice.md`.
-</content>
