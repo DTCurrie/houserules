@@ -323,7 +323,7 @@ describe('assemblePayload', () => {
 });
 
 describe('the agent-kit-payload bin, invoked the way a plugin build invokes it', () => {
-  const BIN = join(CLI_PACKAGE_DIR, 'dist/payload-build-bin.js');
+  const BIN = join(CLI_PACKAGE_DIR, 'bin/agent-kit-payload.mjs');
 
   function runBinIn(cwd: string, payloadRootArg: string) {
     return spawnSync(process.execPath, [BIN, payloadRootArg], {

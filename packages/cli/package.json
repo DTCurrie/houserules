@@ -7,10 +7,11 @@
     "access": "public"
   },
   "bin": {
-    "agent-kit": "dist/cli.js",
-    "agent-kit-payload": "dist/payload-build-bin.js"
+    "agent-kit": "bin/agent-kit.mjs",
+    "agent-kit-payload": "bin/agent-kit-payload.mjs"
   },
   "files": [
+    "bin",
     "dist",
     "payload-dist",
     "!payload-dist/scripts/lib/**",
@@ -47,6 +48,7 @@
       ],
       "files": [
         "package.json",
+        "bin/**",
         "kit.config.example.json",
         "CONVENTIONS.md"
       ],
@@ -58,7 +60,8 @@
         "build"
       ],
       "files": [
-        "package.json"
+        "package.json",
+        "bin/**"
       ],
       "output": []
     },
