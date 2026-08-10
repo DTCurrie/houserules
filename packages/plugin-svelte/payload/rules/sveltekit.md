@@ -32,11 +32,15 @@ form actions.
   request and in the browser on every client-side navigation after that. Code here must run
   in both environments.
 - `+page.server.ts` and `+layout.server.ts` are **server-only**: database access, secrets,
-  and anything that must never reach the client belongs here.
+  and anything that must never reach the client belongs here. Put secret-touching code
+  under `$lib/server`, or read via `$env/static/private`. The build fails if a client
+  bundle imports either.
 - A load function returns the data its `+page.svelte` or `+layout.svelte` reads through the
   `data` prop, typed via the generated `PageData` or `LayoutData`.
 - Fetch data as high in the layout tree as a route allows, and let child routes read it
-  through `data`, rather than each route re-fetching the same resource.
+  through `data`, rather than each route re-fetching the same resource. Never rely on
+  `+layout.server.ts` alone for authorization: layout logic can skip leaf routes. Check
+  access in each route's load function or the `handle` hook.
 - Use the `fetch` passed into the load function, not the global one. It carries request
   credentials and lets SvelteKit dedupe and inline the request during server rendering.
 

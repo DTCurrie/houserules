@@ -112,4 +112,87 @@ describe('typescript', () => {
       readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('typescript'),
     ).toBe(false);
   });
+
+  it('requires a never-typed default branch for exhaustive switches', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'ts/typescript',
+      plugins: PLUGINS,
+    });
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/typescript.md'),
+      'utf8',
+    );
+    expect(ruleText).toMatch(/default.*branch typed\s*\n?\s*`never`/);
+  });
+
+  it('prefers @ts-expect-error over @ts-ignore', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'ts/typescript',
+      plugins: PLUGINS,
+    });
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/typescript.md'),
+      'utf8',
+    );
+    expect(ruleText).toMatch(/`@ts-expect-error`, not `@ts-ignore`/);
+  });
+
+  it('requires Error.cause when rethrowing with added context', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'ts/typescript',
+      plugins: PLUGINS,
+    });
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/typescript.md'),
+      'utf8',
+    );
+    expect(ruleText).toMatch(/Rethrow with `cause`/);
+    expect(ruleText).toMatch(/\{ cause: err \}/);
+  });
+
+  it('enumerates every extension the rule frontmatter globs, in both the README and the advise text', () => {
+    const ruleSource = readFileSync(
+      join(PLUGIN_TYPESCRIPT, 'payload/rules/typescript.md'),
+      'utf8',
+    );
+    const globs = [...ruleSource.matchAll(/^ {2}- ['"](.+?)['"]$/gm)].map(
+      (match) => match[1],
+    );
+    const extensions = globs.map((glob) => glob.replace(/^\*\*\/\*/, ''));
+
+    expect(extensions.length).toBeGreaterThan(0);
+
+    const indexSource = readFileSync(
+      join(PLUGIN_TYPESCRIPT, 'src/index.ts'),
+      'utf8',
+    );
+    const readmeSource = readFileSync(
+      join(PLUGIN_TYPESCRIPT, 'README.md'),
+      'utf8',
+    );
+
+    const missingFromIndex = extensions.filter(
+      (ext) => !globAppearsIn(indexSource, ext),
+    );
+    const missingFromReadme = extensions.filter(
+      (ext) => !globAppearsIn(readmeSource, ext),
+    );
+
+    expect(
+      missingFromIndex,
+      'src/index.ts advise text omits an extension the rule frontmatter globs',
+    ).toEqual([]);
+    expect(
+      missingFromReadme,
+      'README.md omits an extension the rule frontmatter globs',
+    ).toEqual([]);
+  });
 });
+
+function globAppearsIn(source: string, extension: string): boolean {
+  const escaped = extension.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\*\\*/\\*${escaped}(?![A-Za-z])`).test(source);
+}

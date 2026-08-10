@@ -122,4 +122,15 @@ describe('design layout and performance references', () => {
     expect(content).not.toContain('loading="lazy"');
     expect(content).not.toContain('code splitting');
   });
+
+  it('names the current Core Web Vitals (LCP, CLS, INP) and the field p75 measurement in design-performance.md', () => {
+    const root = installed();
+
+    const content = readInstalledReference(root, 'design-performance.md');
+
+    expect(content).toContain('LCP');
+    expect(content).toContain('CLS');
+    expect(content).toContain('INP');
+    expect(content).toContain('75th percentile');
+  });
 });

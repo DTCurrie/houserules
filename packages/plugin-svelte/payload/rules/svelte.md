@@ -62,11 +62,15 @@ const classes = $derived(['btn', `btn-${variant}`, disabled && 'btn-disabled']);
 value)` to read reactive state without taking a dependency.
 - `$bindable()` on a prop the parent binds to with `bind:`. Default it, and document why the
   binding exists if the reason is not obvious from the prop name.
+- Never touch `window` or `document` at module scope. That code runs on the server too,
+  where those globals do not exist.
 
 ## Context Providers
 
 Reactive shared state lives in `.svelte.ts` files using `getContext` and `setContext`.
-**ALWAYS** use `Symbol` keys.
+**ALWAYS** use `Symbol` keys. Never declare `$state` at module scope here: on the server it
+is one instance shared across every request and user, so create it inside `provide*`
+instead.
 
 ```typescript
 // theme-context.svelte.ts

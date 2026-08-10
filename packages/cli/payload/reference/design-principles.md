@@ -97,6 +97,44 @@ actually needs from the parameters it was passing, then delete the rest. Metz ag
 
 Source: https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction
 
+### Orthogonality
+
+Keep unrelated components independent, so a change to one does not force a change in
+another. Two components are orthogonal when you can reason about, test, and change either
+one without touching the other. This is a broader claim than DRY above: DRY is about not
+duplicating one piece of knowledge, orthogonality is about not letting two pieces of
+knowledge become coupled in the first place.
+
+Source: Hunt and Thomas, The Pragmatic Programmer.
+
+## Depth
+
+### Deep modules
+
+Prefer a deep module, a simple interface hiding substantial functionality, over a shallow
+one whose interface is nearly as complex as what it implements. The interface is a cost
+every caller pays. The implementation is a cost paid once, inside the module. A module
+earns the complexity it carries by hiding more of it than it exposes.
+
+This is the fuller reasoning behind `code-cleanliness.md`'s line on function size: past 20
+to 30 lines, look again, because the function may mix abstraction levels or be doing one
+task a split would only fragment. Splitting a function by length alone often turns one deep
+module into several shallow ones, each with its own interface, and now every caller has to
+understand all of them instead of one.
+
+Source: John Ousterhout, A Philosophy of Software Design.
+
+## Errors
+
+### Define errors out of existence
+
+The strongest way to handle an error is to remove the special case that would otherwise
+need handling, rather than add a handler for it. An API that returns an empty result instead
+of throwing when nothing matches removes a branch from every caller, instead of asking each
+caller to add its own try/catch.
+
+Source: Ousterhout, A Philosophy of Software Design.
+
 ## Structure
 
 SOLID is usually stated in class terms. This kit installs into repos that may have no
@@ -148,3 +186,99 @@ without dragging in an unrelated concrete dependency, such as a specific databas
 or filesystem.
 
 Source: https://www.digitalocean.com/community/conceptual-articles/s-o-l-i-d-the-first-five-principles-of-object-oriented-design
+
+## Refactoring and legacy code
+
+### Small, safe, test-backed steps
+
+Refactor using a named catalog of refactorings, extract function, inline variable, rename,
+in small steps backed by a passing test suite, rather than as one large rewrite with no net.
+Each step should leave the tests green, so a mistake is caught at the step that introduced
+it instead of after everything else has changed too.
+
+Source: Martin Fowler, Refactoring.
+
+### Characterization tests
+
+Treat code with no tests as legacy code. Before changing its behavior, write a
+characterization test that pins what it currently does, not what it should do. That test is
+the safety net for the refactor that follows, and it gets rewritten once the behavior you
+actually wanted is in place.
+
+Source: Michael Feathers, Working Effectively with Legacy Code.
+
+### Seams
+
+A seam is a place you can change a program's behavior without editing the code at that
+place, usually by injecting a dependency instead of importing it directly. Introduce a seam
+to make tightly coupled code testable before you change it. This is the same move as
+Dependency Inversion above, used as a rescue tactic on code that was not designed for it
+rather than as a starting design.
+
+Source: Feathers, Working Effectively with Legacy Code.
+
+## Testing and review
+
+### Static analysis as the cheapest layer
+
+Treat static analysis and type-checking as the cheapest layer of test coverage. A type
+error or a lint violation is caught before any test runs, for a fraction of the cost of
+running one. Where the type system can already make an assertion, let it, instead of
+writing a runtime check or a test for the same fact.
+
+### Depending on undocumented behavior
+
+If your code relies on a behavior a dependency does not document or test, add a test that
+pins it. An untested reliance can change without warning, because the maintainer never
+promised it would hold. This is sometimes called the Beyoncé Rule: if you liked it, you
+should have put a test on it.
+
+`testing.md` says not to test code you did not write, aimed at a library's own documented
+contract, covered by that library's own suite. This is the opposite case. You are depending
+on something outside that contract, and the test you add protects your own code, not the
+library's.
+
+### Property-based testing
+
+Where a function has an algebraic invariant, such as `decode(encode(x)) === x`, prefer
+generating inputs against that invariant over hand-picking examples. Generated inputs find
+edge cases a person would not think to write down, and a failure shrinks to the smallest
+input that still reproduces it.
+
+### The purpose of code review
+
+Code review exists for the long-term health of the codebase, not to enforce a reviewer's
+personal style preference. A comment worth raising should survive being asked whether the
+codebase is measurably worse if left as is. One that does not survive that question is a
+preference, not a finding.
+
+### Test Desiderata
+
+Kent Beck's Test Desiderata names properties a good test has, among them isolated, fast,
+repeatable, and self-checking, more than a dozen in total, in tension with each other. Judge
+whether a test is worth keeping against the list, and never trade one property away without
+gaining a better one. Use it where `testing.md`'s own bar, that a test earns its place by
+failing when the behavior breaks, does not settle whether to keep or cut a specific test.
+
+## Documentation
+
+### Diataxis
+
+Separate documentation into four types: tutorials, how-to guides, reference, and
+explanation. Deciding which one a document is before writing it keeps that document from
+trying to teach, guide, describe, and explain all at once, which is what makes most
+documentation hard to read.
+
+Source: Diataxis (diataxis.fr).
+
+### Docs as code
+
+Treat documentation the way you treat source: version-controlled, plain text, reviewed, and
+built through the same CI as the code it describes. A doc that lives outside that pipeline
+can drift from the code silently, since nothing fails when it goes stale.
+
+### README structure
+
+A README should follow a predictable, standard structure, so a reader always knows where to
+find setup, usage, and contribution information without hunting for it. Consistent
+placement is what makes a README skimmable across projects, not just within one.

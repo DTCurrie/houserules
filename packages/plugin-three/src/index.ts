@@ -65,8 +65,11 @@ function threeModule(api: PluginApi): ModuleDef {
           ),
         ];
       });
+      // Only the bullet. The base rule's own payload body already carries the
+      // "Also installed in this repo" heading for the unconditional debugging reference, so
+      // repeating it here renders the heading twice whenever this option is chosen.
       const performanceLink = chosen.includes('performance')
-        ? '\n## Also installed in this repo\n\n- **Renderer performance is a problem:** `../reference/three-performance.md`\n'
+        ? '- **Renderer performance is a problem:** `../reference/three-performance.md`\n'
         : undefined;
       return [
         ...guideActions,
@@ -85,9 +88,16 @@ function threeModule(api: PluginApi): ModuleDef {
           'three-upstream-docs',
           'pull-only pointer to the upstream llms.txt docs for Three.js, Threlte, and R3F',
         ),
+        // Unconditional for the same reason as three-upstream-docs: the base rule links it
+        // from its own payload body, so it must always be present.
+        api.payload.reference(
+          id,
+          'three-debugging',
+          'pull-only diagnostic reference for a broken or slow Three.js render',
+        ),
         {
           kind: 'advise',
-          text: "Three.js rule installed at .claude/rules/three.md, path-scoped via its `paths:` frontmatter (**/three/**, **/*.three.ts, **/*.glsl) so Claude Code loads it only when Three.js code is in the working set. Trim `paths:` to where this repo's Three.js layer actually lives, or widen it if that layer is not under a three/ directory. If you widen the base rule's paths, widen each installed guide's paths the same way, since every guide glob is a strict subset of the base rule's so a guide never loads without it. Keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn.",
+          text: "Three.js rule installed at .claude/rules/three.md, path-scoped via its `paths:` frontmatter (**/three/**, **/*.three.ts, **/*.glsl, **/*.wgsl) so Claude Code loads it only when Three.js code is in the working set. Trim `paths:` to where this repo's Three.js layer actually lives, or widen it if that layer is not under a three/ directory. If you widen the base rule's paths, widen each installed guide's paths the same way, since every guide glob is a strict subset of the base rule's so a guide never loads without it. Keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn.",
           module: id,
         },
       ];

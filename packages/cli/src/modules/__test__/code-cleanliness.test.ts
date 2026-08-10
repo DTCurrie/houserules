@@ -22,6 +22,11 @@ describe('code-cleanliness', () => {
     expect(ruleText).toMatch(
       /Prefer intention-revealing names over short ones/,
     );
+    expect(
+      ruleText,
+      'the line count is a prompt to look, not a target to hit',
+    ).toMatch(/Past 20 to 30 lines, look again/);
+    expect(ruleText).not.toMatch(/Target under 20 to 30 lines/);
 
     const manifest = manifestOf(root);
     expect(manifest.modules.includes('code-cleanliness')).toBeTruthy();
@@ -90,6 +95,12 @@ describe('code-cleanliness', () => {
       );
       expect(referenceText).toMatch(
         /Duplication is far cheaper than the wrong abstraction/,
+      );
+      expect(
+        referenceText,
+        'deep modules is the fuller reasoning behind the function-size line in code-cleanliness.md',
+      ).toMatch(
+        /deep module, a simple interface hiding substantial functionality/,
       );
     });
 

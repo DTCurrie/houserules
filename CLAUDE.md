@@ -17,7 +17,7 @@ via the `/changeset` skill. See that skill for what it does and when to run it.
 ### Tracking out-of-scope work
 
 Discover a real issue outside the current scope? **Do not fix it inline.** Log it with the
-`/backlog-add` skill instead. Prefixes by area: `CLI` (packages/cli/), `PLUGINFIXTUR` (packages/cli/test/plugin-fixture/), `PAYLOAD` (packages/payload/), `PLUGINACCESS` (packages/plugin-accessibility/), `PLUGINBACKLO` (packages/plugin-backlog/), `PLUGINCHANGE` (packages/plugin-changesets/), `PLUGINDECISI` (packages/plugin-decisions/), `PLUGINDESIGN` (packages/plugin-design/), `PLUGINGITHUB` (packages/plugin-github/), `PLUGINPERSON` (packages/plugin-persona-auditor/), `PLUGINPROSE` (packages/plugin-prose/), `PLUGINSVELTE` (packages/plugin-svelte/), `PLUGINTESTIN` (packages/plugin-testing/), `PLUGINTHREE` (packages/plugin-three/), `PLUGINTYPESC` (packages/plugin-typescript/), `TEST` (packages/test/).
+`/backlog-add` skill instead. Prefixes by area: `CLI` (packages/cli/), `PAYLOAD` (packages/payload/), `PLUGINACCESS` (packages/plugin-accessibility/), `PLUGINBACKLO` (packages/plugin-backlog/), `PLUGINCHANGE` (packages/plugin-changesets/), `PLUGINDECISI` (packages/plugin-decisions/), `PLUGINDESIGN` (packages/plugin-design/), `PLUGINGITHUB` (packages/plugin-github/), `PLUGINPERSON` (packages/plugin-persona-auditor/), `PLUGINPROSE` (packages/plugin-prose/), `PLUGINSVELTE` (packages/plugin-svelte/), `PLUGINTESTIN` (packages/plugin-testing/), `PLUGINTHREE` (packages/plugin-three/), `PLUGINTYPESC` (packages/plugin-typescript/), `TEST` (packages/test/), `PLUGINFIXTUR` (packages/cli/test/plugin-fixture/).
 
 ### Recording decisions
 

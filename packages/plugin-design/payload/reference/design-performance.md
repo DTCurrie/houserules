@@ -61,6 +61,26 @@ result for every page.
 roughly 100ms. Otherwise the visitor keeps the fallback font for the entire visit. That is a
 design decision: whether the brand font is worth a layout shift to display it.
 
+## Core Web Vitals as the outcome measure
+
+The design-time choices above exist to move three numbers: LCP, CLS, and INP. These are the
+current Core Web Vitals. INP replaced FID in 2024, so a guide or a checklist that still names
+FID is measuring a retired metric.
+
+- **LCP (Largest Contentful Paint)** measures how long the largest visible element, usually a
+  hero image or a headline, takes to render.
+- **CLS (Cumulative Layout Shift)** measures how much visible content moves after it has
+  already rendered. The font-metric-override fix above is a direct CLS fix.
+- **INP (Interaction to Next Paint)** measures the delay between a user's interaction, a
+  click, a tap, a key press, and the next frame the browser paints in response.
+
+Measure all three from **field data at the 75th percentile**, not from a single lab run. A
+Lighthouse score is a lab measurement: one run, on one machine, on one network condition. Core
+Web Vitals are a field measurement: real visitors, real devices, real networks, aggregated so
+that the number reported is the value the 75th-percentile visitor experienced. A design can
+pass a lab audit and still fail its Core Web Vitals in the field, because the lab run never
+saw the low-end phone or the slow connection that the 75th-percentile visitor is on.
+
 ## Image format as a design-time choice
 
 AVIF produces files roughly 20 to 30 percent smaller than WebP at equal quality. It also

@@ -28,12 +28,21 @@ when `init` asks.
 - **`three`** installs `.claude/rules/three.md`, a path-scoped rule covering Three.js
   extension patterns: extend Three.js classes directly rather than wrapping them,
   pre-allocate temporaries at module scope, `BatchedMesh` or `InstancedMesh` past a few dozen
-  objects, custom `BufferGeometry` via typed-array attributes, custom shaders, and overriding
-  `raycast` when the default bounds test is wrong.
+  objects, custom `BufferGeometry` via typed-array attributes, custom shaders, overriding
+  `raycast` when the default bounds test is wrong, disposing GPU resources and deciding which
+  layer owns that, and rendering on demand rather than every frame.
 
-  Scoped to `**/three/**`, `**/*.three.ts`, and `**/*.glsl` through its `paths:` frontmatter,
-  so it loads only when the Three.js layer is in the working set. Keep that frontmatter. A
-  rule file without `paths:` is loaded on every turn.
+  Scoped to `**/three/**`, `**/*.three.ts`, `**/*.glsl`, and `**/*.wgsl` through its `paths:`
+  frontmatter, so it loads only when the Three.js layer is in the working set. Keep that
+  frontmatter. A rule file without `paths:` is loaded on every turn.
+
+  Two pull-only references install with it unconditionally, because the rule body links them
+  and a link to a file nothing installed fails `agent-kit doctor`:
+
+  - `three-upstream-docs.md`: pointers to the upstream `llms.txt` docs, plus upgrade
+    discipline for Three.js and Threlte.
+  - `three-debugging.md`: read when a render is already broken. Symptom to cause, bisecting by
+    substitution, the helper objects, `webglcontextlost`, and runtime capability detection.
 
   Takes an option for framework binding guides, both off by default since neither is true of
   a repo the installer knows nothing about:

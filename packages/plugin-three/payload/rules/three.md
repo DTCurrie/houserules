@@ -3,6 +3,7 @@ paths:
   - '**/three/**'
   - '**/*.three.ts'
   - '**/*.glsl'
+  - '**/*.wgsl'
 ---
 
 # Three.js Extension Patterns
@@ -23,7 +24,7 @@ Subclass the closest Three.js type instead of wrapping it, so the result hands s
 renderer or framework binding:
 
 ```typescript
-import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 
 export class OBBHelper extends LineSegments2 {
   update(obb: OBB) {
@@ -106,3 +107,20 @@ Keep the pair in sibling `vertex.glsl` and `fragment.glsl` files.
 
 Override `raycast` on a `Mesh` or `Object3D` subclass when the default sphere or box test is
 wrong for the geometry. Push hits to `intersects`, or return early to opt out.
+
+## Dispose GPU resources
+
+Geometries, materials, and textures are disposable GPU resources. `Object3D` is cheap. Call
+`.dispose()` on each once nothing references it, since garbage collection never frees the GPU.
+
+Decide early which layer owns disposal. An unclear owner is how a scene ends in gradual
+slowdown and eventual context loss.
+
+## Render on demand
+
+Render only when the scene changes, not every frame, for a viewer or configurator that is not
+continuously animating. This is the largest performance win available here.
+
+## Also installed in this repo
+
+- **Diagnosing a broken render:** `../reference/three-debugging.md`

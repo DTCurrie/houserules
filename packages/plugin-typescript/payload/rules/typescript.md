@@ -46,6 +46,15 @@ if (isPayload(data)) {
 }
 ```
 
+### More decisions
+
+- **Exhaustive switches.** Give a switch over a discriminated union a `default` branch typed
+  `never`, so a new variant fails at compile time instead of at runtime.
+- **`@ts-expect-error`, not `@ts-ignore`.** `@ts-expect-error` fails once the error stops
+  occurring. `@ts-ignore` suppresses forever.
+- **Rethrow with `cause`.** `throw new Error('...', { cause: err })` keeps the original error
+  instead of dropping it.
+
 ### Where other rules apply
 
 - Whether a comment should exist, and what form it takes: see `code-comments.md` if that rule

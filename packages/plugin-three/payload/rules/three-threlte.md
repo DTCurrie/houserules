@@ -11,7 +11,7 @@ Assumes `three.md`. This is the Svelte binding residue only, not a restatement o
 ## Handing an object to the scene graph
 
 Use `<T>` to declare Three.js objects in a Threlte scene, and `<T is={obj} />` to hand a
-pre-built object from the pure Three.js layer to the scene graph instead of rebuilding it
+pre-built object from the pure layer to the scene graph instead of rebuilding it
 declaratively:
 
 ```svelte
@@ -19,6 +19,8 @@ declaratively:
 ```
 
 An object the pure layer built stays that object. Threlte places it, it does not recreate it.
+Threlte 8 narrowed automatic disposal to objects a `<T>` directly references, so decide
+whether the pure layer or Threlte disposes an object handed in this way.
 
 ## Frame loop and renderer access
 

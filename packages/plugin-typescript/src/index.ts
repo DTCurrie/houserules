@@ -37,7 +37,7 @@ function typescriptModule(api: PluginApi): ModuleDef {
         ),
         {
           kind: 'advise',
-          text: 'TypeScript rule installed at .claude/rules/typescript.md. It is path-scoped via its `paths:` frontmatter (**/*.ts, **/*.mts, **/*.cts, not .tsx) — Claude Code loads it only when a matching source file is in the working set, so it adds nothing to the always-loaded surface. Keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn.',
+          text: 'TypeScript rule installed at .claude/rules/typescript.md. It is path-scoped via its `paths:` frontmatter (**/*.ts, **/*.mts, **/*.cts, **/*.tsx, **/*.svelte, **/*.svelte.ts) — Claude Code loads it only when a matching source file is in the working set, so it adds nothing to the always-loaded surface. Keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn.',
           module: id,
         },
       ];

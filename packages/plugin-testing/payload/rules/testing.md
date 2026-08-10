@@ -31,6 +31,8 @@ that covers it is part of the change, not a follow-up.
   it: introduce the bug the test is supposed to catch, run the test, confirm it goes red, then
   revert. A test that stays green under a deliberate bug is not weak coverage, it is zero
   coverage, and deleting it loses nothing.
+- **A flaky test is quarantined and fixed at the root, never deleted to reach green.**
+  Common causes: isolation (shared state), unsettled async, and a real clock (time).
 - **Do not run that check when the bug would kill the process instead of failing an
   assertion.** A guard against a native panic, a stack overflow, or an out-of-memory has that
   shape. Removing it ends the run rather than reddening a test, so it proves nothing a reader

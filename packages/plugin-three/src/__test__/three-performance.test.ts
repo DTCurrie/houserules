@@ -82,4 +82,53 @@ describe('three renderer performance reference', () => {
       manifest.files['.claude/reference/three-performance.md'],
     ).toBeTruthy();
   });
+
+  it('does not claim WebGPU reached Baseline', () => {
+    const root = installedWith(['performance']);
+
+    const content = readFileSync(referencePath(root), 'utf8');
+
+    expect(content).toContain('has not reached a Baseline classification');
+    expect(content).not.toMatch(/percent.{0,10}global support/);
+  });
+
+  it('states the two-step Firefox WebGPU rollout on Apple Silicon macOS', () => {
+    const root = installedWith(['performance']);
+
+    const content = readFileSync(referencePath(root), 'utf8');
+
+    expect(content).toContain('145');
+    expect(content).toContain('147');
+    expect(content).toMatch(/Intel Mac/);
+    expect(content).toMatch(/Linux/);
+  });
+
+  it('treats the 100-draw-call figure as a prompt to investigate, not a threshold', () => {
+    const root = installedWith(['performance']);
+
+    const content = readFileSync(referencePath(root), 'utf8');
+
+    expect(content).toContain(
+      'roughly 100 draw calls per frame as a prompt to\ninvestigate rather than a hard threshold',
+    );
+  });
+
+  it('does not attach a specific figure to Three.js-versus-framework or WebGPU-versus-WebGL benchmarks', () => {
+    const root = installedWith(['performance']);
+
+    const content = readFileSync(referencePath(root), 'utf8');
+
+    expect(content).toContain('as\ndirectional at best');
+    expect(content).not.toMatch(/benchmark[\s\S]{0,120}percent/);
+  });
+
+  it('tells the reader to recompute the bounding sphere after modifying vertices', () => {
+    const root = installedWith(['performance']);
+
+    const content = readFileSync(referencePath(root), 'utf8');
+
+    expect(content).toContain(
+      'Recompute that bounding sphere after modifying a mesh',
+    );
+  });
 });

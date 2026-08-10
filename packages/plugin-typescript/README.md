@@ -28,10 +28,11 @@ when `init` asks.
   decisions. `interface` for object shapes, because they extend. `type` for unions and
   computed types. `unknown` plus a type guard instead of `any` for untyped external data.
 
-  Scoped to `**/*.ts`, `**/*.mts`, and `**/*.cts` through its `paths:` frontmatter, and
-  deliberately not `.tsx`. Claude Code loads it only when a matching file is in the working
-  set, so it costs nothing on the always-loaded surface. Keep that frontmatter. A rule file
-  without `paths:` is loaded on every turn.
+  Scoped to `**/*.ts`, `**/*.mts`, `**/*.cts`, and `**/*.tsx` through its `paths:`
+  frontmatter, plus `**/*.svelte` and `**/*.svelte.ts` so `svelte.md` can defer to it.
+  Claude Code loads it only when a matching file is in the working set, so it costs nothing
+  on the always-loaded surface. Keep that frontmatter. A rule file without `paths:` is
+  loaded on every turn.
 
   The rule assumes `strict: true`.
 

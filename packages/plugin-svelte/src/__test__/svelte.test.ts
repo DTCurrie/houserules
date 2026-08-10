@@ -118,4 +118,28 @@ describe('svelte', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it('warns that module-level $state is shared across requests and users', () => {
+    const root = installedWith([]);
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/svelte.md'),
+      'utf8',
+    );
+
+    expect(ruleText).toMatch(/shared across every request and user/);
+  });
+
+  it('carves authorization out of the layout-fetching guidance', () => {
+    const root = installedWith(['sveltekit']);
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/sveltekit.md'),
+      'utf8',
+    );
+
+    expect(ruleText).toMatch(
+      /authorization: layout logic can skip leaf routes/,
+    );
+  });
 });

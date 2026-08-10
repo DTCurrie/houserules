@@ -39,6 +39,7 @@ describe('three', () => {
       '**/three/**',
       '**/*.three.ts',
       '**/*.glsl',
+      '**/*.wgsl',
     ]);
 
     const manifest = manifestOf(root);
@@ -47,6 +48,36 @@ describe('three', () => {
       manifest.files['.claude/rules/three.md'],
       'the rule BODY is kit-owned (update-refreshable)',
     ).toBeTruthy();
+  });
+
+  it('teaches disposal ownership for geometries, materials, and textures', () => {
+    const root = installedWith([]);
+
+    const ruleText = readFileSync(join(root, '.claude/rules/three.md'), 'utf8');
+
+    expect(ruleText).toContain('.dispose()');
+    expect(ruleText).toContain('Object3D` is cheap');
+  });
+
+  it('links the debugging reference from the base rule and installs it', () => {
+    const root = installedWith([]);
+
+    const ruleText = readFileSync(join(root, '.claude/rules/three.md'), 'utf8');
+
+    expect(ruleText).toContain('../reference/three-debugging.md');
+    expect(existsSync(join(root, '.claude/reference/three-debugging.md'))).toBe(
+      true,
+    );
+  });
+
+  it('imports LineSegments2 from the three/addons/ alias', () => {
+    const root = installedWith([]);
+
+    const ruleText = readFileSync(join(root, '.claude/rules/three.md'), 'utf8');
+
+    expect(ruleText).toContain(
+      "import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';",
+    );
   });
 
   it('is not installed by default', () => {

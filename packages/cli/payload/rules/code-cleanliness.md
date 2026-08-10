@@ -43,8 +43,8 @@ reference doc linked below.
 
 - **One function, one nameable task.** If you cannot name what a function does in a short
   phrase without "and", it is doing more than one thing.
-- **Target under 20 to 30 lines.** Past that a function usually mixes levels of
-  abstraction, which is what makes it slow to read.
+- **Past 20 to 30 lines, look again.** It may mix abstraction, or be one task a
+  split would only fragment.
 - **Prefer early return over nested conditionals.** Nesting is what makes a function
   expensive to read, since the reader has to hold every enclosing condition in mind at
   once.

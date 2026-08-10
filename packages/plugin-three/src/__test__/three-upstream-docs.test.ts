@@ -72,6 +72,7 @@ describe('three upstream docs reference', () => {
 
     expect(resolution).toEqual([
       { link: '../reference/three-upstream-docs.md', installed: true },
+      { link: '../reference/three-debugging.md', installed: true },
     ]);
   });
 
@@ -92,6 +93,7 @@ describe('three upstream docs reference', () => {
 
     expect(resolution).toEqual([
       { link: '../reference/three-upstream-docs.md', installed: true },
+      { link: '../reference/three-debugging.md', installed: true },
       { link: '../reference/three-performance.md', installed: true },
     ]);
   });
