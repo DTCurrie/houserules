@@ -8,10 +8,8 @@ import { join } from 'node:path';
  *
  * Building the CLI is NOT this function's job. Every `test` script declares a wireit
  * dependency on `../cli:build:ts`, so `dist/` is present and current before vitest starts,
- * and a consumer installing `@agent-kit/cli` from npm gets `dist/` prebuilt in the tarball.
- * This used to shell out to `tsc` here, which cost a full CLI compile once per package per
- * run, ten of them across the workspace. It could also never have worked outside this
- * workspace, since the published package ships neither `src/` nor `tsconfig.build.json`.
+ * and a consumer installing `@agent-kit/cli` from npm gets `dist/` prebuilt in the tarball,
+ * which ships neither `src/` nor `tsconfig.build.json` for this function to compile.
  */
 export default function setup(): () => void {
   // Where useInstalledRepo() keeps its per-(shape, modules) snapshots. Created here so

@@ -14,7 +14,7 @@ Review the design-system fit of a working-tree change. Arguments (optional file 
    stop. There is nothing to review.
 2. **Run the checker.** `node .claude/scripts/design.mjs check <files>` finds hardcoded
    literals, off-scale spacing and type, contrast failures, and undersized hit targets, each
-   with an exact number and the token that should replace it.
+   with an exact number.
 3. **Reach for the rendered tier only when the source pass cannot settle it.** This step is
    conditional, not routine. Run it when `check` raised something only a render can decide,
    such as a contrast ratio against a background painted by another layer, or when the

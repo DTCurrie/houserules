@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,6 +25,21 @@ function tempRoot(): string {
 function ctxAt(root: string): Ctx {
   return { root } as Ctx;
 }
+
+function chmodMakesFileUnreadable(): boolean {
+  const root = tempRoot();
+  const probe = join(root, 'probe');
+  writeFileSync(probe, 'x');
+  chmodSync(probe, 0o000);
+  try {
+    readFileSync(probe, 'utf8');
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+const CHMOD_ENFORCES_UNREADABLE = chmodMakesFileUnreadable();
 
 describe('checkDesignTokens', () => {
   it('warns when the token file is missing', () => {
@@ -53,6 +74,23 @@ describe('checkDesignTokens', () => {
     expect(result.findings[0]?.level).toBe('WARN');
     expect(result.findings[0]?.msg).toContain('placeholder');
   });
+
+  it.skipIf(!CHMOD_ENFORCES_UNREADABLE)(
+    'warns that the token file could not be read when it exists but is unreadable',
+    () => {
+      const root = tempRoot();
+      mkdirSync(join(root, '.claude/design'), { recursive: true });
+      const absolute = join(root, TOKENS_PATH);
+      writeFileSync(absolute, renderTokenSeed());
+      chmodSync(absolute, 0o000);
+
+      const result = checkDesignTokens(ctxAt(root));
+
+      expect(result.findings).toHaveLength(1);
+      expect(result.findings[0]?.level).toBe('WARN');
+      expect(result.findings[0]?.msg).toContain('could not be read');
+    },
+  );
 
   it('produces no findings and one readout for an edited token file', () => {
     const root = tempRoot();

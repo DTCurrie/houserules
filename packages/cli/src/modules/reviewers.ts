@@ -10,7 +10,7 @@ export const title =
 export const group: ModuleGroup = 'optional';
 
 export function hint(ctx: Ctx): string {
-  return `generates DRAFT agents for ${ctx.targets.length || 'your'} target(s) — you fill in the authoritative sources`;
+  return `generates DRAFT agents for ${ctx.targets.length || 'your'} target(s). You fill in the authoritative sources`;
 }
 
 export function defaultEnabled(): boolean {

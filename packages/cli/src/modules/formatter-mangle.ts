@@ -15,7 +15,12 @@ function prettierignoreBlockPresent(root: string): boolean {
   let content: string;
   try {
     content = readFileSync(join(root, '.prettierignore'), 'utf8');
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error(
+        `agent-kit: could not read .prettierignore (${(error as Error).message}). Assuming it has no kit-owned block, which may misdiagnose a formatter mangle.`,
+      );
+    }
     return false;
   }
   return extractBody(content, PRETTIERIGNORE_REGION) !== null;

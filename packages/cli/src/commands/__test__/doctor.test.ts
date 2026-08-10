@@ -703,7 +703,10 @@ describe('doctor and a body-owned rule frontmatter', () => {
       body: sha256(body),
       frontmatter: sha256('---\npaths:\n  - "an-older-default/**"\n---\n'),
     };
-    writeManifest(root, manifest as any);
+    writeManifest(
+      root,
+      manifest as unknown as Parameters<typeof writeManifest>[1],
+    );
 
     const r = runCli(['doctor', root]);
 

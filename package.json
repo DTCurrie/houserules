@@ -25,7 +25,8 @@
     "dogfood:watch": "pnpm --filter @agent-kit/cli dogfood:watch",
     "attw": "wireit",
     "verify:packages": "node scripts/verify-packages.mjs",
-    "verify:payload-copy-set": "node scripts/verify-payload-copy-set.mjs"
+    "verify:payload-copy-set": "node scripts/verify-payload-copy-set.mjs",
+    "verify:payload-test-coverage": "node scripts/verify-payload-test-coverage.mjs"
   },
   "wireit": {
     "lint": {

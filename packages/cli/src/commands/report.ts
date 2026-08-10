@@ -35,6 +35,7 @@ interface TranscriptAgg {
   toolResults: number;
   models: Set<string>;
   sidechainTurns: number;
+  skippedLines: number;
 }
 
 // Anthropic cache multipliers relative to base input price: a cache READ bills at
@@ -42,11 +43,8 @@ interface TranscriptAgg {
 const CACHE_READ_WEIGHT = 0.1;
 const CACHE_WRITE_WEIGHT = 1.25;
 
-/**
- * Aggregates one Claude Code session log. Exported as the substrate for later
- * sub-reports, not only for `report` itself.
- */
-export function parseTranscript(text: string): TranscriptAgg {
+// Aggregates one Claude Code session log.
+function parseTranscript(text: string): TranscriptAgg {
   const agg: TranscriptAgg = {
     turns: 0,
     input: 0,
@@ -56,6 +54,7 @@ export function parseTranscript(text: string): TranscriptAgg {
     toolResults: 0,
     models: new Set(),
     sidechainTurns: 0,
+    skippedLines: 0,
   };
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
@@ -63,6 +62,7 @@ export function parseTranscript(text: string): TranscriptAgg {
     try {
       rec = JSON.parse(line);
     } catch {
+      agg.skippedLines += 1;
       continue;
     }
     const msg = rec.message ?? {};
@@ -135,13 +135,19 @@ export async function report(dir: string, _flags: Flags): Promise<number> {
     toolResults: 0,
     models: new Set(),
     sidechainTurns: 0,
+    skippedLines: 0,
   };
   console.log(`${files.length} session(s):\n`);
+  let skippedFiles = 0;
   for (const file of files) {
     let a: TranscriptAgg;
     try {
       a = parseTranscript(readFileSync(join(projDir, file), 'utf8'));
-    } catch {
+    } catch (error) {
+      skippedFiles += 1;
+      console.error(
+        `  (skipped ${file}: could not read it — ${(error as Error).message})`,
+      );
       continue;
     }
     total.turns += a.turns;
@@ -151,12 +157,16 @@ export async function report(dir: string, _flags: Flags): Promise<number> {
     total.cacheWrite += a.cacheWrite;
     total.toolResults += a.toolResults;
     total.sidechainTurns += a.sidechainTurns;
+    total.skippedLines += a.skippedLines;
     for (const m of a.models) total.models.add(m);
     const id = file.replace(/\.jsonl$/, '').slice(0, 8);
     console.log(
       `  ${id}  turns ${a.turns}  in ${n(a.input)}  out ${n(a.output)}  ` +
         `cache_read ${n(a.cacheRead)}  cache_write ${n(a.cacheWrite)}  ` +
-        `tools ${a.toolResults}  weighted-in ${n(weightedInput(a))}`,
+        `tools ${a.toolResults}  weighted-in ${n(weightedInput(a))}` +
+        (a.skippedLines
+          ? `  (${a.skippedLines} line(s) could not be parsed and were skipped)`
+          : ''),
     );
   }
 
@@ -180,5 +190,10 @@ export async function report(dir: string, _flags: Flags): Promise<number> {
   console.log(
     '\n(cache_read is cost-weighted, never summed flat with fresh input; native /usage covers the live view.)',
   );
+  if (skippedFiles || total.skippedLines) {
+    console.log(
+      `(${skippedFiles} session file(s) and ${total.skippedLines} line(s) across the rest could not be parsed and were excluded from the totals above.)`,
+    );
+  }
   return 0;
 }

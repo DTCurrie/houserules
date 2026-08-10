@@ -106,7 +106,7 @@ function recordDimensions(
  * Scans CSS declarations and inline `style=` attributes in `text` for color and dimension
  * literals, counting how often each distinct value occurs within this text.
  */
-export function countStyleLiteralsInText(text: string): RawLiteralCount[] {
+function countStyleLiteralsInText(text: string): RawLiteralCount[] {
   const withoutComments = text.replace(COMMENT_PATTERN, '');
   const counts = new Map<TokenGroup, Map<string, RawLiteralCount>>();
 
@@ -173,22 +173,26 @@ function rankAndCapGroup(
 /**
  * Reads each file in `filePaths`, scans it for style literals, merges occurrence counts across
  * files, and returns the result as `TokenCandidate[]` ranked by frequency within each group.
- * A file that cannot be read is skipped rather than failing the whole scan.
+ * A file that cannot be read is skipped rather than failing the whole scan, and named in
+ * `unreadableFiles` so a caller can tell "skipped" from "read, nothing found".
  *
- * @returns The ranked candidates, and how many distinct values were dropped by the occurrence
- * floor or the per-group cap.
+ * @returns The ranked candidates, how many distinct values were dropped by the occurrence floor
+ * or the per-group cap, and which input files could not be read.
  */
 export function collectStyleTokenCandidates(filePaths: string[]): {
   candidates: TokenCandidate[];
   droppedCount: number;
+  unreadableFiles: string[];
 } {
   const counts = new Map<TokenGroup, Map<string, RawLiteralCount>>();
+  const unreadableFiles: string[] = [];
 
   for (const filePath of filePaths) {
     let text: string;
     try {
       text = readFileSync(filePath, 'utf8');
     } catch {
+      unreadableFiles.push(filePath);
       continue;
     }
     mergeLiteralCounts(counts, countStyleLiteralsInText(text));
@@ -202,5 +206,5 @@ export function collectStyleTokenCandidates(filePaths: string[]): {
     droppedCount += ranked.droppedCount;
   }
 
-  return { candidates, droppedCount };
+  return { candidates, droppedCount, unreadableFiles };
 }

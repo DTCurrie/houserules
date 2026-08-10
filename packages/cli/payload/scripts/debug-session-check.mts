@@ -18,6 +18,8 @@ import { repoRoot } from '@agent-kit/payload/kit-config';
 // and the throwaway-log directory. Keep both in sync with the skill.
 const MARKER = 'CLAUDE-DEBUG';
 const DEBUG_DIR = '.claude/debug';
+// How many orphaned files to name inline before collapsing to "…".
+const MAX_SHOWN_ORPHANS = 5;
 
 // Active investigations = session logs the skill writes (.claude/debug/<slug>.jsonl).
 function activeLogs(root: string): string[] {
@@ -25,13 +27,22 @@ function activeLogs(root: string): string[] {
     return readdirSync(join(root, DEBUG_DIR)).filter((f) =>
       f.endsWith('.jsonl'),
     );
-  } catch {
-    return []; // dir absent/unreadable — nothing in flight.
+  } catch (error) {
+    // Missing dir is the common, expected case: nothing in flight. Anything else means
+    // this check could not actually look, which is worth a note since the reminder stays
+    // silent either way.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error(
+        `[kit] could not check ${DEBUG_DIR}/ for open sessions: ${(error as Error).message}`,
+      );
+    }
+    return [];
   }
 }
 
 // Excludes .claude/ so the skill, this script, and the logs never count as orphans.
-// --untracked catches a brand-new trace helper file. Exit 1 (no matches) throws.
+// --untracked catches a brand-new trace helper file. Exit 1 (no matches, not an error)
+// and any other failure both throw from execFileSync, so the status code tells them apart.
 function orphanedFiles(root: string): string[] {
   try {
     const out = execFileSync(
@@ -40,7 +51,13 @@ function orphanedFiles(root: string): string[] {
       { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
     );
     return out.split('\n').filter(Boolean);
-  } catch {
+  } catch (error) {
+    const status = (error as { status?: number }).status;
+    if (status !== 1) {
+      console.error(
+        `[kit] could not check the tree for stray ${MARKER} instrumentation (git grep did not run cleanly).`,
+      );
+    }
     return [];
   }
 }
@@ -56,9 +73,9 @@ try {
     );
   }
   if (orphans.length) {
-    const shown = orphans.slice(0, 5).join(', ');
+    const shown = orphans.slice(0, MAX_SHOWN_ORPHANS).join(', ');
     lines.push(
-      `[kit] ${orphans.length} file(s) still carry ${MARKER} instrumentation (${shown}${orphans.length > 5 ? ', …' : ''}) — remove before committing (/debug-session step 9).`,
+      `[kit] ${orphans.length} file(s) still carry ${MARKER} instrumentation (${shown}${orphans.length > MAX_SHOWN_ORPHANS ? ', …' : ''}) — remove before committing (/debug-session step 9).`,
     );
   }
   if (lines.length) console.log(lines.join('\n'));

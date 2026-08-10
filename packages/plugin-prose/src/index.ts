@@ -34,7 +34,7 @@ function codeCommentsModule(api: PluginApi): ModuleDef {
         ),
         {
           kind: 'advise',
-          text: 'Comment rule installed at .claude/rules/code-comments.md. It is path-scoped via its `paths:` frontmatter — Claude Code loads it only when a matching source file is in the working set, so it adds nothing to the always-loaded surface (needs a build with path-scoped rules; verified on Claude Code 2.1.220). Trim `paths:` to the languages this repo actually has, and keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn.',
+          text: 'Comment rule installed at .claude/rules/code-comments.md. It is path-scoped via its `paths:` frontmatter — Claude Code loads it only when a matching source file is in the working set, so it adds nothing to the always-loaded surface (needs a build with path-scoped rules, verified on Claude Code 2.1.220). Trim `paths:` to the languages this repo has, and keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn.',
           module: id,
         },
       ];
@@ -149,7 +149,6 @@ function outputProseModule(api: PluginApi): ModuleDef {
         },
       ];
     },
-    // Installing the style file does not activate it. Output styles are user-selected.
     check(ctx: Ctx) {
       const active = activeStyle(ctx);
 
@@ -181,7 +180,7 @@ function outputProseModule(api: PluginApi): ModuleDef {
       return {
         findings: [],
         readouts: [
-          `output-prose: INACTIVE — installed but no outputStyle set; activate via /config → Output style → "${STYLE_NAME}", or set "outputStyle": "${STYLE_NAME}"`,
+          `output-prose: INACTIVE — installed but no outputStyle set. Activate via /config → Output style → "${STYLE_NAME}", or set "outputStyle": "${STYLE_NAME}"`,
         ],
       };
     },

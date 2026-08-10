@@ -55,7 +55,7 @@ editing on the user's behalf in their voice.
 ## Precision outranks brevity
 
 Cutting words is not the goal. Clarity is. If removing a qualifier changes what the
-sentence claims, keep the qualifier. If a reader needs the reason behind a rule in order to
+sentence claims, keep the qualifier. If a reader needs the reason behind a rule to
 follow it, give the reason in a sentence. A rule with no stated reason gets argued with.
 
 ## Examples

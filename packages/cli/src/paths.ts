@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,12 +15,4 @@ const PAYLOAD_ROOT = join(KIT_ROOT, 'payload-dist');
 /** Resolves a path inside the built payload that ships to user repos. */
 export function payloadPath(...segments: string[]): string {
   return join(PAYLOAD_ROOT, ...segments);
-}
-
-/** Clear failure rather than a confusing missing-file error deep in the plan. */
-export function assertPayloadBuilt(): void {
-  if (existsSync(PAYLOAD_ROOT)) return;
-  throw new Error(
-    'payload-dist/ is missing — run `pnpm build` before using the CLI from a checkout.',
-  );
 }

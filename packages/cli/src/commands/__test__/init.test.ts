@@ -144,12 +144,16 @@ describe('init --yes on a pnpm monorepo', () => {
 
   it('derives a target’s prefix and fixCommands, omitting changelogPath without the ledger module', () => {
     const config = readJson(kitConfigPath(root));
-    const cityville = config.targets.find(
-      (t: any) => t.packageName === '@fix/cityville',
-    );
-    expect(cityville.prefix).toBe('CITYVILLE');
-    expect(cityville.fixCommands).toEqual(['fix']);
-    expect(cityville.changelogPath).toBe(undefined);
+    const targets = config.targets as Array<{
+      packageName?: string;
+      prefix?: string;
+      fixCommands?: string[];
+      changelogPath?: string;
+    }>;
+    const cityville = targets.find((t) => t.packageName === '@fix/cityville');
+    expect(cityville?.prefix).toBe('CITYVILLE');
+    expect(cityville?.fixCommands).toEqual(['fix']);
+    expect(cityville?.changelogPath).toBe(undefined);
   });
 
   it('wires every kit script into a settings.json hook', () => {
@@ -330,7 +334,7 @@ describe('init on an existing CLAUDE.md', () => {
     const root = useRepo('npm-single');
     const heading = '# single-app\n\n';
     const prose =
-      'Pre-existing user CLAUDE.md — the kit must never edit this.\n';
+      'Pre-existing user CLAUDE.md. The kit must never edit this.\n';
     expect(readClaudeMd(root)).toBe(`${heading}${prose}`);
 
     expect(runCli(['init', '--yes', root]).status).toBe(0);
@@ -490,14 +494,13 @@ describe('init settings signature recorded in the manifest', () => {
 
   it('signs the wired guard-bash hook', () => {
     const manifest = manifestOf(root);
-    expect(
-      manifest.settings.hooks.some((h: any) => h.script === 'guard-bash.mjs'),
-    ).toBeTruthy();
+    const hooks = manifest.settings.hooks as Array<{ script?: string }>;
+    expect(hooks.some((h) => h.script === 'guard-bash.mjs')).toBeTruthy();
   });
 
-  it('signs a non-empty set of permissions', () => {
+  it('signs the core module permission it always contributes', () => {
     const manifest = manifestOf(root);
-    expect(manifest.settings.permissions.length > 0).toBeTruthy();
+    expect(manifest.settings.permissions).toContain('allow:Bash(git status)');
   });
 });
 

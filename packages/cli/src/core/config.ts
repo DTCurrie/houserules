@@ -40,7 +40,7 @@ const targetSchema = z.strictObject({
     .array(z.string())
     .nullable()
     .optional()
-    .describe('Per-target override of fix.commands — real repos diverge.'),
+    .describe('Per-target override of fix.commands. Real repos diverge.'),
   verifyCommands: z
     .array(z.string())
     .nullable()
@@ -247,13 +247,13 @@ export type KitConfigTarget = Simplify<z.infer<typeof targetSchema>>;
 /**
  * The published JSON Schema, which powers editor IntelliSense via `$schema`.
  * `io: "input"` so optional-with-default fields stay optional. That is what a
- * hand-written config actually looks like.
+ * hand-written config looks like.
  */
 export function buildJsonSchema(): Record<string, unknown> {
   const { $schema, ...body } = z.toJSONSchema(KitConfigSchema, { io: 'input' });
   return {
     $schema,
-    $id: 'https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json',
+    $id: 'https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json',
     title: 'agent-kit config',
     description:
       'Per-repo configuration for agent-kit (.claude/kit.config.json).',
@@ -284,9 +284,10 @@ function problemsFrom(error: z.ZodError): string[] {
 export class KitConfigError extends Error {
   readonly problems: string[];
 
-  constructor(problems: string[]) {
+  constructor(problems: string[], cause?: unknown) {
     super(
       `Invalid .claude/kit.config.json:\n${problems.map((p) => `  - ${p}`).join('\n')}`,
+      cause === undefined ? undefined : { cause },
     );
     this.name = 'KitConfigError';
     this.problems = problems;
@@ -299,7 +300,10 @@ export function parseKitConfig(raw: string): KitConfig {
   try {
     data = JSON.parse(raw);
   } catch (error) {
-    throw new KitConfigError([`not valid JSON: ${(error as Error).message}`]);
+    throw new KitConfigError(
+      [`not valid JSON: ${(error as Error).message}`],
+      error,
+    );
   }
   const result = KitConfigSchema.safeParse(data, {
     // Only the callback sees `input`, so a missing field can be told apart from a

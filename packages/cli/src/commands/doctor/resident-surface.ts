@@ -13,12 +13,14 @@ const RESIDENT_LINE_BUDGET = 200;
 // An @-import chain deeper than this is pathological. Stop rather than walk it.
 const MAX_IMPORT_DEPTH = 5;
 
-const estimateTokens = (chars: number) => Math.ceil(chars / 4); // dumb-simple; no tokenizer dep.
+const estimateTokens = (chars: number) => Math.ceil(chars / 4); // dumb-simple, no tokenizer dep.
 const countLines = (t: string) =>
   t === '' ? 0 : t.split('\n').length - (t.endsWith('\n') ? 1 : 0);
 
-// `@` only at line start or after whitespace, so `foo@bar` emails never match. The
-// caller keeps only the specifiers that resolve to a real file on disk.
+/**
+ * `@` only at line start or after whitespace, so `foo@bar` emails never match. The
+ * caller keeps only the specifiers that resolve to a real file on disk.
+ */
 export function parseImports(text: string): string[] {
   const specs: string[] = [];
   for (const m of text.matchAll(/(?:^|\s)@([^\s@]+)/g)) specs.push(m[1]);
@@ -46,8 +48,10 @@ function cleanGlob(raw: string): string {
   return value.replace(/\/\*\*$/, '');
 }
 
-// A globbed rule loads only when a matching file is in the working set, so an empty
-// result here means "resident every turn". A list of only `**` counts as unscoped.
+/**
+ * A globbed rule loads only when a matching file is in the working set, so an empty
+ * result here means "resident every turn". A list of only `**` counts as unscoped.
+ */
 export function ruleGlobs(text: string): string[] {
   const fm = frontmatterBlock(text);
   if (fm === null) return [];
@@ -102,8 +106,10 @@ export interface ResidentMeasurement {
   globless: string[];
 }
 
-// Nested package CLAUDE.mds and path-scoped rules are deliberately excluded. They are
-// the on-demand tier and must never be summed into the resident total.
+/**
+ * Nested package CLAUDE.mds and path-scoped rules are deliberately excluded. They are
+ * the on-demand tier and must never be summed into the resident total.
+ */
 export function measureResident(root: string): ResidentMeasurement | null {
   const globless = globlessRuleFiles(root);
   const sources = [
@@ -147,8 +153,10 @@ export function measureResident(root: string): ResidentMeasurement | null {
   };
 }
 
-// The `description:` frontmatter of an installed skill/agent (single-line, quotes
-// optional). Returns null when the file has none.
+/**
+ * The `description:` frontmatter of an installed skill/agent (single-line, quotes
+ * optional). Returns null when the file has none.
+ */
 export function frontmatterDescription(text: string): string | null {
   const fm = frontmatterBlock(text);
   if (fm === null) return null;
@@ -164,8 +172,10 @@ export interface SkillAgentMeasurement {
   agents: number;
 }
 
-// Claude Code puts every `description:` in the system prompt on every turn, the same
-// resident tier as CLAUDE.md. Bodies load only on invocation and are not counted.
+/**
+ * Claude Code puts every `description:` in the system prompt on every turn, the same
+ * resident tier as CLAUDE.md. Bodies load only on invocation and are not counted.
+ */
 export function measureSkillAgentDescriptions(
   root: string,
 ): SkillAgentMeasurement | null {
@@ -251,7 +261,7 @@ export function checkResidentSurface(root: string): CheckResult {
         parts.push(`skill/agent descriptions (~${skillAgentTokens} tokens)`);
       findings.push({
         level: 'WARN',
-        msg: `always-loaded context exceeds budget (~${combinedTokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}) — ${parts.join(' + ')} — trim root CLAUDE.md to a one-line index + on-demand files (CONVENTIONS §1)`,
+        msg: `always-loaded context exceeds budget (~${combinedTokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}). ${parts.join(' + ')}. Trim root CLAUDE.md to a one-line index + on-demand files (CONVENTIONS §1)`,
       });
     }
     // A globless rule loads every turn. Usually not intended, and invisible without

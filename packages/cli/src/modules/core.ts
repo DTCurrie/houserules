@@ -12,7 +12,7 @@ import {
 import type { Action } from '../actions.js';
 import type { Ctx } from '../detect.js';
 import type { Answers, ModuleGroup } from '../module-def.js';
-import { lib, script, template } from './copy-actions.js';
+import { lib, script, selfGitignoreAction, template } from './copy-actions.js';
 import { hookFragment } from './hook-wiring.js';
 
 // Staged by their owning opt-in module rather than by core's blanket walk, so a repo
@@ -40,13 +40,9 @@ function* walk(dir: string): Generator<string> {
   }
 }
 
-/**
- * The always-installed baseline: shared libs, the Bash guard, kit.config.json,
- * permissions, the CLAUDE.md seed or managed region, and template staging.
- */
-export function plan(ctx: Ctx, answers: Answers): Action[] {
+/** The shared libs and scripts every install needs, regardless of which other modules run. */
+function libActions(): Action[] {
   const actions: Action[] = [];
-
   // Every shared lib the scripts import must be listed here. A script installed
   // without its lib fails at runtime with ERR_MODULE_NOT_FOUND, in the user's repo.
   for (const name of [
@@ -76,51 +72,59 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       'UserPromptSubmit: inject a referenced backlog or decision entry from the log',
     ),
   );
+  return actions;
+}
 
-  // Stage the raw templates for hand-instantiation, whatever modules are chosen. The one
-  // exclusion is the debugger, which ships with the debug-session module that references it.
+/**
+ * The raw reference templates staged for hand-instantiation, plus the self-gitignore that
+ * keeps them out of commits. The one exclusion is the debugger template, which ships with
+ * the debug-session module that references it.
+ */
+function templateActions(): Action[] {
+  const actions: Action[] = [];
   const templatesRoot = payloadPath('kit-templates');
   for (const file of walk(templatesRoot)) {
     const rel = relative(templatesRoot, file).replaceAll('\\', '/');
     if (MODULE_OWNED_TEMPLATES.has(rel)) continue;
     actions.push(template(id, rel));
   }
-
   // Reference scaffolding, not repo content. A directory-local .gitignore keeps it out of
   // commits without touching the repo's own, and stays tracked so the intent travels.
-  actions.push({
-    kind: 'write',
-    dest: '.claude/kit-templates/.gitignore',
-    content: [
-      '# Reference scaffolding staged by agent-kit, refreshed by `npx agent-kit update`.',
-      '# The artifacts you build from these (agents, guardrail docs, CLAUDE.md) live',
-      '# elsewhere and are yours to commit — these skeletons are not meant to be.',
-      '*',
-      '!.gitignore',
-      '',
-    ].join('\n'),
-    module: id,
-    reason:
+  actions.push(
+    selfGitignoreAction(
+      id,
+      '.claude/kit-templates/.gitignore',
+      [
+        '# Reference scaffolding staged by agent-kit, refreshed by `npx agent-kit update`.',
+        '# The artifacts you build from these (agents, guardrail docs, CLAUDE.md) live',
+        '# elsewhere and are yours to commit — these skeletons are not meant to be.',
+      ],
       'templates are reference-only; self-gitignored (repo .gitignore untouched)',
-  });
+    ),
+  );
+  return actions;
+}
 
+/**
+ * The two other self-gitignored kit-owned directories: compiled hook scripts, unless the
+ * repo opted into committing them, and the ledger push-queue directory.
+ */
+function selfGitignoredDirActions(ctx: Ctx): Action[] {
+  const actions: Action[] = [];
   // Build output, refreshed by `update`, so a fresh install never commits it. Opt out
   // with kit.config.json `scripts.commit: true`.
   if (ctx.claude.kitConfig?.scripts?.commit !== true) {
-    actions.push({
-      kind: 'write',
-      dest: '.claude/scripts/.gitignore',
-      content: [
-        '# Compiled hook scripts, refreshed by `npx agent-kit update`.',
-        '# Build output, not source — not meant to be committed.',
-        '*',
-        '!.gitignore',
-        '',
-      ].join('\n'),
-      module: id,
-      reason:
+    actions.push(
+      selfGitignoreAction(
+        id,
+        '.claude/scripts/.gitignore',
+        [
+          '# Compiled hook scripts, refreshed by `npx agent-kit update`.',
+          '# Build output, not source — not meant to be committed.',
+        ],
         'scripts are build output; self-gitignored (repo .gitignore untouched)',
-    });
+      ),
+    );
   }
 
   // GitHub Projects holds the durable record now. The `.jsonl` here is a local push queue
@@ -130,24 +134,29 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
   // same dest. The repo root is refused upstream: `*` there would hide every document.
   const ledgerDir = ledgerDirFor(ctx);
   if (ledgerDir) {
-    actions.push({
-      kind: 'write',
-      dest: `${ledgerDir}/.gitignore`,
-      content: [
-        '# This whole directory is local. GitHub Projects is the durable record, the .jsonl',
-        '# ledgers here are a push queue drained by `projects-sync.mjs push`, and the .md',
-        '# files are a rendered view. The .gitignore itself stays tracked so this rule',
-        '# travels with a clone.',
-        '*',
-        '!.gitignore',
-        '',
-      ].join('\n'),
-      module: id,
-      reason:
-        'the ledger directory is a local push queue; GitHub Projects is the durable record',
-    });
+    actions.push(
+      selfGitignoreAction(
+        id,
+        `${ledgerDir}/.gitignore`,
+        [
+          '# This whole directory is local. GitHub Projects is the durable record, the .jsonl',
+          '# ledgers here are a push queue drained by `projects-sync.mjs push`, and the .md',
+          '# files are a rendered view. The .gitignore itself stays tracked so this rule',
+          '# travels with a clone.',
+        ],
+        'the ledger directory is a local push queue. GitHub Projects is the durable record',
+      ),
+    );
   }
+  return actions;
+}
 
+/**
+ * The `kit.config.json` seed, and the `CLAUDE.md` seed-or-region: a whole-file seed for a
+ * repo with no CLAUDE.md yet, otherwise the managed region upserted into the existing one.
+ */
+function claudeMdActions(ctx: Ctx, answers: Answers): Action[] {
+  const actions: Action[] = [];
   actions.push({
     kind: 'seed',
     dest: '.claude/kit.config.json',
@@ -181,7 +190,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
   if (ctx.claude.kitConfig?.claudeMd?.managed === false) {
     actions.push({
       kind: 'advise',
-      text: 'CLAUDE.md region management is disabled (claudeMd.managed: false) — see .claude/kit-templates/ for the kit sections to merge by hand.',
+      text: 'CLAUDE.md region management is disabled (claudeMd.managed: false). See .claude/kit-templates/ for the kit sections to merge by hand.',
       module: id,
     });
   } else {
@@ -195,29 +204,46 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
         'kit sections, maintained in place (content outside the markers is never touched)',
     });
   }
-
-  actions.push({
-    kind: 'merge-settings',
-    module: id,
-    fragment: {
-      permissions: {
-        allow: [
-          'Bash(git status)',
-          'Bash(git status:*)',
-          'Bash(git diff:*)',
-          'Bash(git log:*)',
-          'Bash(git show:*)',
-        ],
-      },
-      ...hookFragment('PreToolUse', 'Bash', 'guard-bash.mjs'),
-    },
-  });
-
-  actions.push({
-    kind: 'merge-settings',
-    module: id,
-    fragment: hookFragment('UserPromptSubmit', null, 'ledger-inject.mjs'),
-  });
-
   return actions;
+}
+
+/** The two settings fragments core contributes: the Bash guard, and the ledger injector. */
+function settingsActions(): Action[] {
+  return [
+    {
+      kind: 'merge-settings',
+      module: id,
+      fragment: {
+        permissions: {
+          allow: [
+            'Bash(git status)',
+            'Bash(git status:*)',
+            'Bash(git diff:*)',
+            'Bash(git log:*)',
+            'Bash(git show:*)',
+          ],
+        },
+        ...hookFragment('PreToolUse', 'Bash', 'guard-bash.mjs'),
+      },
+    },
+    {
+      kind: 'merge-settings',
+      module: id,
+      fragment: hookFragment('UserPromptSubmit', null, 'ledger-inject.mjs'),
+    },
+  ];
+}
+
+/**
+ * The always-installed baseline: shared libs, the Bash guard, kit.config.json,
+ * permissions, the CLAUDE.md seed or managed region, and template staging.
+ */
+export function plan(ctx: Ctx, answers: Answers): Action[] {
+  return [
+    ...libActions(),
+    ...templateActions(),
+    ...selfGitignoredDirActions(ctx),
+    ...claudeMdActions(ctx, answers),
+    ...settingsActions(),
+  ];
 }

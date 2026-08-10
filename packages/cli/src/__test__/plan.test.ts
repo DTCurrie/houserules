@@ -14,7 +14,12 @@ import {
   defaultModuleIds,
   resolveModuleIds,
 } from '../plan.js';
-import type { BodyAction, CopyAction, SeedAction } from '../actions.js';
+import type {
+  BodyAction,
+  CopyAction,
+  MergeSettingsAction,
+  SeedAction,
+} from '../actions.js';
 import type { ModuleDef } from '../module-def.js';
 import type {
   PluginSource,
@@ -1266,5 +1271,70 @@ describe('computeEffects, given two copy actions on one destination', () => {
     ]);
 
     expect(copiesTo(effects)).toHaveLength(2);
+  });
+});
+
+describe('computeEffects, given a merge-settings action and a malformed settings.json', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-settings-parse-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  function fragmentAction(): MergeSettingsAction {
+    return {
+      kind: 'merge-settings',
+      module: 'core',
+      fragment: { permissions: { allow: ['Read(**)'] } },
+    };
+  }
+
+  it('throws a KitError naming the JSON parse failure', () => {
+    const root = tempDir();
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(join(root, '.claude', 'settings.json'), '{ not json');
+
+    expect(() => computeEffects(root, [fragmentAction()])).toThrow(
+      /\.claude\/settings\.json is not valid JSON/,
+    );
+  });
+});
+
+describe('computePrune, given a manifest entry whose file is already absent', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-prune-gone-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  it('records it as gone rather than as deleted', () => {
+    const root = tempDir();
+    const manifest = {
+      kitVersion: '1.0.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      modules: [],
+      files: { 'rules/vanished.md': sha256('gone\n') },
+    };
+
+    const { deletes } = computePrune(root, {
+      manifest,
+      plannedDests: new Set(),
+    });
+
+    expect(deletes).toEqual([{ dest: 'rules/vanished.md', gone: true }]);
   });
 });

@@ -10,6 +10,11 @@
 import { loadConfigSafe } from '@agent-kit/payload/kit-config';
 import { git } from '@agent-kit/payload/proc';
 
+// Past this many changed files, a per-target summary is more useful than a file list.
+const MAX_INLINE_FILES = 25;
+// How many of the changed files to name inline before collapsing to "…".
+const MAX_LISTED_FILES = 10;
+
 try {
   const cwd = process.cwd();
   const root = git(cwd, ['rev-parse', '--show-toplevel'])?.trim();
@@ -47,7 +52,7 @@ try {
         );
         if (t) byTarget.set(t.name, (byTarget.get(t.name) ?? 0) + 1);
       }
-      if (changed.length > 25) {
+      if (changed.length > MAX_INLINE_FILES) {
         const summary = [...byTarget.entries()]
           .map(([n, c]) => `${n} (${c})`)
           .join(', ');
@@ -55,9 +60,9 @@ try {
           `[kit] uncommitted: ${changed.length} files${summary ? ` — ${summary}` : ''}`,
         );
       } else {
-        const shown = changed.slice(0, 10).join(', ');
+        const shown = changed.slice(0, MAX_LISTED_FILES).join(', ');
         lines.push(
-          `[kit] uncommitted (${changed.length}): ${shown}${changed.length > 10 ? ', …' : ''}`,
+          `[kit] uncommitted (${changed.length}): ${shown}${changed.length > MAX_LISTED_FILES ? ', …' : ''}`,
         );
         if (byTarget.size)
           lines.push(

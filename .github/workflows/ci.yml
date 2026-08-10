@@ -77,3 +77,4 @@ jobs:
       - run: pnpm attw
       - run: pnpm verify:packages
       - run: pnpm verify:payload-copy-set
+      - run: pnpm verify:payload-test-coverage

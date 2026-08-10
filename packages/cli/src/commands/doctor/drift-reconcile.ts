@@ -16,6 +16,7 @@ import type { Ctx } from '../../detect.js';
 import { formatterMangleHint } from '../../modules/formatter-mangle.js';
 import { resolveModuleOptions } from '../../module-options.js';
 import { buildPlan, computeEffects, computePrune } from '../../plan.js';
+import type { PlanResult } from '../../plan.js';
 import type { Registry } from '../../plugin-registry.js';
 import { findRetired, retiredModuleAdvice } from '../../retired-modules.js';
 import type { CheckResult, Finding } from './finding.js';
@@ -99,53 +100,22 @@ export function reconcileDrift(
     // folded into `plannedDests` and so appear in neither the drift set nor the prune set.
     for (const problem of planResult.brokenPlugins)
       findings.push({ level: 'ERROR', msg: problem.message });
-    drift = computeDrift(root, planResult.effects, {
-      manifest,
-      prune: computePrune(root, {
-        manifest,
-        plannedDests: planResult.plannedDests,
-      }),
-    });
+    drift = driftReportFor(root, planResult, manifest);
 
     if (flags.fix) {
-      const fixable = new Set(
-        driftedFiles(drift)
-          .filter(
-            (f) =>
-              FIXABLE.includes(f.status) ||
-              (flags.force && FORCE_ONLY.includes(f.status)),
-          )
-          .map((f) => f.path),
+      applyFixableChanges(
+        root,
+        planResult,
+        drift,
+        flags,
+        manifest,
+        moduleIds,
+        registry,
       );
-      if (fixable.size) {
-        apply(
-          root,
-          { ...planResult, prune: null },
-          {
-            kitVersion: flags.kitVersion,
-            moduleIds,
-            previousManifest: manifest,
-            paths: fixable,
-            plugins: registry.plugins,
-          },
-        );
-      }
-      if (flags.prune) {
-        const repo = new TargetRepo(root);
-        for (const file of drift.files) {
-          if (file.status === 'orphaned') repo.remove(file.path);
-        }
-      }
       // Re-derive against the reconciled tree so the report reflects reality.
       const reconciled = readJson<KitManifest>(join(root, MANIFEST_PATH));
       const after = planAgainst(reconciled, false);
-      drift = computeDrift(root, after.effects, {
-        manifest: reconciled,
-        prune: computePrune(root, {
-          manifest: reconciled,
-          plannedDests: after.plannedDests,
-        }),
-      });
+      drift = driftReportFor(root, after, reconciled);
     }
   } catch (e) {
     findings.push({
@@ -154,6 +124,81 @@ export function reconcileDrift(
     });
   }
 
+  const settled = classifyDriftFindings(root, drift, findings);
+
+  return { drift, findings, readouts: settledReadout(settled) };
+}
+
+/** The drift report for one plan result, prune included, against `manifest`. */
+function driftReportFor(
+  root: string,
+  planResult: PlanResult,
+  manifest: KitManifest | null,
+): DriftReport {
+  return computeDrift(root, planResult.effects, {
+    manifest,
+    prune: computePrune(root, {
+      manifest,
+      plannedDests: planResult.plannedDests,
+    }),
+  });
+}
+
+/**
+ * Applies the fixable subset of `drift` to disk: a real write for each fixable path, then,
+ * under `--prune`, removing every orphaned file. Mutates the filesystem, never the report;
+ * the caller re-derives drift against the reconciled tree afterward.
+ */
+function applyFixableChanges(
+  root: string,
+  planResult: PlanResult,
+  drift: DriftReport,
+  flags: Flags,
+  manifest: KitManifest,
+  moduleIds: string[],
+  registry: Registry,
+): void {
+  const fixable = new Set(
+    driftedFiles(drift)
+      .filter(
+        (f) =>
+          FIXABLE.includes(f.status) ||
+          (flags.force && FORCE_ONLY.includes(f.status)),
+      )
+      .map((f) => f.path),
+  );
+  if (fixable.size) {
+    apply(
+      root,
+      { ...planResult, prune: null },
+      {
+        kitVersion: flags.kitVersion,
+        moduleIds,
+        previousManifest: manifest,
+        paths: fixable,
+        plugins: registry.plugins,
+      },
+    );
+  }
+  if (flags.prune) {
+    const repo = new TargetRepo(root);
+    for (const file of drift.files) {
+      if (file.status === 'orphaned') repo.remove(file.path);
+    }
+  }
+}
+
+/**
+ * Classifies every drifted file into a finding, except a settled local edit, and appends a
+ * formatter-mangle hint when the settled count crosses that check's own threshold.
+ *
+ * @returns The settled paths, so the caller can build the "context, not a warning" readout.
+ */
+function classifyDriftFindings(
+  root: string,
+  drift: DriftReport,
+  findings: Finding[],
+): string[] {
   const settled: string[] = [];
   for (const file of driftedFiles(drift)) {
     if (file.status === 'yours') {
@@ -182,7 +227,7 @@ export function reconcileDrift(
   );
   if (mangleHint) findings.push({ level: 'WARN', msg: mangleHint });
 
-  return { drift, findings, readouts: settledReadout(settled) };
+  return settled;
 }
 
 /**

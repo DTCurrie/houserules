@@ -84,7 +84,12 @@ export function isLocalEdit(file: FileDrift): boolean {
 function readText(root: string, relativePath: string): string | null {
   try {
     return readFileSync(join(root, relativePath), 'utf8');
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error(
+        `agent-kit: could not read ${relativePath} (${(error as Error).message}). Drift is being computed against it as if absent.`,
+      );
+    }
     return null;
   }
 }
@@ -201,7 +206,7 @@ export function classifyEffect(
 export function orphanDrift(prune?: PruneResult | null): FileDrift[] {
   const files: FileDrift[] = [];
   for (const { dest, gone } of prune?.deletes ?? []) {
-    if (gone) continue; // already absent — nothing to report
+    if (gone) continue; // already absent, nothing to report
     files.push({ path: dest, status: 'orphaned' });
   }
   // Retired AND locally edited: computePrune kept it precisely because you changed
@@ -213,16 +218,6 @@ export function orphanDrift(prune?: PruneResult | null): FileDrift[] {
   return files;
 }
 
-/**
- * Reports what on disk no longer matches what the kit would write, and why.
- *
- * Derived from the effects `computeEffects()` already produced rather than
- * re-implementing the comparison, so doctor and update cannot disagree about what has
- * drifted. The per-file decision is {@link classifyEffect}, which is pure. This function
- * is only the filesystem shell around it.
- *
- * @param effects From `computeEffects()`. The canonical content per path.
- */
 /**
  * The recorded hash to compare an effect's content against, per action kind.
  *
@@ -250,6 +245,16 @@ function recordedDefaultFrontmatterFor(
     : undefined;
 }
 
+/**
+ * Reports what on disk no longer matches what the kit would write, and why.
+ *
+ * Derived from the effects `computeEffects()` already produced rather than
+ * re-implementing the comparison, so doctor and update cannot disagree about what has
+ * drifted. The per-file decision is {@link classifyEffect}, which is pure. This function
+ * is only the filesystem shell around it.
+ *
+ * @param effects From `computeEffects()`. The canonical content per path.
+ */
 export function computeDrift(
   root: string,
   effects: Effect[],

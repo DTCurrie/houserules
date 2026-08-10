@@ -29,7 +29,7 @@ export interface PayloadImports {
   libs: Record<string, string[]>;
 }
 
-export function emptyPayloadImports(): PayloadImports {
+function emptyPayloadImports(): PayloadImports {
   return { version: 1, libs: {} };
 }
 
@@ -62,13 +62,4 @@ function isPayloadImports(value: unknown): value is PayloadImports {
     (names) =>
       Array.isArray(names) && names.every((name) => typeof name === 'string'),
   );
-}
-
-/** Every lib named by any entry in the sidecar, deduplicated, in first-seen order. */
-export function libsNamedBy(imports: PayloadImports): string[] {
-  const seen = new Set<string>();
-  for (const names of Object.values(imports.libs)) {
-    for (const name of names) seen.add(name);
-  }
-  return [...seen];
 }

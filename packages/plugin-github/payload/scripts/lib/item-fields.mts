@@ -99,7 +99,23 @@ export function fieldValuesFor(op: PushOp): FieldValue[] {
       ];
     case 'report-move':
       return [];
+    default: {
+      const unreachable: never = op;
+      throw new Error(
+        `fieldValuesFor: unhandled op ${JSON.stringify(unreachable)}`,
+      );
+    }
   }
+}
+
+/** Which project field names on the boards this plugin creates hold a date rather than text. */
+const DATE_FIELD_NAMES: ReadonlySet<string> = new Set(['Filed', 'Decided']);
+
+/** The `set-field` value {@link FieldValue} for a `backfill` write of `field` to `value`. */
+export function backfillFieldValue(field: string, value: string): FieldValue {
+  return DATE_FIELD_NAMES.has(field)
+    ? { field, kind: 'date', value }
+    : { field, kind: 'text', value };
 }
 
 /**
@@ -129,5 +145,11 @@ export function fieldValueLiteral(
         );
       }
       return `{ singleSelectOptionId: ${JSON.stringify(optionId)} }`;
+    default: {
+      const unreachable: never = value;
+      throw new Error(
+        `fieldValueLiteral: unhandled kind ${JSON.stringify(unreachable)}`,
+      );
+    }
   }
 }

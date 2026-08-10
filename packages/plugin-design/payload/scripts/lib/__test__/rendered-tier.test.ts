@@ -13,18 +13,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
-import {
-  discoverChrome,
-  launchSession,
-} from '../../payload/scripts/lib/cdp-session.mts';
-import {
-  backgroundAlpha,
-  checkRenderedPage,
-} from '../../payload/scripts/lib/rendered-checks.mts';
+import { discoverChrome, launchSession } from '../cdp-session.mts';
+import { backgroundAlpha, checkRenderedPage } from '../rendered-checks.mts';
 
-import type { RenderSession } from '../../payload/scripts/lib/cdp-session.mts';
+import type { RenderSession } from '../cdp-session.mts';
 
-const PLUGIN_DESIGN = fileURLToPath(new URL('../..', import.meta.url));
+const PLUGIN_DESIGN = fileURLToPath(new URL('../../../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_DESIGN, alias: 'design' }];
 
 function stubSession(evaluations: unknown[]): RenderSession {

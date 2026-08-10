@@ -178,7 +178,9 @@ describe('checkAgentToolScope', () => {
       ].join('\n'),
     );
 
-    expect(messages(root)).toHaveLength(1);
+    expect(messages(root)).toEqual([
+      '.claude/agents/thing-reviewer.md: calls itself read-only and grants Bash, but never says what Bash may not run. Name the commands it may run and close the set with "only", or list the ones it must never run.',
+    ]);
   });
 
   it('does not count a bound in the frontmatter, which is where nobody states a Bash limit', () => {
@@ -198,7 +200,9 @@ describe('checkAgentToolScope', () => {
       ].join('\n'),
     );
 
-    expect(messages(root)).toHaveLength(1);
+    expect(messages(root)).toEqual([
+      '.claude/agents/thing-reviewer.md: calls itself read-only and grants Bash, but never says what Bash may not run. Name the commands it may run and close the set with "only", or list the ones it must never run.',
+    ]);
   });
 
   it('reports how many agents it inspected so a clean run still says it ran', () => {

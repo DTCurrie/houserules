@@ -7,11 +7,18 @@ import type { SettingsPlan } from './merge-settings.js';
 import type { Effect, EffectOp } from './plan.js';
 import type { RegisteredModule } from './plugin-registry.js';
 
-export const isTTY = () => Boolean(process.stdout.isTTY && process.stdin.isTTY);
+const isTTY = () => Boolean(process.stdout.isTTY && process.stdin.isTTY);
 
 // clack sizes a note box to its longest line, so one line wider than the terminal
 // wraps and shreds the border. Every multi-line string is wrapped before note().
-const cols = () => Math.max(48, Math.min(process.stdout.columns || 80, 100));
+const MIN_COLS = 48;
+const DEFAULT_COLS = 80;
+const MAX_COLS = 100;
+const cols = () =>
+  Math.max(
+    MIN_COLS,
+    Math.min(process.stdout.columns || DEFAULT_COLS, MAX_COLS),
+  );
 const noteWidth = () => cols() - 8; // "│  " + content + "  │" + slack
 const messageWidth = () => cols() - 4; // "│  " + content
 
@@ -29,7 +36,7 @@ const LIST_MARKER = /^(?:[-*+]|\d+\.)[ \t]+/;
 /**
  * Word-wraps to `width`, measured on visible characters so ANSI codes do not count. A
  * token is never split, because paths, commands, and flags have to stay copy-pasteable,
- * so an over-long word just overflows its line. A break inside a coloured span is closed
+ * so an over-long word overflows its line. A break inside a coloured span is closed
  * with a reset so the colour cannot bleed into the rest of the output.
  *
  * A list marker stays on the same line as its first word, and continuation lines hang
@@ -110,7 +117,7 @@ export function message(text: string): void {
   else console.log(body);
 }
 
-export function cancel(text: string): void {
+function cancel(text: string): void {
   if (isTTY()) p.cancel(text);
   else console.error(text);
 }
@@ -356,7 +363,7 @@ export function renderPreview({
         op === 'skip-exists'
           ? ' (exists — yours, untouched)'
           : op === 'skip-modified'
-            ? ' (local edits — kept; update --force to overwrite)'
+            ? ' (local edits — kept. Update --force to overwrite)'
             : '';
       const regionSuffix =
         action.kind === 'region'
@@ -408,7 +415,7 @@ export function nextSteps(advisories: AdviseAction[]): void {
   else console.log(`\n${body}\n`);
 }
 
-export function renderWritten(written: WrittenEntry[]): string {
+function renderWritten(written: WrittenEntry[]): string {
   if (!written.length) return 'Nothing to write — already up to date.';
   return written
     .map(

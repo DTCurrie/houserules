@@ -35,8 +35,13 @@ import { runCli, runIn } from './run.js';
  *   whose fixers are `lint:fix` plus a writing `format` alongside a separate
  *   `format:check`. The shape AGENTKIT-4e98d7 broke: `filterFlag` must be empty and the
  *   writing `format` must be detected as a fixer.
- * - `npm-single-prettier` is `npm-single` plus a `prettier` devDependency, so
- *   `ctx.prettier` is true and the `.prettierignore` protection block plans in.
+ * - `npm-single-prettier` is a minimal root package with a `lint:fix` script and a
+ *   `prettier` devDependency, so `ctx.prettier` is true and the `.prettierignore`
+ *   protection block plans in. It carries no lockfile, no pre-existing `CLAUDE.md`, and
+ *   no pre-existing `.claude/settings.json`, unlike `npm-single`.
+ * - `committed-scripts` is a pre-gitignore install: `.claude/scripts/*.mjs` and
+ *   `.claude/settings.json` tracked by git, which the migration has to detect and stage
+ *   out.
  * - `non-js` is a git repo with no package.json.
  */
 type RepoShape =
@@ -138,7 +143,7 @@ const PLUGIN_FIXTURE_PACKAGES: Partial<
 
 /**
  * Picks the scripts that write fixes, mirroring the single rule the fixtures above
- * actually exercise: a `fix` script wins outright, otherwise `lint:fix` runs alone.
+ * exercise: a `fix` script wins outright, otherwise `lint:fix` runs alone.
  */
 function fixCommandsFor(scripts: Record<string, string>): string[] {
   if (scripts.fix) return ['fix'];
@@ -215,9 +220,9 @@ export function useRepo(shape: RepoShape): string {
  * @param opts.plugins Plugins to declare in `.claude/kit.config.json` before `init` runs, as
  * `{ name, alias }` pairs. `name` must be a filesystem path to the plugin package, since
  * test cannot resolve a plugin by npm name. Written as the whole seed file, so `init`
- * reads the declared plugin while resolving `--modules=` and renders everything else — the
- * CLAUDE.md region, scripts, settings — with full knowledge of the modules selected. Part of
- * the cache key.
+ * reads the declared plugin while resolving `--modules=` and renders everything else, the
+ * CLAUDE.md region, scripts, and settings, with full knowledge of the modules selected. Part
+ * of the cache key.
  * @param opts.config Merged into `.claude/kit.config.json` after `init`, for keys a fixture
  * needs set that neither `init`'s detection nor its module set determines. Part of the cache
  * key.
@@ -229,13 +234,31 @@ export function useRepo(shape: RepoShape): string {
  */
 export function useInstalledRepo(
   shape: RepoShape,
-  opts: {
-    modules?: string;
-    plugins?: Array<{ name: string; alias: string }>;
-    config?: Record<string, unknown>;
-    moduleOptions?: Record<string, string[]>;
-  } = {},
+  opts: InstalledRepoOptions = {},
 ): string {
+  const key = cacheKeyFor(shape, opts);
+  const hashedKey = createHash('sha256').update(key).digest('hex').slice(0, 16);
+  const snapshot = join(snapshotRoot(), hashedKey);
+
+  // On disk, not a module-level Map: vitest gives every test FILE a fresh module registry, so
+  // an in-memory cache never survives across files and each would clobber the shared snapshot.
+  if (!existsSync(snapshot)) buildSnapshot(shape, opts, snapshot, key);
+
+  const root = mkdtempSync(join(tmpdir(), `kit-${shape}-`));
+  cpSync(snapshot, root, { recursive: true });
+  onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+  return root;
+}
+
+interface InstalledRepoOptions {
+  modules?: string;
+  plugins?: Array<{ name: string; alias: string }>;
+  config?: Record<string, unknown>;
+  moduleOptions?: Record<string, string[]>;
+}
+
+/** The cache key `useInstalledRepo` keys its on-disk snapshot by. */
+function cacheKeyFor(shape: RepoShape, opts: InstalledRepoOptions): string {
   const pluginTag = (opts.plugins ?? [])
     .map((p) => `${p.name}=${p.alias}`)
     .join(',');
@@ -243,99 +266,123 @@ export function useInstalledRepo(
   const optionTag = opts.moduleOptions
     ? JSON.stringify(opts.moduleOptions)
     : '';
-  const key = `${shape}::${opts.modules ?? ''}::${pluginTag}::${configTag}::${optionTag}`;
-  const hashedKey = createHash('sha256').update(key).digest('hex').slice(0, 16);
-  const snapshot = join(snapshotRoot(), hashedKey);
+  return `${shape}::${opts.modules ?? ''}::${pluginTag}::${configTag}::${optionTag}`;
+}
 
-  // On disk, not a module-level Map: vitest gives every test FILE a fresh module registry, so
-  // an in-memory cache never survives across files and each would clobber the shared snapshot.
-  if (!existsSync(snapshot)) {
-    const staging = buildRepo(shape);
+/**
+ * Builds one shape into `snapshot` by running `init` over a staging copy, then publishes it
+ * atomically. Only called on a cache miss; the caller is responsible for the existence check.
+ */
+function buildSnapshot(
+  shape: RepoShape,
+  opts: InstalledRepoOptions,
+  snapshot: string,
+  key: string,
+): void {
+  const staging = buildRepo(shape);
 
-    // A plugin's modules can only be selected once the plugin is declared in
-    // `.claude/kit.config.json`, but that file is a seed `init` never overwrites once
-    // present. Writing it here, before the one `init` call, means `init` reads the
-    // plugin declaration to build its module registry and resolve `--modules=` and, since
-    // that same registry drives everything else the run touches — the CLAUDE.md region,
-    // scripts, settings — those all see the full module set. The one thing the seed write
-    // itself skips over is `renderKitConfig`, which never runs because the seed's
-    // destination already exists, so the two boolean toggles it would have derived from
-    // the module set (`changesets.enabled`/`stopCheck`, `ledger.enabled`) are computed
-    // here instead, the same way `hasModule` does it: an id matches bare or by
-    // `/<bareId>` suffix, which is how a plugin-qualified module (`cs/changesets`) reads
-    // as `changesets`.
-    if (opts.plugins?.length) {
-      const facts = pluginFixtureFacts(shape);
-      if (!facts) {
-        rmSync(staging, { recursive: true, force: true });
-        throw new Error(
-          `useInstalledRepo(${key}): no PLUGIN_FIXTURE_PACKAGES entry for shape "${shape}". ` +
-            'A plugin declaration writes the whole kit.config.json seed up front, which ' +
-            'needs packageManager/targets derived for the shape. Add one in repo.ts.',
-        );
-      }
-      const tokens = (opts.modules ?? '')
-        .split(',')
-        .map((t) => t.trim())
-        .filter((t) => t && !t.startsWith('-'));
-      const hasToken = (bareId: string) =>
-        tokens.some((t) => t === bareId || t.endsWith(`/${bareId}`));
-      const targets = hasToken('ledger')
-        ? facts.targets.map((t) => ({
-            ...t,
-            changelogPath: `.claude/changelogs/${t.name}.md`,
-            logPath: `.claude/changelogs/${t.name}.log`,
-          }))
-        : facts.targets;
-      write(
-        staging,
-        '.claude/kit.config.json',
-        json({
-          version: 2,
-          packageManager: facts.packageManager,
-          targets,
-          changesets: {
-            enabled: hasToken('changesets'),
-            stopCheck: hasToken('changesets'),
-            baseBranch: 'main',
-          },
-          ledger: { enabled: hasToken('ledger') },
-          plugins: opts.plugins,
-        }),
-      );
-    }
-
-    const args = ['init', '--yes'];
-    if (opts.modules) args.push(`--modules=${opts.modules}`);
-    for (const [id, values] of Object.entries(opts.moduleOptions ?? {})) {
-      args.push('--module-option', `${id}=${values.join(',')}`);
-    }
-    const result = runCli([...args, staging]);
-    if (result.status !== 0) {
-      rmSync(staging, { recursive: true, force: true });
-      throw new Error(
-        `useInstalledRepo(${key}) could not stage: init exited ${result.status}\n${result.stderr}`,
-      );
-    }
-    if (opts.config) patchConfig(staging, opts.config);
-    // Publish atomically. Two workers can miss the same key at once, so each builds into a
-    // private directory and the first rename wins. A loser's rename fails with ENOTEMPTY,
-    // which is success: the winner published an equivalent tree from the same CLI.
-    const pending = `${snapshot}.${process.pid}.pending`;
-    cpSync(staging, pending, { recursive: true });
-    rmSync(staging, { recursive: true, force: true });
-    try {
-      renameSync(pending, snapshot);
-      writeFileSync(`${snapshot}.key`, key);
-    } catch {
-      rmSync(pending, { recursive: true, force: true });
-    }
+  // A plugin's modules can only be selected once the plugin is declared in
+  // `.claude/kit.config.json`, but that file is a seed `init` never overwrites once
+  // present. Writing it here, before the one `init` call, means `init` reads the
+  // plugin declaration to build its module registry and resolve `--modules=` and, since
+  // that same registry drives everything else the run touches: the CLAUDE.md region,
+  // scripts, and settings all see the full module set. The one thing the seed write
+  // itself skips over is `renderKitConfig`, which never runs because the seed's
+  // destination already exists, so the two boolean toggles it would have derived from
+  // the module set (`changesets.enabled`/`stopCheck`, `ledger.enabled`) are computed
+  // here instead, the same way `hasModule` does it: an id matches bare or by
+  // `/<bareId>` suffix, which is how a plugin-qualified module (`cs/changesets`) reads
+  // as `changesets`.
+  if (opts.plugins?.length) {
+    seedPluginConfig(staging, shape, opts, key);
   }
 
-  const root = mkdtempSync(join(tmpdir(), `kit-${shape}-`));
-  cpSync(snapshot, root, { recursive: true });
-  onTestFinished(() => rmSync(root, { recursive: true, force: true }));
-  return root;
+  const args = ['init', '--yes'];
+  if (opts.modules) args.push(`--modules=${opts.modules}`);
+  for (const [id, values] of Object.entries(opts.moduleOptions ?? {})) {
+    args.push('--module-option', `${id}=${values.join(',')}`);
+  }
+  const result = runCli([...args, staging]);
+  if (result.status !== 0) {
+    rmSync(staging, { recursive: true, force: true });
+    throw new Error(
+      `useInstalledRepo(${key}) could not stage: init exited ${result.status}\n${result.stderr}`,
+    );
+  }
+  if (opts.config) patchConfig(staging, opts.config);
+  publishSnapshot(staging, snapshot, key);
+}
+
+/** Writes `.claude/kit.config.json` for a plugin-declaring fixture, ahead of the `init` call. */
+function seedPluginConfig(
+  staging: string,
+  shape: RepoShape,
+  opts: InstalledRepoOptions,
+  key: string,
+): void {
+  const facts = pluginFixtureFacts(shape);
+  if (!facts) {
+    rmSync(staging, { recursive: true, force: true });
+    throw new Error(
+      `useInstalledRepo(${key}): no PLUGIN_FIXTURE_PACKAGES entry for shape "${shape}". ` +
+        'A plugin declaration writes the whole kit.config.json seed up front, which ' +
+        'needs packageManager/targets derived for the shape. Add one in repo.ts.',
+    );
+  }
+  const tokens = (opts.modules ?? '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t && !t.startsWith('-'));
+  const hasToken = (bareId: string) =>
+    tokens.some((t) => t === bareId || t.endsWith(`/${bareId}`));
+  const targets = hasToken('ledger')
+    ? facts.targets.map((t) => ({
+        ...t,
+        changelogPath: `.claude/changelogs/${t.name}.md`,
+        logPath: `.claude/changelogs/${t.name}.log`,
+      }))
+    : facts.targets;
+  write(
+    staging,
+    '.claude/kit.config.json',
+    json({
+      version: 2,
+      packageManager: facts.packageManager,
+      targets,
+      changesets: {
+        enabled: hasToken('changesets'),
+        stopCheck: hasToken('changesets'),
+        baseBranch: 'main',
+      },
+      ledger: { enabled: hasToken('ledger') },
+      plugins: opts.plugins,
+    }),
+  );
+}
+
+/**
+ * Publishes `staging` to `snapshot` atomically. Two workers can miss the same key at once, so
+ * each builds into a private directory and the first rename wins.
+ */
+function publishSnapshot(staging: string, snapshot: string, key: string): void {
+  const pending = `${snapshot}.${process.pid}.pending`;
+  cpSync(staging, pending, { recursive: true });
+  rmSync(staging, { recursive: true, force: true });
+  try {
+    renameSync(pending, snapshot);
+    writeFileSync(`${snapshot}.key`, key);
+  } catch (e) {
+    rmSync(pending, { recursive: true, force: true });
+    // A loser's rename fails with ENOTEMPTY once the winner's snapshot directory exists,
+    // which is success. Any other failure means no worker actually published, so rethrow
+    // rather than let the caller proceed as if one had.
+    if (!existsSync(snapshot)) {
+      throw new Error(
+        `useInstalledRepo(${key}): could not publish snapshot: ${(e as Error).message}`,
+        { cause: e },
+      );
+    }
+  }
 }
 
 /**
@@ -359,7 +406,9 @@ function patchConfig(root: string, patch: Record<string, unknown>): void {
 }
 
 // global-setup.ts creates this and removes it in teardown. Falling back to a local
-// mkdtemp keeps a directly-invoked suite working, at the cost of leaving one temp dir.
+// mkdtemp keeps a directly-invoked suite working, but defeats the on-disk cache
+// entirely: every call returns a fresh directory, so no snapshot is ever shared and
+// each one leaks until the OS reclaims tmpdir().
 function snapshotRoot(): string {
   const fromSetup = process.env.KIT_TEST_SNAPSHOT_ROOT;
   if (fromSetup) {
@@ -472,7 +521,7 @@ function buildRepo(shape: RepoShape): string {
     write(
       root,
       'CLAUDE.md',
-      '# single-app\n\nPre-existing user CLAUDE.md — the kit must never edit this.\n',
+      '# single-app\n\nPre-existing user CLAUDE.md. The kit must never edit this.\n',
     );
     write(
       root,

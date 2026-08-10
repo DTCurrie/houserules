@@ -217,6 +217,62 @@ function readCliVersion(): string {
   return (JSON.parse(raw) as { version: string }).version;
 }
 
+/**
+ * Resolves one configured plugin's package, invokes its entry point, and namespaces the
+ * modules it returns. `ids` is checked and updated in place, since a later entry's
+ * collision check needs every earlier entry's ids already recorded.
+ */
+function resolvePluginModules(
+  root: string,
+  entry: { name: string; alias: string; config?: unknown },
+  ids: Set<string>,
+  cliVersion: string,
+): { source: PluginSource; modules: RegisteredModule[] } {
+  const dir = resolvePluginDir(root, entry.name);
+  const pkg = readPluginPackageJson(dir, entry.name);
+
+  const peerRange = pkg.peerDependencies?.['@agent-kit/cli'];
+  if (peerRange !== undefined)
+    checkPeerRange(entry.name, peerRange, cliVersion);
+
+  const source: PluginSource = {
+    name: entry.name,
+    alias: entry.alias,
+    version: pkg.version ?? 'unknown',
+    dir,
+  };
+
+  const pluginPayloadRoot = join(dir, 'payload-dist');
+  const mod = loadEntryPoint(dir, entry.name);
+  const plugin = extractPluginFn(mod, entry.name);
+  const api: PluginApi = {
+    payload: createPayloadBuilders(pluginPayloadRoot),
+    packageName: entry.name,
+    alias: entry.alias,
+    config: entry.config,
+  };
+  const defs = invokePlugin(plugin, api, entry.name);
+  const sidecar = readPayloadImports(pluginPayloadRoot);
+
+  const modules: RegisteredModule[] = [];
+  for (const def of defs) {
+    const id = namespacedId(entry.alias, def.id);
+    if (ids.has(id)) {
+      fail(
+        entry.name,
+        `contributes module id "${id}", which is already used by a built-in module or another plugin.`,
+      );
+    }
+    ids.add(id);
+    modules.push({
+      id,
+      def: withDerivedLibActions(def, sidecar, entry.name),
+      source,
+    });
+  }
+  return { source, modules };
+}
+
 /** {@inheritDoc BuildRegistry} */
 export const buildRegistry: BuildRegistry = (root, config, builtIns) => {
   const modules: RegisteredModule[] = builtIns.map((def) => ({
@@ -238,48 +294,14 @@ export const buildRegistry: BuildRegistry = (root, config, builtIns) => {
     }
     seenAliases.add(entry.alias);
 
-    const dir = resolvePluginDir(root, entry.name);
-    const pkg = readPluginPackageJson(dir, entry.name);
-
-    const peerRange = pkg.peerDependencies?.['@agent-kit/cli'];
-    if (peerRange !== undefined)
-      checkPeerRange(entry.name, peerRange, cliVersion);
-
-    const source: PluginSource = {
-      name: entry.name,
-      alias: entry.alias,
-      version: pkg.version ?? 'unknown',
-      dir,
-    };
+    const { source, modules: pluginModules } = resolvePluginModules(
+      root,
+      entry,
+      ids,
+      cliVersion,
+    );
     plugins.push(source);
-
-    const pluginPayloadRoot = join(dir, 'payload-dist');
-    const mod = loadEntryPoint(dir, entry.name);
-    const plugin = extractPluginFn(mod, entry.name);
-    const api: PluginApi = {
-      payload: createPayloadBuilders(pluginPayloadRoot),
-      packageName: entry.name,
-      alias: entry.alias,
-      config: entry.config,
-    };
-    const defs = invokePlugin(plugin, api, entry.name);
-    const sidecar = readPayloadImports(pluginPayloadRoot);
-
-    for (const def of defs) {
-      const id = namespacedId(entry.alias, def.id);
-      if (ids.has(id)) {
-        fail(
-          entry.name,
-          `contributes module id "${id}", which is already used by a built-in module or another plugin.`,
-        );
-      }
-      ids.add(id);
-      modules.push({
-        id,
-        def: withDerivedLibActions(def, sidecar, entry.name),
-        source,
-      });
-    }
+    modules.push(...pluginModules);
   }
 
   return {

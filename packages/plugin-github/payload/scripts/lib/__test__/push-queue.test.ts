@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildPushQueue,
+  describeOp,
+  resolveMarkSupersededItemId,
   summarizeQueue,
   syncedRecord,
 } from '../push-queue.mjs';
@@ -561,6 +563,97 @@ describe('syncedRecord', () => {
   });
 });
 
+describe('describeOp', () => {
+  it('reports a decision report-move with no issue as unable to move', () => {
+    const op: PushOp = {
+      entryId: 'DEC-1',
+      kind: 'decisions',
+      surface: 'DECISIONS.md',
+      title: 'a',
+      body: 'b',
+      date: '2026-01-01',
+      chat: null,
+      op: 'report-move',
+      issue: null,
+      itemId: 'PVTI_1',
+      toSurface: 'cli.DECISIONS.md',
+    };
+
+    expect(describeOp(op)).toBe(
+      'report-move DEC-1: decision cannot move to cli.DECISIONS.md',
+    );
+  });
+
+  it('reports a backlog report-move with an issue as adding it to the new surface', () => {
+    const op: PushOp = {
+      entryId: 'BL-1',
+      kind: 'backlog',
+      surface: 'BACKLOG.md',
+      title: 'a',
+      body: 'b',
+      date: '2026-01-01',
+      chat: null,
+      op: 'report-move',
+      issue: 42,
+      itemId: null,
+      toSurface: 'cli.BACKLOG.md',
+    };
+
+    expect(describeOp(op)).toBe(
+      'report-move BL-1: add issue #42 to cli.BACKLOG.md',
+    );
+  });
+
+  it('describes a non-report-move op by its op, entry id, kind, and surface', () => {
+    const op: PushOp = {
+      entryId: 'BL-2',
+      kind: 'backlog',
+      surface: 'BACKLOG.md',
+      title: 'a',
+      body: 'b',
+      date: '2026-01-01',
+      chat: null,
+      op: 'create-issue',
+    };
+
+    expect(describeOp(op)).toBe('create-issue BL-2 (backlog) -> BACKLOG.md');
+  });
+});
+
+describe('resolveMarkSupersededItemId', () => {
+  it('returns the item id directly when the op already carries one', () => {
+    const result = resolveMarkSupersededItemId(
+      { itemId: 'PVTI_9', entryId: 'DEC-1' },
+      new Map(),
+    );
+
+    expect(result).toEqual({ ok: true, value: 'PVTI_9' });
+  });
+
+  it('resolves a null item id against a draft created earlier in the same run', () => {
+    const result = resolveMarkSupersededItemId(
+      { itemId: null, entryId: 'DEC-1' },
+      new Map([['DEC-1', 'PVTI_7']]),
+    );
+
+    expect(result).toEqual({ ok: true, value: 'PVTI_7' });
+  });
+
+  it('errors when the item id is null and no draft was created for the entry this run', () => {
+    const result = resolveMarkSupersededItemId(
+      { itemId: null, entryId: 'DEC-1' },
+      new Map(),
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      status: null,
+      message:
+        'cannot mark DEC-1 superseded: its item id is unknown, its create-draft failed earlier this run',
+    });
+  });
+});
+
 describe('mark-superseded idempotency', () => {
   it('stops emitting once a synced record acknowledges the flip', () => {
     const decisions = [
@@ -812,13 +905,18 @@ describe('an entry that exists only in the index, its queue records long gone', 
       },
     ];
 
-    expect(buildPushQueue([], queue, [], [indexed()])).toContainEqual(
-      expect.objectContaining({
-        op: 'update-draft',
-        entryId: 'D-1',
-        itemId: 'item-1',
-      }),
-    );
+    expect(buildPushQueue([], queue, [], [indexed()])).toContainEqual({
+      entryId: 'D-1',
+      kind: 'decisions',
+      surface: 'cli.DECISIONS.md',
+      title: 'Adopt wireit',
+      body: 'revised body',
+      date: '2026-08-06',
+      chat: null,
+      op: 'update-draft',
+      itemId: 'item-1',
+      scope: ['packages/cli'],
+    });
   });
 
   it('closes an index-only backlog entry against the issue the board recorded', () => {

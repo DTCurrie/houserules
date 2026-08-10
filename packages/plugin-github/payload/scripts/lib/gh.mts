@@ -157,15 +157,6 @@ export function ghExists(): boolean {
   return !result.error && result.status === 0;
 }
 
-/** The authenticated login, or an error naming the auth step the user has to run. */
-export function ghLogin(): GhResult<string> {
-  const result = ghJson<{ login?: string }>('user');
-  if (!result.ok) return result;
-  return result.value.login
-    ? ghOk(result.value.login)
-    : ghErr('gh api user did not return a login, run `gh auth login`');
-}
-
 /**
  * The OAuth scopes on the current token, lowercased.
  *
@@ -187,7 +178,7 @@ export function ghScopes(): GhResult<string[]> {
 }
 
 /** `gh api <path>`, optionally with `--jq <jq>`, parsed as JSON. */
-export function ghJson<TValue>(path: string, jq?: string): GhResult<TValue> {
+function ghJson<TValue>(path: string, jq?: string): GhResult<TValue> {
   const args = ['api', path];
   if (jq) args.push('-q', jq);
 

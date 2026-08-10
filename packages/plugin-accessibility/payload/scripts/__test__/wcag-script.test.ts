@@ -7,7 +7,9 @@ import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 import { settingsOf } from '#test/installed-tree';
 
-const PLUGIN_ACCESSIBILITY = fileURLToPath(new URL('../..', import.meta.url));
+const PLUGIN_ACCESSIBILITY = fileURLToPath(
+  new URL('../../..', import.meta.url),
+);
 const PLUGINS = [{ name: PLUGIN_ACCESSIBILITY, alias: 'a11y' }];
 
 function installed(): string {

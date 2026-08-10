@@ -148,12 +148,10 @@ export function evaluateReadGate(inputs: GateInputs): GateVerdict {
  * costs no network round trip.
  *
  * Takes the resolved ledger directory and `autoSync` rather than reading `kit.config.json`
- * itself. That reader and the directory resolver both live in shared libs the CLI's core
- * module installs beside this file, but neither exists inside this package's own tree. The
- * caller can import them statically because `tsconfig.payload.json`'s `rootDirs` maps the two
- * together, and that is where the resolution belongs. Doing it here instead would need a
- * runtime `require` of an ESM file, which is not available across the whole `engines: >=22`
- * range this package claims to support.
+ * itself. That reader and the directory resolver both live in the shared `@agent-kit/payload`
+ * package, reached here by package-name import: `agent-kit-payload` rewrites the specifier at
+ * build to the relative path the flattened `.claude/scripts/lib/` layout needs, so this file
+ * can import them statically rather than reading config directly.
  */
 export function readGateInputs(
   ledgerDirectory: string,

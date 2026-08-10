@@ -27,7 +27,7 @@ export function checkDesignTokens(ctx: Ctx): CheckResult {
   if (!existsSync(absolute)) {
     findings.push({
       level: 'WARN',
-      msg: `design: no design system at ${TOKENS_PATH} — run \`npx agent-kit init\` to seed one, or write it by hand.`,
+      msg: `design: no design system at ${TOKENS_PATH}. Run \`npx agent-kit init\` to seed one, or write it by hand.`,
     });
     return { findings, readouts };
   }

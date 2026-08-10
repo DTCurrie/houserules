@@ -44,18 +44,15 @@
  *
  * `theme` prints every group in the resolved theme (`color`, `fontFamily`, `fontWeight`,
  * `fontSize`, `radius`, `spacing`), each token marked by whether the repo's own `@theme` block
- * declared it or Tailwind's default palette did. A resolved theme runs past 400 entries and only
- * a handful are usually the repo's own, so by default each group shows only its repo-declared
- * entries plus a count of the Tailwind defaults it is hiding. `--all` prints every entry in every
- * group, each tagged `(repo)` or `(default)`.
+ * declared it or Tailwind's default palette did. By default each group shows only its
+ * repo-declared entries plus a count of the Tailwind defaults it is hiding. `--all` prints every
+ * entry in every group, each tagged `(repo)` or `(default)`.
  *
  * `scaffold` proposes a starter `@theme inline` block naming semantic color roles, such as
  * `--color-brand` and `--color-brand-raised`, aliased with `var()` to the repo's own declared
- * colors rather than inventing new palette numbers. It uses `inline` rather than plain `@theme`
- * because a plain `@theme` alias is declared on `:root` and frozen there, so a deeper override of
- * the underlying variable never reaches it; `inline` reads the underlying variable directly and
- * does follow the override. It prints to stdout and never writes to disk, matching `extract`, so
- * `design.mjs scaffold >> src/app.css` stays the user's explicit act.
+ * colors rather than inventing new palette numbers. It prints to stdout and never writes to
+ * disk, matching `extract`, so `design.mjs scaffold >> src/app.css` stays the user's explicit
+ * act.
  *
  * `render` accepts an `http(s)://` URL or a path to a local `.html` file, resolved against the
  * current working directory and converted to a `file://` URL. It launches a locally discovered
@@ -637,8 +634,12 @@ function reportTailwindV3Fallback(
 
 function reportExtractionSummary(
   tailwindCandidates: TokenCandidate[],
-  cssCandidates: TokenCandidate[],
-  literalResult: { candidates: TokenCandidate[]; droppedCount: number },
+  cssResult: { candidates: TokenCandidate[]; unreadableFiles: string[] },
+  literalResult: {
+    candidates: TokenCandidate[];
+    droppedCount: number;
+    unreadableFiles: string[];
+  },
   dropped: string[],
   hitCap: boolean,
 ): void {
@@ -646,11 +647,21 @@ function reportExtractionSummary(
     `Tailwind @theme contributed ${tailwindCandidates.length} candidates.`,
   );
   console.error(
-    `CSS custom properties contributed ${cssCandidates.length} candidates.`,
+    `CSS custom properties contributed ${cssResult.candidates.length} candidates.`,
   );
+  if (cssResult.unreadableFiles.length > 0) {
+    console.error(
+      `${cssResult.unreadableFiles.length} CSS file(s) could not be read and were skipped: ${cssResult.unreadableFiles.join(', ')}.`,
+    );
+  }
   console.error(
     `Literal scan contributed ${literalResult.candidates.length} candidates and dropped ${literalResult.droppedCount} below the occurrence floor or over the per-group cap.`,
   );
+  if (literalResult.unreadableFiles.length > 0) {
+    console.error(
+      `${literalResult.unreadableFiles.length} style file(s) could not be read and were skipped: ${literalResult.unreadableFiles.join(', ')}.`,
+    );
+  }
   console.error(
     `${dropped.length} values were dropped as not representable in DTCG.`,
   );
@@ -680,12 +691,12 @@ function runExtract(): number {
   );
   const tailwindCandidates = readTailwindThemeCandidates(cssFiles);
   reportTailwindV3Fallback(discovered.tailwindConfigFiles, tailwindCandidates);
-  const cssCandidates = readCssCustomProperties(cssFiles);
+  const cssResult = readCssCustomProperties(cssFiles);
   const literalResult = collectStyleTokenCandidates(discovered.styleFiles);
 
   const merged = mergeCandidatesByPriority([
     tailwindCandidates,
-    cssCandidates,
+    cssResult.candidates,
     literalResult.candidates,
   ]);
   const { document, dropped } = normalizeToDtcg(merged);
@@ -693,7 +704,7 @@ function runExtract(): number {
   console.log(JSON.stringify(document, null, 2));
   reportExtractionSummary(
     tailwindCandidates,
-    cssCandidates,
+    cssResult,
     literalResult,
     dropped,
     discovered.hitCap,
@@ -764,6 +775,8 @@ function reportThemeGroup(
     return;
   }
 
+  // A resolved theme runs past 400 entries and only a handful are usually the repo's own, so
+  // the default view hides Tailwind's defaults and shows only what the repo declared.
   if (repoEntries.length === 0) {
     console.log(
       `  No repo-declared values. ${defaultCount} from Tailwind's defaults. Run with --all to see them.`,
@@ -874,6 +887,8 @@ function runScaffold(root: Record<string, unknown>): number {
     return 1;
   }
 
+  // inline, not plain @theme: a plain alias is declared on :root and frozen there, so a deeper
+  // override of the underlying variable never reaches it. inline reads the variable directly.
   console.log('@theme inline {');
   console.log(
     '  /* inline, so each role reads its underlying variable directly instead of freezing it at :root. */',

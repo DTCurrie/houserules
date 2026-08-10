@@ -136,18 +136,25 @@ export function extractCssCustomProperties(css: string): TokenCandidate[] {
 
 /**
  * Reads each stylesheet that exists on disk and merges the {@link TokenCandidate}s found in it.
- * A missing or unreadable file contributes nothing rather than failing the whole read.
+ * A missing file contributes nothing, silently, since the caller already discovered this list.
+ * A file that exists but could not be read also contributes nothing, but is named in
+ * `unreadableFiles` so a caller can tell that apart from a file that read cleanly and simply had
+ * no root-level custom properties.
  */
-export function readCssCustomProperties(filePaths: string[]): TokenCandidate[] {
+export function readCssCustomProperties(filePaths: string[]): {
+  candidates: TokenCandidate[];
+  unreadableFiles: string[];
+} {
   const candidates: TokenCandidate[] = [];
+  const unreadableFiles: string[] = [];
   for (const filePath of filePaths) {
     if (!existsSync(filePath)) continue;
     try {
       const css = readFileSync(filePath, 'utf8');
       candidates.push(...extractCssCustomProperties(css));
     } catch {
-      continue;
+      unreadableFiles.push(filePath);
     }
   }
-  return candidates;
+  return { candidates, unreadableFiles };
 }

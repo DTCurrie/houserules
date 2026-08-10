@@ -19,6 +19,7 @@ import {
   renderSettings,
 } from '../merge-settings.js';
 import { apply } from '../apply.js';
+import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
 import type { KitManifest } from '../core/manifest.js';
@@ -64,7 +65,7 @@ export function parseRequested(
 /**
  * The modules this run is ADDING that declare options, and so have a question to ask.
  *
- * Keyed on what was just chosen, never on the whole enabled set. A module installed long ago
+ * Keyed on what was chosen, never on the whole enabled set. A module installed long ago
  * has its options settled in `kit.config.json`, and re-asking on every `modules` run would
  * turn a command about adding things into a settings editor. Changing a settled selection is
  * `--reconfigure`.
@@ -253,7 +254,7 @@ async function disableModules(
   const refused = requested.filter((id) => locked.has(id));
   if (refused.length) {
     console.error(
-      `Cannot disable ${refused.join(', ')} — the kit does not function without it.`,
+      `Cannot disable ${refused.join(', ')}. The kit does not function without it.`,
     );
     return 1;
   }
@@ -394,10 +395,9 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
     );
     return 1;
   }
-  if (ctx.claude.settingsParseError) {
-    console.error(
-      `.claude/settings.json is not valid JSON (${ctx.claude.settingsParseError}). Fix it by hand first.`,
-    );
+  const settingsError = settingsParseErrorMessage(ctx);
+  if (settingsError) {
+    console.error(settingsError);
     return 1;
   }
 

@@ -77,7 +77,7 @@ program
     'detect the repo, choose modules, and install the kit into .claude/',
   )
   .argument('[dir]', 'target repo root (default: current directory)')
-  .option('--yes', 'accept all defaults; no prompts (implied when not a TTY)')
+  .option('--yes', 'accept all defaults. No prompts (implied when not a TTY)')
   .option(
     '--modules <list>',
     'adjust the default selection, e.g. ledger,output-prose,-rename ("-" removes)',
@@ -104,9 +104,9 @@ program
 
 program
   .command('modules')
-  .description('list installed vs available modules; enable or disable them')
+  .description('list installed vs available modules. Enable or disable them')
   .argument('[dir]', 'target repo root (default: current directory)')
-  .option('--yes', 'accept all defaults; no prompts (implied when not a TTY)')
+  .option('--yes', 'accept all defaults. No prompts (implied when not a TTY)')
   .option('--modules <list>', 'enable these module ids headlessly')
   .option(
     '--disable <list>',
@@ -168,7 +168,7 @@ program
 program
   .command('doctor')
   .description(
-    'validate the installation; exits 1 on drift, 2 on an invalid kit.config.json',
+    'validate the installation. Exits 1 on drift, 2 on an invalid kit.config.json',
   )
   .argument('[dir]', 'target repo root (default: current directory)')
   .option('--json', 'machine-readable report on stdout')

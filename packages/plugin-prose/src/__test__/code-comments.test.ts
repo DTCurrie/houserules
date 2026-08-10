@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf, settingsOf } from '#test/installed-tree';
+import { allHookCommands, manifestOf } from '#test/installed-tree';
 
 const PLUGIN_PROSE = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_PROSE, alias: 'prose' }];
@@ -34,11 +34,8 @@ describe('code-comments', () => {
       'the rule BODY is kit-owned (update-refreshable)',
     ).toBeTruthy();
 
-    const settings = settingsOf(root);
-    const cmds = Object.values(settings.hooks ?? {}).flatMap((groups: any) =>
-      groups.flatMap((g: any) => g.hooks.map((h: any) => h.command)),
-    );
-    expect(cmds.some((c: string) => c.includes('code-comments'))).toBe(false);
+    const cmds = allHookCommands(root);
+    expect(cmds.some((c) => c.includes('code-comments'))).toBe(false);
     expect(
       readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('code-comments'),
     ).toBe(false);

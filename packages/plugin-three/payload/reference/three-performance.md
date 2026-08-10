@@ -19,7 +19,7 @@ Choose UASTC compression for quality-critical texture maps such as normals, and 
 size-critical maps such as base color. The two trade compressed size against quality
 differently, so the choice is per-map rather than per-project.
 
-Downsize a texture to the resolution the object actually occupies on screen. A
+Downsize a texture to the resolution the object occupies on screen. A
 4096-pixel-square texture costs four times the VRAM of a 2048-pixel-square one, and a texture
 sized for a hero object is rarely the right size for something seen from across the scene.
 

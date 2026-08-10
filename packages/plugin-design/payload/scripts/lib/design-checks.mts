@@ -437,8 +437,8 @@ function linearizeChannel(channel: number): number {
     : ((channel + SRGB_GAMMA_OFFSET) / SRGB_GAMMA_SCALE) ** SRGB_GAMMA_EXPONENT;
 }
 
-/** WCAG relative luminance. Exported so the rendered tier shares one implementation. */
-export function relativeLuminance(color: DtcgColorValue): number {
+/** WCAG relative luminance. Used only by {@link contrastRatio}, which the rendered tier shares. */
+function relativeLuminance(color: DtcgColorValue): number {
   const [r, g, b] = color.components;
   return (
     LUMINANCE_WEIGHT_R * linearizeChannel(r) +
@@ -724,7 +724,7 @@ function checkTokenCoverage(
 }
 
 /** What the coverage summary counts when the source is a file's own CSS. */
-export const DECLARATION_COVERAGE_UNIT = 'declarations';
+const DECLARATION_COVERAGE_UNIT = 'declarations';
 
 /**
  * Runs every deterministic design check against one file's CSS text.

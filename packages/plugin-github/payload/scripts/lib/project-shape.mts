@@ -162,7 +162,7 @@ const DECISIONS_FIELDS: readonly FieldSpec[] = [
   { name: 'Supersedes', dataType: 'TEXT' },
   // The mirror of Supersedes, and the two are not interchangeable. Supersedes lists what this
   // record replaced. Superseded by names the one record that replaced it, which is what makes a
-  // superseded row navigable forward to the decision that is actually current.
+  // superseded row navigable forward to the decision that is current.
   { name: 'Superseded by', dataType: 'TEXT' },
   { name: 'Chat', dataType: 'TEXT' },
   // Below here: columns that exist so the board can rebuild the local index. Without them a

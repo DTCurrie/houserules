@@ -9,11 +9,11 @@
  *   show   <target> <short-or-full-sha>
  *   list   <target>
  *
- * Targets are defined in .claude/kit.config.json (the `targets` array; `name` is the key).
+ * Targets are defined in .claude/kit.config.json (the `targets` array. `name` is the key).
  *
  * Storage (per target):
  *   <changelogPath>            — human-readable index (subject, file count, backlog, reason, changes)
- *   <logPath>                  — append-only JSONL; same metadata plus the full file list.
+ *   <logPath>                  — append-only JSONL. Same metadata plus the full file list.
  *                                Diffs/prior file content are NOT stored — recover via
  *                                `git show <sha>` or `git show <sha>~1:<file>`.
  */
@@ -34,6 +34,7 @@ import { BACKLOG_ID } from '@agent-kit/payload/backlog-id';
 
 const REPO_ROOT = repoRoot();
 const SEPARATOR = '---';
+const MAX_INLINE_FILES = 6;
 
 interface Target {
   name: string;
@@ -199,7 +200,7 @@ function renderChangelogEntry({
   changes,
 }: ChangelogEntryInput): string {
   const filesLine =
-    files.length <= 6
+    files.length <= MAX_INLINE_FILES
       ? files.map((f) => `\`${f}\``).join(', ')
       : `${files.length} files`;
   const backlogLine = backlog.length ? backlog.join(', ') : '_none_';
@@ -243,19 +244,20 @@ interface RecordCommitOptions {
   quiet?: boolean;
 }
 
-function recordCommit(
+type RecordableCheck =
+  | { skipped: true; reason: 'no-target-files' | 'duplicate' }
+  | { skipped: false; files: string[]; changes: string };
+
+// The three ways a commit is NOT recordable: it never touched the target, it is already
+// in the changelog, or the caller never supplied the required summary. Kept separate from
+// the write itself so each precondition can be named and tested on its own.
+function assertRecordable(
   target: ResolvedTarget,
-  ref: string,
-  {
-    reason: reasonOverride,
-    backlog: backlogOverride,
-    changes: changesInput,
-    quiet,
-  }: RecordCommitOptions = {},
-) {
-  const fullSha = resolveSha(ref);
-  const info = gatherCommitInfo(fullSha);
-  const files = listChangedFiles(fullSha, target.sourcePath);
+  info: CommitInfo,
+  changesInput: string | undefined,
+  quiet: boolean | undefined,
+): RecordableCheck {
+  const files = listChangedFiles(info.fullSha, target.sourcePath);
   if (!files.length) {
     if (!quiet)
       console.error(
@@ -276,9 +278,20 @@ function recordCommit(
     );
     process.exit(1);
   }
+  return { skipped: false, files, changes: changesInput.trim() };
+}
 
+// The write itself: one changelog entry, appended to both the human-readable index and
+// the JSONL log. Assumes the commit already passed assertRecordable.
+function writeRecord(
+  target: ResolvedTarget,
+  info: CommitInfo,
+  files: string[],
+  changes: string,
+  reasonOverride: string | undefined,
+  backlogOverride: string | undefined,
+): string {
   const reason = (reasonOverride ?? info.body ?? '').trim();
-  const changes = changesInput.trim();
 
   let backlog;
   if (backlogOverride !== undefined) {
@@ -317,8 +330,36 @@ function recordCommit(
     changes,
   });
 
-  if (!quiet) console.log(info.shortSha);
-  return { skipped: false, sha: info.shortSha };
+  return info.shortSha;
+}
+
+function recordCommit(
+  target: ResolvedTarget,
+  ref: string,
+  {
+    reason: reasonOverride,
+    backlog: backlogOverride,
+    changes: changesInput,
+    quiet,
+  }: RecordCommitOptions = {},
+) {
+  const fullSha = resolveSha(ref);
+  const info = gatherCommitInfo(fullSha);
+
+  const check = assertRecordable(target, info, changesInput, quiet);
+  if (check.skipped) return check;
+
+  const sha = writeRecord(
+    target,
+    info,
+    check.files,
+    check.changes,
+    reasonOverride,
+    backlogOverride,
+  );
+
+  if (!quiet) console.log(sha);
+  return { skipped: false, sha };
 }
 
 interface LogRecord {
@@ -344,11 +385,13 @@ function show(target: ResolvedTarget, ref: string) {
     .split('\n')
     .filter(Boolean);
   let found = 0;
+  let unparsable = 0;
   for (const line of lines) {
     let r: LogRecord;
     try {
       r = JSON.parse(line);
     } catch {
+      unparsable++;
       continue;
     }
     const matches =
@@ -368,6 +411,11 @@ function show(target: ResolvedTarget, ref: string) {
     console.log(r.changes || '(none)');
     console.log(SEPARATOR);
   }
+  if (unparsable) {
+    console.error(
+      `${target.logPath}: skipped ${unparsable} line(s) that could not be parsed as JSON.`,
+    );
+  }
   if (!found) {
     console.error(`No log entries for ${ref}.`);
     process.exit(1);
@@ -379,15 +427,22 @@ function list(target: ResolvedTarget) {
   const lines = readFileSync(target.logFile, 'utf8')
     .split('\n')
     .filter(Boolean);
+  let unparsable = 0;
   for (const line of lines) {
     let r: LogRecord;
     try {
       r = JSON.parse(line);
     } catch {
+      unparsable++;
       continue;
     }
     const backlog = r.backlog?.length ? ` [${r.backlog.join(',')}]` : '';
     console.log(`${r.sha}  ${r.date}  ${r.subject}${backlog}`);
+  }
+  if (unparsable) {
+    console.error(
+      `${target.logPath}: skipped ${unparsable} line(s) that could not be parsed as JSON.`,
+    );
   }
 }
 

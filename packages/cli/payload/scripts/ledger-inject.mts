@@ -36,9 +36,11 @@ interface PromptPayload {
   prompt_text?: string;
 }
 
-// The harness caps hookSpecificOutput.additionalContext at 10,000 characters, shared
-// across every hook firing on the same event. Capped well under that so headroom
-// remains for any other UserPromptSubmit hook a repo adds later.
+/**
+ * The harness caps `hookSpecificOutput.additionalContext` at 10,000 characters, shared
+ * across every hook firing on the same event. Capped well under that so headroom
+ * remains for any other UserPromptSubmit hook a repo adds later.
+ */
 export const MAX_INJECTED_CHARS = 6_000;
 const TRUNCATION_NOTICE =
   '\n\n[kit] truncated: additional matched ledger content omitted to stay under the shared context budget.';
@@ -76,12 +78,11 @@ interface DecisionEntry {
 }
 
 function decodeBody(content: string | undefined): string {
+  if (!content) return '';
   try {
-    return content
-      ? gunzipSync(Buffer.from(content, 'base64')).toString('utf8')
-      : '';
+    return gunzipSync(Buffer.from(content, 'base64')).toString('utf8');
   } catch {
-    return '';
+    return '[kit] this record’s body could not be decoded (corrupt or truncated).';
   }
 }
 

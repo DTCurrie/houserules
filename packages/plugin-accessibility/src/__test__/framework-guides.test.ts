@@ -14,7 +14,7 @@ function pathGlobs(ruleText: string): string[] {
 }
 
 function installedWith(guides: string[]): string {
-  return useInstalledRepo('pnpm-monorepo', {
+  return useInstalledRepo('npm-single', {
     modules: 'a11y/accessibility',
     plugins: PLUGINS,
     moduleOptions: { 'a11y/accessibility': guides },
@@ -85,7 +85,7 @@ describe('accessibility framework guides', () => {
   });
 
   it('installs the html guide alone when nothing was chosen', () => {
-    const root = useInstalledRepo('pnpm-monorepo', {
+    const root = useInstalledRepo('npm-single', {
       modules: 'a11y/accessibility',
       plugins: PLUGINS,
     });

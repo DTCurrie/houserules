@@ -10,7 +10,6 @@ import {
   mkdirSync,
   readdirSync,
   renameSync,
-  writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, relative, resolve } from 'node:path';
@@ -217,11 +216,6 @@ export function rebuildWouldDropEntries(
 
 export function readSurface(file: string): string {
   return existsSync(file) ? readFileSync(file, 'utf8') : '';
-}
-
-export function ensureSurfaceHeader(file: string, header: string): void {
-  if (existsSync(file)) return;
-  writeFileSync(file, header);
 }
 
 /** Reads the body from the argument, or from stdin when it was omitted and stdin is a pipe. */
@@ -559,7 +553,12 @@ export function findSurfaceFiles(dir: string, basename: string): string[] {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
+  } catch (e) {
+    // A read failure looks identical to "nothing rendered yet" to this function's return
+    // shape, so the diagnostic goes to stderr, distinguishable from a fresh ledger directory.
+    console.error(
+      `agent-kit: could not read ledger directory ${dir}: ${(e as Error).message}`,
+    );
     return [];
   }
   return entries

@@ -21,14 +21,6 @@
  * `games/tower-push/BACKLOG.md` and `tower-push` both write
  * .claude/ledgers/tower-push.BACKLOG.md.
  *
- * The ledger is the source of truth. add/remove/update append a record and then rewrite the
- * surface file from the ledger alone, rather than editing the file's text directly, so a repo
- * that gitignores its rendered surfaces can still reconstruct them with `render`. An entry never
- * logged through this script does not exist as far as a rewrite is concerned.
- *
- * The ledger mechanics live in lib/entry-ledger.mjs, shared with the other ledgers. This
- * script owns only what is specific to a backlog: the entry shape, the header, and the verbs.
- *
  * Chat provenance stamps the active session and is the one Claude-Code-specific part. It
  * degrades to a chat:null warning in any other harness. Pass --chat=none or set
  * CLAUDE_SESSION_ID to silence that.
@@ -175,7 +167,7 @@ const CLOSED_BOARD_STATUS = 'Done';
  * them in append order. A queue record always wins over the index for the same id, because the
  * queue is what has not reached the board yet.
  */
-export function projectBacklog(
+function projectBacklog(
   records: BacklogRecord[],
   index: LedgerIndex | null,
 ): {

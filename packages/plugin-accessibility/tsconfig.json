@@ -13,5 +13,7 @@
   // tsconfig.build.json excludes colocated tests so they stay out of dist/. Typechecking
   // must still see them, so the inherited exclude is cleared here.
   "exclude": [],
-  "include": ["src/**/*.ts"]
+  // The payload glob is what reaches the script suites. `src/**` never covers them, so
+  // without it `pnpm check` typechecks nothing under payload/**/__test__/.
+  "include": ["src/**/*.ts", "payload/**/__test__/**/*.ts"]
 }

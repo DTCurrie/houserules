@@ -1,17 +1,3 @@
-/**
- * The starting design system the kit seeds, in W3C Design Tokens Format Module 2025.10.
- *
- * Deliberately brand-neutral and small. This is a placeholder the user replaces, the same way
- * the `dataviz` skill ships a neutral palette to be swapped, so the values here are chosen to
- * be obviously generic rather than to look finished. A seed that looks finished never gets
- * edited, and an unedited seed means every design check measures against values nobody chose.
- *
- * Two spec details worth not relearning. A color `$value` is a structured object with a
- * `colorSpace` and `components` in the 0 to 1 range, not a hex string. A dimension `$value` is
- * a `{ value, unit }` pair, not a CSS string. `design.mjs` renders hex for humans by converting
- * components on the way out, which keeps this file spec-pure.
- */
-
 /** An sRGB color's components, in the 0 to 1 range the spec requires. */
 function srgb(red: number, green: number, blue: number) {
   return { colorSpace: 'srgb', components: [red, green, blue] };
@@ -111,8 +97,19 @@ const SEED_TOKENS = {
 } as const;
 
 /**
- * The seed's serialized form. This exact string is what `init` writes and what
- * {@link isUntouchedSeed} compares against, so the two can never drift.
+ * The seed's serialized form, in W3C Design Tokens Format Module 2025.10. This exact string
+ * is what `init` writes and what {@link isUntouchedSeed} compares against, so the two can
+ * never drift.
+ *
+ * Deliberately brand-neutral and small. This is a placeholder the user replaces, the same way
+ * the `dataviz` skill ships a neutral palette to be swapped, so the values here are chosen to
+ * be obviously generic rather than to look finished. A seed that looks finished never gets
+ * edited, and an unedited seed means every design check measures against values nobody chose.
+ *
+ * Two spec details worth not relearning. A color `$value` is a structured object with a
+ * `colorSpace` and `components` in the 0 to 1 range, not a hex string. A dimension `$value` is
+ * a `{ value, unit }` pair, not a CSS string. `design.mjs` renders hex for humans by converting
+ * components on the way out, which keeps this file spec-pure.
  */
 export function renderTokenSeed(): string {
   return `${JSON.stringify(SEED_TOKENS, null, 2)}\n`;

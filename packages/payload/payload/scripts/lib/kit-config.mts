@@ -188,10 +188,3 @@ export function loadConfigSafe(): KitConfig {
     return EMPTY;
   }
 }
-
-export function targetByName(
-  config: KitConfig,
-  name: string,
-): ConfigTarget | undefined {
-  return config.targets.find((t) => t.name === name);
-}

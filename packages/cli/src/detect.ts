@@ -134,10 +134,12 @@ export function detectVerifyCommands(
   return out.length ? out : null;
 }
 
+const MAX_PREFIX_LENGTH = 12;
+
 export function suggestPrefix(name: string): string {
   const short = name.includes('/') ? (name.split('/').pop() ?? name) : name;
   const cleaned = short.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const prefix = cleaned.replace(/^[0-9]+/, '').slice(0, 12);
+  const prefix = cleaned.replace(/^[0-9]+/, '').slice(0, MAX_PREFIX_LENGTH);
   return prefix || 'PKG';
 }
 
@@ -153,6 +155,8 @@ function shortName(pkgName: string | undefined, dir: string): string {
   return (short || basename(dir)).toLowerCase().replace(/[^a-z0-9-]/g, '-');
 }
 
+let warnedGitMissing = false;
+
 function git(root: string, args: string[]): string | null {
   try {
     return execFileSync('git', args, {
@@ -160,7 +164,18 @@ function git(root: string, args: string[]): string | null {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-  } catch {
+  } catch (error) {
+    // A non-repo dir fails with git's own exit code, not ENOENT: only the "git binary is
+    // not on PATH" case is worth telling the user about, and only once per run.
+    if (
+      !warnedGitMissing &&
+      (error as NodeJS.ErrnoException).code === 'ENOENT'
+    ) {
+      warnedGitMissing = true;
+      console.error(
+        'agent-kit: git could not be run (is it installed and on PATH?). Git-derived detection will read as "not a repo".',
+      );
+    }
     return null;
   }
 }
@@ -194,7 +209,10 @@ function ledgerRecordedFiles(ledgerFile: string): Set<string> {
   let text: string;
   try {
     text = readFileSync(ledgerFile, 'utf8');
-  } catch {
+  } catch (error) {
+    console.error(
+      `agent-kit: could not read ${ledgerFile} (${(error as Error).message}). Treating it as having no recorded files.`,
+    );
     return files;
   }
   for (const line of text.split('\n')) {
@@ -328,8 +346,10 @@ function detectChangesets(
       pendingCount = readdirSync(join(root, '.changeset')).filter(
         (f) => f.endsWith('.md') && f.toLowerCase() !== 'readme.md',
       ).length;
-    } catch {
-      /* unreadable. Treat as none */
+    } catch (error) {
+      console.error(
+        `agent-kit: could not read .changeset/ (${(error as Error).message}). Treating pending changeset count as 0.`,
+      );
     }
   }
   const devDep = hasDep(rootPkg, '@changesets/cli');
@@ -453,7 +473,12 @@ function detectClaudeState(root: string): ClaudeState {
   const listNames = (sub: string): string[] => {
     try {
       return readdirSync(join(dir, sub)).filter((f) => !f.startsWith('.'));
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error(
+          `agent-kit: could not list .claude/${sub} (${(error as Error).message}). Treating it as empty.`,
+        );
+      }
       return [];
     }
   };
@@ -476,7 +501,12 @@ function detectPnpmCatalogModeStrict(root: string): boolean {
     return /^catalogMode:\s*strict\b/m.test(
       readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'),
     );
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error(
+        `agent-kit: could not read pnpm-workspace.yaml (${(error as Error).message}). Treating catalog mode as not strict.`,
+      );
+    }
     return false;
   }
 }

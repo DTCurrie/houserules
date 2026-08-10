@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
   emptyIndex,
   findEntry,
+  indexBasename,
+  loadIndex,
   mergeWithQueue,
   parseIndex,
   serializeIndex,
@@ -102,6 +107,35 @@ describe('findEntry', () => {
 
   it('returns null for a null index', () => {
     expect(findEntry(null, 'BACKLOG-missing')).toBeNull();
+  });
+});
+
+describe('loadIndex', () => {
+  let dir: string;
+
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('returns null when the index file does not exist', () => {
+    dir = mkdtempSync(join(tmpdir(), 'ledger-index-'));
+
+    expect(loadIndex(dir, 'backlog')).toBeNull();
+  });
+
+  it('returns the parsed index for a valid file', () => {
+    dir = mkdtempSync(join(tmpdir(), 'ledger-index-'));
+    const index = filledIndex();
+    writeFileSync(join(dir, indexBasename('backlog')), serializeIndex(index));
+
+    expect(loadIndex(dir, 'backlog')).toEqual(index);
+  });
+
+  it('returns null when the index path is a directory rather than a file', () => {
+    dir = mkdtempSync(join(tmpdir(), 'ledger-index-'));
+    mkdirSync(join(dir, indexBasename('backlog')));
+
+    expect(loadIndex(dir, 'backlog')).toBeNull();
   });
 });
 

@@ -31,8 +31,10 @@ describe('persona-auditor', () => {
       templateText = readFileSync(join(root, personaAuditorTemplate), 'utf8');
     });
 
-    it('stages the persona-auditor template', () => {
-      expect(templateText.length).toBeGreaterThan(0);
+    it('stages the persona-auditor template with the expected frontmatter fields', () => {
+      expect(templateText).toMatch(/^---\ndescription: /);
+      expect(templateText).toMatch(/\nname: "<component>-persona-auditor"\n/);
+      expect(templateText).toMatch(/\ntools: Read, Grep, Glob\n/);
     });
 
     it('documents the anti-anchoring discipline', () => {

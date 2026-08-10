@@ -38,6 +38,7 @@ import type {
   BodyAction,
   CopyAction,
   FileAction,
+  RegionAction,
   SeedAction,
   WriteAction,
 } from './actions.js';
@@ -320,6 +321,248 @@ export function classifyWrite(args: {
 }
 
 /**
+ * A managed marker-delimited block inside a file the user otherwise owns. Bytes outside
+ * the markers are read but never touched.
+ */
+function effectForRegion(
+  action: RegionAction,
+  destAbs: string,
+  exists: boolean,
+  manifest: KitManifest | null,
+  force: boolean,
+  pendingContent: Map<string, string>,
+): Effect {
+  // What THIS PLAN will have written by the time apply() gets here, not just what is
+  // on disk. A fresh repo queues `seed CLAUDE.md` before `region CLAUDE.md`.
+  const pending = pendingContent.get(action.dest);
+  const current = pending ?? (exists ? readFileSync(destAbs, 'utf8') : null);
+  const currentBody =
+    current === null ? null : extractBody(current, action.region);
+  // Trimmed on both sides, and on the recorded hash too. A padded region writes
+  // `start\n\nbody\n\nend`, and extractBody strips only one newline from each end, so a
+  // region read back from disk is never byte-identical to the body that produced it.
+  // Comparing untrimmed made `locallyModified` true for every padded region whose body
+  // legitimately changed, which meant a kit upgrade reported CLAUDE.md as user-edited and
+  // refused to touch it. Only the skip-identical check above, which already trimmed, hid it.
+  const hash = sha256(action.body.trim());
+  const next = upsertRegion(current, action.body, action.region);
+  const content = Buffer.from(next.content, 'utf8');
+
+  if (currentBody !== null && currentBody.trim() === action.body.trim()) {
+    return { action, op: 'skip-identical', content, hash };
+  }
+  const recordedHash = wholeFileHash(manifest, action.dest);
+  // A block still under the legacy markers was recorded by an older kit generation whose
+  // hash semantics are not this one's, so the comparison below would report drift for every
+  // such install and strand it on the old markers behind a --force it has no reason to run.
+  const adoptingLegacy =
+    current !== null && hasLegacyRegion(current, action.region);
+  const locallyModified =
+    !adoptingLegacy &&
+    recordedHash !== undefined &&
+    currentBody !== null &&
+    sha256(currentBody.trim()) !== recordedHash;
+  if (locallyModified && !force) {
+    return { action, op: 'skip-modified', content, hash };
+  }
+  pendingContent.set(action.dest, next.content);
+  return {
+    action,
+    op: next.status === 'created' ? 'create' : 'update',
+    content,
+    hash,
+  };
+}
+
+/**
+ * The kit owns everything below the closing `---` in a `body`-owned file. Splits
+ * frontmatter (which may be user-trimmed) from the body (fully kit-owned) and judges
+ * each half against its own recorded hash.
+ *
+ * @returns Null when the action's payload file is missing, meaning the caller should skip it.
+ */
+function effectForBody(
+  action: BodyAction,
+  destAbs: string,
+  exists: boolean,
+  manifest: KitManifest | null,
+  force: boolean,
+  plugins: PluginSource[] | undefined,
+  broken: Map<string, string[]>,
+  brokenDests: Set<string>,
+): Effect | null {
+  if (checkPayloadMissing(action, plugins, broken, brokenDests)) return null;
+  const shipped = readFileSync(action.src, 'utf8');
+  const { frontmatter: shippedFrontmatter, body: payloadBody } =
+    splitFrontmatter(shipped);
+  // The kit-owned body is the payload's plus whatever the module computed from the
+  // user's selections, so the hash covers both and a changed selection refreshes it.
+  const canonicalBody = payloadBody + (action.appendBody ?? '');
+  const hash = sha256(canonicalBody);
+  const frontmatterHash = sha256(shippedFrontmatter);
+
+  if (!exists) {
+    return {
+      action,
+      op: 'create',
+      content: Buffer.from(shippedFrontmatter + canonicalBody, 'utf8'),
+      hash,
+      frontmatterHash,
+    };
+  }
+
+  const diskText = readFileSync(destAbs, 'utf8');
+  const { frontmatter: diskFrontmatter, body: diskBody } =
+    splitFrontmatter(diskText);
+  const frontmatterState = classifyFrontmatter({
+    onDisk: sha256(diskFrontmatter),
+    recordedDefault: bodyHashes(manifest, action.dest)?.frontmatter,
+    shippedDefault: frontmatterHash,
+  });
+  const resolvedFrontmatter =
+    frontmatterState === 'default' ? shippedFrontmatter : diskFrontmatter;
+  const content = Buffer.from(resolvedFrontmatter + canonicalBody, 'utf8');
+
+  if (resolvedFrontmatter + canonicalBody === diskText) {
+    return { action, op: 'skip-identical', content, hash, frontmatterHash };
+  }
+
+  const recordedBody = bodyHashes(manifest, action.dest);
+  const recordedWholeFile = wholeFileHash(manifest, action.dest);
+  let locallyModified: boolean;
+  if (recordedBody !== undefined) {
+    locallyModified = sha256(diskBody) !== recordedBody.body;
+  } else if (recordedWholeFile !== undefined) {
+    // A legacy manifest entry, written before body ownership existed, holds the
+    // hash of the WHOLE file. An untouched install still matches that hash and
+    // must adopt cleanly rather than read as modified on its first body-owned update.
+    locallyModified = sha256(diskText) !== recordedWholeFile;
+  } else {
+    locallyModified = false;
+  }
+
+  if (locallyModified && !force) {
+    return { action, op: 'skip-modified', content, hash, frontmatterHash };
+  }
+  return { action, op: 'update', content, hash, frontmatterHash };
+}
+
+/**
+ * A user-owned file, written only when absent, except for the `managedKeys` splice
+ * described on {@link SeedAction}.
+ */
+function effectForSeed(
+  action: SeedAction,
+  destAbs: string,
+  exists: boolean,
+  pendingContent: Map<string, string>,
+): Effect {
+  if (!exists) pendingContent.set(action.dest, action.content);
+  // A seed with managedKeys reconciles those keys into a file that already exists. Every
+  // other byte, including the user's edits to the managed keys' neighbours, is preserved.
+  const mergedText =
+    exists && action.managedKeys?.length
+      ? mergeManagedKeys(
+          readFileSync(destAbs, 'utf8'),
+          action.content,
+          action.managedKeys,
+        )
+      : null;
+  if (mergedText !== null) {
+    return { action, op: 'merge', content: Buffer.from(mergedText, 'utf8') };
+  }
+  return {
+    action,
+    op: exists ? 'skip-exists' : 'create',
+    content: exists ? null : Buffer.from(action.content, 'utf8'),
+  };
+}
+
+/**
+ * A kit-owned file end to end: refreshed whenever the canonical bytes change, unless a
+ * hash mismatch against the manifest says you edited it.
+ *
+ * @returns Null when a `copy` dupes a dest/src pair already planned this run (core and a
+ *   plugin sidecar independently deriving the same shared lib), or when its payload file
+ *   is missing.
+ */
+function effectForCopyOrWrite(
+  action: CopyAction | WriteAction,
+  root: string,
+  destAbs: string,
+  exists: boolean,
+  manifest: KitManifest | null,
+  force: boolean,
+  plugins: PluginSource[] | undefined,
+  broken: Map<string, string[]>,
+  brokenDests: Set<string>,
+  seenCopySrc: Map<string, string>,
+): Effect | null {
+  // dest → src of the copy already planned there. Core hand-lists every shared lib
+  // unconditionally (modules/core.ts), and a plugin's sidecar independently derives a copy
+  // of the same lib from the same CLI payload, so the two actions are byte-identical: same
+  // dest, same src, different `module`. Deduping only when both match is what keeps this
+  // safe for a genuine dest collision between two DIFFERENT sources, which stays a bug this
+  // does not paper over.
+  if (action.kind === 'copy') {
+    if (seenCopySrc.get(action.dest) === action.src) return null;
+    seenCopySrc.set(action.dest, action.src);
+    if (checkPayloadMissing(action, plugins, broken, brokenDests)) return null;
+  }
+  const content = readAction(action);
+  const hash = sha256(content);
+  const op = classifyWrite({
+    exists,
+    onDisk: exists ? readFileSync(destAbs) : null,
+    canonical: content,
+    recordedHash: wholeFileHash(manifest, action.dest),
+    force,
+  });
+  return { action, op, content, hash };
+}
+
+/**
+ * All modules' settings fragments merged into one pass over the real file.
+ *
+ * @throws KitError when the existing `.claude/settings.json` is not valid JSON, since the
+ *   kit refuses to rewrite a file it cannot parse.
+ */
+function computeSettingsPlan(
+  root: string,
+  fragments: SettingsFragment[],
+): SettingsPlan | null {
+  if (!fragments.length) return null;
+  const settingsPath = join(root, '.claude', 'settings.json');
+  const existedBefore = existsSync(settingsPath);
+  let current: Settings = {};
+  if (existedBefore) {
+    const text = readFileSync(settingsPath, 'utf8');
+    try {
+      current = parseSettingsText(text);
+    } catch (e) {
+      throw new KitError(
+        `.claude/settings.json is not valid JSON (${(e as Error).message}). ` +
+          'Fix it by hand first. The kit will not rewrite a file it cannot parse.',
+        { cause: e },
+      );
+    }
+  }
+  const allChanges: SettingsChange[] = [];
+  let merged = current;
+  for (const fragment of fragments) {
+    const result = mergeSettings(merged, fragment);
+    merged = result.merged;
+    allChanges.push(...result.changes);
+  }
+  return {
+    dest: '.claude/settings.json',
+    existedBefore,
+    changes: allChanges,
+    text: renderSettings(merged),
+  };
+}
+
+/**
  * Turns the actions modules declared into effects against the real tree. The same
  * result object drives the dry-run preview and `apply()`, so the preview cannot lie.
  *
@@ -341,12 +584,6 @@ export function computeEffects(
   // already-installed files are not mistaken for retired ones and pruned.
   const broken = new Map<string, string[]>();
   const brokenDests = new Set<string>();
-  // dest → src of the copy already planned there. Core hand-lists every shared lib
-  // unconditionally (modules/core.ts), and a plugin's sidecar independently derives a copy
-  // of the same lib from the same CLI payload, so the two actions are byte-identical: same
-  // dest, same src, different `module`. Deduping only when both match is what keeps this
-  // safe for a genuine dest collision between two DIFFERENT sources, which stays a bug this
-  // does not paper over.
   const seenCopySrc = new Map<string, string>();
 
   for (const action of actions) {
@@ -362,203 +599,47 @@ export function computeEffects(
     const destAbs = join(root, action.dest);
     const exists = existsSync(destAbs);
 
+    let effect: Effect | null;
     if (action.kind === 'region') {
-      // What THIS PLAN will have written by the time apply() gets here, not just what is
-      // on disk. A fresh repo queues `seed CLAUDE.md` before `region CLAUDE.md`.
-      const pending = pendingContent.get(action.dest);
-      const current =
-        pending ?? (exists ? readFileSync(destAbs, 'utf8') : null);
-      const currentBody =
-        current === null ? null : extractBody(current, action.region);
-      // Trimmed on both sides, and on the recorded hash too. A padded region writes
-      // `start\n\nbody\n\nend`, and extractBody strips only one newline from each end, so a
-      // region read back from disk is never byte-identical to the body that produced it.
-      // Comparing untrimmed made `locallyModified` true for every padded region whose body
-      // legitimately changed, which meant a kit upgrade reported CLAUDE.md as user-edited and
-      // refused to touch it. Only the skip-identical check above, which already trimmed, hid it.
-      const hash = sha256(action.body.trim());
-      const next = upsertRegion(current, action.body, action.region);
-      const content = Buffer.from(next.content, 'utf8');
-
-      if (currentBody !== null && currentBody.trim() === action.body.trim()) {
-        effects.push({ action, op: 'skip-identical', content, hash });
-        continue;
-      }
-      const recordedHash = wholeFileHash(manifest, action.dest);
-      // A block still under the legacy markers was recorded by an older kit generation whose
-      // hash semantics are not this one's, so the comparison below would report drift for every
-      // such install and strand it on the old markers behind a --force it has no reason to run.
-      const adoptingLegacy =
-        current !== null && hasLegacyRegion(current, action.region);
-      const locallyModified =
-        !adoptingLegacy &&
-        recordedHash !== undefined &&
-        currentBody !== null &&
-        sha256(currentBody.trim()) !== recordedHash;
-      if (locallyModified && !force) {
-        effects.push({ action, op: 'skip-modified', content, hash });
-        continue;
-      }
-      pendingContent.set(action.dest, next.content);
-      effects.push({
+      effect = effectForRegion(
         action,
-        op: next.status === 'created' ? 'create' : 'update',
-        content,
-        hash,
-      });
-      continue;
-    }
-
-    if (action.kind === 'body') {
-      if (checkPayloadMissing(action, plugins, broken, brokenDests)) continue;
-      const shipped = readFileSync(action.src, 'utf8');
-      const { frontmatter: shippedFrontmatter, body: payloadBody } =
-        splitFrontmatter(shipped);
-      // The kit-owned body is the payload's plus whatever the module computed from the
-      // user's selections, so the hash covers both and a changed selection refreshes it.
-      const canonicalBody = payloadBody + (action.appendBody ?? '');
-      const hash = sha256(canonicalBody);
-      const frontmatterHash = sha256(shippedFrontmatter);
-
-      if (!exists) {
-        effects.push({
-          action,
-          op: 'create',
-          content: Buffer.from(shippedFrontmatter + canonicalBody, 'utf8'),
-          hash,
-          frontmatterHash,
-        });
-        continue;
-      }
-
-      const diskText = readFileSync(destAbs, 'utf8');
-      const { frontmatter: diskFrontmatter, body: diskBody } =
-        splitFrontmatter(diskText);
-      const frontmatterState = classifyFrontmatter({
-        onDisk: sha256(diskFrontmatter),
-        recordedDefault: bodyHashes(manifest, action.dest)?.frontmatter,
-        shippedDefault: frontmatterHash,
-      });
-      const resolvedFrontmatter =
-        frontmatterState === 'default' ? shippedFrontmatter : diskFrontmatter;
-      const content = Buffer.from(resolvedFrontmatter + canonicalBody, 'utf8');
-
-      if (resolvedFrontmatter + canonicalBody === diskText) {
-        effects.push({
-          action,
-          op: 'skip-identical',
-          content,
-          hash,
-          frontmatterHash,
-        });
-        continue;
-      }
-
-      const recordedBody = bodyHashes(manifest, action.dest);
-      const recordedWholeFile = wholeFileHash(manifest, action.dest);
-      let locallyModified: boolean;
-      if (recordedBody !== undefined) {
-        locallyModified = sha256(diskBody) !== recordedBody.body;
-      } else if (recordedWholeFile !== undefined) {
-        // A legacy manifest entry, written before body ownership existed, holds the
-        // hash of the WHOLE file. An untouched install still matches that hash and
-        // must adopt cleanly rather than read as modified on its first body-owned update.
-        locallyModified = sha256(diskText) !== recordedWholeFile;
-      } else {
-        locallyModified = false;
-      }
-
-      if (locallyModified && !force) {
-        effects.push({
-          action,
-          op: 'skip-modified',
-          content,
-          hash,
-          frontmatterHash,
-        });
-        continue;
-      }
-      effects.push({ action, op: 'update', content, hash, frontmatterHash });
-      continue;
-    }
-
-    if (action.kind === 'seed') {
-      if (!exists) pendingContent.set(action.dest, action.content);
-      // A seed with managedKeys reconciles those keys into a file that already exists. Every
-      // other byte, including the user's edits to the managed keys' neighbours, is preserved.
-      const mergedText =
-        exists && action.managedKeys?.length
-          ? mergeManagedKeys(
-              readFileSync(destAbs, 'utf8'),
-              action.content,
-              action.managedKeys,
-            )
-          : null;
-      if (mergedText !== null) {
-        effects.push({
-          action,
-          op: 'merge',
-          content: Buffer.from(mergedText, 'utf8'),
-        });
-        continue;
-      }
-      effects.push({
+        destAbs,
+        exists,
+        manifest,
+        force,
+        pendingContent,
+      );
+    } else if (action.kind === 'body') {
+      effect = effectForBody(
         action,
-        op: exists ? 'skip-exists' : 'create',
-        content: exists ? null : Buffer.from(action.content, 'utf8'),
-      });
-      continue;
+        destAbs,
+        exists,
+        manifest,
+        force,
+        plugins,
+        broken,
+        brokenDests,
+      );
+    } else if (action.kind === 'seed') {
+      effect = effectForSeed(action, destAbs, exists, pendingContent);
+    } else {
+      effect = effectForCopyOrWrite(
+        action,
+        root,
+        destAbs,
+        exists,
+        manifest,
+        force,
+        plugins,
+        broken,
+        brokenDests,
+        seenCopySrc,
+      );
     }
-
-    // copy | write: kit-owned
-    if (action.kind === 'copy') {
-      if (seenCopySrc.get(action.dest) === action.src) continue;
-      seenCopySrc.set(action.dest, action.src);
-      if (checkPayloadMissing(action, plugins, broken, brokenDests)) continue;
-    }
-    const content = readAction(action);
-    const hash = sha256(content);
-    const op = classifyWrite({
-      exists,
-      onDisk: exists ? readFileSync(destAbs) : null,
-      canonical: content,
-      recordedHash: wholeFileHash(manifest, action.dest),
-      force,
-    });
-    effects.push({ action, op, content, hash });
+    if (effect) effects.push(effect);
   }
 
-  // All modules' settings fragments merge into one pass over the real file.
-  let settingsPlan: SettingsPlan | null = null;
-  if (fragments.length) {
-    const settingsPath = join(root, '.claude', 'settings.json');
-    const existedBefore = existsSync(settingsPath);
-    let current: Settings = {};
-    if (existedBefore) {
-      const text = readFileSync(settingsPath, 'utf8');
-      try {
-        current = parseSettingsText(text);
-      } catch (e) {
-        throw new KitError(
-          `.claude/settings.json is not valid JSON (${(e as Error).message}). ` +
-            'Fix it by hand first — the kit will not rewrite a file it cannot parse.',
-        );
-      }
-    }
-    const allChanges: SettingsChange[] = [];
-    let merged = current;
-    for (const fragment of fragments) {
-      const result = mergeSettings(merged, fragment);
-      merged = result.merged;
-      allChanges.push(...result.changes);
-    }
-    settingsPlan = {
-      dest: '.claude/settings.json',
-      existedBefore,
-      changes: allChanges,
-      text: renderSettings(merged),
-    };
-  }
+  const settingsPlan = computeSettingsPlan(root, fragments);
 
   // The kit's settings signature is recorded even on a no-change run (the fragments
   // describe the kit's contribution regardless of what's already merged in).

@@ -1,16 +1,3 @@
-/**
- * The markup-pattern to success-criterion map, and the matcher over it.
- *
- * This table ROUTES, it does not lint. A pattern's job is to say "this change is subject to
- * 1.1.1, go read it", never to judge whether the markup satisfies it. Deciding whether an
- * `alt` text is any good is `eslint-plugin-jsx-a11y`'s job and it is better at it. Keeping the
- * table on the routing side of that line is what stops this from becoming a worse copy of a
- * tool that already exists.
- *
- * Over-inclusion is the cheap failure. Naming a criterion that turns out not to apply costs one
- * read. Missing one costs a defect. Prefer a loose pattern.
- */
-
 /** One markup pattern and the criteria a change touching it is subject to. */
 export interface MarkupPattern {
   /** Stable kebab-case handle, used in output and in tests. */
@@ -33,6 +20,18 @@ export interface PatternHit {
   count: number;
 }
 
+/**
+ * The markup-pattern to success-criterion map, matched by {@link matchPatterns}.
+ *
+ * This table ROUTES, it does not lint. A pattern's job is to say "this change is subject to
+ * 1.1.1, go read it", never to judge whether the markup satisfies it. Deciding whether an
+ * `alt` text is any good is `eslint-plugin-jsx-a11y`'s job and it is better at it. Keeping the
+ * table on the routing side of that line is what stops this from becoming a worse copy of a
+ * tool that already exists.
+ *
+ * Over-inclusion is the cheap failure. Naming a criterion that turns out not to apply costs one
+ * read. Missing one costs a defect. Prefer a loose pattern.
+ */
 export const MARKUP_PATTERNS: MarkupPattern[] = [
   {
     id: 'image-icon-or-svg',

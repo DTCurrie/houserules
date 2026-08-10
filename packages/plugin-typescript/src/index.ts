@@ -6,12 +6,9 @@ import type { Action, ModuleDef, PluginApi } from '@agent-kit/cli/plugin';
  * `type` for unions and computed types, and `unknown` plus a type guard instead of `any` for
  * untyped external data.
  *
- * Two sections were dropped from the source this rule was adapted from. Doc comments are
- * `code-comments.md`'s job, which already covers TSDoc form in more depth than a
- * per-language rule needs to restate. "Verify Your Work" (`pnpm check` / `pnpm test`) is
- * the CLAUDE.md managed region's job now, run once per turn rather than repeated in every
- * language rule that happens to load. A language rule that restates a rule the kit already
- * ships costs resident budget every time it loads to say something already said.
+ * Doc-comment form and the "Verify Your Work" gate are each owned elsewhere, by
+ * `code-comments.md` and the CLAUDE.md managed region respectively, so this rule does not
+ * restate either.
  *
  * Delivered as a native path-scoped rule. The body loads only when a matching source file
  * is in the working set, so it costs nothing on the always-loaded surface.
@@ -37,7 +34,7 @@ function typescriptModule(api: PluginApi): ModuleDef {
         ),
         {
           kind: 'advise',
-          text: 'TypeScript rule installed at .claude/rules/typescript.md. It is path-scoped via its `paths:` frontmatter (**/*.ts, **/*.mts, **/*.cts, **/*.tsx, **/*.svelte, **/*.svelte.ts) — Claude Code loads it only when a matching source file is in the working set, so it adds nothing to the always-loaded surface. Keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn.',
+          text: 'TypeScript rule installed at .claude/rules/typescript.md. It is path-scoped via its `paths:` frontmatter (**/*.ts, **/*.mts, **/*.cts, **/*.tsx, **/*.svelte, **/*.svelte.ts). Claude Code loads it only when a matching source file is in the working set, so it adds nothing to the always-loaded surface. Keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn.',
           module: id,
         },
       ];

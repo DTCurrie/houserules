@@ -1,4 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -22,6 +28,23 @@ function tempCssDir(): string {
   onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+function chmodMakesFileUnreadable(): boolean {
+  const dir = mkdtempSync(join(tmpdir(), 'theme-entry-chmod-'));
+  const probe = writeCssFile(dir, 'probe.css', 'x');
+  chmodSync(probe, 0o000);
+  try {
+    readFileSync(probe, 'utf8');
+    return false;
+  } catch {
+    return true;
+  } finally {
+    chmodSync(probe, 0o644);
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const CHMOD_ENFORCES_UNREADABLE = chmodMakesFileUnreadable();
 
 describe('loadDesignSystem', () => {
   it('reports a repo theme with more than 400 entries', async () => {
@@ -146,4 +169,20 @@ describe('findThemeEntryCss', () => {
     if (result.ok) return;
     expect(result.error).toContain('1 file(s)');
   });
+
+  it.skipIf(!CHMOD_ENFORCES_UNREADABLE)(
+    'reports an unreadable entry file distinctly from a file that simply does not import tailwindcss',
+    () => {
+      const dir = tempCssDir();
+      const entry = writeCssFile(dir, 'app.css', '@import "tailwindcss";');
+      chmodSync(entry, 0o000);
+
+      const result = findThemeEntryCss([entry]);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toContain('could not be read');
+      expect(result.error).not.toContain('No CSS file imports');
+    },
+  );
 });

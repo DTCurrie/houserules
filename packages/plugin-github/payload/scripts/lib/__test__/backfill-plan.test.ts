@@ -237,7 +237,28 @@ describe('planBackfill', () => {
     ];
     const secondPlan = planBackfill('decisions', local, backfilledBoard);
 
-    expect(firstPlan.ops.length).toBeGreaterThan(0);
+    expect(firstPlan.ops).toEqual([
+      {
+        op: 'append-marker',
+        itemId: 'PVTI_1',
+        entryId: 'DEC-1',
+        body: 'Original body',
+      },
+      {
+        op: 'set-field',
+        itemId: 'PVTI_1',
+        entryId: 'DEC-1',
+        field: 'Under',
+        value: 'ledger-sync',
+      },
+      {
+        op: 'set-field',
+        itemId: 'PVTI_1',
+        entryId: 'DEC-1',
+        field: 'Scope',
+        value: 'packages/cli',
+      },
+    ]);
     expect(secondPlan.ops).toEqual([]);
     expect(backfillIsNoop(secondPlan)).toBe(true);
   });

@@ -12,7 +12,7 @@ Push the backlog and decision ledgers to the linked GitHub Project boards.
 1. Check what would happen first:
    `node .claude/scripts/projects-sync.mjs status`
    This prints whether the sync gate currently allows pushing, how many entries are pending
-   per ledger, and which project each ledger and target resolves to.
+   per ledger, and which project each ledger resolves to.
 2. If the queue is large or you have not run this before, preview it without changing
    anything:
    `node .claude/scripts/projects-sync.mjs push --dry-run`

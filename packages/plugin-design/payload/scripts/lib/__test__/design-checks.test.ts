@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { checkDesign } from '../../payload/scripts/lib/design-checks.mts';
-import { parseColor } from '../../payload/scripts/lib/dtcg-normalize.mts';
+import { checkDesign } from '../design-checks.mts';
+import { parseColor } from '../dtcg-normalize.mts';
 
 function colorTokenSet(): Record<string, unknown> {
   return {

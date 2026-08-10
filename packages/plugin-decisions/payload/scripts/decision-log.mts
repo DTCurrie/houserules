@@ -27,20 +27,6 @@
  * `<dir>/<word>.DECISIONS.md`. A path ending in DECISIONS.md names the same area and resolves
  * to the same file. Any other path is honored literally.
  *
- * ancestry/current/tree/scope walk the same in-memory projection and print one line per
- * node: id, title, status. ancestry and tree are indented by depth, since supersedes and
- * under can each branch. No traversal prints a body; `show` is the only command that does,
- * and only for one id.
- *
- * `scope` also warns when an accepted record names a path that is gone from disk. A scope holds
- * literal paths and nothing tracks a rename, so the query would otherwise answer "no decision
- * governs this" for a file a decision does govern, which reads the same as the truth. `rescope`
- * re-points those paths. It appends rather than rewrites, so the log still shows which paths the
- * decision was originally written against.
- *
- * The ledger mechanics live in lib/entry-ledger.mjs, shared with backlog-log.mjs. This
- * script owns what is specific to a decision: the record shape, the edges, and the verbs.
- *
  * Chat provenance stamps the active session and degrades to a chat:null warning outside
  * Claude Code. Pass --chat=none or set CLAUDE_SESSION_ID to override.
  */

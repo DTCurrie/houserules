@@ -98,7 +98,7 @@ describe('parseEntries', () => {
       '## [SIM-aaaaaa] T\n\n**Logged:** 2026-01-01\n**Logged:** 2026-09-09\n\nbody\n\n---\n',
     );
 
-    expect(entry.body).toContain('**Logged:** 2026-09-09');
+    expect(entry.body).toEqual('**Logged:** 2026-09-09\n\nbody');
   });
 
   it('ends an entry at the separator', () => {

@@ -107,7 +107,7 @@ export function parsePnpmWorkspaceGlobs(yamlText: string): string[] {
   return globs;
 }
 
-export function workspaceGlobs(root: string): string[] {
+function workspaceGlobs(root: string): string[] {
   const yamlPath = join(root, 'pnpm-workspace.yaml');
   if (existsSync(yamlPath)) {
     try {
@@ -131,13 +131,23 @@ function subdirectories(base: string): string[] {
     return readdirSync(base, { withFileTypes: true })
       .filter((e) => e.isDirectory() && !SKIP_DIRS.has(e.name))
       .map((e) => join(base, e.name));
-  } catch {
+  } catch (e) {
+    // A read failure and a genuinely empty directory both feed workspace detection as a
+    // plain array, with no return channel to tell them apart, so the diagnostic goes to
+    // stderr rather than looking identical to an empty dir.
+    console.error(
+      `agent-kit: could not read directory ${base}: ${(e as Error).message}`,
+    );
     return [];
   }
 }
 
+// Recursion cap for `descendants`. No real workspace nests packages this deep; this guards
+// against a symlink loop or a pathological tree rather than encoding a known layout.
+const MAX_WORKSPACE_DEPTH = 12;
+
 /** Every directory at or below `base`, excluding `base` itself. Depth-capped. */
-function descendants(base: string, depth = 12): string[] {
+function descendants(base: string, depth = MAX_WORKSPACE_DEPTH): string[] {
   if (depth <= 0) return [];
   return subdirectories(base).flatMap((dir) => [
     dir,

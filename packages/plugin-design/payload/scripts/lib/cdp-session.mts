@@ -33,6 +33,7 @@ const DEFAULT_VIEWPORT = { width: 1280, height: 900 };
 const EXIT_WAIT_MS = 2000;
 const PROFILE_REMOVE_RETRIES = 10;
 const PROFILE_REMOVE_RETRY_MS = 50;
+const NAVIGATE_SETTLE_MS = 600;
 
 /** An evaluated expression's value, or the reason it could not be produced. */
 export type SessionResult<TValue> =
@@ -218,7 +219,7 @@ function buildSession(launched: Launched): RenderSession {
         await connection.send('Page.navigate', { url }, sessionId);
         // Page.loadEventFired would be tighter, but it needs an event listener the flat
         // session does not expose here. A settle delay keeps this dependency-free.
-        await wait(600);
+        await wait(NAVIGATE_SETTLE_MS);
       });
     },
     evaluate<TValue>(expression: string) {

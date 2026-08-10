@@ -289,7 +289,7 @@ describe('update on a ledger .jsonl committed before it was gitignored', () => {
 
   it('reports where the durable record lives now', () => {
     expect(result.stdout.replace(/\s+/g, ' ')).toContain(
-      'ledgers: untracked 1 ledger log(s) from git — kept on disk; commit the staged removal to finish. The record now lives in the GitHub Project once `projects-sync.mjs push` has run.',
+      'ledgers: untracked 1 ledger log(s) from git — kept on disk. Commit the staged removal to finish. The record now lives in the GitHub Project once `projects-sync.mjs push` has run.',
     );
   });
 });
@@ -552,13 +552,11 @@ describe('migrating a prior kit hook entry', () => {
 describe('doctor and update on a retired, unmodified, wired hook script', () => {
   let root: string;
   let retired: string;
-  let settingsPath: string;
   let manifestPath: string;
 
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
-    ({ retired, settingsPath, manifestPath } =
-      plantRetiredHookAlongsideUserHook(root));
+    ({ retired, manifestPath } = plantRetiredHookAlongsideUserHook(root));
   });
 
   it('doctor exits 1, since a wired script no module ships spawns a dead process on every trigger', () => {
@@ -601,19 +599,13 @@ describe('doctor and update on a retired, unmodified, wired hook script', () => 
     });
 
     it('unwires the retired kit hook from settings.json', () => {
-      const cmds = (readJson(settingsPath).hooks.PostToolUse ?? []).flatMap(
-        (g: any) => g.hooks.map((h: any) => h.command),
-      );
-      expect(
-        cmds.some((c: string) => c.includes('compact-tool-output')),
-      ).toBeFalsy();
+      const cmds = hookCommandsFor(settingsOf(root), 'PostToolUse');
+      expect(cmds.some((c) => c.includes('compact-tool-output'))).toBeFalsy();
     });
 
     it('preserves the user hook in settings.json', () => {
-      const cmds = (readJson(settingsPath).hooks.PostToolUse ?? []).flatMap(
-        (g: any) => g.hooks.map((h: any) => h.command),
-      );
-      expect(cmds.some((c: string) => c.includes('user-hook.js'))).toBeTruthy();
+      const cmds = hookCommandsFor(settingsOf(root), 'PostToolUse');
+      expect(cmds.some((c) => c.includes('user-hook.js'))).toBeTruthy();
     });
 
     it('drops the retired file from the manifest', () => {

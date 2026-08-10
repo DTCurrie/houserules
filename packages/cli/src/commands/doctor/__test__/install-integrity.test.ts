@@ -57,6 +57,43 @@ function retiredMessages(
     .map((f) => f.msg);
 }
 
+describe('checkInstallIntegrity, kit version check', () => {
+  it('warns when the manifest kit version differs from the running CLI', () => {
+    const ctx = ctxWithFixturePlugin(['fixture/fixture-core']);
+
+    const result = checkInstallIntegrity(
+      '/repo',
+      ctx,
+      '2.0.0',
+      registryFor(ctx),
+    );
+
+    expect(
+      result.findings.filter((f) => f.msg.includes('this CLI is v')),
+    ).toEqual([
+      expect.objectContaining({
+        level: 'WARN',
+        msg: 'installed kit v1.0.0, this CLI is v2.0.0. Run: npx agent-kit update',
+      }),
+    ]);
+  });
+
+  it('does not warn when the manifest kit version matches the running CLI', () => {
+    const ctx = ctxWithFixturePlugin(['fixture/fixture-core']);
+
+    const result = checkInstallIntegrity(
+      '/repo',
+      ctx,
+      '1.0.0',
+      registryFor(ctx),
+    );
+
+    expect(
+      result.findings.filter((f) => f.msg.includes('this CLI is v')),
+    ).toEqual([]);
+  });
+});
+
 describe('checkInstallIntegrity, plugin-aware retired-module check', () => {
   it('does not report a plugin-supplied module id as retired', () => {
     const ctx = ctxWithFixturePlugin(['fixture/fixture-core']);

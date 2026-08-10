@@ -1,6 +1,11 @@
 import type { Action } from '../actions.js';
 import type { ModuleGroup } from '../module-def.js';
-import { script, skill, template } from './copy-actions.js';
+import {
+  script,
+  selfGitignoreAction,
+  skill,
+  template,
+} from './copy-actions.js';
 import { hookFragment } from './hook-wiring.js';
 
 export const id = 'debug-session';
@@ -43,20 +48,15 @@ export function plan(): Action[] {
     ),
     // Throwaway trace logs must never enter a commit. A directory-local .gitignore keeps
     // them out without touching the repo's own, and stays tracked so the intent travels.
-    {
-      kind: 'write',
-      dest: '.claude/debug/.gitignore',
-      content: [
+    selfGitignoreAction(
+      id,
+      '.claude/debug/.gitignore',
+      [
         '# Throwaway trace logs written by the /debug-session skill. Not for commit.',
         '# The directory stays so instrumentation always has somewhere to append.',
-        '*',
-        '!.gitignore',
-        '',
-      ].join('\n'),
-      module: id,
-      reason:
-        'trace logs are throwaway; self-gitignored (repo .gitignore untouched)',
-    },
+      ],
+      'trace logs are throwaway; self-gitignored (repo .gitignore untouched)',
+    ),
     {
       kind: 'merge-settings',
       module: id,

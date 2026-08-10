@@ -1,5 +1,5 @@
 /** Wraps a payload as the `{ input }` option `runScript` expects. */
-export function hookInput(payload: unknown): { input: string } {
+function hookInput(payload: unknown): { input: string } {
   return { input: JSON.stringify(payload) };
 }
 

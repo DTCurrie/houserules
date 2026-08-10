@@ -1,6 +1,8 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 
 import { makeCtx } from '#test/ctx-builder';
 import type { KitConfig } from '../../../core/config.js';
@@ -13,6 +15,34 @@ const KIT_ROOT = resolve(
   '../../../..',
 );
 const ACCESSIBILITY = join(dirname(KIT_ROOT), 'plugin-accessibility');
+
+/**
+ * A synthetic dependency plugin, not one of the real workspace packages: those all publish an
+ * `exports` map with no `./package.json` entry, which blocks the very
+ * `requireFromRoot.resolve(join(name, 'package.json'))` this check relies on to read a
+ * dependency's `keywords`.
+ */
+function hostRootDependingOnFakePlugin(): { root: string; pluginDir: string } {
+  const root = mkdtempSync(join(tmpdir(), 'plugin-registration-'));
+  onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(
+    join(root, 'package.json'),
+    JSON.stringify({
+      name: 'host-repo',
+      dependencies: { '@fake/plugin': '1.0.0' },
+    }),
+  );
+  const pluginDir = join(root, 'node_modules', '@fake', 'plugin');
+  mkdirSync(pluginDir, { recursive: true });
+  writeFileSync(
+    join(pluginDir, 'package.json'),
+    JSON.stringify({
+      name: '@fake/plugin',
+      keywords: ['agent-kit-plugin'],
+    }),
+  );
+  return { root, pluginDir };
+}
 
 const MANIFEST: KitManifest = {
   kitVersion: '1.0.0',
@@ -66,5 +96,31 @@ describe('checkPluginRegistration', () => {
       findings: [],
       readouts: [],
     });
+  });
+});
+
+describe('checkPluginRegistration, dependency-declared plugins', () => {
+  it('warns when a dependency of the repo is not registered in kit.config.json', () => {
+    const { root } = hostRootDependingOnFakePlugin();
+
+    const { findings } = checkPluginRegistration(root, ctxWith([]));
+
+    expect(findings).toEqual([
+      {
+        level: 'WARN',
+        msg: 'plugin @fake/plugin is a dependency of this repo but is not in kit.config.json "plugins", so none of its modules are available',
+      },
+    ]);
+  });
+
+  it('does not warn once the dependency is registered in kit.config.json', () => {
+    const { root, pluginDir } = hostRootDependingOnFakePlugin();
+
+    const { findings } = checkPluginRegistration(
+      root,
+      ctxWith([{ name: pluginDir, alias: 'fake' }]),
+    );
+
+    expect(findings).toEqual([]);
   });
 });

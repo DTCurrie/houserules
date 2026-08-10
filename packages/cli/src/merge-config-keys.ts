@@ -38,7 +38,10 @@ export function mergeManagedKeys(
   try {
     onDisk = JSON.parse(diskText) as Record<string, unknown>;
     canonical = JSON.parse(canonicalText) as Record<string, unknown>;
-  } catch {
+  } catch (error) {
+    console.error(
+      `agent-kit: .claude/kit.config.json is not valid JSON (${(error as Error).message}). Managed keys were left untouched; \`doctor\` reports this separately.`,
+    );
     return null;
   }
   if (onDisk === null || typeof onDisk !== 'object' || Array.isArray(onDisk))

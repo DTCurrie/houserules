@@ -6,6 +6,7 @@ import {
   resolveHostPackage,
 } from './tailwind-host-packages.mjs';
 import type { TailwindResult } from './tailwind-host-packages.mjs';
+import { isRecord } from './is-record.mjs';
 
 /** One class-shaped string Oxide's scanner found, with its position in the source file. */
 export interface ScannedCandidate {
@@ -32,10 +33,6 @@ interface OxideModule {
   Scanner: new (options: {
     sources: { base: string; pattern: string; negated: boolean }[];
   }) => ScannerInstance;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 function hasScanner(value: unknown): value is OxideModule {

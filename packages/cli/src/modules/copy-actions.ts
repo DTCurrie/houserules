@@ -2,7 +2,12 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
-import type { Action, BodyAction, CopyAction } from '../actions.js';
+import type {
+  Action,
+  BodyAction,
+  CopyAction,
+  WriteAction,
+} from '../actions.js';
 import { KitError } from '../plan.js';
 import { payloadPath } from '../paths.js';
 import {
@@ -147,9 +152,31 @@ export function createPayloadBuilders(payloadRoot: string): PayloadBuilders {
 }
 
 /**
+ * A directory-local `.gitignore` that ignores everything under it except itself, so the
+ * exclusion travels with a clone without touching the repo's own `.gitignore`.
+ *
+ * @param commentLines The `# ...` lines explaining what the directory holds and why it is
+ *   excluded, without the trailing `*`/`!.gitignore` body, which every caller shares.
+ */
+export function selfGitignoreAction(
+  module: string,
+  dest: string,
+  commentLines: string[],
+  reason: string,
+): WriteAction {
+  return {
+    kind: 'write',
+    dest,
+    content: [...commentLines, '*', '!.gitignore', ''].join('\n'),
+    module,
+    reason,
+  };
+}
+
+/**
  * Resolves `@agent-kit/payload`'s own built payload root, the one publish-time source for the
  * six shared libs. Every consumer that needs a `lib` copy, kit-owned modules and plugins alike,
- * derives it from here rather than from a copy the CLI's own payload used to carry.
+ * derives it from here, so there is one source for a lib copy rather than several.
  */
 function payloadLibRoot(): string {
   const require = createRequire(import.meta.url);
@@ -186,7 +213,6 @@ export const rule = kitBuilders.rule;
 export const reference = kitBuilders.reference;
 
 export const template = kitBuilders.template;
-export const file = kitBuilders.file;
 
 /**
  * The lib copies `actions` imply, given the sidecar a plugin's payload build wrote for it.

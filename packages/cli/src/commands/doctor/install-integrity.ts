@@ -22,8 +22,15 @@ function shippedScripts(dirs: string[]): Set<string> {
   for (const dir of dirs) {
     try {
       for (const f of readdirSync(dir)) if (f.endsWith('.mjs')) scripts.add(f);
-    } catch {
-      /* payload directory unreadable. Skip it for the retired-script check. */
+    } catch (error) {
+      // ENOENT (payload never built) is expected and silent. Anything else, most often a
+      // permission problem, means the retired-script scan below cannot tell "genuinely
+      // retired" from "could not check", so it is worth telling the user.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error(
+          `agent-kit: could not list ${dir} (${(error as Error).message}). Its scripts may be misreported as retired.`,
+        );
+      }
     }
   }
   return scripts;
@@ -58,7 +65,7 @@ export function checkInstallIntegrity(
   if (manifest.kitVersion !== kitVersion) {
     findings.push({
       level: 'WARN',
-      msg: `installed kit v${manifest.kitVersion}, this CLI is v${kitVersion} — run: npx agent-kit update`,
+      msg: `installed kit v${manifest.kitVersion}, this CLI is v${kitVersion}. Run: npx agent-kit update`,
     });
   }
   // Reference templates that got committed before the kit ignored them. File integrity

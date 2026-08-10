@@ -215,6 +215,28 @@ describe('measureResident', () => {
 
     expect(measureResident(root)?.tokens).toBe(100);
   });
+
+  it('stops following an @-import chain once the depth cap is passed', () => {
+    const root = useRepo('pnpm-single');
+    write(root, 'CLAUDE.md', '@docs/l1.md\n');
+    write(root, 'docs/l1.md', '@l2.md\n');
+    write(root, 'docs/l2.md', '@l3.md\n');
+    write(root, 'docs/l3.md', '@l4.md\n');
+    write(root, 'docs/l4.md', '@l5.md\n');
+    write(root, 'docs/l5.md', '@l6.md\n');
+    write(root, 'docs/l6.md', '@l7.md\n');
+    write(root, 'docs/l7.md', 'never reached\n');
+
+    expect(measureResident(root)?.imports).toBe(5);
+  });
+
+  it('terminates on a two-file @-import cycle instead of looping', () => {
+    const root = useRepo('pnpm-single');
+    write(root, 'CLAUDE.md', '@docs/a.md\n');
+    write(root, 'docs/a.md', '@../CLAUDE.md\n');
+
+    expect(measureResident(root)?.imports).toBe(1);
+  });
 });
 
 describe('measureSkillAgentDescriptions', () => {

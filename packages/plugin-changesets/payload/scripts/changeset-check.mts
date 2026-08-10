@@ -36,13 +36,22 @@ function signatureOf(paths: string[]): string {
 }
 
 // Best-effort: any failure (missing/corrupt file) means "no prior record", which
-// falls open to nudging — never to suppressing.
+// falls open to nudging — never to suppressing. A missing file is the ordinary first-run
+// case and stays silent. Anything else (corrupt JSON, a permission error) is unexpected,
+// so it gets a stderr line naming the failure — the fail-open behavior does not change,
+// but a reader watching stderr can now tell "nothing recorded yet" apart from "could not
+// read what was recorded."
 function readLastSignature(root: string): string | undefined {
+  const statePath = join(root, STATE_DIR, STATE_FILE);
+  if (!existsSync(statePath)) return undefined;
   try {
-    const raw = readFileSync(join(root, STATE_DIR, STATE_FILE), 'utf8');
+    const raw = readFileSync(statePath, 'utf8');
     const parsed = JSON.parse(raw) as { signature?: unknown };
     return typeof parsed.signature === 'string' ? parsed.signature : undefined;
-  } catch {
+  } catch (err) {
+    console.error(
+      `changeset-check: could not read ${STATE_FILE}, treating as no prior record: ${(err as Error).message}`,
+    );
     return undefined;
   }
 }
@@ -78,11 +87,21 @@ const isChangesetMd = (p: string): boolean =>
 // landed in an earlier commit. Naming them steers the next changeset into an --amend
 // instead of a second file for one feature.
 function listPendingChangesets(root: string): string[] {
+  const dir = join(root, '.changeset');
   try {
-    return readdirSync(join(root, '.changeset'))
+    return readdirSync(dir)
       .filter((f) => f.endsWith('.md') && !/^readme\.md$/i.test(f))
       .sort();
-  } catch {
+  } catch (err) {
+    // ENOENT is the ordinary "no .changeset/ dir yet" case, indistinguishable in effect
+    // from a genuinely empty one, so it stays silent. Anything else (permissions, a path
+    // collision) is unexpected and gets a stderr line, so it does not read the same as an
+    // empty pending list.
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error(
+        `changeset-check: could not list ${dir}: ${(err as Error).message}`,
+      );
+    }
     return [];
   }
 }

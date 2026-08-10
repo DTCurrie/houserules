@@ -33,11 +33,8 @@ export interface SettingsFragment {
   [key: string]: unknown;
 }
 
-export type SettingsChangeKind =
-  'permission' | 'hook' | 'remove-hook' | 'statusLine';
-
 export interface SettingsChange {
-  kind: SettingsChangeKind;
+  kind: 'permission' | 'hook' | 'remove-hook' | 'statusLine';
   detail: string;
 }
 
@@ -129,20 +126,26 @@ const SINGLE_VALUE_KEYS = ['statusLine'] as const;
  * historical stock form (see `KIT_STOCK_FORMATS`), which the kit upgrades in place and
  * reports. Everything else in the file passes through untouched.
  */
-export function mergeSettings(
-  existing: Settings | null,
+/** Sets a single-value key only when the user has none yet — never clobbers one they set. */
+function mergeSingleValueKeys(
+  merged: Settings,
   fragment: SettingsFragment,
-): { merged: Settings; changes: SettingsChange[] } {
-  const merged: Settings = structuredClone(existing ?? {});
-  const changes: SettingsChange[] = [];
-
+  changes: SettingsChange[],
+): void {
   for (const key of SINGLE_VALUE_KEYS) {
     if (fragment[key] === undefined) continue;
-    if (merged[key] !== undefined) continue; // user already has one — never clobber
+    if (merged[key] !== undefined) continue;
     merged[key] = structuredClone(fragment[key]);
     changes.push({ kind: key, detail: 'set (was unset)' });
   }
+}
 
+/** Adds each fragment permission entry as a set-union on exact strings, per allow/deny/ask list. */
+function mergePermissions(
+  merged: Settings,
+  fragment: SettingsFragment,
+  changes: SettingsChange[],
+): void {
   for (const list of ['allow', 'deny', 'ask'] as const) {
     const additions = fragment.permissions?.[list];
     if (!additions?.length) continue;
@@ -156,7 +159,17 @@ export function mergeSettings(
       changes.push({ kind: 'permission', detail: `${list}: ${entry}` });
     }
   }
+}
 
+/**
+ * Adds each fragment hook, upgrading a byte-for-byte historical stock command in place and
+ * leaving a user's edited variant or an already-present kit hook untouched.
+ */
+function mergeHooks(
+  merged: Settings,
+  fragment: SettingsFragment,
+  changes: SettingsChange[],
+): void {
   for (const [event, groups] of Object.entries(fragment.hooks ?? {})) {
     for (const group of groups) {
       for (const hook of group.hooks ?? []) {
@@ -197,6 +210,18 @@ export function mergeSettings(
       }
     }
   }
+}
+
+export function mergeSettings(
+  existing: Settings | null,
+  fragment: SettingsFragment,
+): { merged: Settings; changes: SettingsChange[] } {
+  const merged: Settings = structuredClone(existing ?? {});
+  const changes: SettingsChange[] = [];
+
+  mergeSingleValueKeys(merged, fragment, changes);
+  mergePermissions(merged, fragment, changes);
+  mergeHooks(merged, fragment, changes);
 
   return { merged, changes };
 }

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { runCli } from '#test/run';
@@ -46,6 +46,71 @@ module.exports = function payloadBackedPlugin() {
 `,
   );
 }
+
+function writeEscapingFixture(pluginDir: string): void {
+  mkdirSync(pluginDir, { recursive: true });
+  writeFileSync(
+    join(pluginDir, 'package.json'),
+    JSON.stringify({
+      name: '@agent-kit/plugin-fixture-escaping',
+      version: '1.0.0',
+      private: true,
+      main: 'index.cjs',
+    }),
+  );
+  writeFileSync(
+    join(pluginDir, 'index.cjs'),
+    `const { join } = require('node:path');
+module.exports = function escapingPlugin() {
+  return [
+    {
+      id: 'notes',
+      title: 'Notes',
+      group: 'optional',
+      hint: () => 'escaping fixture module',
+      defaultEnabled: () => true,
+      plan: () => [
+        {
+          module: 'notes',
+          kind: 'copy',
+          src: join(__dirname, '..', 'outside.md'),
+          dest: '.claude/rules/notes.md',
+          reason: 'fixture rule',
+        },
+      ],
+    },
+  ];
+};
+`,
+  );
+}
+
+describe('probe, given a plugin whose action src escapes the plugin package', () => {
+  let pluginDir: string;
+  let escapingSrc: string;
+
+  beforeEach(() => {
+    const workDir = mkdtempSync(join(tmpdir(), 'agent-kit-probe-escape-'));
+    pluginDir = join(workDir, 'plugin');
+    writeEscapingFixture(pluginDir);
+    escapingSrc = join(workDir, 'outside.md');
+  });
+
+  afterEach(() => {
+    rmSync(dirname(pluginDir), { recursive: true, force: true });
+  });
+
+  it('exits 1', () => {
+    expect(runCli(['probe', pluginDir]).status).toBe(1);
+  });
+
+  it('names the escaping src on stderr', () => {
+    const stderr = runCli(['probe', pluginDir]).stderr;
+
+    expect(stderr).toContain(`!! src escapes the plugin package: `);
+    expect(stderr).toContain(basename(escapingSrc));
+  });
+});
 
 describe('probe, given a package that loads', () => {
   let pluginDir: string;

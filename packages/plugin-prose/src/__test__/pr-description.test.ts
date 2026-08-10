@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf, settingsOf } from '#test/installed-tree';
+import { allHookCommands, manifestOf } from '#test/installed-tree';
 
 const PLUGIN_PROSE = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_PROSE, alias: 'prose' }];
@@ -66,16 +66,8 @@ describe('pr-description', () => {
   it('adds nothing to the always-loaded surface', () => {
     const root = installed();
 
-    const settings = settingsOf(root);
-    const commands = Object.values(settings.hooks ?? {}).flatMap(
-      (groups: any) =>
-        groups.flatMap((group: any) =>
-          group.hooks.map((hook: any) => hook.command),
-        ),
-    );
-    expect(commands.some((c: string) => c.includes('pr-description'))).toBe(
-      false,
-    );
+    const commands = allHookCommands(root);
+    expect(commands.some((c) => c.includes('pr-description'))).toBe(false);
     expect(
       readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('pr-description'),
     ).toBe(false);

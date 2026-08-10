@@ -50,11 +50,11 @@ function planAllActions(api: PluginApi, plugin: Plugin): Action[] {
 }
 
 describe('a plugin authored against @agent-kit/cli/plugin', () => {
-  it('returns at least two modules', async () => {
+  it('returns three modules', async () => {
     const plugin = await loadFixturePlugin();
     const modules = plugin(buildApi({ note: 'from config' }));
 
-    expect(modules.length).toBeGreaterThanOrEqual(2);
+    expect(modules.length).toBe(3);
   });
 
   it('emits every action kind across its modules', async () => {

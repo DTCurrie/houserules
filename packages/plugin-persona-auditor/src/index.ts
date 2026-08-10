@@ -31,7 +31,7 @@ function personaAuditorModule(api: PluginApi): ModuleDef {
         ),
         {
           kind: 'advise',
-          text: 'Persona audits: instantiate .claude/kit-templates/agents/persona-auditor.agent.md.template per component — it blind-ranks options from a persona before revealing the system choice (anti-anchoring is the point; keep it read-only + haiku).',
+          text: 'Persona audits: instantiate .claude/kit-templates/agents/persona-auditor.agent.md.template per component — it blind-ranks options from a persona before revealing the system choice (anti-anchoring is the point, so keep it read-only and haiku).',
           module: id,
         },
       ];

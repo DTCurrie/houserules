@@ -46,16 +46,22 @@ rustdoc in Rust.
 
 ### What form
 
-- **Exported symbols take TSDoc.** Anything a module exports is API for someone else. When it
-  needs a comment, that comment is a `/** ... */` block directly above it, never a stack of
-  `//` lines. Editors surface TSDoc on hover and at the call site. A `//` comment above an
-  export is invisible there.
+- **TSDoc is for the reader USING the code. `//` is for the reader READING it.** That is the
+  whole test, and it decides every case below. Ask where the information is needed. If a caller
+  needs it at the call site, it is TSDoc, because editors surface TSDoc on hover and a `//`
+  comment is invisible there. If it only makes sense to someone inside the implementation, it is
+  `//`.
+- **In practice that means TSDoc on most top-level definitions**, exported or not. Anything a
+  module exports is API for someone else, so it is the clearest case. A non-exported helper
+  called from a dozen places in a long module has call sites too, and its callers benefit from
+  hover exactly as much.
 - **Keep TSDoc to what the signature cannot say.** A one-sentence summary, then `@param`,
   `@returns`, or `@throws` only where they carry information the types do not. Never
   `@param name The name`. Skip the block entirely when the signature is the whole story, such
   as a getter, a re-export, or a predicate whose name says it all.
-- **Everything else takes `//`.** Non-exported helpers, and lines inside a function body. Put
-  the comment directly above the line it explains, not at the top of the block it lives in.
+- **`//` for context inside an implementation.** Lines inside a function body, and a definition
+  whose explanation would mean nothing at a call site. Put the comment directly above the line it
+  explains, not at the top of the block it lives in.
 - **Hard cap: 200 characters per `//` comment.** If you cannot explain it in 200 characters,
   the comment is documenting too much. Split it, link to a doc or a ticket, or rewrite the code
   to be clearer. TSDoc may run longer when the contract genuinely needs it, but three sentences

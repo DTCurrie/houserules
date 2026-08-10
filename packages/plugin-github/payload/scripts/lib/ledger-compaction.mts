@@ -5,7 +5,7 @@
  * repo's `.jsonl` is empty and its size tracks work outstanding rather than work done.
  *
  * The push queue must owe an entry nothing before it can be dropped, and that alone is not enough.
- * One of two further things has to be true. Either the index confirms the board actually has it, so
+ * One of two further things has to be true. Either the index confirms the board has it, so
  * a push that wrote its `synced` record but whose board write did not land cannot have the only
  * remaining copy eaten. Or the entry never synced at all, in which case there is no board copy for
  * the index to confirm and waiting on confirmation would keep it forever.

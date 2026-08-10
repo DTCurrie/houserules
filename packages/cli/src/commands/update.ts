@@ -11,6 +11,7 @@ import {
 } from '../detect.js';
 import type { Ctx } from '../detect.js';
 import { ledgerDirFor } from '../core/ledger-dir.js';
+import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import {
   assertOptionsRecorded,
   resolveModuleOptions,
@@ -95,6 +96,36 @@ function showNextSteps(
     );
 }
 
+/** Reports, without touching git, how many of `paths` a real run would untrack. */
+function reportWouldUntrack(
+  paths: string[],
+  category: string,
+  noun: string,
+  tail = '',
+): void {
+  if (paths.length)
+    ui.message(
+      `${category}: ${paths.length} committed ${noun} would be untracked from git (kept on disk).${tail}`,
+    );
+}
+
+/** Untracks `paths` from the git index, keeping the bytes on disk, and reports the count. */
+function untrackAndReport(
+  root: string,
+  paths: string[],
+  category: string,
+  noun: string,
+  tail = '',
+): number {
+  const count =
+    paths.length && untrackFromIndex(root, paths) ? paths.length : 0;
+  if (count)
+    ui.message(
+      `${category}: untracked ${count} ${noun} from git — kept on disk. Commit the staged removal to finish.${tail}`,
+    );
+  return count;
+}
+
 /**
  * Why the kept files differ, and how to see it for yourself.
  *
@@ -116,6 +147,58 @@ function showLocalEdits(root: string, dests: string[]): void {
 }
 
 /**
+ * Resolves the recorded module ids against the registry, gates on a retired module or an
+ * unrecorded option, and computes the plan. Both gates run before any plan exists, so
+ * `computePrune` can never see a plan that is missing a module's files: continuing past
+ * either would delete them and look identical to a deliberate removal.
+ *
+ * @throws KitError from any of the gates or from `computeEffects` itself, for the caller
+ *   to report and exit 1 on.
+ */
+function resolveUpdatePlan(
+  root: string,
+  ctx: Ctx,
+  registry: ReturnType<typeof buildRegistry>,
+  manifest: NonNullable<Ctx['claude']['manifest']>,
+  targets: Ctx['targets'],
+  flags: Flags,
+): { planResult: PlanResult; updateModuleIds: string[] } {
+  const recordedModuleIds = manifest.modules ?? ['core'];
+  // Resolution runs first. A pre-split manifest records bare ids that the registry no longer
+  // answers to, and buildPlan matches on the registered id, so leaving them bare would drop
+  // every plugin module's actions and prune its files. The gate runs on the resolved ids, and
+  // an id nothing supplies survives resolution unchanged, so it is still reported.
+  const updateModuleIds = resolveRecordedModuleIds(recordedModuleIds, registry);
+  assertNoRetiredModules(updateModuleIds, registry);
+  // Same placement rule as the retired-module gate above: before any plan exists, so the
+  // prune below can never be computed from a fallback selection the user never chose.
+  if (!flags.force) {
+    assertOptionsRecorded(
+      registry,
+      updateModuleIds,
+      ctx.claude.kitConfig?.moduleOptions,
+    );
+  }
+  const moduleOptions = resolveModuleOptions(
+    registry,
+    updateModuleIds,
+    ctx.claude.kitConfig?.moduleOptions,
+  );
+  const answers: Answers = {
+    moduleIds: updateModuleIds,
+    targets,
+    seedChangesetConfig: false,
+    moduleOptions,
+  };
+  const planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
+    manifest,
+    force: flags.force,
+    plugins: registry.plugins,
+  });
+  return { planResult, updateModuleIds };
+}
+
+/**
  * Refreshes kit-owned files to this kit version. Local edits are honored, so a manifest
  * hash mismatch skips the file unless `--force`. Files and hooks the current kit no
  * longer ships are pruned when they are kit-owned and unmodified. Genuinely-new default
@@ -132,10 +215,9 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     );
     return 1;
   }
-  if (ctx.claude.settingsParseError) {
-    console.error(
-      `.claude/settings.json is not valid JSON (${ctx.claude.settingsParseError}). Fix it by hand first.`,
-    );
+  const settingsError = settingsParseErrorMessage(ctx);
+  if (settingsError) {
+    console.error(settingsError);
     return 1;
   }
 
@@ -148,46 +230,18 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   const targets = ctx.claude.kitConfig?.targets?.length
     ? ctx.claude.kitConfig.targets
     : ctx.targets;
-  const recordedModuleIds = manifest.modules ?? ['core'];
 
   let planResult: PlanResult;
   let updateModuleIds: string[];
   try {
-    // Both of these are inside the KitError handler, and before any plan exists, so computePrune
-    // below can never see a plan that is missing a module's files. Continuing would delete them
-    // and look identical to a deliberate removal.
-    //
-    // Resolution runs first. A pre-split manifest records bare ids that the registry no longer
-    // answers to, and buildPlan matches on the registered id, so leaving them bare would drop
-    // every plugin module's actions and prune its files. The gate runs on the resolved ids, and
-    // an id nothing supplies survives resolution unchanged, so it is still reported.
-    updateModuleIds = resolveRecordedModuleIds(recordedModuleIds, registry);
-    assertNoRetiredModules(updateModuleIds, registry);
-    // Same placement rule as the retired-module gate above: before any plan exists, so the
-    // prune below can never be computed from a fallback selection the user never chose.
-    if (!flags.force) {
-      assertOptionsRecorded(
-        registry,
-        updateModuleIds,
-        ctx.claude.kitConfig?.moduleOptions,
-      );
-    }
-    const moduleOptions = resolveModuleOptions(
+    ({ planResult, updateModuleIds } = resolveUpdatePlan(
+      root,
+      ctx,
       registry,
-      updateModuleIds,
-      ctx.claude.kitConfig?.moduleOptions,
-    );
-    const answers: Answers = {
-      moduleIds: updateModuleIds,
-      targets,
-      seedChangesetConfig: false,
-      moduleOptions,
-    };
-    planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
       manifest,
-      force: flags.force,
-      plugins: registry.plugins,
-    });
+      targets,
+      flags,
+    ));
   } catch (e) {
     if (e instanceof KitError) {
       console.error(e.message);
@@ -225,7 +279,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     }
   }
 
-  // init unions new defaults, but update (the path people actually use) did not.
+  // init unions new defaults, but update (the path people use) did not.
   // Surface them, never enable them.
   // Against the resolved ids, not the recorded ones. A plugin module the repo already has is
   // recorded bare, so comparing against the manifest would advertise it as newly available.
@@ -275,24 +329,23 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     ctx.git.isRepo && !commitScripts ? trackedScriptFiles(root) : [];
 
   if (flags.dryRun) {
-    if (strayTemplates.length)
-      ui.message(
-        `kit-templates: ${strayTemplates.length} committed reference template(s) would be untracked from git (kept on disk).`,
-      );
-    if (strayScripts.length)
-      ui.message(
-        `scripts: ${strayScripts.length} committed hook script(s) would be untracked from git (kept on disk).`,
-      );
-    const dryLedgers = strayLedgerSurfaces(root, ctx);
-    if (dryLedgers.length)
-      ui.message(
-        `ledgers: ${dryLedgers.length} committed rendered file(s) would be untracked from git (kept on disk).`,
-      );
-    const dryLedgerLogs = strayLedgerLogs(root, ctx);
-    if (dryLedgerLogs.length)
-      ui.message(
-        `ledgers: ${dryLedgerLogs.length} committed ledger log(s) would be untracked from git (kept on disk). The GitHub Project is now the durable record, once \`projects-sync.mjs push\` has run.`,
-      );
+    reportWouldUntrack(
+      strayTemplates,
+      'kit-templates',
+      'reference template(s)',
+    );
+    reportWouldUntrack(strayScripts, 'scripts', 'hook script(s)');
+    reportWouldUntrack(
+      strayLedgerSurfaces(root, ctx),
+      'ledgers',
+      'rendered file(s)',
+    );
+    reportWouldUntrack(
+      strayLedgerLogs(root, ctx),
+      'ledgers',
+      'ledger log(s)',
+      ' The GitHub Project is now the durable record, once `projects-sync.mjs push` has run.',
+    );
     showLegacyLedgerHint(root);
     showNextSteps(planResult.advisories, flags);
     ui.outro('Dry run — nothing written.');
@@ -312,43 +365,26 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   );
   ui.written(written);
 
-  const untracked =
-    strayTemplates.length && untrackFromIndex(root, strayTemplates)
-      ? strayTemplates.length
-      : 0;
-  if (untracked)
-    ui.message(
-      `kit-templates: untracked ${untracked} reference template(s) from git — kept on disk; commit the staged removal to finish.`,
-    );
-
-  const untrackedScripts =
-    strayScripts.length && untrackFromIndex(root, strayScripts)
-      ? strayScripts.length
-      : 0;
-  if (untrackedScripts)
-    ui.message(
-      `scripts: untracked ${untrackedScripts} hook script(s) from git — kept on disk; commit the staged removal to finish.`,
-    );
-
-  const strayLedgers = strayLedgerSurfaces(root, ctx);
-  const untrackedLedgers =
-    strayLedgers.length && untrackFromIndex(root, strayLedgers)
-      ? strayLedgers.length
-      : 0;
-  if (untrackedLedgers)
-    ui.message(
-      `ledgers: untracked ${untrackedLedgers} rendered file(s) from git — kept on disk; commit the staged removal to finish.`,
-    );
-
-  const strayLogs = strayLedgerLogs(root, ctx);
-  const untrackedLedgerLogs =
-    strayLogs.length && untrackFromIndex(root, strayLogs)
-      ? strayLogs.length
-      : 0;
-  if (untrackedLedgerLogs)
-    ui.message(
-      `ledgers: untracked ${untrackedLedgerLogs} ledger log(s) from git — kept on disk; commit the staged removal to finish. The record now lives in the GitHub Project once \`projects-sync.mjs push\` has run.`,
-    );
+  untrackAndReport(
+    root,
+    strayTemplates,
+    'kit-templates',
+    'reference template(s)',
+  );
+  untrackAndReport(root, strayScripts, 'scripts', 'hook script(s)');
+  untrackAndReport(
+    root,
+    strayLedgerSurfaces(root, ctx),
+    'ledgers',
+    'rendered file(s)',
+  );
+  untrackAndReport(
+    root,
+    strayLedgerLogs(root, ctx),
+    'ledgers',
+    'ledger log(s)',
+    ' The record now lives in the GitHub Project once `projects-sync.mjs push` has run.',
+  );
 
   showLegacyLedgerHint(root);
   showNextSteps(planResult.advisories, flags);

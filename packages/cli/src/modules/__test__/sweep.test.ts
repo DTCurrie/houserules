@@ -23,10 +23,6 @@ describe('sweep', () => {
       );
     });
 
-    it('ships the /sweep skill', () => {
-      expect(skillText.length).toBeGreaterThan(0);
-    });
-
     it('documents the O(shards) discipline', () => {
       expect(skillText).toMatch(/O\(shards\)/);
     });

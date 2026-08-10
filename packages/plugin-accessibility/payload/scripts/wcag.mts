@@ -11,9 +11,8 @@
  * entry, either by number ("1.4.3") or by a case-insensitive match against criterion names.
  *
  * `applies` reads each file, matches it against lib/wcag-patterns.mjs's routing table, and
- * prints which patterns fired and which criteria they imply. The table routes, it does not
- * lint: a named criterion may not actually apply, and this never judges whether the markup
- * satisfies one. It only says which criteria are worth reading.
+ * prints which patterns fired and which criteria they imply, plus the over-inclusion note
+ * printed at the end of the run.
  */
 
 import { readFileSync, existsSync } from 'node:fs';

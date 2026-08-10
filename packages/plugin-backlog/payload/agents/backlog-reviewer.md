@@ -23,7 +23,7 @@ accumulate, not to do the work.
 3. **Worth-tracking gut-check.** A good entry is concrete, deferred, and actionable: a specific fix
    or improvement the project intends to do. Flag and recommend dropping vague wishlist items
    ("we should be better at X"), things already covered by an active plan, or work small enough it
-   should just be done now rather than tracked.
+   should be done now rather than tracked.
 4. **Scope.** The entry should be genuinely out-of-scope for the current change, not a way to defer
    something that belongs in the diff under review.
 

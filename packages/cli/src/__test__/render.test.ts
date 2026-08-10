@@ -64,14 +64,14 @@ describe('schemaRefFor', () => {
       rootPkg: { name: 'my-repo', dependencies: { react: '^18.0.0' } },
     });
     expect(schemaRefFor(ctx)).toBe(
-      'https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json',
+      'https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json',
     );
   });
 
   it('falls back to the published URL when there is no root package.json', () => {
     const ctx = makeCtx({ rootPkg: null });
     expect(schemaRefFor(ctx)).toBe(
-      'https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json',
+      'https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json',
     );
   });
 });

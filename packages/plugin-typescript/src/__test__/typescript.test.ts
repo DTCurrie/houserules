@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf, settingsOf } from '#test/installed-tree';
+import { allHookCommands, manifestOf } from '#test/installed-tree';
 
 const PLUGIN_TYPESCRIPT = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_TYPESCRIPT, alias: 'ts' }];
@@ -103,11 +103,8 @@ describe('typescript', () => {
       plugins: PLUGINS,
     });
 
-    const settings = settingsOf(root);
-    const cmds = Object.values(settings.hooks ?? {}).flatMap((groups: any) =>
-      groups.flatMap((g: any) => g.hooks.map((h: any) => h.command)),
-    );
-    expect(cmds.some((c: string) => c.includes('typescript'))).toBe(false);
+    const cmds = allHookCommands(root);
+    expect(cmds.some((c) => c.includes('typescript'))).toBe(false);
     expect(
       readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('typescript'),
     ).toBe(false);
@@ -149,8 +146,11 @@ describe('typescript', () => {
       join(root, '.claude/rules/typescript.md'),
       'utf8',
     );
-    expect(ruleText).toMatch(/Rethrow with `cause`/);
+    expect(ruleText).toMatch(
+      /Never drop a caught error\. Attach it as `cause`/,
+    );
     expect(ruleText).toMatch(/\{ cause: err \}/);
+    expect(ruleText).toMatch(/accept a\s+`cause` and forward it to `super`/);
   });
 
   it('enumerates every extension the rule frontmatter globs, in both the README and the advise text', () => {

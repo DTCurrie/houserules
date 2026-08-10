@@ -19,7 +19,7 @@ import type {
  */
 export function hookCommand(scriptName: string): string {
   const path = `"$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
-  return `[ -f ${path} ] && exec node ${path} || echo "[kit] ${scriptName} missing — run: npx agent-kit update"`;
+  return `[ -f ${path} ] && exec node ${path} || echo "[kit] ${scriptName} missing. Run: npx agent-kit update"`;
 }
 
 /** One settings fragment carrying a single hook entry. */

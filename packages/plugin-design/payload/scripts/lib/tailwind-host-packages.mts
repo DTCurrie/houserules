@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { isRecord } from './is-record.mjs';
+
 /**
  * A no-throw outcome, the same shape `SessionResult` uses in `cdp-session.mts`. Every entry
  * point here reports a missing or wrong-version package as a sentence a reader can act on,
@@ -14,7 +16,7 @@ export const TAILWIND_PACKAGE = 'tailwindcss';
 export const OXIDE_PACKAGE = '@tailwindcss/oxide';
 
 /** The plugin supports Tailwind v4 only, matching what `design.mjs extract` already reports. */
-export const SUPPORTED_TAILWIND_MAJOR = 4;
+const SUPPORTED_TAILWIND_MAJOR = 4;
 
 export interface HostPackage {
   /** Absolute path to the package directory inside the host repo. */
@@ -29,10 +31,6 @@ interface PackageManifest {
   main?: string;
   module?: string;
   exports?: unknown;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 /**

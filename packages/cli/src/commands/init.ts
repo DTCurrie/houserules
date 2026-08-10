@@ -17,6 +17,7 @@ import {
 } from '../plan.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import { apply } from '../apply.js';
+import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
 import type { Ctx } from '../detect.js';
@@ -42,7 +43,7 @@ function preflight(root: string, ctx: Ctx): void {
     );
   if (!ctx.git.isRepo) {
     throw new KitError(
-      `${root} is not a git work tree. Kit scripts resolve paths from the git root — run git init first.`,
+      `${root} is not a git work tree. Kit scripts resolve paths from the git root. Run git init first.`,
     );
   }
   // The payload's hooks resolve every path from the git toplevel, so a .claude/ written
@@ -58,11 +59,8 @@ function preflight(root: string, ctx: Ctx): void {
   }
   if (resolve(root) === KIT_ROOT)
     throw new KitError('Refusing to install the kit into itself.');
-  if (ctx.claude.settingsParseError) {
-    throw new KitError(
-      `.claude/settings.json is not valid JSON (${ctx.claude.settingsParseError}). Fix it by hand first.`,
-    );
-  }
+  const settingsError = settingsParseErrorMessage(ctx);
+  if (settingsError) throw new KitError(settingsError);
 }
 
 /** Runs the full install: detect, choose, plan, preview, apply. */
@@ -102,7 +100,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   }
   if (installed) {
     ui.message(
-      `This repo already has kit v${installed.kitVersion}. init re-plans with your existing module set as the default; for a plain refresh of kit-owned files use: npx agent-kit update`,
+      `This repo already has kit v${installed.kitVersion}. init re-plans with your existing module set as the default. For a plain refresh of kit-owned files use: npx agent-kit update`,
     );
   }
 

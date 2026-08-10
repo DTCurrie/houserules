@@ -100,7 +100,7 @@ function isUnderTestDir(relativePath: string): boolean {
 
 /**
  * Copies every `payload/<dir>` except `scripts` into `payload-dist/<dir>`, replacing whatever
- * was there. One entry per directory actually present under `payload/`, not a hand-listed set,
+ * was there. One entry per directory present under `payload/`, not a hand-listed set,
  * so a plugin adding a new surface directory ships without editing a build script
  * (AGENTKIT-b947e5).
  *
@@ -165,20 +165,23 @@ function payloadLibDir(cwd: string): string {
  * @throws When a rewritten file references a lib that does not exist in
  *   `@agent-kit/payload`'s `payload-dist/scripts/lib/`.
  */
-export function buildPayload(payloadRoot: string, cwd: string): void {
-  const files = walkMjsFiles(payloadRoot);
-
-  const rewrites = new Map<string, RewriteResult>();
-  for (const file of files) {
-    const source = readFileSync(file, 'utf8');
-    const result = rewriteImports(source, dirname(file), payloadRoot);
-    rewrites.set(file, result);
-  }
-
+/**
+ * Checks every rewrite against the libs `@agent-kit/payload` actually ships, and against
+ * the sidecar already on disk, before anything is written.
+ *
+ * @throws When a rewritten file references a lib that does not exist in
+ *   `@agent-kit/payload`'s `payload-dist/scripts/lib/`, or when the emitted output looks
+ *   stale (no `@agent-kit/payload` imports found, but the existing sidecar lists some).
+ */
+function validateRewrites(
+  payloadRoot: string,
+  rewrites: Map<string, RewriteResult>,
+  cwd: string,
+): PayloadImports['libs'] {
   const hasLibImports = [...rewrites.values()].some(
     (result) => result.libs.length > 0,
   );
-  // Only a plugin that actually imports a shared lib needs `@agent-kit/payload` resolvable, so
+  // Only a plugin that imports a shared lib needs `@agent-kit/payload` resolvable, so
   // this stays unresolved for the common case of a plugin with none.
   const libDir = hasLibImports ? payloadLibDir(cwd) : undefined;
 
@@ -215,6 +218,21 @@ export function buildPayload(payloadRoot: string, cwd: string): void {
         'Emitted output looks stale. Re-run tsc before this tool.',
     );
   }
+
+  return libs;
+}
+
+export function buildPayload(payloadRoot: string, cwd: string): void {
+  const files = walkMjsFiles(payloadRoot);
+
+  const rewrites = new Map<string, RewriteResult>();
+  for (const file of files) {
+    const source = readFileSync(file, 'utf8');
+    const result = rewriteImports(source, dirname(file), payloadRoot);
+    rewrites.set(file, result);
+  }
+
+  const libs = validateRewrites(payloadRoot, rewrites, cwd);
 
   for (const [file, result] of rewrites) {
     if (result.changed) writeFileSync(file, result.source);

@@ -3,30 +3,15 @@
  * GitHub Projects sync CLI.
  *
  * Usage:
- *   bootstrap [--dry-run]  # create or adopt one project per (backlog, decisions) x target
+ *   bootstrap [--dry-run]  # create or adopt one project per (backlog, decisions)
  *   push [--dry-run]       # drain the push queue to the live boards, then compact
  *   pull [--dry-run]       # rebuild the local index from the boards
  *   backfill [--dry-run]   # bring an existing board up to the current field schema
  *   compact [--dry-run]    # shrink the local ledgers to what a push still owes
- *   status                 # print the resolved project per ledger and target, and gate state
+ *   status                 # print the resolved project per ledger, and gate state
  *
- * Two gates, not one. `bootstrap`, `push`, and `backfill` WRITE to a board and need both the
- * local enable token and maintain or admin on the repository. `pull` only reads, so it needs
- * neither: a contributor who cannot sync can still hold an index and answer `scope` offline,
- * which is the whole reason the read gate exists separately.
- *
- * bootstrap writes the resolved project numbers and node ids to
- * <ledger dir>/.projects.json. That file is the local sync enable token: nothing else in
- * this package writes it, and its presence is one of the two conditions the sync gate
- * checks before any later push. bootstrap is the only verb allowed to run before that file
- * exists, since it is what creates it, but it still requires maintain or admin access on
- * the repository.
- *
- * push reads both ledgers, builds the queue of what has not reached the board yet, and
- * executes it op by op. It gets no gate exemption: with no enable token it refuses before
- * reading a single record. A failed op is recorded in a failure list and the run continues,
- * except a 403 or 404 from the project API, which ends the whole run immediately since
- * every remaining op would fail the same way.
+ * bootstrap, push, and backfill need the local enable token (<ledger dir>/.projects.json) and
+ * maintain or admin on the repository. pull needs neither. status prints the current gate state.
  *
  * --dry-run runs every read the same way a real run would, but prints each planned step
  * instead of creating, linking, or pushing anything.
@@ -92,11 +77,17 @@ import {
 import type { FieldSpec, LedgerKind } from './lib/project-shape.mjs';
 import {
   buildPushQueue,
+  describeOp,
+  resolveMarkSupersededItemId,
   summarizeQueue,
   syncedRecord,
 } from './lib/push-queue.mjs';
 import type { LedgerRecord, PushOp } from './lib/push-queue.mjs';
-import { fieldValueLiteral, fieldValuesFor } from './lib/item-fields.mjs';
+import {
+  backfillFieldValue,
+  fieldValueLiteral,
+  fieldValuesFor,
+} from './lib/item-fields.mjs';
 import type { FieldValue } from './lib/item-fields.mjs';
 import {
   compactBacklog,
@@ -558,7 +549,7 @@ function readPushQueue(): PushOp[] {
  * nothing else in this package reads it. Backfill is the one place that does.
  */
 function recordUnder(record: LedgerRecord): string | null {
-  return (record as unknown as { under?: string }).under ?? null;
+  return (record as { under?: string }).under ?? null;
 }
 
 /**
@@ -674,10 +665,10 @@ function planCompaction(): {
 /**
  * Replaces a ledger with its compacted records.
  *
- * No backup is kept beside it. A one-generation `.bak` used to be written here, but the next
- * compaction overwrote it before anyone could read it, so it promised a recovery it could never
- * deliver. The temp-plus-rename below is the real safety: an interruption at any point leaves
- * either the original or a complete replacement and never a half-written ledger.
+ * No backup is kept beside it. A single-generation backup would be overwritten by the next
+ * compaction before anyone could read it, so it would promise a recovery it could never deliver.
+ * The temp-plus-rename below is the real safety: an interruption at any point leaves either the
+ * original or a complete replacement and never a half-written ledger.
  */
 function writeCompactedLedger(
   path: string,
@@ -1221,30 +1212,12 @@ function handleUpdateDraft(
   return ghOk({ itemId: op.itemId });
 }
 
-/**
- * `op.itemId` is null when the superseded entry has no prior sync record, which is the
- * ordinary case on a first push: it is created and flipped in the same run. The item id then
- * comes from `ctx.createdDraftItems`, populated as each `create-draft` in this run succeeds.
- */
-function resolveMarkSupersededItemId(
-  op: MarkSupersededOp,
-  ctx: PushContext,
-): GhResult<string> {
-  if (op.itemId !== null) return ghOk(op.itemId);
-  const created = ctx.createdDraftItems.get(op.entryId);
-  return created
-    ? ghOk(created)
-    : ghErr(
-        `cannot mark ${op.entryId} superseded: its item id is unknown, its create-draft failed earlier this run`,
-      );
-}
-
 function handleMarkSuperseded(
   op: MarkSupersededOp,
   project: ResolvedProject,
   ctx: PushContext,
 ): GhResult<SyncResult> {
-  const itemId = resolveMarkSupersededItemId(op, ctx);
+  const itemId = resolveMarkSupersededItemId(op, ctx.createdDraftItems);
   if (!itemId.ok) return itemId;
   const fields = setFieldValues(project, itemId.value, fieldValuesFor(op));
   if (!fields.ok) return fields;
@@ -1286,17 +1259,10 @@ function toOutcome(result: GhResult<SyncResult>): OpOutcome {
 }
 
 /**
- * A backlog `report-move` adds the already-synced issue to the new board, since a moved entry
- * is still the same issue. A decision `report-move` mutates nothing: a draft cannot move
- * between boards, so this only reports the surface it cannot reach and leaves the entry as is.
- */
-/**
  * Re-files an entry that moved to another surface.
  *
  * With one board per ledger a move never changes which board an item sits on, so this sets the
- * item's `Area` and nothing else. It used to add the issue to a second board, and to refuse a
- * decision move outright with "a decision cannot move between project boards", both of which were
- * true only while a board existed per target.
+ * item's `Area` and nothing else.
  *
  * A backlog item is found by its issue. A decision draft has no issue, so it is found by the item
  * id the index recorded, which is why this op is one of the reasons push reads the index at all.
@@ -1357,15 +1323,6 @@ function executeOp(
     };
   }
   return toOutcome(runMutatingOp(op, project, ctx));
-}
-
-function describeOp(op: PushOp): string {
-  if (op.op === 'report-move') {
-    return op.issue === null
-      ? `report-move ${op.entryId}: decision cannot move to ${op.toSurface}`
-      : `report-move ${op.entryId}: add issue #${op.issue} to ${op.toSurface}`;
-  }
-  return `${op.op} ${op.entryId} (${op.kind}) -> ${op.surface}`;
 }
 
 function executePushQueue(
@@ -1436,15 +1393,6 @@ function runPush(dryRun: boolean): void {
 interface ItemContent {
   kind: 'draft' | 'issue';
   id: string;
-}
-
-/** Which project field names on the boards this plugin creates hold a date rather than text. */
-const DATE_FIELD_NAMES: ReadonlySet<string> = new Set(['Filed', 'Decided']);
-
-function backfillFieldValue(field: string, value: string): FieldValue {
-  return DATE_FIELD_NAMES.has(field)
-    ? { field, kind: 'date', value }
-    : { field, kind: 'text', value };
 }
 
 /**
@@ -1650,17 +1598,19 @@ function pullKind(
  * the same deterministic title `bootstrap` adopts by, so a contributor with read access but no
  * token still resolves the real boards rather than guessing at them. A title that matches
  * nothing is skipped and printed, since a repo nobody has bootstrapped yet is not an error.
+ * Returns `null` when the owner's projects could not even be listed, which the caller must not
+ * treat the same as an empty match, since one is a transient failure and the other is not.
  */
 function resolveBoardsByTitle(
   owner: string,
   repo: string,
-): Record<string, ResolvedProject> {
+): Record<string, ResolvedProject> | null {
   const ownerProjects = fetchOwnerProjects(owner);
   if (!ownerProjects.ok) {
     console.error(
       `could not list projects for ${owner}: ${ownerProjects.message}`,
     );
-    return {};
+    return null;
   }
 
   const resolved: Record<string, ResolvedProject> = {};
@@ -1688,7 +1638,7 @@ function resolveBoardsByTitle(
 function resolveBoardsForPull(
   owner: string,
   repo: string,
-): Record<string, ResolvedProject> {
+): Record<string, ResolvedProject> | null {
   const token = readEnableToken();
   return token ?? resolveBoardsByTitle(owner, repo);
 }
@@ -1728,7 +1678,7 @@ function runPull(dryRun: boolean): void {
   checkReadGate();
 
   const resolved = resolveBoardsForPull(owner, repo);
-  if (Object.keys(resolved).length === 0) {
+  if (resolved === null || Object.keys(resolved).length === 0) {
     console.log(
       'No project boards were found for this repo. A maintainer runs `bootstrap` once to create them.',
     );
@@ -1764,7 +1714,7 @@ function usage(): void {
       '  projects-sync.mjs pull [--dry-run]',
       '  projects-sync.mjs status',
       '',
-      'bootstrap creates or adopts one GitHub Project per (backlog, decisions) x target,',
+      'bootstrap creates or adopts one GitHub Project per (backlog, decisions),',
       'and writes the resolved project numbers to <ledger dir>/.projects.json. That file',
       'is the local token that enables pushing entries to the board.',
       'push drains the queue of ledger entries that have not reached the board yet, then',

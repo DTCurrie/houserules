@@ -5,17 +5,44 @@ import {
   parseColor,
   parseDimension,
   toMeasurableSrgb,
-} from '../../payload/scripts/lib/dtcg-normalize.mts';
+} from '../dtcg-normalize.mts';
 import {
   extractTailwindThemeCandidates,
   hasTailwindV3Config,
-} from '../../payload/scripts/lib/tailwind-theme.mts';
-import { extractCssCustomProperties } from '../../payload/scripts/lib/css-custom-properties.mts';
-import { collectStyleTokenCandidates } from '../../payload/scripts/lib/style-literals.mts';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+} from '../tailwind-theme.mts';
+import {
+  extractCssCustomProperties,
+  readCssCustomProperties,
+} from '../css-custom-properties.mts';
+import { collectStyleTokenCandidates } from '../style-literals.mts';
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { onTestFinished } from 'vitest';
+
+function chmodMakesFileUnreadable(): boolean {
+  const dir = mkdtempSync(join(tmpdir(), 'token-readers-chmod-'));
+  const probe = join(dir, 'probe.css');
+  writeFileSync(probe, 'x');
+  chmodSync(probe, 0o000);
+  try {
+    readFileSync(probe, 'utf8');
+    return false;
+  } catch {
+    return true;
+  } finally {
+    chmodSync(probe, 0o644);
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const CHMOD_ENFORCES_UNREADABLE = chmodMakesFileUnreadable();
 
 describe('parseColor', () => {
   it('expands a 3-digit hex to its 6-digit srgb components', () => {
@@ -243,6 +270,12 @@ describe('hasTailwindV3Config', () => {
   it('reports true for a tailwind.config.ts path', () => {
     expect(hasTailwindV3Config(['/repo/tailwind.config.ts'])).toBe(true);
   });
+
+  it('reports false when no path is a v3 config', () => {
+    expect(
+      hasTailwindV3Config(['/repo/src/app.css', '/repo/package.json']),
+    ).toBe(false);
+  });
 });
 
 describe('extractCssCustomProperties', () => {
@@ -313,6 +346,31 @@ describe('extractCssCustomProperties', () => {
 
     expect(fromRoot[0].name).toBe(fromTheme[0].name);
   });
+});
+
+describe('readCssCustomProperties', () => {
+  it('reports nothing and no unreadable files for a missing path', () => {
+    const result = readCssCustomProperties(['/does/not/exist.css']);
+
+    expect(result.candidates).toEqual([]);
+    expect(result.unreadableFiles).toEqual([]);
+  });
+
+  it.skipIf(!CHMOD_ENFORCES_UNREADABLE)(
+    'names an existing but unreadable file in unreadableFiles, distinct from a missing one',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'token-readers-unreadable-'));
+      onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
+      const path = join(dir, 'styles.css');
+      writeFileSync(path, ':root { --space-md: 1rem; }');
+      chmodSync(path, 0o000);
+
+      const result = readCssCustomProperties([path]);
+
+      expect(result.candidates).toEqual([]);
+      expect(result.unreadableFiles).toEqual([path]);
+    },
+  );
 });
 
 function styleFile(cssText: string): string {
@@ -388,4 +446,28 @@ describe('collectStyleTokenCandidates', () => {
     expect(candidates).toHaveLength(16);
     expect(droppedCount).toBe(2);
   });
+
+  it('names a missing path in unreadableFiles, since it could not be read either', () => {
+    const { candidates, unreadableFiles } = collectStyleTokenCandidates([
+      '/does/not/exist.css',
+    ]);
+
+    expect(candidates).toEqual([]);
+    expect(unreadableFiles).toEqual(['/does/not/exist.css']);
+  });
+
+  it.skipIf(!CHMOD_ENFORCES_UNREADABLE)(
+    'names an existing but unreadable file in unreadableFiles, distinct from a missing one',
+    () => {
+      const path = styleFile('.a { padding: 8px; } .b { padding: 8px; }');
+      chmodSync(path, 0o000);
+
+      const { candidates, unreadableFiles } = collectStyleTokenCandidates([
+        path,
+      ]);
+
+      expect(candidates).toEqual([]);
+      expect(unreadableFiles).toEqual([path]);
+    },
+  );
 });

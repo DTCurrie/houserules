@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PushOp } from '../push-queue.mjs';
-import { fieldValueLiteral, fieldValuesFor } from '../item-fields.mjs';
+import {
+  backfillFieldValue,
+  fieldValueLiteral,
+  fieldValuesFor,
+} from '../item-fields.mjs';
 import { areaForSurface } from '../project-shape.mjs';
 
 const backlogOpBase = {
@@ -337,5 +341,31 @@ describe('provenance a pulled index cannot derive from the item', () => {
     const op: PushOp = { ...BASE, chat: null, op: 'create-issue' };
 
     expect(fieldValuesFor(op).filter((v) => v.field === 'Chat')).toEqual([]);
+  });
+});
+
+describe('backfillFieldValue', () => {
+  it('writes Filed as a date field', () => {
+    expect(backfillFieldValue('Filed', '2026-08-08')).toEqual({
+      field: 'Filed',
+      kind: 'date',
+      value: '2026-08-08',
+    });
+  });
+
+  it('writes Decided as a date field', () => {
+    expect(backfillFieldValue('Decided', '2026-08-08')).toEqual({
+      field: 'Decided',
+      kind: 'date',
+      value: '2026-08-08',
+    });
+  });
+
+  it('writes any other field as text', () => {
+    expect(backfillFieldValue('Scope', 'packages/cli')).toEqual({
+      field: 'Scope',
+      kind: 'text',
+      value: 'packages/cli',
+    });
   });
 });

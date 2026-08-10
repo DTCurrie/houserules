@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json",
+  "$id": "https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json",
   "title": "agent-kit config",
   "description": "Per-repo configuration for agent-kit (.claude/kit.config.json).",
   "type": "object",
@@ -251,7 +251,7 @@
             "description": "Human label, e.g. \"Core\"."
           },
           "fixCommands": {
-            "description": "Per-target override of fix.commands — real repos diverge.",
+            "description": "Per-target override of fix.commands. Real repos diverge.",
             "anyOf": [
               { "type": "array", "items": { "type": "string" } },
               { "type": "null" }

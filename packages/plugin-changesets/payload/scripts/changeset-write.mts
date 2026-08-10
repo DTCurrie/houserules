@@ -13,15 +13,15 @@
  *   echo "summary" | changeset-write.mjs --pkg <name>
  *
  * Options:
- *   --pkg name[:level]  package to bump; repeatable. Level defaults to --level.
+ *   --pkg name[:level]  package to bump. Repeatable. Level defaults to --level.
  *   --level <l>         default bump level for --pkg entries without one (patch).
- *   --summary "..."     changelog body; read from stdin when omitted and piped.
+ *   --summary "..."     changelog body. Read from stdin when omitted and piped.
  *   --empty             record "no release needed" (no packages bumped).
  *   --amend <id>        rewrite a pending .changeset/<id>.md in place instead of adding
  *                       a new one, for a feature that already has a changeset. Its
  *                       declared bumps are kept and merged with any --pkg given.
- *   --absorb <id>       fold another pending changeset into --amend and delete it;
- *                       repeatable. Requires --amend. The survivor's bumps are the
+ *   --absorb <id>       fold another pending changeset into --amend and delete it.
+ *                       Repeatable. Requires --amend. The survivor's bumps are the
  *                       union of its own, every absorbed file's, and any --pkg given,
  *                       at the highest level named for each package.
  *

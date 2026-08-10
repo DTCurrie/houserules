@@ -12,6 +12,8 @@
 
 import type { LedgerKind } from './project-shape.mjs';
 import type { LedgerEntry } from '@agent-kit/payload/ledger-index';
+import type { GhResult } from './gh.mjs';
+import { ghErr, ghOk } from './gh.mjs';
 
 /** The board `Status` values that mean an entry is finished, per kind. */
 const CLOSED_BACKLOG_STATUS = 'Done';
@@ -295,9 +297,9 @@ export function isRemovedBeforeSync(state: BacklogState): boolean {
 /**
  * Every backlog entry's final state, in first-`add` order.
  *
- * Exported so compaction decides what to drop from the same fold the queue is built from. Two
- * folds of one ledger would drift, and the drift would show up as an entry that compaction
- * believes is finished and push believes is pending.
+ * Feeds `foldBacklog`, which is exported so compaction decides what to drop from the same fold
+ * the queue is built from. Two folds of one ledger would drift, and the drift would show up as
+ * an entry that compaction believes is finished and push believes is pending.
  */
 function backlogStateFromIndex(entry: LedgerEntry): BacklogState {
   const closed = entry.status === CLOSED_BACKLOG_STATUS;
@@ -507,9 +509,9 @@ function markSupersededOps(
 /**
  * Every decision's final state, in first-birth order, with the supersede targets each one names.
  *
- * The counterpart to {@link foldBacklog}, and exported for the same reason. A decision is never
- * terminal: a synced, unedited one emits nothing, but `markSupersededOps` still resolves supersede
- * targets out of this map, so dropping one would silently strand a later flip.
+ * The counterpart to {@link foldBacklog}, feeding {@link foldDecisions} for the same reason. A
+ * decision is never terminal: a synced, unedited one emits nothing, but `markSupersededOps` still
+ * resolves supersede targets out of this map, so dropping one would silently strand a later flip.
  */
 function decisionStateFromIndex(entry: LedgerEntry): DecisionState {
   return {
@@ -598,6 +600,37 @@ export function buildPushQueue(
     ...buildBacklogQueue(backlog, backlogIndex),
     ...buildDecisionsQueue(decisions, decisionsIndex),
   ];
+}
+
+/**
+ * The board item id a `mark-superseded` op should flip, given what earlier ops in the same run
+ * have created.
+ *
+ * `op.itemId` is null when the superseded record is created earlier in this same queue, the
+ * ordinary case on a first push. `createdDraftItems` is the executor's running record of what
+ * each entry id landed as, so a null resolves against that instead of failing outright.
+ */
+export function resolveMarkSupersededItemId(
+  op: { itemId: string | null; entryId: string },
+  createdDraftItems: ReadonlyMap<string, string>,
+): GhResult<string> {
+  if (op.itemId !== null) return ghOk(op.itemId);
+  const created = createdDraftItems.get(op.entryId);
+  return created
+    ? ghOk(created)
+    : ghErr(
+        `cannot mark ${op.entryId} superseded: its item id is unknown, its create-draft failed earlier this run`,
+      );
+}
+
+/** One line per op, for `push --dry-run`. */
+export function describeOp(op: PushOp): string {
+  if (op.op === 'report-move') {
+    return op.issue === null
+      ? `report-move ${op.entryId}: decision cannot move to ${op.toSurface}`
+      : `report-move ${op.entryId}: add issue #${op.issue} to ${op.toSurface}`;
+  }
+  return `${op.op} ${op.entryId} (${op.kind}) -> ${op.surface}`;
 }
 
 /** Pending counts per ledger, without building the full queue. */

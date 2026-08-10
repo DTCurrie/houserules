@@ -6,6 +6,7 @@ import {
   TAILWIND_PACKAGE,
 } from './tailwind-host-packages.mjs';
 import type { TailwindResult } from './tailwind-host-packages.mjs';
+import { isRecord } from './is-record.mjs';
 
 /** Matches `@import "tailwindcss"`, the single-quote form, and a subpath such as `tailwindcss/theme`. */
 const TAILWIND_IMPORT_PATTERN = /@import\s+["']tailwindcss(?:\/[^"']*)?["']/;
@@ -14,7 +15,7 @@ const TAILWIND_IMPORT_PATTERN = /@import\s+["']tailwindcss(?:\/[^"']*)?["']/;
  * `ThemeOptions.DEFAULT` from Tailwind's own theme flags: set on a token that came from
  * Tailwind's built-in palette rather than the repo's own `@theme` block.
  */
-export const THEME_OPTION_DEFAULT = 4;
+const THEME_OPTION_DEFAULT = 4;
 
 export interface TailwindTheme {
   size: number;
@@ -35,10 +36,6 @@ export interface ThemeEntryCss {
   path: string;
   /** Any further files that also import Tailwind, so a caller can report the count. */
   alternates: string[];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 function shapeGuardMessage(member: string, version: string): string {
@@ -106,11 +103,13 @@ export function findThemeEntryCss(
   cssFilePaths: string[],
 ): TailwindResult<ThemeEntryCss> {
   const matches: string[] = [];
+  const unreadable: string[] = [];
   for (const path of cssFilePaths) {
     let text: string;
     try {
       text = readFileSync(path, 'utf8');
     } catch {
+      unreadable.push(path);
       continue;
     }
     if (TAILWIND_IMPORT_PATTERN.test(text)) matches.push(path);
@@ -118,6 +117,12 @@ export function findThemeEntryCss(
 
   const [path, ...alternates] = matches;
   if (path === undefined) {
+    if (unreadable.length > 0) {
+      return {
+        ok: false,
+        error: `${unreadable.length} of ${cssFilePaths.length} CSS file(s) could not be read (e.g. ${unreadable[0]}), so tailwindcss could not be located among them.`,
+      };
+    }
     return {
       ok: false,
       error: `No CSS file imports "tailwindcss" among ${cssFilePaths.length} file(s) checked.`,

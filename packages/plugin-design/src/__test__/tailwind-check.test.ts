@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
 
@@ -48,5 +50,20 @@ describe('checkTailwindAvailable', () => {
       'npm install -D @tailwindcss/vite@^4',
     );
     expect(result.readouts).toEqual([]);
+  });
+
+  it('warns that the manifest could not be parsed, distinctly from "not found", when tailwindcss is installed but its package.json is corrupt', () => {
+    const root = useBareRepo();
+    const manifestDir = join(root, 'node_modules', 'tailwindcss');
+    mkdirSync(manifestDir, { recursive: true });
+    writeFileSync(join(manifestDir, 'package.json'), '{ not json');
+
+    const result = checkTailwindAvailable(ctxAt(root));
+
+    const tailwindFinding = result.findings.find((finding) =>
+      finding.msg.includes('tailwindcss'),
+    );
+    expect(tailwindFinding?.msg).toContain('could not be parsed');
+    expect(tailwindFinding?.msg).not.toContain('tailwindcss not found');
   });
 });

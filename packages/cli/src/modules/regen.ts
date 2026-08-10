@@ -42,7 +42,7 @@ export function plan(): Action[] {
     },
     {
       kind: 'advise',
-      text: 'Regen-on-edit on: add a `regen` block to a target in .claude/kit.config.json — { "sourceGlob": "<glob>", "command": "<generator>" }. Keep the command fast; it runs on every matching edit.',
+      text: 'Regen-on-edit on: add a `regen` block to a target in .claude/kit.config.json — { "sourceGlob": "<glob>", "command": "<generator>" }. Keep the command fast. It runs on every matching edit.',
       module: id,
     },
   ];

@@ -30,7 +30,12 @@ function readPackageJson(dir: string): PackageJson | null {
     return JSON.parse(
       readFileSync(join(dir, 'package.json'), 'utf8'),
     ) as PackageJson;
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error(
+        `agent-kit: could not read ${join(dir, 'package.json')} (${(error as Error).message}). Treating ${dir} as if it were not a package.`,
+      );
+    }
     return null;
   }
 }

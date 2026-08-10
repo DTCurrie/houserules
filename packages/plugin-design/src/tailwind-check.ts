@@ -30,6 +30,11 @@ interface ResolvedPackage {
   major: number;
 }
 
+type PackageResolution =
+  | { status: 'not-found' }
+  | { status: 'unreadable'; manifestPath: string }
+  | ({ status: 'resolved' } & ResolvedPackage);
+
 /**
  * Finds `node_modules/<packageName>/package.json` by walking from `root` up through its
  * ancestor directories, stopping at the filesystem root.
@@ -61,9 +66,9 @@ function findPackageManifest(
 function resolvePackageVersion(
   root: string,
   packageName: string,
-): ResolvedPackage | undefined {
+): PackageResolution {
   const manifestPath = findPackageManifest(root, packageName);
-  if (!manifestPath) return undefined;
+  if (!manifestPath) return { status: 'not-found' };
 
   try {
     const manifest: unknown = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -73,13 +78,13 @@ function resolvePackageVersion(
       !('version' in manifest) ||
       typeof manifest.version !== 'string'
     ) {
-      return undefined;
+      return { status: 'unreadable', manifestPath };
     }
     const major = Number.parseInt(manifest.version.split('.')[0] ?? '', 10);
-    if (Number.isNaN(major)) return undefined;
-    return { version: manifest.version, major };
+    if (Number.isNaN(major)) return { status: 'unreadable', manifestPath };
+    return { status: 'resolved', version: manifest.version, major };
   } catch {
-    return undefined;
+    return { status: 'unreadable', manifestPath };
   }
 }
 
@@ -98,10 +103,18 @@ export function checkTailwindAvailable(ctx: Ctx): CheckResult {
 
   for (const tailwindPackage of TAILWIND_PACKAGES) {
     const resolved = resolvePackageVersion(ctx.root, tailwindPackage.name);
-    if (!resolved) {
+    if (resolved.status === 'not-found') {
       findings.push({
         level: 'WARN',
         msg: `design: ${tailwindPackage.name} not found, so ${tailwindPackage.purpose} is unavailable to design-tailwind. Install it: ${tailwindPackage.installHint}`,
+      });
+      continue;
+    }
+
+    if (resolved.status === 'unreadable') {
+      findings.push({
+        level: 'WARN',
+        msg: `design: ${tailwindPackage.name}'s package.json at ${resolved.manifestPath} could not be parsed, so its version could not be confirmed. Reinstall it: ${tailwindPackage.installHint}`,
       });
       continue;
     }

@@ -196,7 +196,16 @@ Send every slice in the wave as parallel `Agent` calls **in a single message**, 
 
 Mark the slices `DISPATCHED` before you send.
 
-`task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice:
+`task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice,
+and **never restates or overrides a standing rule**. A brief that contradicts one silently disarms
+it, and the only thing standing between that and a corrupted wave is a worker with the judgment to
+refuse.
+
+The one most often violated is the fixer prohibition. `task-worker.md` says a worker does not run
+lint, format, or fix commands, because a fixer rewrites files its siblings still have open. A
+verification recipe written for in-context work says the opposite, and copying that recipe into a
+brief is the easiest mistake in this skill. **The fixer runs once, at the barrier (§7), and never
+in a worker.**
 
 > **Slice `<id>` — `<name>`.** Objective: `<the falsifiable done>`.
 > You own **only** these paths: `<owns>`. Do not edit anything outside them.

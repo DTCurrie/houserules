@@ -3,15 +3,11 @@
  * SessionEnd hook. Fires when a session ends, on `/clear`, and on `/resume`, so it can run
  * several times per CLI process.
  *
- * All SessionEnd hooks share one 1.5 second budget and cannot block termination, so this
- * script never awaits the sync itself. It runs a handful of cheap local checks and, only when
- * every one of them says there is real work, spawns `projects-sync.mjs push` fully detached
- * and returns immediately. It never calls the GitHub permission API itself, since `push`
- * already does that and a network round trip here would blow the budget.
- *
- * A contributor who never opted in must see no evidence the integration exists, so every
- * silent-return path writes nothing at all, not even a log line. Wrapped so it can never
- * crash and never exits non-zero.
+ * Never awaits the sync: runs a handful of cheap local checks and, only when every one of them
+ * says there is real work, spawns `projects-sync.mjs push` fully detached and returns
+ * immediately, inside the shared 1.5 second SessionEnd budget. A contributor who never opted in
+ * sees no evidence the integration exists, so every silent-return path writes nothing at all,
+ * not even a log line. Always exits 0.
  */
 
 import {
@@ -115,6 +111,8 @@ function spawnPush(root: string): void {
   }
 }
 
+// No GitHub permission check here: push already does it, and a network round trip inside the
+// hook's shared budget would blow it.
 function run(): void {
   const root = repoRoot();
   const config = loadConfigSafe();

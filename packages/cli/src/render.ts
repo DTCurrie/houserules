@@ -88,8 +88,6 @@ export function verifyDefaultsFor(
  * copy to point at, so it gets the published URL instead of a path resolving to nothing.
  *
  * The dependency probed here is the package name, `@agent-kit/cli`, not the binary name.
- * An earlier version probed the bare binary name, which was never a published package, so
- * the local-path branch could not fire for anyone.
  */
 export function schemaRefFor(ctx: Ctx): string {
   const deps = {
@@ -98,12 +96,12 @@ export function schemaRefFor(ctx: Ctx): string {
   };
   return '@agent-kit/cli' in deps
     ? '../node_modules/@agent-kit/cli/schema/kit.config.schema.json'
-    : 'https://github.com/DTCurrie/agent-kit/schema/kit.config.schema.json';
+    : 'https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json';
 }
 
 /**
  * Seeds `.claude/kit.config.json` from detected facts. A seeded file is immediately
- * valid, carrying at most `<!-- TODO -->` comments and never a raw placeholder.
+ * valid JSON, carrying no comments and never a raw placeholder.
  */
 export function renderKitConfig(ctx: Ctx, answers: Answers): string {
   const has = (id: string) => hasModule(answers.moduleIds, id);
@@ -365,7 +363,9 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
     '  for the user. No browser/screenshot verification unless explicitly asked.',
     '- Run those gates in order: format first, since it rewrites in place and settles the mechanical',
     '  noise, then lint with autofix so only real problems are left, then typecheck and test. Scope',
-    '  each command to the packages you actually changed.',
+    '  each command to the packages you changed. This order is for work you do yourself.',
+    '  When subagents are editing in parallel, the fixer runs once after they report, never inside',
+    '  one of them, since it rewrites files their siblings still have open.',
     '- **"Done" means every check passed, not that the edits were made.** Report a check that failed',
     '  or never ran, with its output. Never claim success over one you did not see pass.',
     '- Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.',

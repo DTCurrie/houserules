@@ -52,8 +52,27 @@ if (isPayload(data)) {
   `never`, so a new variant fails at compile time instead of at runtime.
 - **`@ts-expect-error`, not `@ts-ignore`.** `@ts-expect-error` fails once the error stops
   occurring. `@ts-ignore` suppresses forever.
-- **Rethrow with `cause`.** `throw new Error('...', { cause: err })` keeps the original error
-  instead of dropping it.
+- **Never drop a caught error. Attach it as `cause`.** Inside a `catch`, throwing anything without
+  passing the error you caught loses the stack and the underlying message.
+  `throw new Error('...', { cause: err })` keeps it. This covers throwing a **new** error, which is
+  the common case, not only re-throwing the same object. A custom error class has to accept a
+  `cause` and forward it to `super`, or none of its call sites can obey this rule.
+
+```typescript
+// BAD — the original error is gone
+try {
+  parse(raw);
+} catch {
+  throw new ConfigError('config is invalid');
+}
+
+// GOOD — the caller can still see what actually failed
+try {
+  parse(raw);
+} catch (err) {
+  throw new ConfigError('config is invalid', { cause: err });
+}
+```
 
 ### Where other rules apply
 

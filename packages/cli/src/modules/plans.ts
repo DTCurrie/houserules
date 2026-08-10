@@ -1,6 +1,6 @@
 import type { Action } from '../actions.js';
 import type { ModuleGroup } from '../module-def.js';
-import { skill } from './copy-actions.js';
+import { selfGitignoreAction, skill } from './copy-actions.js';
 
 export const id = 'plans';
 export const title = 'Phased-implementation planning (/plan-project)';
@@ -40,21 +40,16 @@ export function plan(): Action[] {
     // Living project state, not commit artifacts, and it churns every phase. A
     // directory-local .gitignore keeps it out of commits without touching the repo's own.
     // Sharing a plan means force-adding it.
-    {
-      kind: 'write',
-      dest: '.claude/plans/.gitignore',
-      content: [
+    selfGitignoreAction(
+      id,
+      '.claude/plans/.gitignore',
+      [
         '# Plan workspaces written by the /plan-project skill (PLAN.md, ROADMAP.md, phase sub-plans).',
         '# Gitignored by default: living project state, high-churn, local to your working copy.',
         '# To share a plan, force-add it (git add -f .claude/plans/<name>/) or delete this file.',
-        '*',
-        '!.gitignore',
-        '',
-      ].join('\n'),
-      module: id,
-      reason:
-        'plan workspaces are living project state; self-gitignored (repo .gitignore untouched)',
-    },
+      ],
+      'plan workspaces are living project state; self-gitignored (repo .gitignore untouched)',
+    ),
     {
       kind: 'advise',
       text: 'Planning: run /plan-project "<what to build>" for a large/multi-phase implementation. It scaffolds .claude/plans/<name>/, tracks ROADMAP status in place so resuming is a grep, and then stops. Implementing a phase is a separate step. Run /blast-radius "<change>" to archive a dated impact map (also under .claude/plans/) before a wide change.',

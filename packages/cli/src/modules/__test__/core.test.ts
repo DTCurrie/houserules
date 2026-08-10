@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { makeAnswers, makeCtx } from '#test/ctx-builder';
+import type { KitConfig } from '../../core/config.js';
 import { plan } from '../core.js';
 
 describe('core plan, the ledger directory .gitignore', () => {
@@ -30,5 +31,23 @@ describe('core plan, the ledger directory .gitignore', () => {
 
   it('negates .gitignore, so a bare `*` does not swallow the rule file on clone', () => {
     expect(ledgerIgnoreContent()).toMatch(/^!\.gitignore$/m);
+  });
+
+  it('plans no ledger .gitignore write when the configured dir escapes the repo', () => {
+    const ctx = makeCtx();
+    ctx.claude.kitConfig = {
+      ledgers: { dir: '../outside' },
+    } as unknown as KitConfig;
+
+    const actions = plan(ctx, makeAnswers());
+
+    expect(
+      actions.some(
+        (a) =>
+          a.kind === 'write' &&
+          a.reason ===
+            'the ledger directory is a local push queue. GitHub Projects is the durable record',
+      ),
+    ).toBe(false);
   });
 });

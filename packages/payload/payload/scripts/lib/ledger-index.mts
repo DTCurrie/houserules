@@ -1,18 +1,3 @@
-/**
- * The local cache of what the boards hold.
- *
- * Half of the queue-and-index split. The `.jsonl` ledgers are the queue, holding only what has not
- * reached a board yet. This index is the other half: a projection of the boards that every local
- * query reads, so `scope`, `show`, and prompt injection answer instantly and offline.
- *
- * It is a CACHE and never a record of truth. Deleting it loses nothing that a `pull` cannot
- * rebuild, which is the property that lets the queue be emptied at all. Anything that cannot be
- * rebuilt from a board does not belong in here.
- *
- * Pure apart from {@link loadIndex}, which is the one read every consumer needs and would otherwise
- * be copied into each of them. Writing the file stays the sync plugin's job.
- */
-
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -111,6 +96,13 @@ export function parseIndex(raw: string, kind: LedgerKind): LedgerIndex | null {
  * unreadable file, a truncated write, a hand-edit, a version from the future. Callers already have
  * to handle null for a fresh clone that has never pulled, so there is no second path to get wrong.
  * `ledger-inject.mjs` calls this on every prompt, and a hook that throws costs the user their turn.
+ *
+ * This index is the other half of the queue-and-index split: the `.jsonl` ledgers hold what has
+ * not reached a board yet, and this index is a projection of the boards so `scope`, `show`, and
+ * prompt injection answer instantly and offline. It is a CACHE and never a record of truth.
+ * Deleting it loses nothing a `pull` cannot rebuild, so nothing that cannot be rebuilt from a
+ * board belongs in it. This function is the one read every consumer needs, kept here rather than
+ * copied into each of them. Writing the file stays the sync plugin's job.
  */
 export function loadIndex(
   ledgerDirectory: string,

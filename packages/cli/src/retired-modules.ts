@@ -38,7 +38,7 @@ export const RETIRED_MODULES: Readonly<Record<string, string>> = {
  * resolves to nothing is either an error the user cannot act on or a silent prune, depending on
  * which guard sees it first.
  */
-export const RENAMED_MODULES: Readonly<Record<string, string>> = {
+const RENAMED_MODULES: Readonly<Record<string, string>> = {
   'terse-style': 'output-prose',
 };
 
