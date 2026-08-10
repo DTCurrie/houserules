@@ -20,6 +20,10 @@ packages/plugin-accessibility/payload/reference/wcag22.md
 .claude/kit-templates/
 .claude/kit.config.json
 .claude/ledgers/
+.claude/output-styles/
+.claude/plans/
+.claude/reference/
+.claude/rules/
 .claude/scripts/
 .claude/skills/
 .claude/state/

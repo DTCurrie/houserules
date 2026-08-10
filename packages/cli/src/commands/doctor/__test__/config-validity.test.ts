@@ -348,7 +348,7 @@ describe('checkConfigValidity, verify commands', () => {
     );
 
     expect(messages(root, ctx)).toEqual([
-      'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/kit.config.json, or "verifyCommands" to each target. Without one the helper falls back to a "verify" script and fails when you run it.',
+      'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/kit.config.json, or "verifyCommands" to each target. Without one --run has nothing to run.',
     ]);
   });
 

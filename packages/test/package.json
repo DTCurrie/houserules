@@ -93,7 +93,7 @@
   "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/test#readme",
   "bugs": "https://github.com/DTCurrie/agent-kit/issues",
   "peerDependencies": {
-    "@agent-kit/cli": "^0.1.0",
+    "@agent-kit/cli": ">=0.0.0 <1.0.0",
     "vitest": "^4.1.10"
   },
   "devDependencies": {

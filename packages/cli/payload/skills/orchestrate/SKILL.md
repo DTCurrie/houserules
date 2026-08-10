@@ -117,6 +117,40 @@ brief**, so a worker does not add it back on its own.
 the same wave **iff their `owns` sets are disjoint**. Two "unrelated" features that both edit a barrel
 export are not parallel. They serialize, or one of them gives that file up.
 
+**A slice owns the tests that assert its files' behavior, or it cannot finish.** If a slice changes
+`plan.ts`, it owns `plan.test.ts`. If it changes a warning string, it owns the suite asserting that
+string. Get this wrong and you get one of two failures, both of which surface at the barrier in the
+most expensive context you have: the worker ships a fix with no regression test, because the only
+valid home was outside its `owns`, or it breaks a sibling's assertion and correctly declines to
+repair it. Walk each slice's file list and ask what currently asserts these bytes.
+
+**Slice by shared mutable resource, not by feature.** File ownership is the usual expression of
+this, but it is not the only resource two slices can contend for. Before a wave, name everything two
+slices might both write, then draw the slices so each one is owned once:
+
+- a repo-wide formatter or fixer, which rewrites files nobody assigned it
+- generated tool directories, especially gitignored ones nothing can restore
+- append-only logs and ledgers, where a write inside an isolated worktree is silently discarded
+  rather than conflicted
+- a package's build output, when two slices in that package both need to build
+
+**Lanes, when a resource cannot be partitioned.** Work whose SUBJECT is one of those shared
+resources does not belong in the main checkout beside slices that merely read it. Give it a lane: a
+worktree on its own branch, or a checkout pinned at HEAD for read-only falsification. Two costs to
+plan for. A worktree needs its own dependency install, and **it carries none of the tool directory**,
+so a lane worker cannot be pointed at a brief by path and cannot capture a baseline that assumes an
+installed tree. Give a lane worker its brief inline.
+
+**Slices in one wave may come from different plans.** Nothing here requires a wave's slices to share
+a phase, or even a project. When several plans are in flight, drawing waves across all of them by
+the resource rule above is what finds the real parallelism, and it is usually much wider than any
+single plan's phase boundaries suggest. Record which plan each slice came from, and update BOTH that
+plan's status and the wave's when it lands.
+
+**When you drop a slice, re-home its scope.** A slice cancelled mid-program usually carried more
+than the reason it was cancelled for. Read its brief before deleting it and move whatever is still
+wanted into another slice, or you will rediscover the orphaned half several slices later.
+
 **Orchestrator-owned files** never appear in any worker's `owns`: lockfiles, generated indexes,
 barrel/export files, shared type modules, migrations, config. You edit those (§2). Workers that need a
 change there **request it in their report**. They don't reach for it.
@@ -210,7 +244,36 @@ One run at the wave barrier (§7) is cleaner and cheaper. If the kit's `lint-fix
 confirm `fix.onSubagentStop` is not `true` in `.claude/kit.config.json`. That setting fires the fixer
 at every worker's exit, which is exactly the collision above.
 
+**That setting covers only half of it.** `fix.onSubagentStop` governs a WORKER's exit. A `Stop` hook
+fires at YOUR exit, and this pattern ends a turn every time you dispatch or review, with every
+worker still holding files open. So the repo-wide fixer runs against a tree mid-edit anyway, from the
+other direction.
+
+Two consequences, and the second one matters more:
+
+- Expect a fixer or linter to report problems in files a live slice is halfway through. A worker that
+  has added an import and not yet written the call is not a defect.
+- **A lint or format finding inside a `DISPATCHED` slice's owned path is not residue, and you do not
+  act on it.** Check the slice table before touching anything a hook names. Fixing it means editing a
+  running worker's file, which is precisely what every ownership rule here exists to prevent. Residue
+  is only what survives the barrier, when every slice is `DONE` or `BLOCKED` and the tree is quiet.
+
 ## 5. Review the report, not the diff
+
+**Check the tree before you read the report.** The report is the worker's claim about what it did.
+The tree is what it did. Run this first, every slice, before forming any opinion:
+
+```
+git status --short | grep '^ T\|^T '   # typechanges: a file replaced by a symlink
+git status --short | grep '^ D\|^D '   # deletions: every one must be intentional
+ls .claude/plans/<slug>/               # plan state still there
+```
+
+Seconds to run. Destruction is what reports are worst at surfacing, because a worker that deleted
+something usually did it in service of a step that then succeeded, so its acceptance is green and its
+summary is accurate as far as it goes. A typechange means a real file became a symlink, which is
+almost never intended. A deletion outside `owns` is a defect regardless of what the report says about
+it. If plan state is gone, stop the wave and recover before anything else.
 
 Each worker returns a report: files touched (path + one line each), the acceptance command and its
 output tail, decisions and deviations, and anything blocked or out of scope. Mark the slice
@@ -220,6 +283,17 @@ output tail, decisions and deviations, and anything blocked or out of scope. Mar
   `REVISE`, always. This is the one rule that keeps review from decaying into rubber-stamping. A brief
   with two commands needs two tails. A test tail alone, where you also asked for a typecheck, is an
   unrun acceptance.
+- **Did the acceptance actually RUN, or did the build system skip it?** An incremental runner
+  (wireit, turbo, nx, bazel) reports a cache hit as success. `Ran 0 scripts and skipped 26` is a
+  claim that a previous run with these inputs passed, not evidence that anything ran now. That is
+  usually fine and is the reason the cache exists. It is not fine as the sole evidence for a slice
+  that changed a dozen files, and it is worthless when the worker populated the cache itself moments
+  earlier. When a tail shows everything skipped on a large slice, verify one thing yourself directly.
+- **Did it satisfy the letter and worsen the artifact?** A worker optimizes for the acceptance you
+  wrote. Ask what the change does to the shipped thing, not just to the check. One slice satisfied
+  "the tarball must not carry these files" by excluding them in `files` while leaving a package
+  `exports` entry pointing at them, which passes the check and publishes a package resolving to
+  nothing.
 - **Deviations.** Did it depart from the seam, the constraints, or the plan's architecture?
 - **Ownership.** Did it touch anything outside `owns`? Confirm cheaply with
   `git diff --name-only` (names, not content).
@@ -261,7 +335,12 @@ where the tree is quiet enough to touch globally:
 2. **Verify what actually changed.** Run `/verify-changed` if installed (it scopes to the changed
    packages plus dependents, off-context), otherwise the repo's verify on the touched packages.
 3. **Update the slice table** in place, then print the status table (§4), the wave-close printing.
-4. **Then** open the next wave. Never dispatch wave N+1 with an unreviewed slice from wave N. That is
+4. **Snapshot the state nothing can regenerate**, into a scratch directory. The plan workspace is the
+   whole reason a long run is resumable, and it is gitignored, so git is never the fallback. Copy the
+   plan directory plus any gitignored write-log, credential, or user-owned config the tool directory
+   carries. Skip everything the installer rewrites. It costs a second and it is the only thing
+   standing between a destructive slice and starting over.
+5. **Then** open the next wave. Never dispatch wave N+1 with an unreviewed slice from wave N. That is
    precisely how the architecture drifts while you aren't looking.
 
 **Residue** is what auto-fix couldn't fix, and it's yours by default. It's usually a handful of lines,

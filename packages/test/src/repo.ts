@@ -244,7 +244,8 @@ export function useInstalledRepo(
     ? JSON.stringify(opts.moduleOptions)
     : '';
   const key = `${shape}::${opts.modules ?? ''}::${pluginTag}::${configTag}::${optionTag}`;
-  const snapshot = join(snapshotRoot(), key.replace(/[^a-z0-9]+/gi, '_'));
+  const hashedKey = createHash('sha256').update(key).digest('hex').slice(0, 16);
+  const snapshot = join(snapshotRoot(), hashedKey);
 
   // On disk, not a module-level Map: vitest gives every test FILE a fresh module registry, so
   // an in-memory cache never survives across files and each would clobber the shared snapshot.
@@ -325,6 +326,7 @@ export function useInstalledRepo(
     rmSync(staging, { recursive: true, force: true });
     try {
       renameSync(pending, snapshot);
+      writeFileSync(`${snapshot}.key`, key);
     } catch {
       rmSync(pending, { recursive: true, force: true });
     }

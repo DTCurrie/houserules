@@ -19,7 +19,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { repoRoot } from '@agent-kit/cli/payload/kit-config';
+import { repoRoot } from '@agent-kit/payload/kit-config';
 import {
   matchPatterns,
   criteriaFor,

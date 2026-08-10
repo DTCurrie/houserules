@@ -325,33 +325,36 @@ must exit 0 on every failure path rather than crash a turn. `payload/__test__/de
 and `payload/__test__/execution.test.ts` enforce both against the kit's own payload the same
 way a plugin's would be held to them.
 
-`.claude/scripts/lib/*.mjs` is a public runtime API too, versioned with the CLI, because
-plugin payload scripts import those libs instead of vendoring copies (see the decision "The CLI
-package ships substrate that plugins build on", which
-`node .claude/scripts/decision-log.mjs list` will find). A signature change to a lib
+`.claude/scripts/lib/*.mjs` is a public runtime API too, versioned with `@agent-kit/payload`,
+the package that ships those libs, because plugin payload scripts import them instead of
+vendoring copies (see the decision "The CLI package ships substrate that plugins build on",
+which `node .claude/scripts/decision-log.mjs list` will find). A signature change to a lib
 function follows this same minor/major split.
 
-## 12. How a plugin's payload reaches a CLI lib
+## 12. How a plugin's payload reaches a shared lib
 
-Import it by package name, for values as well as types:
+The six shared libs (`backlog-id`, `entry-ledger`, `kit-config`, `ledger-index`, `proc`,
+`workspaces`) ship from `@agent-kit/payload`, not from the CLI. Import one by package name,
+for values as well as types:
 
 ```ts
-import { repoRoot } from '@agent-kit/cli/payload/kit-config';
-import type { LedgerEntry } from '@agent-kit/cli/payload/ledger-index';
+import { repoRoot } from '@agent-kit/payload/kit-config';
+import type { LedgerEntry } from '@agent-kit/payload/ledger-index';
 ```
 
-Then run `agent-kit-payload` after your `tsc`, which is a bin this package publishes:
+Add `@agent-kit/payload` as a dependency, then run `agent-kit-payload` after your `tsc`, which is
+a bin `@agent-kit/cli` publishes:
 
 ```json
 "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload"
 ```
 
 It takes your payload root, defaulting to `payload-dist`, and does two things. It rewrites every
-`@agent-kit/cli/payload/*` specifier in your emitted `.mjs` to the relative path the installed
+`@agent-kit/payload/*` specifier in your emitted `.mjs` to the relative path the installed
 layout needs, since everything flattens into one `.claude/scripts/lib/` directory in the target
 repo. And it writes `payload-dist/payload-imports.json` recording which libs each emitted file
-imports, which the installer reads to copy those libs from the CLI's own payload. You declare no lib
-copies yourself, and you cannot forget one.
+imports, which the installer reads to copy those libs from `@agent-kit/payload`'s own payload
+build. You declare no lib copies yourself, and you cannot forget one.
 
 Three things worth knowing:
 
@@ -366,3 +369,36 @@ Three things worth knowing:
 
 Your own libs are a different case. A payload file importing a lib from its OWN package uses an
 ordinary relative path, and nothing rewrites it.
+
+**A lib is passed its inputs, never reaches for config itself.** `readGateInputs(ledgerDirectory,
+autoSync)` is the pattern: the payload script is the composition root, and a pure lib takes what it
+needs as parameters rather than loading `kit.config.json` on its own. Write your own libs the same
+way, so they stay testable without a filesystem.
+
+**What your `package.json` and tsconfig split need, for an author outside this workspace:**
+
+- `peerDependencies: { "@agent-kit/cli": "^<major>" }`, pinned to the major of the `PluginApi`
+  surface you built against (§11). This is what lets the resolver reject an incompatible CLI
+  version at install time instead of failing inside your script.
+- A `dependencies` entry on `@agent-kit/payload` if any of your payload scripts import a shared
+  lib. `agent-kit-payload` resolves that package by name to rewrite the specifier and to copy
+  the libs your build declares.
+- `payload-dist` listed in `package.json`'s `files`, alongside `dist`. Without it, `npm publish`
+  ships your compiled `dist/` but not the payload the installer copies into a user's repo.
+- The three-tsconfig split, one job each, same as the CLI's own (see the top-level Layout section
+  of this repo's `CLAUDE.md` for the general pattern):
+  - `tsconfig.build.json` emits your TypeScript source. `rootDir: "./src"`, `outDir: "./dist"`,
+    excluding your tests.
+  - `tsconfig.json` typechecks everything, `src/` and tests alike. It `extends` the build config,
+    sets `noEmit: true` and `rootDir: "."`, and clears the inherited test exclude.
+  - `tsconfig.payload.json` compiles your `.mts` payload scripts. `rootDir: "./payload"`,
+    `outDir: "./payload-dist"`. This one is only needed if you ship `.mts` scripts at all: a
+    prose-only plugin (rules, skills, agents, reference docs) has no compile step and needs no
+    payload tsconfig.
+- `agent-kit-payload` runs after both `tsc` invocations, not before either: `tsc -p
+tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload`. It rewrites the
+  `.mjs` your payload `tsc` just emitted, so running it first would find nothing to rewrite.
+- The payload invariants from §11 apply to every script you ship this way: zero npm dependencies,
+  node builtins only, and a hook script exits 0 on every failure path rather than crashing a turn.
+  A script that imports a CLI lib does not relax this. The lib itself is bound by the same rule,
+  which is why it is safe to import.

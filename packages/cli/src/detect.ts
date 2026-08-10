@@ -2,14 +2,11 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import {
-  listWorkspacePackages,
-  readJson,
-} from '../payload-dist/scripts/lib/workspaces.mjs';
+import { listWorkspacePackages, readJson } from '@agent-kit/payload/workspaces';
 import type {
   PackageJson,
   WorkspacePackage,
-} from '../payload-dist/scripts/lib/workspaces.mjs';
+} from '@agent-kit/payload/workspaces';
 import type { KitConfig, KitConfigTarget } from './core/config.js';
 import type { KitManifest } from './core/manifest.js';
 import type { Settings } from './merge-settings.js';

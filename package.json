@@ -24,7 +24,8 @@
     "dogfood": "pnpm --filter @agent-kit/cli dogfood",
     "dogfood:watch": "pnpm --filter @agent-kit/cli dogfood:watch",
     "attw": "wireit",
-    "verify:packages": "node scripts/verify-packages.mjs"
+    "verify:packages": "node scripts/verify-packages.mjs",
+    "verify:payload-copy-set": "node scripts/verify-payload-copy-set.mjs"
   },
   "wireit": {
     "lint": {
@@ -48,6 +49,7 @@
     "build": {
       "dependencies": [
         "./packages/cli:build",
+        "./packages/payload:build",
         "./packages/plugin-accessibility:build",
         "./packages/plugin-backlog:build",
         "./packages/plugin-changesets:build",
@@ -66,6 +68,7 @@
     "check": {
       "dependencies": [
         "./packages/cli:check",
+        "./packages/payload:check",
         "./packages/plugin-accessibility:check",
         "./packages/plugin-backlog:check",
         "./packages/plugin-changesets:check",
@@ -82,9 +85,10 @@
       ]
     },
     "test": {
-      "//": "Twelve entries, not fourteen. @agent-kit/test and plugin-testing ship no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
+      "//": "Thirteen entries, not fifteen. @agent-kit/test and plugin-testing ship no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
       "dependencies": [
         "./packages/cli:test",
+        "./packages/payload:test",
         "./packages/plugin-accessibility:test",
         "./packages/plugin-backlog:test",
         "./packages/plugin-changesets:test",

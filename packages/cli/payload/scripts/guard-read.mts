@@ -14,8 +14,11 @@
 import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { READ_GUARD_DEFAULTS, loadConfigSafe } from './lib/kit-config.mjs';
-import { globToRe, readStdinJson, repoRoot } from './lib/proc.mjs';
+import {
+  READ_GUARD_DEFAULTS,
+  loadConfigSafe,
+} from '@agent-kit/payload/kit-config';
+import { globToRe, readStdinJson, repoRoot } from '@agent-kit/payload/proc';
 
 interface ReadPayload {
   tool_input?: {

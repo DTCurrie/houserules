@@ -2,6 +2,7 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -71,6 +72,12 @@ export class TargetRepo {
     if (this.dryRun) return true;
     const absolute = this.path(relativePath);
     mkdirSync(dirname(absolute), { recursive: true });
+    // Replace a symlink, never write through it. writeFileSync follows the link and lands the
+    // bytes on its target, which is a file outside the tree we own and usually the payload
+    // source the link points at. Nothing reports it, so the damage shows up only in git.
+    if (lstatSync(absolute, { throwIfNoEntry: false })?.isSymbolicLink()) {
+      rmSync(absolute);
+    }
     writeFileSync(absolute, next);
     if (mode !== undefined) chmodSync(absolute, mode);
     return true;

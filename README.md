@@ -34,6 +34,7 @@ The package is `@agent-kit/cli` and the binary is `agent-kit`, the same split
 | Path                              | Package                             | What it is                                                                               |
 | --------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------- |
 | `packages/cli`                    | `@agent-kit/cli`                    | The installer and its 16-module core payload. Ships the `agent-kit` binary.              |
+| `packages/payload`                | `@agent-kit/payload`                | The shared payload libs (`kit-config`, `entry-ledger`, and friends), zero dependencies.  |
 | `packages/plugin-prose`           | `@agent-kit/plugin-prose`           | Comment discipline, writing voice, a prose output style, and the PR-description skill.   |
 | `packages/plugin-testing`         | `@agent-kit/plugin-testing`         | A runner-agnostic testing rule, split into opt-in per-language guides.                   |
 | `packages/plugin-changesets`      | `@agent-kit/plugin-changesets`      | Changesets integration and the optional per-commit changelog ledger.                     |

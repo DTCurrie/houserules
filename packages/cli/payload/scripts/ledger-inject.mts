@@ -16,16 +16,20 @@ import { gunzipSync } from 'node:zlib';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { loadConfigSafe, repoRoot } from './lib/kit-config.mjs';
-import { BACKLOG_ID } from './lib/backlog-id.mjs';
-import { readStdinJson } from './lib/proc.mjs';
-import { ledgerDir, ledgerPath, readLog } from './lib/entry-ledger.mjs';
+import { loadConfigSafe, repoRoot } from '@agent-kit/payload/kit-config';
+import { BACKLOG_ID } from '@agent-kit/payload/backlog-id';
+import { readStdinJson } from '@agent-kit/payload/proc';
+import {
+  ledgerDir,
+  ledgerPath,
+  readLog,
+} from '@agent-kit/payload/entry-ledger';
 import {
   loadIndex,
   mergeWithQueue,
   type LedgerEntry,
   type LedgerIndex,
-} from './lib/ledger-index.mjs';
+} from '@agent-kit/payload/ledger-index';
 
 interface PromptPayload {
   prompt?: string;

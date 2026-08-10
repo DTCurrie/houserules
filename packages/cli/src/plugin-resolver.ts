@@ -200,13 +200,14 @@ function checkPeerRange(
 function withDerivedLibActions(
   def: ModuleDef,
   sidecar: PayloadImports,
+  pluginName: string,
 ): ModuleDef {
   if (Object.keys(sidecar.libs).length === 0) return def;
   return {
     ...def,
     plan(ctx: Ctx, answers: Answers) {
       const actions = def.plan(ctx, answers);
-      return [...actions, ...deriveLibActions(actions, sidecar)];
+      return [...actions, ...deriveLibActions(actions, sidecar, pluginName)];
     },
   };
 }
@@ -273,7 +274,11 @@ export const buildRegistry: BuildRegistry = (root, config, builtIns) => {
         );
       }
       ids.add(id);
-      modules.push({ id, def: withDerivedLibActions(def, sidecar), source });
+      modules.push({
+        id,
+        def: withDerivedLibActions(def, sidecar, entry.name),
+        source,
+      });
     }
   }
 

@@ -10,8 +10,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { loadConfigSafe } from './lib/kit-config.mjs';
-import { git } from './lib/proc.mjs';
+import { loadConfigSafe } from '@agent-kit/payload/kit-config';
+import { git } from '@agent-kit/payload/proc';
 
 interface StatusPayload {
   workspace?: { project_dir?: string };

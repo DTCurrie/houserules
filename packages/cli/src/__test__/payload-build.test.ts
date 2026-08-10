@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,13 +13,16 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { buildPayload } from '../payload-build.js';
+import { assemblePayload, buildPayload } from '../payload-build.js';
 import {
   PAYLOAD_IMPORTS_FILE,
   PAYLOAD_IMPORT_PREFIX,
 } from '../payload-imports.js';
 
 const CLI_PACKAGE_DIR = fileURLToPath(new URL('../..', import.meta.url));
+const PAYLOAD_PACKAGE_DIR = fileURLToPath(
+  new URL('../../../payload', import.meta.url),
+);
 
 const roots: string[] = [];
 
@@ -33,6 +37,11 @@ function stageCwd(): string {
   roots.push(cwd);
   mkdirSync(join(cwd, 'node_modules/@agent-kit'), { recursive: true });
   symlinkSync(CLI_PACKAGE_DIR, join(cwd, 'node_modules/@agent-kit/cli'), 'dir');
+  symlinkSync(
+    PAYLOAD_PACKAGE_DIR,
+    join(cwd, 'node_modules/@agent-kit/payload'),
+    'dir',
+  );
   return cwd;
 }
 
@@ -214,7 +223,7 @@ describe('buildPayload', () => {
     );
 
     expect(() => buildPayload(root, cwd)).toThrow(
-      /payload-build found no @agent-kit\/cli\/payload\/ imports, but payload-imports\.json already lists 1/,
+      /payload-build found no @agent-kit\/payload\/ imports, but payload-imports\.json already lists 1/,
     );
   });
 
@@ -237,6 +246,82 @@ describe('buildPayload', () => {
   });
 });
 
+describe('assemblePayload', () => {
+  it('copies a payload directory into payload-dist under the same name', () => {
+    const packageRoot = stageRoot();
+    writeAt(packageRoot, 'payload/rules/example.md', '# Example\n');
+    const payloadRoot = join(packageRoot, 'payload-dist');
+
+    assemblePayload(payloadRoot, packageRoot);
+
+    expect(readAt(packageRoot, 'payload-dist/rules/example.md')).toBe(
+      '# Example\n',
+    );
+  });
+
+  it('removes a destination file no longer present in the source before copying', () => {
+    const packageRoot = stageRoot();
+    writeAt(packageRoot, 'payload/rules/keep.md', 'keep\n');
+    writeAt(packageRoot, 'payload-dist/rules/stale.md', 'stale\n');
+    const payloadRoot = join(packageRoot, 'payload-dist');
+
+    assemblePayload(payloadRoot, packageRoot);
+
+    expect(existsSync(join(packageRoot, 'payload-dist/rules/stale.md'))).toBe(
+      false,
+    );
+  });
+
+  it('excludes a __test__ directory at any depth under a copied directory', () => {
+    const packageRoot = stageRoot();
+    writeAt(packageRoot, 'payload/rules/example.md', 'kept\n');
+    writeAt(
+      packageRoot,
+      'payload/rules/__test__/example.test.md',
+      'excluded\n',
+    );
+    const payloadRoot = join(packageRoot, 'payload-dist');
+
+    assemblePayload(payloadRoot, packageRoot);
+
+    expect(
+      existsSync(
+        join(packageRoot, 'payload-dist/rules/__test__/example.test.md'),
+      ),
+    ).toBe(false);
+  });
+
+  it('leaves scripts untouched, never copying payload/scripts over it', () => {
+    const packageRoot = stageRoot();
+    writeAt(packageRoot, 'payload/scripts/hook.mts', 'export {};\n');
+    writeAt(
+      packageRoot,
+      'payload-dist/scripts/hook.mjs',
+      'export const emitted = true;\n',
+    );
+    const payloadRoot = join(packageRoot, 'payload-dist');
+
+    assemblePayload(payloadRoot, packageRoot);
+
+    expect(readAt(packageRoot, 'payload-dist/scripts/hook.mjs')).toBe(
+      'export const emitted = true;\n',
+    );
+    expect(existsSync(join(packageRoot, 'payload-dist/scripts/hook.mts'))).toBe(
+      false,
+    );
+  });
+
+  it('throws when payload/scripts has sources but payload-dist/scripts is missing', () => {
+    const packageRoot = stageRoot();
+    writeAt(packageRoot, 'payload/scripts/hook.mts', 'export {};\n');
+    const payloadRoot = join(packageRoot, 'payload-dist');
+
+    expect(() => assemblePayload(payloadRoot, packageRoot)).toThrow(
+      /payload-dist\/scripts is missing/,
+    );
+  });
+});
+
 describe('the agent-kit-payload bin, invoked the way a plugin build invokes it', () => {
   const BIN = join(CLI_PACKAGE_DIR, 'dist/payload-build-bin.js');
 
@@ -249,6 +334,7 @@ describe('the agent-kit-payload bin, invoked the way a plugin build invokes it',
 
   it('rewrites and writes the sidecar when run as a child process, not only when imported', () => {
     const cwd = stageCwd();
+    mkdirSync(join(cwd, 'payload'), { recursive: true });
     writeAt(
       cwd,
       'payload-dist/scripts/consumer.mjs',
@@ -271,6 +357,7 @@ describe('the agent-kit-payload bin, invoked the way a plugin build invokes it',
 
   it('exits 1 and names the unknown lib rather than writing a sidecar', () => {
     const cwd = stageCwd();
+    mkdirSync(join(cwd, 'payload'), { recursive: true });
     writeAt(
       cwd,
       'payload-dist/scripts/consumer.mjs',

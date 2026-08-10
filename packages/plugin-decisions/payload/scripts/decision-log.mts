@@ -48,13 +48,13 @@
 import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
-import { loadConfigSafe, repoRoot } from '@agent-kit/cli/payload/kit-config';
-import { makeId } from '@agent-kit/cli/payload/backlog-id';
+import { loadConfigSafe, repoRoot } from '@agent-kit/payload/kit-config';
+import { makeId } from '@agent-kit/payload/backlog-id';
 import {
   findEntry,
   loadIndex,
   type LedgerEntry,
-} from '@agent-kit/cli/payload/ledger-index';
+} from '@agent-kit/payload/ledger-index';
 import {
   SEPARATOR,
   appendEvent,
@@ -80,7 +80,7 @@ import {
   takeChatFlag,
   todayDate,
   unknownAreaMessage,
-} from '@agent-kit/cli/payload/entry-ledger';
+} from '@agent-kit/payload/entry-ledger';
 
 const REPO_ROOT = repoRoot();
 const CONFIG = loadConfigSafe();

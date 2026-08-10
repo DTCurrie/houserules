@@ -31,7 +31,10 @@ that don't belong in the log, or that duplicate one already there, before they a
    violating code would be written, not only from what it protects. Work out that path and run
    `scope` on it. A prohibition on comparing two artifacts is violated by a test, so the record
    must cover the test directory, and scoping it to the artifact alone leaves `scope` silent for
-   the agent about to write the test.
+   the agent about to write the test. The same check applies to the revisit trigger: if its
+   condition is someone touching, adding, or changing a path in this repo, that path belongs in
+   `Scope:` too. A trigger left prose when it names a real path is a weak field, since `scope` on
+   that path will stay silent the day the trigger fires.
 5. **Dedupe.** Start from the record's `Scope:` paths and run
    `node .claude/scripts/decision-log.mjs scope <path>` for each. That is the narrow, precise
    question, and it matches a file against any directory scope above it, so it finds decisions a

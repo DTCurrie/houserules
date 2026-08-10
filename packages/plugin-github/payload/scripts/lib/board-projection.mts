@@ -16,7 +16,7 @@ import {
   surfaceForArea,
 } from './project-shape.mjs';
 import type { LedgerKind } from './project-shape.mjs';
-import type { LedgerEntry } from '@agent-kit/cli/payload/ledger-index';
+import type { LedgerEntry } from '@agent-kit/payload/ledger-index';
 
 /** One `fieldValues` node, narrowed to the value shapes the boards actually use. */
 export interface BoardFieldValue {

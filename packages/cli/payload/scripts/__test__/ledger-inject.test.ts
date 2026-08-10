@@ -13,8 +13,8 @@ import {
   MAX_INJECTED_CHARS,
   resolveEntries,
 } from '../ledger-inject.mjs';
-import { emptyIndex, serializeIndex } from '../lib/ledger-index.mjs';
-import type { LedgerEntry, LedgerIndex } from '../lib/ledger-index.mjs';
+import { emptyIndex, serializeIndex } from '@agent-kit/payload/ledger-index';
+import type { LedgerEntry, LedgerIndex } from '@agent-kit/payload/ledger-index';
 
 const INJECT = '.claude/scripts/ledger-inject.mjs';
 

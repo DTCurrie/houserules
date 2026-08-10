@@ -29,8 +29,8 @@ import { dirname, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
-import { loadConfig, repoRoot } from '@agent-kit/cli/payload/kit-config';
-import { BACKLOG_ID } from '@agent-kit/cli/payload/backlog-id';
+import { loadConfig, repoRoot } from '@agent-kit/payload/kit-config';
+import { BACKLOG_ID } from '@agent-kit/payload/backlog-id';
 
 const REPO_ROOT = repoRoot();
 const SEPARATOR = '---';

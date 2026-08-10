@@ -11,12 +11,29 @@ restores if absent.
 
 ### Recording changes (changesets)
 
-After completing a meaningful change to a package, record a changeset **before the commit**.
-Run the `/changeset` skill, or spawn the `changeset-writer` agent. It inspects the diff,
-picks patch/minor/major per package, and writes `.changeset/*.md` via
-`node .claude/scripts/changeset-write.mjs`. Never hand-edit `CHANGELOG.md`, which releases
-generate from changesets (`changeset version`). If nothing user-facing changed, record
-that too: `node .claude/scripts/changeset-write.mjs --empty --summary "<why no release>"`.
+After completing a meaningful change to a package, record a changeset **before the commit**,
+via the `/changeset` skill. See that skill for what it does and when to run it.
+
+### Tracking out-of-scope work
+
+Discover a real issue outside the current scope? **Do not fix it inline.** Log it with the
+`/backlog-add` skill instead. Prefixes by area: `CLI` (packages/cli/), `PLUGINFIXTUR` (packages/cli/test/plugin-fixture/), `PAYLOAD` (packages/payload/), `PLUGINACCESS` (packages/plugin-accessibility/), `PLUGINBACKLO` (packages/plugin-backlog/), `PLUGINCHANGE` (packages/plugin-changesets/), `PLUGINDECISI` (packages/plugin-decisions/), `PLUGINDESIGN` (packages/plugin-design/), `PLUGINGITHUB` (packages/plugin-github/), `PLUGINPERSON` (packages/plugin-persona-auditor/), `PLUGINPROSE` (packages/plugin-prose/), `PLUGINSVELTE` (packages/plugin-svelte/), `PLUGINTESTIN` (packages/plugin-testing/), `PLUGINTHREE` (packages/plugin-three/), `PLUGINTYPESC` (packages/plugin-typescript/), `TEST` (packages/test/).
+
+### Recording decisions
+
+Settled a design question that the code does not explain on its own? Record it with the
+`/decide` skill. See that skill for the bar a decision has to clear and what a record needs.
+
+### Planning large, multi-phase work
+
+For an implementation too big to hold in one plan, run the `/plan-project` skill. It persists
+to `.claude/plans/<name>/`, keeping `ROADMAP.md` current as each phase lands. See the skill
+for the full scaffold and when to use it.
+
+### Executing a planned phase
+
+To implement a phase from `.claude/plans/<slug>/`, run `/orchestrate`. See that skill for how
+it slices work and reviews it.
 
 ### Conventions
 
@@ -32,6 +49,8 @@ that too: `node .claude/scripts/changeset-write.mjs --empty --summary "<why no r
 
 - Stage-sized work (≤ a handful of files): implement directly in-context, with no implementation
   subagents. Reserve subagents for genuinely parallel or unbounded work (wide sweeps, migrations).
+- Exception, a planned phase under `/orchestrate`: dispatch one scoped `task-worker` per slice
+  and review the returned reports. Never pull a worker’s diff into the main context.
 - Verify with static gates (tests, typecheck, lint) plus a short falsifiable acceptance checklist
   for the user. No browser/screenshot verification unless explicitly asked.
 - Run those gates in order: format first, since it rewrites in place and settles the mechanical
@@ -56,7 +75,7 @@ Interactive installer for a portable Claude Code context-discipline kit. Read
 
 ## Workspace
 
-A pnpm workspace of fourteen packages. Every path in the Layout section below is relative to
+A pnpm workspace of fifteen packages. Every path in the Layout section below is relative to
 **`packages/cli/`** unless it starts with `packages/`.
 
 - `packages/cli` is `@agent-kit/cli`, the installer. It ships the binary **`agent-kit`**,
@@ -66,6 +85,11 @@ A pnpm workspace of fourteen packages. Every path in the Layout section below is
   `session-context`, `rename`, `reviewers`, `debug-session`, `plans`, `orchestrate`,
   `verify-changed`, `ready`, `sweep`, `read-guard`, `regen`, `statusline`,
   `code-cleanliness`, `ci-settings`.
+- `packages/payload` is `@agent-kit/payload`, the six shared payload libs (`backlog-id`,
+  `entry-ledger`, `kit-config`, `ledger-index`, `proc`, `workspaces`) as their own package.
+  It ships no modules and installs nothing on its own. A payload script, in the CLI or in a
+  plugin, imports one by package name, `@agent-kit/payload/kit-config`, and the build rewrites
+  that specifier to the relative path the flattened `.claude/scripts/lib/` layout needs.
 - Twelve first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved out of
   the core: `plugin-prose`, `plugin-testing`, `plugin-changesets`, `plugin-backlog`,
   `plugin-decisions`, `plugin-persona-auditor`. Six were authored as plugins and were never
@@ -76,14 +100,16 @@ A pnpm workspace of fourteen packages. Every path in the Layout section below is
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
   workflows, `CLAUDE.md`, and the gitignored `.claude/`. Root `pnpm build|test|check` are
   wireit aggregators that depend on each package's script by path, replacing `pnpm -r`. The
-  `test` aggregator lists **twelve** packages, not fourteen, because `@agent-kit/test` and
+  `test` aggregator lists **thirteen** packages, not fifteen, because `@agent-kit/test` and
   `plugin-testing` ship no `test` script and naming a script that does not exist is a wireit
   error rather than the no-op `pnpm -r` gave you. Root `lint` is also wireit, and `lint:fix`,
   `format`, and `format:check` stay plain scripts. A fixer mutates its own inputs, so caching
   it is wrong, and a repo-wide formatter's input set is `.prettierignore`, which should not be
   restated in `package.json` where the two would drift.
 - **`.claude/` stays at the workspace root**, because that is where Claude Code looks, while
-  each package's payload lives with that package. `scripts/dogfood-link.mjs` bridges the two.
+  each package's payload lives with that package. `packages/cli/scripts/dogfood-link.mjs`
+  bridges the two by seeding this repo's `kit.config.json`/`settings.json` and running the
+  real installer over it, then relinking installed prose back to its payload source.
 
 ## Layout
 
@@ -152,7 +178,7 @@ A pnpm workspace of fourteen packages. Every path in the Layout section below is
   so `check` runs both projects:
   `tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json`. Its `files` names
   `payload/**/*.mts` and `tsconfig.payload.json`, and its `dependencies` names
-  `../cli:build:payload`, without which a `@agent-kit/cli/payload/*` import resolves nothing. **No
+  `../payload:build`, without which a `@agent-kit/payload/*` import resolves nothing. **No
   plugin carries a `rootDirs` line any more.** Six of them did, each pairing `./payload/scripts` with
   `../cli/payload-dist/scripts`, a relative path into a sibling's build output that existed only
   inside this monorepo and that a third-party author had no way to write. Package-name imports plus
@@ -185,16 +211,21 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
 - `pnpm change`: record a changeset. Required for any user-visible change, and dogfooded.
 - `pnpm lint` / `pnpm lint:fix`: run from the workspace root only. `eslint.config.mjs` lives
   at the root with `packages/*/` globs, and no package defines its own `lint` script.
-- `pnpm dogfood`: build the payload, then wire this repo's `.claude/` (gitignored) to run its
-  own hooks/skills/agents. `scripts/dogfood-link.mjs` discovers every workspace package that
-  has a `payload/` dir and assembles each `.claude/<surface>/` directory from **per-entry
-  symlinks** across all of them, not one directory symlink, because `.claude/rules/` now
-  draws from the CLI plus the prose and testing plugins at once. It throws if two packages
-  contribute the same entry name. Idempotent, so re-run after pulling.
-  **`.claude/scripts` is a COPY taken from `payload-dist/`, not a symlink** (a linked script
-  cannot resolve `./lib/` from the symlink's real path), so a `.mts` edit has to be compiled
-  AND re-copied before it is live. The prose/rules/agents/output-styles/reference dirs link
-  straight to each package's `payload/` and are live on save.
+- `pnpm dogfood`: build the payload, then wire this repo to run its own kit by running the real
+  installer over itself. `packages/cli/scripts/dogfood-link.mjs` seeds `.claude/kit.config.json`
+  and `.claude/settings.json` (rewritten every run, since its `plugins` list and the module set
+  the script passes to `init` are two halves of one definition), then shells out to
+  `node dist/cli.js init --yes` with an explicit `--modules` list and `--module-option` flags,
+  the same plan/apply pipeline a user's `init` runs. A relink pass runs after: any manifest-
+  tracked destination under `skills/`, `agents/`, `output-styles/`, `rules/`, or `reference/`
+  whose installed bytes are an exact, unique match for one payload source gets swapped back to
+  a symlink at that source, so editing a payload rule or skill shows up in `.claude/`
+  immediately, with no rebuild and no re-run of this script. Idempotent, so re-run after
+  pulling.
+  **`.claude/scripts/` stays a COPY taken from `payload-dist/`, never relinked** (a symlinked
+  script cannot resolve `./lib/` from the symlink's real path), so a `.mts` edit has to be
+  compiled AND re-copied before it is live. The two `appendBody` rules also stay real files,
+  since their installed bytes carry a routing tail no payload source has byte-for-byte.
 - `pnpm dogfood:watch`: `WIREIT_WATCH=true` over the `dogfood` graph, so editing or adding a
   payload `.mts` recompiles it and re-copies it into `.claude/scripts/` with no second command.
   It covers every package that ships payload scripts, not just the CLI. This replaced a bare
@@ -229,17 +260,17 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   let any non-zero exit fall through to the fallback echo and swallow the code (changeset-check
   exits 2 on purpose).
 - **Payload code crosses packages by PACKAGE NAME, and the build rewrites it.** Decision
-  `AGENTKIT-deb26c`. Any payload file, script or lib, reaches a CLI lib as
-  `import { nowIso } from '@agent-kit/cli/payload/entry-ledger'`, for values and types alike. There
-  is one form, not two. The six CLI libs are `backlog-id`, `entry-ledger`, `kit-config`,
-  `ledger-index`, `proc`, and `workspaces`. Anything else under `./lib/` is the package's own and
-  stays a relative import.
+  `AGENTKIT-deb26c`. Any payload file, script or lib, reaches a shared lib as
+  `import { nowIso } from '@agent-kit/payload/entry-ledger'`, for values and types alike. There
+  is one form, not two. The six shared libs live in the standalone `@agent-kit/payload` package:
+  `backlog-id`, `entry-ledger`, `kit-config`, `ledger-index`, `proc`, and `workspaces`. Anything
+  else under `./lib/` is the package's own and stays a relative import.
   - **`agent-kit-payload` is what makes it safe**, a bin the CLI publishes that each plugin runs
     after its `tsc`. It rewrites those specifiers in the emitted `.mjs` to the relative form the
     flattened `.claude/scripts/` layout needs, and records what it rewrote in
     `payload-dist/payload-imports.json`. Install reads that sidecar and copies each named lib from
-    the CLI's own `payload-dist`, so a plugin no longer relies on the `core` module happening to
-    ship what its scripts import. A plugin declares nothing and cannot forget.
+    `@agent-kit/payload`'s own `payload-dist`, so a plugin no longer relies on the `core` module
+    happening to ship what its scripts import. A plugin declares nothing and cannot forget.
   - **Never let a bare `@agent-kit/*` specifier reach an emitted `.mjs`.** The payload is a copy
     target, not a dependency: it is copied into a user's repo and runs standalone on bare node, on
     every hook. `payload/__test__/dependencies.test.ts` fails on a surviving specifier, and that

@@ -85,7 +85,7 @@ describe('checkDesign, untokenized colors', () => {
 });
 
 describe('checkDesign, declared-pair contrast', () => {
-  it('computes 1.99:1 for #adb5bd on #f9fafb', () => {
+  it('computes 1.98:1 for #adb5bd on #f9fafb', () => {
     const css = `
 .summary-card__label {
   color: #adb5bd;
@@ -95,12 +95,12 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, {});
 
-    expect(findings.some((finding) => finding.message.includes('1.99:1'))).toBe(
+    expect(findings.some((finding) => finding.message.includes('1.98:1'))).toBe(
       true,
     );
   });
 
-  it('computes 1.52:1 for #c9ced4 on #f9fafb', () => {
+  it('computes 1.51:1 for #c9ced4 on #f9fafb', () => {
     const css = `
 .summary-card__hint {
   color: #c9ced4;
@@ -110,7 +110,7 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, {});
 
-    expect(findings.some((finding) => finding.message.includes('1.52:1'))).toBe(
+    expect(findings.some((finding) => finding.message.includes('1.51:1'))).toBe(
       true,
     );
   });
@@ -160,7 +160,7 @@ describe('checkDesign, declared-pair contrast', () => {
     );
   });
 
-  it('computes 2.86:1 for a percentage-lightness oklch foreground on a hex background', () => {
+  it('computes 2.87:1 for a percentage-lightness oklch foreground on a hex background, matching the rendered tier', () => {
     const css = `
 .oklch-percent {
   color: oklch(63.7% 0.237 25.331);
@@ -170,7 +170,7 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, {});
 
-    expect(findings.some((finding) => finding.message.includes('2.86:1'))).toBe(
+    expect(findings.some((finding) => finding.message.includes('2.87:1'))).toBe(
       true,
     );
   });
@@ -215,6 +215,43 @@ describe('checkDesign, declared-pair contrast', () => {
       )?.message,
     ).toBe(
       'var(--color-brand-weird) on #ffffff could not be checked for contrast: unsupported color space display-p3.',
+    );
+  });
+
+  it('computes 4.24:1 for #18a838 on #480878, matching the rendered tier for the same pair', () => {
+    const css = `
+.declared-hex-pair {
+  color: #18a838;
+  background: #480878;
+}
+`;
+
+    const { findings } = checkDesign(css, {});
+
+    expect(findings.some((finding) => finding.message.includes('4.24:1'))).toBe(
+      true,
+    );
+  });
+
+  it('computes 4.24:1 for a var() token resolving to #18a838, matching the same rendered pair', () => {
+    const css = `
+.declared-token-pair {
+  color: var(--color-brand-accent);
+  background: #480878;
+}
+`;
+    const root = {
+      color: {
+        brand: {
+          accent: { $value: parseColor('#18a838') },
+        },
+      },
+    };
+
+    const { findings } = checkDesign(css, root);
+
+    expect(findings.some((finding) => finding.message.includes('4.24:1'))).toBe(
+      true,
     );
   });
 });

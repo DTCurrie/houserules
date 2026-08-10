@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { readJson } from '../../../payload-dist/scripts/lib/workspaces.mjs';
+import { readJson } from '@agent-kit/payload/workspaces';
 import { apply } from '../../apply.js';
 import type { Flags } from '../../cli-contract.js';
 import {

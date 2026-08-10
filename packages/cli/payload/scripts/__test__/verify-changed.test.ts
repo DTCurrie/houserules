@@ -54,6 +54,32 @@ describe('verify-changed.mjs --json', () => {
     const city = out.scope.find((s) => s.package === '@fix/cityville');
     expect(city!.argv).toEqual([['--filter', '@fix/cityville', 'verify']]);
   });
+
+  it('clears a target that sets verifyCommands to null, rather than inheriting the block', () => {
+    const root = repoWithStudioDependingOnCityville();
+    editKitConfig(root, (config) => {
+      const targets = (config.targets ?? []) as {
+        packageName?: string;
+        verifyCommands?: string[] | null;
+      }[];
+      const city = targets.find((t) => t.packageName === '@fix/cityville');
+      city!.verifyCommands = null;
+    });
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const y = 2;\n',
+    );
+
+    const r = runScript(root, SCRIPT, { args: ['--json'] });
+
+    expect(r.status, r.stderr).toBe(0);
+    const out = JSON.parse(r.stdout) as {
+      scope: { package: string; argv: string[][] }[];
+    };
+    const city = out.scope.find((s) => s.package === '@fix/cityville');
+    expect(city, r.stdout).toBeDefined();
+    expect(city!.argv).toEqual([]);
+  });
 });
 
 describe('verify-changed.mjs --run', () => {
@@ -96,5 +122,22 @@ describe('verify-changed.mjs --run', () => {
     const r = runScript(freshRoot, SCRIPT, { args: ['--run'] });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/nothing to verify/);
+  });
+
+  it('names the verify block to configure when none exists, instead of running a script the repo never had', () => {
+    const bareRoot = repoWithStudioDependingOnCityville();
+    editKitConfig(bareRoot, (config) => {
+      delete config.verify;
+    });
+    appendFileSync(
+      join(bareRoot, 'games/cityville/src/game.ts'),
+      'export const y = 2;\n',
+    );
+
+    const r = runScript(bareRoot, SCRIPT, { args: ['--run'] });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/no "verify" block configured/);
+    expect(r.stdout).toMatch(/\.claude\/kit\.config\.json/);
   });
 });

@@ -36,6 +36,21 @@ same time, and a fixer run from here rewrites files your siblings still have ope
 runs one pass over everything after all of you have reported. Leave formatting nits alone. They are
 not your slice.
 
+**Never delete anything you were not given.** No `rm -rf` on a directory outside your owned paths, no
+"clearing stale state" to get a clean run, no deleting a file because a command complained about it.
+This is not a style preference. A worker that removed a generated-looking directory destroyed 34
+plan workspaces, two ledger snapshots, a credential, and the user's own settings file, all of which
+were gitignored and therefore unrecoverable from git. If a command seems to need a clean tree, that
+is a finding: report it under `Blocked` and stop.
+
+**Treat a gitignored directory as MORE dangerous than a tracked one, not less.** The instinct runs
+the other way, because gitignored usually means generated. It also means git cannot get it back. A
+tracked file you clobber is one `git restore` away. An untracked one is gone.
+
+**Do not run the repo's install, bootstrap, or sync commands.** Anything that regenerates a tool
+directory, writes to a remote, or rewrites config belongs to the orchestrator, who runs it once when
+the tree is quiet and can read the diff. Your slice edits source.
+
 **Run the acceptance yourself.** A slice reported without its acceptance output is sent back
 unreviewed, every time. Run the command from your brief and include its tail. If it fails inside your
 owned paths and you can't fix it there, report the failure honestly under `Blocked`. A truthful

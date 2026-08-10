@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * `agent-kit-payload`, the rewrite pass a plugin runs after its `tsc`.
+ * `agent-kit-payload`, assembling `payload-dist/` and rewriting cross-package imports, run
+ * after a plugin's `tsc`.
  *
  * Usage: `agent-kit-payload [payload-root]`, defaulting to `payload-dist` beside the cwd.
  *
@@ -16,7 +17,11 @@
 
 import { join } from 'node:path';
 
-import { buildPayload, DEFAULT_PAYLOAD_ROOT } from './payload-build.js';
+import {
+  assemblePayload,
+  buildPayload,
+  DEFAULT_PAYLOAD_ROOT,
+} from './payload-build.js';
 
 const payloadRoot = join(
   process.cwd(),
@@ -24,6 +29,7 @@ const payloadRoot = join(
 );
 
 try {
+  assemblePayload(payloadRoot, process.cwd());
   buildPayload(payloadRoot, process.cwd());
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

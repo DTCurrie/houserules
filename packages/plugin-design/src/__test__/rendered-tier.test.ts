@@ -236,6 +236,34 @@ describe('checkRenderedPage, oklch contrast', () => {
   });
 });
 
+describe('checkRenderedPage, rgb() contrast matching the declared tier', () => {
+  it('computes 4.24:1 for rgb(24, 168, 56) on rgb(72, 8, 120), the same pair the declared tier reports', async () => {
+    const session = stubSession([
+      {
+        results: [
+          {
+            selector: 'p#label',
+            color: 'rgb(24, 168, 56)',
+            background: 'rgb(72, 8, 120)',
+          },
+        ],
+        truncated: false,
+      },
+      noFindingsEvaluation(),
+      noFindingsEvaluation(),
+    ]);
+
+    const result = await checkRenderedPage(session, {});
+
+    expect(
+      result.findings.find((finding) => finding.selector === 'p#label')
+        ?.message,
+    ).toBe(
+      'rgb(24, 168, 56) on effective background rgb(72, 8, 120) is 4.24:1, under the 4.5:1 minimum.',
+    );
+  });
+});
+
 describe('checkRenderedPage, computed color drift against an oklch token', () => {
   it('reports no finding when the computed color converts to the same sRGB as an oklch token', async () => {
     const session = stubSession([

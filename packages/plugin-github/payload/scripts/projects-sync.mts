@@ -45,7 +45,7 @@ import {
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { loadConfigSafe, repoRoot } from '@agent-kit/cli/payload/kit-config';
+import { loadConfigSafe, repoRoot } from '@agent-kit/payload/kit-config';
 import {
   appendEvent,
   ledgerDir,
@@ -53,7 +53,7 @@ import {
   nowIso,
   decodeBody,
   readLog,
-} from '@agent-kit/cli/payload/entry-ledger';
+} from '@agent-kit/payload/entry-ledger';
 import {
   ghErr,
   ghExists,
@@ -75,8 +75,8 @@ import {
   indexBasename,
   loadIndex,
   serializeIndex,
-} from '@agent-kit/cli/payload/ledger-index';
-import type { LedgerIndex } from '@agent-kit/cli/payload/ledger-index';
+} from '@agent-kit/payload/ledger-index';
+import type { LedgerIndex } from '@agent-kit/payload/ledger-index';
 import {
   describeStep,
   planBootstrap,

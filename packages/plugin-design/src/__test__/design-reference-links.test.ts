@@ -68,4 +68,27 @@ describe('design rule reference links', () => {
       { link: '../reference/design-game-hud.md', installed: true },
     ]);
   });
+
+  it('installs no design-tailwind-theming reference when design-tailwind is chosen without design', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'design/design-tailwind',
+      plugins: PLUGINS,
+    });
+
+    expect(
+      existsSync(join(root, '.claude/reference/design-tailwind-theming.md')),
+    ).toBe(false);
+  });
+
+  it('installs no design-game reference when design-game is chosen without design', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'design/design-game',
+      plugins: PLUGINS,
+      moduleOptions: { 'design/design-game': ['hud'] },
+    });
+
+    expect(existsSync(join(root, '.claude/reference/design-game-hud.md'))).toBe(
+      false,
+    );
+  });
 });

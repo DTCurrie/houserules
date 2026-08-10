@@ -26,8 +26,8 @@ import {
   resolveTargetCommands,
   runsAtRepoRoot,
   type RunnerBlock,
-} from './lib/kit-config.mjs';
-import { readStdinJson, repoRoot, tail } from './lib/proc.mjs';
+} from '@agent-kit/payload/kit-config';
+import { readStdinJson, repoRoot, tail } from '@agent-kit/payload/proc';
 
 interface HookInput {
   stop_hook_active?: boolean;

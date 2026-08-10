@@ -27,7 +27,7 @@
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && node scripts/build-payload.mjs && publint",
+      "command": "tsc -p tsconfig.build.json && agent-kit-payload && publint",
       "dependencies": [
         "../cli:build:ts"
       ],
@@ -35,8 +35,7 @@
         "src/**/*.ts",
         "!src/**/__test__/**",
         "tsconfig.build.json",
-        "payload/**",
-        "scripts/build-payload.mjs"
+        "payload/**"
       ],
       "output": [
         "dist/**",
@@ -89,7 +88,7 @@
   "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-persona-auditor#readme",
   "bugs": "https://github.com/DTCurrie/agent-kit/issues",
   "peerDependencies": {
-    "@agent-kit/cli": "^0.1.0"
+    "@agent-kit/cli": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
     "@agent-kit/cli": "workspace:*",

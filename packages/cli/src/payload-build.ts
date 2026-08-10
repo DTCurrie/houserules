@@ -1,8 +1,11 @@
 import { createRequire } from 'node:module';
 import {
+  cpSync,
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -14,6 +17,9 @@ import {
   readPayloadImports,
   type PayloadImports,
 } from './payload-imports.js';
+
+/** Every prefix the rewriter recognizes, tried in order. */
+const RECOGNIZED_PREFIXES = [PAYLOAD_IMPORT_PREFIX];
 
 const FROM_SPECIFIER =
   /((?:^|\n)\s*(?:import|export)[\s\S]*?from\s+['"])([^'"]+)(['"])/g;
@@ -63,8 +69,11 @@ function rewriteImports(
     text.replace(
       pattern,
       (match, prefix: string, spec: string, suffix: string) => {
-        if (!spec.startsWith(PAYLOAD_IMPORT_PREFIX)) return match;
-        const libName = spec.slice(PAYLOAD_IMPORT_PREFIX.length);
+        const matchedPrefix = RECOGNIZED_PREFIXES.find((candidate) =>
+          spec.startsWith(candidate),
+        );
+        if (!matchedPrefix) return match;
+        const libName = spec.slice(matchedPrefix.length);
         // The sidecar records the emitted BASENAME, extension included, because a consumer builds
         // an install destination straight from it as `.claude/scripts/lib/<name>`. Recording the
         // bare specifier tail instead produced an extensionless copy that resolved to nothing.
@@ -82,10 +91,70 @@ function rewriteImports(
   return { source: rewritten, changed, libs: [...seen] };
 }
 
-function cliLibDir(cwd: string): string {
+/** Top-level `payload/` directories a plugin never wants copied verbatim into `payload-dist/`. */
+const SKIP_TOP_LEVEL_DIRS = new Set(['scripts', '__test__']);
+
+function isUnderTestDir(relativePath: string): boolean {
+  return relativePath.split(sep).includes('__test__');
+}
+
+/**
+ * Copies every `payload/<dir>` except `scripts` into `payload-dist/<dir>`, replacing whatever
+ * was there. One entry per directory actually present under `payload/`, not a hand-listed set,
+ * so a plugin adding a new surface directory ships without editing a build script
+ * (AGENTKIT-b947e5).
+ *
+ * `scripts` is not copied here. `tsconfig.payload.json` compiles `payload/scripts/*.mts`
+ * straight into `payload-dist/scripts`, so this function only asserts that output already
+ * exists rather than duplicating it, and never touches it.
+ *
+ * `__test__` directories are excluded at any depth under a copied directory, mirroring
+ * `tsconfig.payload.json`'s own `payload/**\/__test__/**` exclude for the scripts it compiles.
+ * A colocated test must never reach the published package, whichever surface it sits under.
+ *
+ * @throws When `payload/scripts` has sources but `payload-dist/scripts` is missing, meaning
+ *   `tsc -p tsconfig.payload.json` has not run yet.
+ */
+export function assemblePayload(
+  payloadRoot: string,
+  packageRoot: string,
+): void {
+  const source = join(packageRoot, 'payload');
+  if (!existsSync(source)) {
+    throw new Error(`${source} is missing — nothing to assemble.`);
+  }
+  mkdirSync(payloadRoot, { recursive: true });
+
+  if (
+    existsSync(join(source, 'scripts')) &&
+    !existsSync(join(payloadRoot, 'scripts'))
+  ) {
+    throw new Error(
+      `${join(payloadRoot, 'scripts')} is missing — run \`tsc -p tsconfig.payload.json\` first.`,
+    );
+  }
+
+  const dirs = readdirSync(source, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => !SKIP_TOP_LEVEL_DIRS.has(name));
+
+  for (const dir of dirs) {
+    const from = join(source, dir);
+    const to = join(payloadRoot, dir);
+    rmSync(to, { recursive: true, force: true });
+    cpSync(from, to, {
+      recursive: true,
+      filter: (candidate) => !isUnderTestDir(relative(from, candidate)),
+    });
+  }
+}
+
+/** Resolves the directory a plugin's build should verify its rewritten lib imports against. */
+function payloadLibDir(cwd: string): string {
   const require = createRequire(join(cwd, 'package.json'));
-  const cliPackageJson = require.resolve('@agent-kit/cli/package.json');
-  return join(dirname(cliPackageJson), 'payload-dist', 'scripts', 'lib');
+  const payloadPackageJson = require.resolve('@agent-kit/payload/package.json');
+  return join(dirname(payloadPackageJson), 'payload-dist', 'scripts', 'lib');
 }
 
 /**
@@ -93,12 +162,11 @@ function cliLibDir(cwd: string): string {
  * flattened runtime layout needs, and writes the `payload-imports.json` sidecar recording what
  * it rewrote.
  *
- * @throws When a rewritten file references a lib that does not exist in the CLI's own
- *   `payload-dist/scripts/lib/`.
+ * @throws When a rewritten file references a lib that does not exist in
+ *   `@agent-kit/payload`'s `payload-dist/scripts/lib/`.
  */
 export function buildPayload(payloadRoot: string, cwd: string): void {
   const files = walkMjsFiles(payloadRoot);
-  const libDir = cliLibDir(cwd);
 
   const rewrites = new Map<string, RewriteResult>();
   for (const file of files) {
@@ -107,10 +175,17 @@ export function buildPayload(payloadRoot: string, cwd: string): void {
     rewrites.set(file, result);
   }
 
+  const hasLibImports = [...rewrites.values()].some(
+    (result) => result.libs.length > 0,
+  );
+  // Only a plugin that actually imports a shared lib needs `@agent-kit/payload` resolvable, so
+  // this stays unresolved for the common case of a plugin with none.
+  const libDir = hasLibImports ? payloadLibDir(cwd) : undefined;
+
   const missing: string[] = [];
   for (const [file, result] of rewrites) {
     for (const libName of result.libs) {
-      if (!existsSync(join(libDir, libName))) {
+      if (!libDir || !existsSync(join(libDir, libName))) {
         missing.push(
           `${toPosix(relative(payloadRoot, file))} imports unknown lib "${libName}"`,
         );
@@ -120,7 +195,7 @@ export function buildPayload(payloadRoot: string, cwd: string): void {
 
   if (missing.length > 0) {
     throw new Error(
-      `payload-build found imports of libs that do not exist in @agent-kit/cli:\n${missing.join('\n')}`,
+      `payload-build found imports of libs that do not exist in @agent-kit/payload:\n${missing.join('\n')}`,
     );
   }
 

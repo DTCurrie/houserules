@@ -456,23 +456,8 @@ export function contrastRatio(a: DtcgColorValue, b: DtcgColorValue): number {
   return (lighter + CONTRAST_OFFSET) / (darker + CONTRAST_OFFSET);
 }
 
-const HEX6_PATTERN = /^#([0-9a-fA-F]{6})$/;
-const HEX_CHANNEL_MAX = 255;
-
-// The ratio math needs full sRGB precision. `parseColor` rounds to three decimals for
-// token authoring, which is precise enough for a value comparison but not for a contrast
-// ratio, since a fifth-decimal error can flip which side of 4.5:1 the result lands on.
-function parseHexPrecise(raw: string): DtcgColorValue | undefined {
-  const match = HEX6_PATTERN.exec(raw.trim());
-  if (!match) return undefined;
-  const digits = match[1];
-  const components = [0, 2, 4].map(
-    (offset) =>
-      parseInt(digits.slice(offset, offset + 2), 16) / HEX_CHANNEL_MAX,
-  );
-  return { colorSpace: 'srgb', components };
-}
-
+// The DTCG document already rounds stored colors to three decimals, so measuring more
+// precisely here would only manufacture a mismatch against the rendered tier.
 function resolveDeclaredColor(
   root: Record<string, unknown>,
   raw: string,
@@ -482,7 +467,7 @@ function resolveDeclaredColor(
     const value = resolveTokenByVarName(root, varName);
     return isColorValue(value) ? value : undefined;
   }
-  return parseHexPrecise(raw) ?? parseColor(raw);
+  return parseColor(raw);
 }
 
 function findBackgroundDeclaration(

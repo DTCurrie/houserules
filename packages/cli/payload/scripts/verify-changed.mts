@@ -25,13 +25,14 @@ import { spawnSync } from 'node:child_process';
 import {
   loadConfigSafe,
   repoRoot,
+  resolveTargetCommands,
   type RunnerBlock,
-} from './lib/kit-config.mjs';
+} from '@agent-kit/payload/kit-config';
 import {
   listWorkspacePackages,
   type WorkspacePackage,
-} from './lib/workspaces.mjs';
-import { git, tail } from './lib/proc.mjs';
+} from '@agent-kit/payload/workspaces';
+import { git, tail } from '@agent-kit/payload/proc';
 
 const argv = new Set(process.argv.slice(2));
 const MODE = argv.has('--run') ? 'run' : argv.has('--json') ? 'json' : 'plan';
@@ -109,7 +110,7 @@ function main() {
   const RUNNER = verify.runner ?? config.packageManager ?? 'pnpm';
   const FILTER_FLAG = verify.filterFlag ?? '--filter';
   const RUN_PREFIX = verify.runScriptPrefix ?? [];
-  const COMMANDS = verify.commands ?? ['verify'];
+  const COMMANDS = verify.commands;
   const BASE = verify.baseBranch ?? config.changesets?.baseBranch ?? 'main';
 
   let root: string;
@@ -121,8 +122,11 @@ function main() {
 
   const packages = listWorkspacePackages(root);
   const commandsFor = (name: string) =>
-    (config.targets ?? []).find((t) => t.packageName === name)
-      ?.verifyCommands ?? COMMANDS;
+    resolveTargetCommands(
+      (config.targets ?? []).find((t) => t.packageName === name)
+        ?.verifyCommands,
+      COMMANDS,
+    );
   // Monorepo: <runner> <filterFlag> <pkg> <script>. Single: <runner> <prefix...> <script>.
   const argvFor = (name: string, script: string) =>
     FILTER_FLAG ? [FILTER_FLAG, name, script] : [...RUN_PREFIX, script];
@@ -212,6 +216,13 @@ function main() {
       'Run each command; report one compact line per package: "<pkg>: PASS" or "<pkg>: FAIL (<step>)".',
     );
     process.stdout.write(`${lines.join('\n')}\n`);
+    process.exit(0);
+  }
+
+  if (MODE === 'run' && COMMANDS === undefined) {
+    process.stdout.write(
+      'verify-changed: no "verify" block configured — add one to .claude/kit.config.json (commands: [...]).\n',
+    );
     process.exit(0);
   }
 

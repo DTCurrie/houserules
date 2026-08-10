@@ -53,6 +53,26 @@ So ask where the violating code would land, and cover that path too. Usually it 
 the containing directory rather than the one file, since a path matches any directory scope
 above it.
 
+## Route a path-watchable revisit trigger into scope
+
+The same mechanism answers a second question, this time about the "Revisit when" field. A
+trigger is path-watchable when its condition is someone touching, adding, or changing a path
+in this repo. When it is, put that path in `--scope` too, alongside the prose, since
+`scope <path>` and prompt injection already surface a decision when its scoped paths are
+touched. A trigger that only becomes true outside this repo, or names no enumerable path,
+stays prose, and nobody is notified when it fires. That is honest. A decision that watches
+a minority of its own triggers while its wording implies full coverage is worse than one
+that plainly watches nothing.
+
+Path-watchable, real record: `AGENTKIT-a51421`'s trigger names three files, `init.ts`,
+`modules.ts`, and `doctor.ts` under `packages/cli/src/commands/`. Editing any of them to pass
+the resolved plugin set is exactly the condition, so those paths belong in `--scope`. As
+recorded they are not, which is why `scope` on any of the three today returns nothing.
+
+Not path-watchable, real record: `AGENTKIT-c7e4ec`'s trigger is "WCAG 2.3 or 3.0 reaches
+Recommendation". No path in this repo changes when the W3C publishes a spec, so that one
+stays prose and no scope covers it.
+
 ## Check for an existing decision first
 
 Before recording, ask whether one already governs this ground:
@@ -119,6 +139,8 @@ to `.claude/ledgers/studio.DECISIONS.md`. For a repo-wide decision, pass `DECISI
 1. Check the bar above. If it does not pass, say so and stop.
 2. Draft Why, Rejected, In the code, Revisit when. If Rejected or Revisit when is missing,
    ask the user rather than inventing one.
-3. Run `node .claude/scripts/decision-log.mjs decide <prefix> <area> "<title>" "<body>"`
+3. Check whether Revisit when is path-watchable. If it is, add that path to `--scope`
+   alongside "In the code". If it is not, leave it prose and move on.
+4. Run `node .claude/scripts/decision-log.mjs decide <prefix> <area> "<title>" "<body>"`
    (or `supersede`/`amend` as appropriate).
-4. Spawn the `decision-reviewer` subagent on the new entry to check it against the bar.
+5. Spawn the `decision-reviewer` subagent on the new entry to check it against the bar.

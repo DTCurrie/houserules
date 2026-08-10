@@ -259,7 +259,14 @@ function designTailwindModule(api: PluginApi): ModuleDef {
     defaultEnabled(): boolean {
       return false;
     },
-    plan(): Action[] {
+    plan(_ctx: Ctx, answers: Answers): Action[] {
+      // The theming reference is linked only from the design rule's `appendBody`, which the
+      // `design` module owns. Installing it without `design` selected would leave it an
+      // orphan no rule, skill, or agent ever routes a reader to.
+      const designSelected = answers.moduleIds.includes(`${api.alias}/design`);
+      const referenceLine = designSelected
+        ? 'See .claude/reference/design-tailwind-theming.md for how to extend it and build a runtime theme, linked from the design rule.'
+        : "The theming reference guide was NOT installed, because only the design module's rule can link it into an agent's working context. Install design/design alongside this module to get .claude/reference/design-tailwind-theming.md.";
       return [
         // Every lib these scripts import has to be listed here. One left out installs a
         // script that fails with ERR_MODULE_NOT_FOUND in the user's repo, which no unit
@@ -274,14 +281,18 @@ function designTailwindModule(api: PluginApi): ModuleDef {
           'tailwind-theme.css.template',
           'starter @theme to copy into your own entry stylesheet',
         ),
-        api.payload.reference(
-          id,
-          'design-tailwind-theming',
-          'pull-only guide to extending Tailwind into a design system and building a runtime theme',
-        ),
+        ...(designSelected
+          ? [
+              api.payload.reference(
+                id,
+                'design-tailwind-theming',
+                'pull-only guide to extending Tailwind into a design system and building a runtime theme',
+              ),
+            ]
+          : []),
         {
           kind: 'advise',
-          text: `Tailwind theme wired as the design system. No ${TOKENS_PATH} is seeded, and design.mjs answers token, list, and scales queries from this repo's own @theme block merged with Tailwind's defaults. It reads whichever stylesheet imports Tailwind, or the one you name with --theme <path>. \`check\` also scans each file's class names with \`@tailwindcss/oxide\` and judges them against the same theme, alongside any \`<style>\` block declarations, naming an arbitrary value's nearest theme step and reporting a contrast finding for a \`bg-*\`/\`text-*\` pairing on one element. That half needs \`@tailwindcss/oxide\` installed separately from \`tailwindcss\`, and \`check\` says so rather than reporting a clean file when it is missing. The kit never writes into the Tailwind compile path, so your entry stylesheet and build config are untouched. A starter \`@theme\` installs at .claude/kit-templates/tailwind-theme.css.template, a reference to copy from, not a file the kit ever writes into your CSS. See .claude/reference/design-tailwind-theming.md for how to extend it and build a runtime theme. It needs the design module for the script itself. If this repo already had ${TOKENS_PATH} from an earlier install, nothing reads it now and the kit will not delete it, since a seed is yours. Remove it yourself, and \`agent-kit doctor\` will remind you while it is still there.`,
+          text: `Tailwind theme wired as the design system. No ${TOKENS_PATH} is seeded, and design.mjs answers token, list, and scales queries from this repo's own @theme block merged with Tailwind's defaults. It reads whichever stylesheet imports Tailwind, or the one you name with --theme <path>. \`check\` also scans each file's class names with \`@tailwindcss/oxide\` and judges them against the same theme, alongside any \`<style>\` block declarations, naming an arbitrary value's nearest theme step and reporting a contrast finding for a \`bg-*\`/\`text-*\` pairing on one element. That half needs \`@tailwindcss/oxide\` installed separately from \`tailwindcss\`, and \`check\` says so rather than reporting a clean file when it is missing. The kit never writes into the Tailwind compile path, so your entry stylesheet and build config are untouched. A starter \`@theme\` installs at .claude/kit-templates/tailwind-theme.css.template, a reference to copy from, not a file the kit ever writes into your CSS. ${referenceLine} It needs the design module for the script itself. If this repo already had ${TOKENS_PATH} from an earlier install, nothing reads it now and the kit will not delete it, since a seed is yours. Remove it yourself, and \`agent-kit doctor\` will remind you while it is still there.`,
           module: id,
         },
       ];
@@ -330,6 +341,21 @@ function designGameModule(api: PluginApi): ModuleDef {
     },
     plan(_ctx, answers): Action[] {
       const chosen = answers.moduleOptions[`${api.alias}/${id}`] ?? [];
+      if (chosen.length === 0) return [];
+      // A game guide is linked only from the design rule's `appendBody`, which the `design`
+      // module owns. Installing it without `design` selected would leave it an orphan no
+      // rule, skill, or agent ever routes a reader to, so the guides stay uninstalled until
+      // both are selected.
+      const designSelected = answers.moduleIds.includes(`${api.alias}/design`);
+      if (!designSelected) {
+        return [
+          {
+            kind: 'advise',
+            text: "Game UI references were NOT installed, because only the design module's rule can link a guide into an agent's working context. Install design/design alongside design-game to get the guides you chose under .claude/reference/.",
+            module: id,
+          },
+        ];
+      }
       const guideActions = chosen.flatMap((guide): Action[] => {
         if (!GAME_GUIDES.includes(guide)) return [];
         return [
@@ -345,7 +371,7 @@ function designGameModule(api: PluginApi): ModuleDef {
         ...guideActions,
         {
           kind: 'advise',
-          text: 'Game UI references installed under .claude/reference/. They are PULL-ONLY, so they cost nothing until something reads them. There is deliberately no game rule: whether a repo is a game cannot be detected from a file extension, so a path-scoped rule would load on every component turn in a repo that is not one. If the design module is also installed, its rule links each guide you chose here under "Also installed in this repo", so you do not need your own pointer.',
+          text: 'Game UI references installed under .claude/reference/. They are PULL-ONLY, so they cost nothing until something reads them. There is deliberately no game rule: whether a repo is a game cannot be detected from a file extension, so a path-scoped rule would load on every component turn in a repo that is not one. The design module is installed alongside this one, so its rule links each guide you chose here under "Also installed in this repo".',
           module: id,
         },
       ];

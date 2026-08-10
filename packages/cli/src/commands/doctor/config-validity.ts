@@ -4,11 +4,8 @@ import { join } from 'node:path';
 import {
   resolveTargetCommands,
   runsAtRepoRoot,
-} from '../../../payload-dist/scripts/lib/kit-config.mjs';
-import {
-  listWorkspacePackages,
-  readJson,
-} from '../../../payload-dist/scripts/lib/workspaces.mjs';
+} from '@agent-kit/payload/kit-config';
+import { listWorkspacePackages, readJson } from '@agent-kit/payload/workspaces';
 import { validateKitConfig } from '../../core/config.js';
 import type { Ctx } from '../../detect.js';
 import { MODULES } from '../../plan.js';
@@ -163,13 +160,12 @@ export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
   }
 
   // The per-target loop above walks only NAMED verify commands, so a repo that names none
-  // anywhere is exactly the repo it says nothing about. That is the one that breaks:
-  // verify-changed.mts falls back to a `verify` script most repos do not have, and the
-  // failure surfaces at use time as ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT.
+  // anywhere is exactly the repo it says nothing about. That repo's verify-changed.mts
+  // --run degrades to a no-op message instead of failing, so doctor is what catches it.
   if (verifyInstalled && !anyVerifyCommand)
     findings.push({
       level: 'WARN',
-      msg: 'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/kit.config.json, or "verifyCommands" to each target. Without one the helper falls back to a "verify" script and fails when you run it.',
+      msg: 'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/kit.config.json, or "verifyCommands" to each target. Without one --run has nothing to run.',
     });
 
   // A workspace member no target covers silently misses lint-fix, reviewer, and ledger

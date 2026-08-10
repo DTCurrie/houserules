@@ -341,6 +341,13 @@ export function computeEffects(
   // already-installed files are not mistaken for retired ones and pruned.
   const broken = new Map<string, string[]>();
   const brokenDests = new Set<string>();
+  // dest → src of the copy already planned there. Core hand-lists every shared lib
+  // unconditionally (modules/core.ts), and a plugin's sidecar independently derives a copy
+  // of the same lib from the same CLI payload, so the two actions are byte-identical: same
+  // dest, same src, different `module`. Deduping only when both match is what keeps this
+  // safe for a genuine dest collision between two DIFFERENT sources, which stays a bug this
+  // does not paper over.
+  const seenCopySrc = new Map<string, string>();
 
   for (const action of actions) {
     if (action.kind === 'advise') {
@@ -504,11 +511,11 @@ export function computeEffects(
     }
 
     // copy | write: kit-owned
-    if (
-      action.kind === 'copy' &&
-      checkPayloadMissing(action, plugins, broken, brokenDests)
-    )
-      continue;
+    if (action.kind === 'copy') {
+      if (seenCopySrc.get(action.dest) === action.src) continue;
+      seenCopySrc.set(action.dest, action.src);
+      if (checkPayloadMissing(action, plugins, broken, brokenDests)) continue;
+    }
     const content = readAction(action);
     const hash = sha256(content);
     const op = classifyWrite({

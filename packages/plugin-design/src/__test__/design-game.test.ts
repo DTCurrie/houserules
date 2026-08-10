@@ -14,7 +14,7 @@ function referencePath(root: string, name: string): string {
 
 function installedWith(guides?: string[]): string {
   return useInstalledRepo('pnpm-monorepo', {
-    modules: 'design/design-game',
+    modules: 'design/design,design/design-game',
     plugins: PLUGINS,
     ...(guides ? { moduleOptions: { 'design/design-game': guides } } : {}),
   });
@@ -54,7 +54,10 @@ describe('design game references', () => {
   });
 
   it('installs no advise action and no other file when no option was chosen', () => {
-    const root = installedWith();
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'design/design-game',
+      plugins: PLUGINS,
+    });
 
     expect(existsSync(join(root, '.claude/reference'))).toBe(false);
   });
@@ -104,5 +107,15 @@ describe('design game references', () => {
 
     expect(ruleText).not.toContain('design-game-hud');
     expect(ruleText).not.toContain('design-game-visual');
+  });
+
+  it('installs no reference doc when design-game is chosen without design, since nothing could link it', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'design/design-game',
+      plugins: PLUGINS,
+      moduleOptions: { 'design/design-game': ['hud'] },
+    });
+
+    expect(existsSync(referencePath(root, 'design-game-hud.md'))).toBe(false);
   });
 });

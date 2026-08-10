@@ -1177,3 +1177,94 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
     expect(plannedDests.has(CONFIG_DEST)).toBe(true);
   });
 });
+
+describe('computeEffects, given two copy actions on one destination', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-copy-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  function writeLib(root: string, rel: string, content: string): string {
+    const abs = join(root, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, content);
+    return abs;
+  }
+
+  const LIB_DEST = '.claude/scripts/lib/entry-ledger.mjs';
+
+  function libCopy(src: string, module: string): CopyAction {
+    return {
+      kind: 'copy',
+      src,
+      dest: LIB_DEST,
+      module,
+      reason: 'shared script library',
+    };
+  }
+
+  function copiesTo(effects: { action: { dest: string } }[]): unknown[] {
+    return effects.filter((effect) => effect.action.dest === LIB_DEST);
+  }
+
+  it('plans one write when core and a plugin derive the same lib from the same source', () => {
+    const payload = tempDir();
+    const src = writeLib(
+      payload,
+      'entry-ledger.mjs',
+      'export const ledger = 1;\n',
+    );
+
+    const { effects } = computeEffects(tempDir(), [
+      libCopy(src, 'core'),
+      libCopy(src, 'backlog'),
+    ]);
+
+    expect(copiesTo(effects)).toHaveLength(1);
+  });
+
+  it('attributes the surviving write to the first action, so core keeps the lib', () => {
+    const payload = tempDir();
+    const src = writeLib(
+      payload,
+      'entry-ledger.mjs',
+      'export const ledger = 1;\n',
+    );
+
+    const { effects } = computeEffects(tempDir(), [
+      libCopy(src, 'core'),
+      libCopy(src, 'backlog'),
+    ]);
+
+    expect(effects[0].action.module).toBe('core');
+  });
+
+  it('plans both writes when two different sources claim one destination', () => {
+    const payload = tempDir();
+    const shipped = writeLib(
+      payload,
+      'cli/entry-ledger.mjs',
+      'export const ledger = 1;\n',
+    );
+    const forged = writeLib(
+      payload,
+      'other/entry-ledger.mjs',
+      'export const ledger = 2;\n',
+    );
+
+    const { effects } = computeEffects(tempDir(), [
+      libCopy(shipped, 'core'),
+      libCopy(forged, 'backlog'),
+    ]);
+
+    expect(copiesTo(effects)).toHaveLength(2);
+  });
+});

@@ -21,9 +21,9 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import { loadConfigSafe } from '@agent-kit/cli/payload/kit-config';
-import { listWorkspacePackages } from '@agent-kit/cli/payload/workspaces';
-import { git, readStdinJson } from '@agent-kit/cli/payload/proc';
+import { loadConfigSafe } from '@agent-kit/payload/kit-config';
+import { listWorkspacePackages } from '@agent-kit/payload/workspaces';
+import { git, readStdinJson } from '@agent-kit/payload/proc';
 
 const STATE_DIR = '.claude/state';
 const STATE_FILE = 'changeset-check.json';

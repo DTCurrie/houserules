@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "build": "wireit",
-    "build:payload": "rm -rf payload-dist && tsc -p tsconfig.payload.json && agent-kit-payload && node scripts/build-payload.mjs",
+    "build:payload": "rm -rf payload-dist && tsc -p tsconfig.payload.json && agent-kit-payload",
     "check": "wireit",
     "prepack": "npm run build",
     "test": "wireit",
@@ -28,10 +28,10 @@
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload && node scripts/build-payload.mjs && publint",
+      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload && publint",
       "dependencies": [
         "../cli:build:ts",
-        "../cli:build:payload"
+        "../payload:build"
       ],
       "files": [
         "src/**/*.ts",
@@ -39,8 +39,7 @@
         "payload/**",
         "!payload/**/__test__/**",
         "tsconfig.build.json",
-        "tsconfig.payload.json",
-        "scripts/build-payload.mjs"
+        "tsconfig.payload.json"
       ],
       "output": [
         "dist/**",
@@ -52,7 +51,7 @@
       "dependencies": [
         "../cli:build:ts",
         "../test:build",
-        "../cli:build:payload"
+        "../payload:build"
       ],
       "files": [
         "src/**/*.ts",
@@ -103,7 +102,7 @@
   "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-design#readme",
   "bugs": "https://github.com/DTCurrie/agent-kit/issues",
   "peerDependencies": {
-    "@agent-kit/cli": "^0.1.0"
+    "@agent-kit/cli": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
     "@agent-kit/cli": "workspace:*",

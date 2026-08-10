@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
-import { listWorkspacePackages } from '../../../payload-dist/scripts/lib/workspaces.mjs';
+import { listWorkspacePackages } from '@agent-kit/payload/workspaces';
 import { frontmatterBlock } from '../../core/frontmatter.js';
 import type { CheckResult, Finding } from './finding.js';
 

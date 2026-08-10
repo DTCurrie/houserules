@@ -1,14 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { makeCtx } from '#test/ctx-builder';
-import { useRepo } from '#test/repo';
+import { useInstalledRepo, useRepo } from '#test/repo';
 import type { Ctx } from '../../../detect.js';
 import {
   checkReferenceReachability,
   referenceLinksIn,
 } from '../reference-reachability.js';
+import { detect } from '../../../detect.js';
+
+const KIT_ROOT = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../..',
+);
+const ACCESSIBILITY = join(dirname(KIT_ROOT), 'plugin-accessibility');
+const TESTING = join(dirname(KIT_ROOT), 'plugin-testing');
+const DESIGN = join(dirname(KIT_ROOT), 'plugin-design');
 
 function write(root: string, rel: string, text: string): void {
   const abs = join(root, rel);
@@ -185,5 +195,40 @@ describe('checkReferenceReachability', () => {
       findings: [],
       readouts: [],
     });
+  });
+
+  it('is silent on a repo staged with two plugins that both set moduleOptions', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'a11y/accessibility,t/testing',
+      plugins: [
+        { name: ACCESSIBILITY, alias: 'a11y' },
+        { name: TESTING, alias: 't' },
+      ],
+      moduleOptions: {
+        'a11y/accessibility': ['html', 'react'],
+        't/testing': ['typescript', 'javascript'],
+      },
+    });
+
+    expect(messages(root, detect(root))).toEqual([]);
+  });
+
+  it('reports no reference findings for design-game installed without design', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'design/design-game',
+      plugins: [{ name: DESIGN, alias: 'design' }],
+      moduleOptions: { 'design/design-game': ['hud', 'visual'] },
+    });
+
+    expect(messages(root, detect(root))).toEqual([]);
+  });
+
+  it('reports no reference findings for design-tailwind installed without design', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'design/design-tailwind',
+      plugins: [{ name: DESIGN, alias: 'design' }],
+    });
+
+    expect(messages(root, detect(root))).toEqual([]);
   });
 });

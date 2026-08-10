@@ -234,6 +234,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@agent-kit/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
@@ -305,11 +308,38 @@ importers:
         specifier: workspace:*
         version: link:../..
 
+  packages/payload:
+    devDependencies:
+      '@agent-kit/test':
+        specifier: workspace:*
+        version: link:../test
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      publint:
+        specifier: ^0.3.23
+        version: 0.3.23
+      type-fest:
+        specifier: ^5.8.0
+        version: 5.8.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(vite@8.1.5(@types/node@26.1.2))
+      wireit:
+        specifier: ^0.14.13
+        version: 0.14.13
+
   packages/plugin-accessibility:
     devDependencies:
       '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
+      '@agent-kit/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@agent-kit/test':
         specifier: workspace:*
         version: link:../test
@@ -337,6 +367,9 @@ importers:
       '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
+      '@agent-kit/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@agent-kit/test':
         specifier: workspace:*
         version: link:../test
@@ -364,6 +397,9 @@ importers:
       '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
+      '@agent-kit/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@agent-kit/test':
         specifier: workspace:*
         version: link:../test
@@ -391,6 +427,9 @@ importers:
       '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
+      '@agent-kit/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@agent-kit/test':
         specifier: workspace:*
         version: link:../test
@@ -451,6 +490,9 @@ importers:
       '@agent-kit/cli':
         specifier: workspace:*
         version: link:../cli
+      '@agent-kit/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@agent-kit/test':
         specifier: workspace:*
         version: link:../test

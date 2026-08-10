@@ -8,7 +8,7 @@
 
 // Core declares this, and it is re-exported so every board module keeps naming project-shape as
 // where its vocabulary comes from. A type-only import, which erases before emit.
-import type { LedgerKind } from '@agent-kit/cli/payload/ledger-index';
+import type { LedgerKind } from '@agent-kit/payload/ledger-index';
 
 export type { LedgerKind };
 

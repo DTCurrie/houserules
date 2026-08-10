@@ -12,7 +12,7 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { repoRoot } from './lib/kit-config.mjs';
+import { repoRoot } from '@agent-kit/payload/kit-config';
 
 // Shared with payload/skills/debug-session/SKILL.md — the tag on every trace edit
 // and the throwaway-log directory. Keep both in sync with the skill.

@@ -1,8 +1,14 @@
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 
 import type { Action, BodyAction, CopyAction } from '../actions.js';
+import { KitError } from '../plan.js';
 import { payloadPath } from '../paths.js';
-import type { PayloadImports } from '../payload-imports.js';
+import {
+  PAYLOAD_IMPORTS_FILE,
+  type PayloadImports,
+} from '../payload-imports.js';
 
 /**
  * The action builders bound to one payload root. The kit binds them to its own payload, and
@@ -140,10 +146,22 @@ export function createPayloadBuilders(payloadRoot: string): PayloadBuilders {
   };
 }
 
+/**
+ * Resolves `@agent-kit/payload`'s own built payload root, the one publish-time source for the
+ * six shared libs. Every consumer that needs a `lib` copy, kit-owned modules and plugins alike,
+ * derives it from here rather than from a copy the CLI's own payload used to carry.
+ */
+function payloadLibRoot(): string {
+  const require = createRequire(import.meta.url);
+  const payloadPackageJson = require.resolve('@agent-kit/payload/package.json');
+  return join(dirname(payloadPackageJson), 'payload-dist');
+}
+
 const kitBuilders = createPayloadBuilders(payloadPath());
+const libBuilders = createPayloadBuilders(payloadLibRoot());
 
 export const script = kitBuilders.script;
-export const lib = kitBuilders.lib;
+export const lib = libBuilders.lib;
 export const skill = kitBuilders.skill;
 export const agent = kitBuilders.agent;
 
@@ -175,15 +193,21 @@ export const file = kitBuilders.file;
  *
  * A copy action's `dest` mirrors the payload root one-for-one, so `.claude/scripts/foo.mjs`
  * corresponds to the sidecar key `scripts/foo.mjs`. Every lib basename `sidecar` names for that
- * key gets ONE copy from the CLI's own payload, deduplicated across every action passed in, and
+ * key gets ONE copy from `@agent-kit/payload`, deduplicated across every action passed in, and
  * attributed to the module that declared the action which named it.
  *
  * Empty when `sidecar` names nothing, which is the compatibility path for a plugin published
  * before this mechanism existed.
+ *
+ * @param pluginName Named in the thrown error when a sidecar entry is stale.
+ * @throws KitError when `sidecar` names a lib `@agent-kit/payload` does not ship. That happens
+ *   when the plugin was built against a newer or older `@agent-kit/payload` than the one
+ *   installed now.
  */
 export function deriveLibActions(
   actions: Action[],
   sidecar: PayloadImports,
+  pluginName: string,
 ): CopyAction[] {
   const seen = new Set<string>();
   const derived: CopyAction[] = [];
@@ -195,6 +219,14 @@ export function deriveLibActions(
     for (const name of sidecar.libs[key] ?? []) {
       if (seen.has(name)) continue;
       seen.add(name);
+      if (!existsSync(join(payloadLibRoot(), 'scripts', 'lib', name))) {
+        throw new KitError(
+          `plugin "${pluginName}"'s ${PAYLOAD_IMPORTS_FILE} names lib "${name}" for ` +
+            `${key}, which this @agent-kit/payload does not ship. Rebuild the plugin's ` +
+            `payload (its package's \`build\` or \`build:payload\` script) against a ` +
+            `compatible @agent-kit/payload version.`,
+        );
+      }
       derived.push(lib(action.module, name));
     }
   }

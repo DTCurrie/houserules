@@ -389,8 +389,11 @@ kit's own do: zero npm dependencies, node builtins only, and a hook script that 
 every failure path rather than crashing a turn.
 
 A payload script that needs shared logic imports it from `.claude/scripts/lib/*.mjs` rather
-than vendoring a copy. That surface is a public runtime API, versioned with the CLI. See
-[CONVENTIONS.md](CONVENTIONS.md#11-plugin-surface-semver-policy).
+than vendoring a copy. That surface is a public runtime API, versioned with
+`@agent-kit/payload`, the package that ships it. See
+[CONVENTIONS.md](CONVENTIONS.md#11-plugin-surface-semver-policy). For the mechanics of
+importing a shared lib from your own payload source and the build step that wires it up, see
+[CONVENTIONS.md §12](CONVENTIONS.md#12-how-a-plugins-payload-reaches-a-shared-lib).
 
 Your package builds its own `payload-dist/` from source, the same way `@agent-kit/cli`
 builds its own. `PluginApi.payload` reads from your plugin's `payload-dist/`, never from the
@@ -439,11 +442,14 @@ which is the better default for a published plugin.
 `payload/`, the same way `@agent-kit/cli` builds its own. A prose-only plugin, one that ships
 only rules, reference docs, skills, agents, or output styles, has no compile step at all: it
 needs no `tsconfig.payload.json` and no `tsc` invocation, since none of those file types are
-compiled. A `tsconfig.payload.json`, a `tsc -p tsconfig.payload.json` build step, and a
-`build-payload.mjs` copy step exist only for a plugin that ships `.mts` scripts under
-`payload/scripts/`. If you copy `packages/plugin-accessibility/tsconfig.payload.json` as a
-starting point, delete its `rootDirs` entry: it points into this workspace and means nothing
-in your repo.
+compiled. A `tsconfig.payload.json`, a `tsc -p tsconfig.payload.json` build step, and an
+`agent-kit-payload` run exist only for a plugin that ships `.mts` scripts under
+`payload/scripts/`. `agent-kit-payload` is a bin `@agent-kit/cli` publishes: it assembles the
+prose directories, rewrites any `@agent-kit/payload/*` import in your emitted `.mjs`, and
+records which libs each script imports. `packages/plugin-accessibility/tsconfig.payload.json`
+is a starting point you can copy as-is: it carries no path into this workspace, since a
+payload script reaches a shared lib by package name instead (see
+[CONVENTIONS.md §12](CONVENTIONS.md#12-how-a-plugins-payload-reaches-a-shared-lib)).
 
 **Verify the plugin loads.** Run:
 

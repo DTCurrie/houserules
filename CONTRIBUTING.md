@@ -21,10 +21,11 @@ pnpm build
 
 ## Repo layout
 
-This is a pnpm workspace that publishes thirteen packages: `@agent-kit/cli` (the installer,
-which ships the `agent-kit` binary), eleven `@agent-kit/plugin-*` packages, and
-`@agent-kit/test`, a shared test library. Each package owns its own `src/`, tests, and, for
-the CLI and plugins, a `payload/` directory of files the installer copies into a user's repo.
+This is a pnpm workspace that publishes fifteen packages: `@agent-kit/cli` (the installer,
+which ships the `agent-kit` binary), `@agent-kit/payload` (the shared payload libs, imported
+by package name), twelve `@agent-kit/plugin-*` packages, and `@agent-kit/test`, a shared test
+library. Each package owns its own `src/`, tests, and, for the CLI and plugins, a `payload/`
+directory of files the installer copies into a user's repo.
 Root-level config (`prettier`, `eslint`, changesets, CI workflows) applies to the whole
 workspace, since no package defines its own lint script.
 

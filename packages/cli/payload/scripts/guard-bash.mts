@@ -12,8 +12,8 @@
  * A missing or unreadable config falls back to the four defaults.
  */
 
-import { GUARD_DEFAULTS, loadConfigSafe } from './lib/kit-config.mjs';
-import { readStdinJson } from './lib/proc.mjs';
+import { GUARD_DEFAULTS, loadConfigSafe } from '@agent-kit/payload/kit-config';
+import { readStdinJson } from '@agent-kit/payload/proc';
 
 interface BashPayload {
   tool_input?: { command?: string };

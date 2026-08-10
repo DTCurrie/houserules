@@ -7,8 +7,8 @@
  * stdout becomes session context, so this stays tiny. Every failure path exits 0.
  */
 
-import { loadConfigSafe } from './lib/kit-config.mjs';
-import { git } from './lib/proc.mjs';
+import { loadConfigSafe } from '@agent-kit/payload/kit-config';
+import { git } from '@agent-kit/payload/proc';
 
 try {
   const cwd = process.cwd();

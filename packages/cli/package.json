@@ -1,6 +1,6 @@
 {
   "name": "@agent-kit/cli",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "agent-kit: an interactive installer for a portable Claude Code context-discipline kit: hooks, skills, agents, changesets integration, and token-efficiency tooling.",
   "type": "module",
   "publishConfig": {
@@ -13,6 +13,7 @@
   "files": [
     "dist",
     "payload-dist",
+    "!payload-dist/scripts/lib/**",
     "schema",
     "kit.config.example.json",
     "CONVENTIONS.md"
@@ -22,9 +23,6 @@
     "./plugin": {
       "types": "./dist/plugin.d.ts",
       "default": "./dist/plugin.js"
-    },
-    "./payload/*": {
-      "types": "./payload-dist/scripts/lib/*.d.mts"
     },
     "./schema": "./schema/kit.config.schema.json"
   },
@@ -66,6 +64,9 @@
     },
     "build:payload": {
       "command": "tsc -p tsconfig.payload.json && node scripts/build-payload.mjs",
+      "dependencies": [
+        "../payload:build"
+      ],
       "files": [
         "payload/**",
         "!payload/**/__test__/**",
@@ -144,18 +145,24 @@
       ]
     },
     "dogfood": {
-      "//": "No `output`. This writes into the repo root's .claude/, outside the package, and wireit rejects output paths that escape the package directory. With `files` and no `output` it re-runs whenever an input changes, which is what WIREIT_WATCH wants.",
+      "//": "No `output`. This writes into the repo root's .claude/, outside the package, and wireit rejects output paths that escape the package directory. With `files` and no `output` it re-runs whenever an input changes, which is what WIREIT_WATCH wants. It shells out to the real installer (`dist/cli.js init`), so every package it loads as a plugin has to be built first, and every package's `package.json` feeds the `targets` array the script derives.",
       "command": "node scripts/dogfood-link.mjs",
       "dependencies": [
-        "build:payload",
+        "build:ts",
         "../plugin-accessibility:build",
         "../plugin-backlog:build",
         "../plugin-changesets:build",
         "../plugin-decisions:build",
-        "../plugin-design:build"
+        "../plugin-design:build",
+        "../plugin-prose:build",
+        "../plugin-svelte:build",
+        "../plugin-testing:build",
+        "../plugin-three:build",
+        "../plugin-typescript:build"
       ],
       "files": [
-        "scripts/dogfood-link.mjs"
+        "scripts/dogfood-link.mjs",
+        "../*/package.json"
       ]
     }
   },
@@ -181,6 +188,7 @@
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "dependencies": {
+    "@agent-kit/payload": "workspace:*",
     "@clack/prompts": "^0.11.0",
     "commander": "^15.0.0",
     "dequal": "^2.0.3",

@@ -15,8 +15,13 @@
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { loadConfigSafe } from './lib/kit-config.mjs';
-import { globToRe, readStdinJson, repoRoot, tail } from './lib/proc.mjs';
+import { loadConfigSafe } from '@agent-kit/payload/kit-config';
+import {
+  globToRe,
+  readStdinJson,
+  repoRoot,
+  tail,
+} from '@agent-kit/payload/proc';
 
 interface RegenPayload {
   tool_input?: { file_path?: string; path?: string };

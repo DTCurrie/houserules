@@ -11,7 +11,7 @@
  */
 
 import type { LedgerKind } from './project-shape.mjs';
-import type { LedgerEntry } from '@agent-kit/cli/payload/ledger-index';
+import type { LedgerEntry } from '@agent-kit/payload/ledger-index';
 
 /** The board `Status` values that mean an entry is finished, per kind. */
 const CLOSED_BACKLOG_STATUS = 'Done';
