@@ -1,17 +1,7 @@
-import type { KitConfig } from './core/config.js';
-import type { ModuleDef } from './module-def.js';
+import type { KitConfig, ModuleDef } from '@agent-kit/api';
 
-/** Where a plugin came from and what the kit resolved it to. Recorded in the manifest. */
-export interface PluginSource {
-  /** The `name` from config: an npm package name or a repo-relative path. */
-  name: string;
-  /** The id namespace its modules are addressed under. */
-  alias: string;
-  /** From the resolved package.json. `unknown` when it declares none. */
-  version: string;
-  /** Absolute path to the resolved package directory. */
-  dir: string;
-}
+export type { PluginSource } from '@agent-kit/api/internal';
+import type { PluginSource } from '@agent-kit/api/internal';
 
 /**
  * One module in the registry, built-in or contributed.

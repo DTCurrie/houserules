@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { frontmatterBlock, splitFrontmatter } from '../../core/frontmatter.js';
-import type { CheckResult, Finding } from './finding.js';
+import type { CheckResult, Finding } from '@agent-kit/api';
 
 /**
  * The tools an agent's frontmatter grants, or null when it names none.
@@ -17,7 +17,9 @@ export function grantedTools(text: string): string[] | null {
   const at = lines.findIndex((line) => /^tools:/.test(line));
   if (at === -1) return null;
   const unquote = (value: string) => value.trim().replace(/^['"]|['"]$/g, '');
-  const inline = lines[at].slice('tools:'.length).trim();
+  const toolsLine = lines[at];
+  if (toolsLine === undefined) return null;
+  const inline = toolsLine.slice('tools:'.length).trim();
   if (inline)
     return inline
       .replace(/^\[|\]$/g, '')
@@ -26,9 +28,13 @@ export function grantedTools(text: string): string[] | null {
       .filter(Boolean);
   const entries: string[] = [];
   for (let i = at + 1; i < lines.length; i++) {
-    const entry = /^\s*-\s*(.+)$/.exec(lines[i]);
+    const line = lines[i];
+    if (line === undefined) break;
+    const entry = /^\s*-\s*(.+)$/.exec(line);
     if (!entry) break;
-    entries.push(unquote(entry[1]));
+    const value = entry[1];
+    if (value === undefined) break;
+    entries.push(unquote(value));
   }
   return entries;
 }

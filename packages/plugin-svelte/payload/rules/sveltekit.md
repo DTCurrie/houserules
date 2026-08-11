@@ -8,6 +8,7 @@ paths:
   - '**/+layout.server.ts'
   - '**/+server.ts'
   - '**/hooks.server.ts'
+  - '**/hooks.client.ts'
 ---
 
 # SvelteKit
@@ -76,6 +77,41 @@ const { form }: { form: ActionData } = $props();
   {#if form?.error}<p>{form.error}</p>{/if}
   <button>Submit</button>
 </form>
+```
+
+## Error Tracking
+
+- **Wire the shared `handleError` hook to a tracking service.** `hooks.server.ts` exports
+  it for errors thrown on the server, `hooks.client.ts` for errors thrown during
+  client-side navigation, and SvelteKit calls whichever applies for every unexpected error
+  it does not already handle. It is the one place that sees every crash regardless of
+  which route or load function threw it. Forward `error`, `event.route.id`, and `status`
+  to the service, and return the `App.Error` shape the hook expects, `{ message }` unless
+  this app's `app.d.ts` redeclares it.
+- **Make sure that service consumes the source maps Vite emits for the production
+  build.** A tracker holding only the minified bundle can tell you a crash happened and
+  nothing about where in the source it happened. Whether to upload maps to the tracker at
+  build time, publish them alongside the bundle, or skip them is a deployment decision
+  this rule cannot verify from inside the repo: it depends on the adapter, the host, and
+  the tracking vendor's own upload step. Decide it deliberately. Most build tooling omits
+  source maps from a production build by default, so skipping this step is the easy
+  mistake, and it is what makes the first bullet worth doing at all.
+
+```typescript
+// hooks.server.ts
+import type { HandleServerError } from '@sveltejs/kit';
+
+export const handleError: HandleServerError = ({
+  error,
+  event,
+  status,
+  message,
+}) => {
+  if (status !== 404) {
+    trackError(error, { route: event.route.id, status });
+  }
+  return { message };
+};
 ```
 
 ## Server Versus Universal

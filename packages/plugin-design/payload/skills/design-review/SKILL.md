@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Review changed styled markup against the repo's design system, covering design, design system, tokens, spacing and type scales, contrast, hit targets, and component reuse in CSS, JSX, TSX, Svelte, Vue, and Astro. Use before handing off a UI change.
+description: Review changed styled markup against the design system: tokens, spacing, contrast, hit targets, and component reuse in CSS, JSX, TSX, Svelte, Vue, and Astro. Use before handing off a UI change.
 allowed-tools: Bash(git diff:*), Bash(git merge-base:*), Bash(node .claude/scripts/design.mjs:*), Read, Grep, Agent
 ---
 

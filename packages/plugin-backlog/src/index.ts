@@ -1,5 +1,5 @@
-import { definePlugin, scriptPermission } from '@agent-kit/cli/plugin';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/cli/plugin';
+import { definePlugin, scriptPermission } from '@agent-kit/api';
+import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
 
 /** An append-only ledger for out-of-scope work, plus the skill and reviewer around it. */
 function backlogModule(api: PluginApi): ModuleDef {

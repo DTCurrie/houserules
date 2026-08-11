@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
 import { KIT_ROOT } from '../../paths.js';
-import type { CheckResult, Finding } from './finding.js';
+import type { CheckResult, Finding } from '@agent-kit/api';
 
 /**
  * The `keywords` entry a package declares to say it contributes agent-kit modules. Gating

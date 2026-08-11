@@ -1,5 +1,5 @@
-import { definePlugin } from '@agent-kit/cli/plugin';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/cli/plugin';
+import { definePlugin } from '@agent-kit/api';
+import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
 
 /**
  * A template-only reference pattern: a read-only, single-JSON-output auditor that

@@ -189,9 +189,11 @@ describe('projectBoardItems for backlog', () => {
     });
 
     const { entries } = projectBoardItems('backlog', [item]);
+    const [entry] = entries;
+    if (entry === undefined) throw new Error('expected one projected entry');
 
-    expect(entries[0].issue).toBeNull();
-    expect(entries[0].title).toBe('Draft entry');
+    expect(entry.issue).toBeNull();
+    expect(entry.title).toBe('Draft entry');
   });
 
   it('skips an item carrying no content', () => {

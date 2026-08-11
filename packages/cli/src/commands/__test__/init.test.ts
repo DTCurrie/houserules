@@ -25,7 +25,7 @@ import {
   settingsOf,
 } from '#test/installed-tree';
 import { selectModuleOptions } from '../../ui.js';
-import type { ModuleDef } from '../../module-def.js';
+import type { ModuleDef } from '@agent-kit/api';
 import type { RegisteredModule } from '../../plugin-registry.js';
 
 function optionlessModule(id: string): RegisteredModule {

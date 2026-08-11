@@ -184,6 +184,11 @@ describe('backgroundAlpha', () => {
       value: 'oklch(0.9 0.05 150 / 0.5)',
       alpha: 0.5,
     },
+    {
+      name: 'a legacy rgba() with a trailing comma and no alpha value',
+      value: 'rgba(0, 0, 0,)',
+      alpha: 1,
+    },
   ])('reads $alpha for $name', ({ value, alpha }) => {
     expect(backgroundAlpha(value)).toBe(alpha);
   });

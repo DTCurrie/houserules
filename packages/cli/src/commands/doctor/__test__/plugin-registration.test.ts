@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished } from 'vitest';
 
 import { makeCtx } from '#test/ctx-builder';
-import type { KitConfig } from '../../../core/config.js';
-import type { KitManifest } from '../../../core/manifest.js';
+import type { KitConfig } from '@agent-kit/api';
+import type { KitManifest } from '@agent-kit/api/internal';
 import type { Ctx } from '../../../detect.js';
 import { checkPluginRegistration } from '../plugin-registration.js';
 

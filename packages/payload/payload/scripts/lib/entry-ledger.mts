@@ -50,8 +50,10 @@ function readLastJsonRecord(file: string): TranscriptRecord | null {
     readSync(fd, buf, 0, chunkSize, size - chunkSize);
     const lines = buf.toString('utf8').split('\n').filter(Boolean);
     for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i];
+      if (line === undefined) continue;
       try {
-        return JSON.parse(lines[i]);
+        return JSON.parse(line);
       } catch {
         // Partial JSON at the buffer head, or a malformed line — keep walking back.
       }
@@ -575,7 +577,8 @@ function metadataOf(line: string): [string, string][] {
   const pairs: [string, string][] = [];
   for (const segment of line.split(METADATA_JOIN)) {
     const m = segment.trim().match(METADATA_LINE);
-    if (m) pairs.push([m[1], m[2].trim()]);
+    // METADATA_LINE has two non-optional capture groups, so a match always fills both.
+    if (m) pairs.push([m[1]!, m[2]!.trim()]);
   }
   return pairs;
 }
@@ -613,7 +616,8 @@ export function parseEntries(text: string): ParsedEntry[] {
     const m = line.match(ENTRY_HEAD);
     if (m) {
       if (current) entries.push(current);
-      current = { id: m[1], title: m[2], meta: {}, body: [] };
+      // ENTRY_HEAD has two non-optional capture groups, so a match always fills both.
+      current = { id: m[1]!, title: m[2]!, meta: {}, body: [] };
       continue;
     }
     if (!current) continue;

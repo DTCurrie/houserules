@@ -252,7 +252,8 @@ describe('detect', () => {
     });
 
     it('resolves the single target at the repo root using its lint:fix script', () => {
-      const [t] = ctx.targets;
+      const t = ctx.targets[0];
+      if (!t) throw new Error('expected a target');
       expect(t.pathPrefix).toBe('');
       expect(t.sourcePath).toBe('src');
       expect(t.fixCommands).toEqual(['lint:fix']);
@@ -275,7 +276,9 @@ describe('detect', () => {
     expect(ctx.packageManager!.name).toBe('pnpm');
     expect(ctx.isMonorepo).toBe(false);
     expect(ctx.targets.length).toBe(1);
-    expect(ctx.targets[0].fixCommands).toEqual(['lint:fix', 'format']);
+    const target = ctx.targets[0];
+    if (!target) throw new Error('expected a target');
+    expect(target.fixCommands).toEqual(['lint:fix', 'format']);
 
     const config = JSON.parse(
       renderKitConfig(ctx, {

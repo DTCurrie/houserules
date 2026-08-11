@@ -1,6 +1,6 @@
 ---
 name: changeset
-description: Record a pending release note (changeset) for the packages a change touched. Use after completing a user-visible change, before the user commits. Changesets accompany the change, not the release.
+description: Record a pending release note (changeset) for the packages a change touched. Use after completing a user-visible change, before the user commits.
 argument-hint: [pkg[:level] ...] ["summary"]
 allowed-tools: Bash(node .claude/scripts/changeset-write.mjs:*), Bash(git status:*), Bash(git diff:*), Read, Glob, Grep
 ---

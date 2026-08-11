@@ -48,15 +48,19 @@ function writeAt(root: string, rel: string, body: string) {
   return full;
 }
 
+function onlyEntry(text: string) {
+  const [entry] = parseEntries(text);
+  if (!entry) throw new Error('expected parseEntries to return one entry');
+  return entry;
+}
+
 afterEach(() => {
   while (roots.length) rmSync(roots.pop()!, { recursive: true, force: true });
 });
 
 describe('parseEntries', () => {
   it('returns the id, title, and body of an entry', () => {
-    const [entry] = parseEntries(
-      '## [SIM-aaaaaa] A title\n\nthe body\n\n---\n',
-    );
+    const entry = onlyEntry('## [SIM-aaaaaa] A title\n\nthe body\n\n---\n');
 
     expect(entry).toMatchObject({
       id: 'SIM-aaaaaa',
@@ -66,7 +70,7 @@ describe('parseEntries', () => {
   });
 
   it('lifts a metadata line out of the body and into meta', () => {
-    const [entry] = parseEntries(
+    const entry = onlyEntry(
       '## [SIM-aaaaaa] T\n\n**Logged:** 2026-01-01\n\nthe body\n\n---\n',
     );
 
@@ -75,7 +79,7 @@ describe('parseEntries', () => {
   });
 
   it('reads several labels joined by a middot on one line', () => {
-    const [entry] = parseEntries(
+    const entry = onlyEntry(
       '## [SIM-aaaaaa] T\n\n**Decided:** 2026-07-14 · **Status:** accepted\n\nbody\n\n---\n',
     );
 
@@ -86,7 +90,7 @@ describe('parseEntries', () => {
   });
 
   it('keeps the first value when a label repeats', () => {
-    const [entry] = parseEntries(
+    const entry = onlyEntry(
       '## [SIM-aaaaaa] T\n\n**Logged:** 2026-01-01\n**Logged:** 2026-09-09\n\nbody\n\n---\n',
     );
 
@@ -94,7 +98,7 @@ describe('parseEntries', () => {
   });
 
   it('leaves a repeated label line in the body rather than dropping it', () => {
-    const [entry] = parseEntries(
+    const entry = onlyEntry(
       '## [SIM-aaaaaa] T\n\n**Logged:** 2026-01-01\n**Logged:** 2026-09-09\n\nbody\n\n---\n',
     );
 
@@ -107,7 +111,7 @@ describe('parseEntries', () => {
     );
 
     expect(entries).toHaveLength(2);
-    expect(entries[0].body).toBe('one');
+    expect(entries[0]?.body).toBe('one');
   });
 
   it('ignores prose before the first entry heading', () => {
@@ -116,7 +120,7 @@ describe('parseEntries', () => {
     );
 
     expect(entries).toHaveLength(1);
-    expect(entries[0].body).toBe('body');
+    expect(entries[0]?.body).toBe('body');
   });
 });
 
@@ -136,9 +140,7 @@ describe('renderMetadata', () => {
   it('round-trips through parseEntries', () => {
     const meta = renderMetadata({ Decided: '2026-07-14', Status: 'accepted' });
 
-    const [entry] = parseEntries(
-      `## [SIM-aaaaaa] T\n\n${meta}\n\nbody\n\n---\n`,
-    );
+    const entry = onlyEntry(`## [SIM-aaaaaa] T\n\n${meta}\n\nbody\n\n---\n`);
 
     expect(entry.meta).toEqual({ Decided: '2026-07-14', Status: 'accepted' });
   });

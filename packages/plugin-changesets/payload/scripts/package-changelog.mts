@@ -116,12 +116,14 @@ function gatherCommitInfo(fullSha: string): CommitInfo {
   const fmt = '%H%x1f%aI%x1f%s%x1f%b';
   const raw = shStr(`git show -s --format=${fmt} ${fullSha}`);
   const trimmed = raw.endsWith('\n') ? raw.slice(0, -1) : raw;
+  // fmt has four \x1f-delimited fields (%H, %aI, %s, %b), so a well-formed `git show`
+  // line always splits into exactly four parts.
   const [sha, isoDate, subject, body = ''] = trimmed.split('\x1f');
   return {
-    fullSha: sha,
-    shortSha: sha.slice(0, 7),
-    date: isoDate.slice(0, 10),
-    subject,
+    fullSha: sha!,
+    shortSha: sha!.slice(0, 7),
+    date: isoDate!.slice(0, 10),
+    subject: subject!,
     body: body.replace(/\s+$/, ''),
   };
 }

@@ -4,14 +4,16 @@ import { createRequire } from 'node:module';
 import { satisfies, validRange } from 'semver';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
-import type { Answers, ModuleDef } from './module-def.js';
+import { readJson } from '@agent-kit/payload/workspaces';
+
+import type { Answers, ModuleDef } from '@agent-kit/api';
 import {
   createPayloadBuilders,
   deriveLibActions,
 } from './modules/copy-actions.js';
 import { KIT_ROOT } from './paths.js';
 import { readPayloadImports, type PayloadImports } from './payload-imports.js';
-import type { Ctx } from './detect.js';
+import { detectPackageManager, type Ctx } from './detect.js';
 import type { Plugin, PluginApi } from './plugin.js';
 import {
   namespacedId,
@@ -30,6 +32,21 @@ function fail(pluginName: string, message: string, cause?: unknown): never {
   const error = new PluginResolutionError(pluginName, message);
   if (cause !== undefined) error.cause = cause;
   throw error;
+}
+
+/** Renders the install command for `root`'s detected package manager, defaulting to npm. */
+function installCommand(root: string, name: string): string {
+  const rootPkg = readJson(join(root, 'package.json'));
+  switch (detectPackageManager(root, rootPkg)?.name) {
+    case 'pnpm':
+      return `pnpm add ${name}`;
+    case 'yarn':
+      return `yarn add ${name}`;
+    case 'bun':
+      return `bun add ${name}`;
+    default:
+      return `npm install ${name}`;
+  }
 }
 
 function isPathSpecifier(root: string, name: string): boolean {
@@ -64,7 +81,7 @@ function resolvePluginDir(root: string, name: string): string {
   } catch (error) {
     fail(
       name,
-      `could not resolve npm package "${name}" from ${root}. Install it in the target repo, e.g. \`npm install ${name}\`.`,
+      `could not resolve npm package "${name}" from ${root}. Install it in the target repo, e.g. \`${installCommand(root, name)}\`.`,
       error,
     );
   }

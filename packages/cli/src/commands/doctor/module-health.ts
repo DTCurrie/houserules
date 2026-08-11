@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { Ctx } from '../../detect.js';
 import type { Registry } from '../../plugin-registry.js';
 import { verifyDefaultsFor } from '../../render.js';
-import type { CheckResult, Finding } from './finding.js';
+import type { CheckResult, Finding } from '@agent-kit/api';
 
 /**
  * Whether each installed module has what it needs to actually do its job.

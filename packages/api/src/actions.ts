@@ -1,4 +1,4 @@
-import type { RegionSpec } from './core/regions.js';
+import type { RegionSpec } from './regions.js';
 import type { SettingsFragment } from './merge-settings.js';
 
 interface ActionBase {

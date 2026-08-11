@@ -1,8 +1,4 @@
-import {
-  definePlugin,
-  hookFragment,
-  scriptPermission,
-} from '@agent-kit/cli/plugin';
+import { definePlugin, hookFragment, scriptPermission } from '@agent-kit/api';
 import type {
   Action,
   Answers,
@@ -10,7 +6,7 @@ import type {
   Ctx,
   ModuleDef,
   PluginApi,
-} from '@agent-kit/cli/plugin';
+} from '@agent-kit/api';
 
 function renderChangesetConfig(ctx: Ctx): string {
   return `${JSON.stringify(

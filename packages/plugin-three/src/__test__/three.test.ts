@@ -11,7 +11,9 @@ const PLUGINS = [{ name: PLUGIN_THREE, alias: 'three' }];
 
 function pathGlobs(ruleText: string): string[] {
   const body = ruleText.split('---')[1] ?? '';
-  return [...body.matchAll(/^ {2}- ['"](.+?)['"]$/gm)].map((m) => m[1]);
+  return [...body.matchAll(/^ {2}- ['"](.+?)['"]$/gm)]
+    .map((m) => m[1])
+    .filter((glob): glob is string => glob !== undefined);
 }
 
 function installedWith(guides: string[]): string {

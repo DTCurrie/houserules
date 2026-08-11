@@ -4,9 +4,9 @@ import { join } from 'node:path';
 
 import { makeCtx } from '#test/ctx-builder';
 import { useRepo } from '#test/repo';
-import type { KitManifest } from '../../../core/manifest.js';
+import type { KitManifest } from '@agent-kit/api/internal';
 import type { Ctx } from '../../../detect.js';
-import type { ModuleDef } from '../../../module-def.js';
+import type { ModuleDef } from '@agent-kit/api';
 import { MODULES } from '../../../plan.js';
 import type { Registry } from '../../../plugin-registry.js';
 import { checkModuleHealth } from '../module-health.js';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PluginSource } from '../../plugin-registry.js';
-import type { KitManifest } from '../manifest.js';
+import type { KitManifest } from '@agent-kit/api/internal';
 
 const PLUGIN: PluginSource = {
   name: '@acme/kit-plugin',

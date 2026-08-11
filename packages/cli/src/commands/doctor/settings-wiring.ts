@@ -2,11 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
-import type { Settings } from '../../merge-settings.js';
-import type { CheckResult, Finding } from './finding.js';
+import type { CheckResult, Finding, Settings } from '@agent-kit/api';
 
 // module id → hook script that must appear in a settings.json hook command.
-const HOOK_SCRIPTS: Record<string, string[]> = {
+export const HOOK_SCRIPTS: Record<string, string[]> = {
   core: ['guard-bash.mjs', 'ledger-inject.mjs'],
   'lint-fix': ['lint-format-fix.mjs'],
   changesets: ['changeset-check.mjs'],
@@ -16,8 +15,16 @@ const HOOK_SCRIPTS: Record<string, string[]> = {
   regen: ['regen-on-edit.mjs'],
 };
 
-const KIT_HOOK_SCRIPT_RE =
-  /(guard-bash|lint-format-fix|changeset-check|session-context|debug-session-check)\.mjs/;
+/**
+ * Every hook script a module might wire, derived from {@link HOOK_SCRIPTS} rather than
+ * restated, so a script added to that map is covered here without a second edit
+ * (CLI-daafc3: three script names had drifted out of a hand-maintained copy of this list).
+ */
+export const KIT_HOOK_SCRIPT_RE = new RegExp(
+  `(${Array.from(new Set(Object.values(HOOK_SCRIPTS).flat()))
+    .map((scriptName) => scriptName.replace(/\.mjs$/, ''))
+    .join('|')})\\.mjs`,
+);
 
 export function allHookCommands(
   settings: Settings | null | undefined,

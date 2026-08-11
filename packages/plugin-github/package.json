@@ -28,9 +28,10 @@
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload",
+      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload && publint",
       "dependencies": [
         "../cli:build:ts",
+        "../api:build",
         "../payload:build"
       ],
       "files": [
@@ -50,6 +51,7 @@
       "command": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json",
       "dependencies": [
         "../cli:build:ts",
+        "../api:build",
         "../test:build",
         "../payload:build"
       ],
@@ -98,10 +100,11 @@
   "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-github#readme",
   "bugs": "https://github.com/DTCurrie/agent-kit/issues",
   "peerDependencies": {
-    "@agent-kit/cli": ">=0.0.0 <1.0.0",
+    "@agent-kit/api": ">=0.0.0 <1.0.0",
     "@agent-kit/payload": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
+    "@agent-kit/api": "workspace:*",
     "@agent-kit/cli": "workspace:*",
     "@agent-kit/payload": "workspace:*",
     "@agent-kit/test": "workspace:*",

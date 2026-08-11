@@ -10,7 +10,7 @@ import {
   verifyDefaultsFor,
 } from '../render.js';
 import type { PackageManagerInfo } from '../detect.js';
-import { parseKitConfig } from '../core/config.js';
+import { parseKitConfig } from '@agent-kit/api/internal';
 import { makeAnswers, makeCtx, makeTarget } from '#test/ctx-builder';
 
 describe('verifyDefaultsFor', () => {

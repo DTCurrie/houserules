@@ -1,6 +1,6 @@
 ---
 name: ledger-sync
-description: Push the local backlog and decisions ledgers to GitHub Projects, syncing backlog entries to issues and decisions to draft items on the project board. Use when the user asks to sync, push, or upload the ledger, backlog, or decisions to GitHub Projects or the project board, or asks why an entry has not shown up there.
+description: Push the backlog and decision ledgers to GitHub Projects: entries become issues, decisions become draft items on the project board. Use when the user asks to sync, push, or upload to GitHub Projects or the project board.
 argument-hint: status|push|pull|backfill|compact [--dry-run]
 allowed-tools: Bash(node .claude/scripts/projects-sync.mjs:*)
 ---

@@ -10,9 +10,9 @@ const PLUGINS = [{ name: PLUGIN_DESIGN, alias: 'design' }];
 const RULE_PATH = '.claude/rules/design.md';
 
 function referenceLinksIn(ruleText: string): string[] {
-  return [...ruleText.matchAll(/`(\.\.\/reference\/[^`]+\.md)`/g)].map(
-    (match) => match[1],
-  );
+  return [...ruleText.matchAll(/`(\.\.\/reference\/[^`]+\.md)`/g)]
+    .map((match) => match[1])
+    .filter((link) => link !== undefined);
 }
 
 function resolvedLinksIn(root: string): Array<{

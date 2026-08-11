@@ -405,8 +405,9 @@ function resolveTokenChain(
     chain.push(path);
     const value = located.node.$value;
     const alias = typeof value === 'string' ? ALIAS_PATTERN.exec(value) : null;
-    if (!alias) return { value, type: located.type, chain };
-    path = alias[1];
+    const aliasTarget = alias?.[1];
+    if (aliasTarget === undefined) return { value, type: located.type, chain };
+    path = aliasTarget;
   }
 }
 
@@ -860,6 +861,7 @@ function collectColorRoles(entries: ThemeGroupEntry[]): ColorRole[] {
     const sorted = [...shades].sort((a, b) => a.shade - b.shade);
     const lightest = sorted[0];
     const darkest = sorted[sorted.length - 1];
+    if (lightest === undefined || darkest === undefined) continue;
     roles.push({ role: base, variable: `--color-${lightest.name}` });
     if (sorted.length > 1) {
       roles.push({
@@ -1064,17 +1066,19 @@ function extractSourceFlags(argv: string[]): ParsedArgv {
   let tokensOverride: string | undefined;
   let themeOverride: string | undefined;
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--tokens') {
+    const arg = argv[i];
+    if (arg === undefined) continue;
+    if (arg === '--tokens') {
       tokensOverride = argv[i + 1];
       i += 1;
       continue;
     }
-    if (argv[i] === '--theme') {
+    if (arg === '--theme') {
       themeOverride = argv[i + 1];
       i += 1;
       continue;
     }
-    rest.push(argv[i]);
+    rest.push(arg);
   }
   return { tokensOverride, themeOverride, rest };
 }

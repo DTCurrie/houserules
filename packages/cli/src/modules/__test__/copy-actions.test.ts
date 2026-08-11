@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import type { Action } from '../../actions.js';
+import type { Action } from '@agent-kit/api';
 import type { PayloadImports } from '../../payload-imports.js';
 import { deriveLibActions } from '../copy-actions.js';
 

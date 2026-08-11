@@ -1,6 +1,6 @@
 ---
 name: tidy
-description: Audit the working diff against the installed code-cleanliness rule and fix mechanical violations. Covers naming, function size, magic values, and dead code. Use after writing or changing code. For general simplification and reuse cleanups, use `simplify` instead. Triggers: tidy, clean up, code cleanliness, naming, magic values, dead code.
+description: Tidy and clean up the working diff by auditing it against the code-cleanliness rule: fix mechanical violations in naming, function size, magic values, and dead code. Use after writing or changing code. For general simplification and reuse cleanups, use `simplify` instead.
 allowed-tools: Read, Edit, Grep, Glob, Bash
 ---
 

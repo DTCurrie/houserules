@@ -7,7 +7,7 @@ import {
   KitConfigError,
   parseKitConfig,
   validateKitConfig,
-} from '../config.js';
+} from '@agent-kit/api/internal';
 
 function repoFile(relativePath: string): string {
   return readFileSync(

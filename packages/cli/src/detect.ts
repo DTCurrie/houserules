@@ -7,82 +7,30 @@ import type {
   PackageJson,
   WorkspacePackage,
 } from '@agent-kit/payload/workspaces';
-import type { KitConfig, KitConfigTarget } from './core/config.js';
-import type { KitManifest } from './core/manifest.js';
-import type { Settings } from './merge-settings.js';
-
-/** How the package manager was identified. Shown in the profile card. */
-export type PackageManagerSource = 'packageManager' | 'lockfile' | 'default';
-
-export interface PackageManagerInfo {
-  name: string;
-  version?: string;
-  source: PackageManagerSource;
-}
+import type { Ctx, KitConfig, Settings, Target } from '@agent-kit/api';
+import type {
+  ChangesetInvocation,
+  KitManifest,
+  PackageManagerInfo,
+} from '@agent-kit/api/internal';
 
 /**
- * A unit of the repo the kit tracks: a workspace package, or the repo itself for a
- * single-package repo. Detection proposes these. `kit.config.json` is the contract
- * once the user has edited it.
- *
- * It is deliberately the SAME type as a config target rather than a near-duplicate.
- * `update`/`modules` prefer `kitConfig.targets` and fall back to detection's, so the
- * two are used interchangeably. Declaring them separately only invited them to
- * drift on optionality. Per-field documentation lives on the zod schema's
- * `.describe()` calls in `core/config.ts`.
+ * `Ctx` and `Target` are the plugin contract and live in `@agent-kit/api`, since a plugin's
+ * `plan(ctx, answers)` codes against them. The nested shapes `Ctx` is built from, such as
+ * `ChangesetsState` and `PackageManagerInfo`, were never part of that contract (`plugin.ts`
+ * never re-exported them either), so they cross from `@agent-kit/api/internal` instead. This
+ * file stays the sole PRODUCER: `detect()` and every helper that touches the filesystem or
+ * shells out to git. Re-exported here so the ~30 CLI modules that read `Ctx`/`Target` off
+ * `./detect.js` need no import change.
  */
-export type Target = KitConfigTarget;
-
-export type ChangesetInvocation =
-  'devdep' | 'root-script' | 'external-cli' | 'absent';
-
-export interface ChangesetsState {
-  configExists: boolean;
-  config: Record<string, unknown> | null;
-  pendingCount: number;
-  devDep: boolean;
-  rootScript: string | null;
-  invocation: ChangesetInvocation;
-  baseBranch: string;
-}
-
-export interface GitState {
-  isRepo: boolean;
-  top: string | null;
-  hasCommits: boolean;
-  branch: string | null;
-}
-
-export interface ClaudeState {
-  dirExists: boolean;
-  settingsExists: boolean;
-  settings: Settings | null;
-  /** Message from a failed settings.json parse. Null when it parsed or is absent. */
-  settingsParseError: string | null;
-  settingsLocalExists: boolean;
-  claudeMdExists: boolean;
-  manifest: KitManifest | null;
-  kitConfig: KitConfig | null;
-  agents: string[];
-  skills: string[];
-}
-
-/** Everything `detect()` concluded, read-only. The sole input to module decisions. */
-export interface Ctx {
-  root: string;
-  git: GitState;
-  packageManager: PackageManagerInfo | null;
-  rootPkg: PackageJson | null;
-  isMonorepo: boolean;
-  packages: WorkspacePackage[];
-  targets: Target[];
-  typescript: boolean;
-  /** Prettier can run here, so the kit's files need protecting from it. */
-  prettier: boolean;
-  changesets: ChangesetsState;
-  pnpmCatalogModeStrict: boolean;
-  claude: ClaudeState;
-}
+export type { Ctx, Target } from '@agent-kit/api';
+export type {
+  ChangesetInvocation,
+  PackageManagerInfo,
+} from '@agent-kit/api/internal';
+// Consumed by detect()'s own return shape, not re-exported: nothing outside this file names
+// them, and plugin.ts never carried them either.
+import type { ChangesetsState, ClaudeState } from '@agent-kit/api/internal';
 
 // `prettier --write` writes but `prettier --check` only verifies. Wiring a checker
 // into the auto-fix hook would fail unfixably on every stop.
@@ -303,7 +251,14 @@ export function untrackFromIndex(root: string, files: string[]): boolean {
   return git(root, ['rm', '--cached', '-f', '-q', '--', ...files]) !== null;
 }
 
-function detectPackageManager(
+/**
+ * The target repo's package manager, by `packageManager` field then lockfile.
+ *
+ * Exported for callers that run BEFORE `detect()` does and so cannot read the resolved
+ * `Ctx`. `plugin-resolver.ts` is one: a plugin that fails to resolve aborts the run while
+ * the registry is still being built.
+ */
+export function detectPackageManager(
   root: string,
   rootPkg: PackageJson | null,
 ): PackageManagerInfo | null {

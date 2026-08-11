@@ -1,13 +1,13 @@
 import type { Ctx } from '../../detect.js';
-import type { CheckResult, Finding } from './finding.js';
+import type { CheckResult, Finding } from '@agent-kit/api';
 
 const MIN_NODE_MAJOR = 20;
 
 /** The host preconditions the kit cannot run without. */
 export function checkEnvironment(ctx: Ctx): CheckResult {
   const findings: Finding[] = [];
-  const [major] = process.versions.node.split('.').map(Number);
-  if (major < MIN_NODE_MAJOR)
+  const major = process.versions.node.split('.').map(Number)[0];
+  if (major === undefined || major < MIN_NODE_MAJOR)
     findings.push({
       level: 'ERROR',
       msg: `node ${process.versions.node} < ${MIN_NODE_MAJOR}`,

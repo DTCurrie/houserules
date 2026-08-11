@@ -1,6 +1,6 @@
 ---
 name: ready
-description: Off-context pre-handoff roll-up. Run the deterministic pre-handoff checks and return ONE ready / not-ready verdict plus the falsifiable acceptance checklist the change should be judged against, including a "backlog item resolved but not removed" check. Use right before handing a finished change back to the user.
+description: Off-context pre-handoff roll-up: run the pre-handoff checks and return one ready / not-ready verdict plus the acceptance checklist. Use right before handing a finished change back.
 allowed-tools: Bash, Read, Grep, Glob, Agent
 ---
 

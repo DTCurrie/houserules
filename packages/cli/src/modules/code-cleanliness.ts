@@ -1,5 +1,4 @@
-import type { Action } from '../actions.js';
-import type { ModuleGroup } from '../module-def.js';
+import type { Action, ModuleGroup } from '@agent-kit/api';
 import { reference, rule, skill } from './copy-actions.js';
 
 export const id = 'code-cleanliness';

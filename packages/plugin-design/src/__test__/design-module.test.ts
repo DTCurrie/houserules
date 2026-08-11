@@ -31,6 +31,19 @@ describe('design', () => {
     ).toMatch(/^---\n(?:.*\n)*?paths:\n/);
   });
 
+  it('makes no unconditional claim that the design system lives at .claude/design/tokens.json, since a tailwind install has no such file', () => {
+    const root = installed();
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/design.md'),
+      'utf8',
+    );
+
+    expect(ruleText).not.toMatch(
+      /system itself lives at `\.claude\/design\/tokens\.json`/,
+    );
+  });
+
   it('installs the reference doc, the script, and the token seed', () => {
     const root = installed();
 

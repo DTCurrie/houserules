@@ -1,9 +1,5 @@
-import {
-  definePlugin,
-  hookFragment,
-  scriptPermission,
-} from '@agent-kit/cli/plugin';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/cli/plugin';
+import { definePlugin, hookFragment, scriptPermission } from '@agent-kit/api';
+import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
 
 /**
  * The plugin's own config slice, which today recognizes nothing.

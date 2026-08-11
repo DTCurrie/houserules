@@ -1,4 +1,4 @@
-import type { CheckResult, Ctx, Finding } from '@agent-kit/cli/plugin';
+import type { CheckResult, Ctx, Finding } from '@agent-kit/api';
 
 /**
  * A markup framework, and the accessibility linter a repo using it should have. The plugin

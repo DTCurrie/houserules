@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Execute a planned phase by fanning out tightly-scoped implementer subagents. Slice the phase by file ownership, write the shared seam yourself first, dispatch one sonnet task-worker per slice in waves, then review each worker's REPORT (never its diff) and approve or send it back. Use to drive a `.claude/plans/<slug>/` phase to done without pulling the implementation into this context.
+description: Execute a planned phase by fanning out task-worker subagents per file-owned slice, then review each worker's report. Use to drive a .claude/plans/ phase to done.
 argument-hint: '[<plan-slug>] [<phase> | all] [--auto]'
 allowed-tools: Read, Edit, Write, Grep, Glob, Bash, Agent, SendMessage
 ---

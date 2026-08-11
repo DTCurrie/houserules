@@ -22,13 +22,16 @@ const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const [locArg, newName] = args.filter((a) => !a.startsWith('--'));
 
-const usage = () => {
+// A declaration rather than the file's usual `const` arrow on purpose. TypeScript applies
+// never-return narrowing through a hoisted declaration, and not through a module-scope const
+// assigned before its call sites, so the arrow form leaves locArg and newName widened below.
+function usage(): never {
   console.error(
     'usage: node .claude/scripts/rename.mjs <file>:<line>:<col> <newName> [--dry-run]\n' +
       '  <line>/<col> are 1-based and must point at the identifier (e.g. from `grep -n`).',
   );
   process.exit(2);
-};
+}
 
 if (!locArg || !newName) usage();
 

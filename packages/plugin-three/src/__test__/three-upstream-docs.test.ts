@@ -13,9 +13,9 @@ const RULE_PATH = '.claude/rules/three.md';
 const REFERENCE_PATH = '.claude/reference/three-upstream-docs.md';
 
 function referenceLinksIn(ruleText: string): string[] {
-  return [...ruleText.matchAll(/`(\.\.\/reference\/[^`]+\.md)`/g)].map(
-    (match) => match[1],
-  );
+  return [...ruleText.matchAll(/`(\.\.\/reference\/[^`]+\.md)`/g)]
+    .map((match) => match[1])
+    .filter((link): link is string => link !== undefined);
 }
 
 describe('three upstream docs reference', () => {

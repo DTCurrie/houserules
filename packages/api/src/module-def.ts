@@ -1,6 +1,6 @@
 import type { Action } from './actions.js';
-import type { CheckResult } from './commands/doctor/finding.js';
-import type { Ctx, Target } from './detect.js';
+import type { CheckResult } from './finding.js';
+import type { Ctx, Target } from './ctx.js';
 
 /**
  * Which section of the interactive multiselect a module appears under.

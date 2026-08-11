@@ -26,7 +26,9 @@
     "attw": "wireit",
     "verify:packages": "node scripts/verify-packages.mjs",
     "verify:payload-copy-set": "node scripts/verify-payload-copy-set.mjs",
-    "verify:payload-test-coverage": "node scripts/verify-payload-test-coverage.mjs"
+    "verify:payload-test-coverage": "node scripts/verify-payload-test-coverage.mjs",
+    "verify:payload-lib-declarations": "node scripts/verify-payload-lib-declarations.mjs",
+    "verify:knip": "knip"
   },
   "wireit": {
     "lint": {
@@ -49,6 +51,7 @@
     },
     "build": {
       "dependencies": [
+        "./packages/api:build",
         "./packages/cli:build",
         "./packages/payload:build",
         "./packages/plugin-accessibility:build",
@@ -56,8 +59,8 @@
         "./packages/plugin-changesets:build",
         "./packages/plugin-decisions:build",
         "./packages/plugin-design:build",
-        "./packages/plugin-persona-auditor:build",
         "./packages/plugin-github:build",
+        "./packages/plugin-persona-auditor:build",
         "./packages/plugin-prose:build",
         "./packages/plugin-svelte:build",
         "./packages/plugin-testing:build",
@@ -68,6 +71,7 @@
     },
     "check": {
       "dependencies": [
+        "./packages/api:check",
         "./packages/cli:check",
         "./packages/payload:check",
         "./packages/plugin-accessibility:check",
@@ -75,8 +79,8 @@
         "./packages/plugin-changesets:check",
         "./packages/plugin-decisions:check",
         "./packages/plugin-design:check",
-        "./packages/plugin-persona-auditor:check",
         "./packages/plugin-github:check",
+        "./packages/plugin-persona-auditor:check",
         "./packages/plugin-prose:check",
         "./packages/plugin-svelte:check",
         "./packages/plugin-testing:check",
@@ -86,8 +90,9 @@
       ]
     },
     "test": {
-      "//": "Thirteen entries, not fifteen. @agent-kit/test and plugin-testing ship no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
+      "//": "Fifteen entries, not sixteen. @agent-kit/test ships no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
       "dependencies": [
+        "./packages/api:test",
         "./packages/cli:test",
         "./packages/payload:test",
         "./packages/plugin-accessibility:test",
@@ -95,24 +100,26 @@
         "./packages/plugin-changesets:test",
         "./packages/plugin-decisions:test",
         "./packages/plugin-design:test",
-        "./packages/plugin-persona-auditor:test",
         "./packages/plugin-github:test",
+        "./packages/plugin-persona-auditor:test",
         "./packages/plugin-prose:test",
         "./packages/plugin-svelte:test",
+        "./packages/plugin-testing:test",
         "./packages/plugin-three:test",
         "./packages/plugin-typescript:test"
       ]
     },
     "attw": {
       "dependencies": [
+        "./packages/api:attw",
         "./packages/cli:attw",
         "./packages/plugin-accessibility:attw",
         "./packages/plugin-backlog:attw",
         "./packages/plugin-changesets:attw",
         "./packages/plugin-decisions:attw",
         "./packages/plugin-design:attw",
-        "./packages/plugin-persona-auditor:attw",
         "./packages/plugin-github:attw",
+        "./packages/plugin-persona-auditor:attw",
         "./packages/plugin-prose:attw",
         "./packages/plugin-svelte:attw",
         "./packages/plugin-testing:attw",
@@ -127,6 +134,7 @@
     "@eslint/js": "^10.0.1",
     "eslint": "^10.8.0",
     "globals": "^17.9.0",
+    "knip": "^6.32.0",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",

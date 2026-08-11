@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ledgerDirFor } from '../../core/ledger-dir.js';
-import { MANIFEST_PATH } from '../../core/manifest.js';
+import { MANIFEST_PATH } from '@agent-kit/api/internal';
 import {
   trackedLedgerLogs,
   trackedLedgerSurfaces,
@@ -13,7 +13,7 @@ import type { Ctx } from '../../detect.js';
 import { payloadPath } from '../../paths.js';
 import { MODULES } from '../../plan.js';
 import type { Registry } from '../../plugin-registry.js';
-import type { CheckResult, Finding } from './finding.js';
+import type { CheckResult, Finding } from '@agent-kit/api';
 import { allHookCommands } from './settings-wiring.js';
 
 /** Every `.mjs` script name shipped across a set of built payload directories. */

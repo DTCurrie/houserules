@@ -1,5 +1,5 @@
-import { definePlugin, scriptPermission } from '@agent-kit/cli/plugin';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/cli/plugin';
+import { definePlugin, scriptPermission } from '@agent-kit/api';
+import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
 
 /**
  * An append-only decision ledger, plus the skill that captures a decision and the reviewer

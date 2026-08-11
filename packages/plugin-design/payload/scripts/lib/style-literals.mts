@@ -112,6 +112,7 @@ function countStyleLiteralsInText(text: string): RawLiteralCount[] {
 
   for (const match of withoutComments.matchAll(DECLARATION_PATTERN)) {
     const [, property, value] = match;
+    if (property === undefined || value === undefined) continue;
     recordColors(counts, value);
     recordDimensions(counts, property, value);
   }

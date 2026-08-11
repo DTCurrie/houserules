@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { makeAnswers, makeCtx } from '#test/ctx-builder';
-import type { KitConfig } from '../../core/config.js';
+import type { KitConfig } from '@agent-kit/api';
 import { plan } from '../core.js';
 
 describe('core plan, the ledger directory .gitignore', () => {

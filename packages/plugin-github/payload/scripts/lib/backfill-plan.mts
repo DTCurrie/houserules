@@ -133,7 +133,8 @@ function matchLocalEntry(
   const candidates = localByTitle.get(item.title) ?? [];
   if (candidates.length === 0) return { status: 'unmatched' };
   if (candidates.length > 1) return { status: 'ambiguous' };
-  return { status: 'matched', entry: candidates[0] };
+  // candidates.length === 1 here, since the 0 and >1 cases returned above.
+  return { status: 'matched', entry: candidates[0]! };
 }
 
 /** The `set-field` ops that bring `item` in line with `entry`, for one ledger kind. */

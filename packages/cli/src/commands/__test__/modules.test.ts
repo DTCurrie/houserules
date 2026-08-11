@@ -21,7 +21,7 @@ import {
 } from '#test/installed-tree';
 import { optionBearingAdditions, parseRequested } from '../modules.js';
 import { MODULES } from '../../plan.js';
-import type { ModuleDef } from '../../module-def.js';
+import type { ModuleDef } from '@agent-kit/api';
 import type { Registry, RegisteredModule } from '../../plugin-registry.js';
 
 function installedWithReadGuard(): string {

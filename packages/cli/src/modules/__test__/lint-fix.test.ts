@@ -6,6 +6,8 @@ import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn, runScript } from '#test/run';
 import { editKitConfig, readJson, settingsOf } from '#test/installed-tree';
 import { recordedCalls, stubRunner } from '#test/runner-stub';
+import { makeAnswers, makeCtx } from '#test/ctx-builder';
+import { defaultEnabled, plan } from '../lint-fix.js';
 
 describe('lint-fix without a detected fix command', () => {
   let root: string;
@@ -51,6 +53,109 @@ describe('lint-fix without a detected fix command', () => {
     const doc = runCli(['doctor', root]);
     expect(doc.status, doc.stdout).toBe(0);
     expect(doc.stdout).not.toMatch(/lint-format-fix\.mjs not wired/);
+  });
+});
+
+function stopHookScripts(actions: ReturnType<typeof plan>): string[] {
+  return actions
+    .filter(
+      (a): a is Extract<typeof a, { kind: 'merge-settings' }> =>
+        a.kind === 'merge-settings',
+    )
+    .flatMap((a) => a.fragment.hooks?.Stop ?? [])
+    .flatMap((g) => g.hooks.map((h) => h.command));
+}
+
+describe('plan, given a root-scoped fix block whose commands are real root scripts', () => {
+  it('wires the Stop hook', () => {
+    const ctx = makeCtx({
+      rootPkg: { name: 'my-repo', scripts: { 'lint:fix': 'eslint --fix .' } },
+      targets: [],
+    });
+    ctx.claude.kitConfig = {
+      version: 2,
+      packageManager: 'npm',
+      targets: [],
+      fix: {
+        runner: 'npm',
+        filterFlag: '',
+        runScriptPrefix: ['run'],
+        commands: ['lint:fix'],
+      },
+    };
+
+    const actions = plan(ctx, makeAnswers({ targets: [] }));
+
+    expect(
+      stopHookScripts(actions).some((c) => c.includes('lint-format-fix.mjs')),
+    ).toBe(true);
+  });
+
+  it('reports defaultEnabled as true', () => {
+    const ctx = makeCtx({
+      rootPkg: { name: 'my-repo', scripts: { 'lint:fix': 'eslint --fix .' } },
+      targets: [],
+    });
+    ctx.claude.kitConfig = {
+      version: 2,
+      packageManager: 'npm',
+      targets: [],
+      fix: {
+        runner: 'npm',
+        filterFlag: '',
+        runScriptPrefix: ['run'],
+        commands: ['lint:fix'],
+      },
+    };
+
+    expect(defaultEnabled(ctx)).toBe(true);
+  });
+});
+
+describe('plan, given a root-scoped fix block whose commands are not real root scripts', () => {
+  it('does not wire the Stop hook and advises instead', () => {
+    const ctx = makeCtx({
+      rootPkg: { name: 'my-repo', scripts: {} },
+      targets: [],
+    });
+    ctx.claude.kitConfig = {
+      version: 2,
+      packageManager: 'npm',
+      targets: [],
+      fix: {
+        runner: 'npm',
+        filterFlag: '',
+        runScriptPrefix: ['run'],
+        commands: ['lint:fix'],
+      },
+    };
+
+    const actions = plan(ctx, makeAnswers({ targets: [] }));
+
+    expect(
+      stopHookScripts(actions).some((c) => c.includes('lint-format-fix.mjs')),
+    ).toBe(false);
+    expect(actions.some((a) => a.kind === 'advise')).toBe(true);
+  });
+
+  it('reports defaultEnabled as false', () => {
+    const ctx = makeCtx({
+      rootPkg: { name: 'my-repo', scripts: {} },
+      targets: [],
+    });
+    ctx.claude.kitConfig = {
+      version: 2,
+      packageManager: 'npm',
+      targets: [],
+      fix: {
+        runner: 'npm',
+        filterFlag: '',
+        runScriptPrefix: ['run'],
+        commands: ['lint:fix'],
+      },
+    };
+
+    expect(defaultEnabled(ctx)).toBe(false);
   });
 });
 

@@ -19,7 +19,7 @@ import {
 } from '#test/installed-tree';
 import { runDoctorJson } from '#test/doctor-report';
 import { blockingDrift, doctorExitCode } from '../doctor.js';
-import type { Finding } from '../doctor/finding.js';
+import type { Finding } from '@agent-kit/api';
 import { EXIT } from '../../cli-contract.js';
 import type { FileDrift } from '../../core/drift.js';
 import { PRETTIERIGNORE_REGION } from '../../modules/prettier-guard.js';

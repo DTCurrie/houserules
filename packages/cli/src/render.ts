@@ -1,8 +1,8 @@
 import { claudeMdRegion } from './core/claude-md-region.js';
-import { upsertRegion } from './core/regions.js';
+import { upsertRegion } from '@agent-kit/api/internal';
 import { hasModule } from './plugin-registry.js';
 import type { Ctx, PackageManagerInfo, Target } from './detect.js';
-import type { Answers } from './module-def.js';
+import type { Answers } from '@agent-kit/api';
 
 interface FixDefaults {
   runner: string;

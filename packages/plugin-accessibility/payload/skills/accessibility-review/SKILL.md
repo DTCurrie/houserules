@@ -1,6 +1,6 @@
 ---
 name: accessibility-review
-description: Review changed markup for accessibility against WCAG 2.2, covering a11y, contrast, screen reader, keyboard, and focus behavior in HTML, JSX, TSX, Svelte, Vue, and Astro. Use before handing off a change that touches markup.
+description: Review changed markup for accessibility (a11y) against WCAG 2.2: contrast, screen reader, keyboard, and focus behavior in HTML, JSX, TSX, Svelte, Vue, and Astro. Use before handing off a change that touches markup.
 allowed-tools: Bash(git diff:*), Bash(git merge-base:*), Bash(node .claude/scripts/wcag.mjs:*), Read, Grep, Agent
 ---
 

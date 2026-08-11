@@ -161,7 +161,11 @@ try {
       .map((line) => {
         const fields = line.split('\t');
         return { status: fields[0], path: fields[fields.length - 1] };
-      });
+      })
+      .filter(
+        (e): e is { status: string; path: string } =>
+          e.status !== undefined && e.path !== undefined,
+      );
     committed = nameStatus.map((e) => e.path);
     committedNewChangesets = nameStatus
       .filter(

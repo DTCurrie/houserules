@@ -21,7 +21,7 @@ import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
 import type { Ctx } from '../detect.js';
-import type { Answers } from '../module-def.js';
+import type { Answers } from '@agent-kit/api';
 import type { PlanResult } from '../plan.js';
 import type { Registry } from '../plugin-registry.js';
 
@@ -36,8 +36,8 @@ function samePath(a: string, b: string): boolean {
 }
 
 function preflight(root: string, ctx: Ctx): void {
-  const [major] = process.versions.node.split('.').map(Number);
-  if (major < 20)
+  const major = process.versions.node.split('.').map(Number)[0];
+  if (major === undefined || major < 20)
     throw new KitError(
       `Node ${process.versions.node} is too old — the kit needs >= 20.`,
     );

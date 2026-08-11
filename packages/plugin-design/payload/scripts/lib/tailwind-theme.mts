@@ -71,12 +71,15 @@ function extractDeclarations(blockBody: string): TokenCandidate[] {
   DECLARATION_PATTERN.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = DECLARATION_PATTERN.exec(blockBody)) !== null) {
-    const mapped = mapPropertyToGroup(match[1]);
+    const property = match[1];
+    const rawValue = match[2];
+    if (property === undefined || rawValue === undefined) continue;
+    const mapped = mapPropertyToGroup(property);
     if (!mapped) continue;
     candidates.push({
       group: mapped.group,
       name: mapped.name,
-      raw: match[2].trim(),
+      raw: rawValue.trim(),
       occurrences: 1,
       source: TAILWIND_SOURCE,
     });
@@ -124,6 +127,6 @@ export function hasTailwindV3Config(filePaths: string[]): boolean {
   return filePaths.some((filePath) => {
     const segments = filePath.split('/');
     const fileName = segments[segments.length - 1];
-    return TAILWIND_V3_CONFIG_NAMES.has(fileName);
+    return fileName !== undefined && TAILWIND_V3_CONFIG_NAMES.has(fileName);
   });
 }

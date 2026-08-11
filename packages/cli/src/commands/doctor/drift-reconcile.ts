@@ -10,8 +10,7 @@ import {
   FORCE_ONLY,
   type DriftReport,
 } from '../../core/drift.js';
-import { TargetRepo } from '../../core/fs-target.js';
-import { MANIFEST_PATH, type KitManifest } from '../../core/manifest.js';
+import { MANIFEST_PATH, type KitManifest } from '@agent-kit/api/internal';
 import type { Ctx } from '../../detect.js';
 import { formatterMangleHint } from '../../modules/formatter-mangle.js';
 import { resolveModuleOptions } from '../../module-options.js';
@@ -19,7 +18,7 @@ import { buildPlan, computeEffects, computePrune } from '../../plan.js';
 import type { PlanResult } from '../../plan.js';
 import type { Registry } from '../../plugin-registry.js';
 import { findRetired, retiredModuleAdvice } from '../../retired-modules.js';
-import type { CheckResult, Finding } from './finding.js';
+import type { CheckResult, Finding } from '@agent-kit/api';
 
 const DRIFT_EXPLANATIONS: Record<string, string> = {
   missing: 'missing. `doctor --fix` recreates it',
@@ -102,6 +101,9 @@ export function reconcileDrift(
       findings.push({ level: 'ERROR', msg: problem.message });
     drift = driftReportFor(root, planResult, manifest);
 
+    let settledManifest: KitManifest | null = manifest;
+    let settledPlanResult = planResult;
+
     if (flags.fix) {
       applyFixableChanges(
         root,
@@ -114,9 +116,14 @@ export function reconcileDrift(
       );
       // Re-derive against the reconciled tree so the report reflects reality.
       const reconciled = readJson<KitManifest>(join(root, MANIFEST_PATH));
-      const after = planAgainst(reconciled, false);
-      drift = driftReportFor(root, after, reconciled);
+      settledManifest = reconciled;
+      settledPlanResult = planAgainst(reconciled, false);
+      drift = driftReportFor(root, settledPlanResult, reconciled);
     }
+
+    findings.push(
+      ...staleManifestFindings(root, settledManifest, settledPlanResult),
+    );
   } catch (e) {
     findings.push({
       level: 'ERROR',
@@ -145,9 +152,31 @@ function driftReportFor(
 }
 
 /**
- * Applies the fixable subset of `drift` to disk: a real write for each fixable path, then,
- * under `--prune`, removing every orphaned file. Mutates the filesystem, never the report;
- * the caller re-derives drift against the reconciled tree afterward.
+ * A manifest entry naming a dest that is already gone from disk: the earlier repair that
+ * deleted it never dropped the receipt, so it reads as installed forever. Distinct from
+ * `orphaned`, which `orphanDrift` reports only for a dest still ON disk. `doctor --fix
+ * --prune` clears it, via the same `apply()` prune pass that removes an orphaned file.
+ */
+function staleManifestFindings(
+  root: string,
+  manifest: KitManifest | null,
+  planResult: PlanResult,
+): Finding[] {
+  return computePrune(root, { manifest, plannedDests: planResult.plannedDests })
+    .deletes.filter((entry) => entry.gone)
+    .map((entry) => ({
+      level: 'WARN',
+      msg: `${entry.dest}: manifest lists it but the file is gone from disk. \`doctor --fix --prune\` removes the stale entry`,
+    }));
+}
+
+/**
+ * Applies the fixable subset of `drift` to disk: a real write for each fixable path, plus,
+ * under `--prune`, the deletion pass for every orphaned or already-gone manifest entry.
+ * Routed through `apply()` rather than a bare `TargetRepo.remove`, so the manifest receipt
+ * for a pruned dest is dropped in the same pass that deletes it (AGENTKIT-fec011). Mutates
+ * the filesystem, never the report; the caller re-derives drift against the reconciled tree
+ * afterward.
  */
 function applyFixableChanges(
   root: string,
@@ -167,10 +196,20 @@ function applyFixableChanges(
       )
       .map((f) => f.path),
   );
-  if (fixable.size) {
+  // `force: true` here matches the removal pass this replaces, which pruned every
+  // orphaned dest unconditionally. Whether a locally-edited orphan should survive
+  // `--prune` without `--force` is a separate question from AGENTKIT-fec011.
+  const prune = flags.prune
+    ? computePrune(root, {
+        manifest,
+        plannedDests: planResult.plannedDests,
+        force: true,
+      })
+    : null;
+  if (fixable.size || prune?.deletes.length) {
     apply(
       root,
-      { ...planResult, prune: null },
+      { ...planResult, prune },
       {
         kitVersion: flags.kitVersion,
         moduleIds,
@@ -179,12 +218,6 @@ function applyFixableChanges(
         plugins: registry.plugins,
       },
     );
-  }
-  if (flags.prune) {
-    const repo = new TargetRepo(root);
-    for (const file of drift.files) {
-      if (file.status === 'orphaned') repo.remove(file.path);
-    }
   }
 }
 

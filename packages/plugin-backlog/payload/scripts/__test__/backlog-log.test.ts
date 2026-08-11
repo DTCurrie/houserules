@@ -86,6 +86,14 @@ function logRecords(root: string): LogRecord[] {
     .map((line) => JSON.parse(line) as LogRecord);
 }
 
+function recordAt(root: string, index: number): LogRecord {
+  const record = logRecords(root)[index];
+  if (record === undefined) {
+    throw new Error(`expected a log record at index ${index}`);
+  }
+  return record;
+}
+
 function encodeBody(body: string): string {
   return gzipSync(Buffer.from(body, 'utf8')).toString('base64');
 }
@@ -240,7 +248,7 @@ describe('backlog-log.mjs add', () => {
       '--chat=none',
     ]).stdout.trim();
 
-    const [record] = logRecords(root);
+    const record = recordAt(root, 0);
     expect(record).toMatchObject({
       id,
       action: 'add',
@@ -263,7 +271,7 @@ describe('backlog-log.mjs add', () => {
     ]);
 
     expect(r.stdout).toContain('chat: session-77');
-    expect(logRecords(root)[0].chat).toBe('session-77');
+    expect(recordAt(root, 0).chat).toBe('session-77');
     expect(readFile(root, ROOT_SURFACE)).toContain('**Chat:** session-77');
   });
 
@@ -311,7 +319,7 @@ describe('backlog-log.mjs add', () => {
       '42',
     ]);
 
-    expect(logRecords(root)[0].issue).toBe(42);
+    expect(recordAt(root, 0).issue).toBe(42);
   });
 
   it('accepts --issue before the positional arguments', () => {
@@ -326,13 +334,13 @@ describe('backlog-log.mjs add', () => {
       '--chat=none',
     ]);
 
-    expect(logRecords(root)[0].issue).toBe(42);
+    expect(recordAt(root, 0).issue).toBe(42);
   });
 
   it('omits the issue key entirely when --issue is not given', () => {
     run(root, ['add', 'TEST', 'BACKLOG.md', 'T', 'B', '--chat=none']);
 
-    expect('issue' in logRecords(root)[0]).toBe(false);
+    expect('issue' in recordAt(root, 0)).toBe(false);
   });
 
   it('does not change the rendered surface when the record carries an issue number', () => {
@@ -487,7 +495,7 @@ describe('backlog-log.mjs remove', () => {
       '--chat=none',
     ]);
 
-    const record = logRecords(root)[2];
+    const record = recordAt(root, 2);
     expect(record).toMatchObject({
       id: 'TEST-aaaaaa',
       action: 'remove',
@@ -639,7 +647,7 @@ describe('backlog-log.mjs update', () => {
       '--chat=none',
     ]);
 
-    const record = logRecords(root)[2];
+    const record = recordAt(root, 2);
     expect(record).toMatchObject({
       id: 'TEST-aaaaaa',
       action: 'update',

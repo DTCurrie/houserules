@@ -82,6 +82,32 @@ describe('checkDesign, untokenized colors', () => {
     expect(newValue?.message).toContain('matches no token');
     expect(newValue?.message).not.toContain('color.brand.primary');
   });
+
+  it('reports a new-value finding rather than a match when a token has fewer components than the parsed literal', () => {
+    const root = {
+      color: {
+        brand: {
+          truncated: {
+            $value: { colorSpace: 'srgb', components: [0.145, 0.388] },
+          },
+        },
+      },
+    };
+    const css = `
+.button {
+  color: #2563eb;
+}
+`;
+
+    const { findings } = checkDesign(css, root);
+    const match = findings.find((finding) =>
+      finding.message.includes('#2563eb'),
+    );
+
+    expect(match?.message).toBe(
+      '#2563eb matches no token. This is a new value and needs a design decision before it joins the token set.',
+    );
+  });
 });
 
 describe('checkDesign, declared-pair contrast', () => {
@@ -323,8 +349,9 @@ describe('checkDesign, hit targets', () => {
     const { findings } = checkDesign(css, {});
 
     expect(findings).toHaveLength(1);
-    expect(findings[0].message).toContain('18 by 18');
-    expect(findings[0].message).toContain('under the 24 by 24 minimum');
+    const [finding] = findings;
+    expect(finding?.message).toContain('18 by 18');
+    expect(finding?.message).toContain('under the 24 by 24 minimum');
   });
 
   it('reports nothing for an interactive element at the 24 by 24 minimum', () => {

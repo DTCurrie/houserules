@@ -5,9 +5,14 @@ import { join } from 'node:path';
 import { makeCtx } from '#test/ctx-builder';
 import { useRepo } from '#test/repo';
 import type { Ctx } from '../../../detect.js';
-import type { KitManifest } from '../../../core/manifest.js';
-import type { Settings } from '../../../merge-settings.js';
-import { allHookCommands, checkSettingsWiring } from '../settings-wiring.js';
+import type { KitManifest } from '@agent-kit/api/internal';
+import type { Settings } from '@agent-kit/api';
+import {
+  allHookCommands,
+  checkSettingsWiring,
+  HOOK_SCRIPTS,
+  KIT_HOOK_SCRIPT_RE,
+} from '../settings-wiring.js';
 
 function installedCtx(overrides: {
   modules: string[];
@@ -200,6 +205,24 @@ describe('checkSettingsWiring', () => {
     expect(checkSettingsWiring(root, ctx).findings).toEqual([]);
   });
 
+  it('warns when settings.local.json duplicates the read-guard hook script', () => {
+    const root = useRepo('pnpm-single');
+    writeSettingsLocal(root, wiring('node .claude/scripts/guard-read.mjs'));
+    const ctx = installedCtx({
+      modules: ['read-guard'],
+      claude: {
+        settingsLocalExists: true,
+        settings: wiring('node .claude/scripts/guard-read.mjs'),
+      },
+    });
+
+    expect(checkSettingsWiring(root, ctx).findings).toContainEqual(
+      expect.objectContaining({
+        msg: 'settings.local.json also wires kit hook scripts — they will run twice',
+      }),
+    );
+  });
+
   it('tolerates an unparseable settings.local.json, since that file is the user’s business', () => {
     const root = useRepo('pnpm-single');
     mkdirSync(join(root, '.claude'), { recursive: true });
@@ -214,4 +237,15 @@ describe('checkSettingsWiring', () => {
 
     expect(checkSettingsWiring(root, ctx).findings).toEqual([]);
   });
+});
+
+describe('KIT_HOOK_SCRIPT_RE', () => {
+  it.each(Array.from(new Set(Object.values(HOOK_SCRIPTS).flat())))(
+    'matches %s',
+    (scriptName) => {
+      expect(
+        KIT_HOOK_SCRIPT_RE.test(`node .claude/scripts/${scriptName}`),
+      ).toBe(true);
+    },
+  );
 });

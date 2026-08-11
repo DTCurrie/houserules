@@ -38,7 +38,7 @@ import {
 } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-import { loadConfigSafe, repoRoot } from '@agent-kit/payload/kit-config';
+import { loadConfigSafe, repoRootSafe } from '@agent-kit/payload/kit-config';
 import { makeId } from '@agent-kit/payload/backlog-id';
 import {
   SEPARATOR,
@@ -69,7 +69,18 @@ import {
 import { findEntry, loadIndex } from '@agent-kit/payload/ledger-index';
 import type { LedgerEntry, LedgerIndex } from '@agent-kit/payload/ledger-index';
 
-const REPO_ROOT = repoRoot();
+function requireRepoRoot(): string {
+  const root = repoRootSafe();
+  if (root === null) {
+    console.error(
+      'backlog-log.mjs requires a git work tree. Run it from inside a git repository.',
+    );
+    process.exit(0);
+  }
+  return root;
+}
+
+const REPO_ROOT = requireRepoRoot();
 const CONFIG = loadConfigSafe();
 const LEDGER_DIR = ledgerDir(REPO_ROOT, CONFIG.ledgers?.dir);
 const LOG_FILE = ledgerPath(REPO_ROOT, 'backlog', CONFIG.ledgers?.dir);

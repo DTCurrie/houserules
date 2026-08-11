@@ -1,6 +1,6 @@
 import { accessSync, constants } from 'node:fs';
 
-import type { CheckResult, Finding } from '@agent-kit/cli/plugin';
+import type { CheckResult, Finding } from '@agent-kit/api';
 
 /**
  * Where a local Chrome usually is. Kept in step with `CHROME_CANDIDATES` in

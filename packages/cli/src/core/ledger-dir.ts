@@ -1,6 +1,6 @@
 import type { Ctx } from '../detect.js';
 
-export const DEFAULT_LEDGER_DIR = '.claude/ledgers';
+const DEFAULT_LEDGER_DIR = '.claude/ledgers';
 
 /**
  * The repo-relative ledger directory, or null when the kit must not manage it.

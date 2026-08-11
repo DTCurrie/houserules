@@ -2,7 +2,7 @@ import type {
   HookEntry,
   HookGroup,
   SettingsFragment,
-} from '../merge-settings.js';
+} from './merge-settings.js';
 
 /**
  * The shell command that runs one hook script, guarded so a missing script degrades to an

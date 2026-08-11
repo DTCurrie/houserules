@@ -1,7 +1,7 @@
 import { EXIT } from '../../cli-contract.js';
 import { driftedFiles, type DriftReport } from '../../core/drift.js';
 import * as log from '../log.js';
-import type { Finding } from './finding.js';
+import type { Finding } from '@agent-kit/api';
 
 export interface DoctorReport {
   root: string;

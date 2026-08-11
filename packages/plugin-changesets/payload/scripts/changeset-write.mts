@@ -133,7 +133,9 @@ function readReleases(file: string): Release[] {
   for (const line of lines.slice(1)) {
     if (line.trim() === '---') break;
     const match = RELEASE_LINE.exec(line);
-    if (match) releases.push({ name: match[1], level: match[2] });
+    // Both capture groups in RELEASE_LINE are required (no `?`), so a successful match
+    // always populates match[1] and match[2].
+    if (match) releases.push({ name: match[1]!, level: match[2]! });
   }
   return releases;
 }
@@ -145,8 +147,9 @@ function mergeReleases(existing: Release[], incoming: Release[]): Release[] {
   const byName = new Map(existing.map((r) => [r.name, r]));
   for (const entry of incoming) {
     const prior = byName.get(entry.name);
-    if (!prior || LEVEL_RANK[entry.level] > LEVEL_RANK[prior.level])
-      byName.set(entry.name, entry);
+    const entryRank = LEVEL_RANK[entry.level] ?? -1;
+    const priorRank = prior ? (LEVEL_RANK[prior.level] ?? -1) : -1;
+    if (!prior || entryRank > priorRank) byName.set(entry.name, entry);
   }
   return [...byName.values()];
 }
@@ -271,7 +274,8 @@ if (!empty) {
           'The amended changeset declares no packages. Pass --pkg, or --empty to keep it release-free.',
         );
     } else if (valid.length === 1)
-      entries = [{ name: valid[0], level: defaultLevel }];
+      // valid.length === 1 guarantees valid[0] is present.
+      entries = [{ name: valid[0]!, level: defaultLevel }];
     else usage(`Specify --pkg. Valid packages: ${valid.join(', ')}`);
   }
   for (const entry of entries) {

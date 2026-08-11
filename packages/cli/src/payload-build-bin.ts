@@ -17,10 +17,30 @@ import {
   DEFAULT_PAYLOAD_ROOT,
 } from './payload-build.js';
 
-const payloadRoot = join(
-  process.cwd(),
-  process.argv[2] ?? DEFAULT_PAYLOAD_ROOT,
-);
+const USAGE = `Usage: agent-kit-payload [payload-root]
+
+Assembles payload-dist/ and rewrites cross-package imports. Run it after a plugin's tsc.
+
+  payload-root  Directory to assemble, relative to the cwd. Defaults to ${DEFAULT_PAYLOAD_ROOT}.
+
+Exits 0 after writing the sidecar, or 1 with the reason on stderr.`;
+
+const arg = process.argv[2];
+
+if (arg === '--help' || arg === '-h') {
+  console.log(USAGE);
+  process.exit(0);
+}
+
+// A path is positional, so anything dash-led is a mistyped flag. Treating it as a directory
+// name is how `agent-kit-payload --help` used to write a full build into a folder called
+// `--help`, which is not gitignored and gets committed by the next `git add -A`.
+if (arg?.startsWith('-')) {
+  console.error(`agent-kit-payload: unknown option "${arg}"\n\n${USAGE}`);
+  process.exit(1);
+}
+
+const payloadRoot = join(process.cwd(), arg ?? DEFAULT_PAYLOAD_ROOT);
 
 try {
   assemblePayload(payloadRoot, process.cwd());

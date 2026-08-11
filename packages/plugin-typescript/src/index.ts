@@ -1,5 +1,5 @@
-import { definePlugin } from '@agent-kit/cli/plugin';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/cli/plugin';
+import { definePlugin } from '@agent-kit/api';
+import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
 
 /**
  * Ships the TypeScript type-system rule: `interface` for object shapes since they extend,

@@ -54,7 +54,9 @@ function positionToLineAndColumn(
   position: number,
 ): { line: number; column: number } {
   const lines = contents.slice(0, position).split('\n');
-  return { line: lines.length, column: lines[lines.length - 1].length + 1 };
+  // String.split always returns at least one element, so the last line is never undefined.
+  const lastLine = lines[lines.length - 1]!;
+  return { line: lines.length, column: lastLine.length + 1 };
 }
 
 /**

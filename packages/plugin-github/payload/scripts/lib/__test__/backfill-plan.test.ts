@@ -369,14 +369,12 @@ describe('planBackfill over a projection of real board items', () => {
 
   it('leaves a draft alone once its marker and fields have landed', () => {
     const local = [localEntry({ id: 'DEC-9', title: 'Adopt wireit' })];
-    const items = [
-      draftItem(
-        'PVTI_9',
-        'Adopt wireit',
-        'Some body text\n\n<!-- agent-kit:entry:DEC-9 -->',
-      ),
-    ];
-    items[0].fieldValues.nodes.push(
+    const item = draftItem(
+      'PVTI_9',
+      'Adopt wireit',
+      'Some body text\n\n<!-- agent-kit:entry:DEC-9 -->',
+    );
+    item.fieldValues.nodes.push(
       {
         __typename: 'ProjectV2ItemFieldTextValue',
         text: 'chat-123',
@@ -389,7 +387,7 @@ describe('planBackfill over a projection of real board items', () => {
       },
     );
 
-    expect(backfillIsNoop(planFromItems(local, items))).toBe(true);
+    expect(backfillIsNoop(planFromItems(local, [item]))).toBe(true);
   });
 });
 

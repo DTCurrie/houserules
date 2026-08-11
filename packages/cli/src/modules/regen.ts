@@ -1,7 +1,6 @@
-import type { Action } from '../actions.js';
-import type { ModuleGroup } from '../module-def.js';
+import type { Action, ModuleGroup } from '@agent-kit/api';
 import { script } from './copy-actions.js';
-import { hookFragment } from './hook-wiring.js';
+import { hookFragment } from '@agent-kit/api';
 
 export const id = 'regen';
 export const title = 'Regenerate-on-edit (keep a generated snapshot fresh)';

@@ -1,6 +1,6 @@
 ---
 name: verify-changed
-description: Verify a change off-context. Run check/test/lint on only the changed packages plus their transitive dependents, and return a compact PASS/FAIL-per-package verdict instead of a multi-minute full-suite transcript. Use before handing off a change in a workspace/monorepo, in place of running the whole suite in the main context.
+description: Verify a change off-context: run check/test/lint on changed packages and dependents, returning a PASS/FAIL-per-package verdict. Use before handing off a change in a workspace or monorepo.
 allowed-tools: Agent
 ---
 

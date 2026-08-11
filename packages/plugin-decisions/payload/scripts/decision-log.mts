@@ -34,7 +34,7 @@
 import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
-import { loadConfigSafe, repoRoot } from '@agent-kit/payload/kit-config';
+import { loadConfigSafe, repoRootSafe } from '@agent-kit/payload/kit-config';
 import { makeId } from '@agent-kit/payload/backlog-id';
 import {
   findEntry,
@@ -68,7 +68,18 @@ import {
   unknownAreaMessage,
 } from '@agent-kit/payload/entry-ledger';
 
-const REPO_ROOT = repoRoot();
+function requireRepoRoot(): string {
+  const root = repoRootSafe();
+  if (root === null) {
+    console.error(
+      'decision-log.mjs requires a git work tree. Run it from inside a git repository.',
+    );
+    process.exit(0);
+  }
+  return root;
+}
+
+const REPO_ROOT = requireRepoRoot();
 const CONFIG = loadConfigSafe();
 const LEDGER_DIR = ledgerDir(REPO_ROOT, CONFIG.ledgers?.dir);
 const LOG_FILE = ledgerPath(REPO_ROOT, 'decisions', CONFIG.ledgers?.dir);
@@ -635,7 +646,8 @@ switch (action) {
     );
     requireKnownId(entries, targetId, 'supersede');
     requireAccepted(superseded, targetId, 'supersede');
-    const prefix = targetId.split('-')[0];
+    // split('-') on any string always yields at least one element.
+    const prefix = targetId.split('-')[0]!;
     const scope = splitList(scopeFlag);
     const ts = nowIso();
     const id = makeId(prefix, newTitle, ts);

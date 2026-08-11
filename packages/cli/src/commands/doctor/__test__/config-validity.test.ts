@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import { makeCtx } from '#test/ctx-builder';
 import { useRepo } from '#test/repo';
-import type { KitConfig } from '../../../core/config.js';
-import type { KitManifest } from '../../../core/manifest.js';
+import type { KitConfig } from '@agent-kit/api';
+import type { KitManifest } from '@agent-kit/api/internal';
 import type { Ctx } from '../../../detect.js';
 import { checkConfigValidity } from '../config-validity.js';
 

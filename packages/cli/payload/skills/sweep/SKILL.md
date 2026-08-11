@@ -1,6 +1,6 @@
 ---
 name: sweep
-description: Shard a repo-wide MECHANICAL edit into package-boundaried writer subagents so the orchestrator pays O(shards), not O(matches). Locate once, fan out one low-effort writer per package, each reporting only a one-line count, then verify the touched packages. Use for a rote change across many files (rename an import, swap an API call, add a header) where the match set or individual diffs should stay out of the main context.
+description: Shard a repo-wide mechanical edit into per-package writer subagents, costing O(shards) not O(matches). Use for a rote change across many files, such as renaming an import or swapping an API call.
 argument-hint: <the mechanical change to make across the repo>
 allowed-tools: Bash, Grep, Glob, Read, Agent
 ---

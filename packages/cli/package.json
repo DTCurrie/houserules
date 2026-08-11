@@ -83,7 +83,8 @@
     "build:ts": {
       "command": "tsc -p tsconfig.build.json",
       "dependencies": [
-        "build:payload"
+        "build:payload",
+        "../api:build"
       ],
       "files": [
         "src/**/*.ts",
@@ -111,6 +112,7 @@
       "command": "tsc --noEmit -p tsconfig.json",
       "dependencies": [
         "build:payload",
+        "../api:build",
         "../test:build"
       ],
       "files": [
@@ -191,28 +193,24 @@
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "dependencies": {
+    "@agent-kit/api": "workspace:*",
     "@agent-kit/payload": "workspace:*",
     "@clack/prompts": "^0.11.0",
     "commander": "^15.0.0",
     "dequal": "^2.0.3",
     "diff": "^9.0.0",
     "picocolors": "^1.1.1",
-    "semver": "^7.8.5",
-    "zod": "^4.4.3"
+    "semver": "^7.8.5"
   },
   "devDependencies": {
     "@agent-kit/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
-    "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.2",
     "@types/semver": "^7.8.0",
-    "eslint": "^10.8.0",
-    "globals": "^17.9.0",
     "prettier": "^3.9.6",
     "publint": "^0.3.23",
     "type-fest": "^5.8.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.66.0",
     "vitest": "^4.1.10",
     "wireit": "^0.14.13"
   }

@@ -53,8 +53,23 @@ function importEntryOf(manifest: PackageManifest): string | undefined {
   return manifest.module ?? manifest.main;
 }
 
-function installHint(packageName: string): string {
-  return `Install it in that repo with \`npm install -D ${packageName}@${SUPPORTED_TAILWIND_MAJOR}\`.`;
+/**
+ * The dev-install command for `root`'s package manager, by lockfile.
+ *
+ * Lockfile only, deliberately. The installer's `detectPackageManager` prefers
+ * `package.json`'s `packageManager` field first, but it is not reachable here: this is a
+ * copied payload lib running on bare node, and it may not import from the CLI's `src/`. A
+ * lockfile is strong evidence on its own, and npm is the right fallback when there is none.
+ */
+function installHint(root: string, packageName: string): string {
+  const spec = `${packageName}@${SUPPORTED_TAILWIND_MAJOR}`;
+  if (existsSync(join(root, 'pnpm-lock.yaml')))
+    return `Install it in that repo with \`pnpm add -D ${spec}\`.`;
+  if (existsSync(join(root, 'yarn.lock')))
+    return `Install it in that repo with \`yarn add -D ${spec}\`.`;
+  if (existsSync(join(root, 'bun.lock')) || existsSync(join(root, 'bun.lockb')))
+    return `Install it in that repo with \`bun add -d ${spec}\`.`;
+  return `Install it in that repo with \`npm install -D ${spec}\`.`;
 }
 
 function readManifest(path: string): TailwindResult<PackageManifest> {
@@ -119,7 +134,7 @@ export function resolveHostPackage(
   if (manifestPath === undefined) {
     return {
       ok: false,
-      error: `${packageName} is not installed in ${root}. ${installHint(packageName)}`,
+      error: `${packageName} is not installed in ${root}. ${installHint(root, packageName)}`,
     };
   }
 

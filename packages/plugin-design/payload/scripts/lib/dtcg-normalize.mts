@@ -57,7 +57,9 @@ function expandShortHex(digits: string): string {
 function parseHex(raw: string): DtcgColor | undefined {
   const match = HEX_PATTERN.exec(raw);
   if (!match) return undefined;
-  const digits = match[1].length === 3 ? expandShortHex(match[1]) : match[1];
+  const captured = match[1];
+  if (captured === undefined) return undefined;
+  const digits = captured.length === 3 ? expandShortHex(captured) : captured;
   const channels: number[] = [];
   for (let index = 0; index < 6; index += 2) {
     channels.push(
@@ -82,15 +84,18 @@ function splitArguments(body: string): string[] {
 function parseRgb(raw: string): DtcgColor | undefined {
   const match = RGB_PATTERN.exec(raw);
   if (!match) return undefined;
-  const parts = splitArguments(match[1]).map(Number);
+  const body = match[1];
+  if (body === undefined) return undefined;
+  const parts = splitArguments(body).map(Number);
   if (parts.length < 3 || parts.slice(0, 3).some(Number.isNaN))
     return undefined;
   const color: DtcgColor = {
     colorSpace: 'srgb',
     components: parts.slice(0, 3).map((part) => round(part / CHANNEL_MAX)),
   };
-  if (parts.length > 3 && !Number.isNaN(parts[3]))
-    color.alpha = round(parts[3]);
+  const alphaPart = parts[3];
+  if (alphaPart !== undefined && !Number.isNaN(alphaPart))
+    color.alpha = round(alphaPart);
   return color;
 }
 
@@ -106,7 +111,9 @@ const PERCENTAGE_PATTERN = /^(-?[0-9]*\.?[0-9]+)%$/;
 function parseOklchComponent(part: string, index: number): number {
   const percentageMatch = PERCENTAGE_PATTERN.exec(part);
   if (!percentageMatch) return Number(part);
-  const percentage = Number(percentageMatch[1]);
+  const digits = percentageMatch[1];
+  if (digits === undefined) return NaN;
+  const percentage = Number(digits);
   if (index === 0) return percentage / 100;
   if (index === 1) return (percentage / 100) * OKLCH_CHROMA_REFERENCE;
   return NaN;
@@ -115,7 +122,8 @@ function parseOklchComponent(part: string, index: number): number {
 /** Parses oklch()'s alpha argument, where `50%` means `0.5`, same as every other CSS alpha. */
 function parseAlphaComponent(part: string): number {
   const percentageMatch = PERCENTAGE_PATTERN.exec(part);
-  return percentageMatch ? Number(percentageMatch[1]) / 100 : Number(part);
+  const digits = percentageMatch?.[1];
+  return digits !== undefined ? Number(digits) / 100 : Number(part);
 }
 
 /**
@@ -125,7 +133,9 @@ function parseAlphaComponent(part: string): number {
 function parseOklch(raw: string): DtcgColor | undefined {
   const match = OKLCH_PATTERN.exec(raw);
   if (!match) return undefined;
-  const parts = splitArguments(match[1]);
+  const body = match[1];
+  if (body === undefined) return undefined;
+  const parts = splitArguments(body);
   if (parts.length < 3) return undefined;
   const components = parts
     .slice(0, 3)
@@ -135,8 +145,9 @@ function parseOklch(raw: string): DtcgColor | undefined {
     colorSpace: 'oklch',
     components: components.map(round),
   };
-  if (parts.length > 3) {
-    const alpha = parseAlphaComponent(parts[3]);
+  const alphaPart = parts[3];
+  if (alphaPart !== undefined) {
+    const alpha = parseAlphaComponent(alphaPart);
     if (!Number.isNaN(alpha)) color.alpha = round(alpha);
   }
   return color;
@@ -175,10 +186,10 @@ const SRGB_ENCODE_GAMMA_OFFSET = 0.055;
 const SRGB_ENCODE_GAMMA_EXPONENT = 1 / 2.4;
 
 function dotProduct(coefficients: readonly number[], values: number[]): number {
-  return coefficients.reduce(
-    (sum, coefficient, index) => sum + coefficient * values[index],
-    0,
-  );
+  return coefficients.reduce((sum, coefficient, index) => {
+    const value = values[index];
+    return value === undefined ? sum : sum + coefficient * value;
+  }, 0);
 }
 
 // An out-of-gamut oklch color converts to a linear channel outside [0, 1], including
@@ -192,9 +203,12 @@ function encodeSrgbChannel(linear: number): number {
         SRGB_ENCODE_GAMMA_OFFSET;
 }
 
-/** Converts oklch's `[lightness, chroma, hue]`, already decimal per {@link parseOklchComponent}, to gamma-encoded sRGB. */
-function convertOklchToSrgb(components: number[]): number[] {
-  const [lightness, chroma, hueDegrees] = components;
+/** Converts oklch's `lightness, chroma, hue`, already decimal per {@link parseOklchComponent}, to gamma-encoded sRGB. */
+function convertOklchToSrgb(
+  lightness: number,
+  chroma: number,
+  hueDegrees: number,
+): number[] {
   const hueRadians = hueDegrees * DEGREES_TO_RADIANS;
   const oklab = [
     lightness,
@@ -237,9 +251,16 @@ export function toMeasurableSrgb(
 ): MeasurableColor | undefined {
   if (color.colorSpace === 'srgb') return color;
   if (color.colorSpace === 'oklch') {
+    const [lightness, chroma, hueDegrees] = color.components;
+    if (
+      lightness === undefined ||
+      chroma === undefined ||
+      hueDegrees === undefined
+    )
+      return undefined;
     return {
       colorSpace: 'srgb',
-      components: convertOklchToSrgb(color.components),
+      components: convertOklchToSrgb(lightness, chroma, hueDegrees),
     };
   }
   return undefined;
@@ -249,7 +270,10 @@ export function toMeasurableSrgb(
 export function parseDimension(raw: string): DtcgDimension | undefined {
   const match = DIMENSION_PATTERN.exec(raw.trim());
   if (!match) return undefined;
-  return { value: Number(match[1]), unit: match[2] };
+  const value = match[1];
+  const unit = match[2];
+  if (value === undefined || unit === undefined) return undefined;
+  return { value: Number(value), unit };
 }
 
 /** A DTCG fontFamily `$value`: the stack split on commas with quotes stripped. */

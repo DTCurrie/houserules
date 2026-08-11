@@ -8,7 +8,7 @@ import { checkAgentToolScope } from './doctor/agent-tool-scope.js';
 import { checkConfigValidity } from './doctor/config-validity.js';
 import { reconcileDrift } from './doctor/drift-reconcile.js';
 import { checkEnvironment } from './doctor/environment.js';
-import type { CheckResult, Finding } from './doctor/finding.js';
+import type { CheckResult, Finding } from '@agent-kit/api';
 import {
   printJsonReport,
   printTextReport,

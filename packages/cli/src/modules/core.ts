@@ -9,11 +9,10 @@ import {
   renderClaudeMd,
   renderKitConfig,
 } from '../render.js';
-import type { Action } from '../actions.js';
+import type { Action, Answers, ModuleGroup } from '@agent-kit/api';
 import type { Ctx } from '../detect.js';
-import type { Answers, ModuleGroup } from '../module-def.js';
 import { lib, script, selfGitignoreAction, template } from './copy-actions.js';
-import { hookFragment } from './hook-wiring.js';
+import { hookFragment } from '@agent-kit/api';
 
 // Staged by their owning opt-in module rather than by core's blanket walk, so a repo
 // that never enables that module does not carry its pattern.

@@ -1,11 +1,11 @@
-import { definePlugin, scriptPermission } from '@agent-kit/cli/plugin';
+import { definePlugin, scriptPermission } from '@agent-kit/api';
 import type {
   Action,
   CheckResult,
   Ctx,
   ModuleDef,
   PluginApi,
-} from '@agent-kit/cli/plugin';
+} from '@agent-kit/api';
 
 import { checkAccessibilityLinter } from './linter-check.js';
 

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { makeCtx } from '#test/ctx-builder';
-import type { Action } from '../../actions.js';
+import type { Action } from '@agent-kit/api';
 import { formatterMangleHint } from '../formatter-mangle.js';
 import {
   PRETTIERIGNORE_REGION,

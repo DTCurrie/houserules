@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { extractBody } from '../core/regions.js';
+import { extractBody } from '@agent-kit/api/internal';
 import { PRETTIERIGNORE_REGION } from './prettier-guard.js';
 
 /**

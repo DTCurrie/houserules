@@ -1,4 +1,4 @@
-import { definePlugin, scriptPermission } from '@agent-kit/cli/plugin';
+import { definePlugin, scriptPermission } from '@agent-kit/api';
 
 import { checkChromeAvailable } from './chrome-check.js';
 import {
@@ -16,7 +16,7 @@ import type {
   Ctx,
   ModuleDef,
   PluginApi,
-} from '@agent-kit/cli/plugin';
+} from '@agent-kit/api';
 
 /**
  * The file types the design rule claims. Narrower than the accessibility rule's markup list on
@@ -276,6 +276,7 @@ function designTailwindModule(api: PluginApi): ModuleDef {
         api.payload.lib(id, 'tailwind-theme-to-dtcg.mjs'),
         api.payload.lib(id, 'tailwind-candidates.mjs'),
         api.payload.lib(id, 'tailwind-checks.mjs'),
+        api.payload.lib(id, 'is-record.mjs'),
         api.payload.template(
           id,
           'tailwind-theme.css.template',

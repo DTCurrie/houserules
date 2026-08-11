@@ -132,10 +132,13 @@ function colorsEqual(a: DtcgColorValue, b: unknown): boolean {
     isColorValue(b) &&
     a.colorSpace === b.colorSpace &&
     a.components.length === b.components.length &&
-    a.components.every(
-      (component, index) =>
-        Math.abs(component - b.components[index]) <= COLOR_COMPONENT_EPSILON,
-    )
+    a.components.every((component, index) => {
+      const other = b.components[index];
+      return (
+        other !== undefined &&
+        Math.abs(component - other) <= COLOR_COMPONENT_EPSILON
+      );
+    })
   );
 }
 
@@ -175,11 +178,13 @@ function parseDeclarations(source: string): ParsedDeclarations {
     buffer = '';
     if (text.length === 0) return;
     const match = currentSelector ? DECLARATION_PATTERN.exec(text) : null;
-    if (match) {
+    const property = match?.[1];
+    const value = match?.[2];
+    if (match && property !== undefined && value !== undefined) {
       declarations.push({
         selector: currentSelector as string,
-        property: match[1],
-        value: match[2].trim(),
+        property,
+        value: value.trim(),
         line: bufferStartLine,
       });
     } else {
@@ -224,7 +229,8 @@ function groupBySelector(declarations: CssDeclaration[]): CssDeclaration[][] {
   const groups: CssDeclaration[][] = [];
   let current: CssDeclaration[] = [];
   for (const declaration of declarations) {
-    if (current.length > 0 && current[0].selector !== declaration.selector) {
+    const first = current[0];
+    if (first !== undefined && first.selector !== declaration.selector) {
       groups.push(current);
       current = [];
     }
@@ -291,7 +297,8 @@ function resolveTokenValue(
   const value = current.$value;
   if (typeof value === 'string') {
     const alias = ALIAS_PATTERN.exec(value);
-    if (alias) return resolveTokenValue(root, alias[1]);
+    const target = alias?.[1];
+    if (target !== undefined) return resolveTokenValue(root, target);
   }
   return value;
 }
@@ -440,6 +447,7 @@ function linearizeChannel(channel: number): number {
 /** WCAG relative luminance. Used only by {@link contrastRatio}, which the rendered tier shares. */
 function relativeLuminance(color: DtcgColorValue): number {
   const [r, g, b] = color.components;
+  if (r === undefined || g === undefined || b === undefined) return 0;
   return (
     LUMINANCE_WEIGHT_R * linearizeChannel(r) +
     LUMINANCE_WEIGHT_G * linearizeChannel(g) +

@@ -420,6 +420,101 @@ interface ResolvedProject {
   id: string;
 }
 
+/**
+ * The one saved view a freshly created board opens with, so it shows a useful layout instead
+ * of a default table of every field. Named after the ledger, matching the board title's second
+ * word.
+ *
+ * Existing boards are never touched. Reconciling a view on every run would need to tell "never
+ * configured" apart from "the user rearranged it deliberately", and there is no reliable signal
+ * for that, so `bootstrap` only configures the view of a board it creates.
+ */
+const VIEW_SPECS: Record<
+  LedgerKind,
+  {
+    name: string;
+    layout: 'BOARD_LAYOUT' | 'TABLE_LAYOUT';
+    visibleFieldNames: readonly string[];
+  }
+> = {
+  backlog: {
+    name: 'Backlog',
+    layout: 'BOARD_LAYOUT',
+    visibleFieldNames: [
+      'Title',
+      'Status',
+      'Linked pull requests',
+      'Sub-issues progress',
+      'Area',
+    ],
+  },
+  decisions: {
+    name: 'Decisions',
+    layout: 'TABLE_LAYOUT',
+    visibleFieldNames: [
+      'Title',
+      'Supersedes',
+      'Chat',
+      'Superseded by',
+      'Scope',
+      'Area',
+    ],
+  },
+};
+
+interface DefaultViewResponse {
+  node: { views: { nodes: { id: string; number: number }[] } } | null;
+}
+
+/**
+ * A new project arrives with one default view at number 1, named `View 1`. That is the view
+ * every board opens to, so configuring it means updating that view rather than creating a
+ * second one.
+ */
+function fetchDefaultViewId(projectId: string): GhResult<string> {
+  const query = `query { node(id: ${JSON.stringify(projectId)}) { ... on ProjectV2 { views(first: 1) { nodes { id number } } } } }`;
+  const result = ghGraphql<DefaultViewResponse>(query);
+  if (!result.ok) return result;
+  const view = result.value.node?.views.nodes[0];
+  return view ? ghOk(view.id) : ghErr('project has no default view');
+}
+
+function updateViewMutation(
+  viewId: string,
+  spec: (typeof VIEW_SPECS)[LedgerKind],
+  visibleFieldIds: readonly string[],
+): GhResult<void> {
+  const idsLiteral = visibleFieldIds.map((id) => JSON.stringify(id)).join(', ');
+  const query = `mutation { updateProjectV2View(input: { viewId: ${JSON.stringify(viewId)}, name: ${JSON.stringify(spec.name)}, layout: ${spec.layout}, configuration: { visibleFieldIds: [${idsLiteral}] } }) { projectV2View { id } } }`;
+  const result = ghGraphql<{
+    updateProjectV2View: { projectV2View: { id: string } };
+  }>(query);
+  return result.ok ? ghOk(undefined) : result;
+}
+
+/**
+ * Configures the default view of a board `bootstrap` just created. A field the board does not
+ * have is skipped rather than failing the run, since `groupByFields` and `sortByFields` are not
+ * settable and every other field named here is expected to exist by the time this runs.
+ */
+function configureCreatedView(
+  projectId: string,
+  kind: LedgerKind,
+): GhResult<void> {
+  const spec = VIEW_SPECS[kind];
+  const fieldIds = fieldIdsByName(projectId);
+  if (!fieldIds.ok) return fieldIds;
+
+  const visibleFieldIds = spec.visibleFieldNames
+    .map((name) => fieldIds.value.get(name))
+    .filter((id): id is string => id !== undefined);
+
+  const defaultView = fetchDefaultViewId(projectId);
+  if (!defaultView.ok) return defaultView;
+
+  return updateViewMutation(defaultView.value, spec, visibleFieldIds);
+}
+
 function executeStep(
   step: BootstrapStep,
   ownerId: string,
@@ -438,6 +533,12 @@ function executeStep(
     if (!fields.ok) failStep(fields.message);
     const link = linkProjectToRepository(created.value.id, repositoryId);
     if (!link.ok) failStep(link.message);
+    // Cosmetic: the board and its fields are what matters, so a view that fails to configure
+    // is reported and the run carries on rather than failing bootstrap outright.
+    const view = configureCreatedView(created.value.id, step.kind);
+    if (!view.ok) {
+      console.error(`Could not configure the default view: ${view.message}`);
+    }
     return created.value;
   }
 
@@ -1598,19 +1699,19 @@ function pullKind(
  * the same deterministic title `bootstrap` adopts by, so a contributor with read access but no
  * token still resolves the real boards rather than guessing at them. A title that matches
  * nothing is skipped and printed, since a repo nobody has bootstrapped yet is not an error.
- * Returns `null` when the owner's projects could not even be listed, which the caller must not
- * treat the same as an empty match, since one is a transient failure and the other is not.
+ * Returns a failed result when the owner's projects could not even be listed, which the caller
+ * must not treat the same as an empty match, since one is a transient failure and the other is
+ * not.
  */
 function resolveBoardsByTitle(
   owner: string,
   repo: string,
-): Record<string, ResolvedProject> | null {
+): GhResult<Record<string, ResolvedProject>> {
   const ownerProjects = fetchOwnerProjects(owner);
   if (!ownerProjects.ok) {
-    console.error(
+    return ghErr(
       `could not list projects for ${owner}: ${ownerProjects.message}`,
     );
-    return null;
   }
 
   const resolved: Record<string, ResolvedProject> = {};
@@ -1625,7 +1726,7 @@ function resolveBoardsByTitle(
     }
     resolved[projectKey(kind)] = { number: match.number, id: match.id };
   }
-  return resolved;
+  return ghOk(resolved);
 }
 
 /**
@@ -1638,9 +1739,9 @@ function resolveBoardsByTitle(
 function resolveBoardsForPull(
   owner: string,
   repo: string,
-): Record<string, ResolvedProject> | null {
+): GhResult<Record<string, ResolvedProject>> {
   const token = readEnableToken();
-  return token ?? resolveBoardsByTitle(owner, repo);
+  return token ? ghOk(token) : resolveBoardsByTitle(owner, repo);
 }
 
 /** The ledger script that renders one kind's markdown surfaces, if that module is installed. */
@@ -1678,7 +1779,12 @@ function runPull(dryRun: boolean): void {
   checkReadGate();
 
   const resolved = resolveBoardsForPull(owner, repo);
-  if (resolved === null || Object.keys(resolved).length === 0) {
+  if (!resolved.ok) {
+    console.error(`Could not resolve project boards. ${resolved.message}`);
+    process.exit(1);
+    return;
+  }
+  if (Object.keys(resolved.value).length === 0) {
     console.log(
       'No project boards were found for this repo. A maintainer runs `bootstrap` once to create them.',
     );
@@ -1686,7 +1792,7 @@ function runPull(dryRun: boolean): void {
   }
 
   for (const kind of LEDGER_KINDS) {
-    const index = pullKind(kind, resolved);
+    const index = pullKind(kind, resolved.value);
     const boardList =
       index.projects.length === 0
         ? 'no boards'

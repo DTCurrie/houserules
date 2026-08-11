@@ -92,6 +92,14 @@ describe('three renderer performance reference', () => {
     expect(content).not.toMatch(/percent.{0,10}global support/);
   });
 
+  it('attributes the OffscreenCanvas global support figure to a named source', () => {
+    const root = installedWith(['performance']);
+
+    const content = readFileSync(referencePath(root), 'utf8');
+
+    expect(content).toMatch(/global\s+support[\s\S]{0,40}per caniuse/i);
+  });
+
   it('states the two-step Firefox WebGPU rollout on Apple Silicon macOS', () => {
     const root = installedWith(['performance']);
 

@@ -1,6 +1,6 @@
 ---
 name: review-change
-description: Dispatch the per-target reviewer agents for a change. Map the changed files to each area's ${name}-reviewer by the kit.config.json pathPrefix, fan them out in ONE message as read-only agents, and reconcile their OK / Conflict / Gap verdicts. Use to review a working-tree or branch change against each area's authoritative source before handing off.
+description: Dispatch the per-target reviewer agents for a change, mapped by kit.config.json pathPrefix, and reconcile their OK / Conflict / Gap verdicts. Use to review a working-tree or branch change before handing off.
 allowed-tools: Bash, Read, Agent
 ---
 

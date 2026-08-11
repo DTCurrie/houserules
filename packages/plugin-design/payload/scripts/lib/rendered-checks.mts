@@ -111,10 +111,13 @@ function colorMatchesAnyToken(
     return (
       measurableToken !== undefined &&
       measurableToken.components.length === color.components.length &&
-      measurableToken.components.every(
-        (component, index) =>
-          Math.abs(component - color.components[index]) <= COLOR_MATCH_EPSILON,
-      )
+      measurableToken.components.every((component, index) => {
+        const other = color.components[index];
+        return (
+          other !== undefined &&
+          Math.abs(component - other) <= COLOR_MATCH_EPSILON
+        );
+      })
     );
   });
 }
@@ -153,11 +156,15 @@ export function backgroundAlpha(background: string): number {
   const trimmed = background.trim();
   if (trimmed === 'transparent') return 0;
   const slashMatch = /\/\s*([\d.]+%?)\s*\)$/.exec(trimmed);
-  if (slashMatch) return parseAlphaArgument(slashMatch[1]);
+  const slashCaptured = slashMatch?.[1];
+  if (slashCaptured !== undefined) return parseAlphaArgument(slashCaptured);
   const commaMatch = /^rgba?\(([^)]+)\)$/i.exec(trimmed);
-  if (commaMatch) {
-    const parts = commaMatch[1].split(',').map((part) => part.trim());
-    if (parts.length > 3) return parseAlphaArgument(parts[3]);
+  const commaBody = commaMatch?.[1];
+  if (commaBody !== undefined) {
+    const parts = commaBody.split(',').map((part) => part.trim());
+    const alphaPart = parts[3];
+    if (parts.length > 3 && alphaPart !== undefined && alphaPart.length > 0)
+      return parseAlphaArgument(alphaPart);
   }
   return 1;
 }

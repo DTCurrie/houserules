@@ -479,6 +479,12 @@ function relink() {
     if (!LINK_SURFACES.includes(relPath.split('/')[0])) continue;
 
     const fullDest = join(repoRoot, dest);
+    // A manifest entry whose file is gone is a drift finding for `doctor`, not a reason to
+    // abort the relink pass. lstatSync would throw ENOENT and take the whole run with it.
+    if (!existsSync(fullDest)) {
+      kept.push({ dest, reason: 'manifest destination missing from disk' });
+      continue;
+    }
     if (lstatSync(fullDest).isSymbolicLink()) {
       alreadyLive++;
       continue;

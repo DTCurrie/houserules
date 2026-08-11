@@ -174,6 +174,6 @@ describe('mergeWithQueue', () => {
 
     const [merged] = mergeWithQueue(index, [queuedA]);
 
-    expect(merged.body).toBe('Fresh body from the queue.');
+    expect(merged?.body).toBe('Fresh body from the queue.');
   });
 });

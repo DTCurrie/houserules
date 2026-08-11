@@ -6,6 +6,7 @@
     "rootDir": "./payload",
     "outDir": "./payload-dist",
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,

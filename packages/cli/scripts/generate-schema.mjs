@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Regenerates schema/kit.config.schema.json from the zod schema in `src/core/config.ts`.
+ * Regenerates schema/kit.config.schema.json from the zod schema in `@agent-kit/api/internal`.
  *
- * Usage: `pnpm run schema`. Build first, since it reads dist/.
+ * Usage: `pnpm run schema`. Build first, since @agent-kit/api must be built.
  * `src/core/__test__/config.test.ts` fails if the committed file falls out of sync.
  */
 
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { format, resolveConfig } from 'prettier';
-import { buildJsonSchema } from '../dist/core/config.js';
+import { buildJsonSchema } from '@agent-kit/api/internal';
 
 const target = new URL('../schema/kit.config.schema.json', import.meta.url);
 const path = fileURLToPath(target);

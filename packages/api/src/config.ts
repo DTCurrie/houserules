@@ -97,7 +97,7 @@ const pluginEntrySchema = z.strictObject({
  * "what does it mean when absent". Duplicating the defaults would let the CLI reader and
  * the payload reader drift, and the hooks are the ones that have to cope with absence.
  */
-export const KitConfigSchema = z.strictObject({
+const KitConfigSchema = z.strictObject({
   // Documentation keys the shipped example carries. Declared so a strict parse
   // does not reject the very file we tell people to copy.
   _help: z.string().optional(),

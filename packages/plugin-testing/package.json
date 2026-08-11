@@ -22,13 +22,15 @@
     "build": "wireit",
     "check": "wireit",
     "prepack": "npm run build",
-    "attw": "wireit"
+    "attw": "wireit",
+    "test": "wireit"
   },
   "wireit": {
     "build": {
       "command": "tsc -p tsconfig.build.json && agent-kit-payload && publint",
       "dependencies": [
-        "../cli:build:ts"
+        "../cli:build:ts",
+        "../api:build"
       ],
       "files": [
         "src/**/*.ts",
@@ -44,12 +46,15 @@
     "check": {
       "command": "tsc --noEmit -p tsconfig.json",
       "dependencies": [
-        "../cli:build:ts"
+        "../cli:build:ts",
+        "../api:build"
       ],
       "files": [
         "src/**/*.ts",
         "tsconfig.json",
-        "tsconfig.build.json"
+        "tsconfig.build.json",
+        "payload/**",
+        "vitest.config.ts"
       ],
       "output": []
     },
@@ -60,6 +65,19 @@
       ],
       "files": [
         "package.json"
+      ],
+      "output": []
+    },
+    "test": {
+      "command": "vitest run",
+      "dependencies": [
+        "build",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "payload/**",
+        "vitest.config.ts"
       ],
       "output": []
     }
@@ -75,14 +93,17 @@
   "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-testing#readme",
   "bugs": "https://github.com/DTCurrie/agent-kit/issues",
   "peerDependencies": {
-    "@agent-kit/cli": ">=0.0.0 <1.0.0"
+    "@agent-kit/api": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
+    "@agent-kit/api": "workspace:*",
     "@agent-kit/cli": "workspace:*",
+    "@agent-kit/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.1.2",
     "publint": "^0.3.23",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
     "wireit": "^0.14.13"
   },
   "license": "MIT",

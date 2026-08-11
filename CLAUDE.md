@@ -55,7 +55,9 @@ it slices work and reviews it.
   for the user. No browser/screenshot verification unless explicitly asked.
 - Run those gates in order: format first, since it rewrites in place and settles the mechanical
   noise, then lint with autofix so only real problems are left, then typecheck and test. Scope
-  each command to the packages you actually changed.
+  each command to the packages you changed. This order is for work you do yourself.
+  When subagents are editing in parallel, the fixer runs once after they report, never inside
+  one of them, since it rewrites files their siblings still have open.
 - **"Done" means every check passed, not that the edits were made.** Report a check that failed
   or never ran, with its output. Never claim success over one you did not see pass.
 - Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.
@@ -100,8 +102,8 @@ A pnpm workspace of fifteen packages. Every path in the Layout section below is 
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
   workflows, `CLAUDE.md`, and the gitignored `.claude/`. Root `pnpm build|test|check` are
   wireit aggregators that depend on each package's script by path, replacing `pnpm -r`. The
-  `test` aggregator lists **thirteen** packages, not fifteen, because `@agent-kit/test` and
-  `plugin-testing` ship no `test` script and naming a script that does not exist is a wireit
+  `test` aggregator lists **fourteen** packages, not fifteen, because `@agent-kit/test` ships
+  no `test` script and naming a script that does not exist is a wireit
   error rather than the no-op `pnpm -r` gave you. Root `lint` is also wireit, and `lint:fix`,
   `format`, and `format:check` stay plain scripts. A fixer mutates its own inputs, so caching
   it is wrong, and a repo-wide formatter's input set is `.prettierignore`, which should not be
@@ -163,7 +165,14 @@ A pnpm workspace of fifteen packages. Every path in the Layout section below is 
   shipped test would carry a `vitest` import into a user's install. `tsconfig.json` clears the
   inherited exclude so `pnpm check` still typechecks them. Verify with a real
   `pnpm pack` and grep the tarball, not with `find` over `dist/`.
-- **Every package uses that same two-tsconfig split, and one tsconfig may never do both jobs.**
+- **Most packages use that same two-tsconfig split, and where both jobs exist one tsconfig may
+  never do both.** Two are exceptions, and they are exceptions for a reason rather than by drift.
+  `packages/payload` has no `src/` at all, so it has no `tsconfig.build.json`, and its
+  `tsconfig.json` extends `tsconfig.payload.json`, the reverse of the usual direction.
+  `packages/test` has a single `tsconfig.json` doing both jobs, because it ships no payload and
+  its consumers import it through `#test/*`. Check which shape a package has before writing a
+  path into a brief. A slice brief written from the old wording sent a worker to edit a
+  `tsconfig.build.json` that does not exist.
   `tsconfig.build.json` is the EMIT config: it excludes tests so they stay out of `dist/`.
   `tsconfig.json` is the CHECK config: it `extends` the build one, sets `noEmit` and
   `rootDir: "."`, clears the exclude with `exclude: []`, and lists **both** test locations in

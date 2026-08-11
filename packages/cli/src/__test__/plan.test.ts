@@ -19,8 +19,8 @@ import type {
   CopyAction,
   MergeSettingsAction,
   SeedAction,
-} from '../actions.js';
-import type { ModuleDef } from '../module-def.js';
+  ModuleDef,
+} from '@agent-kit/api';
 import type {
   PluginSource,
   Registry,
@@ -45,6 +45,11 @@ function makeRegistry(
 }
 
 const registry = makeRegistry(MODULES);
+
+function single<T>(items: readonly T[]): T {
+  expect(items).toHaveLength(1);
+  return items[0]!;
+}
 
 describe('resolveModuleIds', () => {
   it('returns the defaults when no flag is given', () => {
@@ -410,12 +415,13 @@ describe('computeEffects, given a "body" action', () => {
     const action = bodyAction(src);
 
     const { effects } = computeEffects(root, [action]);
+    const effect = single(effects);
 
     expect(effects).toHaveLength(1);
-    expect(effects[0].op).toBe('create');
-    expect(effects[0].content?.toString('utf8')).toBe(SHIPPED);
-    expect(effects[0].hash).toBe(sha256(SHIPPED_BODY));
-    expect(effects[0].frontmatterHash).toBe(sha256(SHIPPED_FRONTMATTER));
+    expect(effect.op).toBe('create');
+    expect(effect.content?.toString('utf8')).toBe(SHIPPED);
+    expect(effect.hash).toBe(sha256(SHIPPED_BODY));
+    expect(effect.frontmatterHash).toBe(sha256(SHIPPED_FRONTMATTER));
   });
 
   it('appends appendBody below the payload body and hashes the pair together', () => {
@@ -426,10 +432,11 @@ describe('computeEffects, given a "body" action', () => {
     const action = { ...bodyAction(src), appendBody: tail };
 
     const { effects } = computeEffects(root, [action]);
+    const effect = single(effects);
 
-    expect(effects[0].content?.toString('utf8')).toBe(SHIPPED + tail);
-    expect(effects[0].hash).toBe(sha256(SHIPPED_BODY + tail));
-    expect(effects[0].frontmatterHash).toBe(sha256(SHIPPED_FRONTMATTER));
+    expect(effect.content?.toString('utf8')).toBe(SHIPPED + tail);
+    expect(effect.hash).toBe(sha256(SHIPPED_BODY + tail));
+    expect(effect.frontmatterHash).toBe(sha256(SHIPPED_FRONTMATTER));
   });
 
   it('refreshes an installed rule whose appendBody changed, since the selection that composed it did', () => {
@@ -440,9 +447,10 @@ describe('computeEffects, given a "body" action', () => {
     const action = { ...bodyAction(src), appendBody: '\nnew routing line\n' };
 
     const { effects } = computeEffects(root, [action]);
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('update');
-    expect(effects[0].content?.toString('utf8')).toBe(
+    expect(effect.op).toBe('update');
+    expect(effect.content?.toString('utf8')).toBe(
       SHIPPED + '\nnew routing line\n',
     );
   });
@@ -457,9 +465,10 @@ describe('computeEffects, given a "body" action', () => {
     const action = bodyAction(src);
 
     const { effects } = computeEffects(root, [action]);
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('skip-identical');
-    expect(effects[0].content?.toString('utf8')).toBe(
+    expect(effect.op).toBe('skip-identical');
+    expect(effect.content?.toString('utf8')).toBe(
       customFrontmatter + SHIPPED_BODY,
     );
   });
@@ -474,9 +483,10 @@ describe('computeEffects, given a "body" action', () => {
     const action = bodyAction(src);
 
     const { effects } = computeEffects(root, [action]);
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('update');
-    expect(effects[0].content?.toString('utf8')).toBe(
+    expect(effect.op).toBe('update');
+    expect(effect.content?.toString('utf8')).toBe(
       customFrontmatter + SHIPPED_BODY,
     );
   });
@@ -501,8 +511,9 @@ describe('computeEffects, given a "body" action', () => {
     };
 
     const { effects } = computeEffects(root, [action], { manifest });
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('skip-modified');
+    expect(effect.op).toBe('skip-modified');
   });
 
   it('overwrites a body-modified file when force is set', () => {
@@ -528,9 +539,10 @@ describe('computeEffects, given a "body" action', () => {
       manifest,
       force: true,
     });
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('update');
-    expect(effects[0].content?.toString('utf8')).toBe(
+    expect(effect.op).toBe('update');
+    expect(effect.content?.toString('utf8')).toBe(
       SHIPPED_FRONTMATTER + SHIPPED_BODY,
     );
   });
@@ -552,9 +564,10 @@ describe('computeEffects, given a "body" action', () => {
     };
 
     const { effects } = computeEffects(root, [action], { manifest });
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('update');
-    expect(effects[0].content?.toString('utf8')).toBe(
+    expect(effect.op).toBe('update');
+    expect(effect.content?.toString('utf8')).toBe(
       SHIPPED_FRONTMATTER + SHIPPED_BODY,
     );
   });
@@ -580,8 +593,9 @@ describe('computeEffects, given a "body" action', () => {
     };
 
     const { effects } = computeEffects(root, [action], { manifest });
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('skip-modified');
+    expect(effect.op).toBe('skip-modified');
   });
 
   it('silently replaces an untouched frontmatter with the shipped default when the kit moved it on', () => {
@@ -609,9 +623,10 @@ describe('computeEffects, given a "body" action', () => {
     };
 
     const { effects } = computeEffects(root, [action], { manifest });
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('update');
-    expect(effects[0].content?.toString('utf8')).toBe(
+    expect(effect.op).toBe('update');
+    expect(effect.content?.toString('utf8')).toBe(
       newShippedFrontmatter + newShippedBody,
     );
   });
@@ -642,8 +657,9 @@ describe('computeEffects, given a "body" action', () => {
     };
 
     const { effects } = computeEffects(root, [action], { manifest });
+    const effect = single(effects);
 
-    expect(effects[0].content?.toString('utf8')).toBe(
+    expect(effect.content?.toString('utf8')).toBe(
       customFrontmatter + SHIPPED_BODY,
     );
   });
@@ -672,9 +688,10 @@ describe('computeEffects, given a "body" action', () => {
     };
 
     const { effects } = computeEffects(root, [action], { manifest });
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('update');
-    expect(effects[0].content?.toString('utf8')).toBe(
+    expect(effect.op).toBe('update');
+    expect(effect.content?.toString('utf8')).toBe(
       newShippedFrontmatter + SHIPPED_BODY,
     );
   });
@@ -726,11 +743,12 @@ describe('computeEffects, given a plugin-sourced action whose payload file is mi
     const { brokenPlugins, effects } = computeEffects(root, [action], {
       plugins: [pluginSource(pluginDir)],
     });
+    const brokenPlugin = single(brokenPlugins);
 
     expect(brokenPlugins).toHaveLength(1);
-    expect(brokenPlugins[0].plugin).toBe('@agent-kit/plugin-demo');
-    expect(brokenPlugins[0].message).toContain('@agent-kit/plugin-demo');
-    expect(brokenPlugins[0].message).toContain(action.src);
+    expect(brokenPlugin.plugin).toBe('@agent-kit/plugin-demo');
+    expect(brokenPlugin.message).toContain('@agent-kit/plugin-demo');
+    expect(brokenPlugin.message).toContain(action.src);
     expect(effects).toHaveLength(0);
   });
 
@@ -742,9 +760,10 @@ describe('computeEffects, given a plugin-sourced action whose payload file is mi
     const { brokenPlugins } = computeEffects(root, [action], {
       plugins: [pluginSource(pluginDir)],
     });
+    const brokenPlugin = single(brokenPlugins);
 
-    expect(brokenPlugins[0].message).toMatch(/payload/i);
-    expect(brokenPlugins[0].message).toMatch(/build/i);
+    expect(brokenPlugin.message).toMatch(/payload/i);
+    expect(brokenPlugin.message).toMatch(/build/i);
   });
 
   it("still renders a healthy sibling plugin's plan", () => {
@@ -773,11 +792,12 @@ describe('computeEffects, given a plugin-sourced action whose payload file is mi
         ],
       },
     );
+    const effect = single(effects);
 
     expect(brokenPlugins).toHaveLength(1);
     expect(effects).toHaveLength(1);
-    expect(effects[0].action.dest).toBe('ok.md');
-    expect(effects[0].op).toBe('create');
+    expect(effect.action.dest).toBe('ok.md');
+    expect(effect.op).toBe('create');
   });
 });
 
@@ -1018,8 +1038,9 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     const { effects } = computeEffects(root, [regionAction('new body')], {
       manifest: manifestRecording(sha256('old body')),
     });
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('update');
+    expect(effect.op).toBe('update');
   });
 
   it('still refuses a body the user edited', () => {
@@ -1029,8 +1050,9 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     const { effects } = computeEffects(root, [regionAction('new body')], {
       manifest: manifestRecording(sha256('what the kit last wrote')),
     });
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('skip-modified');
+    expect(effect.op).toBe('skip-modified');
   });
 
   it('adopts a block under legacy markers even though no recorded hash can match it', () => {
@@ -1044,8 +1066,9 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     const { effects } = computeEffects(root, [regionAction('new body')], {
       manifest: manifestRecording('a-hash-from-another-codebase'),
     });
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('update');
+    expect(effect.op).toBe('update');
   });
 
   it('leaves no legacy marker behind once it adopts', () => {
@@ -1055,10 +1078,9 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     const { effects } = computeEffects(root, [regionAction('new body')], {
       manifest: manifestRecording('a-hash-from-another-codebase'),
     });
+    const effect = single(effects);
 
-    expect(effects[0].content!.toString()).not.toContain(
-      'claude-kit:claude-md',
-    );
+    expect(effect.content!.toString()).not.toContain('claude-kit:claude-md');
   });
 
   it('preserves every byte outside the markers when adopting', () => {
@@ -1068,8 +1090,9 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     const { effects } = computeEffects(root, [regionAction('new body')], {
       manifest: manifestRecording('a-hash-from-another-codebase'),
     });
+    const effect = single(effects);
 
-    const written = effects[0].content!.toString();
+    const written = effect.content!.toString();
     expect(written.startsWith('# Title\n')).toBe(true);
     expect(written.endsWith('\nUser prose below.\n')).toBe(true);
   });
@@ -1116,8 +1139,9 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
     const root = tempDir();
 
     const { effects } = computeEffects(root, [seedAction()]);
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('create');
+    expect(effect.op).toBe('create');
   });
 
   it('reports a merge when the config exists, so the preview shows the write', () => {
@@ -1125,8 +1149,9 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
     writeExistingConfig(root, { version: 2, packageManager: 'pnpm' });
 
     const { effects } = computeEffects(root, [seedAction()]);
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('merge');
+    expect(effect.op).toBe('merge');
   });
 
   it('writes the resolved selection into a config the user already has', () => {
@@ -1134,8 +1159,9 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
     writeExistingConfig(root, { version: 2, packageManager: 'pnpm' });
 
     const { effects } = computeEffects(root, [seedAction()]);
+    const effect = single(effects);
 
-    const written = JSON.parse(effects[0].content!.toString());
+    const written = JSON.parse(effect.content!.toString());
     expect(written.moduleOptions).toEqual(SELECTION);
   });
 
@@ -1148,8 +1174,9 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
     });
 
     const { effects } = computeEffects(root, [seedAction()]);
+    const effect = single(effects);
 
-    const written = JSON.parse(effects[0].content!.toString());
+    const written = JSON.parse(effect.content!.toString());
     expect(written.packageManager).toBe('pnpm');
     expect(written.plugins).toEqual([{ name: '../p', alias: 'p' }]);
   });
@@ -1159,8 +1186,9 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
     writeExistingConfig(root, { version: 2, moduleOptions: SELECTION });
 
     const { effects } = computeEffects(root, [seedAction()]);
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('skip-exists');
+    expect(effect.op).toBe('skip-exists');
   });
 
   it('leaves a seed without managedKeys alone when the dest exists', () => {
@@ -1169,8 +1197,9 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
     const action = { ...seedAction(), managedKeys: undefined };
 
     const { effects } = computeEffects(root, [action]);
+    const effect = single(effects);
 
-    expect(effects[0].op).toBe('skip-exists');
+    expect(effect.op).toBe('skip-exists');
   });
 
   it('counts the config among plannedDests so prune never retires it', () => {
@@ -1232,7 +1261,6 @@ describe('computeEffects, given two copy actions on one destination', () => {
       libCopy(src, 'core'),
       libCopy(src, 'backlog'),
     ]);
-
     expect(copiesTo(effects)).toHaveLength(1);
   });
 
@@ -1248,8 +1276,9 @@ describe('computeEffects, given two copy actions on one destination', () => {
       libCopy(src, 'core'),
       libCopy(src, 'backlog'),
     ]);
+    const effect = single(effects);
 
-    expect(effects[0].action.module).toBe('core');
+    expect(effect.action.module).toBe('core');
   });
 
   it('plans both writes when two different sources claim one destination', () => {
@@ -1269,7 +1298,6 @@ describe('computeEffects, given two copy actions on one destination', () => {
       libCopy(shipped, 'core'),
       libCopy(forged, 'backlog'),
     ]);
-
     expect(copiesTo(effects)).toHaveLength(2);
   });
 });

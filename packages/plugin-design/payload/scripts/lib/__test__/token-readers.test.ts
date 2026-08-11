@@ -149,6 +149,15 @@ describe('toMeasurableSrgb', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('returns undefined for an oklch color with fewer than three components', () => {
+    expect(
+      toMeasurableSrgb({
+        colorSpace: 'oklch',
+        components: [0.55, 0.2],
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe('parseDimension', () => {
@@ -235,7 +244,8 @@ describe('extractTailwindThemeCandidates', () => {
     );
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0].name).toBe('md');
+    const [candidate] = candidates;
+    expect(candidate?.name).toBe('md');
   });
 
   it('reads a @theme default block', () => {
@@ -244,7 +254,8 @@ describe('extractTailwindThemeCandidates', () => {
     );
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0].name).toBe('md');
+    const [candidate] = candidates;
+    expect(candidate?.name).toBe('md');
   });
 
   it('reads a @theme static block', () => {
@@ -253,7 +264,8 @@ describe('extractTailwindThemeCandidates', () => {
     );
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0].name).toBe('md');
+    const [candidate] = candidates;
+    expect(candidate?.name).toBe('md');
   });
 
   it('reads a @theme block with two modifiers together', () => {
@@ -262,7 +274,8 @@ describe('extractTailwindThemeCandidates', () => {
     );
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0].name).toBe('md');
+    const [candidate] = candidates;
+    expect(candidate?.name).toBe('md');
   });
 });
 
@@ -285,7 +298,8 @@ describe('extractCssCustomProperties', () => {
     );
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0]).toMatchObject({ group: 'spacing', name: 'md' });
+    const [candidate] = candidates;
+    expect(candidate).toMatchObject({ group: 'spacing', name: 'md' });
   });
 
   it('skips the same declaration when it is inside .card instead of :root', () => {
@@ -344,7 +358,9 @@ describe('extractCssCustomProperties', () => {
       '@theme { --color-brand: #222; }',
     );
 
-    expect(fromRoot[0].name).toBe(fromTheme[0].name);
+    const [rootCandidate] = fromRoot;
+    const [themeCandidate] = fromTheme;
+    expect(rootCandidate?.name).toBe(themeCandidate?.name);
   });
 });
 

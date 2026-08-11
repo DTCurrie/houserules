@@ -1,5 +1,5 @@
 import type { Ctx, Target } from '../src/detect.js';
-import type { Answers, ModuleDef } from '../src/module-def.js';
+import type { Answers, ModuleDef } from '@agent-kit/api';
 import type { RegisteredModule, Registry } from '../src/plugin-registry.js';
 
 /**

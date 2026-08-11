@@ -1,6 +1,6 @@
 ---
 name: plan-project
-description: Plan a large, multi-phase implementation as a persisted project. Scaffold a gitignored `.claude/plans/<name>/` workspace with a PLAN overview, a living ROADMAP, and one sub-plan per phase, then stop and hand off. Implementation is a separate, explicit step (`/orchestrate` or in-context), and ROADMAP status is kept current in place as each phase lands so a returning session greps status instead of re-deriving scope from the transcript. Use when a task is too big to hold in one in-context plan.
+description: Plan a large, multi-phase implementation as a persisted .claude/plans/<name>/ workspace with a ROADMAP and one sub-plan per phase. Use when a task is too big to hold in one in-context plan.
 argument-hint: <what to build>
 allowed-tools: Read, Edit, Write, Grep, Glob, Bash, Agent
 ---

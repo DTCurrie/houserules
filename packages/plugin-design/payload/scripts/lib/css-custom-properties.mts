@@ -30,7 +30,12 @@ function extractRootBlockBodies(css: string): string[] {
   const bodies: string[] = [];
   for (const match of css.matchAll(RULE_BLOCK_PATTERN)) {
     const [, selectorList, body] = match;
-    if (isRootSelector(selectorList)) bodies.push(body);
+    if (
+      selectorList !== undefined &&
+      body !== undefined &&
+      isRootSelector(selectorList)
+    )
+      bodies.push(body);
   }
   return bodies;
 }
@@ -102,6 +107,7 @@ function extractDeclarations(body: string): TokenCandidate[] {
   const candidates: TokenCandidate[] = [];
   for (const match of body.matchAll(DECLARATION_PATTERN)) {
     const [, name, rawValue] = match;
+    if (name === undefined || rawValue === undefined) continue;
     const raw = rawValue.trim();
     if (VAR_REFERENCE_PATTERN.test(raw)) continue;
 

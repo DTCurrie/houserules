@@ -27,9 +27,9 @@ import type {
   CopyAction,
   FileAction,
   RegionAction,
-} from '../../actions.js';
+  RegionSpec,
+} from '@agent-kit/api';
 import type { Effect } from '../../plan.js';
-import type { RegionSpec } from '../regions.js';
 
 function copyAction(overrides: Partial<CopyAction> = {}): CopyAction {
   return {

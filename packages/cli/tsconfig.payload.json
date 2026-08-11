@@ -6,6 +6,7 @@
     "rootDir": "./payload",
     "outDir": "./payload-dist",
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     // Payload output is executed directly by node in a user's repo, with no

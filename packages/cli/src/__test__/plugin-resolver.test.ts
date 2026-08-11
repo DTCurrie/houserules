@@ -18,9 +18,7 @@ import { describe, expect, it, onTestFinished } from 'vitest';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 
-import type { CopyAction } from '../actions.js';
-import type { KitConfig } from '../core/config.js';
-import type { Answers, ModuleDef } from '../module-def.js';
+import type { CopyAction, KitConfig, Answers, ModuleDef } from '@agent-kit/api';
 import { KitError } from '../plan.js';
 import { buildPayload } from '../payload-build.js';
 import { PluginResolutionError } from '../plugin-registry.js';
@@ -188,6 +186,24 @@ describe('buildRegistry', () => {
     } catch (error) {
       expect((error as PluginResolutionError).pluginName).toBe(
         'this-package-does-not-exist-abcxyz',
+      );
+    }
+  });
+
+  it('hints the pnpm install command when the target repo has a pnpm lockfile', () => {
+    const root = makeRoot();
+    writeFileSync(join(root, 'pnpm-lock.yaml'), '');
+    const config = buildConfig([
+      { name: 'this-package-does-not-exist-abcxyz', alias: 'missing' },
+    ]);
+
+    try {
+      buildRegistry(root, config, []);
+      expect.unreachable();
+    } catch (error) {
+      expect((error as PluginResolutionError).message).toContain('pnpm add');
+      expect((error as PluginResolutionError).message).not.toContain(
+        'npm install',
       );
     }
   });

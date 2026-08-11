@@ -17,14 +17,14 @@ import {
   parseSettingsText,
   removeSettingsFragments,
   renderSettings,
-} from '../merge-settings.js';
+} from '@agent-kit/api/internal';
 import { apply } from '../apply.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
-import type { KitManifest } from '../core/manifest.js';
+import type { KitManifest } from '@agent-kit/api/internal';
 import type { Ctx } from '../detect.js';
-import type { Answers } from '../module-def.js';
+import type { Answers } from '@agent-kit/api';
 import type { PlanResult } from '../plan.js';
 import type { Registry, RegisteredModule } from '../plugin-registry.js';
 

@@ -6,13 +6,12 @@ import {
   runsAtRepoRoot,
 } from '@agent-kit/payload/kit-config';
 import { listWorkspacePackages, readJson } from '@agent-kit/payload/workspaces';
-import { validateKitConfig } from '../../core/config.js';
-import type { KitConfig } from '../../core/config.js';
+import { validateKitConfig } from '@agent-kit/api/internal';
+import type { CheckResult, Finding, KitConfig } from '@agent-kit/api';
 import type { Ctx } from '../../detect.js';
 import { MODULES } from '../../plan.js';
 import { PluginResolutionError, type Registry } from '../../plugin-registry.js';
 import { buildRegistry } from '../../plugin-resolver.js';
-import type { CheckResult, Finding } from './finding.js';
 
 export interface ConfigValidity extends CheckResult {
   /**

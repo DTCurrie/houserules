@@ -9,7 +9,7 @@ import type {
   ModuleDef,
   PayloadBuilders,
   PluginApi,
-} from '@agent-kit/cli/plugin';
+} from '@agent-kit/api';
 
 function buildApi(): PluginApi {
   return {

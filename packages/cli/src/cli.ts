@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { Command, CommanderError } from 'commander';
 
-import { KitConfigError } from './core/config.js';
+import { KitConfigError } from '@agent-kit/api/internal';
 import type { Flags } from './cli-contract.js';
 import { EXIT } from './cli-contract.js';
 

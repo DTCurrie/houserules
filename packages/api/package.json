@@ -1,0 +1,115 @@
+{
+  "name": "@agent-kit/api",
+  "version": "0.0.0",
+  "description": "agent-kit plugin contract: the plugin API, action types, module definitions, and the kit.config.json schema.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "default": "./dist/internal.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "check": "wireit",
+    "test": "wireit",
+    "prepack": "npm run build",
+    "attw": "wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsc -p tsconfig.build.json && publint",
+      "files": [
+        "src/**/*.ts",
+        "!src/**/__test__/**",
+        "tsconfig.build.json"
+      ],
+      "output": [
+        "dist/**"
+      ],
+      "dependencies": [
+        "../payload:build"
+      ]
+    },
+    "check": {
+      "command": "tsc --noEmit -p tsconfig.json",
+      "files": [
+        "src/**/*.ts",
+        "tsconfig.json",
+        "tsconfig.build.json"
+      ],
+      "output": [],
+      "dependencies": [
+        "../payload:build"
+      ]
+    },
+    "test": {
+      "command": "vitest run",
+      "dependencies": [
+        "build",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "vitest.config.ts"
+      ],
+      "output": []
+    },
+    "attw": {
+      "command": "attw --pack . --profile esm-only",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "package.json"
+      ],
+      "output": []
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "directory": "packages/api"
+  },
+  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/api#readme",
+  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
+  "dependencies": {
+    "@agent-kit/payload": "workspace:*",
+    "type-fest": "^5.8.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@agent-kit/test": "workspace:*",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@types/node": "^26.1.2",
+    "publint": "^0.3.23",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "wireit": "^0.14.13"
+  },
+  "license": "MIT",
+  "author": "Devin T. Currie (https://github.com/DTCurrie)",
+  "keywords": [
+    "agent-kit",
+    "agent-kit-plugin",
+    "claude-code",
+    "plugin-api"
+  ]
+}

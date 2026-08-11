@@ -158,9 +158,9 @@ describe('typescript', () => {
       join(PLUGIN_TYPESCRIPT, 'payload/rules/typescript.md'),
       'utf8',
     );
-    const globs = [...ruleSource.matchAll(/^ {2}- ['"](.+?)['"]$/gm)].map(
-      (match) => match[1],
-    );
+    const globs = [...ruleSource.matchAll(/^ {2}- ['"](.+?)['"]$/gm)]
+      .map((match) => match[1])
+      .filter((glob): glob is string => glob !== undefined);
     const extensions = globs.map((glob) => glob.replace(/^\*\*\/\*/, ''));
 
     expect(extensions.length).toBeGreaterThan(0);

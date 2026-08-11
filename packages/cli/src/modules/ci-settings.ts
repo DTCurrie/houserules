@@ -1,6 +1,5 @@
-import type { Action } from '../actions.js';
+import type { Action, ModuleGroup } from '@agent-kit/api';
 import type { Ctx } from '../detect.js';
-import type { ModuleGroup } from '../module-def.js';
 
 export const id = 'ci-settings';
 export const title = 'Headless-run deny list (.claude/settings.ci.json)';

@@ -9,10 +9,17 @@ KTX2 with Basis Universal is not a free upload. Loading a KTX2 texture **transco
 load time to a GPU-native format: BC on desktop, ASTC or ETC2 on mobile. That transcode step
 runs on load and is fast, but it is a real CPU-side step.
 
-The win is what happens after the transcode. The texture **stays compressed in VRAM**,
-typically **4x to 8x less texture memory** than an uncompressed equivalent. A PNG or JPG
-texture, by contrast, ends up fully uncompressed in VRAM once the GPU unpacks it. On a scene
-with many large textures, that memory difference is what keeps you off the mobile GPU's
+The win is what happens after the transcode. The texture **stays compressed in VRAM**, where a
+PNG or JPG ends up fully uncompressed once the GPU unpacks it.
+
+The saving is fixed by the target format's block size rather than by the image, so it is
+arithmetic rather than a benchmark. Uncompressed `RGBA8` costs 32 bits per pixel. A block
+format stores one 4x4 block in a fixed number of bytes: BC7 and ASTC 4x4 take 16 bytes per
+block, which is 8 bits per pixel, and BC1 and ETC2 RGB take 8 bytes, which is 4. That puts the
+range at **4x for BC7 or ASTC 4x4, and 8x for BC1 or ETC2 RGB**. Which one you get depends on
+the format Basis transcodes to for the device, not on the source texture.
+
+On a scene with many large textures, that difference is what keeps you off the mobile GPU's
 texture-memory ceiling. three.js ships a KTX2 loader for this format.
 
 Choose UASTC compression for quality-critical texture maps such as normals, and ETC1S for
@@ -92,18 +99,20 @@ The main thread is not just your render loop. It is shared with the DOM, the UI 
 input handling, so anything you move off it buys back input responsiveness as well as frame
 rate.
 
-`OffscreenCanvas` lets you render on a worker thread and is safe to recommend today, at
-roughly **95% global support** (Chrome 69+, Edge 79+, Firefox 105+, Safari 16.4+). Use
-ordinary Web Workers for physics, pathfinding, and other heavy simulation work that does not
-need direct DOM access.
+`OffscreenCanvas` lets you render on a worker thread and is safe to recommend today. Global
+support sits at roughly **95%** per caniuse's OffscreenCanvas entry, checked 2026-08-11, and
+starts at Chrome 69, Edge 79, Firefox 105, and Safari 16.4 per MDN's browser-compat-data,
+checked the same date. Use ordinary Web Workers for physics, pathfinding, and other heavy
+simulation work that does not need direct DOM access.
 
 ## WebGPU, with a fallback
 
 WebGPU has not reached a Baseline classification, since a major browser still lacks stable
-support on some platforms. Safari shipped it stably in **26.0** (September 2025). Firefox
-added it in two steps on macOS: version **145** enabled it on Apple Silicon running macOS
-Tahoe, and version **147** (released January 13, 2026) extended it to Apple Silicon on
-older macOS versions.
+support on some platforms. The version floors below come from MDN's browser-compat-data,
+checked 2026-08-11. Safari shipped it stably in **26.0** (September 2025). Firefox added it
+in two steps on macOS: version **145** enabled it on Apple Silicon running macOS Tahoe, and
+version **147** (released January 13, 2026) extended it to Apple Silicon on older macOS
+versions.
 
 **Firefox does not support WebGPU on Intel Macs or on Linux.** Ship a WebGL fallback
 alongside any WebGPU renderer path. Targeting WebGPU alone leaves those combinations with a

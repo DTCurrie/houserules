@@ -22,6 +22,14 @@ Vitest and TypeScript, but the principles they illustrate apply to any test runn
 - **Exclude tests from the build.** A test under a compiled source root is emitted into the
   published output and imports the test runner, which is a dev dependency. Add the exclude to
   the build config, then check the output directory for a `__test__` after building.
+- **Write a type test when the type IS the product.** A published package's public surface, a
+  generic whose inference is the feature, or a discriminated union whose exhaustiveness callers
+  rely on. Ordinary application code does not need one, since a runtime test already covers the
+  values that flow through it. Use Vitest's built-in `expectTypeOf`, or `tsd`.
+- **Enable Vitest's `typecheck` for a type test to run at all.** Vitest strips types by default
+  rather than checking them, the same trap `CLAUDE.md` warns about for the whole repo. Without
+  `typecheck: { enabled: true }` in the Vitest config, a file full of `expectTypeOf` assertions
+  reports green while checking nothing.
 
 ## Examples
 
@@ -204,3 +212,34 @@ it('prefixes a currency total with $', () => {
   expect(format([{ price: 3 }])).toMatch(/^\$/);
 });
 ```
+
+**Bad — a generic's inference has no test, so it regresses silently:**
+
+```ts
+function firstOf<T>(items: T[]): T | undefined {
+  return items[0];
+}
+
+it('returns the first item', () => {
+  expect(firstOf([1, 2, 3])).toBe(1);
+});
+```
+
+A change that widens the return type to `T` (dropping `| undefined`) still passes this test.
+The runtime value is unaffected either way, so nothing here would catch a caller losing the
+`undefined` case on an empty array.
+
+**Good — the inferred type pinned alongside the runtime value:**
+
+```ts
+it('returns the first item', () => {
+  expect(firstOf([1, 2, 3])).toBe(1);
+});
+
+it('types the result as possibly undefined', () => {
+  expectTypeOf(firstOf([1, 2, 3])).toEqualTypeOf<number | undefined>();
+});
+```
+
+The second test fails the moment the signature drops `| undefined`, even though every runtime
+value stays the same.

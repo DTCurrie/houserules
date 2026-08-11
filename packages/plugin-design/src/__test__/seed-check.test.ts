@@ -16,7 +16,7 @@ import {
 } from '../seed-check.js';
 import { renderTokenSeed } from '../tokens-seed.js';
 
-import type { Ctx } from '@agent-kit/cli/plugin';
+import type { Ctx } from '@agent-kit/api';
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), 'plugin-design-'));

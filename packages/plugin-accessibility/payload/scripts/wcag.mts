@@ -69,18 +69,19 @@ function parseCorpus(text: string): Criterion[] {
   const entries: Criterion[] = [];
   const headingRe = /^## (\d+\.\d+\.\d+) (.+)$/gm;
   const matches = [...text.matchAll(headingRe)];
-  for (let i = 0; i < matches.length; i += 1) {
-    const match = matches[i];
+  for (const [i, match] of matches.entries()) {
     const next = matches[i + 1];
-    const start = match.index + match[0].length;
+    // headingRe has no optional capture groups, so a match always populates
+    // match[0] (the whole heading), match[1] (the number), and match[2] (the name).
+    const start = match.index! + match[0]!.length;
     const end = next ? next.index : text.length;
     const rest = text.slice(start, end).trim();
     const metaMatch = rest.match(/^\*\*Level (\w+)\*\*.*?(https:\/\/\S+)/);
     const level = metaMatch?.[1] ?? '?';
     const url = metaMatch?.[2] ?? '';
     entries.push({
-      number: match[1],
-      name: match[2].trim(),
+      number: match[1]!,
+      name: match[2]!.trim(),
       level,
       url,
       body: rest,
@@ -114,7 +115,8 @@ function runLookup(query: string | undefined, entries: Criterion[]): number {
   const needle = query.toLowerCase();
   const matches = entries.filter((e) => e.name.toLowerCase().includes(needle));
   if (matches.length === 1) {
-    printEntry(matches[0]);
+    // matches.length === 1 guarantees matches[0] is present.
+    printEntry(matches[0]!);
     return 0;
   }
   if (matches.length > 1) {

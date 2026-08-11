@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { mergeSettings, parseSettingsText } from '../merge-settings.js';
-import type { Settings, SettingsFragment } from '../merge-settings.js';
+import { mergeSettings, parseSettingsText } from '@agent-kit/api/internal';
+import type { Settings, SettingsFragment } from '@agent-kit/api';
 
 const KIT_FRAGMENT: SettingsFragment = {
   permissions: { allow: ['Bash(git status:*)', 'Bash(git diff:*)'] },
@@ -61,9 +61,14 @@ describe('mergeSettings', () => {
   it('keeps a user hook byte-identical while appending the kit hook to the same matcher group', () => {
     const { merged } = mergeSettings(existing, KIT_FRAGMENT);
     const pre = merged.hooks!.PreToolUse;
+    if (!pre) throw new Error('expected a PreToolUse hook list');
     expect(pre).toHaveLength(1);
-    expect(pre[0].hooks[0].command).toBe('node   ./my-hook.js   --check');
-    expect(pre[0].hooks[1].command).toContain('guard-bash.mjs');
+    const group = pre[0];
+    if (!group) throw new Error('expected a matcher group');
+    const [first, second] = group.hooks;
+    if (!first || !second) throw new Error('expected two hooks');
+    expect(first.command).toBe('node   ./my-hook.js   --check');
+    expect(second.command).toContain('guard-bash.mjs');
   });
 
   it('leaves unrelated top-level keys untouched', () => {

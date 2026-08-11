@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { checkAccessibilityLinter } from '../linter-check.js';
-import type { Ctx } from '@agent-kit/cli/plugin';
+import type { Ctx } from '@agent-kit/api';
 
 function ctxWith(dependencies: Record<string, string>): Ctx {
   return {
@@ -29,8 +29,9 @@ describe('checkAccessibilityLinter', () => {
     const result = checkAccessibilityLinter(ctxWith({ react: '^19.0.0' }));
 
     expect(result.findings).toHaveLength(1);
-    expect(result.findings[0].level).toBe('WARN');
-    expect(result.findings[0].msg).toContain('eslint-plugin-jsx-a11y');
+    const [finding] = result.findings;
+    expect(finding?.level).toBe('WARN');
+    expect(finding?.msg).toContain('eslint-plugin-jsx-a11y');
   });
 
   it('stays silent when the linter is already present', () => {
@@ -49,7 +50,8 @@ describe('checkAccessibilityLinter', () => {
     const result = checkAccessibilityLinter(ctxWith({ [framework]: '^5.0.0' }));
 
     expect(result.findings).toHaveLength(1);
-    expect(result.findings[0].msg).toContain(linter);
+    const [finding] = result.findings;
+    expect(finding?.msg).toContain(linter);
   });
 
   it('finds a framework declared in a workspace package, not only the root', () => {
@@ -58,9 +60,8 @@ describe('checkAccessibilityLinter', () => {
     );
 
     expect(result.findings).toHaveLength(1);
-    expect(result.findings[0].msg).toContain(
-      'eslint-plugin-vuejs-accessibility',
-    );
+    const [finding] = result.findings;
+    expect(finding?.msg).toContain('eslint-plugin-vuejs-accessibility');
   });
 
   it('warns once per framework when a repo uses two', () => {

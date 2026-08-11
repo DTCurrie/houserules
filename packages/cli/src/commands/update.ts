@@ -32,12 +32,12 @@ import {
   parseSettingsText,
   removeHooksByScript,
   renderSettings,
-} from '../merge-settings.js';
+} from '@agent-kit/api/internal';
 import { apply } from '../apply.js';
 import { formatterMangleHint } from '../modules/formatter-mangle.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
-import type { Answers } from '../module-def.js';
+import type { Answers } from '@agent-kit/api';
 import type { PlanResult, PruneResult } from '../plan.js';
 
 /** Committed rendered ledgers, or nothing when the kit must not manage that directory. */

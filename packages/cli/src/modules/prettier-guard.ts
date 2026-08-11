@@ -1,8 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { Action } from '../actions.js';
-import type { RegionSpec } from '../core/regions.js';
+import type { Action, RegionSpec } from '@agent-kit/api';
 import type { Ctx } from '../detect.js';
 
 /**

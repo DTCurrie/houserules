@@ -58,6 +58,22 @@ function logRecords(root: string): LogRecord[] {
     .map((line) => JSON.parse(line) as LogRecord);
 }
 
+function recordAt(root: string, index: number): LogRecord {
+  const record = logRecords(root)[index];
+  if (record === undefined) {
+    throw new Error(`expected a log record at index ${index}`);
+  }
+  return record;
+}
+
+function lineAt(lines: string[], index: number): string {
+  const line = lines[index];
+  if (line === undefined) {
+    throw new Error(`expected a line at index ${index}`);
+  }
+  return line;
+}
+
 function encodeBody(body: string): string {
   return gzipSync(Buffer.from(body, 'utf8')).toString('base64');
 }
@@ -285,7 +301,7 @@ describe('decision-log.mjs decide', () => {
       '--chat=none',
     ]).stdout.trim();
 
-    const [record] = logRecords(root);
+    const record = recordAt(root, 0);
     expect(record).toMatchObject({
       id,
       action: 'decide',
@@ -308,7 +324,7 @@ describe('decision-log.mjs decide', () => {
       '--chat=none',
     ]);
 
-    expect(logRecords(root)[0].scope).toEqual([
+    expect(recordAt(root, 0).scope).toEqual([
       'src/sim/nav.ts',
       'src/sim/agent.ts',
     ]);
@@ -510,7 +526,7 @@ describe('decision-log.mjs supersede', () => {
       '--chat=none',
     ]);
 
-    expect(logRecords(root)[1].supersedes).toEqual([firstId]);
+    expect(recordAt(root, 1).supersedes).toEqual([firstId]);
   });
 
   it('shows the old entry as superseded and the new one as accepted', () => {
@@ -728,7 +744,7 @@ describe('decision-log.mjs amend', () => {
       '--chat=none',
     ]);
 
-    const [, amendRecord] = logRecords(root);
+    const amendRecord = recordAt(root, 1);
     expect(amendRecord).toMatchObject({ id, action: 'amend' });
     expect(amendRecord.supersedes).toBeUndefined();
     expect(amendRecord.under).toBeUndefined();
@@ -903,7 +919,7 @@ describe('decision-log.mjs rescope', () => {
   it('records no body on the rescope event', () => {
     rescopeTo('src/design/nav.ts');
 
-    expect(logRecords(root)[1].content).toBeUndefined();
+    expect(recordAt(root, 1).content).toBeUndefined();
   });
 
   it('shows the original scope and the new one as separate records', () => {
@@ -1313,7 +1329,7 @@ describe('decision-log.mjs ancestry', () => {
     const r = run(root, ['ancestry', secondId]);
 
     const lines = r.stdout.trim().split('\n');
-    expect(lines[1].startsWith('  ')).toBe(true);
+    expect(lineAt(lines, 1).startsWith('  ')).toBe(true);
   });
 
   it('prints no body for any node in the walk', () => {
@@ -1461,7 +1477,7 @@ describe('decision-log.mjs tree', () => {
     const r = run(root, ['tree', parentId]);
 
     const lines = r.stdout.trim().split('\n');
-    expect(lines[1].startsWith('  ')).toBe(true);
+    expect(lineAt(lines, 1).startsWith('  ')).toBe(true);
   });
 
   it('prints only the given id when it has no children', () => {

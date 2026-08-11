@@ -1,8 +1,7 @@
-import type { Action } from '../actions.js';
+import type { Action, ModuleGroup } from '@agent-kit/api';
 import type { Ctx } from '../detect.js';
-import type { ModuleGroup } from '../module-def.js';
 import { script, skill } from './copy-actions.js';
-import { scriptPermission } from './hook-wiring.js';
+import { scriptPermission } from '@agent-kit/api';
 
 export const id = 'verify-changed';
 export const title = 'Diff-scoped verification (/verify-changed)';

@@ -1,5 +1,5 @@
-import type { SettingsSignature } from '../merge-settings.js';
-import type { PluginSource } from '../plugin-registry.js';
+import type { SettingsSignature } from './merge-settings.js';
+import type { PluginSource } from './plugin-source.js';
 
 export const MANIFEST_PATH = '.claude/kit-manifest.json';
 

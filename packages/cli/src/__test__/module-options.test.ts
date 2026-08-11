@@ -6,7 +6,7 @@ import {
   parseModuleOptionFlags,
   resolveModuleOptions,
 } from '../module-options.js';
-import type { ModuleDef } from '../module-def.js';
+import type { ModuleDef } from '@agent-kit/api';
 import type { RegisteredModule, Registry } from '../plugin-registry.js';
 
 function moduleWithOptions(
@@ -39,9 +39,9 @@ function suggestionFor(registry: Registry, id: string): string {
 }
 
 function moduleOptionArgsIn(suggestion: string): string[] {
-  return [...suggestion.matchAll(/--module-option (\S+)/g)].map(
-    (match) => match[1],
-  );
+  return [...suggestion.matchAll(/--module-option (\S+)/g)]
+    .map((match) => match[1])
+    .filter((value): value is string => value !== undefined);
 }
 
 function registryOf(defs: ModuleDef[]): Registry {

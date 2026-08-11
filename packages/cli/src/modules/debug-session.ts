@@ -1,12 +1,11 @@
-import type { Action } from '../actions.js';
-import type { ModuleGroup } from '../module-def.js';
+import type { Action, ModuleGroup } from '@agent-kit/api';
 import {
   script,
   selfGitignoreAction,
   skill,
   template,
 } from './copy-actions.js';
-import { hookFragment } from './hook-wiring.js';
+import { hookFragment } from '@agent-kit/api';
 
 export const id = 'debug-session';
 export const title = 'Hypothesis-driven debug session (/debug-session)';

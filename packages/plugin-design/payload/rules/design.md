@@ -11,8 +11,9 @@ paths:
 # Design
 
 This rule covers using the repo's design system when writing or editing styled markup. The
-system itself lives at `.claude/design/tokens.json`. It is guidance, not a linter, so a
-value that violates a rule below is a finding to weigh, not an error to block on.
+system's values come from a seeded token file or from this repo's Tailwind theme, whichever
+this install uses. It is guidance, not a linter, so a value that violates a rule below is a
+finding to weigh, not an error to block on.
 
 ## Rule — follow without deliberation
 

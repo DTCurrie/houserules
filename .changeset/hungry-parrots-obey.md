@@ -8,6 +8,6 @@ Initial release. An interactive installer for a portable Claude Code context-dis
 
 `agent-kit doctor` audits an install: config validity, context budget, drift against the manifest, fix and verify script wiring, whether a read-only agent grants an unbounded Bash, and whether every installed reference doc is reachable from something else the kit installed. `--fix` reconciles and `--prune` removes what no enabled module produces.
 
-Plugins extend the kit. Declare one in `.claude/kit.config.json` under `plugins` and its modules become selectable as `<alias>/<moduleId>`. `CONVENTIONS.md` documents the contract, including how a plugin's payload reaches a shared lib.
+Plugins extend the kit. Declare one in `.claude/kit.config.json` under `plugins` and its modules become selectable as `<alias>/<moduleId>`. A plugin codes against `@agent-kit/api` rather than against this package, so the installer stays out of its dependency graph. `CONVENTIONS.md` documents the contract, including how a plugin's payload reaches a shared lib.
 
 Ships the planning and orchestration skills: `/plan-project` persists a multi-phase plan, `/orchestrate` executes a phase by fanning out scoped implementer subagents, and `/verify-changed`, `/ready`, `/sweep`, and `/blast-radius` cover verification and wide changes.

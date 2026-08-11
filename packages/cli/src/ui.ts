@@ -1,9 +1,9 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import type { AdviseAction } from './actions.js';
+import type { AdviseAction } from '@agent-kit/api';
 import type { WrittenEntry } from './apply.js';
 import type { ChangesetInvocation, Ctx, Target } from './detect.js';
-import type { SettingsPlan } from './merge-settings.js';
+import type { SettingsPlan } from '@agent-kit/api/internal';
 import type { Effect, EffectOp } from './plan.js';
 import type { RegisteredModule } from './plugin-registry.js';
 

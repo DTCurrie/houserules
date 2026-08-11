@@ -1,22 +1,41 @@
-import type { Action } from '../actions.js';
+import { runsAtRepoRoot } from '@agent-kit/payload/kit-config';
+import type { Action, Answers, ModuleGroup } from '@agent-kit/api';
 import type { Ctx } from '../detect.js';
-import type { Answers, ModuleGroup } from '../module-def.js';
 import { script } from './copy-actions.js';
-import { hookFragment } from './hook-wiring.js';
+import { hookFragment } from '@agent-kit/api';
 
 export const id = 'lint-fix';
 export const title = 'Lint/format auto-fix on Stop';
 export const group: ModuleGroup = 'recommended';
 
+/**
+ * The top-level `fix.commands` a root-scoped runner block (`filterFlag: ""`) would run,
+ * kept to only the ones that actually exist as a root `package.json` script.
+ *
+ * `config.fix.commands` is always seeded, so its mere presence proves nothing: it is only
+ * trustworthy once checked against the root scripts it claims to run.
+ */
+function rootFixCommands(ctx: Ctx): string[] {
+  const fix = ctx.claude.kitConfig?.fix;
+  if (!fix?.commands?.length || !runsAtRepoRoot(fix)) return [];
+  const scripts = ctx.rootPkg?.scripts ?? {};
+  return fix.commands.filter((cmd) => typeof scripts[cmd] === 'string');
+}
+
 export function hint(ctx: Ctx): string {
   const detected = ctx.targets.filter((t) => t.fixCommands);
-  return detected.length
-    ? `fix scripts found: ${detected.map((t) => `${t.name} → ${t.fixCommands!.join('+')}`).join(', ')}`
+  const parts = detected.map((t) => `${t.name} → ${t.fixCommands!.join('+')}`);
+  const root = rootFixCommands(ctx);
+  if (root.length) parts.push(`root → ${root.join('+')}`);
+  return parts.length
+    ? `fix scripts found: ${parts.join(', ')}`
     : 'no fix scripts detected — configure fixCommands before enabling';
 }
 
 export function defaultEnabled(ctx: Ctx): boolean {
-  return ctx.targets.some((t) => t.fixCommands);
+  return (
+    ctx.targets.some((t) => t.fixCommands) || rootFixCommands(ctx).length > 0
+  );
 }
 
 /**
@@ -37,10 +56,13 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     ),
   ];
 
-  // Gate on target fixCommands, never on the always-seeded config.fix.commands. Wiring
-  // off the latter would spill package-manager errors into context every turn.
+  // Gate on target fixCommands, or on config.fix.commands once verified against real root
+  // scripts (rootFixCommands). Never on config.fix.commands as-is: wiring off the always-
+  // seeded default, unchecked, would spill package-manager errors into context every turn.
   const targets = answers?.targets ?? ctx?.targets ?? [];
-  const anyFix = targets.some((t) => t.fixCommands?.length);
+  const anyFix =
+    targets.some((t) => t.fixCommands?.length) ||
+    rootFixCommands(ctx).length > 0;
   if (anyFix) {
     for (const event of ['Stop', 'SubagentStop'])
       actions.push({

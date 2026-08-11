@@ -104,7 +104,8 @@ export function resolveRecordedModuleIds(
           '.claude/kit.config.json, or rename its alias, so the recorded module resolves to one.',
       );
     }
-    return suppliers[0].id;
+    // Reached only when suppliers.length is exactly 1: the 0 and >1 cases both returned above.
+    return suppliers[0]!.id;
   });
 }
 

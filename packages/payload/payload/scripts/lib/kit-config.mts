@@ -101,6 +101,22 @@ export function repoRoot(): string {
     .trim();
 }
 
+/**
+ * `repoRoot()` for a script that must not crash. Returns null outside a git work tree, or
+ * when `git` is absent, rather than throwing.
+ *
+ * A runtime-invoked payload script is required to exit 0 on every failure path, and a
+ * throw at module load defeats that before any handler can run. Such a script resolves its
+ * root through this and exits cleanly on null.
+ */
+export function repoRootSafe(): string | null {
+  try {
+    return repoRoot() || null;
+  } catch {
+    return null;
+  }
+}
+
 export const GUARD_DEFAULTS = {
   gitCommit: true,
   gitPush: true,

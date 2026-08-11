@@ -1,6 +1,6 @@
 ---
 name: changeset-condense
-description: Condense the pending changesets, consolidating redundant .changeset/*.md entries into one. Use when a later changeset supersedes, extends, or fixes an earlier one, so the release notes carry one bullet per feature instead of a contradiction.
+description: Condense pending changesets, consolidating redundant .changeset/*.md entries into one. Use when a later changeset supersedes, extends, or fixes an earlier one.
 argument-hint: [id ...]
 allowed-tools: Bash(node .claude/scripts/changeset-write.mjs:*), Bash(git status:*), Bash(git log:*), Read, Glob, Grep
 ---

@@ -32,7 +32,9 @@ export function splitFrontmatter(text: string): FrontmatterSplit {
 /** The text BETWEEN the `---` delimiters, or null when the file has no frontmatter. */
 export function frontmatterBlock(text: string): string | null {
   const found = FRONTMATTER.exec(text);
-  return found ? found[1] : null;
+  if (!found) return null;
+  const captured = found[1];
+  return captured === undefined ? null : captured;
 }
 
 /**

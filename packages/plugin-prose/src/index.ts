@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { definePlugin } from '@agent-kit/cli/plugin';
-import type { Action, Ctx, ModuleDef, PluginApi } from '@agent-kit/cli/plugin';
+import { definePlugin } from '@agent-kit/api';
+import type { Action, Ctx, ModuleDef, PluginApi } from '@agent-kit/api';
 
 /**
  * Ships the comment-discipline rule: default to no comment, TSDoc for exported API,

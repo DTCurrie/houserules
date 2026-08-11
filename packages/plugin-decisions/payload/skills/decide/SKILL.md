@@ -1,6 +1,6 @@
 ---
 name: decide
-description: Record a decision to the decision ledger, with the rejected alternative and revisit trigger that make it worth keeping. Use when a discussion settles a design question, when recording why we chose one option over another, or when a new decision supersedes a prior one.
+description: Record a decision to the decision ledger, with the rejected alternative and revisit trigger. Use when a discussion settles a design question or a new decision supersedes a prior one.
 argument-hint: decide|supersede|amend|rescope <args...>
 allowed-tools: Bash(node .claude/scripts/decision-log.mjs:*), Agent
 ---

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractBody, upsertRegion, type RegionSpec } from '../regions.js';
+import { extractBody, upsertRegion } from '@agent-kit/api/internal';
+import type { RegionSpec } from '@agent-kit/api';
 
 const SPEC: RegionSpec = {
   id: 'claude-md',

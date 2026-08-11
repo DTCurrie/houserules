@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { createPayloadBuilders } from '../modules/copy-actions.js';
-import type { Action } from '../actions.js';
+import type { Action } from '@agent-kit/api';
 import type { PluginApi } from '../plugin.js';
 import type { Plugin } from '../plugin.js';
 

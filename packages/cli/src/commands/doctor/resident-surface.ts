@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 
 import { listWorkspacePackages } from '@agent-kit/payload/workspaces';
 import { frontmatterBlock } from '../../core/frontmatter.js';
-import type { CheckResult, Finding } from './finding.js';
+import type { CheckResult, Finding } from '@agent-kit/api';
 
 // The always-loaded surface is paid on every turn (CONVENTIONS §1). ~3-4K tokens
 // is the sane target. Take the upper end as the ceiling and ~200 lines alongside.
@@ -23,7 +23,10 @@ const countLines = (t: string) =>
  */
 export function parseImports(text: string): string[] {
   const specs: string[] = [];
-  for (const m of text.matchAll(/(?:^|\s)@([^\s@]+)/g)) specs.push(m[1]);
+  for (const m of text.matchAll(/(?:^|\s)@([^\s@]+)/g)) {
+    const spec = m[1];
+    if (spec !== undefined) specs.push(spec);
+  }
   return specs;
 }
 
@@ -44,7 +47,7 @@ const RESIDENT_MEMORY_FILES = [
 function cleanGlob(raw: string): string {
   const trimmed = raw.trim();
   const quoted = /^(['"])(.*?)\1/.exec(trimmed);
-  const value = quoted ? quoted[2] : trimmed.replace(/\s+#.*$/, '');
+  const value = quoted ? (quoted[2] ?? '') : trimmed.replace(/\s+#.*$/, '');
   return value.replace(/\/\*\*$/, '');
 }
 
@@ -58,18 +61,24 @@ export function ruleGlobs(text: string): string[] {
   const lines = fm.split('\n');
   const at = lines.findIndex((l) => /^paths:/.test(l));
   if (at === -1) return [];
-  const inline = lines[at].slice('paths:'.length).trim();
+  const pathsLine = lines[at];
+  if (pathsLine === undefined) return [];
+  const inline = pathsLine.slice('paths:'.length).trim();
   const raw = inline ? inline.replace(/^\[|\]$/g, '').split(',') : [];
   if (!inline) {
     for (let i = at + 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (line === undefined) break;
       // A comment or blank line is legal inside a YAML block sequence and does not end it.
       // Breaking on one truncates the list, and drops it entirely when the comment sits
       // between `paths:` and the first entry, which then reads as a globless always-loaded
       // rule and spends the resident budget that is not actually being spent.
-      if (/^[ \t]*(#|$)/.test(lines[i])) continue;
-      const item = /^[ \t]*-[ \t]*(.+)$/.exec(lines[i]);
+      if (/^[ \t]*(#|$)/.test(line)) continue;
+      const item = /^[ \t]*-[ \t]*(.+)$/.exec(line);
       if (!item) break; // the next key ends the list
-      raw.push(item[1]);
+      const value = item[1];
+      if (value === undefined) break;
+      raw.push(value);
     }
   }
   return raw.map(cleanGlob).filter((g) => g && g !== '**');
@@ -162,7 +171,9 @@ export function frontmatterDescription(text: string): string | null {
   if (fm === null) return null;
   const m = /^description:[ \t]*(.*)$/m.exec(fm);
   if (!m) return null;
-  return m[1].trim().replace(/^['"]|['"]$/g, '');
+  const captured = m[1];
+  if (captured === undefined) return null;
+  return captured.trim().replace(/^['"]|['"]$/g, '');
 }
 
 export interface SkillAgentMeasurement {

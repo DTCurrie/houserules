@@ -5,8 +5,8 @@ import {
   MANIFEST_PATH,
   type BodyHashes,
   type KitManifest,
-} from './core/manifest.js';
-import type { SettingsSignature } from './merge-settings.js';
+  type SettingsSignature,
+} from '@agent-kit/api/internal';
 import type { EffectOp, PlanResult, PruneResult } from './plan.js';
 import type { PluginSource } from './plugin-registry.js';
 

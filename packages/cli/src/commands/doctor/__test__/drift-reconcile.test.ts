@@ -55,3 +55,53 @@ describe('reconcileDrift, given a settings.json that fails to parse', () => {
     ]);
   });
 });
+
+function nameGoneFile(root: string): string {
+  const manifestPath = join(root, '.claude', 'kit-manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const dest = '.claude/scripts/already-deleted.mjs';
+  manifest.files[dest] = 'deadbeef';
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  return dest;
+}
+
+describe('reconcileDrift, given a manifest entry naming a file already gone from disk', () => {
+  it('reports a stale-manifest-entry finding', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const dest = nameGoneFile(root);
+
+    expect(messages(root)).toContainEqual(
+      expect.stringContaining(
+        `${dest}: manifest lists it but the file is gone from disk`,
+      ),
+    );
+  });
+
+  it('leaves the finding in place under --fix alone, since --prune also has to be set', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const dest = nameGoneFile(root);
+    const ctx = detect(root);
+    const { registry } = checkConfigValidity(root, ctx);
+    if (!registry) throw new Error('unreachable: registry failed to build');
+
+    reconcileDrift(root, ctx, { ...FLAGS, fix: true }, registry);
+
+    const manifestPath = join(root, '.claude', 'kit-manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    expect(manifest.files[dest]).toBe('deadbeef');
+  });
+
+  it('drops the stale entry from the manifest under --fix --prune', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const dest = nameGoneFile(root);
+    const ctx = detect(root);
+    const { registry } = checkConfigValidity(root, ctx);
+    if (!registry) throw new Error('unreachable: registry failed to build');
+
+    reconcileDrift(root, ctx, { ...FLAGS, fix: true, prune: true }, registry);
+
+    const manifestPath = join(root, '.claude', 'kit-manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    expect(manifest.files[dest]).toBeUndefined();
+  });
+});

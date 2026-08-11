@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import plugin from '../index.js';
-import type { Answers, Ctx, PluginApi } from '@agent-kit/cli/plugin';
+import type { Answers, Ctx, PluginApi } from '@agent-kit/api';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -151,9 +151,9 @@ describe('projects plugin', () => {
     );
     const imported = [
       ...new Set(
-        [...script.matchAll(/from '\.\/lib\/([\w-]+\.mjs)'/g)].map(
-          (match) => match[1],
-        ),
+        [...script.matchAll(/from '\.\/lib\/([\w-]+\.mjs)'/g)]
+          .map((match) => match[1])
+          .filter((lib) => lib !== undefined),
       ),
     ];
 

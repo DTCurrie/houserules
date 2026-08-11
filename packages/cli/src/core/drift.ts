@@ -4,9 +4,12 @@ import { join } from 'node:path';
 
 import { truncateDiff, unifiedDiff } from './diff.js';
 import { classifyFrontmatter, splitFrontmatter } from './frontmatter.js';
-import { bodyHashes, wholeFileHash } from './manifest.js';
-import type { KitManifest } from './manifest.js';
-import { extractBody } from './regions.js';
+import {
+  bodyHashes,
+  wholeFileHash,
+  extractBody,
+  type KitManifest,
+} from '@agent-kit/api/internal';
 import type { Effect, PruneResult } from '../plan.js';
 
 /**

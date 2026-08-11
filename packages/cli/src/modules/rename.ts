@@ -1,7 +1,5 @@
-import type { Action } from '../actions.js';
-import type { CheckResult } from '../commands/doctor/finding.js';
+import type { Action, CheckResult, ModuleGroup } from '@agent-kit/api';
 import type { Ctx } from '../detect.js';
-import type { ModuleGroup } from '../module-def.js';
 import { script } from './copy-actions.js';
 
 export const id = 'rename';

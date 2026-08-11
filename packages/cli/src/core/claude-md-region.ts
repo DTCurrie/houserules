@@ -1,4 +1,4 @@
-import type { RegionSpec } from './regions.js';
+import type { RegionSpec } from '@agent-kit/api';
 
 /**
  * The one `RegionSpec` for the kit-owned block inside CLAUDE.md. Both the seed

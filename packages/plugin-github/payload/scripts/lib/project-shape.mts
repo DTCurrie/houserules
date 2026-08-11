@@ -87,7 +87,7 @@ export const AREA_REPO_ROOT = 'repo root';
  */
 export function areaForSurface(surface: string): string {
   const match = surface.match(/^(.+)\.(BACKLOG|DECISIONS)\.md$/);
-  return match ? match[1] : AREA_REPO_ROOT;
+  return match?.[1] ?? AREA_REPO_ROOT;
 }
 
 /** The surface an `Area` names, the exact inverse of {@link areaForSurface}. */
@@ -211,7 +211,7 @@ export function formatMarker(entryId: string): string {
 /** The entry id in `body`'s marker, or null when it carries none. */
 export function parseMarker(body: string): string | null {
   const match = body.match(MARKER_PATTERN);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 /**

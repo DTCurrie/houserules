@@ -29,7 +29,8 @@
     "build": {
       "command": "tsc -p tsconfig.build.json && agent-kit-payload && publint",
       "dependencies": [
-        "../cli:build:ts"
+        "../cli:build:ts",
+        "../api:build"
       ],
       "files": [
         "src/**/*.ts",
@@ -46,6 +47,7 @@
       "command": "tsc --noEmit -p tsconfig.json",
       "dependencies": [
         "../cli:build:ts",
+        "../api:build",
         "../test:build"
       ],
       "files": [
@@ -88,9 +90,10 @@
   "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-typescript#readme",
   "bugs": "https://github.com/DTCurrie/agent-kit/issues",
   "peerDependencies": {
-    "@agent-kit/cli": ">=0.0.0 <1.0.0"
+    "@agent-kit/api": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
+    "@agent-kit/api": "workspace:*",
     "@agent-kit/cli": "workspace:*",
     "@agent-kit/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",

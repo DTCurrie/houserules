@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { isUntouchedSeed } from './tokens-seed.js';
 
-import type { CheckResult, Ctx, Finding } from '@agent-kit/cli/plugin';
+import type { CheckResult, Ctx, Finding } from '@agent-kit/api';
 
 /** Where the kit seeds the design system. Also the root of the design workspace. */
 export const TOKENS_PATH = '.claude/design/tokens.json';

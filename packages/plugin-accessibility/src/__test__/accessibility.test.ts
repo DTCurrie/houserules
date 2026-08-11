@@ -11,7 +11,9 @@ const PLUGINS = [{ name: PLUGIN_ACCESSIBILITY, alias: 'a11y' }];
 
 function pathGlobs(ruleText: string): string[] {
   const body = ruleText.split('---')[1] ?? '';
-  return [...body.matchAll(/^ {2}- ['"](.+?)['"]$/gm)].map((m) => m[1]);
+  return [...body.matchAll(/^ {2}- ['"](.+?)['"]$/gm)]
+    .map((m) => m[1])
+    .filter((path): path is string => path !== undefined);
 }
 
 describe('accessibility', () => {

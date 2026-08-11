@@ -2,12 +2,8 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
-import type {
-  Action,
-  BodyAction,
-  CopyAction,
-  WriteAction,
-} from '../actions.js';
+import type { Action, CopyAction, WriteAction } from '@agent-kit/api';
+import { createPayloadBuilders } from '@agent-kit/api/internal';
 import { KitError } from '../plan.js';
 import { payloadPath } from '../paths.js';
 import {
@@ -15,141 +11,7 @@ import {
   type PayloadImports,
 } from '../payload-imports.js';
 
-/**
- * The action builders bound to one payload root. The kit binds them to its own payload, and
- * a plugin gets them bound to the payload inside its own package, so the same seven builders
- * serve both without either knowing where the other's files live.
- */
-export interface PayloadBuilders {
-  script(module: string, name: string, reason: string): CopyAction;
-  lib(module: string, name: string): CopyAction;
-  skill(module: string, name: string, reason: string): CopyAction;
-  agent(module: string, name: string, reason: string): CopyAction;
-  /**
-   * `appendBody` is routing text composed from the user's selections, appended below the
-   * payload rule's own body. Use it to link an OPTIONAL file, since a link shipped in the
-   * payload dangles wherever that option was not chosen.
-   */
-  rule(
-    module: string,
-    name: string,
-    reason: string,
-    appendBody?: string,
-  ): BodyAction;
-  reference(module: string, name: string, reason: string): CopyAction;
-  template(module: string, rel: string, reason?: string): CopyAction;
-  /**
-   * Escape hatch for a destination the named builders do not cover, such as
-   * `.claude/output-styles/`. `srcRel` resolves inside this payload root, so a plugin never
-   * computes a path into its own package.
-   */
-  file(args: {
-    module: string;
-    srcRel: string;
-    dest: string;
-    reason: string;
-    mode?: number;
-  }): CopyAction;
-}
-
-/**
- * Binds the payload action builders to `payloadRoot`, an absolute path to a built payload
- * directory.
- *
- * A plugin never calls this itself. The kit resolves the plugin's package, builds the
- * instance, and hands it to the plugin factory. Path resolution stays in one place, and a
- * plugin cannot accidentally emit actions pointing at the kit's payload.
- */
-export function createPayloadBuilders(payloadRoot: string): PayloadBuilders {
-  const at = (...segments: string[]) => join(payloadRoot, ...segments);
-
-  return {
-    script(module, name, reason) {
-      return {
-        kind: 'copy',
-        src: at('scripts', name),
-        dest: `.claude/scripts/${name}`,
-        mode: 0o755,
-        module,
-        reason,
-      };
-    },
-
-    lib(module, name) {
-      return {
-        kind: 'copy',
-        src: at('scripts', 'lib', name),
-        dest: `.claude/scripts/lib/${name}`,
-        module,
-        reason: 'shared script library',
-      };
-    },
-
-    skill(module, name, reason) {
-      return {
-        kind: 'copy',
-        src: at('skills', name, 'SKILL.md'),
-        dest: `.claude/skills/${name}/SKILL.md`,
-        module,
-        reason,
-      };
-    },
-
-    agent(module, name, reason) {
-      return {
-        kind: 'copy',
-        src: at('agents', `${name}.md`),
-        dest: `.claude/agents/${name}.md`,
-        module,
-        reason,
-      };
-    },
-
-    rule(module, name, reason, appendBody) {
-      const action: BodyAction = {
-        kind: 'body',
-        src: at('rules', `${name}.md`),
-        dest: `.claude/rules/${name}.md`,
-        module,
-        reason,
-      };
-      if (appendBody) action.appendBody = appendBody;
-      return action;
-    },
-
-    reference(module, name, reason) {
-      return {
-        kind: 'copy',
-        src: at('reference', `${name}.md`),
-        dest: `.claude/reference/${name}.md`,
-        module,
-        reason,
-      };
-    },
-
-    template(module, rel, reason = 'reference template') {
-      return {
-        kind: 'copy',
-        src: at('kit-templates', ...rel.split('/')),
-        dest: `.claude/kit-templates/${rel}`,
-        module,
-        reason,
-      };
-    },
-
-    file({ module, srcRel, dest, reason, mode }) {
-      const action: CopyAction = {
-        kind: 'copy',
-        src: at(...srcRel.split('/')),
-        dest,
-        module,
-        reason,
-      };
-      if (mode !== undefined) action.mode = mode;
-      return action;
-    },
-  };
-}
+export { createPayloadBuilders };
 
 /**
  * A directory-local `.gitignore` that ignores everything under it except itself, so the

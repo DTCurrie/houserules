@@ -1,6 +1,6 @@
 ---
 name: debug-session
-description: Hypothesis-driven debugging for bugs that need more than a one-shot fix. Form explicit hypotheses, add structured trace logging under .claude/debug/, confirm or reject each hypothesis from the logs with jq, then remove ALL added instrumentation so nothing is orphaned in source. Use when a bug's cause is non-obvious and print statements are about to be sprinkled in.
+description: Hypothesis-driven debugging for bugs: add structured trace logging under .claude/debug/, confirm or reject each hypothesis from the logs, then remove all instrumentation. Use when a bug's cause is non-obvious and print statements are about to be sprinkled in.
 argument-hint: <bug description>
 allowed-tools: Read, Edit, Write, Grep, Glob, Bash
 ---

@@ -39,6 +39,16 @@ function newChangesets(root: string, before: Set<string>): string[] {
   );
 }
 
+function soleNewChangeset(root: string, before: Set<string>): string {
+  const [file, ...rest] = newChangesets(root, before);
+  if (file === undefined || rest.length > 0) {
+    throw new Error(
+      `expected exactly one new changeset, found ${JSON.stringify([file, ...rest])}`,
+    );
+  }
+  return file;
+}
+
 describe('changeset-write.mjs on a pnpm monorepo', () => {
   let root: string;
 
@@ -65,7 +75,7 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
       /^\.changeset\/[a-z][a-z-]*\.md$/,
     );
 
-    const [file] = newChangesets(root, before);
+    const file = soleNewChangeset(root, before);
     const text = readFileSync(join(root, '.changeset', file), 'utf8');
     expect(text, text).toMatch(
       /^---\n['"]@fix\/cityville['"]: minor\n['"]@fix\/studio['"]: patch\n---\n\nAdd road planning/,
@@ -103,7 +113,7 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
       args: ['--empty', '--summary', 'tooling only — no release'],
     });
     expect(r.status, r.stderr).toBe(0);
-    const [file] = newChangesets(root, before);
+    const file = soleNewChangeset(root, before);
     expect(readFileSync(join(root, '.changeset', file), 'utf8')).toMatch(
       /^---\n+---\n+tooling only/,
     );
@@ -408,7 +418,7 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
       input: 'Summary via stdin.\n',
     });
     expect(r.status, r.stderr).toBe(0);
-    const [file] = newChangesets(root, before);
+    const file = soleNewChangeset(root, before);
     expect(readFileSync(join(root, '.changeset', file), 'utf8')).toMatch(
       /['"]@fix\/studio['"]: patch[\s\S]*Summary via stdin\./,
     );

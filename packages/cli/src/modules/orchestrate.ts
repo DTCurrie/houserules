@@ -1,6 +1,5 @@
-import type { Action } from '../actions.js';
+import type { Action, Answers, ModuleGroup } from '@agent-kit/api';
 import type { Ctx } from '../detect.js';
-import type { Answers, ModuleGroup } from '../module-def.js';
 import { agent, skill } from './copy-actions.js';
 
 export const id = 'orchestrate';

@@ -1,7 +1,6 @@
-import type { Action } from '../actions.js';
-import type { ModuleGroup } from '../module-def.js';
+import type { Action, ModuleGroup } from '@agent-kit/api';
 import { script } from './copy-actions.js';
-import { hookCommand } from './hook-wiring.js';
+import { hookCommand } from '@agent-kit/api';
 
 export const id = 'statusline';
 export const title = 'Kit-aware statusline (changeset debt + targets-touched)';

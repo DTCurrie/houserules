@@ -11,7 +11,9 @@ const PLUGINS = [{ name: PLUGIN_PROSE, alias: 'prose' }];
 
 function pathGlobs(ruleText: string): string[] {
   const body = ruleText.split('---')[1] ?? '';
-  return [...body.matchAll(/^ {2}- ['"](.+?)['"]$/gm)].map((m) => m[1]);
+  return [...body.matchAll(/^ {2}- ['"](.+?)['"]$/gm)]
+    .map((m) => m[1])
+    .filter((glob): glob is string => glob !== undefined);
 }
 
 describe('prose-voice', () => {

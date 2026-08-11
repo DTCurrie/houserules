@@ -7,11 +7,14 @@ import {
   parseSettingsText,
   renderSettings,
   settingsSignature,
-} from './merge-settings.js';
+  extractBody,
+  hasLegacyRegion,
+  upsertRegion,
+  bodyHashes,
+  wholeFileHash,
+} from '@agent-kit/api/internal';
 import { mergeManagedKeys } from './merge-config-keys.js';
-import { extractBody, hasLegacyRegion, upsertRegion } from './core/regions.js';
 import { classifyFrontmatter, splitFrontmatter } from './core/frontmatter.js';
-import { bodyHashes, wholeFileHash } from './core/manifest.js';
 
 import * as core from './modules/core.js';
 import * as lintFix from './modules/lint-fix.js';
@@ -41,18 +44,19 @@ import type {
   RegionAction,
   SeedAction,
   WriteAction,
-} from './actions.js';
-import type { KitManifest } from './core/manifest.js';
-import type { Ctx } from './detect.js';
-import type { Answers, ModuleDef } from './module-def.js';
-import type { PluginSource, Registry } from './plugin-registry.js';
-import type {
+  Answers,
+  ModuleDef,
   Settings,
-  SettingsChange,
   SettingsFragment,
+} from '@agent-kit/api';
+import type {
+  KitManifest,
+  SettingsChange,
   SettingsPlan,
   SettingsSignature,
-} from './merge-settings.js';
+} from '@agent-kit/api/internal';
+import type { Ctx } from './detect.js';
+import type { PluginSource, Registry } from './plugin-registry.js';
 
 /**
  * What computeEffects() concluded an action means against the real tree.
@@ -113,7 +117,7 @@ export interface ComputeEffectsOptions {
  * Recorded instead of thrown, so a broken plugin does not block the plan of every other
  * one.
  */
-export interface BrokenPluginProblem {
+interface BrokenPluginProblem {
   /** The plugin's name, as configured in kit.config.json. */
   plugin: string;
   /** Human-readable, names the plugin, the missing file(s), and the fix. */
@@ -131,7 +135,7 @@ export interface PlanResult {
   brokenPlugins: BrokenPluginProblem[];
 }
 
-export interface PruneDelete {
+interface PruneDelete {
   dest: string;
   /** The file was locally edited and --force removed it anyway. */
   modified?: boolean;
