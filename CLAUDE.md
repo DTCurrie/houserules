@@ -17,7 +17,7 @@ via the `/changeset` skill. See that skill for what it does and when to run it.
 ### Tracking out-of-scope work
 
 Discover a real issue outside the current scope? **Do not fix it inline.** Log it with the
-`/backlog-add` skill instead. Prefixes by area: `CLI` (packages/cli/), `PAYLOAD` (packages/payload/), `PLUGINACCESS` (packages/plugin-accessibility/), `PLUGINBACKLO` (packages/plugin-backlog/), `PLUGINCHANGE` (packages/plugin-changesets/), `PLUGINDECISI` (packages/plugin-decisions/), `PLUGINDESIGN` (packages/plugin-design/), `PLUGINGITHUB` (packages/plugin-github/), `PLUGINPERSON` (packages/plugin-persona-auditor/), `PLUGINPROSE` (packages/plugin-prose/), `PLUGINSVELTE` (packages/plugin-svelte/), `PLUGINTESTIN` (packages/plugin-testing/), `PLUGINTHREE` (packages/plugin-three/), `PLUGINTYPESC` (packages/plugin-typescript/), `TEST` (packages/test/), `PLUGINFIXTUR` (packages/cli/test/plugin-fixture/).
+`/backlog-add` skill instead. Prefixes by area: `API` (packages/api/), `CLI` (packages/cli/), `PAYLOAD` (packages/payload/), `PLUGINACCESS` (packages/plugin-accessibility/), `PLUGINBACKLO` (packages/plugin-backlog/), `PLUGINCHANGE` (packages/plugin-changesets/), `PLUGINDECISI` (packages/plugin-decisions/), `PLUGINDESIGN` (packages/plugin-design/), `PLUGINGITHUB` (packages/plugin-github/), `PLUGINPERSON` (packages/plugin-persona-auditor/), `PLUGINPROSE` (packages/plugin-prose/), `PLUGINSVELTE` (packages/plugin-svelte/), `PLUGINTESTIN` (packages/plugin-testing/), `PLUGINTHREE` (packages/plugin-three/), `PLUGINTYPESC` (packages/plugin-typescript/), `TEST` (packages/test/), `PLUGINFIXTUR` (packages/cli/test/plugin-fixture/).
 
 ### Recording decisions
 
@@ -77,7 +77,7 @@ Interactive installer for a portable Claude Code context-discipline kit. Read
 
 ## Workspace
 
-A pnpm workspace of fifteen packages. Every path in the Layout section below is relative to
+A pnpm workspace of sixteen packages. Every path in the Layout section below is relative to
 **`packages/cli/`** unless it starts with `packages/`.
 
 - `packages/cli` is `@agent-kit/cli`, the installer. It ships the binary **`agent-kit`**,
@@ -87,6 +87,9 @@ A pnpm workspace of fifteen packages. Every path in the Layout section below is 
   `session-context`, `rename`, `reviewers`, `debug-session`, `plans`, `orchestrate`,
   `verify-changed`, `ready`, `sweep`, `read-guard`, `regen`, `statusline`,
   `code-cleanliness`, `ci-settings`.
+- `packages/api` is `@agent-kit/api`, the plugin contract package: action types, module
+  definitions, and the `kit.config.json` schema that plugin authors build against. See
+  Layout below for where each shared type lives inside it.
 - `packages/payload` is `@agent-kit/payload`, the six shared payload libs (`backlog-id`,
   `entry-ledger`, `kit-config`, `ledger-index`, `proc`, `workspaces`) as their own package.
   It ships no modules and installs nothing on its own. A payload script, in the CLI or in a
@@ -102,7 +105,7 @@ A pnpm workspace of fifteen packages. Every path in the Layout section below is 
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
   workflows, `CLAUDE.md`, and the gitignored `.claude/`. Root `pnpm build|test|check` are
   wireit aggregators that depend on each package's script by path, replacing `pnpm -r`. The
-  `test` aggregator lists **fourteen** packages, not fifteen, because `@agent-kit/test` ships
+  `test` aggregator lists **fifteen** packages, not sixteen, because `@agent-kit/test` ships
   no `test` script and naming a script that does not exist is a wireit
   error rather than the no-op `pnpm -r` gave you. Root `lint` is also wireit, and `lint:fix`,
   `format`, and `format:check` stay plain scripts. A fixer mutates its own inputs, so caching
@@ -117,17 +120,23 @@ A pnpm workspace of fifteen packages. Every path in the Layout section below is 
 
 - `src/`: the installer, in TypeScript. The pipeline is detect → plan (declarative actions) →
   preview → apply. May use npm dependencies (@clack/prompts, picocolors, zod). Builds to `dist/`
-  (gitignored). There is no central type module. Every shared type lives with the code that
-  produces it: `Ctx` and `Target` in `src/detect.ts`, `Effect`/`PlanResult`/`PruneResult` in
-  `src/plan.ts`, the `Settings*` and `Hook*` shapes in `src/merge-settings.ts`, `Apply*` in
-  `src/apply.ts`, `KitManifest` in `src/core/manifest.ts`, the `Action` union in
-  `src/actions.ts`, `ModuleDef`/`Answers` in `src/module-def.ts`, and `Flags`/`EXIT` in
-  `src/cli-contract.ts`. `src/core/config.ts` is the zod schema for `kit.config.json`.
+  (gitignored). Shared types that cross the plugin boundary live in the `@agent-kit/api`
+  contract package, not scattered across `src/`: `Ctx` and `Target` in
+  `packages/api/src/ctx.ts` (re-exported from `src/detect.ts`, which stays the sole producer,
+  the code that actually builds a `Ctx`), `KitManifest` in `packages/api/src/manifest.ts`,
+  the `Action` union in `packages/api/src/actions.ts`, `ModuleDef`/`Answers` in
+  `packages/api/src/module-def.ts`, and the `Settings*`/`Hook*` shapes in
+  `packages/api/src/merge-settings.ts`. What stays local to `src/`: `Effect`/`PlanResult`/
+  `PruneResult` in `src/plan.ts`, `Apply*` in `src/apply.ts`, and `Flags`/`EXIT` in
+  `src/cli-contract.ts`. `packages/api/src/config.ts` is the zod schema for
+  `kit.config.json`.
 - `schema/kit.config.schema.json` is **generated** from that zod schema by `pnpm run schema`.
   Never hand-edit it. `src/core/__test__/config.test.ts` fails when it falls out of sync.
 - `payload/`: everything copied into user repos. Scripts are authored as `.mts` and compiled
   to `payload-dist/scripts/*.mjs`. The prose dirs (`skills/`, `agents/`, `rules/`,
-  `output-styles/`, `kit-templates/`) are copied through verbatim. **`payload-dist/` is what
+  `kit-templates/`) are copied through verbatim. `output-styles/` moved to `plugin-prose`
+  along with the `output-prose` module, so it is no longer one of this package's prose dirs.
+  **`payload-dist/` is what
   ships and what `payloadPath()` reads.** Zero runtime dependencies, node builtins only, POSIX
   shells, enforced by `payload/__test__/dependencies.test.ts` (imports) and `payload/__test__/execution.test.ts`
   (actually executing each emitted script on bare node). Hook scripts must never crash: config
@@ -140,9 +149,11 @@ A pnpm workspace of fifteen packages. Every path in the Layout section below is 
   - **The filename names the unit, and every `describe` in it is about that unit.** A file named
     for a theme is a grouping, and a grouping hides which unit is covered. `src/**/__test__/`,
     `src/modules/__test__/` (named for the module it covers), `src/commands/doctor/__test__/`
-    (one file per doctor check), `payload/scripts/__test__/`, `payload/scripts/lib/__test__/`,
-    and `payload/__test__/` for the two invariants over the whole built tree (`dependencies`,
-    `execution`).
+    (one file per doctor check), `payload/scripts/__test__/`, and `payload/__test__/` for the
+    two invariants over the whole built tree (`dependencies`, `execution`). The shared libs'
+    own tests live at `packages/payload/payload/scripts/lib/__test__/` in the standalone
+    `@agent-kit/payload` package, not under `packages/cli/payload/scripts/lib/`, which does
+    not exist.
   - **The shared testing modules live in `packages/test`, published as `@agent-kit/test`**, one
     per artifact: `repo` (builds the synthetic repos), `run` (`runCli`, `runScript`, `runIn`),
     `installed-tree`, `doctor-report`, `runner-stub`, `hook-input`, plus `global-setup`. It holds
@@ -295,7 +306,7 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   A plugin's cross-package imports are derived from its sidecar instead, so only the CLI's own
   manifest is hand-maintained now.
 - Two readers of kit.config.json, one shape: the CLI validates strictly via zod
-  (`src/core/config.ts`), and the payload reads it defensively and **dependency-free**
+  (`packages/api/src/config.ts`), and the payload reads it defensively and **dependency-free**
   (`loadConfigSafe()`). They share only the inferred `KitConfig` type. Never make the payload
   import zod. `payload/__test__/dependencies.test.ts` enforces this.
 - init never runs package-manager installs and never touches settings.local.json.
@@ -308,11 +319,11 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   `.claude/` that the manifest tracks by content hash is byte-fragile, so a repo-wide
   `prettier --write` rewrites it and `update` then reads the whole install as local edits
   and skips it. That is silent, which is why `src/modules/prettier-guard.ts` writes the
-  `.prettierignore` block rather than the README documenting it. It belongs to `core` and not
-  to `lint-fix`, even though that module's Stop hook is the usual way the formatter gets
-  dragged across `.claude/`: the fragility is a property of the install, and `lint-fix` does
-  not even enable itself in a repo with no fix script. A new kit-owned subtree under
-  `.claude/` belongs in `PRETTIERIGNORE_BODY` the same day it is added.
+  `.prettierignore` block rather than the README documenting it. It runs unconditionally
+  after every module's `plan()` in `src/plan.ts`, not scoped to `core`, and derives the
+  protected `.claude/` subtrees dynamically from the actions the plan actually produced
+  (`protectedSubtrees()`), rather than a hand-maintained constant. A new kit-owned subtree
+  under `.claude/` is covered automatically, the day its action lands.
 - Prose the kit ships (payload skills, agents, rules, templates, and the CLAUDE.md region
   `src/render.ts` generates) follows `packages/plugin-prose/payload/rules/prose-voice.md`:
   plain sentences, no semicolons, no em dash where a period or comma works. Frontmatter
@@ -320,9 +331,13 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   rewording one.
 - No catch-all files, per `payload/rules/code-cleanliness.md` (in `packages/cli`), which the
   kit ships and this repo obeys. There is no `types.ts`, `shared.ts`, `utils.ts`,
-  `constants.ts`, or `helpers.ts`
-  anywhere in `src/`. A type belongs to the module that produces it, and genuinely shared code
-  gets a module named for its job. Do not reintroduce one.
+  `constants.ts`, or `helpers.ts` anywhere in any package's `src/`. A type belongs to the
+  module that produces it, and genuinely shared code gets a module named for its job.
+  `@agent-kit/api` is not an exception carved out of this rule: it is a deliberate published
+  contract package, the one place a plugin author's code and this installer's code both
+  compile against, not a dumping ground reached for out of laziness. A file in it still has
+  to be named for what it holds (`actions.ts`, `manifest.ts`, `merge-settings.ts`), never
+  `types.ts`. Do not reintroduce a per-package catch-all.
 - `doctor` is an orchestrator over independent checks. Each check in `src/commands/doctor/`
   is a pure-ish function of `(root, ctx, flags)` returning `{ findings, readouts }`, and
   `src/commands/doctor.ts` only sequences them and rolls the severity up to an exit code.

@@ -32,10 +32,13 @@ when `init` asks.
   what level, Arrange/Act/Assert structure, and naming that states the observable behavior
   rather than the implementation.
 
-  `init` also prompts for language guides to install alongside it. Two exist today:
+  `init` also prompts for language guides to install alongside it. Four exist today:
   **TypeScript** (`testing-typescript`) and **JavaScript** (`testing-javascript`), each
   installed as its own path-scoped rule with the concrete suffix list, runnable examples, and
-  build-exclusion advice the base rule leaves to them. TypeScript is selected by default.
+  build-exclusion advice the base rule leaves to them; **Svelte** (`testing-svelte`), runner
+  setup for testing Svelte 5 components and `.svelte.ts` reactive modules; and **3D and WebGL**
+  (`testing-3d`), domain guidance for tests that cover Three.js scenes and other WebGL code.
+  TypeScript is selected by default.
 
   Because the rule is path-scoped, Claude Code loads it only when a matching test file is in
   the working set, so it costs nothing on the always-loaded surface.

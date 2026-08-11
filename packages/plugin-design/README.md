@@ -99,7 +99,7 @@ node .claude/scripts/design.mjs token color.brand.primary --theme src/app.css
 Tailwind's defaults. `scaffold` prints a starter semantic layer to stdout and writes
 nothing. `--theme <path>` points every query command, including `token`, `list`, `scales`,
 and `check`, at the stylesheet Tailwind compiles, for a repo with more than one. See
-[`.claude/reference/design-tailwind-theming.md`](payload/reference/design-tailwind-theming.md)
+[`.claude/reference/design-tailwind-theming.md`](https://github.com/DTCurrie/agent-kit/blob/main/packages/plugin-design/payload/reference/design-tailwind-theming.md)
 for how to extend the theme and build one that switches at runtime.
 
 ## Replace the seed

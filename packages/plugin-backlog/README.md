@@ -27,7 +27,9 @@ when `init` asks.
 ## Modules
 
 - **`backlog`** installs `.claude/scripts/backlog-log.mjs`, a ledger CLI with `add`, `remove`,
-  `update`, `show`, and `list` subcommands. It also installs the `backlog-add` skill, which
+  `update`, `move`, `show`, `list`, and `render` subcommands. `move` re-points an entry to a
+  different area, and `render` regenerates a `BACKLOG.md` file from the ledger without adding
+  an entry. It also installs the `backlog-add` skill, which
   logs an out-of-scope discovery and stops rather than starting work on it, and the
   `backlog-reviewer` agent (haiku), which validates format, checks for duplicates, and
   gut-checks whether a fresh entry is worth tracking before the skill continues.

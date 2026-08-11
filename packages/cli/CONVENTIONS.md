@@ -14,7 +14,7 @@ Auto-loaded context is paid on **every turn of every session**, before any work.
 that the harness lists every turn, and the machine-local memory index (§5).
 
 `npx agent-kit doctor` measures the in-repo part of that and fails past **4000 tokens or 200 lines**
-(`RESIDENT_TOKEN_BUDGET` / `RESIDENT_LINE_BUDGET` in `src/commands/doctor.ts`). Skill and agent
+(`RESIDENT_TOKEN_BUDGET` / `RESIDENT_LINE_BUDGET` in `src/commands/doctor/resident-surface.ts`). Skill and agent
 _bodies_ are excluded, because they load on invocation, not on every turn. The memory index lives
 outside the repo, so doctor cannot see it. Budget it by hand.
 
@@ -303,10 +303,10 @@ Each of these is a standing habit, not a script:
 
 ## 11. Plugin surface semver policy
 
-`@agent-kit/cli/plugin` (`PluginApi`, `Plugin`, `definePlugin`, `PayloadBuilders`, and the
-`Action` union it re-exports) is public API the moment a plugin depends on it. A plugin
-declares `peerDependencies: { "@agent-kit/cli": "^<major>" }`, so a breaking change to this
-surface breaks every plugin still on that major. See
+`@agent-kit/api` (`PluginApi`, `Plugin`, `definePlugin`, `PayloadBuilders`, and the `Action`
+union) is public API the moment a plugin depends on it. A plugin declares
+`peerDependencies: { "@agent-kit/api": ">=0.0.0 <1.0.0" }`, so a breaking change to this
+surface breaks every plugin still on that range. See
 [README.md](README.md#writing-a-plugin) for what a plugin author sees.
 
 - **Minor.** Adding an optional field to `PluginApi`. Adding a new `Action` kind. Adding a new
@@ -342,11 +342,12 @@ import { repoRoot } from '@agent-kit/payload/kit-config';
 import type { LedgerEntry } from '@agent-kit/payload/ledger-index';
 ```
 
-Add `@agent-kit/payload` as a dependency, then run `agent-kit-payload` after your `tsc`, which is
-a bin `@agent-kit/cli` publishes:
+Add `@agent-kit/payload` to `peerDependencies`, not `dependencies`, alongside `@agent-kit/api`
+(§11), only if a payload script imports a shared lib. Then run `agent-kit-payload` after your
+`tsc`, which is a bin `@agent-kit/cli` publishes:
 
 ```json
-"build": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload"
+"build": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload && publint"
 ```
 
 It takes your payload root, defaulting to `payload-dist`, and does two things. It rewrites every
@@ -377,12 +378,13 @@ way, so they stay testable without a filesystem.
 
 **What your `package.json` and tsconfig split need, for an author outside this workspace:**
 
-- `peerDependencies: { "@agent-kit/cli": "^<major>" }`, pinned to the major of the `PluginApi`
-  surface you built against (§11). This is what lets the resolver reject an incompatible CLI
-  version at install time instead of failing inside your script.
-- A `dependencies` entry on `@agent-kit/payload` if any of your payload scripts import a shared
-  lib. `agent-kit-payload` resolves that package by name to rewrite the specifier and to copy
-  the libs your build declares.
+- `peerDependencies: { "@agent-kit/api": ">=0.0.0 <1.0.0" }`, pinned to the range of the
+  `PluginApi` surface you built against (§11). This is what lets the resolver reject an
+  incompatible version at install time instead of failing inside your script.
+- A `peerDependencies` entry on `@agent-kit/payload`, not `dependencies`, if any of your payload
+  scripts import a shared lib. `agent-kit-payload` resolves that package by name to rewrite the
+  specifier and to copy the libs your build declares. A plugin with no payload scripts, or one
+  that imports no shared lib, does not need this entry.
 - `payload-dist` listed in `package.json`'s `files`, alongside `dist`. Without it, `npm publish`
   ships your compiled `dist/` but not the payload the installer copies into a user's repo.
 - The three-tsconfig split, one job each, same as the CLI's own (see the top-level Layout section

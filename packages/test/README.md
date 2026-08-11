@@ -88,8 +88,8 @@ every test, so a regression in `init` fails one suite instead of every suite tha
   directory `useInstalledRepo` snapshots into, and removes it on teardown. It does not build
   the CLI. Installing `@agent-kit/cli` from npm gives you `dist/` prebuilt, and inside this
   workspace each `test` script declares a wireit dependency on the CLI's build instead.
-- **`@agent-kit/test/hook-input`**: `hookInput`, `readToolInput`, and `promptInput` build the
-  JSON payloads `runScript` expects on stdin for hook-style scripts.
+- **`@agent-kit/test/hook-input`**: `readToolInput` and `promptInput` build the JSON payloads
+  `runScript` expects on stdin for hook-style scripts.
 
 ## Part of agent-kit
 

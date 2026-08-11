@@ -6,7 +6,7 @@ get from a fresh clone to a reviewable pull request.
 ## Prerequisites
 
 - Node `>=22`
-- pnpm, pinned via `packageManager` in the root `package.json` (currently `pnpm@11.5.0`).
+- pnpm, pinned via `packageManager` in the root `package.json` (currently `pnpm@11.20.0`).
   Use [corepack](https://nodejs.org/api/corepack.html) to get the exact version, or install
   pnpm directly.
 
@@ -21,11 +21,12 @@ pnpm build
 
 ## Repo layout
 
-This is a pnpm workspace that publishes fifteen packages: `@agent-kit/cli` (the installer,
-which ships the `agent-kit` binary), `@agent-kit/payload` (the shared payload libs, imported
-by package name), twelve `@agent-kit/plugin-*` packages, and `@agent-kit/test`, a shared test
-library. Each package owns its own `src/`, tests, and, for the CLI and plugins, a `payload/`
-directory of files the installer copies into a user's repo.
+This is a pnpm workspace that publishes sixteen packages: `@agent-kit/cli` (the installer,
+which ships the `agent-kit` binary), `@agent-kit/api` (the plugin API: action types, module
+definitions, and the `kit.config.json` schema), `@agent-kit/payload` (the shared payload libs,
+imported by package name), twelve `@agent-kit/plugin-*` packages, and `@agent-kit/test`, a
+shared test library. Each package owns its own `src/`, tests, and, for the CLI and plugins, a
+`payload/` directory of files the installer copies into a user's repo.
 Root-level config (`prettier`, `eslint`, changesets, CI workflows) applies to the whole
 workspace, since no package defines its own lint script.
 
@@ -50,6 +51,11 @@ pnpm --filter @agent-kit/plugin-testing check
 
 `pnpm build` runs a full build across the workspace and is required before probing anything
 under a package's `dist/`.
+
+CI's `packages` job also runs `pnpm attw` and three `pnpm verify:*` scripts
+(`verify:packages`, `verify:payload-copy-set`, `verify:payload-test-coverage`) that check a
+package's published shape. Run them if you touch a package's `exports`, `files`, or payload
+copy list.
 
 Every `build`, `check`, and `test` script runs through
 [wireit](https://github.com/google/wireit), which means two things day to day. A script whose

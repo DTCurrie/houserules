@@ -29,8 +29,10 @@ when `init` asks.
 ## Modules
 
 - **`decisions`** installs `.claude/scripts/decision-log.mjs`, a ledger CLI with `decide`,
-  `supersede`, `amend`, `rescope`, `show`, `list`, `scope`, `ancestry`, `current`, and `tree`
-  subcommands. A scope holds literal paths, so `rescope` re-points a record after a file move
+  `supersede`, `amend`, `move`, `rescope`, `show`, `list`, `render`, `scope`, `ancestry`,
+  `current`, and `tree` subcommands. `move` re-points a record to a different target's ledger,
+  and `render` regenerates a `DECISIONS.md` file from the ledger without adding a record. A
+  scope holds literal paths, so `rescope` updates the paths a record covers after a file move
   and `scope` warns about the records whose paths have gone stale. It also installs the
   `decide` skill, which enforces a recording bar (the
   decision must constrain code non-obviously, a competent person could plausibly have chosen

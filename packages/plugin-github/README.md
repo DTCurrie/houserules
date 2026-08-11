@@ -6,12 +6,29 @@
 GitHub integrations for agent-kit. Every module this plugin ships is selected as
 `<alias>/<module>`, so the alias names the service and the module names the integration.
 
+## Install
+
+```
+pnpm add -D @agent-kit/plugin-github @agent-kit/cli
+pnpm exec agent-kit init
+```
+
+Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+`init` is what writes the module into `.claude/`. This module is off by default, so select it
+when `init` asks.
+
+## Modules
+
+- **`projects`**, selected as `github/projects` once the plugin is aliased `github`, syncs
+  the agent-kit backlog and decision ledgers to GitHub Projects, so the durable record lives
+  on a board instead of in a committed `.jsonl`. A push turns backlog entries into real
+  issues on a linked project, and decisions into draft items. A pull rebuilds a local index
+  from those boards, so every local query answers offline while the queue itself stays empty.
+  See `` `github/projects` `` below for the full setup and behavior.
+
 ## `github/projects`
 
-Syncs the agent-kit backlog and decision ledgers to GitHub Projects, so the durable record
-lives on a board instead of in a committed `.jsonl`. A push turns backlog entries into real
-issues on a linked project, and decisions into draft items. A pull rebuilds a local index
-from those boards, so every local query answers offline while the queue itself stays empty.
+The full setup and behavior for the `projects` module, in depth.
 
 ## Prerequisite
 

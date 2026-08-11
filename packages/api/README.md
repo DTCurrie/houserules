@@ -6,6 +6,8 @@ API, the action types, the module definition, and the `kit.config.json` schema.
 Depend on this rather than on `@agent-kit/cli`. The CLI is the installer, and a plugin has no reason
 to carry it in its dependency graph.
 
+## Install
+
 ```sh
 pnpm add -D @agent-kit/api
 ```
@@ -61,6 +63,12 @@ reachable there, that is a gap in the contract worth
 
 `CONVENTIONS.md` in `@agent-kit/cli` documents the full plugin contract, including how a plugin's
 payload reaches a shared lib.
+
+## Part of agent-kit
+
+[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+infrastructure that keeps the agent's context lean. The
+[package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
 
 ## License
 

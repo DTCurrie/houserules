@@ -2,9 +2,9 @@
 
 ## Supported Versions
 
-Only the latest published release is supported. Nothing has been published yet,
-and every package in this workspace sits at `0.0.0` or `0.1.0`. Update this
-policy once a stable release line exists.
+Only the latest published release is supported. No package has published a release
+yet, and every package in this workspace sits at `0.0.0`. Update this policy once a
+stable release line exists.
 
 ## Reporting a Vulnerability
 

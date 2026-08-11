@@ -113,19 +113,20 @@ A plugin is a separate package that contributes more modules. Install it as a de
 and declare it in `.claude/kit.config.json` (see [Writing a plugin](#writing-a-plugin)) to
 select its modules.
 
-| Package                             | Modules it ships                                                                                                                                                                                                                                                           |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@agent-kit/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`, `pr-description`                                                                                                                                                                                                     |
-| `@agent-kit/plugin-testing`         | ships `testing` (plus opt-in `testing-typescript` and `testing-javascript` language guides, chosen through the module's options)                                                                                                                                           |
-| `@agent-kit/plugin-changesets`      | ships `changesets`, `ledger`                                                                                                                                                                                                                                               |
-| `@agent-kit/plugin-backlog`         | ships `backlog`                                                                                                                                                                                                                                                            |
-| `@agent-kit/plugin-decisions`       | ships `decisions`                                                                                                                                                                                                                                                          |
-| `@agent-kit/plugin-persona-auditor` | ships `persona-auditor`                                                                                                                                                                                                                                                    |
-| `@agent-kit/plugin-typescript`      | ships `typescript` (a path-scoped rule for the type-system decisions with a right answer, deferring comments to `code-comments` and naming to `code-cleanliness`)                                                                                                          |
-| `@agent-kit/plugin-accessibility`   | ships `accessibility` (WCAG rule, pull-only criteria reference, and the `wcag.mjs` router, plus opt-in React/Svelte/Vue/HTML guides chosen through the module's options) and `accessibility-review`                                                                        |
-| `@agent-kit/plugin-three`           | ships `three` (a path-scoped Three.js rule, plus opt-in Threlte and React Three Fiber guides chosen through the module's options)                                                                                                                                          |
-| `@agent-kit/plugin-svelte`          | ships `svelte` (a Svelte 5 rule plus an opt-in SvelteKit guide) and `svelte-mcp` (the Svelte MCP server configs, installed to `.claude/mcp/` for you to wire up)                                                                                                           |
-| `@agent-kit/plugin-design`          | ships `design` (a DTCG token set seeded to `.claude/design/tokens.json`, a path-scoped design rule, a pull-only principles reference, and the `design.mjs` query script), plus opt-in `design-tailwind` to make the repo's own Tailwind v4 theme the design system instead |
+| Package                             | Modules it ships                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@agent-kit/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`, `pr-description`                                                                                                                                                                                                                                                                                                        |
+| `@agent-kit/plugin-testing`         | ships `testing` (plus opt-in `testing-typescript`, `testing-javascript`, `testing-svelte`, and `testing-3d` language and framework guides, chosen through the module's options)                                                                                                                                                                                               |
+| `@agent-kit/plugin-changesets`      | ships `changesets`, `ledger`                                                                                                                                                                                                                                                                                                                                                  |
+| `@agent-kit/plugin-backlog`         | ships `backlog`                                                                                                                                                                                                                                                                                                                                                               |
+| `@agent-kit/plugin-decisions`       | ships `decisions`                                                                                                                                                                                                                                                                                                                                                             |
+| `@agent-kit/plugin-persona-auditor` | ships `persona-auditor`                                                                                                                                                                                                                                                                                                                                                       |
+| `@agent-kit/plugin-typescript`      | ships `typescript` (a path-scoped rule for the type-system decisions with a right answer, deferring comments to `code-comments` and naming to `code-cleanliness`)                                                                                                                                                                                                             |
+| `@agent-kit/plugin-accessibility`   | ships `accessibility` (WCAG rule, pull-only criteria reference, and the `wcag.mjs` router, plus opt-in React/Svelte/Vue/HTML guides chosen through the module's options) and `accessibility-review`                                                                                                                                                                           |
+| `@agent-kit/plugin-three`           | ships `three` (a path-scoped Three.js rule, plus opt-in Threlte and React Three Fiber guides chosen through the module's options)                                                                                                                                                                                                                                             |
+| `@agent-kit/plugin-svelte`          | ships `svelte` (a Svelte 5 rule plus an opt-in SvelteKit guide) and `svelte-mcp` (the Svelte MCP server configs, installed to `.claude/mcp/` for you to wire up)                                                                                                                                                                                                              |
+| `@agent-kit/plugin-design`          | ships `design` (a DTCG token set seeded to `.claude/design/tokens.json`, a path-scoped design rule, a pull-only principles reference, and the `design.mjs` query script), `design-review` (a design-diff review pass), and `design-game` (game-UI specific design guidance), plus opt-in `design-tailwind` to make the repo's own Tailwind v4 theme the design system instead |
+| `@agent-kit/plugin-github`          | ships `projects` (syncs the backlog and decision ledgers to a GitHub Project, so the durable record survives outside the repo)                                                                                                                                                                                                                                                |
 
 Installing a plugin opts you into the plugin. Each module inside it still honors its own
 default: most default off, so you enable them individually with `--modules` or through
@@ -142,6 +143,8 @@ npx agent-kit modules   # list installed vs available modules, and enable more a
                          # --disable=<ids> withdraws a module: prunes its files (your edits
                          # are kept unless --force) and unwires only the settings entries no
                          # remaining module still needs
+npx agent-kit report    # transcript telemetry for this repo's sessions (read-only)
+                         # --json for a machine-readable report
 ```
 
 Every command takes the target repo as a positional `[dir]` or via `--cwd <dir>`, plus a
@@ -327,8 +330,11 @@ A plugin is a module provider. It contributes `ModuleDef`s, the same shape `core
 built-in module use, and nothing else: no lifecycle hooks, no way to transform another
 module's actions, no path onto disk that isn't a declared action. The kit decides what those
 actions mean against the real tree, so a plugin's plan shows up in `--dry-run` the same as a
-built-in module's does. See the `PluginApi` and `Plugin` TSDoc in `src/plugin.ts` for the full
-contract, including what happens when a plugin throws.
+built-in module's does. The contract itself now lives in `@agent-kit/api`, a standalone
+package the CLI depends on rather than defines. See the `PluginApi` and `Plugin` TSDoc in
+`@agent-kit/api`'s `src/index.ts` for the full contract, including what happens when a plugin
+throws. This package's own `src/plugin.ts` re-exports both, so `@agent-kit/cli/plugin` is
+still the import path a plugin author uses.
 
 ### Declaring one
 
@@ -353,10 +359,12 @@ factory verbatim, through `PluginApi.config`, and the kit never reads inside it.
 Publish it as `@agent-kit/plugin-<name>`, with
 
 ```json
-"peerDependencies": { "@agent-kit/cli": "^<major>" }
+"peerDependencies": { "@agent-kit/api": ">=0.0.0 <1.0.0" }
 ```
 
-pinned to the major version of the `PluginApi` surface you built against. See
+pinned to the range of the `PluginApi` surface you built against, the same form every
+first-party plugin in this workspace declares today. Add `@agent-kit/payload` as a peer too,
+at the same range, if your payload imports a shared lib from it. See
 [CONVENTIONS.md](CONVENTIONS.md#11-plugin-surface-semver-policy) for what changes at each
 bump.
 
@@ -405,24 +413,29 @@ The rest of this section assumes you are inside the `agent-kit` workspace. Most 
 authors are not. Here is the same path from a plain repo with no `workspace:*` protocol
 available.
 
-**Depend on a published `@agent-kit/cli`.** Add it the normal way:
+**Depend on a published `@agent-kit/cli`.** The published contract your plugin builds
+against is `@agent-kit/api`, kept as the `peerDependencies` range from the "Building it"
+section above. `@agent-kit/cli` itself is a devDependency: it ships the `agent-kit-payload`
+bin your build step runs and the `agent-kit` binary you use while developing. Add both the
+normal way:
 
 ```
-npm install --save-dev @agent-kit/cli
+npm install --save-dev @agent-kit/cli @agent-kit/api
 ```
 
-and keep the `peerDependencies` range from the "Building it" section above. If your plugin
-lives in a repo that keeps a checkout of this workspace beside it, for example while you
-develop against an unreleased CLI change, point at that checkout with a `link:` or `file:`
-dependency instead:
+If your plugin lives in a repo that keeps a checkout of this workspace beside it, for example
+while you develop against an unreleased CLI change, point at that checkout with a `link:` or
+`file:` dependency instead:
 
 ```json
 "devDependencies": { "@agent-kit/cli": "link:../agent-kit/packages/cli" }
 ```
 
 **Prefer the type-only import.** `definePlugin` is a value import, so using it gives your
-plugin a runtime dependency on `@agent-kit/cli`. `Plugin` is exported as a type, so importing
-only that type costs nothing at runtime and keeps `@agent-kit/cli` a genuine peer dependency:
+plugin a runtime dependency on `@agent-kit/cli`, which re-exports it from `@agent-kit/api`.
+`Plugin` is exported as a type, so importing only that type costs nothing at runtime and
+keeps `@agent-kit/api` a genuine peer dependency with no runtime import of `@agent-kit/cli`
+at all:
 
 ```ts
 import type { Plugin } from '@agent-kit/cli/plugin';

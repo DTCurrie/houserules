@@ -31,23 +31,24 @@ The package is `@agent-kit/cli` and the binary is `agent-kit`, the same split
 
 ## Packages
 
-| Path                              | Package                             | What it is                                                                               |
-| --------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------- |
-| `packages/cli`                    | `@agent-kit/cli`                    | The installer and its 16-module core payload. Ships the `agent-kit` binary.              |
-| `packages/payload`                | `@agent-kit/payload`                | The shared payload libs (`kit-config`, `entry-ledger`, and friends), zero dependencies.  |
-| `packages/plugin-prose`           | `@agent-kit/plugin-prose`           | Comment discipline, writing voice, a prose output style, and the PR-description skill.   |
-| `packages/plugin-testing`         | `@agent-kit/plugin-testing`         | A runner-agnostic testing rule, split into opt-in per-language guides.                   |
-| `packages/plugin-changesets`      | `@agent-kit/plugin-changesets`      | Changesets integration and the optional per-commit changelog ledger.                     |
-| `packages/plugin-backlog`         | `@agent-kit/plugin-backlog`         | An append-only backlog ledger, with the add skill and reviewer agent.                    |
-| `packages/plugin-decisions`       | `@agent-kit/plugin-decisions`       | An append-only decision ledger, the `/decide` skill, and the decision-reviewer agent.    |
-| `packages/plugin-persona-auditor` | `@agent-kit/plugin-persona-auditor` | A blind-rank-then-reconcile persona-auditor agent template.                              |
-| `packages/plugin-accessibility`   | `@agent-kit/plugin-accessibility`   | A WCAG 2.2 rule, framework guides, and a router over changed markup.                     |
-| `packages/plugin-typescript`      | `@agent-kit/plugin-typescript`      | A path-scoped TypeScript rule: interface vs type, and `unknown` over `any`.              |
-| `packages/plugin-three`           | `@agent-kit/plugin-three`           | Three.js authoring patterns, with opt-in Threlte and React Three Fiber guides.           |
-| `packages/plugin-svelte`          | `@agent-kit/plugin-svelte`          | Svelte 5 conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.       |
-| `packages/plugin-design`          | `@agent-kit/plugin-design`          | A DTCG design system an agent queries by name, or `design-tailwind` for a Tailwind repo. |
-| `packages/plugin-github`          | `@agent-kit/plugin-github`          | Syncs the backlog and decision ledgers to GitHub Projects, with adopt and sync skills.   |
-| `packages/test`                   | `@agent-kit/test`                   | Shared testing modules for driving the CLI against synthetic repos. For plugin authors.  |
+| Path                              | Package                             | What it is                                                                                                                    |
+| --------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `packages/cli`                    | `@agent-kit/cli`                    | The installer and its 16-module core payload. Ships the `agent-kit` binary.                                                   |
+| `packages/payload`                | `@agent-kit/payload`                | The shared payload libs (`kit-config`, `entry-ledger`, and friends), zero dependencies.                                       |
+| `packages/api`                    | `@agent-kit/api`                    | The plugin API package: action types, module definitions, and the `kit.config.json` schema that plugin authors build against. |
+| `packages/plugin-prose`           | `@agent-kit/plugin-prose`           | Comment discipline, writing voice, a prose output style, and the PR-description skill.                                        |
+| `packages/plugin-testing`         | `@agent-kit/plugin-testing`         | A runner-agnostic testing rule, split into opt-in per-language guides.                                                        |
+| `packages/plugin-changesets`      | `@agent-kit/plugin-changesets`      | Changesets integration and the optional per-commit changelog ledger.                                                          |
+| `packages/plugin-backlog`         | `@agent-kit/plugin-backlog`         | An append-only backlog ledger, with the add skill and reviewer agent.                                                         |
+| `packages/plugin-decisions`       | `@agent-kit/plugin-decisions`       | An append-only decision ledger, the `/decide` skill, and the decision-reviewer agent.                                         |
+| `packages/plugin-persona-auditor` | `@agent-kit/plugin-persona-auditor` | A blind-rank-then-reconcile persona-auditor agent template.                                                                   |
+| `packages/plugin-accessibility`   | `@agent-kit/plugin-accessibility`   | A WCAG 2.2 rule, framework guides, and a router over changed markup.                                                          |
+| `packages/plugin-typescript`      | `@agent-kit/plugin-typescript`      | A path-scoped TypeScript rule: interface vs type, and `unknown` over `any`.                                                   |
+| `packages/plugin-three`           | `@agent-kit/plugin-three`           | Three.js authoring patterns, with opt-in Threlte and React Three Fiber guides.                                                |
+| `packages/plugin-svelte`          | `@agent-kit/plugin-svelte`          | Svelte 5 conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.                                            |
+| `packages/plugin-design`          | `@agent-kit/plugin-design`          | A DTCG design system an agent queries by name, or `design-tailwind` for a Tailwind repo.                                      |
+| `packages/plugin-github`          | `@agent-kit/plugin-github`          | Syncs the backlog and decision ledgers to GitHub Projects, with adopt and sync skills.                                        |
+| `packages/test`                   | `@agent-kit/test`                   | Shared testing modules for driving the CLI against synthetic repos. For plugin authors.                                       |
 
 Every package has its own README. Plugins are independent, so install only the ones a repo
 needs.

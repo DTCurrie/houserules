@@ -4,6 +4,11 @@
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "private": true,
   "description": "Workspace root for agent-kit and its first-party plugins. Not published.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/agent-kit.git"
+  },
   "packageManager": "pnpm@11.20.0",
   "type": "module",
   "engines": {
