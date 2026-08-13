@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { KitError } from '../plan.js';
+import { KitError } from '../kit-error.js';
 import type { ModuleDef } from '@agent-kit/api';
 import type {
   PluginSource,

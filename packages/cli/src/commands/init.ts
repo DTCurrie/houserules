@@ -10,11 +10,11 @@ import {
 import { hasModule } from '../plugin-registry.js';
 import {
   MODULES,
-  KitError,
   buildPlan,
   computeEffects,
   resolveModuleIds,
 } from '../plan.js';
+import { KitError } from '../kit-error.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import { apply } from '../apply.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';

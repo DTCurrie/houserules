@@ -16,7 +16,7 @@ export interface RegionSpec {
   legacy?: { start: string; end: string };
 }
 
-export type UpsertStatus = 'created' | 'replaced' | 'inserted';
+type UpsertStatus = 'created' | 'replaced' | 'inserted';
 
 interface Located {
   blockStart: number;

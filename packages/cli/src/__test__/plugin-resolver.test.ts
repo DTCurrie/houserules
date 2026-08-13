@@ -19,7 +19,7 @@ import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 
 import type { CopyAction, KitConfig, Answers, ModuleDef } from '@agent-kit/api';
-import { KitError } from '../plan.js';
+import { KitError } from '../kit-error.js';
 import { buildPayload } from '../payload-build.js';
 import { PluginResolutionError } from '../plugin-registry.js';
 import { buildRegistry } from '../plugin-resolver.js';

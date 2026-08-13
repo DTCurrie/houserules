@@ -72,7 +72,7 @@ function readLastJsonRecord(file: string): TranscriptRecord | null {
  *
  * @returns null in any harness that is not Claude Code, which callers report as `chat: null`.
  */
-export function detectChatId(repoRoot: string): string | null {
+function detectChatId(repoRoot: string): string | null {
   if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
   const dir = resolve(
     homedir(),
@@ -231,7 +231,7 @@ export function relativeToRoot(repoRoot: string, p: string): string {
   return relative(repoRoot, resolve(p));
 }
 
-export const DEFAULT_LEDGER_DIR = '.claude/ledgers';
+const DEFAULT_LEDGER_DIR = '.claude/ledgers';
 
 /**
  * The ledger directory, from `ledgers.dir` or the default.
@@ -590,7 +590,7 @@ export function renderMetadata(fields: Record<string, string | null>): string {
     .join('\n');
 }
 
-export interface ParsedEntry {
+interface ParsedEntry {
   id: string;
   title: string;
   meta: Record<string, string>;

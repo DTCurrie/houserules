@@ -20,13 +20,8 @@ import {
   assertNoRetiredModules,
   resolveRecordedModuleIds,
 } from '../retired-modules.js';
-import {
-  MODULES,
-  KitError,
-  buildPlan,
-  computeEffects,
-  computePrune,
-} from '../plan.js';
+import { MODULES, buildPlan, computeEffects, computePrune } from '../plan.js';
+import { KitError } from '../kit-error.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import {
   parseSettingsText,

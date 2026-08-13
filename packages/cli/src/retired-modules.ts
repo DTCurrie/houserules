@@ -1,4 +1,4 @@
-import { KitError } from './plan.js';
+import { KitError } from './kit-error.js';
 import type { RegisteredModule, Registry } from './plugin-registry.js';
 
 /**

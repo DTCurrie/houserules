@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 
 import type { Action, CopyAction, WriteAction } from '@agent-kit/api';
 import { createPayloadBuilders } from '@agent-kit/api/internal';
-import { KitError } from '../plan.js';
+import { KitError } from '../kit-error.js';
 import { payloadPath } from '../paths.js';
 import {
   PAYLOAD_IMPORTS_FILE,

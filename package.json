@@ -33,7 +33,8 @@
     "verify:payload-copy-set": "node scripts/verify-payload-copy-set.mjs",
     "verify:payload-test-coverage": "node scripts/verify-payload-test-coverage.mjs",
     "verify:payload-lib-declarations": "node scripts/verify-payload-lib-declarations.mjs",
-    "verify:knip": "knip"
+    "verify:knip": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles",
+    "verify:knip:audit": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles --include-entry-exports"
   },
   "wireit": {
     "lint": {

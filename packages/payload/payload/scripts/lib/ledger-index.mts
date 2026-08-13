@@ -38,7 +38,7 @@ export interface LedgerEntry {
  * An index written by an older version is discarded rather than migrated. It costs one `pull` to
  * rebuild and a migration path for a cache is work that buys nothing.
  */
-export const INDEX_VERSION = 1;
+const INDEX_VERSION = 1;
 
 export interface LedgerIndex {
   version: number;

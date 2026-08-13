@@ -11,7 +11,6 @@
  */
 
 export { extractBody, hasLegacyRegion, upsertRegion } from './regions.js';
-export type { UpsertStatus } from './regions.js';
 
 export {
   mergeSettings,

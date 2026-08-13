@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import {
-  KitError,
   MODULES,
   SHARED_HOST_FILES,
   buildPlan,
@@ -14,6 +13,7 @@ import {
   defaultModuleIds,
   resolveModuleIds,
 } from '../plan.js';
+import { KitError } from '../kit-error.js';
 import type {
   BodyAction,
   CopyAction,

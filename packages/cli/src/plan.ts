@@ -13,6 +13,7 @@ import {
   bodyHashes,
   wholeFileHash,
 } from '@agent-kit/api/internal';
+import { KitError } from './kit-error.js';
 import { mergeManagedKeys } from './merge-config-keys.js';
 import { classifyFrontmatter, splitFrontmatter } from './core/frontmatter.js';
 
@@ -169,8 +170,6 @@ export const MODULES: ModuleDef[] = [
   codeCleanliness,
   ciSettings,
 ];
-
-export class KitError extends Error {}
 
 /**
  * Files the USER owns, of which the kit manages only a region or a few keys. These

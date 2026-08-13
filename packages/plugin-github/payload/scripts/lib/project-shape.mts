@@ -76,7 +76,7 @@ export function projectTitle(repoName: string, kind: LedgerKind): string {
  * A readable sentinel rather than an empty string, because this is a column people read on the
  * board. {@link surfaceForArea} maps it back, and the pair is the contract.
  */
-export const AREA_REPO_ROOT = 'repo root';
+const AREA_REPO_ROOT = 'repo root';
 
 /**
  * The `Area` value for a surface: the bare target name, or {@link AREA_REPO_ROOT}.
