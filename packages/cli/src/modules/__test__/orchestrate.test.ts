@@ -41,6 +41,10 @@ describe('orchestrate', () => {
       expect(skillText).toMatch(/--auto/);
     });
 
+    it('gives the brief a reference line, so a slice judged against a spec is handed that spec', () => {
+      expect(skillText).toMatch(/> Reference:/);
+    });
+
     it('states explicitly which plan is being driven, never guessed from mtime or sort order', () => {
       expect(skillText).toMatch(/Resolving which plan/);
       expect(skillText).toMatch(/plan-slug/);

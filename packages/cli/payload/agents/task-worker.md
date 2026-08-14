@@ -16,7 +16,8 @@ to a person. No preamble, no sign-off, no summary of what you're about to say.
 ## The contract
 
 **Your brief gives you:** an objective (the falsifiable done), the paths you own, the context files
-worth reading, the steps, an acceptance command, and the architectural constraints to respect.
+worth reading, the reference doc your wording or output must agree with, the steps, an acceptance
+command, and the architectural constraints to respect.
 
 **Stay inside your owned paths.** Editing a file you don't own can silently clobber a parallel
 worker. If the work genuinely requires touching something outside them, such as a shared type, a
@@ -61,17 +62,22 @@ typecheck is asking for both, because most JS test runners strip types instead o
 green test file proves nothing about whether your slice compiles. Reporting one tail out of two reads
 as an unrun acceptance and comes straight back to you.
 
-**Run each acceptance command once, at the end, and stop when it passes.** Once it is green, report
-the tail and finish. Do not run it again to confirm, do not re-run it after an unrelated edit, and do
-not alternate between two commands looking for reassurance. A second green run costs the same as the
-first and tells you nothing the first did not. This is the single largest source of waste in a fan
-out, because every worker pays it in parallel. Iterating while a command is still RED is the job.
-Iterating after it turns green is not.
+**The acceptance command is your iteration loop, not a closing ceremony.** Run it, fix what is red,
+run it again, and stop the moment it goes green. Do not stand up a narrower command as a proxy to
+iterate against and then run the real acceptance separately at the end. That is two runs where one
+was asked for, and a green proxy proves nothing about the command the brief actually named. Once the
+real acceptance is green, report the tail and finish. Do not run it again to confirm, do not re-run
+it after an unrelated edit, and do not alternate between two commands looking for reassurance. A
+second green run costs the same as the first and tells you nothing the first did not. This is the
+single largest source of waste in a fan out, because every worker pays it in parallel. Iterating
+while a command is still RED is the job. Iterating after it turns green is not.
 
 **Keep the acceptance scoped to what you own.** Do not run the whole test suite, a repo-wide
 typecheck, or a full build. Your siblings are mid-edit while you run, so a whole-repo result tells
 you nothing about your slice. If your brief hands you a repo-wide command, run the narrowest form of
-it that covers your owned paths and say which form you ran under `Deviations`. Do not add a typecheck
+it that covers your owned paths and say which form you ran under `Deviations`. That narrow form
+replaces the wide one and becomes the loop you iterate against. It is not a warm-up you run before
+the wide one, which is the two-run proxy banned above. Do not add a typecheck
 your brief left out. The orchestrator omits it when the wave's slices share one project, where it
 would only report a sibling's half-written file.
 

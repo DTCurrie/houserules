@@ -102,9 +102,14 @@ It catches it after the wave closed, which costs a residue pass instead of the w
 
 Two commands is the ceiling, not a starting point. Each one a slice carries is paid by every worker
 in the wave at once, so a package-wide typecheck handed to four slices is four package-wide
-typechecks. Prefer the narrowest command that could actually fail on this slice's changes, and say
-**once** in the brief. Without that word a worker re-runs a green command to reassure itself, which
-is the most expensive habit in a fan out and the easiest to prevent.
+typechecks. Prefer the narrowest command that could actually fail on this slice's changes.
+
+**The acceptance has to be cheap enough to iterate against, because iterating is what it is for.** A
+worker runs it, fixes what is red, and runs it again until it goes green. Hand it a command too slow
+or too broad for that loop and it will quietly stand up a narrower proxy, iterate against that, then
+run your acceptance at the end as a formality. That is two runs where you asked for one, and a green
+proxy proves nothing about the command you actually named. Narrow the acceptance until it can carry
+the loop. Never word the brief so the acceptance reads as a closing ceremony.
 
 **Pair the typecheck in only when its project is quiet.** `tsc` runs per project, not per file, so a
 package-scoped typecheck reads whatever a sibling is mid-write in that package, which is the same
@@ -123,6 +128,12 @@ string. Get this wrong and you get one of two failures, both of which surface at
 most expensive context you have: the worker ships a fix with no regression test, because the only
 valid home was outside its `owns`, or it breaks a sibling's assertion and correctly declines to
 repair it. Walk each slice's file list and ask what currently asserts these bytes.
+
+**A slice judged against a spec carries that spec, by path.** When the plan records a format, a
+standard, or a criteria doc that a slice's output has to conform to, name it on the brief's
+`Reference` line. "Never hand a worker the whole plan" means the plan, not the one document the slice
+is measured by. A worker left to infer a format invents one, and that surfaces at the barrier, in the
+most expensive context you have, after the worker who could have gotten it right is gone.
 
 **Slice by shared mutable resource, not by feature.** File ownership is the usual expression of
 this, but it is not the only resource two slices can contend for. Before a wave, name everything two
@@ -210,9 +221,11 @@ in a worker.**
 > **Slice `<id>` — `<name>`.** Objective: `<the falsifiable done>`.
 > You own **only** these paths: `<owns>`. Do not edit anything outside them.
 > Context you need: `<the seam file(s) + the 2–3 files worth reading first>`.
+> Reference: `<the plan doc(s) this slice's output is judged against, by path, or "none">`.
 > Steps: `<the ≤8 steps>`.
-> Acceptance: run `<command(s), scoped to your owned paths>` **once, at the end**, and include the
-> last ~10 lines of each in your report.
+> Acceptance: `<command(s), scoped to your owned paths>` is your iteration loop. Run it, fix what is
+> red, run it again, and stop the moment it goes green. Include the last ~10 lines of each in your
+> report.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
 
 Never hand a worker the whole plan. It gets its slice, its seam, and its constraints.

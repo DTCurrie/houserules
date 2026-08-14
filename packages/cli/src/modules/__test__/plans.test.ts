@@ -31,6 +31,14 @@ describe('plans', () => {
       expect(manifest.modules.includes('plans')).toBeTruthy();
     });
 
+    it('templates a phase doc with a Reference section for the spec its work must conform to', () => {
+      const text = readFileSync(
+        join(root, '.claude/skills/plan-project/SKILL.md'),
+        'utf8',
+      );
+      expect(text).toMatch(/## Reference\n\n<[^>]*"none"[^>]*>/);
+    });
+
     it('self-gitignores its plan workspace while keeping the .gitignore itself tracked', () => {
       const ignore = readFileSync(
         join(root, '.claude/plans/.gitignore'),

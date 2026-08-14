@@ -65,7 +65,8 @@ the design thinking itself, plan mode and the Plan agent are available. This ski
 ## 3. Write the three doc types
 
 Create these under `.claude/plans/<slug>/`. Keep each lean and cross-linked, with relative links so
-the workspace is self-contained.
+the workspace is self-contained. A phase that records its spec in `## Reference` is what lets
+`/orchestrate` hand that spec to the slice it judges, as the brief's `Reference:` line.
 
 **`PLAN.md`** is the stable overview: goal plus approach, and it rarely changes once set.
 
@@ -125,6 +126,10 @@ Checkboxes mirror it: `[ ]` todo, `[~]` in progress, `[x]` done.
 ## Objective
 
 <What "done" means here: the falsifiable acceptance from step 2.>
+
+## Reference
+
+<Relative links to any spec, format, or standard this phase's work must conform to, or "none".>
 
 ## Steps
 
