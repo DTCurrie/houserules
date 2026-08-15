@@ -59,7 +59,9 @@ function svelteModule(api: PluginApi): ModuleDef {
 
 /**
  * Ships the three Svelte MCP server configs (HTTP, stdio, VS Code) as kit-owned files under
- * `.claude/mcp/`.
+ * `.claude/mcp/`, namespaced by server name via `api.payload.mcp`. The names were once
+ * `mcp.http.json` and friends, which would have collided with any second plugin shipping an MCP
+ * config, since `plan.ts` treats two sources at one dest as a bug rather than deduping it.
  *
  * A module of its own, not an option value of `svelteModule`, because the dependency runs
  * the other way: an MCP config does not defer to the base rule the way the SvelteKit guide
@@ -84,27 +86,27 @@ function svelteMcpModule(api: PluginApi): ModuleDef {
     },
     plan(): Action[] {
       return [
-        api.payload.file({
-          module: id,
-          srcRel: 'mcp/mcp.http.json',
-          dest: '.claude/mcp/mcp.http.json',
-          reason: 'Svelte MCP server config, HTTP transport',
-        }),
-        api.payload.file({
-          module: id,
-          srcRel: 'mcp/mcp.stdio.json',
-          dest: '.claude/mcp/mcp.stdio.json',
-          reason: 'Svelte MCP server config, stdio transport',
-        }),
-        api.payload.file({
-          module: id,
-          srcRel: 'mcp/vscode.mcp.json',
-          dest: '.claude/mcp/vscode.mcp.json',
-          reason: 'Svelte MCP server config for VS Code',
-        }),
+        api.payload.mcp(
+          id,
+          'svelte',
+          'http',
+          'Svelte MCP server config, HTTP transport',
+        ),
+        api.payload.mcp(
+          id,
+          'svelte',
+          'stdio',
+          'Svelte MCP server config, stdio transport',
+        ),
+        api.payload.mcp(
+          id,
+          'svelte',
+          'vscode',
+          'Svelte MCP server config for VS Code',
+        ),
         {
           kind: 'advise',
-          text: "Svelte MCP configs installed under .claude/mcp/: mcp.http.json, mcp.stdio.json, and vscode.mcp.json. None of these are wired in yet, since houserules never writes .mcp.json. Copy the `mcpServers` block from either mcp.http.json or mcp.stdio.json into this repo's own .mcp.json (http and stdio are alternatives, use one, not both), or for VS Code copy vscode.mcp.json into its own MCP config. An unused MCP server costs context on every turn, so remove it once you stop using it.",
+          text: "Svelte MCP configs installed under .claude/mcp/: svelte.http.json, svelte.stdio.json, and svelte.vscode.json. None of these are wired in yet, since houserules never writes .mcp.json. Copy the `mcpServers` block from either svelte.http.json or svelte.stdio.json into this repo's own .mcp.json (http and stdio are alternatives, use one, not both), or for VS Code copy svelte.vscode.json into its own MCP config. An unused MCP server costs context on every turn, so remove it once you stop using it. If you installed an earlier version of this module, the old .claude/mcp/mcp.http.json, mcp.stdio.json, and vscode.mcp.json are removed on update, and anything you already copied into .mcp.json is untouched.",
           module: id,
         },
       ];

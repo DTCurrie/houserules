@@ -61,6 +61,13 @@ function buildApi(config?: unknown): PluginApi {
         module,
         reason,
       }),
+      mcp: (module, server, transport, reason) => ({
+        kind: 'copy',
+        src: `/payload/mcp/${server}.${transport}.json`,
+        dest: `.claude/mcp/${server}.${transport}.json`,
+        module,
+        reason,
+      }),
       file: ({ module, srcRel, dest, reason, mode }) => {
         const action = {
           kind: 'copy' as const,

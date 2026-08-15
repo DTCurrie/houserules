@@ -37,10 +37,13 @@ select them when `init` asks.
   actions, and the server-versus-universal split. It installs alongside the base rule when
   chosen, never on its own, because it opens by assuming `svelte.md` is already installed.
 
-- **`svelte-mcp`** installs the three Svelte MCP server configs (HTTP, stdio, and VS Code)
-  under `.claude/mcp/`. houserules never writes `.mcp.json`, so an advise action explains how to
-  wire one of them into this repo's own config, and that an unused MCP server costs context on
-  every turn.
+- **`svelte-mcp`** installs the three Svelte MCP server configs under `.claude/mcp/`:
+  `svelte.http.json`, `svelte.stdio.json`, and `svelte.vscode.json`. houserules never writes
+  `.mcp.json`, so an advise action explains how to wire one of them into this repo's own config,
+  and that an unused MCP server costs context on every turn. The names are namespaced by server,
+  so a second plugin shipping an MCP config cannot collide with these. An install predating that
+  change carried `mcp.http.json`, `mcp.stdio.json`, and `vscode.mcp.json`, and `update` removes
+  those three.
 
 Doc comments, verification commands, and accessibility are deliberately out of scope of the
 `svelte` rule. Those belong to `code-comments.md` and `prose-voice.md` in

@@ -3,8 +3,16 @@ import { join } from 'node:path';
 import type { BodyAction, CopyAction } from './actions.js';
 
 /**
+ * How an MCP client reaches the server. `stdio` and `http` are the two Claude Code accepts in an
+ * `mcpServers` block, and `vscode` is the same server under VS Code's own `servers` key, which is
+ * a different file shape rather than a different transport. A union, not a string, so a typo is a
+ * compile error instead of a config nobody can find.
+ */
+export type McpTransport = 'stdio' | 'http' | 'vscode';
+
+/**
  * The action builders bound to one payload root. houserules binds them to its own payload, and
- * a plugin gets them bound to the payload inside its own package, so the same seven builders
+ * a plugin gets them bound to the payload inside its own package, so the same eight builders
  * serve both without either knowing where the other's files live.
  */
 export interface PayloadBuilders {
@@ -25,6 +33,19 @@ export interface PayloadBuilders {
   ): BodyAction;
   reference(module: string, name: string, reason: string): CopyAction;
   template(module: string, rel: string, reason?: string): CopyAction;
+  /**
+   * An MCP server config, namespaced by server name so two plugins shipping one cannot collide.
+   *
+   * The namespacing is the whole point of the builder. `plan.ts` dedupes a copy only when dest
+   * AND src match, so two different sources at one dest is a real bug rather than something the
+   * planner absorbs. A naming rule written down somewhere is forgettable. This is not.
+   */
+  mcp(
+    module: string,
+    server: string,
+    transport: McpTransport,
+    reason: string,
+  ): CopyAction;
   /**
    * Escape hatch for a destination the named builders do not cover, such as
    * `.claude/output-styles/`. `srcRel` resolves inside this payload root, so a plugin never
@@ -119,6 +140,16 @@ export function createPayloadBuilders(payloadRoot: string): PayloadBuilders {
         kind: 'copy',
         src: at('templates', ...rel.split('/')),
         dest: `.claude/templates/${rel}`,
+        module,
+        reason,
+      };
+    },
+
+    mcp(module, server, transport, reason) {
+      return {
+        kind: 'copy',
+        src: at('mcp', `${server}.${transport}.json`),
+        dest: `.claude/mcp/${server}.${transport}.json`,
         module,
         reason,
       };

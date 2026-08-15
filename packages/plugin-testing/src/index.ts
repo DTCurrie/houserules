@@ -7,6 +7,8 @@ import type {
   PluginApi,
 } from '@houserules/api';
 
+import { playwrightMcpModule } from './playwright-mcp.js';
+
 /**
  * The base rule holds everything that applies to any test runner with a `describe`/`it`
  * shape: whether a test is worth writing, placement, what to test, structure, naming, and
@@ -79,4 +81,5 @@ function testingModule(api: PluginApi): ModuleDef {
 
 export default definePlugin((api: PluginApi): ModuleDef[] => [
   testingModule(api),
+  playwrightMcpModule(api),
 ]);

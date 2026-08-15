@@ -1,6 +1,7 @@
 import { definePlugin, scriptPermission } from '@houserules/api';
 
 import { checkChromeAvailable } from './chrome-check.js';
+import { chromeDevtoolsMcpModule } from './chrome-devtools-mcp.js';
 import {
   checkDesignTokens,
   checkStaleTokenSeed,
@@ -385,4 +386,5 @@ export default definePlugin((api: PluginApi): ModuleDef[] => [
   designReviewModule(api),
   designTailwindModule(api),
   designGameModule(api),
+  chromeDevtoolsMcpModule(api),
 ]);

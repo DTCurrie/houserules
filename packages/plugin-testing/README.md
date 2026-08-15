@@ -43,6 +43,19 @@ when `init` asks.
   Because the rule is path-scoped, Claude Code loads it only when a matching test file is in
   the working set, so it costs nothing on the always-loaded surface.
 
+- **`playwright-mcp`** installs the Playwright MCP server config under `.claude/mcp/`, as
+  `playwright.stdio.json` and `playwright.vscode.json`. houserules never writes `.mcp.json`, so an
+  advise action explains how to wire one of them into this repo's own config. Reach for it for
+  cross-browser work and test assertions. For performance traces, Lighthouse, and heap snapshots,
+  `chrome-devtools-mcp` in `@houserules/plugin-design` is the pick, and the advise text in both
+  modules says so.
+
+  The default surface is 24 tool definitions, paid on every turn whether you use them or not, and
+  the shipped `--caps=testing` brings it to 29. Every other capability is opt-in through `--caps`.
+  The args pin `@playwright/mcp@0.0.79`, because the package is pre-1.0 and `@latest` could change
+  the tool surface without warning, and they carry `--headless` and `--isolated`. Switching
+  browsers is a one-word edit: `--browser firefox`, `--browser webkit`, or `--browser msedge`.
+
 ## Upgrading from the CLI core
 
 `testing` was a built-in CLI module. A repo that recorded it before the split gets a

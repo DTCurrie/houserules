@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf } from '#test/installed-tree';
+import { manifestOf, readJson, sha256 } from '#test/installed-tree';
+import { runCli } from '#test/run';
 
 const PLUGIN_SVELTE = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_SVELTE, alias: 'svelte' }];
@@ -14,6 +15,23 @@ function pathGlobs(ruleText: string): string[] {
   return [...body.matchAll(/^ {2}- ['"](.+?)['"]$/gm)]
     .map((m) => m[1])
     .filter((glob): glob is string => glob !== undefined);
+}
+
+const PRE_RENAME_DESTS = [
+  '.claude/mcp/mcp.http.json',
+  '.claude/mcp/mcp.stdio.json',
+  '.claude/mcp/vscode.mcp.json',
+];
+
+function plantPreRenameMcpConfigs(root: string): void {
+  const manifestPath = join(root, '.claude/houserules.manifest.json');
+  const manifest = readJson(manifestPath);
+  for (const dest of PRE_RENAME_DESTS) {
+    const content = `{ "mcpServers": {}, "dest": "${dest}" }\n`;
+    writeFileSync(join(root, dest), content);
+    manifest.files[dest] = sha256(content);
+  }
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
 function installedWith(guides: string[]): string {
@@ -86,12 +104,90 @@ describe('svelte', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/mcp/mcp.http.json'))).toBe(true);
-    expect(existsSync(join(root, '.claude/mcp/mcp.stdio.json'))).toBe(true);
-    expect(existsSync(join(root, '.claude/mcp/vscode.mcp.json'))).toBe(true);
+    expect(existsSync(join(root, '.claude/mcp/svelte.http.json'))).toBe(true);
+    expect(existsSync(join(root, '.claude/mcp/svelte.stdio.json'))).toBe(true);
+    expect(existsSync(join(root, '.claude/mcp/svelte.vscode.json'))).toBe(true);
 
     const manifest = manifestOf(root);
     expect(manifest.modules.includes('svelte/svelte-mcp')).toBeTruthy();
+  });
+
+  it('namespaces every MCP dest by server name, so a second plugin cannot collide', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'svelte/svelte-mcp',
+      plugins: PLUGINS,
+    });
+
+    expect(readdirSync(join(root, '.claude/mcp')).sort()).toEqual([
+      'svelte.http.json',
+      'svelte.stdio.json',
+      'svelte.vscode.json',
+    ]);
+  });
+
+  describe('upgrading from an install that predates the rename', () => {
+    let root: string;
+
+    beforeEach(() => {
+      root = useInstalledRepo('pnpm-monorepo', {
+        modules: 'svelte/svelte-mcp',
+        plugins: PLUGINS,
+      });
+      plantPreRenameMcpConfigs(root);
+    });
+
+    it('deletes the three unnamespaced configs on update', () => {
+      const planted = PRE_RENAME_DESTS.filter((dest) =>
+        existsSync(join(root, dest)),
+      );
+
+      const result = runCli(['update', root]);
+
+      expect(
+        planted,
+        'the fixture never planted, so the rest is vacuous',
+      ).toEqual(PRE_RENAME_DESTS);
+      expect(result.status, result.stderr).toBe(0);
+      expect(
+        PRE_RENAME_DESTS.filter((dest) => existsSync(join(root, dest))),
+        'a leftover here collides with any second plugin shipping an MCP config',
+      ).toEqual([]);
+    });
+
+    it('drops them from the manifest too', () => {
+      runCli(['update', root]);
+
+      const tracked = Object.keys(manifestOf(root).files);
+      expect(tracked.filter((dest) => PRE_RENAME_DESTS.includes(dest))).toEqual(
+        [],
+      );
+    });
+
+    it('keeps the namespaced configs it replaced them with', () => {
+      runCli(['update', root]);
+
+      expect(readdirSync(join(root, '.claude/mcp')).sort()).toEqual([
+        'svelte.http.json',
+        'svelte.stdio.json',
+        'svelte.vscode.json',
+      ]);
+    });
+  });
+
+  it('tracks each MCP config in the manifest, so update refreshes it', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'svelte/svelte-mcp',
+      plugins: PLUGINS,
+    });
+
+    const manifest = manifestOf(root);
+    expect(Object.keys(manifest.files)).toEqual(
+      expect.arrayContaining([
+        '.claude/mcp/svelte.http.json',
+        '.claude/mcp/svelte.stdio.json',
+        '.claude/mcp/svelte.vscode.json',
+      ]),
+    );
   });
 
   it('never ships Svelte 4 syntax in an installed rule body', () => {

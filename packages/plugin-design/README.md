@@ -68,6 +68,23 @@ select them when `init` asks.
   There is deliberately no rule, since whether a repo is a game cannot be detected from a file
   extension.
 
+- **`chrome-devtools-mcp`** installs the Chrome DevTools MCP server config under
+  `.claude/mcp/`, as `chrome-devtools.stdio.json` and `chrome-devtools.vscode.json`. houserules
+  never writes `.mcp.json`, so an advise action explains how to wire one of them into this repo's
+  own config. Reach for it when you need performance traces with insight analysis, a Lighthouse
+  audit, or a heap snapshot, which is the tooling nothing else has. For cross-browser work and
+  test assertions, `playwright-mcp` in `@houserules/plugin-testing` is the cheaper pick, and the
+  advise text in both modules says so.
+
+  The default surface is 50 tool definitions, paid on every turn whether you use them or not. The
+  `slim` module option swaps in a 3-tool variant instead. The shipped args pin
+  `chrome-devtools-mcp@1.7.0`, so the counts here stay true, and carry `--headless`, `--isolated`,
+  and `--no-usage-statistics`, since upstream defaults telemetry on.
+
+  It does not replace `design.mjs render`. That tier drives Chrome over CDP and returns composited
+  contrast and rendered geometry as text, deterministically, with no model in the loop. This module
+  is for interactive debugging.
+
 ## Querying the design system
 
 ```

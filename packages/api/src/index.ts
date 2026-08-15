@@ -35,7 +35,7 @@ export type {
  */
 export type { CheckResult, Finding, Level } from './finding.js';
 export type { RegionSpec } from './regions.js';
-export type { PayloadBuilders } from './copy-actions.js';
+export type { McpTransport, PayloadBuilders } from './copy-actions.js';
 
 export { hookCommand, hookFragment, scriptPermission } from './hook-wiring.js';
 

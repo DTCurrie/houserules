@@ -251,6 +251,15 @@ Each of these is a standing habit, not a script:
 - **`/clear` between unrelated tasks.** Stale context is paid on every following turn.
 - **Disable unused MCP servers** (`/mcp`). CLI tools (`gh`, `aws`) are cheaper than MCP equivalents,
   and tool definitions cost context even when deferred.
+  - **The tool count is the number to look at before enabling one**, because every definition is
+    paid on every turn. `chrome-devtools-mcp` is 50, or 3 with `--slim`. `@playwright/mcp` is 24,
+    and its other capabilities are opt-in through `--caps`. Both together is 74.
+  - **Chrome versus Playwright splits on performance tooling versus cross-browser reach.** Chrome
+    DevTools has traces, Lighthouse, and heap snapshots, which nothing else does. Playwright runs
+    on Chrome, Firefox, WebKit, and Edge, and carries test assertions.
+  - **A plugin ships its MCP config to `.claude/mcp/<server>.<transport>.json`**, through the
+    `mcp()` payload builder. The server name is what keeps two plugins from colliding on one
+    destination, which the planner treats as a bug rather than deduping.
 - **Keep the always-loaded surface under ~200 lines**, the same `RESIDENT_LINE_BUDGET` doctor checks
   in §1. Everything task-scoped moves to a skill, a nested CLAUDE.md, or an on-demand doc (§1–§2).
 - **Subagents for high-volume operations** such as long test runs, log spelunking, and wide greps.
