@@ -62,6 +62,13 @@ typecheck is asking for both, because most JS test runners strip types instead o
 green test file proves nothing about whether your slice compiles. Reporting one tail out of two reads
 as an unrun acceptance and comes straight back to you.
 
+**Say what a failure would have looked like.** When your acceptance is an observation rather than a
+pass/fail command, a value you read, a DOM you inspected, a thing you drove, report both the value
+you saw and the value you would have seen if the code were broken. If they are the same, your check
+proved nothing and the objective is unverified. The usual way this happens is measuring a transform
+on an input where it is the identity: zero, empty, symmetric, single-element. Pick an input where
+the two differ and observe again.
+
 **The acceptance command is your iteration loop, not a closing ceremony.** Run it, fix what is red,
 run it again, and stop the moment it goes green. Do not stand up a narrower command as a proxy to
 iterate against and then run the real acceptance separately at the end. That is two runs where one

@@ -311,6 +311,12 @@ output tail, decisions and deviations, and anything blocked or out of scope. Mar
   usually fine and is the reason the cache exists. It is not fine as the sole evidence for a slice
   that changed a dozen files, and it is worthless when the worker populated the cache itself moments
   earlier. When a tail shows everything skipped on a large slice, verify one thing yourself directly.
+- **Could the evidence have come out any other way?** An observed value is evidence only if a broken
+  implementation would have produced a different one. One worker mirrored a route across the wrong
+  axis and confirmed it by reading the Z column back, but the fixture sat at z ≈ 0, where negating
+  changes nothing, so correct and broken produce the same output. The report was accurate and carried
+  no information. Where the acceptance is a value read rather than a command's exit code, ask what
+  the reading would have been if the code were wrong. If the worker did not say, send it back.
 - **Did it satisfy the letter and worsen the artifact?** A worker optimizes for the acceptance you
   wrote. Ask what the change does to the shipped thing, not just to the check. One slice satisfied
   "the tarball must not carry these files" by excluding them in `files` while leaving a package
