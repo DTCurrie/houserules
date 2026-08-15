@@ -8,7 +8,7 @@ import { join } from 'node:path';
  *
  * Building the CLI is NOT this function's job. Every `test` script declares a wireit
  * dependency on `../cli:build:ts`, so `dist/` is present and current before vitest starts,
- * and a consumer installing `@agent-kit/cli` from npm gets `dist/` prebuilt in the tarball,
+ * and a consumer installing `@houserules/cli` from npm gets `dist/` prebuilt in the tarball,
  * which ships neither `src/` nor `tsconfig.build.json` for this function to compile.
  */
 export default function setup(): () => void {

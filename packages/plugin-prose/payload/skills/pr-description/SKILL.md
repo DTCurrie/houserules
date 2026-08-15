@@ -51,7 +51,7 @@ If the PR stacks on another, note the base branch and link the parent PR here.
 ### One section per layer the PR touches
 
 Use the architecture layers **this repo actually has**, and omit any layer the PR does not
-touch. Read the layout section of `CLAUDE.md`, or the `targets` in `.claude/kit.config.json`,
+touch. Read the layout section of `CLAUDE.md`, or the `targets` in `.claude/houserules.config.json`,
 to find out what those layers are called here. Do not import a layer vocabulary from another
 repo, and do not invent a section to look thorough.
 
@@ -94,7 +94,7 @@ Always last. Name the exact commands you ran and any tests you added. "Tests pas
 enough, because it does not say what ran.
 
 Use this repo's own verify commands. If the `verify-changed` module is installed, they are the
-`verifyCommands` in `.claude/kit.config.json`. Otherwise read the scripts in `package.json`.
+`verifyCommands` in `.claude/houserules.config.json`. Otherwise read the scripts in `package.json`.
 
 ```markdown
 ### Testing

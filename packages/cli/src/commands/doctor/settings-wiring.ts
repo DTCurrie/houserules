@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
-import type { CheckResult, Finding, Settings } from '@agent-kit/api';
+import type { CheckResult, Finding, Settings } from '@houserules/api';
 
 // module id → hook script that must appear in a settings.json hook command.
 export const HOOK_SCRIPTS: Record<string, string[]> = {
@@ -43,7 +43,7 @@ export function allHookCommands(
 export function checkSettingsWiring(root: string, ctx: Ctx): CheckResult {
   const findings: Finding[] = [];
   const manifest = ctx.claude.manifest;
-  const config = ctx.claude.kitConfig;
+  const config = ctx.claude.houseConfig;
 
   if (manifest && ctx.claude.settingsExists && !ctx.claude.settingsParseError) {
     const commands = allHookCommands(ctx.claude.settings);
@@ -66,7 +66,7 @@ export function checkSettingsWiring(root: string, ctx: Ctx): CheckResult {
   } else if (manifest && !ctx.claude.settingsExists) {
     findings.push({
       level: 'ERROR',
-      msg: 'kit installed but .claude/settings.json is missing (hooks unwired) — rerun init',
+      msg: 'houserules installed but .claude/settings.json is missing (hooks unwired) — rerun init',
     });
   }
 
@@ -87,7 +87,7 @@ export function checkSettingsWiring(root: string, ctx: Ctx): CheckResult {
       if (dupes.length)
         findings.push({
           level: 'WARN',
-          msg: 'settings.local.json also wires kit hook scripts — they will run twice',
+          msg: 'settings.local.json also wires houserules hook scripts — they will run twice',
         });
     } catch {
       /* local file is the user's business */

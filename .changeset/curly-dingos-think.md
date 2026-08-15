@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-typescript': minor
+'@houserules/plugin-typescript': minor
 ---
 
 Initial release. A path-scoped TypeScript rule covering the type-system decisions that have a right answer.

@@ -1,4 +1,4 @@
-import type { Action, ModuleGroup } from '@agent-kit/api';
+import type { Action, ModuleGroup } from '@houserules/api';
 import { skill } from './copy-actions.js';
 
 export const id = 'sweep';
@@ -19,7 +19,7 @@ export function defaultEnabled(): boolean {
  * set or the individual diffs.
  *
  * Script-free, because the value is the locate-once, shard, fan-out, verify discipline
- * that the kit's own generated CLAUDE.md tells agents to follow (CONVENTIONS §9).
+ * that houserules' own generated CLAUDE.md tells agents to follow (CONVENTIONS §9).
  */
 export function plan(): Action[] {
   return [

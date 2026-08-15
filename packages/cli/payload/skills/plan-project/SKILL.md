@@ -37,7 +37,7 @@ the docs are dateable on resume:
 date +%Y-%m-%d
 ```
 
-Create the workspace directory (the kit already installed `.claude/plans/.gitignore`):
+Create the workspace directory (houserules already installed `.claude/plans/.gitignore`):
 
 ```
 mkdir -p .claude/plans/<slug>

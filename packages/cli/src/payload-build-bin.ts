@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * `agent-kit-payload`, assembling `payload-dist/` and rewriting cross-package imports, run
+ * `houserules-payload`, assembling `payload-dist/` and rewriting cross-package imports, run
  * after a plugin's `tsc`.
  *
- * Usage: `agent-kit-payload [payload-root]`, defaulting to `payload-dist` beside the cwd.
+ * Usage: `houserules-payload [payload-root]`, defaulting to `payload-dist` beside the cwd.
  *
  * Exits 0 after writing the sidecar, or 1 with the reason on stderr. A plugin chains it in
  * `build:payload`, so a non-zero exit has to fail that script rather than pass silently.
@@ -17,7 +17,7 @@ import {
   DEFAULT_PAYLOAD_ROOT,
 } from './payload-build.js';
 
-const USAGE = `Usage: agent-kit-payload [payload-root]
+const USAGE = `Usage: houserules-payload [payload-root]
 
 Assembles payload-dist/ and rewrites cross-package imports. Run it after a plugin's tsc.
 
@@ -33,10 +33,10 @@ if (arg === '--help' || arg === '-h') {
 }
 
 // A path is positional, so anything dash-led is a mistyped flag. Treating it as a directory
-// name is how `agent-kit-payload --help` used to write a full build into a folder called
+// name is how `houserules-payload --help` used to write a full build into a folder called
 // `--help`, which is not gitignored and gets committed by the next `git add -A`.
 if (arg?.startsWith('-')) {
-  console.error(`agent-kit-payload: unknown option "${arg}"\n\n${USAGE}`);
+  console.error(`houserules-payload: unknown option "${arg}"\n\n${USAGE}`);
   process.exit(1);
 }
 

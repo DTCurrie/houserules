@@ -1,7 +1,7 @@
-# @agent-kit/plugin-svelte
+# @houserules/plugin-svelte
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-svelte.svg)](https://www.npmjs.com/package/@agent-kit/plugin-svelte)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-svelte.svg)](https://www.npmjs.com/package/@agent-kit/plugin-svelte)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-svelte.svg)](https://www.npmjs.com/package/@houserules/plugin-svelte)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-svelte.svg)](https://www.npmjs.com/package/@houserules/plugin-svelte)
 
 An agent trained on older Svelte reaches for `export let`, a `$:` reactive statement, and
 `on:click` by reflex, because that is what most of its training data still shows. None of
@@ -14,11 +14,11 @@ when a Svelte file is in the working set.
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-svelte
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-svelte
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the modules into `.claude/`. Both modules below are off by default, so
 select them when `init` asks.
 
@@ -38,22 +38,22 @@ select them when `init` asks.
   chosen, never on its own, because it opens by assuming `svelte.md` is already installed.
 
 - **`svelte-mcp`** installs the three Svelte MCP server configs (HTTP, stdio, and VS Code)
-  under `.claude/mcp/`. The kit never writes `.mcp.json`, so an advise action explains how to
+  under `.claude/mcp/`. houserules never writes `.mcp.json`, so an advise action explains how to
   wire one of them into this repo's own config, and that an unused MCP server costs context on
   every turn.
 
 Doc comments, verification commands, and accessibility are deliberately out of scope of the
 `svelte` rule. Those belong to `code-comments.md` and `prose-voice.md` in
-[`@agent-kit/plugin-prose`](https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-prose),
+[`@houserules/plugin-prose`](https://github.com/DTCurrie/houserules/tree/main/packages/plugin-prose),
 CLAUDE.md's managed region, and `accessibility-svelte.md` in
-[`@agent-kit/plugin-accessibility`](https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-accessibility),
+[`@houserules/plugin-accessibility`](https://github.com/DTCurrie/houserules/tree/main/packages/plugin-accessibility),
 if those rules are installed.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 

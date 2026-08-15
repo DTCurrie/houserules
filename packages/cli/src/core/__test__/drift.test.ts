@@ -28,7 +28,7 @@ import type {
   FileAction,
   RegionAction,
   RegionSpec,
-} from '@agent-kit/api';
+} from '@houserules/api';
 import type { Effect } from '../../plan.js';
 
 function copyAction(overrides: Partial<CopyAction> = {}): CopyAction {
@@ -136,7 +136,7 @@ describe('classifyEffect', () => {
     expect(calls).toBe(0);
   });
 
-  it('reports a locally-edited non-region file the kit has not changed since as "yours"', () => {
+  it('reports a locally-edited non-region file houserules has not changed since as "yours"', () => {
     const result = classifyEffect(
       effect(copyAction(), 'skip-modified', 'canonical', KIT_LAST_WROTE),
       () => 'edited on disk',
@@ -146,7 +146,7 @@ describe('classifyEffect', () => {
     expect(result.yours).toBe(true);
   });
 
-  it('reports a locally-edited non-region file the kit HAS changed since as "conflict"', () => {
+  it('reports a locally-edited non-region file houserules HAS changed since as "conflict"', () => {
     const result = classifyEffect(
       effect(copyAction(), 'skip-modified', 'canonical', KIT_WOULD_WRITE_NOW),
       () => 'edited on disk',
@@ -182,7 +182,7 @@ describe('classifyEffect', () => {
     expect(result.diff).toMatch(/edited on disk/);
   });
 
-  it('reports a non-region file the kit itself would refresh as "stale" with yours false', () => {
+  it('reports a non-region file houserules itself would refresh as "stale" with yours false', () => {
     const result = classifyEffect(
       effect(copyAction(), 'update', 'new canonical', KIT_WOULD_WRITE_NOW),
       () => 'old canonical',
@@ -219,7 +219,7 @@ describe('classifyEffect', () => {
     expect(result.status).toBe('no-marker');
   });
 
-  it('reports a locally-edited region the kit has not changed since as "yours", diffing only the region body', () => {
+  it('reports a locally-edited region houserules has not changed since as "yours", diffing only the region body', () => {
     const host = 'prefix\n<!-- start -->\nedited body\n<!-- end -->\nsuffix';
     const result = classifyEffect(
       effect(
@@ -237,7 +237,7 @@ describe('classifyEffect', () => {
     expect(result.diff).not.toMatch(/prefix/);
   });
 
-  it('reports a locally-edited region the kit HAS changed since as "conflict"', () => {
+  it('reports a locally-edited region houserules HAS changed since as "conflict"', () => {
     const host = 'prefix\n<!-- start -->\nedited body\n<!-- end -->\nsuffix';
     const result = classifyEffect(
       effect(
@@ -290,7 +290,7 @@ describe('classifyEffect', () => {
     expect(result.status).toBe('missing');
   });
 
-  it('reports a body-owned file whose body was edited but the kit has not changed since as "yours", diffing only the body', () => {
+  it('reports a body-owned file whose body was edited but houserules has not changed since as "yours", diffing only the body', () => {
     const host = '---\npaths: ["custom/**"]\n---\nmy edited body\n';
     const content = '---\npaths: ["custom/**"]\n---\ncanonical body\n';
     const result = classifyEffect(
@@ -304,7 +304,7 @@ describe('classifyEffect', () => {
     expect(result.diff).not.toMatch(/paths:/);
   });
 
-  it('reports a body-owned file whose body was edited and the kit HAS changed since as "conflict"', () => {
+  it('reports a body-owned file whose body was edited and houserules HAS changed since as "conflict"', () => {
     const host = '---\npaths: ["custom/**"]\n---\nmy edited body\n';
     const content = '---\npaths: ["custom/**"]\n---\ncanonical body\n';
     const result = classifyEffect(
@@ -315,7 +315,7 @@ describe('classifyEffect', () => {
     expect(result.status).toBe('conflict');
   });
 
-  it('reports a body-owned file the kit itself would refresh as "stale", diffing only the body', () => {
+  it('reports a body-owned file houserules itself would refresh as "stale", diffing only the body', () => {
     const host = '---\npaths: ["custom/**"]\n---\nold body\n';
     const content = '---\npaths: ["custom/**"]\n---\nnew body\n';
     const result = classifyEffect(
@@ -484,7 +484,7 @@ describe('FORCE_ONLY', () => {
 
 function simulateKitContentMovedOn(root: string, relPath: string): void {
   const filePath = join(root, relPath);
-  const tampered = `${readFileSync(filePath, 'utf8')}// kit changed upstream\n`;
+  const tampered = `${readFileSync(filePath, 'utf8')}// houserules changed upstream\n`;
   writeFileSync(filePath, tampered);
   const manifest = manifestOf(root);
   manifest.files[relPath] = sha256(tampered);
@@ -497,7 +497,7 @@ function simulateEditOnTopOfAnOlderKitVersion(
 ): void {
   appendFileSync(join(root, relPath), '// my tweak\n');
   const manifest = manifestOf(root);
-  manifest.files[relPath] = sha256('what an older kit version wrote\n');
+  manifest.files[relPath] = sha256('what an older houserules version wrote\n');
   writeManifest(root, manifest);
 }
 
@@ -535,12 +535,12 @@ describe('a file edited locally (`yours`)', () => {
     expect(report.exitCode).toBe(0);
   });
 
-  it('raises no warning, since the kit has not changed the file since you edited it', () => {
+  it('raises no warning, since houserules has not changed the file since you edited it', () => {
     expect(runDoctorJson(root).counts.warnings).toBe(0);
   });
 });
 
-describe('a file edited locally that the kit has since changed (`conflict`)', () => {
+describe('a file edited locally that houserules has since changed (`conflict`)', () => {
   let root: string;
 
   beforeEach(() => {
@@ -567,7 +567,7 @@ describe('a file edited locally that the kit has since changed (`conflict`)', ()
     expect(entry?.yours).toBe(true);
   });
 
-  it('raises a warning, since a newer kit version leaves you a merge to make', () => {
+  it('raises a warning, since a newer houserules version leaves you a merge to make', () => {
     expect(runDoctorJson(root).counts.warnings).toBe(1);
   });
 
@@ -596,7 +596,7 @@ describe('a file edited locally that the kit has since changed (`conflict`)', ()
   });
 });
 
-describe('a file the kit would rewrite but was not edited (`stale`)', () => {
+describe('a file houserules would rewrite but was not edited (`stale`)', () => {
   let root: string;
 
   beforeEach(() => {
@@ -628,7 +628,7 @@ describe('removing the CLAUDE.md markers (`no-marker`)', () => {
     root = useInstalledRepo('npm-single');
     claudeMd = join(root, 'CLAUDE.md');
     const stripped = readFileSync(claudeMd, 'utf8').replace(
-      /\n*<!-- agent-kit:claude-md start -->[\s\S]*?<!-- agent-kit:claude-md end -->\n*/,
+      /\n*<!-- houserules:claude-md start -->[\s\S]*?<!-- houserules:claude-md end -->\n*/,
       '\n\nMY OWN PROSE MARKER\n\n',
     );
     writeFileSync(claudeMd, stripped);
@@ -637,7 +637,7 @@ describe('removing the CLAUDE.md markers (`no-marker`)', () => {
   it('is fixed by re-inserting the markers', () => {
     expect(runCli(['doctor', root, '--fix']).status).toBe(0);
     expect(readFileSync(claudeMd, 'utf8')).toContain(
-      '<!-- agent-kit:claude-md start -->',
+      '<!-- houserules:claude-md start -->',
     );
   });
 

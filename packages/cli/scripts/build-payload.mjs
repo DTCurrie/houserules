@@ -7,20 +7,20 @@
  * without this file changing (AGENTKIT-b947e5).
  *
  * This is the one package whose own assembly step cannot call the shared `assemblePayload`/
- * `buildPayload` (`src/payload-build.ts`, exposed as the `agent-kit-payload` bin): that
+ * `buildPayload` (`src/payload-build.ts`, exposed as the `houserules-payload` bin): that
  * function only exists once cli's OWN `dist/` is built, and this script runs before that, as
  * part of building it. Every other package calls the bin instead, because their build depends
  * on cli already being fully built. This is the one intentional duplicate of that logic,
- * covering both the directory copy AND the `@agent-kit/payload/<lib>` import rewrite, since
+ * covering both the directory copy AND the `@houserules/payload/<lib>` import rewrite, since
  * this package's own hook scripts (guard-bash.mts and friends) now reach the shared libs the
  * same way a plugin does.
  *
- * `@agent-kit/payload` is the one PUBLISH-time source for the six libs now: the CLI's own
+ * `@houserules/payload` is the one PUBLISH-time source for the six libs now: the CLI's own
  * `.claude/scripts/lib/*.mjs` copy actions (`src/modules/core.ts`) resolve straight there, and
  * so does a plugin's sidecar-derived copy (`src/modules/copy-actions.ts`), and `package.json`'s
  * `files` excludes `payload-dist/scripts/lib/**` so the published tarball carries none of them.
  * A local copy still lands under `payload-dist/scripts/lib/` here, byte-identical to
- * `@agent-kit/payload`'s own build: this package's own compiled hook scripts (guard-bash.mjs
+ * `@houserules/payload`'s own build: this package's own compiled hook scripts (guard-bash.mjs
  * and friends) resolve `./lib/<name>.mjs` relative to their own real path, on bare node, which
  * is what lets `payload/__test__/execution.test.ts` and the per-script `payload/scripts/__test__/`
  * suites run them straight out of this package's build output without an install step, and it
@@ -78,14 +78,15 @@ for (const dir of dirs) {
 }
 
 /**
- * Copies the compiled libs (`.mjs` + `.d.mts`) out of `@agent-kit/payload`'s own
+ * Copies the compiled libs (`.mjs` + `.d.mts`) out of `@houserules/payload`'s own
  * `payload-dist/scripts/lib/`, resolved by package name rather than a relative path into a
  * sibling package. `package.json`'s `files` excludes this directory from what gets published,
  * so the bytes exist here for this package's own build/test needs only, never for shipping.
  */
 function copyPayloadLibs() {
   const require = createRequire(import.meta.url);
-  const payloadPackageJson = require.resolve('@agent-kit/payload/package.json');
+  const payloadPackageJson =
+    require.resolve('@houserules/payload/package.json');
   const sourceLibDir = join(
     dirname(payloadPackageJson),
     'payload-dist',
@@ -117,10 +118,10 @@ function toPosix(path) {
 }
 
 /**
- * Rewrites every `@agent-kit/payload/<lib>` import under `payload-dist/scripts` (this
+ * Rewrites every `@houserules/payload/<lib>` import under `payload-dist/scripts` (this
  * package's own hook scripts) to the relative form the flattened install layout needs. The
  * lib copies `copyPayloadLibs` places make every such reference resolvable, both here and once
- * `agent-kit init` places the script and its lib sibling at the matching spot in a target repo.
+ * `houserules init` places the script and its lib sibling at the matching spot in a target repo.
  */
 function rewritePayloadLibImports(libDir) {
   const scriptsDir = join(OUT, 'scripts');
@@ -128,7 +129,7 @@ function rewritePayloadLibImports(libDir) {
     if (dirname(file) === libDir) continue;
     const source = readFileSync(file, 'utf8');
     const rewritten = source.replace(
-      /(from\s+['"])@agent-kit\/payload\/([^'"]+)(['"])/g,
+      /(from\s+['"])@houserules\/payload\/([^'"]+)(['"])/g,
       (match, prefix, libName, suffix) => {
         const target = join(libDir, `${libName}.mjs`);
         const rel = toPosix(relative(dirname(file), target));
@@ -143,5 +144,5 @@ const libDir = copyPayloadLibs();
 rewritePayloadLibImports(libDir);
 
 console.log(
-  `Assembled payload-dist (${dirs.join(', ')} + compiled scripts, libs from @agent-kit/payload, excluded from the published tarball)`,
+  `Assembled payload-dist (${dirs.join(', ')} + compiled scripts, libs from @houserules/payload, excluded from the published tarball)`,
 );

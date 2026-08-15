@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { KitError } from '../kit-error.js';
+import { HouseError } from '../house-error.js';
 import {
   assertOptionsRecorded,
   parseModuleOptionFlags,
   resolveModuleOptions,
 } from '../module-options.js';
-import type { ModuleDef } from '@agent-kit/api';
+import type { ModuleDef } from '@houserules/api';
 import type { RegisteredModule, Registry } from '../plugin-registry.js';
 
 function moduleWithOptions(
@@ -33,7 +33,7 @@ function suggestionFor(registry: Registry, id: string): string {
   try {
     assertOptionsRecorded(registry, [id], {});
   } catch (error) {
-    return (error as KitError).message;
+    return (error as HouseError).message;
   }
   throw new Error(`assertOptionsRecorded did not throw for "${id}"`);
 }
@@ -92,25 +92,25 @@ describe('parseModuleOptionFlags', () => {
   });
 
   it('throws when a value has no =', () => {
-    expect(() => parseModuleOptionFlags(['testing'])).toThrow(KitError);
+    expect(() => parseModuleOptionFlags(['testing'])).toThrow(HouseError);
   });
 
   it('throws when the id is empty', () => {
-    expect(() => parseModuleOptionFlags(['=typescript'])).toThrow(KitError);
+    expect(() => parseModuleOptionFlags(['=typescript'])).toThrow(HouseError);
   });
 
   it('throws when the value list is empty', () => {
-    expect(() => parseModuleOptionFlags(['testing='])).toThrow(KitError);
+    expect(() => parseModuleOptionFlags(['testing='])).toThrow(HouseError);
   });
 
   it('throws when the value list is only a trailing comma', () => {
-    expect(() => parseModuleOptionFlags(['testing=,'])).toThrow(KitError);
+    expect(() => parseModuleOptionFlags(['testing=,'])).toThrow(HouseError);
   });
 
   it('throws when an id repeats across two flags', () => {
     expect(() =>
       parseModuleOptionFlags(['testing=typescript', 'testing=javascript']),
-    ).toThrow(KitError);
+    ).toThrow(HouseError);
   });
 });
 
@@ -215,9 +215,9 @@ describe('assertOptionsRecorded', () => {
     ).not.toThrow();
   });
 
-  it('throws a KitError when an enabled option-bearing module has no recorded selection', () => {
+  it('throws a HouseError when an enabled option-bearing module has no recorded selection', () => {
     expect(() => assertOptionsRecorded(registry, ['langs'], undefined)).toThrow(
-      KitError,
+      HouseError,
     );
   });
 

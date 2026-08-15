@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import plugin from '../index.js';
-import type { Answers, Ctx, PluginApi } from '@agent-kit/api';
+import type { Answers, Ctx, PluginApi } from '@houserules/api';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -56,8 +56,8 @@ function buildApi(config?: unknown): PluginApi {
       }),
       template: (module, rel, reason = 'reference template') => ({
         kind: 'copy',
-        src: `/payload/kit-templates/${rel}`,
-        dest: `.claude/kit-templates/${rel}`,
+        src: `/payload/templates/${rel}`,
+        dest: `.claude/templates/${rel}`,
         module,
         reason,
       }),
@@ -72,7 +72,7 @@ function buildApi(config?: unknown): PluginApi {
         return mode === undefined ? action : { ...action, mode };
       },
     },
-    packageName: '@agent-kit/plugin-github',
+    packageName: '@houserules/plugin-github',
     alias: 'projects',
     config,
   };
@@ -182,7 +182,7 @@ describe('projects plugin', () => {
 
   it('rejects autoSync here and names where it belongs, since nothing reads it from this block', () => {
     expect(() => plugin(buildApi({ autoSync: true }))).toThrow(
-      /top level of kit\.config\.json/,
+      /top level of houserules\.config\.json/,
     );
   });
 

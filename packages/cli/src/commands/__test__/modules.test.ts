@@ -13,15 +13,15 @@ import { treeHash, useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, type RunResult } from '#test/run';
 import {
   allHookCommands,
-  editKitConfig,
-  kitConfigPath,
+  editHouseConfig,
+  houseConfigPath,
   manifestOf,
   readJson,
   settingsOf,
 } from '#test/installed-tree';
 import { optionBearingAdditions, parseRequested } from '../modules.js';
 import { MODULES } from '../../plan.js';
-import type { ModuleDef } from '@agent-kit/api';
+import type { ModuleDef } from '@houserules/api';
 import type { Registry, RegisteredModule } from '../../plugin-registry.js';
 
 function installedWithReadGuard(): string {
@@ -248,7 +248,7 @@ describe('modules given an id the registry cannot resolve', () => {
     expect(r.stderr).toMatch(/bogus\/nope/);
   });
 
-  it('points at the kit.config.json plugins array, since an unregistered plugin looks identical', () => {
+  it('points at the houserules.config.json plugins array, since an unregistered plugin looks identical', () => {
     const root = useInstalledRepo('npm-single');
 
     const r = runCli(['modules', '--yes', '--modules=bogus/nope', root]);
@@ -295,11 +295,11 @@ describe('modules given an id that is already installed', () => {
 });
 
 describe('modules command on an uninitialized repo', () => {
-  it('refuses to run and points at `npx agent-kit init`', () => {
+  it('refuses to run and points at `npx houserules init`', () => {
     const root = useRepo('non-js');
     const r = runCli(['modules', root]);
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/npx agent-kit init/);
+    expect(r.stderr).toMatch(/npx houserules init/);
   });
 });
 
@@ -352,7 +352,7 @@ describe('modules --disable', () => {
       expect(allHookCommands(root)).toContain('node ./my-own-stop-hook.js');
     });
 
-    it('keeps another kit module’s hook wired', () => {
+    it('keeps another houserules module’s hook wired', () => {
       expect(
         allHookCommands(root).some((c) => c.includes('guard-bash.mjs')),
       ).toBe(true);
@@ -450,7 +450,7 @@ const FIXTURE_PLUGIN = join(KIT_ROOT, 'test/plugin-fixture');
 const OPTION_MODULE = 'fixture/fixture-langs';
 
 function ensureFixtureSelfLink(): void {
-  const link = join(FIXTURE_PLUGIN, 'node_modules', '@agent-kit', 'cli');
+  const link = join(FIXTURE_PLUGIN, 'node_modules', '@houserules', 'cli');
   if (existsSync(link)) return;
   mkdirSync(dirname(link), { recursive: true });
   symlinkSync(KIT_ROOT, link, 'dir');
@@ -463,7 +463,7 @@ describe('modules --yes --module-option, adding a module that declares options',
     ensureFixtureSelfLink();
     root = useRepo('npm-single');
     runCli(['init', '--yes', root]);
-    editKitConfig(root, (config) => {
+    editHouseConfig(root, (config) => {
       (config as Record<string, unknown>).plugins = [
         { name: FIXTURE_PLUGIN, alias: 'fixture' },
       ];
@@ -490,7 +490,7 @@ describe('modules --yes --module-option, adding a module that declares options',
   it('persists the selection so a later update re-resolves to it', () => {
     addWithOptions('alpha,beta');
 
-    expect(readJson(kitConfigPath(root)).moduleOptions).toEqual({
+    expect(readJson(houseConfigPath(root)).moduleOptions).toEqual({
       [OPTION_MODULE]: ['alpha', 'beta'],
     });
   });
@@ -576,7 +576,7 @@ describe('modules --reconfigure on an installed module that declares options', (
     ensureFixtureSelfLink();
     root = useRepo('npm-single');
     runCli(['init', '--yes', root]);
-    editKitConfig(root, (config) => {
+    editHouseConfig(root, (config) => {
       (config as Record<string, unknown>).plugins = [
         { name: FIXTURE_PLUGIN, alias: 'fixture' },
       ];
@@ -618,7 +618,7 @@ describe('modules --reconfigure on an installed module that declares options', (
   it('records the new selection so update re-resolves to it', () => {
     reconfigureTo('beta');
 
-    expect(readJson(kitConfigPath(root)).moduleOptions).toEqual({
+    expect(readJson(houseConfigPath(root)).moduleOptions).toEqual({
       [OPTION_MODULE]: ['beta'],
     });
   });

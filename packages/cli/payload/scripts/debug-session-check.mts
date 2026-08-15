@@ -12,7 +12,7 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { repoRoot } from '@agent-kit/payload/kit-config';
+import { repoRoot } from '@houserules/payload/config';
 
 // Shared with payload/skills/debug-session/SKILL.md — the tag on every trace edit
 // and the throwaway-log directory. Keep both in sync with the skill.
@@ -33,7 +33,7 @@ function activeLogs(root: string): string[] {
     // silent either way.
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.error(
-        `[kit] could not check ${DEBUG_DIR}/ for open sessions: ${(error as Error).message}`,
+        `[houserules] could not check ${DEBUG_DIR}/ for open sessions: ${(error as Error).message}`,
       );
     }
     return [];
@@ -55,7 +55,7 @@ function orphanedFiles(root: string): string[] {
     const status = (error as { status?: number }).status;
     if (status !== 1) {
       console.error(
-        `[kit] could not check the tree for stray ${MARKER} instrumentation (git grep did not run cleanly).`,
+        `[houserules] could not check the tree for stray ${MARKER} instrumentation (git grep did not run cleanly).`,
       );
     }
     return [];
@@ -69,13 +69,13 @@ try {
   const lines: string[] = [];
   if (logs.length) {
     lines.push(
-      `[kit] open debug session(s): ${logs.join(', ')} under ${DEBUG_DIR}/ — /debug-session to resume or clean up.`,
+      `[houserules] open debug session(s): ${logs.join(', ')} under ${DEBUG_DIR}/ — /debug-session to resume or clean up.`,
     );
   }
   if (orphans.length) {
     const shown = orphans.slice(0, MAX_SHOWN_ORPHANS).join(', ');
     lines.push(
-      `[kit] ${orphans.length} file(s) still carry ${MARKER} instrumentation (${shown}${orphans.length > MAX_SHOWN_ORPHANS ? ', …' : ''}) — remove before committing (/debug-session step 9).`,
+      `[houserules] ${orphans.length} file(s) still carry ${MARKER} instrumentation (${shown}${orphans.length > MAX_SHOWN_ORPHANS ? ', …' : ''}) — remove before committing (/debug-session step 9).`,
     );
   }
   if (lines.length) console.log(lines.join('\n'));

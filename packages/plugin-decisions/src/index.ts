@@ -1,5 +1,5 @@
-import { definePlugin, scriptPermission } from '@agent-kit/api';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
+import { definePlugin, scriptPermission } from '@houserules/api';
+import type { Action, ModuleDef, PluginApi } from '@houserules/api';
 
 /**
  * An append-only decision ledger, plus the skill that captures a decision and the reviewer

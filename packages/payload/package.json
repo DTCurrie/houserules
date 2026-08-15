@@ -1,7 +1,7 @@
 {
-  "name": "@agent-kit/payload",
+  "name": "@houserules/payload",
   "version": "0.0.0",
-  "description": "agent-kit: shared payload libraries, copied into .claude/scripts/lib and executed on bare node with zero runtime dependencies.",
+  "description": "houserules: shared payload libraries, copied into .claude/scripts/lib and executed on bare node with zero runtime dependencies.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -64,20 +64,20 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
     "directory": "packages/payload"
   },
-  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/payload#readme",
-  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/payload#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "keywords": [
-    "agent-kit",
+    "houserules",
     "claude-code",
     "hooks"
   ],
   "devDependencies": {
-    "@agent-kit/test": "workspace:*",
+    "@houserules/test": "workspace:*",
     "@types/node": "^26.1.2",
     "publint": "^0.3.23",
     "type-fest": "^5.8.0",

@@ -1,4 +1,4 @@
-import type { Action, ModuleGroup } from '@agent-kit/api';
+import type { Action, ModuleGroup } from '@houserules/api';
 import { reference, rule, skill } from './copy-actions.js';
 
 export const id = 'code-cleanliness';
@@ -21,7 +21,7 @@ export function defaultEnabled(): boolean {
  * theory sits in `.claude/reference/`, which is never auto-loaded, and the rule links to
  * it so even the pointer stays conditional.
  *
- * Two axes are left out on purpose, because the kit already covers them and restating a
+ * Two axes are left out on purpose, because houserules already covers them and restating a
  * rule makes the copies drift: comments belong to `code-comments.md`, and formatting
  * belongs to the repo's own linter, wired by `lint-fix`.
  */

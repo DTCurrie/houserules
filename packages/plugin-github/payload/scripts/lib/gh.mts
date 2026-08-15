@@ -225,7 +225,7 @@ export function ghGraphql<TValue>(
  * The repository the `origin` remote points at.
  *
  * @returns An error when there is no `origin`, or when it is not a GitHub remote. Both are
- *   ordinary states for a repo the kit is installed in, not exceptional ones.
+ *   ordinary states for a repo houserules is installed in, not exceptional ones.
  */
 export function ghRepo(): GhResult<{ owner: string; repo: string }> {
   const result = spawnSync('git', ['remote', 'get-url', 'origin'], {

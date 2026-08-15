@@ -1,8 +1,8 @@
-import { runsAtRepoRoot } from '@agent-kit/payload/kit-config';
-import type { Action, Answers, ModuleGroup } from '@agent-kit/api';
+import { runsAtRepoRoot } from '@houserules/payload/config';
+import type { Action, Answers, ModuleGroup } from '@houserules/api';
 import type { Ctx } from '../detect.js';
 import { script } from './copy-actions.js';
-import { hookFragment } from '@agent-kit/api';
+import { hookFragment } from '@houserules/api';
 
 export const id = 'lint-fix';
 export const title = 'Lint/format auto-fix on Stop';
@@ -16,7 +16,7 @@ export const group: ModuleGroup = 'recommended';
  * trustworthy once checked against the root scripts it claims to run.
  */
 function rootFixCommands(ctx: Ctx): string[] {
-  const fix = ctx.claude.kitConfig?.fix;
+  const fix = ctx.claude.houseConfig?.fix;
   if (!fix?.commands?.length || !runsAtRepoRoot(fix)) return [];
   const scripts = ctx.rootPkg?.scripts ?? {};
   return fix.commands.filter((cmd) => typeof scripts[cmd] === 'string');
@@ -78,7 +78,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
   } else {
     actions.push({
       kind: 'advise',
-      text: 'lint-fix is enabled but no target has a detected fix command — the Stop hooks were NOT wired (they would run nonexistent lint:fix/format:fix and spill errors every turn). Add "fixCommands": ["lint:fix", …] to a target in .claude/kit.config.json (with the matching package.json scripts), then run npx agent-kit update to wire them.',
+      text: 'lint-fix is enabled but no target has a detected fix command — the Stop hooks were NOT wired (they would run nonexistent lint:fix/format:fix and spill errors every turn). Add "fixCommands": ["lint:fix", …] to a target in .claude/houserules.config.json (with the matching package.json scripts), then run npx houserules update to wire them.',
       module: id,
     });
   }

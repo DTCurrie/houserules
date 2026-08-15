@@ -1,4 +1,4 @@
-import type { Action, ModuleGroup } from '@agent-kit/api';
+import type { Action, ModuleGroup } from '@houserules/api';
 import type { Ctx } from '../detect.js';
 
 export const id = 'ci-settings';

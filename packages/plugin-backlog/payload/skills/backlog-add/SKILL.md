@@ -8,7 +8,7 @@ allowed-tools: Bash(node .claude/scripts/backlog-log.mjs:*), Agent
 Log a deferred work item without bloating the current diff. Arguments: $ARGUMENTS
 
 1. Run: `node .claude/scripts/backlog-log.mjs add $ARGUMENTS`
-   PREFIX is the area code, listed in the kit.config.json targets. The second argument says
+   PREFIX is the area code, listed in the houserules.config.json targets. The second argument says
    where the entry lands. Pass a bare target name such as `studio` and it resolves to
    `.claude/ledgers/studio.BACKLOG.md`. For the repo-wide backlog, pass `BACKLOG.md`. If the
    summary is long, pipe it on stdin.

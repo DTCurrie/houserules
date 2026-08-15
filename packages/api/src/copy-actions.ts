@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { BodyAction, CopyAction } from './actions.js';
 
 /**
- * The action builders bound to one payload root. The kit binds them to its own payload, and
+ * The action builders bound to one payload root. houserules binds them to its own payload, and
  * a plugin gets them bound to the payload inside its own package, so the same seven builders
  * serve both without either knowing where the other's files live.
  */
@@ -43,9 +43,9 @@ export interface PayloadBuilders {
  * Binds the payload action builders to `payloadRoot`, an absolute path to a built payload
  * directory.
  *
- * A plugin never calls this itself. The kit resolves the plugin's package, builds the
+ * A plugin never calls this itself. houserules resolves the plugin's package, builds the
  * instance, and hands it to the plugin factory. Path resolution stays in one place, and a
- * plugin cannot accidentally emit actions pointing at the kit's payload.
+ * plugin cannot accidentally emit actions pointing at houserules' payload.
  */
 export function createPayloadBuilders(payloadRoot: string): PayloadBuilders {
   const at = (...segments: string[]) => join(payloadRoot, ...segments);
@@ -117,8 +117,8 @@ export function createPayloadBuilders(payloadRoot: string): PayloadBuilders {
     template(module, rel, reason = 'reference template') {
       return {
         kind: 'copy',
-        src: at('kit-templates', ...rel.split('/')),
-        dest: `.claude/kit-templates/${rel}`,
+        src: at('templates', ...rel.split('/')),
+        dest: `.claude/templates/${rel}`,
         module,
         reason,
       };

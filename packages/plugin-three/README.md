@@ -1,7 +1,7 @@
-# @agent-kit/plugin-three
+# @houserules/plugin-three
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-three.svg)](https://www.npmjs.com/package/@agent-kit/plugin-three)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-three.svg)](https://www.npmjs.com/package/@agent-kit/plugin-three)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-three.svg)](https://www.npmjs.com/package/@houserules/plugin-three)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-three.svg)](https://www.npmjs.com/package/@houserules/plugin-three)
 
 An agent writing Three.js reaches for a wrapper object around a scene graph node instead of
 extending the class directly, and allocates a new `Vector3` inside the render loop instead of
@@ -15,11 +15,11 @@ a rule the agent loads only when the Three.js layer is in the working set.
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-three
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-three
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the module into `.claude/`. This module is off by default, so select it
 when `init` asks.
 
@@ -37,7 +37,7 @@ when `init` asks.
   frontmatter. A rule file without `paths:` is loaded on every turn.
 
   Two pull-only references install with it unconditionally, because the rule body links them
-  and a link to a file nothing installed fails `agent-kit doctor`:
+  and a link to a file nothing installed fails `houserules doctor`:
 
   - `three-upstream-docs.md`: pointers to the upstream `llms.txt` docs, plus upgrade
     discipline for Three.js and Threlte.
@@ -57,11 +57,11 @@ when `init` asks.
   loads on a file where the base rule is absent. Widening the base rule's `paths:` means
   widening an installed guide's the same way.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 

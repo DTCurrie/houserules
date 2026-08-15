@@ -5,13 +5,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useRepo } from '#test/repo';
 import { runCli, type RunResult } from '#test/run';
 
-describe('agent-kit with no subcommand', () => {
+describe('houserules with no subcommand', () => {
   it('exits 1', () => {
     expect(runCli([]).status).toBe(1);
   });
 
   it('prints usage on stderr', () => {
-    expect(runCli([]).stderr).toMatch(/Usage: agent-kit/);
+    expect(runCli([]).stderr).toMatch(/Usage: houserules/);
   });
 
   it('leaves stdout empty', () => {
@@ -19,11 +19,11 @@ describe('agent-kit with no subcommand', () => {
   });
 });
 
-describe('agent-kit --help', () => {
+describe('houserules --help', () => {
   it('exits 0 and prints usage to stdout', () => {
     const r = runCli(['--help']);
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/Usage: agent-kit/);
+    expect(r.stdout).toMatch(/Usage: houserules/);
   });
 
   it('documents the exit-code contract', () => {
@@ -31,7 +31,7 @@ describe('agent-kit --help', () => {
   });
 });
 
-describe('agent-kit --version', () => {
+describe('houserules --version', () => {
   it('exits 0 and prints a semver on stdout', () => {
     const r = runCli(['--version']);
     expect(r.status).toBe(0);
@@ -73,7 +73,8 @@ describe('--cwd', () => {
   it('is honored when no positional directory is given', () => {
     expect(runCli(['init', '--yes', '--cwd', viaCwd]).status).toBe(0);
     expect(
-      readFileSync(join(viaCwd, '.claude/kit.config.json'), 'utf8').length,
+      readFileSync(join(viaCwd, '.claude/houserules.config.json'), 'utf8')
+        .length,
     ).toBeGreaterThan(0);
   });
 
@@ -82,8 +83,10 @@ describe('--cwd', () => {
       runCli(['init', '--yes', viaPositional, '--cwd', viaCwd]).status,
     ).toBe(0);
     expect(
-      readFileSync(join(viaPositional, '.claude/kit.config.json'), 'utf8')
-        .length,
+      readFileSync(
+        join(viaPositional, '.claude/houserules.config.json'),
+        'utf8',
+      ).length,
     ).toBeGreaterThan(0);
   });
 });
@@ -129,13 +132,13 @@ describe('doctor', () => {
     });
   });
 
-  describe('a schema-invalid kit.config.json', () => {
+  describe('a schema-invalid houserules.config.json', () => {
     let root: string;
 
     beforeEach(() => {
       root = useRepo('npm-single');
       expect(runCli(['init', '--yes', root]).status).toBe(0);
-      const path = join(root, '.claude/kit.config.json');
+      const path = join(root, '.claude/houserules.config.json');
       const config = JSON.parse(readFileSync(path, 'utf8')) as Record<
         string,
         unknown

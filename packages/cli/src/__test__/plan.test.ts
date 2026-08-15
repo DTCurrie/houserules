@@ -13,14 +13,14 @@ import {
   defaultModuleIds,
   resolveModuleIds,
 } from '../plan.js';
-import { KitError } from '../kit-error.js';
+import { HouseError } from '../house-error.js';
 import type {
   BodyAction,
   CopyAction,
   MergeSettingsAction,
   SeedAction,
   ModuleDef,
-} from '@agent-kit/api';
+} from '@houserules/api';
 import type {
   PluginSource,
   Registry,
@@ -121,9 +121,9 @@ describe('resolveModuleIds', () => {
     expect(resolved).toEqual(registryOrder);
   });
 
-  it('throws a KitError naming the offending id for an unknown module', () => {
+  it('throws a HouseError naming the offending id for an unknown module', () => {
     const ctx = makeCtx();
-    expect(() => resolveModuleIds(ctx, registry, 'nope')).toThrow(KitError);
+    expect(() => resolveModuleIds(ctx, registry, 'nope')).toThrow(HouseError);
     expect(() => resolveModuleIds(ctx, registry, 'nope')).toThrow(
       /Unknown module "nope"/,
     );
@@ -273,8 +273,8 @@ describe('classifyWrite', () => {
     ).toBe('skip-identical');
   });
 
-  it('refreshes a file only the kit has written, since a hash match means you never touched it', () => {
-    const onDisk = Buffer.from('old kit content', 'utf8');
+  it('refreshes a file only houserules has written, since a hash match means you never touched it', () => {
+    const onDisk = Buffer.from('old houserules content', 'utf8');
     expect(
       classifyWrite({
         exists: true,
@@ -286,14 +286,14 @@ describe('classifyWrite', () => {
     ).toBe('update');
   });
 
-  it('skips a file you edited, since its bytes no longer match the hash the kit recorded', () => {
+  it('skips a file you edited, since its bytes no longer match the hash houserules recorded', () => {
     const onDisk = Buffer.from('your local edit', 'utf8');
     expect(
       classifyWrite({
         exists: true,
         onDisk,
         canonical,
-        recordedHash: sha256(Buffer.from('what the kit originally wrote')),
+        recordedHash: sha256(Buffer.from('what houserules originally wrote')),
         force: false,
       }),
     ).toBe('skip-modified');
@@ -306,13 +306,13 @@ describe('classifyWrite', () => {
         exists: true,
         onDisk,
         canonical,
-        recordedHash: sha256(Buffer.from('what the kit originally wrote')),
+        recordedHash: sha256(Buffer.from('what houserules originally wrote')),
         force: true,
       }),
     ).toBe('update');
   });
 
-  it('updates an unmanaged file the kit never wrote, since there is nothing recorded to have diverged from', () => {
+  it('updates an unmanaged file houserules never wrote, since there is nothing recorded to have diverged from', () => {
     expect(
       classifyWrite({
         exists: true,
@@ -359,7 +359,7 @@ describe('classifyWrite', () => {
     ).toBe('skip-identical');
   });
 
-  it('refreshes an empty on-disk file that only the kit wrote, matching the recorded hash of empty content', () => {
+  it('refreshes an empty on-disk file that only houserules wrote, matching the recorded hash of empty content', () => {
     const onDisk = Buffer.from('');
     expect(
       classifyWrite({
@@ -598,7 +598,7 @@ describe('computeEffects, given a "body" action', () => {
     expect(effect.op).toBe('skip-modified');
   });
 
-  it('silently replaces an untouched frontmatter with the shipped default when the kit moved it on', () => {
+  it('silently replaces an untouched frontmatter with the shipped default when houserules moved it on', () => {
     const payloadDir = tempDir();
     const root = tempDir();
     const newShippedFrontmatter = '---\ndescription: shipped rule v2\n---\n';
@@ -696,11 +696,11 @@ describe('computeEffects, given a "body" action', () => {
     );
   });
 
-  it('throws a KitError naming the payload path when the src is missing', () => {
+  it('throws a HouseError naming the payload path when the src is missing', () => {
     const root = tempDir();
     const action = bodyAction(join(tempDir(), 'nonexistent.md'));
 
-    expect(() => computeEffects(root, [action])).toThrow(KitError);
+    expect(() => computeEffects(root, [action])).toThrow(HouseError);
   });
 });
 
@@ -720,7 +720,7 @@ describe('computeEffects, given a plugin-sourced action whose payload file is mi
 
   function pluginSource(
     dir: string,
-    name = '@agent-kit/plugin-demo',
+    name = '@houserules/plugin-demo',
   ): PluginSource {
     return { name, alias: 'demo', version: '1.0.0', dir };
   }
@@ -746,8 +746,8 @@ describe('computeEffects, given a plugin-sourced action whose payload file is mi
     const brokenPlugin = single(brokenPlugins);
 
     expect(brokenPlugins).toHaveLength(1);
-    expect(brokenPlugin.plugin).toBe('@agent-kit/plugin-demo');
-    expect(brokenPlugin.message).toContain('@agent-kit/plugin-demo');
+    expect(brokenPlugin.plugin).toBe('@houserules/plugin-demo');
+    expect(brokenPlugin.message).toContain('@houserules/plugin-demo');
     expect(brokenPlugin.message).toContain(action.src);
     expect(effects).toHaveLength(0);
   });
@@ -787,8 +787,8 @@ describe('computeEffects, given a plugin-sourced action whose payload file is mi
       [brokenPluginAction, healthyAction],
       {
         plugins: [
-          pluginSource(brokenPluginDir, '@agent-kit/plugin-broken'),
-          pluginSource(healthyPluginDir, '@agent-kit/plugin-ok'),
+          pluginSource(brokenPluginDir, '@houserules/plugin-broken'),
+          pluginSource(healthyPluginDir, '@houserules/plugin-ok'),
         ],
       },
     );
@@ -990,8 +990,8 @@ describe('computeEffects, given a "region" action on a padded region', () => {
 
   const CURRENT = {
     id: 'claude-md',
-    start: '<!-- agent-kit:claude-md start -->',
-    end: '<!-- agent-kit:claude-md end -->',
+    start: '<!-- houserules:claude-md start -->',
+    end: '<!-- houserules:claude-md end -->',
     anchor: 'after-h1' as const,
     pad: true,
     legacy: {
@@ -1048,7 +1048,7 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     hostFile(root, CURRENT, 'body the user rewrote');
 
     const { effects } = computeEffects(root, [regionAction('new body')], {
-      manifest: manifestRecording(sha256('what the kit last wrote')),
+      manifest: manifestRecording(sha256('what houserules last wrote')),
     });
     const effect = single(effects);
 
@@ -1060,7 +1060,7 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     hostFile(
       root,
       CURRENT.legacy,
-      'body written by the previous kit generation',
+      'body written by the previous houserules generation',
     );
 
     const { effects } = computeEffects(root, [regionAction('new body')], {
@@ -1112,7 +1112,7 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
     return dir;
   }
 
-  const CONFIG_DEST = '.claude/kit.config.json';
+  const CONFIG_DEST = '.claude/houserules.config.json';
   const SELECTION = { 'langs/fixture': ['beta'] };
 
   function seedAction(): SeedAction {
@@ -1121,7 +1121,7 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
       module: 'core',
       dest: CONFIG_DEST,
       content: `${JSON.stringify({ version: 2, moduleOptions: SELECTION }, null, 2)}\n`,
-      reason: 'per-repo kit config',
+      reason: 'per-repo houserules config',
       managedKeys: ['moduleOptions'],
     };
   }
@@ -1165,7 +1165,7 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
     expect(written.moduleOptions).toEqual(SELECTION);
   });
 
-  it('preserves the keys the kit does not manage', () => {
+  it('preserves the keys houserules does not manage', () => {
     const root = tempDir();
     writeExistingConfig(root, {
       version: 2,
@@ -1324,7 +1324,7 @@ describe('computeEffects, given a merge-settings action and a malformed settings
     };
   }
 
-  it('throws a KitError naming the JSON parse failure', () => {
+  it('throws a HouseError naming the JSON parse failure', () => {
     const root = tempDir();
     mkdirSync(join(root, '.claude'), { recursive: true });
     writeFileSync(join(root, '.claude', 'settings.json'), '{ not json');

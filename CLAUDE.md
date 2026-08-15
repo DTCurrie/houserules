@@ -1,12 +1,12 @@
-# agent-kit
+# houserules
 
-<!-- agent-kit:claude-md start -->
+<!-- houserules:claude-md start -->
 
-### agent-kit sections
+### houserules sections
 
-This block is maintained by `npx agent-kit update`. Content outside the markers around it
+This block is maintained by `npx houserules update`. Content outside the markers around it
 is yours and never touched. For a fuller from-scratch skeleton to compare structure against, see
-`.claude/kit-templates/CLAUDE.md.template`, a gitignored reference that `npx agent-kit update`
+`.claude/templates/CLAUDE.md.template`, a gitignored reference that `npx houserules update`
 restores if absent.
 
 ### Recording changes (changesets)
@@ -70,30 +70,30 @@ it slices work and reviews it.
 - Never `git stash` to baseline-check. Use `git diff --name-only` / `git show HEAD:<path>`.
 - Pipe long command output through `grep`, and batch related greps into one call.
 
-<!-- agent-kit:claude-md end -->
+<!-- houserules:claude-md end -->
 
-Interactive installer for a portable Claude Code context-discipline kit. Read
-`packages/cli/README.md` for the product story. This file is for working on the kit itself.
+Interactive installer for portable Claude Code context discipline. Read
+`packages/cli/README.md` for the product story. This file is for working on houserules itself.
 
 ## Workspace
 
 A pnpm workspace of sixteen packages. Every path in the Layout section below is relative to
 **`packages/cli/`** unless it starts with `packages/`.
 
-- `packages/cli` is `@agent-kit/cli`, the installer. It ships the binary **`agent-kit`**,
+- `packages/cli` is `@houserules/cli`, the installer. It ships the binary **`houserules`**,
   so the package name and the command differ, the same split `@changesets/cli` uses for
-  `changeset`. Install is `pnpm add -D @agent-kit/cli`, then `agent-kit <cmd>`. Its core
+  `changeset`. Install is `pnpm add -D @houserules/cli`, then `houserules <cmd>`. Its core
   ships 16 built-in modules (`src/plan.ts`'s `MODULES` array): `core`, `lint-fix`,
   `session-context`, `rename`, `reviewers`, `debug-session`, `plans`, `orchestrate`,
   `verify-changed`, `ready`, `sweep`, `read-guard`, `regen`, `statusline`,
   `code-cleanliness`, `ci-settings`.
-- `packages/api` is `@agent-kit/api`, the plugin contract package: action types, module
-  definitions, and the `kit.config.json` schema that plugin authors build against. See
+- `packages/api` is `@houserules/api`, the plugin contract package: action types, module
+  definitions, and the `houserules.config.json` schema that plugin authors build against. See
   Layout below for where each shared type lives inside it.
-- `packages/payload` is `@agent-kit/payload`, the six shared payload libs (`backlog-id`,
-  `entry-ledger`, `kit-config`, `ledger-index`, `proc`, `workspaces`) as their own package.
+- `packages/payload` is `@houserules/payload`, the six shared payload libs (`backlog-id`,
+  `entry-ledger`, `config`, `ledger-index`, `proc`, `workspaces`) as their own package.
   It ships no modules and installs nothing on its own. A payload script, in the CLI or in a
-  plugin, imports one by package name, `@agent-kit/payload/kit-config`, and the build rewrites
+  plugin, imports one by package name, `@houserules/payload/config`, and the build rewrites
   that specifier to the relative path the flattened `.claude/scripts/lib/` layout needs.
 - Twelve first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved out of
   the core: `plugin-prose`, `plugin-testing`, `plugin-changesets`, `plugin-backlog`,
@@ -105,7 +105,7 @@ A pnpm workspace of sixteen packages. Every path in the Layout section below is 
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
   workflows, `CLAUDE.md`, and the gitignored `.claude/`. Root `pnpm build|test|check` are
   wireit aggregators that depend on each package's script by path, replacing `pnpm -r`. The
-  `test` aggregator lists **fifteen** packages, not sixteen, because `@agent-kit/test` ships
+  `test` aggregator lists **fifteen** packages, not sixteen, because `@houserules/test` ships
   no `test` script and naming a script that does not exist is a wireit
   error rather than the no-op `pnpm -r` gave you. Root `lint` is also wireit, and `lint:fix`,
   `format`, and `format:check` stay plain scripts. A fixer mutates its own inputs, so caching
@@ -113,28 +113,28 @@ A pnpm workspace of sixteen packages. Every path in the Layout section below is 
   restated in `package.json` where the two would drift.
 - **`.claude/` stays at the workspace root**, because that is where Claude Code looks, while
   each package's payload lives with that package. `packages/cli/scripts/dogfood-link.mjs`
-  bridges the two by seeding this repo's `kit.config.json`/`settings.json` and running the
+  bridges the two by seeding this repo's `houserules.config.json`/`settings.json` and running the
   real installer over it, then relinking installed prose back to its payload source.
 
 ## Layout
 
 - `src/`: the installer, in TypeScript. The pipeline is detect → plan (declarative actions) →
   preview → apply. May use npm dependencies (@clack/prompts, picocolors, zod). Builds to `dist/`
-  (gitignored). Shared types that cross the plugin boundary live in the `@agent-kit/api`
+  (gitignored). Shared types that cross the plugin boundary live in the `@houserules/api`
   contract package, not scattered across `src/`: `Ctx` and `Target` in
   `packages/api/src/ctx.ts` (re-exported from `src/detect.ts`, which stays the sole producer,
-  the code that actually builds a `Ctx`), `KitManifest` in `packages/api/src/manifest.ts`,
+  the code that actually builds a `Ctx`), `HouseManifest` in `packages/api/src/manifest.ts`,
   the `Action` union in `packages/api/src/actions.ts`, `ModuleDef`/`Answers` in
   `packages/api/src/module-def.ts`, and the `Settings*`/`Hook*` shapes in
   `packages/api/src/merge-settings.ts`. What stays local to `src/`: `Effect`/`PlanResult`/
   `PruneResult` in `src/plan.ts`, `Apply*` in `src/apply.ts`, and `Flags`/`EXIT` in
   `src/cli-contract.ts`. `packages/api/src/config.ts` is the zod schema for
-  `kit.config.json`.
-- `schema/kit.config.schema.json` is **generated** from that zod schema by `pnpm run schema`.
+  `houserules.config.json`.
+- `schema/houserules.config.schema.json` is **generated** from that zod schema by `pnpm run schema`.
   Never hand-edit it. `src/core/__test__/config.test.ts` fails when it falls out of sync.
 - `payload/`: everything copied into user repos. Scripts are authored as `.mts` and compiled
   to `payload-dist/scripts/*.mjs`. The prose dirs (`skills/`, `agents/`, `rules/`,
-  `kit-templates/`) are copied through verbatim. `output-styles/` moved to `plugin-prose`
+  `templates/`) are copied through verbatim. `output-styles/` moved to `plugin-prose`
   along with the `output-prose` module, so it is no longer one of this package's prose dirs.
   **`payload-dist/` is what
   ships and what `payloadPath()` reads.** Zero runtime dependencies, node builtins only, POSIX
@@ -152,9 +152,9 @@ A pnpm workspace of sixteen packages. Every path in the Layout section below is 
     (one file per doctor check), `payload/scripts/__test__/`, and `payload/__test__/` for the
     two invariants over the whole built tree (`dependencies`, `execution`). The shared libs'
     own tests live at `packages/payload/payload/scripts/lib/__test__/` in the standalone
-    `@agent-kit/payload` package, not under `packages/cli/payload/scripts/lib/`, which does
+    `@houserules/payload` package, not under `packages/cli/payload/scripts/lib/`, which does
     not exist.
-  - **The shared testing modules live in `packages/test`, published as `@agent-kit/test`**, one
+  - **The shared testing modules live in `packages/test`, published as `@houserules/test`**, one
     per artifact: `repo` (builds the synthetic repos), `run` (`runCli`, `runScript`, `runIn`),
     `installed-tree`, `doctor-report`, `runner-stub`, `hook-input`, plus `global-setup`. It holds
     **no tests of its own**: every suite that imports one exercises it. `vitest` is a
@@ -198,11 +198,11 @@ A pnpm workspace of sixteen packages. Every path in the Layout section below is 
   so `check` runs both projects:
   `tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json`. Its `files` names
   `payload/**/*.mts` and `tsconfig.payload.json`, and its `dependencies` names
-  `../payload:build`, without which a `@agent-kit/payload/*` import resolves nothing. **No
+  `../payload:build`, without which a `@houserules/payload/*` import resolves nothing. **No
   plugin carries a `rootDirs` line any more.** Six of them did, each pairing `./payload/scripts` with
   `../cli/payload-dist/scripts`, a relative path into a sibling's build output that existed only
   inside this monorepo and that a third-party author had no way to write. Package-name imports plus
-  the `agent-kit-payload` rewrite replaced all six. Do not add one back.
+  the `houserules-payload` rewrite replaced all six. Do not add one back.
   Not hypothetical either: six plugins ran `check` over `src/` alone, so 26 payload sources
   including the largest script in the workspace were never typechecked by it. `build` caught them,
   which is why nothing was broken, but `check` is the gate that runs first and it was reporting
@@ -231,8 +231,8 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
 - `pnpm change`: record a changeset. Required for any user-visible change, and dogfooded.
 - `pnpm lint` / `pnpm lint:fix`: run from the workspace root only. `eslint.config.mjs` lives
   at the root with `packages/*/` globs, and no package defines its own `lint` script.
-- `pnpm dogfood`: build the payload, then wire this repo to run its own kit by running the real
-  installer over itself. `packages/cli/scripts/dogfood-link.mjs` seeds `.claude/kit.config.json`
+- `pnpm dogfood`: build the payload, then wire this repo to run houserules on itself by running the real
+  installer over itself. `packages/cli/scripts/dogfood-link.mjs` seeds `.claude/houserules.config.json`
   and `.claude/settings.json` (rewritten every run, since its `plugins` list and the module set
   the script passes to `init` are two halves of one definition), then shells out to
   `node dist/cli.js init --yes` with an explicit `--modules` list and `--module-option` flags,
@@ -264,12 +264,12 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   writes (through `src/core/fs-target.ts`), and dry-run renders the same computed effects. Never
   add filesystem writes elsewhere.
 - Kit-owned vs user-owned: copies and writes are manifest-tracked and update-refreshable. Seeds
-  (kit.config.json, CLAUDE.md, reviewer drafts, .changeset/config.json) belong to the user, so
+  (houserules.config.json, CLAUDE.md, reviewer drafts, .changeset/config.json) belong to the user, so
   never overwrite them.
 - Ownership can split INSIDE one file, and there are two shapes of that. A `region` action means
-  the kit owns a marker-delimited block in a file the user owns. A `body` action is the mirror:
-  the kit owns everything below the closing `---` and the user owns the frontmatter above it.
-  Rules are the `body` case, because the kit's own advise text tells users to trim a rule's
+  houserules owns a marker-delimited block in a file the user owns. A `body` action is the mirror:
+  houserules owns everything below the closing `---` and the user owns the frontmatter above it.
+  Rules are the `body` case, because houserules' own advise text tells users to trim a rule's
   `paths:` to their repo. Both record a hash of the part the KIT wrote, never of the whole file,
   and `update` splices rather than overwrites. Adding a third split needs a reason this good.
 - `.claude/scripts/` is **generated, not source**: self-gitignored on init, and installs that
@@ -281,17 +281,17 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   exits 2 on purpose).
 - **Payload code crosses packages by PACKAGE NAME, and the build rewrites it.** Decision
   `AGENTKIT-deb26c`. Any payload file, script or lib, reaches a shared lib as
-  `import { nowIso } from '@agent-kit/payload/entry-ledger'`, for values and types alike. There
-  is one form, not two. The six shared libs live in the standalone `@agent-kit/payload` package:
-  `backlog-id`, `entry-ledger`, `kit-config`, `ledger-index`, `proc`, and `workspaces`. Anything
+  `import { nowIso } from '@houserules/payload/entry-ledger'`, for values and types alike. There
+  is one form, not two. The six shared libs live in the standalone `@houserules/payload` package:
+  `backlog-id`, `entry-ledger`, `config`, `ledger-index`, `proc`, and `workspaces`. Anything
   else under `./lib/` is the package's own and stays a relative import.
-  - **`agent-kit-payload` is what makes it safe**, a bin the CLI publishes that each plugin runs
+  - **`houserules-payload` is what makes it safe**, a bin the CLI publishes that each plugin runs
     after its `tsc`. It rewrites those specifiers in the emitted `.mjs` to the relative form the
     flattened `.claude/scripts/` layout needs, and records what it rewrote in
     `payload-dist/payload-imports.json`. Install reads that sidecar and copies each named lib from
-    `@agent-kit/payload`'s own `payload-dist`, so a plugin no longer relies on the `core` module
+    `@houserules/payload`'s own `payload-dist`, so a plugin no longer relies on the `core` module
     happening to ship what its scripts import. A plugin declares nothing and cannot forget.
-  - **Never let a bare `@agent-kit/*` specifier reach an emitted `.mjs`.** The payload is a copy
+  - **Never let a bare `@houserules/*` specifier reach an emitted `.mjs`.** The payload is a copy
     target, not a dependency: it is copied into a user's repo and runs standalone on bare node, on
     every hook. `payload/__test__/dependencies.test.ts` fails on a surviving specifier, and that
     test is the guard now, replacing the types-only exports map that used to fail such an import at
@@ -305,17 +305,17 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
 - A lib the CLI's OWN scripts import must still be listed in `src/modules/core.ts`'s copy manifest.
   A plugin's cross-package imports are derived from its sidecar instead, so only the CLI's own
   manifest is hand-maintained now.
-- Two readers of kit.config.json, one shape: the CLI validates strictly via zod
+- Two readers of houserules.config.json, one shape: the CLI validates strictly via zod
   (`packages/api/src/config.ts`), and the payload reads it defensively and **dependency-free**
-  (`loadConfigSafe()`). They share only the inferred `KitConfig` type. Never make the payload
+  (`loadConfigSafe()`). They share only the inferred `HouseConfig` type. Never make the payload
   import zod. `payload/__test__/dependencies.test.ts` enforces this.
 - init never runs package-manager installs and never touches settings.local.json.
-- Managed regions: the kit maintains its own marker-delimited block inside files the user
+- Managed regions: houserules maintains its own marker-delimited block inside files the user
   owns (CLAUDE.md, and `.prettierignore` when prettier is detected). It writes ONLY between
   the markers, and bytes outside them are never modified. Those paths are in
   `SHARED_HOST_FILES`: never created wholesale, never pruned, and their manifest hash covers
   the region BODY, not the file.
-- The kit's installed files must stay out of the host repo's formatter. Everything under
+- houserules' installed files must stay out of the host repo's formatter. Everything under
   `.claude/` that the manifest tracks by content hash is byte-fragile, so a repo-wide
   `prettier --write` rewrites it and `update` then reads the whole install as local edits
   and skips it. That is silent, which is why `src/modules/prettier-guard.ts` writes the
@@ -324,16 +324,16 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   protected `.claude/` subtrees dynamically from the actions the plan actually produced
   (`protectedSubtrees()`), rather than a hand-maintained constant. A new kit-owned subtree
   under `.claude/` is covered automatically, the day its action lands.
-- Prose the kit ships (payload skills, agents, rules, templates, and the CLAUDE.md region
+- Prose houserules ships (payload skills, agents, rules, templates, and the CLAUDE.md region
   `src/render.ts` generates) follows `packages/plugin-prose/payload/rules/prose-voice.md`:
   plain sentences, no semicolons, no em dash where a period or comma works. Frontmatter
   `description:` fields are the skill-routing signal, so keep every trigger term when
   rewording one.
 - No catch-all files, per `payload/rules/code-cleanliness.md` (in `packages/cli`), which the
-  kit ships and this repo obeys. There is no `types.ts`, `shared.ts`, `utils.ts`,
+  houserules ships and this repo obeys. There is no `types.ts`, `shared.ts`, `utils.ts`,
   `constants.ts`, or `helpers.ts` anywhere in any package's `src/`. A type belongs to the
   module that produces it, and genuinely shared code gets a module named for its job.
-  `@agent-kit/api` is not an exception carved out of this rule: it is a deliberate published
+  `@houserules/api` is not an exception carved out of this rule: it is a deliberate published
   contract package, the one place a plugin author's code and this installer's code both
   compile against, not a dumping ground reached for out of laziness. A file in it still has
   to be named for what it holds (`actions.ts`, `manifest.ts`, `merge-settings.ts`), never
@@ -356,8 +356,8 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   module moved to: `computePrune` deletes any manifest dest the current plan no longer
   produces, and a removed entry stops that from erroring first.
 - Any guard that prevents a prune must run before `computeEffects` and inside the command's
-  `KitError` handler. `assertNoRetiredModules` is that guard: it has to see the recorded
-  module set before a plan is computed from it, and it throws `KitError` so the command
+  `HouseError` handler. `assertNoRetiredModules` is that guard: it has to see the recorded
+  module set before a plan is computed from it, and it throws `HouseError` so the command
   aborts with nothing written rather than silently deleting the retired module's files.
 - **Edit from the file's current bytes.** Re-read before editing when your view of it is
   second-hand (an earlier snapshot, a build or lint error, another tool's output) or the user may

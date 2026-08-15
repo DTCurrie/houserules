@@ -3,18 +3,18 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
 // Resolved as a PACKAGE, not by a relative path into a sibling package's dist/. A consumer
-// installing @agent-kit/test from npm has no `../dist/cli.js` to reach for, only
+// installing @houserules/test from npm has no `../dist/cli.js` to reach for, only
 // node_modules. `createRequire` gives synchronous resolution (`import.meta.resolve` is async
 // in some runtimes and still experimental for conditions), and resolving `package.json`
-// rather than the package root works even though @agent-kit/cli declares no `.` export: a
+// rather than the package root works even though @houserules/cli declares no `.` export: a
 // `bin` field is never gated by `exports`, but reading it still needs the package.json path.
 const require = createRequire(import.meta.url);
-const cliPkgPath = require.resolve('@agent-kit/cli/package.json');
+const cliPkgPath = require.resolve('@houserules/cli/package.json');
 const cliPkg = require(cliPkgPath) as { bin?: Record<string, string> };
-const cliBinRel = cliPkg.bin?.['agent-kit'];
+const cliBinRel = cliPkg.bin?.['houserules'];
 if (!cliBinRel) {
   throw new Error(
-    '@agent-kit/cli package.json has no "agent-kit" bin entry to resolve',
+    '@houserules/cli package.json has no "houserules" bin entry to resolve',
   );
 }
 const KIT_CLI = join(dirname(cliPkgPath), cliBinRel);
@@ -48,7 +48,7 @@ export function runIn(cwd: string, command: string, args: string[]): string {
   });
 }
 
-/** Runs the kit CLI as a subprocess. Never throws, so a test can assert on the exit code. */
+/** Runs the houserules CLI as a subprocess. Never throws, so a test can assert on the exit code. */
 export function runCli(
   args: string[],
   opts: Parameters<typeof spawnSync>[2] = {},

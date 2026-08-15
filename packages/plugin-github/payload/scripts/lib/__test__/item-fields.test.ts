@@ -30,7 +30,7 @@ const decisionOpBase = {
 
 describe('areaForSurface', () => {
   it('strips a target-prefixed backlog surface to the target name', () => {
-    expect(areaForSurface('agent-kit.BACKLOG.md')).toBe('agent-kit');
+    expect(areaForSurface('houserules.BACKLOG.md')).toBe('houserules');
   });
 
   it('names the bare backlog surface as the repo root', () => {
@@ -38,7 +38,7 @@ describe('areaForSurface', () => {
   });
 
   it('strips a target-prefixed decisions surface to the target name', () => {
-    expect(areaForSurface('agent-kit.DECISIONS.md')).toBe('agent-kit');
+    expect(areaForSurface('houserules.DECISIONS.md')).toBe('houserules');
   });
 
   it('names the bare decisions surface as the repo root', () => {
@@ -96,13 +96,13 @@ describe('fieldValuesFor, given a backlog op', () => {
     const op: PushOp = {
       ...backlogOpBase,
       op: 'create-issue',
-      surface: 'agent-kit.BACKLOG.md',
+      surface: 'houserules.BACKLOG.md',
     };
 
     expect(fieldValuesFor(op)).toContainEqual({
       field: 'Area',
       kind: 'text',
-      value: 'agent-kit',
+      value: 'houserules',
     });
   });
 });
@@ -283,7 +283,7 @@ describe('mark-superseded', () => {
       op: 'mark-superseded',
       entryId: 'DEC-old',
       kind: 'decisions',
-      surface: 'agent-kit.DECISIONS.md',
+      surface: 'houserules.DECISIONS.md',
       title: 'Old decision',
       body: '',
       date: '2026-01-01',

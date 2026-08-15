@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { makeCtx } from '#test/ctx-builder';
 import { useRepo } from '#test/repo';
 import type { Ctx } from '../../../detect.js';
-import type { KitManifest } from '@agent-kit/api/internal';
-import type { Settings } from '@agent-kit/api';
+import type { HouseManifest } from '@houserules/api/internal';
+import type { Settings } from '@houserules/api';
 import {
   allHookCommands,
   checkSettingsWiring,
@@ -18,7 +18,7 @@ function installedCtx(overrides: {
   modules: string[];
   claude?: Partial<Ctx['claude']>;
 }): Ctx {
-  const manifest: KitManifest = {
+  const manifest: HouseManifest = {
     kitVersion: '1.0.0',
     installedAt: '2026-01-01T00:00:00.000Z',
     modules: overrides.modules,
@@ -133,10 +133,10 @@ describe('checkSettingsWiring', () => {
 
   it('warns about unwired lint-fix once a target declares a fix command', () => {
     const ctx = installedCtx({ modules: ['lint-fix'] });
-    ctx.claude.kitConfig = {
+    ctx.claude.houseConfig = {
       version: 2,
       targets: [{ name: 'core', packageName: '.', fixCommands: ['lint:fix'] }],
-    } as Ctx['claude']['kitConfig'];
+    } as Ctx['claude']['houseConfig'];
 
     expect(checkSettingsWiring('/repo', ctx).findings).toContainEqual(
       expect.objectContaining({
@@ -145,7 +145,7 @@ describe('checkSettingsWiring', () => {
     );
   });
 
-  it('errors when the kit is installed but settings.json is absent', () => {
+  it('errors when houserules is installed but settings.json is absent', () => {
     const ctx = installedCtx({
       modules: ['core'],
       claude: { settingsExists: false },
@@ -154,7 +154,7 @@ describe('checkSettingsWiring', () => {
     expect(checkSettingsWiring('/repo', ctx).findings).toContainEqual(
       expect.objectContaining({
         level: 'ERROR',
-        msg: 'kit installed but .claude/settings.json is missing (hooks unwired) — rerun init',
+        msg: 'houserules installed but .claude/settings.json is missing (hooks unwired) — rerun init',
       }),
     );
   });
@@ -173,7 +173,7 @@ describe('checkSettingsWiring', () => {
     );
   });
 
-  it('warns when settings.local.json wires a kit hook script that would then run twice', () => {
+  it('warns when settings.local.json wires a houserules hook script that would then run twice', () => {
     const root = useRepo('pnpm-single');
     writeSettingsLocal(root, wiring('node .claude/scripts/guard-bash.mjs'));
     const ctx = installedCtx({
@@ -186,12 +186,12 @@ describe('checkSettingsWiring', () => {
 
     expect(checkSettingsWiring(root, ctx).findings).toContainEqual(
       expect.objectContaining({
-        msg: 'settings.local.json also wires kit hook scripts — they will run twice',
+        msg: 'settings.local.json also wires houserules hook scripts — they will run twice',
       }),
     );
   });
 
-  it('ignores a settings.local.json that wires a script the kit does not own', () => {
+  it('ignores a settings.local.json that wires a script houserules does not own', () => {
     const root = useRepo('pnpm-single');
     writeSettingsLocal(root, wiring('node ./my-own-hook.mjs'));
     const ctx = installedCtx({
@@ -218,7 +218,7 @@ describe('checkSettingsWiring', () => {
 
     expect(checkSettingsWiring(root, ctx).findings).toContainEqual(
       expect.objectContaining({
-        msg: 'settings.local.json also wires kit hook scripts — they will run twice',
+        msg: 'settings.local.json also wires houserules hook scripts — they will run twice',
       }),
     );
   });

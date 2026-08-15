@@ -1,10 +1,11 @@
 {
-  "name": "@agent-kit/plugin-fixture",
+  "name": "@houserules/plugin-fixture",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "index.ts",
   "devDependencies": {
-    "@agent-kit/cli": "workspace:*"
+    "@houserules/cli": "workspace:*",
+    "@houserules/payload": "workspace:*"
   }
 }

@@ -13,8 +13,11 @@ import {
   MAX_INJECTED_CHARS,
   resolveEntries,
 } from '../ledger-inject.mjs';
-import { emptyIndex, serializeIndex } from '@agent-kit/payload/ledger-index';
-import type { LedgerEntry, LedgerIndex } from '@agent-kit/payload/ledger-index';
+import { emptyIndex, serializeIndex } from '@houserules/payload/ledger-index';
+import type {
+  LedgerEntry,
+  LedgerIndex,
+} from '@houserules/payload/ledger-index';
 
 const INJECT = '.claude/scripts/ledger-inject.mjs';
 
@@ -165,7 +168,7 @@ describe('capInjectedText', () => {
     const result = capInjectedText('a'.repeat(500), 200);
 
     expect(result.length).toBe(200);
-    expect(result).toContain('[kit] truncated');
+    expect(result).toContain('[houserules] truncated');
   });
 });
 
@@ -182,7 +185,7 @@ describe('ledger-inject.mjs injected size cap', () => {
 
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout.length).toBeLessThanOrEqual(MAX_INJECTED_CHARS);
-    expect(r.stdout).toContain('[kit] truncated');
+    expect(r.stdout).toContain('[houserules] truncated');
   });
 });
 

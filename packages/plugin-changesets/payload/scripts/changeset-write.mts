@@ -27,7 +27,7 @@
  *
  * Package names are validated against the packages that actually exist, the workspace
  * members or the root package in a single-package repo, never against a possibly-stale
- * kit.config.json.
+ * houserules.config.json.
  */
 
 import {
@@ -43,7 +43,7 @@ import { pathToFileURL } from 'node:url';
 import { execSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
-import { listPublishablePackageNames } from '@agent-kit/payload/workspaces';
+import { listPublishablePackageNames } from '@houserules/payload/workspaces';
 
 const LEVELS = new Set(['patch', 'minor', 'major']);
 const LEVEL_RANK: Record<string, number> = { patch: 0, minor: 1, major: 2 };
@@ -293,7 +293,7 @@ if (!officialWrite) {
   console.error(
     [
       'Cannot author a changeset: @changesets/write is not resolvable from this repo.',
-      'agent-kit writes changesets only with the official changesets library — no fallback.',
+      'houserules writes changesets only with the official changesets library — no fallback.',
       'Fix: install the CLI as a root devDependency, then rerun:',
       '  pnpm add -D -w @changesets/cli   # npm: npm install -D @changesets/cli',
       'Notes: a pnpx/npx-only root script is not enough (nothing is resolvable from',

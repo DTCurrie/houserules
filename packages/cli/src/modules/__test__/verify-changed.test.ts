@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { useInstalledRepo } from '#test/repo';
 import { runCli } from '#test/run';
 import { readJson } from '#test/installed-tree';
-import type { InstalledKitConfig } from '#test/installed-tree';
+import type { InstalledHouseConfig } from '#test/installed-tree';
 
 const SCRIPT = '.claude/scripts/verify-changed.mjs';
 
@@ -27,8 +27,8 @@ describe('verify-changed install', () => {
   });
 
   it('seeds a verify block with the detected commands', () => {
-    const config = readJson<InstalledKitConfig>(
-      join(root, '.claude/kit.config.json'),
+    const config = readJson<InstalledHouseConfig>(
+      join(root, '.claude/houserules.config.json'),
     );
     expect(config.verify, 'verify block present').toBeTruthy();
     expect(config.verify!.commands).toEqual(['verify']);
@@ -36,7 +36,7 @@ describe('verify-changed install', () => {
 
   it('records the module in the manifest', () => {
     const manifest = readJson<{ modules: string[] }>(
-      join(root, '.claude/kit-manifest.json'),
+      join(root, '.claude/houserules.manifest.json'),
     );
     expect(manifest.modules.includes('verify-changed')).toBe(true);
   });
@@ -57,10 +57,10 @@ describe('verify-changed install', () => {
 });
 
 describe('verify-changed absent', () => {
-  it('leaves the verify block out of kit.config.json by default', () => {
+  it('leaves the verify block out of houserules.config.json by default', () => {
     const root = useInstalledRepo('pnpm-monorepo');
-    const config = readJson<InstalledKitConfig>(
-      join(root, '.claude/kit.config.json'),
+    const config = readJson<InstalledHouseConfig>(
+      join(root, '.claude/houserules.config.json'),
     );
     expect(config.verify, 'no verify block by default').toBe(undefined);
   });

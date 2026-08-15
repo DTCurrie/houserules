@@ -1,26 +1,26 @@
-# @agent-kit/plugin-github
+# @houserules/plugin-github
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-github.svg)](https://www.npmjs.com/package/@agent-kit/plugin-github)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-github.svg)](https://www.npmjs.com/package/@agent-kit/plugin-github)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-github.svg)](https://www.npmjs.com/package/@houserules/plugin-github)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-github.svg)](https://www.npmjs.com/package/@houserules/plugin-github)
 
-GitHub integrations for agent-kit. Every module this plugin ships is selected as
+GitHub integrations for houserules. Every module this plugin ships is selected as
 `<alias>/<module>`, so the alias names the service and the module names the integration.
 
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-github @agent-kit/cli
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-github @houserules/cli
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the module into `.claude/`. This module is off by default, so select it
 when `init` asks.
 
 ## Modules
 
 - **`projects`**, selected as `github/projects` once the plugin is aliased `github`, syncs
-  the agent-kit backlog and decision ledgers to GitHub Projects, so the durable record lives
+  the houserules backlog and decision ledgers to GitHub Projects, so the durable record lives
   on a board instead of in a committed `.jsonl`. A push turns backlog entries into real
   issues on a linked project, and decisions into draft items. A pull rebuilds a local index
   from those boards, so every local query answers offline while the queue itself stays empty.
@@ -48,7 +48,7 @@ Pushing to the board needs **both** of these:
    is gitignored, so it never arrives with a clone.
 2. `maintain` or `admin` access on the repository.
 
-Committed config moves one way only. `projects.autoSync: false` in `.claude/kit.config.json`
+Committed config moves one way only. `projects.autoSync: false` in `.claude/houserules.config.json`
 forbids sync repo-wide. `true` merely permits it and grants nothing by itself. **Granting
 needs both conditions above. Denying needs either.**
 
@@ -61,18 +61,18 @@ there with the `backlog-adopt` skill.
 1. Install the package and the CLI:
 
    ```
-   pnpm add -D @agent-kit/plugin-github @agent-kit/cli
+   pnpm add -D @houserules/plugin-github @houserules/cli
    ```
 
-2. Declare the plugin in `.claude/kit.config.json`:
+2. Declare the plugin in `.claude/houserules.config.json`:
 
    ```json
    {
-     "plugins": [{ "name": "@agent-kit/plugin-github", "alias": "github" }]
+     "plugins": [{ "name": "@houserules/plugin-github", "alias": "github" }]
    }
    ```
 
-3. Run `agent-kit init` and enable the `github/projects` module when it asks. It is off by
+3. Run `houserules init` and enable the `github/projects` module when it asks. It is off by
    default.
 
 4. As a maintainer with `maintain` or `admin` access, run bootstrap once:
@@ -170,7 +170,7 @@ An item it cannot match to a local entry is reported and skipped rather than gue
 
 ## Config
 
-`projects.autoSync` in `.claude/kit.config.json` is a boolean. Its default is permissive:
+`projects.autoSync` in `.claude/houserules.config.json` is a boolean. Its default is permissive:
 when the key is absent, sync is allowed as long as the other two gate conditions hold.
 Setting it to `false` forbids sync repo-wide regardless of who runs it.
 
@@ -185,11 +185,11 @@ Setting it to `false` forbids sync repo-wide regardless of who runs it.
 - An item added to a board by hand carries no entry marker, so `pull` skips it. Adopt a
   reported issue with the `backlog-adopt` skill instead of adding it to the board directly.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 

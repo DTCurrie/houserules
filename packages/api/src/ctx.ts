@@ -1,10 +1,10 @@
 import type {
   PackageJson,
   WorkspacePackage,
-} from '@agent-kit/payload/workspaces';
+} from '@houserules/payload/workspaces';
 
-import type { KitConfig, KitConfigTarget } from './config.js';
-import type { KitManifest } from './manifest.js';
+import type { HouseConfig, HouseConfigTarget } from './config.js';
+import type { HouseManifest } from './manifest.js';
 import type { Settings } from './merge-settings.js';
 
 /** How the package manager was identified. Shown in the profile card. */
@@ -17,17 +17,17 @@ export interface PackageManagerInfo {
 }
 
 /**
- * A unit of the repo the kit tracks: a workspace package, or the repo itself for a
- * single-package repo. Detection proposes these. `kit.config.json` is the contract
+ * A unit of the repo houserules tracks: a workspace package, or the repo itself for a
+ * single-package repo. Detection proposes these. `houserules.config.json` is the contract
  * once the user has edited it.
  *
  * It is deliberately the SAME type as a config target rather than a near-duplicate.
- * `update`/`modules` prefer `kitConfig.targets` and fall back to detection's, so the
+ * `update`/`modules` prefer `houseConfig.targets` and fall back to detection's, so the
  * two are used interchangeably. Declaring them separately only invited them to
  * drift on optionality. Per-field documentation lives on the zod schema's
  * `.describe()` calls in `config.ts`.
  */
-export type Target = KitConfigTarget;
+export type Target = HouseConfigTarget;
 
 export type ChangesetInvocation =
   'devdep' | 'root-script' | 'external-cli' | 'absent';
@@ -57,8 +57,8 @@ export interface ClaudeState {
   settingsParseError: string | null;
   settingsLocalExists: boolean;
   claudeMdExists: boolean;
-  manifest: KitManifest | null;
-  kitConfig: KitConfig | null;
+  manifest: HouseManifest | null;
+  houseConfig: HouseConfig | null;
   agents: string[];
   skills: string[];
 }
@@ -73,7 +73,7 @@ export interface Ctx {
   packages: WorkspacePackage[];
   targets: Target[];
   typescript: boolean;
-  /** Prettier can run here, so the kit's files need protecting from it. */
+  /** Prettier can run here, so houserules' files need protecting from it. */
   prettier: boolean;
   changesets: ChangesetsState;
   pnpmCatalogModeStrict: boolean;

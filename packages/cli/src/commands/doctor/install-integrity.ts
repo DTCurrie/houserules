@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ledgerDirFor } from '../../core/ledger-dir.js';
-import { MANIFEST_PATH } from '@agent-kit/api/internal';
+import { MANIFEST_PATH } from '@houserules/api/internal';
 import {
   trackedLedgerLogs,
   trackedLedgerSurfaces,
@@ -13,7 +13,7 @@ import type { Ctx } from '../../detect.js';
 import { payloadPath } from '../../paths.js';
 import { MODULES } from '../../plan.js';
 import type { Registry } from '../../plugin-registry.js';
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 import { allHookCommands } from './settings-wiring.js';
 
 /** Every `.mjs` script name shipped across a set of built payload directories. */
@@ -28,7 +28,7 @@ function shippedScripts(dirs: string[]): Set<string> {
       // retired" from "could not check", so it is worth telling the user.
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         console.error(
-          `agent-kit: could not list ${dir} (${(error as Error).message}). Its scripts may be misreported as retired.`,
+          `houserules: could not list ${dir} (${(error as Error).message}). Its scripts may be misreported as retired.`,
         );
       }
     }
@@ -37,7 +37,7 @@ function shippedScripts(dirs: string[]): Set<string> {
 }
 
 /**
- * Whether what the manifest claims still matches what this kit ships: the receipt
+ * Whether what the manifest claims still matches what houserules ships: the receipt
  * exists, its version is current, nothing generated got committed, and no retired
  * module or hook script is left behind.
  *
@@ -57,7 +57,7 @@ export function checkInstallIntegrity(
   if (!manifest) {
     findings.push({
       level: 'ERROR',
-      msg: `no ${MANIFEST_PATH} — kit not installed here (run: npx agent-kit init)`,
+      msg: `no ${MANIFEST_PATH} — houserules not installed here (run: npx houserules init)`,
     });
     return { findings, readouts: [] };
   }
@@ -65,26 +65,26 @@ export function checkInstallIntegrity(
   if (manifest.kitVersion !== kitVersion) {
     findings.push({
       level: 'WARN',
-      msg: `installed kit v${manifest.kitVersion}, this CLI is v${kitVersion}. Run: npx agent-kit update`,
+      msg: `installed houserules v${manifest.kitVersion}, this CLI is v${kitVersion}. Run: npx houserules update`,
     });
   }
-  // Reference templates that got committed before the kit ignored them. File integrity
+  // Reference templates that got committed before houserules ignored them. File integrity
   // itself is the drift engine's job, further down.
   const strayTemplates = ctx.git.isRepo ? trackedTemplateFiles(root) : [];
   if (strayTemplates.length) {
     findings.push({
       level: 'WARN',
-      msg: `${strayTemplates.length} reference template(s) under .claude/kit-templates/ are committed (reference-only). Untrack, keeping them on disk: npx agent-kit update — or: git rm --cached -r .claude/kit-templates && git add .claude/kit-templates/.gitignore`,
+      msg: `${strayTemplates.length} reference template(s) under .claude/templates/ are committed (reference-only). Untrack, keeping them on disk: npx houserules update — or: git rm --cached -r .claude/templates && git add .claude/templates/.gitignore`,
     });
   }
   // Same story for .claude/scripts/, which is build output.
-  const commitScripts = ctx.claude.kitConfig?.scripts?.commit === true;
+  const commitScripts = ctx.claude.houseConfig?.scripts?.commit === true;
   const strayScripts =
     ctx.git.isRepo && !commitScripts ? trackedScriptFiles(root) : [];
   if (strayScripts.length) {
     findings.push({
       level: 'WARN',
-      msg: `${strayScripts.length} script(s) under .claude/scripts/ are committed (build output). Untrack, keeping them on disk: npx agent-kit update — or: git rm --cached -r .claude/scripts && git add .claude/scripts/.gitignore`,
+      msg: `${strayScripts.length} script(s) under .claude/scripts/ are committed (build output). Untrack, keeping them on disk: npx houserules update — or: git rm --cached -r .claude/scripts && git add .claude/scripts/.gitignore`,
     });
   }
 
@@ -96,7 +96,7 @@ export function checkInstallIntegrity(
   if (strayLedgers.length) {
     findings.push({
       level: 'WARN',
-      msg: `${strayLedgers.length} rendered ledger file(s) are committed (generated from the .jsonl beside them). Untrack, keeping them on disk: npx agent-kit update — or: git rm --cached ${strayLedgers.join(' ')}`,
+      msg: `${strayLedgers.length} rendered ledger file(s) are committed (generated from the .jsonl beside them). Untrack, keeping them on disk: npx houserules update — or: git rm --cached ${strayLedgers.join(' ')}`,
     });
   }
 
@@ -107,12 +107,12 @@ export function checkInstallIntegrity(
   if (strayLedgerLogs.length) {
     findings.push({
       level: 'WARN',
-      msg: `${strayLedgerLogs.length} ledger log(s) are committed. The GitHub Project is the durable record now, once \`projects-sync.mjs push\` has run, and the file stays on disk as a push queue. Untrack it: npx agent-kit update — or: git rm --cached ${strayLedgerLogs.join(' ')}`,
+      msg: `${strayLedgerLogs.length} ledger log(s) are committed. The GitHub Project is the durable record now, once \`projects-sync.mjs push\` has run, and the file stays on disk as a push queue. Untrack it: npx houserules update — or: git rm --cached ${strayLedgerLogs.join(' ')}`,
     });
   }
 
-  // Modules and hooks the manifest records but the current kit no longer defines. The
-  // kit is otherwise add-and-update-only, so without this an orphan stays invisible.
+  // Modules and hooks the manifest records but the current houserules no longer defines. The
+  // houserules is otherwise add-and-update-only, so without this an orphan stays invisible.
   // Resolved against the registry, which includes every module a configured plugin
   // contributes, not just the built-ins.
   const knownModuleIds = new Set(
@@ -122,10 +122,10 @@ export function checkInstallIntegrity(
     if (!knownModuleIds.has(id))
       findings.push({
         level: 'WARN',
-        msg: `manifest lists module "${id}" which this kit no longer defines — npx agent-kit update prunes its retired files/hooks`,
+        msg: `manifest lists module "${id}" which houserules no longer defines — npx houserules update prunes its retired files/hooks`,
       });
   }
-  // A kit-owned OR kit-signed hook script this kit no longer ships is retired. Scripts
+  // A kit-owned OR kit-signed hook script houserules no longer ships is retired. Scripts
   // ship from the CLI's own payload plus every resolved plugin's payload.
   const scriptDirs = [
     payloadPath('scripts'),
@@ -147,7 +147,7 @@ export function checkInstallIntegrity(
     const wired = wiredCommands.some((c) => c.includes(base));
     findings.push({
       level: 'WARN',
-      msg: `retired kit hook script ${base} is no longer shipped by this kit${wired ? ' but is still wired (a dead node process on every trigger)' : ''} — prune it: npx agent-kit update`,
+      msg: `retired houserules hook script ${base} is no longer shipped by houserules${wired ? ' but is still wired (a dead node process on every trigger)' : ''} — prune it: npx houserules update`,
     });
   }
 

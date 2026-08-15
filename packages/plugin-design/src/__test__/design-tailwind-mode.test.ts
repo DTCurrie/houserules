@@ -103,6 +103,6 @@ describe('design.mjs Tailwind mode', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('@import "tailwindcss"');
     expect(result.stderr).toContain('--theme <path>');
-    expect(result.stderr).not.toContain('agent-kit init');
+    expect(result.stderr).not.toContain('houserules init');
   });
 });

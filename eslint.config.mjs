@@ -46,7 +46,7 @@ export default ts.config(
     },
   },
   // Tests drive the CLI through JSON artifacts on disk and deliberately poke
-  // arbitrary shapes into them — a suite asserting the kit tolerates an unknown
+  // arbitrary shapes into them — a suite asserting houserules tolerates an unknown
   // settings key cannot type that key as part of Settings. `any` in a test helper
   // is that intent, not a gap; src/ stays strict.
   //

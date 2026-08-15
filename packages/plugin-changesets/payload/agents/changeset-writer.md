@@ -14,7 +14,7 @@ find out whether it already has one.
 ## Procedure
 
 1. **Read the change.** `git status --porcelain` and `git diff` (or `git diff HEAD`) to see
-   what actually changed. Map paths to packages via the targets in `.claude/kit.config.json`.
+   what actually changed. Map paths to packages via the targets in `.claude/houserules.config.json`.
 2. **Read the pending changesets.** Glob `.changeset/*.md` and read each one. Decide which of
    three cases you are in:
    - **A pending changeset already covers this feature and its summary still fits.** Record

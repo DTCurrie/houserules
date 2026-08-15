@@ -12,9 +12,9 @@ import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
-import { editKitConfig } from '#test/installed-tree';
+import { editHouseConfig } from '#test/installed-tree';
 
-// Mirrors `LedgerEntry`/`LedgerIndex` from @agent-kit/cli's `lib/ledger-index.mjs`, the seam a
+// Mirrors `LedgerEntry`/`LedgerIndex` from @houserules/cli's `lib/ledger-index.mjs`, the seam a
 // pulled board index is written through. Declared locally rather than imported: that seam is
 // bridged into a payload script by `tsconfig.payload.json`'s `rootDirs`, which excludes this
 // test directory, so a real import here has no path to resolve under `tsc --noEmit`.
@@ -1253,7 +1253,7 @@ describe('backlog-log.mjs given an area named by its own surface filename', () =
 describe('backlog-log.mjs with a configured ledgers.dir', () => {
   it('writes the ledger and the area surface under the configured directory', () => {
     const root = stage();
-    editKitConfig(root, (config) => {
+    editHouseConfig(root, (config) => {
       config.ledgers = { dir: '.claude/state/ledgers' };
     });
 
@@ -1397,7 +1397,7 @@ describe('backlog-log.mjs reading the local index merged with the queue', () => 
   });
 });
 
-describe('backlog-log.mjs add given an area kit.config.json does not configure', () => {
+describe('backlog-log.mjs add given an area houserules.config.json does not configure', () => {
   let root: string;
 
   beforeEach(() => {
@@ -1433,7 +1433,7 @@ describe('backlog-log.mjs add given an area kit.config.json does not configure',
   });
 });
 
-describe('backlog-log.mjs remove given an area kit.config.json does not configure', () => {
+describe('backlog-log.mjs remove given an area houserules.config.json does not configure', () => {
   it('rejects the area and leaves the entry on its real surface', () => {
     const root = stage();
     seedLog(root, [
@@ -1463,7 +1463,7 @@ describe('backlog-log.mjs remove given an area kit.config.json does not configur
   });
 });
 
-describe('backlog-log.mjs update given an area kit.config.json does not configure', () => {
+describe('backlog-log.mjs update given an area houserules.config.json does not configure', () => {
   it('rejects the area without recording an update event', () => {
     const root = stage();
     seedLog(root, [
@@ -1493,7 +1493,7 @@ describe('backlog-log.mjs update given an area kit.config.json does not configur
   });
 });
 
-describe('backlog-log.mjs move given an area kit.config.json does not configure', () => {
+describe('backlog-log.mjs move given an area houserules.config.json does not configure', () => {
   let root: string;
 
   beforeEach(() => {
@@ -1529,7 +1529,7 @@ describe('backlog-log.mjs move given an area kit.config.json does not configure'
   });
 });
 
-describe('backlog-log.mjs list given an area kit.config.json does not configure', () => {
+describe('backlog-log.mjs list given an area houserules.config.json does not configure', () => {
   it('rejects the area rather than reporting an empty result', () => {
     const root = stage();
 
@@ -1540,7 +1540,7 @@ describe('backlog-log.mjs list given an area kit.config.json does not configure'
   });
 });
 
-describe('backlog-log.mjs render given an area kit.config.json does not configure', () => {
+describe('backlog-log.mjs render given an area houserules.config.json does not configure', () => {
   it('rejects the area and writes no surface file', () => {
     const root = stage();
 

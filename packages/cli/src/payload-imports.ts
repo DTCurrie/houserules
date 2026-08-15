@@ -15,7 +15,7 @@ import { join } from 'node:path';
 export const PAYLOAD_IMPORTS_FILE = 'payload-imports.json';
 
 /** The specifier prefix a payload file uses to reach a shared payload lib, before the build rewrites it. */
-export const PAYLOAD_IMPORT_PREFIX = '@agent-kit/payload/';
+export const PAYLOAD_IMPORT_PREFIX = '@houserules/payload/';
 
 export interface PayloadImports {
   version: 1;

@@ -1,6 +1,6 @@
-# Contributing to agent-kit
+# Contributing to houserules
 
-Thanks for looking at agent-kit. This file covers what a first-time contributor needs to
+Thanks for looking at houserules. This file covers what a first-time contributor needs to
 get from a fresh clone to a reviewable pull request.
 
 ## Prerequisites
@@ -13,18 +13,18 @@ get from a fresh clone to a reviewable pull request.
 ## Getting set up
 
 ```sh
-git clone https://github.com/DTCurrie/agent-kit.git
-cd agent-kit
+git clone https://github.com/DTCurrie/houserules.git
+cd houserules
 pnpm install
 pnpm build
 ```
 
 ## Repo layout
 
-This is a pnpm workspace that publishes sixteen packages: `@agent-kit/cli` (the installer,
-which ships the `agent-kit` binary), `@agent-kit/api` (the plugin API: action types, module
-definitions, and the `kit.config.json` schema), `@agent-kit/payload` (the shared payload libs,
-imported by package name), twelve `@agent-kit/plugin-*` packages, and `@agent-kit/test`, a
+This is a pnpm workspace that publishes sixteen packages: `@houserules/cli` (the installer,
+which ships the `houserules` binary), `@houserules/api` (the plugin API: action types, module
+definitions, and the `houserules.config.json` schema), `@houserules/payload` (the shared payload libs,
+imported by package name), twelve `@houserules/plugin-*` packages, and `@houserules/test`, a
 shared test library. Each package owns its own `src/`, tests, and, for the CLI and plugins, a
 `payload/` directory of files the installer copies into a user's repo.
 Root-level config (`prettier`, `eslint`, changesets, CI workflows) applies to the whole
@@ -45,8 +45,8 @@ pnpm test        # the full test suite, including end-to-end fixtures
 Scope any of these to the package you touched with `--filter`, for example:
 
 ```sh
-pnpm --filter @agent-kit/cli test
-pnpm --filter @agent-kit/plugin-testing check
+pnpm --filter @houserules/cli test
+pnpm --filter @houserules/plugin-testing check
 ```
 
 `pnpm build` runs a full build across the workspace and is required before probing anything
@@ -61,7 +61,7 @@ Every `build`, `check`, and `test` script runs through
 [wireit](https://github.com/google/wireit), which means two things day to day. A script whose
 inputs have not changed is skipped, so re-running a command you just ran is close to free. And
 a `--filter`ed command pulls in whatever it depends on, so
-`pnpm --filter @agent-kit/plugin-design test` builds the CLI first if it needs to, with no
+`pnpm --filter @houserules/plugin-design test` builds the CLI first if it needs to, with no
 separate step. Running `npx vitest` directly, outside the `test` script, does still need a
 prior `pnpm build`.
 
@@ -72,8 +72,8 @@ pnpm dogfood
 ```
 
 This wires this repo's own gitignored `.claude/` directory from every package's `payload/`,
-so the kit runs its own hooks, skills, and agents against itself. It is how changes to the
-kit get exercised the way a real install would use them.
+so houserules runs its own hooks, skills, and agents against itself. It is how changes to
+houserules get exercised the way a real install would use them.
 
 If you are iterating on a hook script (a `.mts` file under a package's `payload/scripts/`),
 run `pnpm dogfood:watch`. `.claude/scripts` is a copy of `payload-dist/`, not a symlink, so an

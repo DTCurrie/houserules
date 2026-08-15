@@ -62,7 +62,7 @@ to point it at, say "cannot determine from source" instead of guessing.
 
 ## Accessibility is not your job
 
-Contrast and hit-target thresholds also come from WCAG. `@agent-kit/plugin-accessibility`
+Contrast and hit-target thresholds also come from WCAG. `@houserules/plugin-accessibility`
 owns the accessibility verdict and its `accessibility-reviewer` agent covers focus states,
 keyboard behavior, and screen-reader concerns. Report the design-system angle only. Defer
 anything else to `/accessibility-review`.

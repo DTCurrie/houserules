@@ -29,7 +29,7 @@ import { ghPermissions, ghRepo } from './gh.mjs';
 export interface GateInputs {
   /** Whether `.claude/ledgers/.projects.json` exists locally. */
   hasEnableToken: boolean;
-  /** `projects.autoSync` from kit.config.json. Undefined when the key is absent. */
+  /** `projects.autoSync` from houserules.config.json. Undefined when the key is absent. */
   autoSync: boolean | undefined;
   /** Null when the permission call failed or was never made. */
   permissions: RepoPermissions | null;
@@ -54,7 +54,7 @@ const NO_TOKEN_MESSAGE =
   'local ledger keeps recording either way.';
 
 const AUTO_SYNC_DISABLED_MESSAGE =
-  'projects.autoSync is set to false in kit.config.json. A maintainer turned sync off for this ' +
+  'projects.autoSync is set to false in houserules.config.json. A maintainer turned sync off for this ' +
   'repo. Your local ledger keeps recording either way.';
 
 const PERMISSION_UNKNOWN_MESSAGE =
@@ -147,9 +147,9 @@ export function evaluateReadGate(inputs: GateInputs): GateVerdict {
  * The permission call is skipped when a local condition already denies, so the common case
  * costs no network round trip.
  *
- * Takes the resolved ledger directory and `autoSync` rather than reading `kit.config.json`
- * itself. That reader and the directory resolver both live in the shared `@agent-kit/payload`
- * package, reached here by package-name import: `agent-kit-payload` rewrites the specifier at
+ * Takes the resolved ledger directory and `autoSync` rather than reading `houserules.config.json`
+ * itself. That reader and the directory resolver both live in the shared `@houserules/payload`
+ * package, reached here by package-name import: `houserules-payload` rewrites the specifier at
  * build to the relative path the flattened `.claude/scripts/lib/` layout needs, so this file
  * can import them statically rather than reading config directly.
  */

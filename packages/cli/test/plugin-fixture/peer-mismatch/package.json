@@ -1,9 +1,9 @@
 {
-  "name": "@agent-kit/plugin-fixture-peer-mismatch",
+  "name": "@houserules/plugin-fixture-peer-mismatch",
   "version": "1.0.0",
   "private": true,
   "main": "index.cjs",
   "peerDependencies": {
-    "@agent-kit/cli": "^999.0.0"
+    "@houserules/cli": "^999.0.0"
   }
 }

@@ -1,8 +1,8 @@
 import { claudeMdRegion } from './core/claude-md-region.js';
-import { upsertRegion } from '@agent-kit/api/internal';
+import { upsertRegion } from '@houserules/api/internal';
 import { hasModule } from './plugin-registry.js';
 import type { Ctx, PackageManagerInfo, Target } from './detect.js';
-import type { Answers } from '@agent-kit/api';
+import type { Answers } from '@houserules/api';
 
 interface FixDefaults {
   runner: string;
@@ -83,27 +83,27 @@ export function verifyDefaultsFor(
 
 /**
  * The `$schema` value that gives editors completion and inline validation on
- * kit.config.json. The config lives at `.claude/kit.config.json`, so a local path has to
- * climb out of `.claude/` first. A repo that only ever runs `npx agent-kit` has no local
+ * houserules.config.json. The config lives at `.claude/houserules.config.json`, so a local path has to
+ * climb out of `.claude/` first. A repo that only ever runs `npx houserules` has no local
  * copy to point at, so it gets the published URL instead of a path resolving to nothing.
  *
- * The dependency probed here is the package name, `@agent-kit/cli`, not the binary name.
+ * The dependency probed here is the package name, `@houserules/cli`, not the binary name.
  */
 export function schemaRefFor(ctx: Ctx): string {
   const deps = {
     ...ctx.rootPkg?.dependencies,
     ...ctx.rootPkg?.devDependencies,
   };
-  return '@agent-kit/cli' in deps
-    ? '../node_modules/@agent-kit/cli/schema/kit.config.schema.json'
-    : 'https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json';
+  return '@houserules/cli' in deps
+    ? '../node_modules/@houserules/cli/schema/houserules.config.schema.json'
+    : 'https://github.com/DTCurrie/houserules/blob/main/schema/houserules.config.schema.json';
 }
 
 /**
- * Seeds `.claude/kit.config.json` from detected facts. A seeded file is immediately
+ * Seeds `.claude/houserules.config.json` from detected facts. A seeded file is immediately
  * valid JSON, carrying no comments and never a raw placeholder.
  */
-export function renderKitConfig(ctx: Ctx, answers: Answers): string {
+export function renderHouseConfig(ctx: Ctx, answers: Answers): string {
   const has = (id: string) => hasModule(answers.moduleIds, id);
   const config: {
     $schema: string;
@@ -303,8 +303,8 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
     '',
     '<!-- TODO: one-line description of the project. Keep this file lean. It is loaded every turn. -->',
     '<!-- For a fuller from-scratch skeleton (layout, scripts, guardrail-doc pointers, per-target',
-    '     workflows), see .claude/kit-templates/CLAUDE.md.template, a gitignored reference that',
-    '     `npx agent-kit update` restores if absent. -->',
+    '     workflows), see .claude/templates/CLAUDE.md.template, a gitignored reference that',
+    '     `npx houserules update` restores if absent. -->',
     '',
     '## Layout',
     '',
@@ -332,11 +332,11 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
 /** The managed-region body spliced into a CLAUDE.md the user already has. */
 export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   const body = [
-    '### agent-kit sections',
+    '### houserules sections',
     '',
-    'This block is maintained by `npx agent-kit update`. Content outside the markers around it',
+    'This block is maintained by `npx houserules update`. Content outside the markers around it',
     'is yours and never touched. For a fuller from-scratch skeleton to compare structure against, see',
-    '`.claude/kit-templates/CLAUDE.md.template`, a gitignored reference that `npx agent-kit update`',
+    '`.claude/templates/CLAUDE.md.template`, a gitignored reference that `npx houserules update`',
     'restores if absent.',
     '',
     ...changesetsSection(ctx, answers),
@@ -397,10 +397,10 @@ model: haiku
 
 You are the ${target.label} reviewer, a read-only auditor for \`${target.pathPrefix || './'}\`.
 
-<!-- TODO(agent-kit): this is a DRAFT. Fill in the authoritative source below and delete
+<!-- TODO(houserules): this is a DRAFT. Fill in the authoritative source below and delete
      the DRAFT marker from the description above. See the full pattern in
-     .claude/kit-templates/agents/reviewer.agent.md.template, a gitignored reference that
-     \`npx agent-kit update\` restores if it's missing. -->
+     .claude/templates/agents/reviewer.agent.md.template, a gitignored reference that
+     \`npx houserules update\` restores if it's missing. -->
 
 ## Authoritative source
 

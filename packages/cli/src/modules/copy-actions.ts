@@ -2,9 +2,9 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
-import type { Action, CopyAction, WriteAction } from '@agent-kit/api';
-import { createPayloadBuilders } from '@agent-kit/api/internal';
-import { KitError } from '../kit-error.js';
+import type { Action, CopyAction, WriteAction } from '@houserules/api';
+import { createPayloadBuilders } from '@houserules/api/internal';
+import { HouseError } from '../house-error.js';
 import { payloadPath } from '../paths.js';
 import {
   PAYLOAD_IMPORTS_FILE,
@@ -36,13 +36,14 @@ export function selfGitignoreAction(
 }
 
 /**
- * Resolves `@agent-kit/payload`'s own built payload root, the one publish-time source for the
+ * Resolves `@houserules/payload`'s own built payload root, the one publish-time source for the
  * six shared libs. Every consumer that needs a `lib` copy, kit-owned modules and plugins alike,
  * derives it from here, so there is one source for a lib copy rather than several.
  */
 function payloadLibRoot(): string {
   const require = createRequire(import.meta.url);
-  const payloadPackageJson = require.resolve('@agent-kit/payload/package.json');
+  const payloadPackageJson =
+    require.resolve('@houserules/payload/package.json');
   return join(dirname(payloadPackageJson), 'payload-dist');
 }
 
@@ -57,11 +58,11 @@ export const agent = kitBuilders.agent;
 /**
  * A Claude Code rule file. Claude Code loads `.claude/rules/` as memory, and a rule whose
  * frontmatter carries `paths:` globs loads only when a matching file is in the working set.
- * One without `paths:` is resident on every turn, so kit rules always ship with them.
+ * One without `paths:` is resident on every turn, so houserules rules always ship with them.
  *
  * Split ownership, which is why this is a `body` action and not a `copy`. The `paths:` list
- * is yours, because only your repo knows which suffixes it uses, and the kit's own advise
- * text tells you to trim it. Everything below the closing `---` is the kit's, and stays
+ * is yours, because only your repo knows which suffixes it uses, and houserules' own advise
+ * text tells you to trim it. Everything below the closing `---` is houserules', and stays
  * update-refreshable however far the frontmatter diverges. See {@link BodyAction}.
  */
 export const rule = kitBuilders.rule;
@@ -81,15 +82,15 @@ export const template = kitBuilders.template;
  *
  * A copy action's `dest` mirrors the payload root one-for-one, so `.claude/scripts/foo.mjs`
  * corresponds to the sidecar key `scripts/foo.mjs`. Every lib basename `sidecar` names for that
- * key gets ONE copy from `@agent-kit/payload`, deduplicated across every action passed in, and
+ * key gets ONE copy from `@houserules/payload`, deduplicated across every action passed in, and
  * attributed to the module that declared the action which named it.
  *
  * Empty when `sidecar` names nothing, which is the compatibility path for a plugin published
  * before this mechanism existed.
  *
  * @param pluginName Named in the thrown error when a sidecar entry is stale.
- * @throws KitError when `sidecar` names a lib `@agent-kit/payload` does not ship. That happens
- *   when the plugin was built against a newer or older `@agent-kit/payload` than the one
+ * @throws HouseError when `sidecar` names a lib `@houserules/payload` does not ship. That happens
+ *   when the plugin was built against a newer or older `@houserules/payload` than the one
  *   installed now.
  */
 export function deriveLibActions(
@@ -108,11 +109,11 @@ export function deriveLibActions(
       if (seen.has(name)) continue;
       seen.add(name);
       if (!existsSync(join(payloadLibRoot(), 'scripts', 'lib', name))) {
-        throw new KitError(
+        throw new HouseError(
           `plugin "${pluginName}"'s ${PAYLOAD_IMPORTS_FILE} names lib "${name}" for ` +
-            `${key}, which this @agent-kit/payload does not ship. Rebuild the plugin's ` +
+            `${key}, which this @houserules/payload does not ship. Rebuild the plugin's ` +
             `payload (its package's \`build\` or \`build:payload\` script) against a ` +
-            `compatible @agent-kit/payload version.`,
+            `compatible @houserules/payload version.`,
         );
       }
       derived.push(lib(action.module, name));

@@ -20,7 +20,7 @@ const payload = (command: string): string =>
 function withConfig(root: string, guard: Record<string, unknown>): void {
   mkdirSync(join(root, '.claude'), { recursive: true });
   writeFileSync(
-    join(root, '.claude/kit.config.json'),
+    join(root, '.claude/houserules.config.json'),
     JSON.stringify({ version: 2, guard, targets: [] }),
   );
 }
@@ -47,7 +47,7 @@ describe('guard-bash', () => {
   ])('blocks "$cmd" by default', ({ cmd }) => {
     const r = runScript(root, SCRIPT, { input: payload(cmd) });
     expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/Blocked by agent-kit guard/);
+    expect(r.stderr).toMatch(/Blocked by houserules guard/);
   });
 
   it.each([
@@ -68,7 +68,7 @@ describe('guard-bash', () => {
     },
   );
 
-  it('blocks by default even without a kit.config.json, since the payload script falls back to hardcoded defaults', () => {
+  it('blocks by default even without a houserules.config.json, since the payload script falls back to hardcoded defaults', () => {
     const bare = useRepo('non-js');
     const r = spawnSync(
       process.execPath,

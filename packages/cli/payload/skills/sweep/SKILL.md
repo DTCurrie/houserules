@@ -31,7 +31,7 @@ pattern needs refining, refine it here, cheaply, before fanning out.
 
 ## 2. Shard by package
 
-Group the matching files by package, using `.claude/kit.config.json` `targets[].pathPrefix` or the
+Group the matching files by package, using `.claude/houserules.config.json` `targets[].pathPrefix` or the
 top-level dir. Each package is one shard. Sharding by package rather than by file keeps writers from
 colliding and makes verification package-scoped.
 

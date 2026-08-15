@@ -1,5 +1,5 @@
-import { definePlugin } from '@agent-kit/api';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
+import { definePlugin } from '@houserules/api';
+import type { Action, ModuleDef, PluginApi } from '@houserules/api';
 
 const FRAMEWORK_GUIDES = ['threlte', 'r3f'];
 

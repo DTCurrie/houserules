@@ -136,7 +136,7 @@ function subdirectories(base: string): string[] {
     // plain array, with no return channel to tell them apart, so the diagnostic goes to
     // stderr rather than looking identical to an empty dir.
     console.error(
-      `agent-kit: could not read directory ${base}: ${(e as Error).message}`,
+      `houserules: could not read directory ${base}: ${(e as Error).message}`,
     );
     return [];
   }

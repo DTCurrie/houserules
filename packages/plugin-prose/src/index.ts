@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { definePlugin } from '@agent-kit/api';
-import type { Action, Ctx, ModuleDef, PluginApi } from '@agent-kit/api';
+import { definePlugin } from '@houserules/api';
+import type { Action, Ctx, ModuleDef, PluginApi } from '@houserules/api';
 
 /**
  * Ships the comment-discipline rule: default to no comment, TSDoc for exported API,
@@ -119,7 +119,7 @@ function activeStyle(ctx: Ctx): string | null {
  * This governs replies to someone who can ask, so brevity leads until it would cost
  * correctness.
  *
- * Installing the file does not activate it. Output styles are user-selected, and the kit never
+ * Installing the file does not activate it. Output styles are user-selected, and houserules never
  * writes `outputStyle` into settings.json, which would clobber the user's choice.
  */
 function outputProseModule(api: PluginApi): ModuleDef {
@@ -217,7 +217,7 @@ function prDescriptionModule(api: PluginApi): ModuleDef {
         ),
         {
           kind: 'advise',
-          text: "PR description skill installed. Run /pr-description before opening a pull request, optionally with a base branch. It reads the branch diff rather than the session transcript, names the layers from this repo's own CLAUDE.md layout and kit.config.json targets, and returns the body as pasteable markdown. It creates or updates the PR only when you ask it to.",
+          text: "PR description skill installed. Run /pr-description before opening a pull request, optionally with a base branch. It reads the branch diff rather than the session transcript, names the layers from this repo's own CLAUDE.md layout and houserules.config.json targets, and returns the body as pasteable markdown. It creates or updates the PR only when you ask it to.",
           module: id,
         },
       ];

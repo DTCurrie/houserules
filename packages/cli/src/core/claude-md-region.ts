@@ -1,4 +1,4 @@
-import type { RegionSpec } from '@agent-kit/api';
+import type { RegionSpec } from '@houserules/api';
 
 /**
  * The one `RegionSpec` for the kit-owned block inside CLAUDE.md. Both the seed
@@ -8,8 +8,8 @@ import type { RegionSpec } from '@agent-kit/api';
  */
 export const claudeMdRegion: RegionSpec = {
   id: 'claude-md',
-  start: '<!-- agent-kit:claude-md start -->',
-  end: '<!-- agent-kit:claude-md end -->',
+  start: '<!-- houserules:claude-md start -->',
+  end: '<!-- houserules:claude-md end -->',
   anchor: 'after-h1',
   pad: true,
   legacy: {

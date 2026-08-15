@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-design': minor
+'@houserules/plugin-design': minor
 ---
 
 Initial release. A DTCG design system an agent can query, plus the rule that points at it.

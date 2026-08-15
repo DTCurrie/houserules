@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { frontmatterBlock, splitFrontmatter } from '../../core/frontmatter.js';
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 
 /**
  * The tools an agent's frontmatter grants, or null when it names none.

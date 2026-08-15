@@ -23,7 +23,7 @@ body:
       label: Reproduction steps
       description: Steps to reproduce the bug, starting from a clean repo if possible.
       placeholder: |
-        1. Run `agent-kit init`
+        1. Run `houserules init`
         2. ...
     validations:
       required: true
@@ -33,27 +33,27 @@ body:
       label: Affected package
       description: Which package does this bug affect?
       options:
-        - '@agent-kit/cli'
-        - '@agent-kit/plugin-accessibility'
-        - '@agent-kit/plugin-backlog'
-        - '@agent-kit/plugin-changesets'
-        - '@agent-kit/plugin-decisions'
-        - '@agent-kit/plugin-design'
-        - '@agent-kit/plugin-persona-auditor'
-        - '@agent-kit/plugin-prose'
-        - '@agent-kit/plugin-svelte'
-        - '@agent-kit/plugin-testing'
-        - '@agent-kit/plugin-three'
-        - '@agent-kit/plugin-typescript'
-        - '@agent-kit/test'
+        - '@houserules/cli'
+        - '@houserules/plugin-accessibility'
+        - '@houserules/plugin-backlog'
+        - '@houserules/plugin-changesets'
+        - '@houserules/plugin-decisions'
+        - '@houserules/plugin-design'
+        - '@houserules/plugin-persona-auditor'
+        - '@houserules/plugin-prose'
+        - '@houserules/plugin-svelte'
+        - '@houserules/plugin-testing'
+        - '@houserules/plugin-three'
+        - '@houserules/plugin-typescript'
+        - '@houserules/test'
         - Not sure
     validations:
       required: false
   - type: input
-    id: agent-kit-version
+    id: houserules-version
     attributes:
-      label: agent-kit version
-      description: Output of `agent-kit --version`, or the version pinned in your package.json.
+      label: houserules version
+      description: Output of `houserules --version`, or the version pinned in your package.json.
     validations:
       required: false
   - type: input

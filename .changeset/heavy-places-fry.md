@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-testing': minor
+'@houserules/plugin-testing': minor
 ---
 
 Initial release. A runner-agnostic testing rule, split into opt-in guides.

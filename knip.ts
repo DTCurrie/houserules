@@ -16,7 +16,7 @@ const config: KnipConfig = {
         // this restatement, every command reached only through cli.ts's dynamic `import()`
         // dispatch reports as unused.
         'src/cli.ts',
-        // Reached only through bin/agent-kit-payload.mjs, which imports the built
+        // Reached only through bin/houserules-payload.mjs, which imports the built
         // dist/payload-build-bin.js. knip's graph is source-only and cannot follow that edge.
         'src/payload-build-bin.ts',
         // The plugin-author public API. Its importers are third-party plugin packages, none of
@@ -56,7 +56,7 @@ const config: KnipConfig = {
       // reaches them by package name, so nothing in this workspace imports the sources.
       entry: ['payload/scripts/lib/*.mts'],
     },
-    // Each plugin's payload scripts import `@agent-kit/payload/<lib>` by package name.
+    // Each plugin's payload scripts import `@houserules/payload/<lib>` by package name.
     // Declaring those scripts as entries is what lets knip see that edge, so no
     // dependency-level exemption is needed.
     'packages/plugin-accessibility': {

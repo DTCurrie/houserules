@@ -26,7 +26,7 @@ export interface CheckResult {
 
 /** Printed once per run. Names the plugin that owns everything `check` deliberately skips. */
 export const ACCESSIBILITY_SCOPE_NOTE =
-  'Focus states, ARIA, landmarks, and every other WCAG concern beyond declared-pair contrast and declared hit-target size are owned by @agent-kit/plugin-accessibility, not this check.';
+  'Focus states, ARIA, landmarks, and every other WCAG concern beyond declared-pair contrast and declared hit-target size are owned by @houserules/plugin-accessibility, not this check.';
 
 interface CssDeclaration {
   selector: string;

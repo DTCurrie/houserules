@@ -1,6 +1,6 @@
 import { accessSync, constants } from 'node:fs';
 
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 
 /**
  * Where a local Chrome usually is. Kept in step with `CHROME_CANDIDATES` in
@@ -29,7 +29,7 @@ function isExecutable(path: string): boolean {
  * Reports whether the rendered design checks can run on this machine.
  *
  * A WARN and never an ERROR. The rendered tier is optional, and every other design check works
- * without it, so a machine with no Chrome is a reduced install rather than a broken one. The kit
+ * without it, so a machine with no Chrome is a reduced install rather than a broken one. houserules
  * discovers a browser and never installs one.
  */
 export function checkChromeAvailable(): CheckResult {

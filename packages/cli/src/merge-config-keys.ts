@@ -1,8 +1,8 @@
 /**
- * The keys the kit reconciles inside `.claude/kit.config.json`, a file the USER owns.
+ * The keys houserules reconciles inside `.claude/houserules.config.json`, a file the USER owns.
  *
  * This is the JSON analogue of what {@link ./merge-settings.ts} does to `settings.json`. The
- * file belongs to the user end to end, and the kit writes only the named keys, so every other
+ * file belongs to the user end to end, and houserules writes only the named keys, so every other
  * key, and the user's own edits to the managed ones, survive a run untouched.
  */
 
@@ -12,7 +12,7 @@ function sameJson(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Splices the kit's value for each key in `managedKeys` into `diskText`.
+ * Splices houserules' value for each key in `managedKeys` into `diskText`.
  *
  * A key the canonical render omits is REMOVED from the result rather than left behind. That is
  * what makes a withdrawal work: when a module's options resolve to nothing the key has to
@@ -40,7 +40,7 @@ export function mergeManagedKeys(
     canonical = JSON.parse(canonicalText) as Record<string, unknown>;
   } catch (error) {
     console.error(
-      `agent-kit: .claude/kit.config.json is not valid JSON (${(error as Error).message}). Managed keys were left untouched; \`doctor\` reports this separately.`,
+      `houserules: .claude/houserules.config.json is not valid JSON (${(error as Error).message}). Managed keys were left untouched; \`doctor\` reports this separately.`,
     );
     return null;
   }

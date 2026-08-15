@@ -18,7 +18,7 @@ describe('debug-session', () => {
       const installed = [
         '.claude/skills/debug-session/SKILL.md',
         '.claude/scripts/debug-session-check.mjs',
-        '.claude/kit-templates/agents/debugger.agent.md.template',
+        '.claude/templates/agents/debugger.agent.md.template',
       ];
 
       expect(
@@ -53,7 +53,7 @@ describe('debug-session', () => {
       expect(hook.stdout.trim()).toBe('');
     });
 
-    it('reports an open session log and orphaned instrumentation, excluding the kit’s own payload files', () => {
+    it('reports an open session log and orphaned instrumentation, excluding houserules’ own payload files', () => {
       // Built from parts: a literal tag would make `git grep CLAUDE-DEBUG` flag this suite.
       const MARKER = ['CLAUDE', 'DEBUG'].join('-');
       writeFileSync(
@@ -89,7 +89,7 @@ describe('debug-session', () => {
     it('still stages the always-shipped reviewer agent template', () => {
       expect(
         existsSync(
-          join(root, '.claude/kit-templates/agents/reviewer.agent.md.template'),
+          join(root, '.claude/templates/agents/reviewer.agent.md.template'),
         ),
       ).toBeTruthy();
     });
@@ -97,7 +97,7 @@ describe('debug-session', () => {
     it('does not stage the debugger template, script, or skill', () => {
       expect(
         existsSync(
-          join(root, '.claude/kit-templates/agents/debugger.agent.md.template'),
+          join(root, '.claude/templates/agents/debugger.agent.md.template'),
         ),
       ).toBe(false);
       expect(

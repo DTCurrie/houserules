@@ -4,9 +4,9 @@ import { createRequire } from 'node:module';
 import { satisfies, validRange } from 'semver';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
-import { readJson } from '@agent-kit/payload/workspaces';
+import { readJson } from '@houserules/payload/workspaces';
 
-import type { Answers, ModuleDef } from '@agent-kit/api';
+import type { Answers, ModuleDef } from '@houserules/api';
 import {
   createPayloadBuilders,
   deriveLibActions,
@@ -192,7 +192,7 @@ function checkPeerRange(
   if (!validRange(range)) {
     fail(
       pluginName,
-      `declares an unparseable peerDependencies["@agent-kit/cli"] range "${range}". Use a valid semver range, such as "^${cliVersion}".`,
+      `declares an unparseable peerDependencies["@houserules/cli"] range "${range}". Use a valid semver range, such as "^${cliVersion}".`,
     );
   }
   // Prereleases satisfy a range only when it names one, so a CLI on 1.0.0-rc.1 would fail a
@@ -201,7 +201,7 @@ function checkPeerRange(
   if (!satisfies(cliVersion, range, { includePrerelease: true })) {
     fail(
       pluginName,
-      `requires @agent-kit/cli "${range}" but the running CLI is ${cliVersion}. Update the plugin, or pin a compatible @agent-kit/cli version.`,
+      `requires @houserules/cli "${range}" but the running CLI is ${cliVersion}. Update the plugin, or pin a compatible @houserules/cli version.`,
     );
   }
 }
@@ -248,7 +248,7 @@ function resolvePluginModules(
   const dir = resolvePluginDir(root, entry.name);
   const pkg = readPluginPackageJson(dir, entry.name);
 
-  const peerRange = pkg.peerDependencies?.['@agent-kit/cli'];
+  const peerRange = pkg.peerDependencies?.['@houserules/cli'];
   if (peerRange !== undefined)
     checkPeerRange(entry.name, peerRange, cliVersion);
 
@@ -306,7 +306,7 @@ export const buildRegistry: BuildRegistry = (root, config, builtIns) => {
     if (seenAliases.has(entry.alias)) {
       fail(
         entry.name,
-        `alias "${entry.alias}" is already used by another plugin. Give each plugin a unique alias in .claude/kit.config.json.`,
+        `alias "${entry.alias}" is already used by another plugin. Give each plugin a unique alias in .claude/houserules.config.json.`,
       );
     }
     seenAliases.add(entry.alias);

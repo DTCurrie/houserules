@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-three': minor
+'@houserules/plugin-three': minor
 ---
 
 Initial release. Three.js authoring patterns, with opt-in Threlte and React Three Fiber guides.

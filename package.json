@@ -1,13 +1,13 @@
 {
-  "name": "agent-kit-workspace",
+  "name": "houserules-workspace",
   "version": "0.0.0",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "private": true,
-  "description": "Workspace root for agent-kit and its first-party plugins. Not published.",
+  "description": "Workspace root for houserules and its first-party plugins. Not published.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DTCurrie/agent-kit.git"
+    "url": "git+https://github.com/DTCurrie/houserules.git"
   },
   "packageManager": "pnpm@11.20.0",
   "type": "module",
@@ -20,14 +20,14 @@
     "test": "wireit",
     "lint": "wireit",
     "lint:fix": "eslint . --fix",
-    "schema": "pnpm --filter @agent-kit/cli schema",
+    "schema": "pnpm --filter @houserules/cli schema",
     "format": "prettier --cache --write .",
     "format:check": "prettier --cache --check .",
     "change": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish",
-    "dogfood": "pnpm --filter @agent-kit/cli dogfood",
-    "dogfood:watch": "pnpm --filter @agent-kit/cli dogfood:watch",
+    "dogfood": "pnpm --filter @houserules/cli dogfood",
+    "dogfood:watch": "pnpm --filter @houserules/cli dogfood:watch",
     "attw": "wireit",
     "verify:packages": "node scripts/verify-packages.mjs",
     "verify:payload-copy-set": "node scripts/verify-payload-copy-set.mjs",
@@ -38,7 +38,7 @@
   },
   "wireit": {
     "lint": {
-      "//": "node_modules is excluded because packages/cli/test/plugin-fixture/node_modules/@agent-kit/cli symlinks back to packages/cli, and a glob that follows it recurses until wireit runs out of heap.",
+      "//": "node_modules is excluded because packages/cli/test/plugin-fixture/node_modules/@houserules/cli symlinks back to packages/cli, and a glob that follows it recurses until wireit runs out of heap.",
       "command": "eslint --cache --cache-location .eslintcache .",
       "files": [
         "eslint.config.mjs",
@@ -96,7 +96,7 @@
       ]
     },
     "test": {
-      "//": "Fifteen entries, not sixteen. @agent-kit/test ships no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
+      "//": "Fifteen entries, not sixteen. @houserules/test ships no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
       "dependencies": [
         "./packages/api:test",
         "./packages/cli:test",

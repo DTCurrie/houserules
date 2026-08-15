@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn, runScript } from '#test/run';
-import { editKitConfig, readJson, settingsOf } from '#test/installed-tree';
+import { editHouseConfig, readJson, settingsOf } from '#test/installed-tree';
 import { recordedCalls, stubRunner } from '#test/runner-stub';
 import { makeAnswers, makeCtx } from '#test/ctx-builder';
 import { defaultEnabled, plan } from '../lint-fix.js';
@@ -72,7 +72,7 @@ describe('plan, given a root-scoped fix block whose commands are real root scrip
       rootPkg: { name: 'my-repo', scripts: { 'lint:fix': 'eslint --fix .' } },
       targets: [],
     });
-    ctx.claude.kitConfig = {
+    ctx.claude.houseConfig = {
       version: 2,
       packageManager: 'npm',
       targets: [],
@@ -96,7 +96,7 @@ describe('plan, given a root-scoped fix block whose commands are real root scrip
       rootPkg: { name: 'my-repo', scripts: { 'lint:fix': 'eslint --fix .' } },
       targets: [],
     });
-    ctx.claude.kitConfig = {
+    ctx.claude.houseConfig = {
       version: 2,
       packageManager: 'npm',
       targets: [],
@@ -118,7 +118,7 @@ describe('plan, given a root-scoped fix block whose commands are not real root s
       rootPkg: { name: 'my-repo', scripts: {} },
       targets: [],
     });
-    ctx.claude.kitConfig = {
+    ctx.claude.houseConfig = {
       version: 2,
       packageManager: 'npm',
       targets: [],
@@ -143,7 +143,7 @@ describe('plan, given a root-scoped fix block whose commands are not real root s
       rootPkg: { name: 'my-repo', scripts: {} },
       targets: [],
     });
-    ctx.claude.kitConfig = {
+    ctx.claude.houseConfig = {
       version: 2,
       packageManager: 'npm',
       targets: [],
@@ -166,7 +166,7 @@ describe('the per-extension fix-command gate', () => {
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
     stubRunner(root);
-    editKitConfig(root, (c) => {
+    editHouseConfig(root, (c) => {
       c.fix = {
         runner: './stub-runner.sh',
         filterFlag: '--filter',

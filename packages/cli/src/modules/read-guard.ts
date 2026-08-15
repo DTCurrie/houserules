@@ -1,6 +1,6 @@
-import type { Action, ModuleGroup } from '@agent-kit/api';
+import type { Action, ModuleGroup } from '@houserules/api';
 import { script } from './copy-actions.js';
-import { hookFragment } from '@agent-kit/api';
+import { hookFragment } from '@houserules/api';
 
 export const id = 'read-guard';
 export const title =
@@ -35,7 +35,7 @@ export function plan(): Action[] {
     },
     {
       kind: 'advise',
-      text: 'Read guard on: tune readGuard.maxBytes / readGuard.denyGlobs in .claude/kit.config.json. Reads with offset/limit always pass; only unbounded whole-file reads of generated/huge files are redirected.',
+      text: 'Read guard on: tune readGuard.maxBytes / readGuard.denyGlobs in .claude/houserules.config.json. Reads with offset/limit always pass; only unbounded whole-file reads of generated/huge files are redirected.',
       module: id,
     },
   ];

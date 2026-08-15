@@ -1,6 +1,6 @@
 {
-  "$schema": "../node_modules/@agent-kit/cli/schema/kit.config.schema.json",
-  "_help": "agent-kit per-repo config, schema v2. `npx agent-kit init` generates this from detection; edit freely afterwards — `npx agent-kit doctor` validates it against the repo. Consumed by: guard-bash.mjs (guard), lint-format-fix.mjs (fix + targets), changeset-check.mjs (changesets + targets), package-changelog.mjs (targets, when ledger.enabled), verify-changed.mjs (verify + targets[].verifyCommands, when the verify-changed module is enabled).",
+  "$schema": "../node_modules/@houserules/cli/schema/houserules.config.schema.json",
+  "_help": "houserules per-repo config, schema v2. `npx houserules init` generates this from detection; edit freely afterwards — `npx houserules doctor` validates it against the repo. Consumed by: guard-bash.mjs (guard), lint-format-fix.mjs (fix + targets), changeset-check.mjs (changesets + targets), package-changelog.mjs (targets, when ledger.enabled), verify-changed.mjs (verify + targets[].verifyCommands, when the verify-changed module is enabled).",
   "version": 2,
   "packageManager": "pnpm",
   "fix": {

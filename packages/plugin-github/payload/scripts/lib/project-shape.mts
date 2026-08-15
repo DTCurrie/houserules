@@ -8,7 +8,7 @@
 
 // Core declares this, and it is re-exported so every board module keeps naming project-shape as
 // where its vocabulary comes from. A type-only import, which erases before emit.
-import type { LedgerKind } from '@agent-kit/payload/ledger-index';
+import type { LedgerKind } from '@houserules/payload/ledger-index';
 
 export type { LedgerKind };
 
@@ -82,7 +82,7 @@ const AREA_REPO_ROOT = 'repo root';
  * The `Area` value for a surface: the bare target name, or {@link AREA_REPO_ROOT}.
  *
  * Kept beside its inverse deliberately. These two lived in different files and drifted, so the
- * backlog board stored `agent-kit` while the projection read it straight back as the surface and
+ * backlog board stored `houserules` while the projection read it straight back as the surface and
  * the `.BACKLOG.md` suffix was silently lost. One file, one pair, one round trip.
  */
 export function areaForSurface(surface: string): string {
@@ -202,10 +202,10 @@ export function splitListField(value: string | null): string[] {
  * An HTML comment because it has to survive round-tripping through the GitHub web editor
  * without being visible to whoever reads the issue.
  */
-const MARKER_PATTERN = /<!-- agent-kit:entry:(\S+) -->/;
+const MARKER_PATTERN = /<!-- houserules:entry:(\S+) -->/;
 
 export function formatMarker(entryId: string): string {
-  return `<!-- agent-kit:entry:${entryId} -->`;
+  return `<!-- houserules:entry:${entryId} -->`;
 }
 
 /** The entry id in `body`'s marker, or null when it carries none. */

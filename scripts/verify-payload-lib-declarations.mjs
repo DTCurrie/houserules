@@ -9,9 +9,9 @@
  * `api.payload.lib(id, '<name>.mjs')` literal calls in `src/index.ts`, or in the same
  * `for (const name of [...]) { ...lib(id, name)... }` shape `packages/cli/src/modules/core.ts`
  * uses for its hand-maintained manifest. A cross-package lib, one rewritten from
- * `@agent-kit/payload/<name>` by the `agent-kit-payload` build step, is recorded instead in
+ * `@houserules/payload/<name>` by the `houserules-payload` build step, is recorded instead in
  * that package's own `payload-dist/payload-imports.json` sidecar, so that file is read as a
- * second declaration source. `@agent-kit/payload` itself is skipped, since it is the source
+ * second declaration source. `@houserules/payload` itself is skipped, since it is the source
  * those sidecars point at, not a package with its own install pipeline.
  *
  * Falsifies the shape of AGENTKIT-beef33 across every package at once, rather than the one
@@ -29,7 +29,7 @@ import { join, relative } from 'node:path';
 const repoRoot = join(import.meta.dirname, '..');
 const packagesDir = join(repoRoot, 'packages');
 
-const SKIPPED_PACKAGE_NAMES = new Set(['@agent-kit/payload']);
+const SKIPPED_PACKAGE_NAMES = new Set(['@houserules/payload']);
 
 function packageNameOf(packageDir) {
   const manifest = JSON.parse(

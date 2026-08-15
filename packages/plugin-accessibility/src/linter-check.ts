@@ -1,9 +1,9 @@
-import type { CheckResult, Ctx, Finding } from '@agent-kit/api';
+import type { CheckResult, Ctx, Finding } from '@houserules/api';
 
 /**
  * A markup framework, and the accessibility linter a repo using it should have. The plugin
  * ships routing and reasoning. The mechanical checking belongs to these, and every one of them
- * is better at it than anything the kit would write.
+ * is better at it than anything houserules would write.
  */
 const LINTERS_BY_FRAMEWORK = [
   {
@@ -53,7 +53,7 @@ function declaredDependencies(ctx: Ctx): Set<string> {
  * Warns when a repo has a markup framework and no accessibility linter for it.
  *
  * This is where the plugin's central decision becomes visible to someone who never read the
- * README: the kit routes and reasons, the linter checks. A repo with neither is relying on the
+ * README: houserules routes and reasons, the linter checks. A repo with neither is relying on the
  * agent to catch by hand what a linter catches mechanically.
  *
  * Pure and read-only, per the `check` contract. A missing manifest, a `dependencies` field that

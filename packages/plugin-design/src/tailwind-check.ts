@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import type { CheckResult, Ctx, Finding } from '@agent-kit/api';
+import type { CheckResult, Ctx, Finding } from '@houserules/api';
 
 const TAILWIND_MAJOR = 4;
 

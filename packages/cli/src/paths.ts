@@ -2,7 +2,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * The kit's own package root, resolved from this module's location. That location is
+ * houserules' own package root, resolved from this module's location. That location is
  * one level under the root in both source (`src/paths.ts`) and build output
  * (`dist/paths.js`), so the CLI finds its payload whatever repo it was invoked against.
  */

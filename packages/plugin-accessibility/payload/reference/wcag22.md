@@ -1,4 +1,4 @@
-<!-- GENERATED — do not edit. Regenerate with `pnpm --filter @agent-kit/plugin-accessibility wcag:regen`. -->
+<!-- GENERATED — do not edit. Regenerate with `pnpm --filter @houserules/plugin-accessibility wcag:regen`. -->
 
 # WCAG 2.2 Success Criteria
 

@@ -25,11 +25,11 @@ describe('projectTitle', () => {
 
   it('gives one repo exactly two titles, however many targets it declares', () => {
     const titles = new Set([
-      projectTitle('agent-kit', 'backlog'),
-      projectTitle('agent-kit', 'decisions'),
+      projectTitle('houserules', 'backlog'),
+      projectTitle('houserules', 'decisions'),
     ]);
 
-    expect([...titles]).toEqual(['agent-kit Backlog', 'agent-kit Decisions']);
+    expect([...titles]).toEqual(['houserules Backlog', 'houserules Decisions']);
   });
 });
 
@@ -210,7 +210,7 @@ describe('fieldsFor decisions', () => {
 describe('formatMarker', () => {
   it('wraps the entry id in an HTML comment', () => {
     expect(formatMarker('TEST-abc123')).toBe(
-      '<!-- agent-kit:entry:TEST-abc123 -->',
+      '<!-- houserules:entry:TEST-abc123 -->',
     );
   });
 });
@@ -218,7 +218,7 @@ describe('formatMarker', () => {
 describe('parseMarker', () => {
   it('extracts the entry id from a body carrying a marker', () => {
     expect(
-      parseMarker('Some report text.\n\n<!-- agent-kit:entry:TEST-abc123 -->'),
+      parseMarker('Some report text.\n\n<!-- houserules:entry:TEST-abc123 -->'),
     ).toBe('TEST-abc123');
   });
 
@@ -232,7 +232,7 @@ describe('parseMarker', () => {
 
   it('returns null for prose that merely resembles a marker', () => {
     expect(
-      parseMarker('The marker is agent-kit:entry:TEST-abc123, apparently.'),
+      parseMarker('The marker is houserules:entry:TEST-abc123, apparently.'),
     ).toBeNull();
   });
 });
@@ -240,12 +240,12 @@ describe('parseMarker', () => {
 describe('appendMarker', () => {
   it('appends the marker to a body carrying none', () => {
     expect(appendMarker('Reported bug.', 'TEST-abc123')).toBe(
-      'Reported bug.\n\n<!-- agent-kit:entry:TEST-abc123 -->',
+      'Reported bug.\n\n<!-- houserules:entry:TEST-abc123 -->',
     );
   });
 
   it('is a no-op when the body already carries a marker', () => {
-    const body = 'Reported bug.\n\n<!-- agent-kit:entry:TEST-abc123 -->';
+    const body = 'Reported bug.\n\n<!-- houserules:entry:TEST-abc123 -->';
 
     expect(appendMarker(body, 'TEST-xyz789')).toBe(body);
   });

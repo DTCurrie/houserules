@@ -4,9 +4,9 @@ import { TargetRepo } from './core/fs-target.js';
 import {
   MANIFEST_PATH,
   type BodyHashes,
-  type KitManifest,
+  type HouseManifest,
   type SettingsSignature,
-} from '@agent-kit/api/internal';
+} from '@houserules/api/internal';
 import type { EffectOp, PlanResult, PruneResult } from './plan.js';
 import type { PluginSource } from './plugin-registry.js';
 
@@ -27,7 +27,7 @@ export type ApplyInput = Except<
 export interface ApplyOptions {
   kitVersion: string;
   moduleIds: string[];
-  previousManifest?: KitManifest | null;
+  previousManifest?: HouseManifest | null;
   /** Restrict writes to these dests (doctor --fix). Omit to write the whole plan. */
   paths?: Set<string>;
   /** The plugins the registry resolved for this run, recorded on the manifest. */
@@ -41,11 +41,11 @@ export interface WrittenEntry {
 
 export interface ApplyResult {
   written: WrittenEntry[];
-  manifest: KitManifest;
+  manifest: HouseManifest;
 }
 
 /**
- * Executes a computed plan. This is the only code in the kit that writes to a target
+ * Executes a computed plan. This is the only code in houserules that writes to a target
  * repo, and it adds no decisions of its own. Every effect here was already produced by
  * `computeEffects()` and shown to the user, and every write goes through `TargetRepo`,
  * so "what a run would touch" and "what a run did touch" come from the same code.
@@ -75,7 +75,7 @@ export function apply(
   for (const { action, op, content, hash, frontmatterHash } of effects) {
     if (!wanted(action.dest)) continue;
     // `region` and `body` are manifest-tracked like copy/write, but the recorded hash
-    // covers only the part the kit owns: the region body, or the file body below the
+    // covers only the part houserules owns: the region body, or the file body below the
     // frontmatter. The rest of the file is the user's.
     const owned =
       action.kind === 'copy' ||
@@ -93,7 +93,7 @@ export function apply(
     }
     if (content === null) continue;
     // A merge rewrites a file the user owns, so it gets the same backup settings.json gets.
-    // Every other op here writes a file the kit owns and can regenerate.
+    // Every other op here writes a file houserules owns and can regenerate.
     if (op === 'merge') repo.backupOnce(action.dest);
     // Only copy/write carry a mode. A seed never does.
     const mode = 'mode' in action ? action.mode : undefined;
@@ -140,7 +140,7 @@ export function apply(
     // which is the one thing that makes a repeated `init` non-idempotent.
     JSON.stringify(previousManifest.plugins ?? []) ===
       JSON.stringify(plugins ?? []);
-  const manifest: KitManifest = stable
+  const manifest: HouseManifest = stable
     ? previousManifest
     : {
         kitVersion,

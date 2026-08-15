@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
  * SessionStart hook. Prints an orientation header of at most four lines: branch,
- * uncommitted files, and affected kit targets, so the agent does not re-derive it with
+ * uncommitted files, and affected houserules targets, so the agent does not re-derive it with
  * full `git status` reads.
  *
  * stdout becomes session context, so this stays tiny. Every failure path exits 0.
  */
 
-import { loadConfigSafe } from '@agent-kit/payload/kit-config';
-import { git } from '@agent-kit/payload/proc';
+import { loadConfigSafe } from '@houserules/payload/config';
+import { git } from '@houserules/payload/proc';
 
 // Past this many changed files, a per-target summary is more useful than a file list.
 const MAX_INLINE_FILES = 25;
@@ -36,7 +36,9 @@ try {
       ].filter(Boolean);
       if (bits.length) tracking = ` (${bits.join(', ')})`;
     }
-    lines.push(`[kit] branch: ${branch ?? '(no commits yet)'}${tracking}`);
+    lines.push(
+      `[houserules] branch: ${branch ?? '(no commits yet)'}${tracking}`,
+    );
 
     const status = git(root, ['status', '--porcelain']) ?? '';
     const changed = status
@@ -57,16 +59,16 @@ try {
           .map(([n, c]) => `${n} (${c})`)
           .join(', ');
         lines.push(
-          `[kit] uncommitted: ${changed.length} files${summary ? ` — ${summary}` : ''}`,
+          `[houserules] uncommitted: ${changed.length} files${summary ? ` — ${summary}` : ''}`,
         );
       } else {
         const shown = changed.slice(0, MAX_LISTED_FILES).join(', ');
         lines.push(
-          `[kit] uncommitted (${changed.length}): ${shown}${changed.length > MAX_LISTED_FILES ? ', …' : ''}`,
+          `[houserules] uncommitted (${changed.length}): ${shown}${changed.length > MAX_LISTED_FILES ? ', …' : ''}`,
         );
         if (byTarget.size)
           lines.push(
-            `[kit] targets touched: ${[...byTarget.keys()].join(', ')}`,
+            `[houserules] targets touched: ${[...byTarget.keys()].join(', ')}`,
           );
       }
     }

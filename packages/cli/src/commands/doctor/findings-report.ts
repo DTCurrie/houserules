@@ -1,7 +1,7 @@
 import { EXIT } from '../../cli-contract.js';
 import { driftedFiles, type DriftReport } from '../../core/drift.js';
 import * as log from '../log.js';
-import type { Finding } from '@agent-kit/api';
+import type { Finding } from '@houserules/api';
 
 export interface DoctorReport {
   root: string;
@@ -63,11 +63,11 @@ export function printTextReport(report: DoctorReport, isFixing: boolean): void {
   console.log(
     report.findings.length
       ? `\n${errors.length} error(s), ${warns.length} warning(s).`
-      : '✓ kit installation healthy — no findings.',
+      : '✓ houserules installation healthy — no findings.',
   );
   if (report.configBlocked) {
     console.log(
-      'Every other check was skipped: they all read .claude/kit.config.json, and a config the schema rejects cannot be trusted.',
+      'Every other check was skipped: they all read .claude/houserules.config.json, and a config the schema rejects cannot be trusted.',
     );
     console.log('Fix the problems above, then run doctor again.');
     return;
@@ -75,6 +75,6 @@ export function printTextReport(report: DoctorReport, isFixing: boolean): void {
   // Gated on blocking drift, not on drift at all. A local edit is never reconciled by a
   // bare `--fix`, so offering it there contradicts the healthy verdict just printed.
   if (report.blockingCount && !isFixing) {
-    console.log('Run `npx agent-kit doctor --fix` to reconcile.');
+    console.log('Run `npx houserules doctor --fix` to reconcile.');
   }
 }

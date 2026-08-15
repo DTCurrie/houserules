@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { KitConfigError, parseKitConfig } from '../config.js';
+import { HouseConfigError, parseHouseConfig } from '../config.js';
 
 const minimalConfig = {
   version: 2,
@@ -8,26 +8,26 @@ const minimalConfig = {
   targets: [],
 };
 
-describe('parseKitConfig', () => {
+describe('parseHouseConfig', () => {
   it('accepts a minimal valid config', () => {
-    expect(parseKitConfig(JSON.stringify(minimalConfig))).toEqual(
+    expect(parseHouseConfig(JSON.stringify(minimalConfig))).toEqual(
       minimalConfig,
     );
   });
 
   it('rejects an unknown top-level key', () => {
     const raw = JSON.stringify({ ...minimalConfig, notAField: true });
-    expect(() => parseKitConfig(raw)).toThrow(KitConfigError);
+    expect(() => parseHouseConfig(raw)).toThrow(HouseConfigError);
   });
 
   it('rejects a missing required field', () => {
     const raw = JSON.stringify({ version: 2, targets: [] });
     try {
-      parseKitConfig(raw);
-      throw new Error('expected parseKitConfig to throw');
+      parseHouseConfig(raw);
+      throw new Error('expected parseHouseConfig to throw');
     } catch (error) {
-      expect(error).toBeInstanceOf(KitConfigError);
-      expect((error as KitConfigError).problems).toContain(
+      expect(error).toBeInstanceOf(HouseConfigError);
+      expect((error as HouseConfigError).problems).toContain(
         'packageManager is required',
       );
     }

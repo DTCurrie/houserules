@@ -5,7 +5,7 @@ export default defineConfig({
     alias: [
       {
         find: /^#test\/(.*)$/,
-        replacement: '@agent-kit/test/$1',
+        replacement: '@houserules/test/$1',
       },
     ],
   },
@@ -15,7 +15,7 @@ export default defineConfig({
       'src/**/__test__/**/*.test.ts',
       'payload/**/__test__/**/*.test.ts',
     ],
-    globalSetup: ['@agent-kit/test/global-setup'],
+    globalSetup: ['@houserules/test/global-setup'],
     testTimeout: 30_000,
     hookTimeout: 30_000,
     expect: { requireAssertions: true },

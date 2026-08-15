@@ -7,12 +7,12 @@ import { payloadPath } from '../paths.js';
 import {
   renderClaudeAdditions,
   renderClaudeMd,
-  renderKitConfig,
+  renderHouseConfig,
 } from '../render.js';
-import type { Action, Answers, ModuleGroup } from '@agent-kit/api';
+import type { Action, Answers, ModuleGroup } from '@houserules/api';
 import type { Ctx } from '../detect.js';
 import { lib, script, selfGitignoreAction, template } from './copy-actions.js';
-import { hookFragment } from '@agent-kit/api';
+import { hookFragment } from '@houserules/api';
 
 // Staged by their owning opt-in module rather than by core's blanket walk, so a repo
 // that never enables that module does not carry its pattern.
@@ -45,7 +45,7 @@ function libActions(): Action[] {
   // Every shared lib the scripts import must be listed here. A script installed
   // without its lib fails at runtime with ERR_MODULE_NOT_FOUND, in the user's repo.
   for (const name of [
-    'kit-config.mjs',
+    'config.mjs',
     'backlog-id.mjs',
     'entry-ledger.mjs',
     'ledger-index.mjs',
@@ -63,7 +63,7 @@ function libActions(): Action[] {
   );
   // Inert until a prompt actually references a logged ID. Verified on the stock CLI:
   // UserPromptSubmit exit-0 stdout is added to context, same as SessionStart. Reads any
-  // kit ledger, so it belongs to core rather than to any one ledger module.
+  // houserules ledger, so it belongs to core rather than to any one ledger module.
   actions.push(
     script(
       id,
@@ -81,7 +81,7 @@ function libActions(): Action[] {
  */
 function templateActions(): Action[] {
   const actions: Action[] = [];
-  const templatesRoot = payloadPath('kit-templates');
+  const templatesRoot = payloadPath('templates');
   for (const file of walk(templatesRoot)) {
     const rel = relative(templatesRoot, file).replaceAll('\\', '/');
     if (MODULE_OWNED_TEMPLATES.has(rel)) continue;
@@ -92,9 +92,9 @@ function templateActions(): Action[] {
   actions.push(
     selfGitignoreAction(
       id,
-      '.claude/kit-templates/.gitignore',
+      '.claude/templates/.gitignore',
       [
-        '# Reference scaffolding staged by agent-kit, refreshed by `npx agent-kit update`.',
+        '# Reference scaffolding staged by houserules, refreshed by `npx houserules update`.',
         '# The artifacts you build from these (agents, guardrail docs, CLAUDE.md) live',
         '# elsewhere and are yours to commit — these skeletons are not meant to be.',
       ],
@@ -111,14 +111,14 @@ function templateActions(): Action[] {
 function selfGitignoredDirActions(ctx: Ctx): Action[] {
   const actions: Action[] = [];
   // Build output, refreshed by `update`, so a fresh install never commits it. Opt out
-  // with kit.config.json `scripts.commit: true`.
-  if (ctx.claude.kitConfig?.scripts?.commit !== true) {
+  // with houserules.config.json `scripts.commit: true`.
+  if (ctx.claude.houseConfig?.scripts?.commit !== true) {
     actions.push(
       selfGitignoreAction(
         id,
         '.claude/scripts/.gitignore',
         [
-          '# Compiled hook scripts, refreshed by `npx agent-kit update`.',
+          '# Compiled hook scripts, refreshed by `npx houserules update`.',
           '# Build output, not source — not meant to be committed.',
         ],
         'scripts are build output; self-gitignored (repo .gitignore untouched)',
@@ -151,17 +151,17 @@ function selfGitignoredDirActions(ctx: Ctx): Action[] {
 }
 
 /**
- * The `kit.config.json` seed, and the `CLAUDE.md` seed-or-region: a whole-file seed for a
+ * The `houserules.config.json` seed, and the `CLAUDE.md` seed-or-region: a whole-file seed for a
  * repo with no CLAUDE.md yet, otherwise the managed region upserted into the existing one.
  */
 function claudeMdActions(ctx: Ctx, answers: Answers): Action[] {
   const actions: Action[] = [];
   actions.push({
     kind: 'seed',
-    dest: '.claude/kit.config.json',
-    content: renderKitConfig(ctx, answers),
+    dest: '.claude/houserules.config.json',
+    content: renderHouseConfig(ctx, answers),
     module: id,
-    reason: 'per-repo kit config (targets + toolchain)',
+    reason: 'per-repo houserules config (targets + toolchain)',
     // Resolved option selections have to survive the run that computed them, or `update`
     // re-resolves to each module's defaults and prunes whatever the real selection installed.
     managedKeys: ['moduleOptions'],
@@ -186,10 +186,10 @@ function claudeMdActions(ctx: Ctx, answers: Answers): Action[] {
 
   // Emitted unconditionally. computeEffects resolves a region against the content the
   // plan has already queued for that path, not just what is on disk.
-  if (ctx.claude.kitConfig?.claudeMd?.managed === false) {
+  if (ctx.claude.houseConfig?.claudeMd?.managed === false) {
     actions.push({
       kind: 'advise',
-      text: 'CLAUDE.md region management is disabled (claudeMd.managed: false). See .claude/kit-templates/ for the kit sections to merge by hand.',
+      text: 'CLAUDE.md region management is disabled (claudeMd.managed: false). See .claude/templates/ for houserules sections to merge by hand.',
       module: id,
     });
   } else {
@@ -200,7 +200,7 @@ function claudeMdActions(ctx: Ctx, answers: Answers): Action[] {
       region: claudeMdRegion,
       module: id,
       reason:
-        'kit sections, maintained in place (content outside the markers is never touched)',
+        'houserules sections, maintained in place (content outside the markers is never touched)',
     });
   }
   return actions;
@@ -234,7 +234,7 @@ function settingsActions(): Action[] {
 }
 
 /**
- * The always-installed baseline: shared libs, the Bash guard, kit.config.json,
+ * The always-installed baseline: shared libs, the Bash guard, houserules.config.json,
  * permissions, the CLAUDE.md seed or managed region, and template staging.
  */
 export function plan(ctx: Ctx, answers: Answers): Action[] {

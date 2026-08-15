@@ -7,7 +7,7 @@
  * Every other path exits 0, because a PostToolUse hook that crashes would spew on every
  * edit.
  *
- * Config (kit.config.json): a target may carry a `regen` block of `sourceGlob` (for
+ * Config (houserules.config.json): a target may carry a `regen` block of `sourceGlob` (for
  * example `packages/foo/data/**`) and `command` (for example `pnpm --filter foo gen`).
  * Keep the command fast and the sourceGlob tight. It runs on every matching edit.
  */
@@ -15,13 +15,13 @@
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { loadConfigSafe } from '@agent-kit/payload/kit-config';
+import { loadConfigSafe } from '@houserules/payload/config';
 import {
   globToRe,
   readStdinJson,
   repoRoot,
   tail,
-} from '@agent-kit/payload/proc';
+} from '@houserules/payload/proc';
 
 interface RegenPayload {
   tool_input?: { file_path?: string; path?: string };
@@ -66,7 +66,7 @@ try {
 
   if (failures.length) {
     process.stderr.write(
-      'agent-kit regen: a generator failed after your edit — fix the source, then it will re-run.\n',
+      'houserules regen: a generator failed after your edit — fix the source, then it will re-run.\n',
     );
     for (const f of failures) {
       process.stderr.write(`\n--- ${f.command} ---\n`);

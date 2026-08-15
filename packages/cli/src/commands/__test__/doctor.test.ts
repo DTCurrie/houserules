@@ -19,7 +19,7 @@ import {
 } from '#test/installed-tree';
 import { runDoctorJson } from '#test/doctor-report';
 import { blockingDrift, doctorExitCode } from '../doctor.js';
-import type { Finding } from '@agent-kit/api';
+import type { Finding } from '@houserules/api';
 import { EXIT } from '../../cli-contract.js';
 import type { FileDrift } from '../../core/drift.js';
 import { PRETTIERIGNORE_REGION } from '../../modules/prettier-guard.js';
@@ -146,18 +146,18 @@ describe('doctor on a freshly initialized pnpm monorepo', () => {
     expect(r.stdout).toMatch(/healthy/);
   });
 
-  it('exits 0 and names a locally edited kit file in a readout, since nothing can acknowledge the edit', () => {
+  it('exits 0 and names a locally edited houserules file in a readout, since nothing can acknowledge the edit', () => {
     const guard = join(root, '.claude/scripts/guard-bash.mjs');
     appendFileSync(guard, '// tweak\n');
 
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).toMatch(
-      /your edits on 1 kit file\(s\), kept as-is: \.claude\/scripts\/guard-bash\.mjs/,
+      /your edits on 1 houserules file\(s\), kept as-is: \.claude\/scripts\/guard-bash\.mjs/,
     );
   });
 
-  it('prints no warning and no diff for a locally edited kit file the kit has not changed since', () => {
+  it('prints no warning and no diff for a locally edited houserules file houserules has not changed since', () => {
     appendFileSync(join(root, '.claude/scripts/guard-bash.mjs'), '// tweak\n');
 
     const r = runCli(['doctor', root]);
@@ -199,7 +199,7 @@ describe('doctor on a freshly initialized pnpm monorepo', () => {
     expect(r.stdout).toMatch(/session-context\.mjs not wired/);
   });
 
-  it('exits 0 with a warning when a package fix script drifts from kit.config.json', () => {
+  it('exits 0 with a warning when a package fix script drifts from houserules.config.json', () => {
     const pkgPath = join(root, 'games/cityville/package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
       scripts: Record<string, unknown>;
@@ -360,13 +360,13 @@ describe('doctor workspace coverage', () => {
     root = useInstalledRepo('pnpm-monorepo');
   });
 
-  it('exits 0 with no "no kit target" warning when init gave every workspace member a target', () => {
+  it('exits 0 with no "no houserules target" warning when init gave every workspace member a target', () => {
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
-    expect(r.stdout).not.toMatch(/has no kit target/);
+    expect(r.stdout).not.toMatch(/has no houserules target/);
   });
 
-  it('warns pointing at kit.config.json when a workspace package is added after init', () => {
+  it('warns pointing at houserules.config.json when a workspace package is added after init', () => {
     mkdirSync(join(root, 'apps/newgame'), { recursive: true });
     writeFileSync(
       join(root, 'apps/newgame/package.json'),
@@ -376,19 +376,19 @@ describe('doctor workspace coverage', () => {
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).toMatch(
-      /workspace package "@fix\/newgame" \(apps\/newgame\) has no kit target/,
+      /workspace package "@fix\/newgame" \(apps\/newgame\) has no houserules target/,
     );
-    expect(r.stdout).toMatch(/kit\.config\.json/);
+    expect(r.stdout).toMatch(/houserules\.config\.json/);
   });
 });
 
-describe('doctor on a kit.config.json the schema rejects', () => {
+describe('doctor on a houserules.config.json the schema rejects', () => {
   let root: string;
 
   function breakConfig(
     mutate: (config: Record<string, unknown>) => void,
   ): void {
-    const path = join(root, '.claude/kit.config.json');
+    const path = join(root, '.claude/houserules.config.json');
     const config = JSON.parse(readFileSync(path, 'utf8'));
     mutate(config);
     writeFileSync(path, JSON.stringify(config, null, 2));
@@ -413,7 +413,7 @@ describe('doctor on a kit.config.json the schema rejects', () => {
 
     const r = runCli(['doctor', root]);
 
-    expect(r.stdout).toMatch(/kit\.config\.json: targets/);
+    expect(r.stdout).toMatch(/houserules\.config\.json: targets/);
     expect(r.stdout).not.toMatch(/TypeError/);
   });
 
@@ -565,8 +565,8 @@ describe('doctor committed .claude/scripts detection', () => {
     expect(r.stdout).toMatch(/git rm --cached/);
   });
 
-  it('suppresses the committed-scripts finding when kit.config.json sets scripts.commit: true', () => {
-    const configPath = join(root, '.claude/kit.config.json');
+  it('suppresses the committed-scripts finding when houserules.config.json sets scripts.commit: true', () => {
+    const configPath = join(root, '.claude/houserules.config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.scripts = { commit: true };
     writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -582,12 +582,12 @@ describe('doctor committed .claude/scripts detection', () => {
 });
 
 describe('doctor on an uninstalled repo', () => {
-  it('exits 1 reporting the kit is not installed', () => {
+  it('exits 1 reporting houserules is not installed', () => {
     const root = useRepo('non-js');
 
     const r = runCli(['doctor', root]);
     expect(r.status).toBe(1);
-    expect(r.stdout).toMatch(/kit not installed/);
+    expect(r.stdout).toMatch(/houserules not installed/);
   });
 });
 
@@ -605,7 +605,7 @@ describe('doctor committed reference template detection', () => {
   });
 
   it('exits 0 with a git rm --cached warning when reference templates get committed', () => {
-    runIn(root, 'git', ['add', '-f', '.claude/kit-templates']);
+    runIn(root, 'git', ['add', '-f', '.claude/templates']);
     runIn(root, 'git', ['commit', '-qm', 'committed templates']);
 
     const r = runCli(['doctor', root]);
@@ -615,10 +615,10 @@ describe('doctor committed reference template detection', () => {
   });
 });
 
-describe('doctor on a manifest listing a module the kit no longer defines', () => {
+describe('doctor on a manifest listing a module houserules no longer defines', () => {
   it('warns by name and still exits 0', () => {
     const root = useInstalledRepo('pnpm-monorepo');
-    const manifestPath = join(root, '.claude/kit-manifest.json');
+    const manifestPath = join(root, '.claude/houserules.manifest.json');
     const manifest = readJson(manifestPath);
     manifest.modules = [...manifest.modules, 'ghost-module'];
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
@@ -626,7 +626,7 @@ describe('doctor on a manifest listing a module the kit no longer defines', () =
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).toMatch(
-      /module "ghost-module" which this kit no longer defines/,
+      /module "ghost-module" which houserules no longer defines/,
     );
   });
 });
@@ -690,7 +690,7 @@ describe('doctor and a body-owned rule frontmatter', () => {
     expect(r.stdout).not.toMatch(/code-cleanliness\.md/);
   });
 
-  it('warns once when a customized frontmatter differs from a default the kit has since moved on from, while still exiting 0', () => {
+  it('warns once when a customized frontmatter differs from a default houserules has since moved on from, while still exiting 0', () => {
     const original = readFileSync(rulePath, 'utf8');
     const body = original.slice(frontmatterOf(original).length);
     const customized = '---\npaths:\n  - "custom/**"\n---\n';
@@ -712,7 +712,7 @@ describe('doctor and a body-owned rule frontmatter', () => {
 
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).toMatch(
-      /code-cleanliness\.md: the kit shipped a new default `paths:`/,
+      /code-cleanliness\.md: houserules shipped a new default `paths:`/,
     );
   });
 });
@@ -734,13 +734,13 @@ describe('doctor, the suspected-formatter-mangle hint', () => {
     root = useInstalledRepo('pnpm-monorepo');
   });
 
-  it('warns with the recovery command when several kit files read as edited and no .prettierignore block exists', () => {
+  it('warns with the recovery command when several houserules files read as edited and no .prettierignore block exists', () => {
     editThreeKitFiles();
 
     const r = runCli(['doctor', root]);
 
     expect(r.stdout).toMatch(/likely cause/);
-    expect(r.stdout).toMatch(/npx agent-kit doctor --fix --force/);
+    expect(r.stdout).toMatch(/npx houserules doctor --fix --force/);
   });
 
   it('does not move the exit code, since a WARN finding alone never does', () => {
@@ -761,7 +761,7 @@ describe('doctor, the suspected-formatter-mangle hint', () => {
     expect(r.stdout).not.toMatch(/likely cause/);
   });
 
-  it('stays silent when only a couple of kit files read as edited', () => {
+  it('stays silent when only a couple of houserules files read as edited', () => {
     appendFileSync(join(root, '.claude/scripts/guard-bash.mjs'), '// tweak\n');
     appendFileSync(
       join(root, '.claude/scripts/session-context.mjs'),

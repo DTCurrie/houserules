@@ -10,7 +10,7 @@
  * otherwise fix every changed package concurrently, rewriting files its siblings still
  * hold open. The parent turn's Stop runs the same fix once, after the fan-out settles.
  *
- * Config keys used (see kit.config.example.json):
+ * Config keys used (see houserules.config.example.json):
  *   targets[].pathPrefix, targets[].packageName   map a changed path to a package
  *   lintableExtensions                            which file types trigger the hook
  *   generatedFilePattern                          files written by tooling, skipped
@@ -26,8 +26,8 @@ import {
   resolveTargetCommands,
   runsAtRepoRoot,
   type RunnerBlock,
-} from '@agent-kit/payload/kit-config';
-import { readStdinJson, repoRoot, tail } from '@agent-kit/payload/proc';
+} from '@houserules/payload/config';
+import { readStdinJson, repoRoot, tail } from '@houserules/payload/proc';
 
 interface HookInput {
   stop_hook_active?: boolean;

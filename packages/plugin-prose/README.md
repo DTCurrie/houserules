@@ -1,7 +1,7 @@
-# @agent-kit/plugin-prose
+# @houserules/plugin-prose
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-prose.svg)](https://www.npmjs.com/package/@agent-kit/plugin-prose)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-prose.svg)](https://www.npmjs.com/package/@agent-kit/plugin-prose)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-prose.svg)](https://www.npmjs.com/package/@houserules/plugin-prose)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-prose.svg)](https://www.npmjs.com/package/@houserules/plugin-prose)
 
 An agent left to its own judgment writes a file header nobody reads, restates a variable name
 in a comment above it, adds an em dash where a period would do, and pads a PR description with
@@ -15,11 +15,11 @@ optional terser reply style, and a PR description skill that reads the actual di
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-prose
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-prose
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the modules into `.claude/`. All four modules below are off by default,
 so select them when `init` asks.
 
@@ -82,14 +82,14 @@ The `output-prose` style is adapted from [caveman](https://github.com/JuliusBrus
 by Julius Brussee, MIT licensed. Its rule set is the origin of this one: drop filler and
 pleasantries, prefer fragments, preserve code and errors byte for byte, keep the user's
 language, and suspend compression where terseness would risk a misread. The wording and the
-fragment-versus-precision trade-off are this kit's own. The full MIT notice is in this
+fragment-versus-precision trade-off are houserules' own. The full MIT notice is in this
 package's `LICENSE`, and the installed style file carries a pointer to it.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 

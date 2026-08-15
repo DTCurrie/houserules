@@ -1,4 +1,4 @@
-import { definePlugin, hookFragment, scriptPermission } from '@agent-kit/api';
+import { definePlugin, hookFragment, scriptPermission } from '@houserules/api';
 import type {
   Action,
   Answers,
@@ -6,7 +6,7 @@ import type {
   Ctx,
   ModuleDef,
   PluginApi,
-} from '@agent-kit/api';
+} from '@houserules/api';
 
 function renderChangesetConfig(ctx: Ctx): string {
   return `${JSON.stringify(
@@ -213,7 +213,7 @@ function ledgerModule(api: PluginApi): ModuleDef {
         },
         {
           kind: 'advise',
-          text: 'Ledger: instantiate an archivist per target from .claude/kit-templates/agents/archivist.agent.md.template (records commits into .claude/changelogs/).',
+          text: 'Ledger: instantiate an archivist per target from .claude/templates/agents/archivist.agent.md.template (records commits into .claude/changelogs/).',
           module: id,
         },
       ];

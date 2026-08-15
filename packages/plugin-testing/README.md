@@ -1,7 +1,7 @@
-# @agent-kit/plugin-testing
+# @houserules/plugin-testing
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-testing.svg)](https://www.npmjs.com/package/@agent-kit/plugin-testing)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-testing.svg)](https://www.npmjs.com/package/@agent-kit/plugin-testing)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-testing.svg)](https://www.npmjs.com/package/@houserules/plugin-testing)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-testing.svg)](https://www.npmjs.com/package/@houserules/plugin-testing)
 
 An agent asked to fix a bug will often write a test that passes before the fix and after it,
 which proves nothing. Left alone, it also drifts toward asserting `toBeDefined()`, chasing a
@@ -15,11 +15,11 @@ suffix and build-exclusion detail the base rule leaves out.
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-testing
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-testing
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the module into `.claude/`. This module is off by default, so select it
 when `init` asks.
 
@@ -46,15 +46,15 @@ when `init` asks.
 ## Upgrading from the CLI core
 
 `testing` was a built-in CLI module. A repo that recorded it before the split gets a
-`KitError` on its next `init` or `update` naming this package. Installing it and adding it to
-the `plugins` array in `.claude/kit.config.json` restores the module and its files. Nothing is
+`HouseError` on its next `init` or `update` naming this package. Installing it and adding it to
+the `plugins` array in `.claude/houserules.config.json` restores the module and its files. Nothing is
 deleted in the meantime.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 

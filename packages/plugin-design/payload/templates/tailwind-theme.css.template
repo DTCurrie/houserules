@@ -1,6 +1,6 @@
 /*
  * Starter design system on top of Tailwind v4. Copy the parts you want into your own entry
- * stylesheet, next to your own `@import "tailwindcss"`. The kit never writes into your CSS,
+ * stylesheet, next to your own `@import "tailwindcss"`. houserules never writes into your CSS,
  * so nothing here takes effect until you paste it somewhere Tailwind compiles.
  *
  * See ../reference/design-tailwind-theming.md for why each block is shaped the way it is.

@@ -12,8 +12,8 @@ import {
   upsertRegion,
   bodyHashes,
   wholeFileHash,
-} from '@agent-kit/api/internal';
-import { KitError } from './kit-error.js';
+} from '@houserules/api/internal';
+import { HouseError } from './house-error.js';
 import { mergeManagedKeys } from './merge-config-keys.js';
 import { classifyFrontmatter, splitFrontmatter } from './core/frontmatter.js';
 
@@ -49,13 +49,13 @@ import type {
   ModuleDef,
   Settings,
   SettingsFragment,
-} from '@agent-kit/api';
+} from '@houserules/api';
 import type {
-  KitManifest,
+  HouseManifest,
   SettingsChange,
   SettingsPlan,
   SettingsSignature,
-} from '@agent-kit/api/internal';
+} from '@houserules/api/internal';
 import type { Ctx } from './detect.js';
 import type { PluginSource, Registry } from './plugin-registry.js';
 
@@ -94,7 +94,7 @@ export interface Effect {
    */
   hash?: string;
   /**
-   * `body` actions only: sha256 of the frontmatter the KIT ships, which is the default a
+   * `body` actions only: sha256 of the frontmatter houserules ships, which is the default a
    * later run compares the user's against. Never the hash of what is on disk. Recorded
    * beside `hash` as {@link BodyHashes}.
    */
@@ -102,13 +102,13 @@ export interface Effect {
 }
 
 export interface ComputeEffectsOptions {
-  manifest?: KitManifest | null;
+  manifest?: HouseManifest | null;
   force?: boolean;
   /**
    * Plugin sources, used to attribute a missing `payload-dist/` file to the plugin that
    * owns it instead of aborting the whole plan. A caller that omits this still gets the
-   * old behavior: a missing payload file throws {@link KitError} unconditionally, since
-   * there is no way to tell a plugin's file from the kit's own.
+   * old behavior: a missing payload file throws {@link HouseError} unconditionally, since
+   * there is no way to tell a plugin's file from houserules' own.
    */
   plugins?: PluginSource[];
 }
@@ -119,7 +119,7 @@ export interface ComputeEffectsOptions {
  * one.
  */
 interface BrokenPluginProblem {
-  /** The plugin's name, as configured in kit.config.json. */
+  /** The plugin's name, as configured in houserules.config.json. */
   plugin: string;
   /** Human-readable, names the plugin, the missing file(s), and the fix. */
   message: string;
@@ -172,7 +172,7 @@ export const MODULES: ModuleDef[] = [
 ];
 
 /**
- * Files the USER owns, of which the kit manages only a region or a few keys. These
+ * Files the USER owns, of which houserules manages only a region or a few keys. These
  * are never created wholesale, never pruned, and never overwritten outside their
  * managed span.
  */
@@ -193,7 +193,7 @@ export function defaultModuleIds(ctx: Ctx, registry: Registry): string[] {
  * Adjusts the default module set additively and subtractively. A `--modules` value of
  * `ledger,-rename` adds ledger and withdraws rename. `core` is always re-added.
  *
- * @throws KitError when the flag names a module that does not exist.
+ * @throws HouseError when the flag names a module that does not exist.
  */
 export function resolveModuleIds(
   ctx: Ctx,
@@ -208,7 +208,7 @@ export function resolveModuleIds(
     const remove = token.startsWith('-');
     const id = remove ? token.slice(1) : token;
     if (!known.has(id)) {
-      throw new KitError(
+      throw new HouseError(
         `Unknown module "${id}". Known modules: ${[...known].join(', ')}`,
       );
     }
@@ -271,7 +271,7 @@ function formatBrokenPluginMessage(
 
 /**
  * Checks a `copy` or `body` action's payload file. A built-in's missing file is a broken
- * kit install and aborts immediately, since there is no owner to attribute it to and
+ * houserules install and aborts immediately, since there is no owner to attribute it to and
  * nothing else can produce it. A plugin's missing file is recorded against that plugin in
  * `broken` and `brokenDests` instead, so the caller can skip this one action and keep
  * planning everything else.
@@ -286,7 +286,7 @@ function checkPayloadMissing(
 ): boolean {
   if (existsSync(action.src)) return false;
   const plugin = findOwningPlugin(action.src, plugins);
-  if (!plugin) throw new KitError(`Kit payload file missing: ${action.src}`);
+  if (!plugin) throw new HouseError(`Kit payload file missing: ${action.src}`);
   const missing = broken.get(plugin.name) ?? [];
   missing.push(action.src);
   broken.set(plugin.name, missing);
@@ -301,10 +301,10 @@ function checkPayloadMissing(
  * This encodes the kit-owned versus user-owned rule, which is the invariant the whole
  * update story rests on. A file whose current bytes differ from the hash the manifest
  * recorded is one YOU edited, and it is never refreshed without `force`. A file matching
- * its recorded hash is one only the KIT has written, so a content change means the kit
+ * its recorded hash is one only houserules has written, so a content change means houserules
  * moved on and the refresh is safe and silent.
  *
- * @param recordedHash From the manifest. `undefined` means the kit never wrote this path,
+ * @param recordedHash From the manifest. `undefined` means houserules never wrote this path,
  *   so there is nothing to have diverged from and the file is refreshable.
  */
 export function classifyWrite(args: {
@@ -331,7 +331,7 @@ function effectForRegion(
   action: RegionAction,
   destAbs: string,
   exists: boolean,
-  manifest: KitManifest | null,
+  manifest: HouseManifest | null,
   force: boolean,
   pendingContent: Map<string, string>,
 ): Effect {
@@ -345,7 +345,7 @@ function effectForRegion(
   // `start\n\nbody\n\nend`, and extractBody strips only one newline from each end, so a
   // region read back from disk is never byte-identical to the body that produced it.
   // Comparing untrimmed made `locallyModified` true for every padded region whose body
-  // legitimately changed, which meant a kit upgrade reported CLAUDE.md as user-edited and
+  // legitimately changed, which meant a houserules upgrade reported CLAUDE.md as user-edited and
   // refused to touch it. Only the skip-identical check above, which already trimmed, hid it.
   const hash = sha256(action.body.trim());
   const next = upsertRegion(current, action.body, action.region);
@@ -355,7 +355,7 @@ function effectForRegion(
     return { action, op: 'skip-identical', content, hash };
   }
   const recordedHash = wholeFileHash(manifest, action.dest);
-  // A block still under the legacy markers was recorded by an older kit generation whose
+  // A block still under the legacy markers was recorded by an older houserules generation whose
   // hash semantics are not this one's, so the comparison below would report drift for every
   // such install and strand it on the old markers behind a --force it has no reason to run.
   const adoptingLegacy =
@@ -378,7 +378,7 @@ function effectForRegion(
 }
 
 /**
- * The kit owns everything below the closing `---` in a `body`-owned file. Splits
+ * houserules owns everything below the closing `---` in a `body`-owned file. Splits
  * frontmatter (which may be user-trimmed) from the body (fully kit-owned) and judges
  * each half against its own recorded hash.
  *
@@ -388,7 +388,7 @@ function effectForBody(
   action: BodyAction,
   destAbs: string,
   exists: boolean,
-  manifest: KitManifest | null,
+  manifest: HouseManifest | null,
   force: boolean,
   plugins: PluginSource[] | undefined,
   broken: Map<string, string[]>,
@@ -494,7 +494,7 @@ function effectForCopyOrWrite(
   root: string,
   destAbs: string,
   exists: boolean,
-  manifest: KitManifest | null,
+  manifest: HouseManifest | null,
   force: boolean,
   plugins: PluginSource[] | undefined,
   broken: Map<string, string[]>,
@@ -527,8 +527,8 @@ function effectForCopyOrWrite(
 /**
  * All modules' settings fragments merged into one pass over the real file.
  *
- * @throws KitError when the existing `.claude/settings.json` is not valid JSON, since the
- *   kit refuses to rewrite a file it cannot parse.
+ * @throws HouseError when the existing `.claude/settings.json` is not valid JSON, since the
+ *   houserules refuses to rewrite a file it cannot parse.
  */
 function computeSettingsPlan(
   root: string,
@@ -543,9 +543,9 @@ function computeSettingsPlan(
     try {
       current = parseSettingsText(text);
     } catch (e) {
-      throw new KitError(
+      throw new HouseError(
         `.claude/settings.json is not valid JSON (${(e as Error).message}). ` +
-          'Fix it by hand first. The kit will not rewrite a file it cannot parse.',
+          'Fix it by hand first. houserules will not rewrite a file it cannot parse.',
         { cause: e },
       );
     }
@@ -644,8 +644,8 @@ export function computeEffects(
 
   const settingsPlan = computeSettingsPlan(root, fragments);
 
-  // The kit's settings signature is recorded even on a no-change run (the fragments
-  // describe the kit's contribution regardless of what's already merged in).
+  // houserules' settings signature is recorded even on a no-change run (the fragments
+  // describe houserules' contribution regardless of what's already merged in).
   const signature = settingsSignature(fragments);
 
   // `region` and `body` are included so a retired one stops being pruned as an orphan.
@@ -695,7 +695,7 @@ export function computePrune(
     plannedDests,
     force = false,
   }: {
-    manifest?: KitManifest | null;
+    manifest?: HouseManifest | null;
     plannedDests: Set<string>;
     force?: boolean;
   },

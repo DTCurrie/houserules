@@ -9,7 +9,10 @@ import { join } from 'node:path';
 
 import { useInstalledRepo } from '#test/repo';
 import { runIn, runScript } from '#test/run';
-import { editKitConfig, type InstalledKitConfig } from '#test/installed-tree';
+import {
+  editHouseConfig,
+  type InstalledHouseConfig,
+} from '#test/installed-tree';
 import { recordedCalls, stubRunner } from '#test/runner-stub';
 
 const SCRIPT = '.claude/scripts/lint-format-fix.mjs';
@@ -18,7 +21,7 @@ function setRunner(
   root: string,
   fixOverrides: Record<string, unknown> = {},
 ): void {
-  editKitConfig(root, (config: InstalledKitConfig) => {
+  editHouseConfig(root, (config: InstalledHouseConfig) => {
     config.fix = {
       runner: './stub-runner.sh',
       filterFlag: '--filter',
@@ -113,14 +116,14 @@ describe('lint-format-fix.mjs on SubagentStop', () => {
   });
 });
 
-describe('lint-format-fix.mjs seeded kit.config.json', () => {
+describe('lint-format-fix.mjs seeded houserules.config.json', () => {
   let root: string;
   let config: { fix: { onSubagentStop: boolean }; verify?: unknown };
 
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
     config = JSON.parse(
-      readFileSync(join(root, '.claude/kit.config.json'), 'utf8'),
+      readFileSync(join(root, '.claude/houserules.config.json'), 'utf8'),
     );
   });
 
@@ -182,7 +185,7 @@ describe('lint-format-fix.mjs when a target sets fixCommands to null', () => {
     root = useInstalledRepo('pnpm-monorepo');
     stubRunner(root);
     setRunner(root);
-    editKitConfig(root, (config: InstalledKitConfig) => {
+    editHouseConfig(root, (config: InstalledHouseConfig) => {
       for (const target of config.targets)
         if (target.name === 'cityville') target.fixCommands = null;
     });

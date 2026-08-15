@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { Command, CommanderError } from 'commander';
 
-import { KitConfigError } from '@agent-kit/api/internal';
+import { HouseConfigError } from '@houserules/api/internal';
 import type { Flags } from './cli-contract.js';
 import { EXIT } from './cli-contract.js';
 
@@ -63,8 +63,8 @@ function flagsFrom(options: CommandOptions, command: Command): Flags {
 }
 
 const program = new Command()
-  .name('agent-kit')
-  .description('portable Claude Code context-discipline kit')
+  .name('houserules')
+  .description('portable context-discipline for Claude Code')
   .version(KIT_VERSION, '-v, --version')
   .option('--cwd <dir>', 'target repo root (default: current directory)')
   .option('--dry-run', 'show what would change without writing')
@@ -74,7 +74,7 @@ const program = new Command()
 program
   .command('init')
   .description(
-    'detect the repo, choose modules, and install the kit into .claude/',
+    'detect the repo, choose modules, and install houserules into .claude/',
   )
   .argument('[dir]', 'target repo root (default: current directory)')
   .option('--yes', 'accept all defaults. No prompts (implied when not a TTY)')
@@ -143,10 +143,10 @@ program
 program
   .command('update')
   .description(
-    'refresh kit-owned files to this kit version, keeping your edits',
+    'refresh kit-owned files to houserules version, keeping your edits',
   )
   .argument('[dir]', 'target repo root (default: current directory)')
-  .option('--force', 'overwrite kit files that have local edits')
+  .option('--force', 'overwrite houserules files that have local edits')
   .option(
     '--next-steps',
     'print the full post-install to-do list (summarized by default)',
@@ -168,12 +168,12 @@ program
 program
   .command('doctor')
   .description(
-    'validate the installation. Exits 1 on drift, 2 on an invalid kit.config.json',
+    'validate the installation. Exits 1 on drift, 2 on an invalid houserules.config.json',
   )
   .argument('[dir]', 'target repo root (default: current directory)')
   .option('--json', 'machine-readable report on stdout')
   .option('--fix', 'reconcile the drift found (your edits are kept)')
-  .option('--prune', 'with --fix, also delete orphaned kit files')
+  .option('--prune', 'with --fix, also delete orphaned houserules files')
   .option('--force', 'with --fix, also overwrite files you have edited')
   .action(
     async (
@@ -232,9 +232,9 @@ program.addHelpText(
 Exit codes:
   0  success (doctor: no problems)
   1  error, or doctor found a problem
-  2  .claude/kit.config.json does not satisfy the schema
+  2  .claude/houserules.config.json does not satisfy the schema
 
-Details: https://github.com/DTCurrie/agent-kit#readme`,
+Details: https://github.com/DTCurrie/houserules#readme`,
 );
 
 try {
@@ -251,7 +251,7 @@ try {
     // --help and --version report success. Parse failures already wrote to stderr.
     process.exit(error.exitCode === 0 ? EXIT.ok : EXIT.error);
   }
-  if (error instanceof KitConfigError) {
+  if (error instanceof HouseConfigError) {
     console.error(error.message);
     process.exit(EXIT.badConfig);
   }

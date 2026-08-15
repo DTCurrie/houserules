@@ -27,13 +27,13 @@ export interface WriteAction extends ActionBase {
 /**
  * User-owned: written whole only when absent, never refreshed or overwritten.
  *
- * `managedKeys` is the one narrow exception, and it exists because some of what the kit
+ * `managedKeys` is the one narrow exception, and it exists because some of what houserules
  * computes has to OUTLIVE the run that computed it. A module's resolved `options` are the
  * case: `update` and `doctor` re-resolve them every run, so a selection that is never written
  * down silently reverts to the module's defaults and takes its installed files with it.
  *
  * Naming the keys, rather than refreshing the file, is what keeps this from becoming a fourth
- * ownership shape. The file stays the user's. The kit reconciles the listed keys and never
+ * ownership shape. The file stays the user's. houserules reconciles the listed keys and never
  * reads or writes a byte of the rest. See {@link ./merge-config-keys.ts}.
  */
 export interface SeedAction extends ActionBase {
@@ -41,12 +41,12 @@ export interface SeedAction extends ActionBase {
   dest: string;
   content: string;
   reason: string;
-  /** JSON top-level keys the kit reconciles when the file already exists. */
+  /** JSON top-level keys houserules reconciles when the file already exists. */
   managedKeys?: string[];
 }
 
 /**
- * A marker-delimited block inside a file the USER owns. The kit rewrites only what
+ * A marker-delimited block inside a file the USER owns. houserules rewrites only what
  * is between the markers. Everything else in the host file survives verbatim. The
  * manifest records a hash of the BODY (not the file), so a hand-edited region is
  * detectable as a local edit while the user's own prose around it is irrelevant.
@@ -61,12 +61,12 @@ export interface RegionAction extends ActionBase {
 }
 
 /**
- * A file whose BODY the kit owns and whose FRONTMATTER you own. The mirror image of
- * {@link RegionAction}. There the kit owns a marked span inside a file that is yours.
+ * A file whose BODY houserules owns and whose FRONTMATTER you own. The mirror image of
+ * {@link RegionAction}. There houserules owns a marked span inside a file that is yours.
  * Here it owns everything below the closing `---`, and the frontmatter above it is yours
  * to configure.
  *
- * Rule files are the case this exists for. The kit's own advice tells you to trim a rule's
+ * Rule files are the case this exists for. houserules' own advice tells you to trim a rule's
  * `paths:` globs to the suffixes your repo uses, and a whole-file hash would then freeze
  * the rule BODY at whatever shipped the day you trimmed it. The manifest records the body
  * hash and the shipped frontmatter hash separately, so `update` splices a fresh body under
@@ -84,7 +84,7 @@ export interface BodyAction extends ActionBase {
   reason: string;
   /**
    * Text appended below the payload file's own body, composed by the module from what the
-   * user selected. The kit owns it exactly as it owns the rest of the body, so the recorded
+   * user selected. houserules owns it exactly as it owns the rest of the body, so the recorded
    * body hash covers both and `update` refreshes the pair together.
    *
    * This is what lets a rule point at an OPTIONAL file. A link that ships in the payload

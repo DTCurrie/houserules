@@ -137,7 +137,7 @@ Source: Ousterhout, A Philosophy of Software Design.
 
 ## Structure
 
-SOLID is usually stated in class terms. This kit installs into repos that may have no
+SOLID is usually stated in class terms. houserules installs into repos that may have no
 classes at all, so each principle below keeps its canonical name, for greppability, and
 gets a restatement at module and function level.
 

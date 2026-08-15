@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { useInstalledRepo } from '#test/repo';
 import { runIn, runScript } from '#test/run';
 import { stubRunner } from '#test/runner-stub';
-import { editKitConfig, readJson } from '#test/installed-tree';
+import { editHouseConfig, readJson } from '#test/installed-tree';
 
 interface CityvillePackageJson {
   dependencies?: Record<string, string>;
@@ -27,7 +27,7 @@ function repoWithStudioDependingOnCityville(): string {
 
 function useStubVerifyRunner(root: string, { fail = false } = {}): void {
   stubRunner(root, { fail, failMessage: 'type error TS2322' });
-  editKitConfig(root, (config) => {
+  editHouseConfig(root, (config) => {
     config.verify.runner = './stub-runner.sh';
   });
 }
@@ -57,7 +57,7 @@ describe('verify-changed.mjs --json', () => {
 
   it('clears a target that sets verifyCommands to null, rather than inheriting the block', () => {
     const root = repoWithStudioDependingOnCityville();
-    editKitConfig(root, (config) => {
+    editHouseConfig(root, (config) => {
       const targets = (config.targets ?? []) as {
         packageName?: string;
         verifyCommands?: string[] | null;
@@ -126,7 +126,7 @@ describe('verify-changed.mjs --run', () => {
 
   it('names the verify block to configure when none exists, instead of running a script the repo never had', () => {
     const bareRoot = repoWithStudioDependingOnCityville();
-    editKitConfig(bareRoot, (config) => {
+    editHouseConfig(bareRoot, (config) => {
       delete config.verify;
     });
     appendFileSync(
@@ -138,6 +138,6 @@ describe('verify-changed.mjs --run', () => {
 
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/no "verify" block configured/);
-    expect(r.stdout).toMatch(/\.claude\/kit\.config\.json/);
+    expect(r.stdout).toMatch(/\.claude\/houserules\.config\.json/);
   });
 });

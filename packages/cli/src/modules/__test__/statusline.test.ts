@@ -27,7 +27,7 @@ describe('statusline', () => {
       scriptOutput = r.stdout;
     });
 
-    it('sets statusLine to the kit command', () => {
+    it('sets statusLine to houserules command', () => {
       const settings = settingsOf(root);
       expect(settings.statusLine).toBeTruthy();
       expect(settings.statusLine.command).toMatch(/statusline\.mjs/);
@@ -44,7 +44,7 @@ describe('statusline', () => {
     });
 
     it.each([
-      { detail: 'a [kit] prefix', pattern: /\[kit\]/ },
+      { detail: 'a [houserules] prefix', pattern: /\[houserules\]/ },
       { detail: 'the pending changeset count', pattern: /changeset/ },
       { detail: 'the touched target', pattern: /cityville/ },
       { detail: 'the ambient context percentage', pattern: /ctx 34%/ },

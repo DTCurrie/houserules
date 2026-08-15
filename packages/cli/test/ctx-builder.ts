@@ -1,5 +1,5 @@
 import type { Ctx, Target } from '../src/detect.js';
-import type { Answers, ModuleDef } from '@agent-kit/api';
+import type { Answers, ModuleDef } from '@houserules/api';
 import type { RegisteredModule, Registry } from '../src/plugin-registry.js';
 
 /**
@@ -40,7 +40,7 @@ export function makeTarget(overrides: Partial<Target> = {}): Target {
 /**
  * The shape `detect()` produces, for the pure planning and rendering functions that consume it.
  *
- * Defaults describe the plainest repo the kit supports: npm, single package, a git repo with
+ * Defaults describe the plainest repo houserules supports: npm, single package, a git repo with
  * commits, no changesets, no existing `.claude/`. A test overrides only the field it is about.
  */
 export function makeCtx(overrides: Partial<Ctx> = {}): Ctx {
@@ -72,7 +72,7 @@ export function makeCtx(overrides: Partial<Ctx> = {}): Ctx {
       settingsLocalExists: false,
       claudeMdExists: false,
       manifest: null,
-      kitConfig: null,
+      houseConfig: null,
       agents: [],
       skills: [],
     },

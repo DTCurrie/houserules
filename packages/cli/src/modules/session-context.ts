@@ -1,6 +1,6 @@
-import type { Action, ModuleGroup } from '@agent-kit/api';
+import type { Action, ModuleGroup } from '@houserules/api';
 import { script } from './copy-actions.js';
-import { hookFragment } from '@agent-kit/api';
+import { hookFragment } from '@houserules/api';
 
 export const id = 'session-context';
 export const title = 'Session-start context header';

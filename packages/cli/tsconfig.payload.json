@@ -14,8 +14,8 @@
     // erasable, so `.mjs` emit is the source minus its types and nothing else.
     "erasableSyntaxOnly": true,
     // Declarations are emitted for this package's own hook scripts. workspaces and
-    // kit-config, which src/ consumes from payload-dist (e.g. detect.ts), now live in
-    // @agent-kit/payload — scripts/build-payload.mjs copies their compiled .mjs/.d.mts
+    // config, which src/ consumes from payload-dist (e.g. detect.ts), now live in
+    // @houserules/payload — scripts/build-payload.mjs copies their compiled .mjs/.d.mts
     // into this package's payload-dist/scripts/lib/ after this project runs, which is
     // what keeps that relative import working unchanged. Build order is
     // payload → src, wired in the `build` script.

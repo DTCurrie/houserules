@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * statusLine command. Surfaces the two things the native statusline cannot: pending
- * changeset debt and which kit targets the working tree has touched, alongside the
+ * changeset debt and which houserules targets the working tree has touched, alongside the
  * ambient context percentage and cost from the status JSON Claude Code pipes in.
  *
  * One line to stdout. Every failure path prints nothing and exits 0.
@@ -10,8 +10,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { loadConfigSafe } from '@agent-kit/payload/kit-config';
-import { git } from '@agent-kit/payload/proc';
+import { loadConfigSafe } from '@houserules/payload/config';
+import { git } from '@houserules/payload/proc';
 
 interface StatusPayload {
   workspace?: { project_dir?: string };
@@ -68,7 +68,8 @@ try {
   const cost = status.cost?.total_cost_usd;
   if (typeof cost === 'number') segments.push(`$${cost.toFixed(2)}`);
 
-  if (segments.length) process.stdout.write(`[kit] ${segments.join(' · ')}\n`);
+  if (segments.length)
+    process.stdout.write(`[houserules] ${segments.join(' · ')}\n`);
 } catch {
   /* never disrupt the session */
 }

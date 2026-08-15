@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import { makeCtx } from '#test/ctx-builder';
 import { useRepo } from '#test/repo';
-import type { KitConfig } from '@agent-kit/api';
-import type { KitManifest } from '@agent-kit/api/internal';
+import type { HouseConfig } from '@houserules/api';
+import type { HouseManifest } from '@houserules/api/internal';
 import type { Ctx } from '../../../detect.js';
 import { checkConfigValidity } from '../config-validity.js';
 
@@ -35,10 +35,10 @@ function stageConfig(
   const withDefaults = { packageManager: 'pnpm', ...config };
   mkdirSync(join(root, '.claude'), { recursive: true });
   writeFileSync(
-    join(root, '.claude', 'kit.config.json'),
+    join(root, '.claude', 'houserules.config.json'),
     JSON.stringify(withDefaults, null, 2),
   );
-  const manifest: KitManifest = {
+  const manifest: HouseManifest = {
     kitVersion: '1.0.0',
     installedAt: '2026-01-01T00:00:00.000Z',
     modules,
@@ -50,7 +50,7 @@ function stageConfig(
     claude: {
       ...base.claude,
       manifest,
-      kitConfig: config as unknown as KitConfig,
+      houseConfig: config as unknown as HouseConfig,
     },
   };
 }
@@ -60,7 +60,7 @@ function messages(root: string, ctx: Ctx): string[] {
 }
 
 describe('checkConfigValidity, when the config is absent', () => {
-  it('errors when the kit is installed but the config is gone', () => {
+  it('errors when houserules is installed but the config is gone', () => {
     const base = makeCtx();
     const ctx = {
       ...base,
@@ -76,13 +76,13 @@ describe('checkConfigValidity, when the config is absent', () => {
     };
 
     expect(checkConfigValidity('/repo', ctx).findings).toEqual([
-      { level: 'ERROR', msg: 'no .claude/kit.config.json' },
+      { level: 'ERROR', msg: 'no .claude/houserules.config.json' },
     ]);
   });
 
-  it('warns rather than errors when the kit was never installed', () => {
+  it('warns rather than errors when houserules was never installed', () => {
     expect(checkConfigValidity('/repo', makeCtx()).findings).toEqual([
-      { level: 'WARN', msg: 'no .claude/kit.config.json' },
+      { level: 'WARN', msg: 'no .claude/houserules.config.json' },
     ]);
   });
 });
@@ -111,7 +111,7 @@ describe('checkConfigValidity, schema validation', () => {
 
     expect(checkConfigValidity(root, ctx).findings[0]).toMatchObject({
       level: 'ERROR',
-      msg: expect.stringContaining('kit.config.json:'),
+      msg: expect.stringContaining('houserules.config.json:'),
     });
   });
 
@@ -136,7 +136,7 @@ describe('checkConfigValidity, schema validation', () => {
     });
 
     expect(messages(root, ctx)).toEqual([
-      expect.stringContaining('kit.config.json: packageManager'),
+      expect.stringContaining('houserules.config.json: packageManager'),
     ]);
   });
 
@@ -348,7 +348,7 @@ describe('checkConfigValidity, verify commands', () => {
     );
 
     expect(messages(root, ctx)).toEqual([
-      'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/kit.config.json, or "verifyCommands" to each target. Without one --run has nothing to run.',
+      'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/houserules.config.json, or "verifyCommands" to each target. Without one --run has nothing to run.',
     ]);
   });
 
@@ -440,7 +440,7 @@ describe('checkConfigValidity, workspace coverage', () => {
     const ctx = stageConfig(root, { version: 2, targets: [STUDIO_TARGET] });
 
     expect(messages(root, ctx)).toContain(
-      'workspace package "@fix/cityville" (games/cityville) has no kit target — add one to .claude/kit.config.json targets[] by hand (re-running init skips the existing config)',
+      'workspace package "@fix/cityville" (games/cityville) has no houserules target — add one to .claude/houserules.config.json targets[] by hand (re-running init skips the existing config)',
     );
   });
 

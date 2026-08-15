@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { extractBody } from '@agent-kit/api/internal';
+import { extractBody } from '@houserules/api/internal';
 import { PRETTIERIGNORE_REGION } from './prettier-guard.js';
 
 /**
@@ -18,7 +18,7 @@ function prettierignoreBlockPresent(root: string): boolean {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.error(
-        `agent-kit: could not read .prettierignore (${(error as Error).message}). Assuming it has no kit-owned block, which may misdiagnose a formatter mangle.`,
+        `houserules: could not read .prettierignore (${(error as Error).message}). Assuming it has no kit-owned block, which may misdiagnose a formatter mangle.`,
       );
     }
     return false;
@@ -33,7 +33,7 @@ function prettierignoreBlockPresent(root: string): boolean {
  * Shared by `doctor` and `update` because they reach the same conclusion from the same
  * evidence, and a repo that hits this usually runs the one that does not warn.
  *
- * @param editedPaths Repo-relative dests whose bytes no longer match what the kit wrote.
+ * @param editedPaths Repo-relative dests whose bytes no longer match what houserules wrote.
  * @param remedy The command that restores them, worded for the calling command.
  * @returns The hint, or null when the count is too low to blame a formatter or a
  *   `.prettierignore` block already rules one out.

@@ -1,7 +1,7 @@
-import type { KitConfig, ModuleDef } from '@agent-kit/api';
+import type { HouseConfig, ModuleDef } from '@houserules/api';
 
-export type { PluginSource } from '@agent-kit/api/internal';
-import type { PluginSource } from '@agent-kit/api/internal';
+export type { PluginSource } from '@houserules/api/internal';
+import type { PluginSource } from '@houserules/api/internal';
 
 /**
  * One module in the registry, built-in or contributed.
@@ -47,7 +47,7 @@ export class PluginResolutionError extends Error {
  * Loads the plugins declared in config and returns them alongside the built-ins.
  * Implemented by `plugin-resolver.ts`, which owns the resolution rules.
  *
- * Resolution runs against the TARGET repo, never against the kit's own install. A plugin is a
+ * Resolution runs against the TARGET repo, never against houserules' own install. A plugin is a
  * dependency of the repo being configured, the same way an eslint plugin is.
  *
  * Built-ins come first and always win a name contest. A plugin may not claim a bare id, and
@@ -58,7 +58,7 @@ export class PluginResolutionError extends Error {
  */
 export type BuildRegistry = (
   root: string,
-  config: KitConfig | null,
+  config: HouseConfig | null,
   builtIns: ModuleDef[],
 ) => Registry;
 

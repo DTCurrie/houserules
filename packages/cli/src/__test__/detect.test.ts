@@ -12,7 +12,7 @@ import {
   trackedScriptFiles,
   untrackFromIndex,
 } from '../detect.js';
-import { renderKitConfig } from '../render.js';
+import { renderHouseConfig } from '../render.js';
 import { useRepo } from '#test/repo';
 import { runIn } from '#test/run';
 
@@ -281,7 +281,7 @@ describe('detect', () => {
     expect(target.fixCommands).toEqual(['lint:fix', 'format']);
 
     const config = JSON.parse(
-      renderKitConfig(ctx, {
+      renderHouseConfig(ctx, {
         moduleIds: ['lint-fix'],
         targets: ctx.targets,
         seedChangesetConfig: false,
@@ -349,7 +349,7 @@ describe('detect, ctx.prettier', () => {
 });
 
 describe('trackedScriptFiles and untrackFromIndex', () => {
-  it('finds every kit script committed by a pre-gitignore install', () => {
+  it('finds every houserules script committed by a pre-gitignore install', () => {
     const root = useRepo('committed-scripts');
     expect(trackedScriptFiles(root).sort()).toEqual(
       [

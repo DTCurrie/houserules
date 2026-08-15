@@ -1,1 +1,1 @@
-export * from '@agent-kit/api';
+export * from '@houserules/api';

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
 import { runIn, runScript } from '#test/run';
-import { kitConfigPath, readJson } from '#test/installed-tree';
+import { houseConfigPath, readJson } from '#test/installed-tree';
 
 const SCRIPT = '.claude/scripts/changeset-check.mjs';
 const PLUGIN_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
@@ -225,7 +225,7 @@ describe('changeset-check.mjs', () => {
       join(root, 'games/cityville/src/game.ts'),
       'export const more = 2;\n',
     );
-    const configPath = kitConfigPath(root);
+    const configPath = houseConfigPath(root);
     const config = readJson<{
       changesets: { stopCheck: boolean; baseBranch: string };
     }>(configPath);
@@ -240,7 +240,7 @@ describe('changeset-check.mjs', () => {
       join(root, 'games/cityville/src/game.ts'),
       'export const more = 2;\n',
     );
-    const configPath = kitConfigPath(root);
+    const configPath = houseConfigPath(root);
     const config = readJson<{
       changesets: { stopCheck: boolean; baseBranch: string };
     }>(configPath);
@@ -255,7 +255,7 @@ describe('changeset-check.mjs, non-target changes', () => {
   it('stays silent when only a non-target file (README.md) is dirty', () => {
     const root = installChangesets();
     runIn(root, 'git', ['add', '-A']);
-    runIn(root, 'git', ['commit', '-qm', 'install kit']);
+    runIn(root, 'git', ['commit', '-qm', 'install houserules']);
     appendFileSync(join(root, 'README.md'), 'docs only\n');
     const r = runScript(root, SCRIPT, { input: '{}' });
     expect(r.status, r.stderr).toBe(0);

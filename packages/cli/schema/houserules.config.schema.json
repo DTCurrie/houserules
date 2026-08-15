@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json",
-  "title": "agent-kit config",
-  "description": "Per-repo configuration for agent-kit (.claude/kit.config.json).",
+  "$id": "https://github.com/DTCurrie/houserules/blob/main/schema/houserules.config.schema.json",
+  "title": "houserules config",
+  "description": "Per-repo configuration for houserules (.claude/houserules.config.json).",
   "type": "object",
   "properties": {
     "_help": { "type": "string" },
@@ -159,7 +159,7 @@
       "type": "object",
       "properties": {
         "managed": {
-          "description": "Let the kit maintain its marked block in CLAUDE.md. Set false to opt out; the kit then never touches the file.",
+          "description": "Let houserules maintain its marked block in CLAUDE.md. Set false to opt out; houserules then never touches the file.",
           "type": "boolean"
         }
       },
@@ -182,7 +182,7 @@
       "type": "object",
       "properties": {
         "commit": {
-          "description": "Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx agent-kit update`.",
+          "description": "Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx houserules update`.",
           "type": "boolean"
         }
       },
@@ -206,7 +206,7 @@
             "description": "Id namespace for this plugin's modules. A module `prose-voice` under alias `voice` is selected as \"voice/prose-voice\"."
           },
           "config": {
-            "description": "Passed to the plugin verbatim. The kit never reads inside it."
+            "description": "Passed to the plugin verbatim. houserules never reads inside it."
           }
         },
         "required": ["name", "alias"],
@@ -290,7 +290,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "The packages/areas the kit tracks."
+      "description": "The packages/areas houserules tracks."
     }
   },
   "required": ["version", "packageManager", "targets"],

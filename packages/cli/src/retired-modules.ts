@@ -1,4 +1,4 @@
-import { KitError } from './kit-error.js';
+import { HouseError } from './house-error.js';
 import type { RegisteredModule, Registry } from './plugin-registry.js';
 
 /**
@@ -14,16 +14,16 @@ import type { RegisteredModule, Registry } from './plugin-registry.js';
  * version, and the cost of keeping a line here forever is one line.
  */
 export const RETIRED_MODULES: Readonly<Record<string, string>> = {
-  backlog: '@agent-kit/plugin-backlog',
-  changesets: '@agent-kit/plugin-changesets',
-  ledger: '@agent-kit/plugin-changesets',
-  decisions: '@agent-kit/plugin-decisions',
-  'code-comments': '@agent-kit/plugin-prose',
-  'prose-voice': '@agent-kit/plugin-prose',
-  'output-prose': '@agent-kit/plugin-prose',
-  'terse-style': '@agent-kit/plugin-prose',
-  testing: '@agent-kit/plugin-testing',
-  'persona-auditor': '@agent-kit/plugin-persona-auditor',
+  backlog: '@houserules/plugin-backlog',
+  changesets: '@houserules/plugin-changesets',
+  ledger: '@houserules/plugin-changesets',
+  decisions: '@houserules/plugin-decisions',
+  'code-comments': '@houserules/plugin-prose',
+  'prose-voice': '@houserules/plugin-prose',
+  'output-prose': '@houserules/plugin-prose',
+  'terse-style': '@houserules/plugin-prose',
+  testing: '@houserules/plugin-testing',
+  'persona-auditor': '@houserules/plugin-persona-auditor',
 };
 
 /**
@@ -83,7 +83,7 @@ function suppliersOf(
  * An id the registry already answers to is returned unchanged, which also makes this idempotent.
  * An id nothing supplies is returned unchanged so {@link assertNoRetiredModules} still reports it.
  *
- * @throws KitError when two plugins both supply the id, since picking one silently installs the
+ * @throws HouseError when two plugins both supply the id, since picking one silently installs the
  * wrong module's files.
  */
 export function resolveRecordedModuleIds(
@@ -97,11 +97,11 @@ export function resolveRecordedModuleIds(
     const suppliers = suppliersOf(registry, today);
     if (suppliers.length === 0) return recordedId;
     if (suppliers.length > 1) {
-      throw new KitError(
+      throw new HouseError(
         `Module "${recordedId}" is supplied by more than one plugin: ` +
           `${suppliers.map((module) => module.id).join(', ')}.\n` +
           'Nothing was changed. Remove one of those plugins from the "plugins" array in ' +
-          '.claude/kit.config.json, or rename its alias, so the recorded module resolves to one.',
+          '.claude/houserules.config.json, or rename its alias, so the recorded module resolves to one.',
       );
     }
     // Reached only when suppliers.length is exactly 1: the 0 and >1 cases both returned above.
@@ -142,7 +142,7 @@ export function findRetired(
 
 /**
  * The fix text for a set of retired modules: which packages to install and what to add to
- * `.claude/kit.config.json`. One line per package, deduplicated, because two retired ids often
+ * `.claude/houserules.config.json`. One line per package, deduplicated, because two retired ids often
  * come from the same package.
  */
 export function retiredModuleAdvice(retired: readonly RetiredModule[]): string {
@@ -155,7 +155,7 @@ export function retiredModuleAdvice(retired: readonly RetiredModule[]): string {
   const lines = [...byPackage].map(
     ([packageName, ids]) =>
       `  ${ids.join(', ')} moved to ${packageName}. Install it, then add ` +
-      `{ "name": "${packageName}", "alias": "<alias>" } to the "plugins" array in .claude/kit.config.json.`,
+      `{ "name": "${packageName}", "alias": "<alias>" } to the "plugins" array in .claude/houserules.config.json.`,
   );
   return lines.join('\n');
 }
@@ -167,7 +167,7 @@ export function retiredModuleAdvice(retired: readonly RetiredModule[]): string {
  * missing a retired module's files. Aborting is the whole point: continuing would look
  * identical to the user having deliberately removed the module.
  *
- * @throws KitError naming every retired module and the package that restores it.
+ * @throws HouseError naming every retired module and the package that restores it.
  */
 export function assertNoRetiredModules(
   moduleIds: readonly string[],
@@ -175,7 +175,7 @@ export function assertNoRetiredModules(
 ): void {
   const retired = findRetired(moduleIds, registry);
   if (!retired.length) return;
-  throw new KitError(
+  throw new HouseError(
     `This install uses ${retired.length === 1 ? 'a module' : 'modules'} that moved out of the CLI into ${retired.length === 1 ? 'a plugin' : 'plugins'}:\n` +
       `${retiredModuleAdvice(retired)}\n` +
       'Nothing was changed. Installing the plugin restores the module and its files.',

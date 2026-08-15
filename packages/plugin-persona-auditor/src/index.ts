@@ -1,5 +1,5 @@
-import { definePlugin } from '@agent-kit/api';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
+import { definePlugin } from '@houserules/api';
+import type { Action, ModuleDef, PluginApi } from '@houserules/api';
 
 /**
  * A template-only reference pattern: a read-only, single-JSON-output auditor that
@@ -31,7 +31,7 @@ function personaAuditorModule(api: PluginApi): ModuleDef {
         ),
         {
           kind: 'advise',
-          text: 'Persona audits: instantiate .claude/kit-templates/agents/persona-auditor.agent.md.template per component — it blind-ranks options from a persona before revealing the system choice (anti-anchoring is the point, so keep it read-only and haiku).',
+          text: 'Persona audits: instantiate .claude/templates/agents/persona-auditor.agent.md.template per component — it blind-ranks options from a persona before revealing the system choice (anti-anchoring is the point, so keep it read-only and haiku).',
           module: id,
         },
       ];

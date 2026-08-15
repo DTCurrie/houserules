@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-backlog': minor
+'@houserules/plugin-backlog': minor
 ---
 
 Initial release. An append-only backlog ledger, with the add skill and reviewer agent around it.

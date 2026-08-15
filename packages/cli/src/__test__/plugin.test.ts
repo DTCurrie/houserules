@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { createPayloadBuilders } from '../modules/copy-actions.js';
-import type { Action } from '@agent-kit/api';
+import type { Action } from '@houserules/api';
 import type { PluginApi } from '../plugin.js';
 import type { Plugin } from '../plugin.js';
 
@@ -13,10 +13,10 @@ const FIXTURE_ROOT = join(KIT_ROOT, 'test/plugin-fixture');
 const CLI_PAYLOAD_ROOT = join(KIT_ROOT, 'payload-dist');
 
 // The fixture is a standalone package under test/, not a pnpm workspace member, so nothing
-// links "@agent-kit/cli" into its node_modules. Link it here so the fixture resolves the
+// links "@houserules/cli" into its node_modules. Link it here so the fixture resolves the
 // same bare specifier a real plugin package would.
 function ensureFixtureSelfLink(): void {
-  const link = join(FIXTURE_ROOT, 'node_modules', '@agent-kit', 'cli');
+  const link = join(FIXTURE_ROOT, 'node_modules', '@houserules', 'cli');
   if (existsSync(link)) return;
   mkdirSync(dirname(link), { recursive: true });
   symlinkSync(KIT_ROOT, link, 'dir');
@@ -31,7 +31,7 @@ async function loadFixturePlugin(): Promise<Plugin> {
 function buildApi(config: unknown): PluginApi {
   return {
     payload: createPayloadBuilders(join(FIXTURE_ROOT, 'payload-dist')),
-    packageName: '@agent-kit/plugin-fixture',
+    packageName: '@houserules/plugin-fixture',
     alias: 'fixture',
     config,
   };
@@ -49,7 +49,7 @@ function planAllActions(api: PluginApi, plugin: Plugin): Action[] {
   );
 }
 
-describe('a plugin authored against @agent-kit/cli/plugin', () => {
+describe('a plugin authored against @houserules/cli/plugin', () => {
   it('returns three modules', async () => {
     const plugin = await loadFixturePlugin();
     const modules = plugin(buildApi({ note: 'from config' }));
@@ -90,7 +90,7 @@ describe('a plugin authored against @agent-kit/cli/plugin', () => {
     }
   });
 
-  it("never points a src path into the kit's own payload-dist", async () => {
+  it("never points a src path into houserules' own payload-dist", async () => {
     const plugin = await loadFixturePlugin();
     const actions = planAllActions(buildApi({}), plugin);
     const withSrc = actions.filter(

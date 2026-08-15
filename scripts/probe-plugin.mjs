@@ -63,9 +63,9 @@ for (const registered of registry.modules) {
     console.log(`  ${action.kind} ${target}`);
     if (!action.src) continue;
     // A plugin's own files resolve inside its own package. A shared lib does not: a plugin
-    // that imports one by package name gets a copy derived from `@agent-kit/payload`, the one
+    // that imports one by package name gets a copy derived from `@houserules/payload`, the one
     // publish-time source for the six shared libs, and rejecting that here would fail every
-    // migrated plugin. The CLI's own payload is also allowed, since the kit's built-in modules
+    // migrated plugin. The CLI's own payload is also allowed, since houserules' built-in modules
     // (e.g. core) resolve their own non-lib actions there.
     const allowedRoots = [
       resolve(repoRoot, packagePath),
@@ -74,7 +74,7 @@ for (const registered of registry.modules) {
     ];
     if (!allowedRoots.some((allowed) => action.src.startsWith(allowed))) {
       console.error(
-        `  !! src escapes the plugin package, the CLI payload, and @agent-kit/payload: ${action.src}`,
+        `  !! src escapes the plugin package, the CLI payload, and @houserules/payload: ${action.src}`,
       );
       process.exit(1);
     }

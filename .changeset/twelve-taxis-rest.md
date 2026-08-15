@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-decisions': minor
+'@houserules/plugin-decisions': minor
 ---
 
 Initial release. An append-only decision ledger, the /decide skill, and the decision-reviewer agent.

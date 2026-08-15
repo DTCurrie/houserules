@@ -414,7 +414,7 @@ describe('unknownAreaMessage', () => {
 
   it('names the area, the config file, and every valid area', () => {
     expect(complaintFor('cli')).toBe(
-      'Unknown area "cli". No target named "cli" is configured in kit.config.json, ' +
+      'Unknown area "cli". No target named "cli" is configured in houserules.config.json, ' +
         'and no surface for it exists yet.\n' +
         'Valid areas: (repo root), tower-push.',
     );
@@ -438,7 +438,7 @@ describe('unknownAreaMessage', () => {
 
   it('lists an existing unconfigured area among the valid ones', () => {
     expect(complaintFor('cli', ['retired'])).toBe(
-      'Unknown area "cli". No target named "cli" is configured in kit.config.json, ' +
+      'Unknown area "cli". No target named "cli" is configured in houserules.config.json, ' +
         'and no surface for it exists yet.\n' +
         'Valid areas: (repo root), tower-push, retired.',
     );
@@ -446,7 +446,7 @@ describe('unknownAreaMessage', () => {
 
   it('rejects a path whose trailing directory names no target', () => {
     expect(complaintFor('apps/studio/BACKLOG.md')).toBe(
-      'Unknown area "apps/studio/BACKLOG.md". No target named "studio" is configured in kit.config.json, ' +
+      'Unknown area "apps/studio/BACKLOG.md". No target named "studio" is configured in houserules.config.json, ' +
         'and no surface for it exists yet.\n' +
         'Valid areas: (repo root), tower-push.',
     );

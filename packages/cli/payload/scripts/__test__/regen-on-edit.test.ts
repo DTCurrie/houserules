@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 import {
-  editKitConfig,
+  editHouseConfig,
   hookCommandsFor,
   settingsOf,
 } from '#test/installed-tree';
@@ -30,7 +30,7 @@ describe('regen-on-edit.mjs', () => {
   });
 
   it('runs the target generator when an edited file matches its sourceGlob', () => {
-    editKitConfig(root, (c) => {
+    editHouseConfig(root, (c) => {
       const studio = c.targets.find((t: any) => t.name === 'studio');
       studio.regen = {
         sourceGlob: 'apps/studio/**',
@@ -47,7 +47,7 @@ describe('regen-on-edit.mjs', () => {
   });
 
   it('does not run the generator when the edited file does not match its sourceGlob', () => {
-    editKitConfig(root, (c) => {
+    editHouseConfig(root, (c) => {
       const studio = c.targets.find((t: any) => t.name === 'studio');
       studio.regen = {
         sourceGlob: 'apps/studio/**',
@@ -64,7 +64,7 @@ describe('regen-on-edit.mjs', () => {
   });
 
   it('exits 2 with a stderr tail of the failing generator’s output', () => {
-    editKitConfig(root, (c) => {
+    editHouseConfig(root, (c) => {
       const studio = c.targets.find((t: any) => t.name === 'studio');
       studio.regen = {
         sourceGlob: 'apps/studio/**',

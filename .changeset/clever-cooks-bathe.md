@@ -1,8 +1,8 @@
 ---
-'@agent-kit/test': minor
+'@houserules/test': minor
 ---
 
-Initial release. Shared testing infrastructure for driving the agent-kit CLI against synthetic repos.
+Initial release. Shared testing infrastructure for driving the houserules CLI against synthetic repos.
 
 `useRepo` builds a bare fixture and `useInstalledRepo` stages a cached post-`init` snapshot, so a suite that is not about `init` does not run it. Snapshots are keyed by a hash of the fixture shape, so a many-plugin install stages regardless of where the repo is checked out. Also ships the CLI and script runners, and the installed-tree and doctor-report readers.
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { KitError } from '../kit-error.js';
-import type { ModuleDef } from '@agent-kit/api';
+import { HouseError } from '../house-error.js';
+import type { ModuleDef } from '@houserules/api';
 import type {
   PluginSource,
   RegisteredModule,
@@ -28,7 +28,7 @@ function stubModule(id: string): ModuleDef {
 
 function pluginSource(alias: string): PluginSource {
   return {
-    name: `@agent-kit/plugin-${alias}`,
+    name: `@houserules/plugin-${alias}`,
     alias,
     version: '0.0.0',
     dir: `/packages/plugin-${alias}`,
@@ -67,7 +67,7 @@ function registryWithPluginModule(
 describe('findRetired', () => {
   it('reports a retired id the registry cannot supply', () => {
     expect(findRetired(['backlog'], registryWith(['core']))).toEqual([
-      { id: 'backlog', packageName: '@agent-kit/plugin-backlog' },
+      { id: 'backlog', packageName: '@houserules/plugin-backlog' },
     ]);
   });
 
@@ -108,8 +108,8 @@ describe('findRetired', () => {
 describe('retiredModuleAdvice', () => {
   it('groups ids that came from the same package onto one line', () => {
     const advice = retiredModuleAdvice([
-      { id: 'changesets', packageName: '@agent-kit/plugin-changesets' },
-      { id: 'ledger', packageName: '@agent-kit/plugin-changesets' },
+      { id: 'changesets', packageName: '@houserules/plugin-changesets' },
+      { id: 'ledger', packageName: '@houserules/plugin-changesets' },
     ]);
 
     expect(advice.split('\n')).toHaveLength(1);
@@ -118,25 +118,25 @@ describe('retiredModuleAdvice', () => {
 
   it('names the plugins array so the fix is copy-pasteable', () => {
     const advice = retiredModuleAdvice([
-      { id: 'testing', packageName: '@agent-kit/plugin-testing' },
+      { id: 'testing', packageName: '@houserules/plugin-testing' },
     ]);
 
-    expect(advice).toContain('.claude/kit.config.json');
-    expect(advice).toContain('"name": "@agent-kit/plugin-testing"');
+    expect(advice).toContain('.claude/houserules.config.json');
+    expect(advice).toContain('"name": "@houserules/plugin-testing"');
   });
 });
 
 describe('assertNoRetiredModules', () => {
-  it('throws KitError naming the package that restores the module', () => {
+  it('throws HouseError naming the package that restores the module', () => {
     expect(() =>
       assertNoRetiredModules(['backlog'], registryWith(['core'])),
-    ).toThrow(/@agent-kit\/plugin-backlog/);
+    ).toThrow(/@houserules\/plugin-backlog/);
   });
 
-  it('throws KitError rather than a bare Error, so the CLI reports it as a user problem', () => {
+  it('throws HouseError rather than a bare Error, so the CLI reports it as a user problem', () => {
     expect(() =>
       assertNoRetiredModules(['decisions'], registryWith(['core'])),
-    ).toThrow(KitError);
+    ).toThrow(HouseError);
   });
 
   it('states that nothing was changed, since the risk is a silent prune', () => {
@@ -230,7 +230,7 @@ describe('resolveRecordedModuleIds', () => {
     ]);
 
     expect(() => resolveRecordedModuleIds(['backlog'], registry)).toThrow(
-      KitError,
+      HouseError,
     );
   });
 
@@ -257,13 +257,13 @@ describe('resolveRecordedModuleIds', () => {
 describe('RETIRED_MODULES', () => {
   it('maps every retired id to a plugin package name', () => {
     const wrong = Object.entries(RETIRED_MODULES).filter(
-      ([, pkg]) => !pkg.startsWith('@agent-kit/plugin-'),
+      ([, pkg]) => !pkg.startsWith('@houserules/plugin-'),
     );
 
     expect(wrong).toEqual([]);
   });
 
   it('carries the pre-rename terse-style id, since an old manifest still records it', () => {
-    expect(RETIRED_MODULES['terse-style']).toBe('@agent-kit/plugin-prose');
+    expect(RETIRED_MODULES['terse-style']).toBe('@houserules/plugin-prose');
   });
 });

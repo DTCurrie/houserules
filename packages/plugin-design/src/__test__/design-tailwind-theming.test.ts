@@ -11,7 +11,7 @@ import { loadDesignSystem } from '../../payload/scripts/lib/tailwind-design-syst
 const PLUGIN_DESIGN = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_DESIGN, alias: 'design' }];
 
-const TEMPLATE_PATH = '.claude/kit-templates/tailwind-theme.css.template';
+const TEMPLATE_PATH = '.claude/templates/tailwind-theme.css.template';
 const REFERENCE_PATH = '.claude/reference/design-tailwind-theming.md';
 
 function installed(): string {
@@ -54,7 +54,7 @@ describe('tailwind-theme.css.template', () => {
   it('compiles under real Tailwind with no error', async () => {
     const templatePath = join(
       PLUGIN_DESIGN,
-      'payload/kit-templates/tailwind-theme.css.template',
+      'payload/templates/tailwind-theme.css.template',
     );
     const templateContent = readFileSync(templatePath, 'utf8');
     const root = useTailwindRepo({ css: templateContent });
@@ -67,7 +67,7 @@ describe('tailwind-theme.css.template', () => {
   it('resolves a utility from its semantic layer', async () => {
     const templatePath = join(
       PLUGIN_DESIGN,
-      'payload/kit-templates/tailwind-theme.css.template',
+      'payload/templates/tailwind-theme.css.template',
     );
     const templateContent = readFileSync(templatePath, 'utf8');
     const root = useTailwindRepo({ css: templateContent });
@@ -83,7 +83,7 @@ describe('tailwind-theme.css.template', () => {
   it('closes off the default palette while keeping the semantic layer', async () => {
     const templatePath = join(
       PLUGIN_DESIGN,
-      'payload/kit-templates/tailwind-theme.css.template',
+      'payload/templates/tailwind-theme.css.template',
     );
     const templateContent = readFileSync(templatePath, 'utf8');
     const root = useTailwindRepo({ css: templateContent });

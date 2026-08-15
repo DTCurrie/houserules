@@ -4,10 +4,13 @@ import { join } from 'node:path';
 import {
   resolveTargetCommands,
   runsAtRepoRoot,
-} from '@agent-kit/payload/kit-config';
-import { listWorkspacePackages, readJson } from '@agent-kit/payload/workspaces';
-import { validateKitConfig } from '@agent-kit/api/internal';
-import type { CheckResult, Finding, KitConfig } from '@agent-kit/api';
+} from '@houserules/payload/config';
+import {
+  listWorkspacePackages,
+  readJson,
+} from '@houserules/payload/workspaces';
+import { validateHouseConfig } from '@houserules/api/internal';
+import type { CheckResult, Finding, HouseConfig } from '@houserules/api';
 import type { Ctx } from '../../detect.js';
 import { MODULES } from '../../plan.js';
 import { PluginResolutionError, type Registry } from '../../plugin-registry.js';
@@ -36,7 +39,7 @@ export interface ConfigValidity extends CheckResult {
  */
 function checkTargetScripts(
   root: string,
-  config: KitConfig,
+  config: HouseConfig,
   workspaceNames: Set<string>,
   verifyInstalled: boolean,
 ): {
@@ -134,12 +137,12 @@ function checkRootScripts(
 /**
  * A workspace member no target covers silently misses lint-fix, reviewer, and ledger
  * coverage while doctor still reports healthy. A workspace package that a `plugins[]`
- * entry resolves to is tooling for the kit, not reviewable product code, so it is
+ * entry resolves to is tooling for houserules, not reviewable product code, so it is
  * exempt. Matched on the resolved directory, since a repo-relative `plugins[]` entry
  * never carries the package name.
  */
 function checkWorkspaceCoverage(
-  config: KitConfig,
+  config: HouseConfig,
   registry: Registry,
   workspacePackages: ReturnType<typeof listWorkspacePackages>,
 ): Finding[] {
@@ -150,14 +153,14 @@ function checkWorkspaceCoverage(
     if (!targeted.has(p.name) && !pluginDirs.has(p.dir))
       findings.push({
         level: 'WARN',
-        msg: `workspace package "${p.name}" (${p.relDir}) has no kit target — add one to .claude/kit.config.json targets[] by hand (re-running init skips the existing config)`,
+        msg: `workspace package "${p.name}" (${p.relDir}) has no houserules target — add one to .claude/houserules.config.json targets[] by hand (re-running init skips the existing config)`,
       });
   }
   return findings;
 }
 
 /**
- * Whether `.claude/kit.config.json` satisfies the schema and describes a repo that
+ * Whether `.claude/houserules.config.json` satisfies the schema and describes a repo that
  * actually exists: every target's paths, package, and named scripts, plus any workspace
  * package no target covers.
  *
@@ -170,23 +173,29 @@ function checkWorkspaceCoverage(
 export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
   const findings: Finding[] = [];
   const configProblems: string[] = [];
-  const config = ctx.claude.kitConfig;
+  const config = ctx.claude.houseConfig;
   const manifest = ctx.claude.manifest;
 
   if (!config) {
     findings.push({
       level: manifest ? 'ERROR' : 'WARN',
-      msg: 'no .claude/kit.config.json',
+      msg: 'no .claude/houserules.config.json',
     });
     return { findings, readouts: [], configProblems, registry: null };
   }
 
   // Schema validation runs first: a rejected config is one the hooks are silently
   // misreading, and the field name beats the downstream symptom.
-  const raw = readFileSync(join(root, '.claude', 'kit.config.json'), 'utf8');
-  configProblems.push(...validateKitConfig(raw));
+  const raw = readFileSync(
+    join(root, '.claude', 'houserules.config.json'),
+    'utf8',
+  );
+  configProblems.push(...validateHouseConfig(raw));
   for (const problem of configProblems) {
-    findings.push({ level: 'ERROR', msg: `kit.config.json: ${problem}` });
+    findings.push({
+      level: 'ERROR',
+      msg: `houserules.config.json: ${problem}`,
+    });
   }
   if (configProblems.length)
     return { findings, readouts: [], configProblems, registry: null };
@@ -233,7 +242,7 @@ export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
   if (verifyInstalled && !targetResult.anyVerifyCommand)
     findings.push({
       level: 'WARN',
-      msg: 'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/kit.config.json, or "verifyCommands" to each target. Without one --run has nothing to run.',
+      msg: 'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/houserules.config.json, or "verifyCommands" to each target. Without one --run has nothing to run.',
     });
 
   findings.push(...checkWorkspaceCoverage(config, registry, workspacePackages));

@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { makeCtx } from '#test/ctx-builder';
-import type { Action } from '@agent-kit/api';
+import type { Action } from '@houserules/api';
 import { formatterMangleHint } from '../formatter-mangle.js';
 import {
   PRETTIERIGNORE_REGION,
   prettierGuardActions,
 } from '../prettier-guard.js';
 
-const REMEDY = 'Run `npx agent-kit update --force` to restore them';
+const REMEDY = 'Run `npx houserules update --force` to restore them';
 
 function regionBody(actions: Action[]): string {
   const region = actions.find(
@@ -31,7 +31,7 @@ function kitPaths(count: number): string[] {
 }
 
 describe('formatterMangleHint', () => {
-  it('blames a formatter once more than a couple of kit files read as edited', () => {
+  it('blames a formatter once more than a couple of houserules files read as edited', () => {
     const hint = formatterMangleHint(emptyRoot(), kitPaths(3), REMEDY);
 
     expect(hint).toMatch(/3 kit-owned file\(s\) under \.claude\//);

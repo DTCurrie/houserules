@@ -50,45 +50,50 @@ export function allHookCommands(root: string): string[] {
   );
 }
 
-export interface KitManifestShape {
+export interface HouseManifestShape {
   files: Record<string, string>;
   modules: string[];
   [key: string]: any;
 }
 
-export function manifestOf(root: string): KitManifestShape {
-  return readJson<KitManifestShape>(join(root, '.claude/kit-manifest.json'));
+export function manifestOf(root: string): HouseManifestShape {
+  return readJson<HouseManifestShape>(
+    join(root, '.claude/houserules.manifest.json'),
+  );
 }
 
-export function writeManifest(root: string, manifest: KitManifestShape): void {
+export function writeManifest(
+  root: string,
+  manifest: HouseManifestShape,
+): void {
   writeFileSync(
-    join(root, '.claude/kit-manifest.json'),
+    join(root, '.claude/houserules.manifest.json'),
     `${JSON.stringify(manifest, null, 2)}\n`,
   );
 }
 
 /**
  * The config as the PAYLOAD sees it: read defensively and never zod-validated. Deliberately
- * not the inferred `KitConfig` from `src/core/config.ts`, which would couple the payload side
+ * not the inferred `HouseConfig` from `src/core/config.ts`, which would couple the payload side
  * of the suite to the CLI side the repo works to keep apart.
  */
-export type InstalledKitConfig = Record<string, any>;
+export type InstalledHouseConfig = Record<string, any>;
 
-export function kitConfigPath(root: string): string {
-  return join(root, '.claude/kit.config.json');
+export function houseConfigPath(root: string): string {
+  return join(root, '.claude/houserules.config.json');
 }
 
-export function editKitConfig(
+export function editHouseConfig(
   root: string,
-  edit: (config: InstalledKitConfig) => void,
+  edit: (config: InstalledHouseConfig) => void,
 ): void {
-  const config = readJson<InstalledKitConfig>(kitConfigPath(root));
+  const config = readJson<InstalledHouseConfig>(houseConfigPath(root));
   edit(config);
-  writeFileSync(kitConfigPath(root), JSON.stringify(config, null, 2));
+  writeFileSync(houseConfigPath(root), JSON.stringify(config, null, 2));
 }
 
-export const REGION_START = '<!-- agent-kit:claude-md start -->';
-export const REGION_END = '<!-- agent-kit:claude-md end -->';
+export const REGION_START = '<!-- houserules:claude-md start -->';
+export const REGION_END = '<!-- houserules:claude-md end -->';
 
 export function claudeMdPath(root: string): string {
   return join(root, 'CLAUDE.md');

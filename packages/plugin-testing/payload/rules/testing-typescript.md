@@ -115,12 +115,12 @@ describe('doctor', () => {
     expect(runCli(['doctor', root]).status).toBe(0);
   });
 
-  it('exits 0 when a kit file was edited locally, since nothing can acknowledge the edit', () => {
+  it('exits 0 when a houserules file was edited locally, since nothing can acknowledge the edit', () => {
     appendFileSync(join(root, '.claude/scripts/guard.mjs'), '// tweak\n');
     expect(runCli(['doctor', root]).status).toBe(0);
   });
 
-  it('exits 1 when a kit file is missing', () => {
+  it('exits 1 when a houserules file is missing', () => {
     rmSync(join(root, '.claude/scripts/guard.mjs'));
     expect(runCli(['doctor', root]).status).toBe(1);
   });

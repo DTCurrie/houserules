@@ -17,7 +17,7 @@
  *   tree      <id>
  *   scope     <path> [<path>...]
  *
- * Log: .claude/ledgers/decisions.jsonl (or `ledgers.dir` from kit.config.json), one JSON
+ * Log: .claude/ledgers/decisions.jsonl (or `ledgers.dir` from houserules.config.json), one JSON
  * record per line. Body content is gzip+base64. Status is never stored. A record is
  * superseded once its id appears in a later record's `supersedes` array, and `list`/
  * `render` derive that in one pass over the log.
@@ -34,13 +34,13 @@
 import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
-import { loadConfigSafe, repoRootSafe } from '@agent-kit/payload/kit-config';
-import { makeId } from '@agent-kit/payload/backlog-id';
+import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
+import { makeId } from '@houserules/payload/backlog-id';
 import {
   findEntry,
   loadIndex,
   type LedgerEntry,
-} from '@agent-kit/payload/ledger-index';
+} from '@houserules/payload/ledger-index';
 import {
   SEPARATOR,
   appendEvent,
@@ -66,7 +66,7 @@ import {
   takeChatFlag,
   todayDate,
   unknownAreaMessage,
-} from '@agent-kit/payload/entry-ledger';
+} from '@houserules/payload/entry-ledger';
 
 function requireRepoRoot(): string {
   const root = repoRootSafe();

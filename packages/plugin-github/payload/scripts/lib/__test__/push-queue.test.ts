@@ -318,7 +318,7 @@ describe('buildPushQueue', () => {
           ts: '2026-01-02T00:00:00Z',
           id: 'DEC-1',
           action: 'move',
-          file: 'agent-kit.DECISIONS.md',
+          file: 'houserules.DECISIONS.md',
         },
         decide('DEC-2', {
           ts: '2026-01-03T00:00:00Z',
@@ -331,7 +331,7 @@ describe('buildPushQueue', () => {
     );
     const markOp = ops.find((op) => op.op === 'mark-superseded');
 
-    expect(markOp).toMatchObject({ surface: 'agent-kit.DECISIONS.md' });
+    expect(markOp).toMatchObject({ surface: 'houserules.DECISIONS.md' });
   });
 
   it('names the recorded itemId when the target syncs after the supersede record', () => {

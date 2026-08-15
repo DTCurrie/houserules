@@ -1,9 +1,9 @@
 {
-  "name": "@agent-kit/plugin-fixture-peer-zerox",
+  "name": "@houserules/plugin-fixture-peer-zerox",
   "version": "1.0.0",
   "private": true,
   "main": "index.cjs",
   "peerDependencies": {
-    "@agent-kit/cli": "^0.2.0"
+    "@houserules/cli": "^0.2.0"
   }
 }

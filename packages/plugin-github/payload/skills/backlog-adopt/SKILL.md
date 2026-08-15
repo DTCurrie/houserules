@@ -12,7 +12,7 @@ Argument: $ARGUMENTS
 
 1. Read the issue once:
    `gh issue view <n> --json number,title,body,url,labels,author,state`
-2. Check the body for `<!-- agent-kit:entry:` first. If that marker is already there, the
+2. Check the body for `<!-- houserules:entry:` first. If that marker is already there, the
    issue is already adopted. Report the entry id it names and stop. Do not create a second
    entry for the same issue.
 3. Resolve which target the entry belongs to. Check the issue's labels against the
@@ -34,6 +34,6 @@ Argument: $ARGUMENTS
 
 ## What this does not touch
 
-The issue's title and body are never rewritten. The only write the kit makes to a
-reporter's issue is appending the `<!-- agent-kit:entry:<ID> -->` marker during the push in
+The issue's title and body are never rewritten. The only write houserules makes to a
+reporter's issue is appending the `<!-- houserules:entry:<ID> -->` marker during the push in
 step 5, so a later adoption attempt can detect it and refuse to duplicate the entry.

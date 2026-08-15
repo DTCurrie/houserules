@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { mergeSettings, parseSettingsText } from '@agent-kit/api/internal';
-import type { Settings, SettingsFragment } from '@agent-kit/api';
+import { mergeSettings, parseSettingsText } from '@houserules/api/internal';
+import type { Settings, SettingsFragment } from '@houserules/api';
 
 const KIT_FRAGMENT: SettingsFragment = {
   permissions: { allow: ['Bash(git status:*)', 'Bash(git diff:*)'] },
@@ -53,12 +53,12 @@ describe('mergeSettings', () => {
     expect(merged.permissions?.allow?.[0]).toBe('Bash(echo hi)');
   });
 
-  it('appends the kit permission entries to the existing list', () => {
+  it('appends houserules permission entries to the existing list', () => {
     const { merged } = mergeSettings(existing, KIT_FRAGMENT);
     expect(merged.permissions?.allow).toContain('Bash(git status:*)');
   });
 
-  it('keeps a user hook byte-identical while appending the kit hook to the same matcher group', () => {
+  it('keeps a user hook byte-identical while appending houserules hook to the same matcher group', () => {
     const { merged } = mergeSettings(existing, KIT_FRAGMENT);
     const pre = merged.hooks!.PreToolUse;
     if (!pre) throw new Error('expected a PreToolUse hook list');
@@ -88,7 +88,7 @@ describe('mergeSettings', () => {
     expect(JSON.stringify(second.merged)).toBe(JSON.stringify(first.merged));
   });
 
-  describe("when the user has edited a kit hook's script", () => {
+  describe("when the user has edited a houserules hook's script", () => {
     const editedExisting: Settings = {
       hooks: {
         Stop: [
@@ -115,7 +115,7 @@ describe('mergeSettings', () => {
       ).toHaveLength(1);
     });
 
-    it("keeps the user's edited variant rather than the kit's stock command", () => {
+    it("keeps the user's edited variant rather tha houserules' stock command", () => {
       const { merged } = mergeSettings(editedExisting, KIT_FRAGMENT);
       const stopCommands = merged.hooks!.Stop!.flatMap((g) =>
         g.hooks.map((h) => h.command),
@@ -141,7 +141,7 @@ describe('mergeSettings', () => {
               {
                 type: 'command',
                 command:
-                  '[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" || echo "[kit] guard-bash.mjs missing — run: npx agent-kit update"',
+                  '[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" || echo "[houserules] guard-bash.mjs missing — run: npx houserules update"',
               },
             ],
           },

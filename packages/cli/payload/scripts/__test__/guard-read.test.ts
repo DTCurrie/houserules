@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 import {
-  editKitConfig,
+  editHouseConfig,
   hookCommandsFor,
   settingsOf,
 } from '#test/installed-tree';
@@ -58,7 +58,7 @@ describe('guard-read.mjs', () => {
   });
 
   it('blocks a whole-file read once the file exceeds the configured maxBytes', () => {
-    editKitConfig(root, (c) => {
+    editHouseConfig(root, (c) => {
       c.readGuard = { maxBytes: 5 };
     });
     const r = runScript(

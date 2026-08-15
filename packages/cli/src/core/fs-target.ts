@@ -23,7 +23,7 @@ export class TargetRepo {
   readonly dryRun: boolean;
 
   // Explicit fields rather than parameter properties: `erasableSyntaxOnly` is on so
-  // every .ts in the kit stays runnable under node's type stripping.
+  // every .ts in houserules stays runnable under node's type stripping.
   constructor(root: string, dryRun = false) {
     this.root = root;
     this.dryRun = dryRun;
@@ -63,7 +63,7 @@ export class TargetRepo {
   private warnIfUnreadable(relativePath: string, error: unknown): void {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.error(
-        `agent-kit: could not read ${relativePath} (${(error as Error).message}). Treating it as if it does not exist.`,
+        `houserules: could not read ${relativePath} (${(error as Error).message}). Treating it as if it does not exist.`,
       );
     }
   }
@@ -102,7 +102,7 @@ export class TargetRepo {
 
   /**
    * One-shot backup: copies `relativePath` to `<path>.bak` unless a backup is
-   * already there. Taken once, before the kit's first write to a file the user
+   * already there. Taken once, before houserules' first write to a file the user
    * owns. A second run must not overwrite the pristine original.
    */
   backupOnce(relativePath: string): void {

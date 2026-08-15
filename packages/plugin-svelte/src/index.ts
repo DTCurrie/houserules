@@ -1,5 +1,5 @@
-import { definePlugin } from '@agent-kit/api';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
+import { definePlugin } from '@houserules/api';
+import type { Action, ModuleDef, PluginApi } from '@houserules/api';
 
 /**
  * Ships the path-scoped Svelte 5 rule, plus an opt-in SvelteKit guide.
@@ -67,7 +67,7 @@ function svelteModule(api: PluginApi): ModuleDef {
  * module requires nothing from `svelte.md` in return.
  *
  * `defaultEnabled(): false`, since installing three files still leaves the server
- * unconfigured until wired into `.mcp.json` or an editor's own MCP config, and the kit never
+ * unconfigured until wired into `.mcp.json` or an editor's own MCP config, and houserules never
  * writes `.mcp.json` for the user.
  */
 function svelteMcpModule(api: PluginApi): ModuleDef {
@@ -104,7 +104,7 @@ function svelteMcpModule(api: PluginApi): ModuleDef {
         }),
         {
           kind: 'advise',
-          text: "Svelte MCP configs installed under .claude/mcp/: mcp.http.json, mcp.stdio.json, and vscode.mcp.json. None of these are wired in yet, since the kit never writes .mcp.json. Copy the `mcpServers` block from either mcp.http.json or mcp.stdio.json into this repo's own .mcp.json (http and stdio are alternatives, use one, not both), or for VS Code copy vscode.mcp.json into its own MCP config. An unused MCP server costs context on every turn, so remove it once you stop using it.",
+          text: "Svelte MCP configs installed under .claude/mcp/: mcp.http.json, mcp.stdio.json, and vscode.mcp.json. None of these are wired in yet, since houserules never writes .mcp.json. Copy the `mcpServers` block from either mcp.http.json or mcp.stdio.json into this repo's own .mcp.json (http and stdio are alternatives, use one, not both), or for VS Code copy vscode.mcp.json into its own MCP config. An unused MCP server costs context on every turn, so remove it once you stop using it.",
           module: id,
         },
       ];

@@ -16,20 +16,20 @@ import { gunzipSync } from 'node:zlib';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { loadConfigSafe, repoRoot } from '@agent-kit/payload/kit-config';
-import { BACKLOG_ID } from '@agent-kit/payload/backlog-id';
-import { readStdinJson } from '@agent-kit/payload/proc';
+import { loadConfigSafe, repoRoot } from '@houserules/payload/config';
+import { BACKLOG_ID } from '@houserules/payload/backlog-id';
+import { readStdinJson } from '@houserules/payload/proc';
 import {
   ledgerDir,
   ledgerPath,
   readLog,
-} from '@agent-kit/payload/entry-ledger';
+} from '@houserules/payload/entry-ledger';
 import {
   loadIndex,
   mergeWithQueue,
   type LedgerEntry,
   type LedgerIndex,
-} from '@agent-kit/payload/ledger-index';
+} from '@houserules/payload/ledger-index';
 
 interface PromptPayload {
   prompt?: string;
@@ -43,7 +43,7 @@ interface PromptPayload {
  */
 export const MAX_INJECTED_CHARS = 6_000;
 const TRUNCATION_NOTICE =
-  '\n\n[kit] truncated: additional matched ledger content omitted to stay under the shared context budget.';
+  '\n\n[houserules] truncated: additional matched ledger content omitted to stay under the shared context budget.';
 
 /** Truncates `text` to `maxChars`, appending a notice when truncation happens. */
 export function capInjectedText(text: string, maxChars: number): string {
@@ -82,7 +82,7 @@ function decodeBody(content: string | undefined): string {
   try {
     return gunzipSync(Buffer.from(content, 'base64')).toString('utf8');
   } catch {
-    return '[kit] this record’s body could not be decoded (corrupt or truncated).';
+    return '[houserules] this record’s body could not be decoded (corrupt or truncated).';
   }
 }
 
@@ -272,7 +272,7 @@ function main(): void {
       const b = resolvedBacklog.get(id);
       if (b) {
         blocks.push(
-          `[kit backlog] ${id} — ${b.title || '(untitled)'}${b.surface ? ` (${b.surface})` : ''}\n${b.body}`.trim(),
+          `[houserules backlog] ${id} — ${b.title || '(untitled)'}${b.surface ? ` (${b.surface})` : ''}\n${b.body}`.trim(),
         );
         continue;
       }
@@ -281,7 +281,7 @@ function main(): void {
       if (!d) continue; // unknown id → inject nothing
       const status = superseded.has(id) ? 'superseded' : 'accepted';
       const ancestry = ancestryLines(decisions, superseded, id);
-      const header = `[kit decision] ${id} — ${d.title || '(untitled)'} (${status})${d.surface ? ` (${d.surface})` : ''}`;
+      const header = `[houserules decision] ${id} — ${d.title || '(untitled)'} (${status})${d.surface ? ` (${d.surface})` : ''}`;
       const parts = [header];
       if (ancestry.length) parts.push(`ancestry:\n${ancestry.join('\n')}`);
       if (d.body) parts.push(d.body);
@@ -289,7 +289,7 @@ function main(): void {
     }
 
     if (blocks.length) {
-      const body = `Referenced ledger item(s), decoded from the kit's logs:\n\n${blocks.join('\n\n')}\n`;
+      const body = `Referenced ledger item(s), decoded from houserules' logs:\n\n${blocks.join('\n\n')}\n`;
       process.stdout.write(capInjectedText(body, MAX_INJECTED_CHARS));
     }
   } catch {

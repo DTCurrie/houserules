@@ -1,16 +1,20 @@
-# agent-kit
+# houserules
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/cli.svg)](https://www.npmjs.com/package/@agent-kit/cli)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/cli.svg)](https://www.npmjs.com/package/@agent-kit/cli)
-[![CI](https://github.com/DTCurrie/agent-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/DTCurrie/agent-kit/actions/workflows/ci.yml)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DTCurrie/agent-kit/badge)](https://scorecard.dev/viewer/?uri=github.com/DTCurrie/agent-kit)
-[![license](https://img.shields.io/npm/l/@agent-kit/cli.svg)](./LICENSE)
-[![node](https://img.shields.io/node/v/@agent-kit/cli.svg)](https://nodejs.org)
+[![npm](https://img.shields.io/npm/v/@houserules/cli.svg)](https://www.npmjs.com/package/@houserules/cli)
+[![downloads](https://img.shields.io/npm/dm/@houserules/cli.svg)](https://www.npmjs.com/package/@houserules/cli)
+[![CI](https://github.com/DTCurrie/houserules/actions/workflows/ci.yml/badge.svg)](https://github.com/DTCurrie/houserules/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DTCurrie/houserules/badge)](https://scorecard.dev/viewer/?uri=github.com/DTCurrie/houserules)
+[![license](https://img.shields.io/npm/l/@houserules/cli.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/@houserules/cli.svg)](https://nodejs.org)
 
 A Claude Code session spends most of its budget on context it pays for every turn and on
-conclusions it derives twice. agent-kit is a portable kit of infrastructure that pushes that
-work off the main agent's context window: into disposable subagents, onto disk as ledgers and
-changesets, into deterministic hook scripts, and behind grep-able snapshots.
+conclusions it derives twice. houserules pushes that work off the main agent's context window:
+into disposable subagents, onto disk as ledgers and changesets, into deterministic hook scripts,
+and behind grep-able snapshots.
+
+The name is the shape of it. Your language and framework ship a printed rulebook, and it is a
+good one. House rules are the conventions your table actually plays by, layered on top. This
+installs them, in a form the agent reads every turn.
 
 Install it and run `init` in any repo. It detects what the repo already uses, proposes a set
 of modules, previews every write, and then applies them.
@@ -18,11 +22,11 @@ of modules, previews every write, and then applies them.
 ## Install
 
 ```
-pnpm add -D @agent-kit/cli
-pnpm exec agent-kit init
+pnpm add -D @houserules/cli
+pnpm exec houserules init
 ```
 
-The package is `@agent-kit/cli` and the binary is `agent-kit`, the same split
+The package is `@houserules/cli` and the binary is `houserules`, the same split
 `@changesets/cli` uses for `changeset`. Add `--dry-run` to preview without writing, or
 `--yes` to skip the prompts.
 
@@ -31,36 +35,36 @@ The package is `@agent-kit/cli` and the binary is `agent-kit`, the same split
 
 ## Packages
 
-| Path                              | Package                             | What it is                                                                                                                    |
-| --------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `packages/cli`                    | `@agent-kit/cli`                    | The installer and its 16-module core payload. Ships the `agent-kit` binary.                                                   |
-| `packages/payload`                | `@agent-kit/payload`                | The shared payload libs (`kit-config`, `entry-ledger`, and friends), zero dependencies.                                       |
-| `packages/api`                    | `@agent-kit/api`                    | The plugin API package: action types, module definitions, and the `kit.config.json` schema that plugin authors build against. |
-| `packages/plugin-prose`           | `@agent-kit/plugin-prose`           | Comment discipline, writing voice, a prose output style, and the PR-description skill.                                        |
-| `packages/plugin-testing`         | `@agent-kit/plugin-testing`         | A runner-agnostic testing rule, split into opt-in per-language guides.                                                        |
-| `packages/plugin-changesets`      | `@agent-kit/plugin-changesets`      | Changesets integration and the optional per-commit changelog ledger.                                                          |
-| `packages/plugin-backlog`         | `@agent-kit/plugin-backlog`         | An append-only backlog ledger, with the add skill and reviewer agent.                                                         |
-| `packages/plugin-decisions`       | `@agent-kit/plugin-decisions`       | An append-only decision ledger, the `/decide` skill, and the decision-reviewer agent.                                         |
-| `packages/plugin-persona-auditor` | `@agent-kit/plugin-persona-auditor` | A blind-rank-then-reconcile persona-auditor agent template.                                                                   |
-| `packages/plugin-accessibility`   | `@agent-kit/plugin-accessibility`   | A WCAG 2.2 rule, framework guides, and a router over changed markup.                                                          |
-| `packages/plugin-typescript`      | `@agent-kit/plugin-typescript`      | A path-scoped TypeScript rule: interface vs type, and `unknown` over `any`.                                                   |
-| `packages/plugin-three`           | `@agent-kit/plugin-three`           | Three.js authoring patterns, with opt-in Threlte and React Three Fiber guides.                                                |
-| `packages/plugin-svelte`          | `@agent-kit/plugin-svelte`          | Svelte 5 conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.                                            |
-| `packages/plugin-design`          | `@agent-kit/plugin-design`          | A DTCG design system an agent queries by name, or `design-tailwind` for a Tailwind repo.                                      |
-| `packages/plugin-github`          | `@agent-kit/plugin-github`          | Syncs the backlog and decision ledgers to GitHub Projects, with adopt and sync skills.                                        |
-| `packages/test`                   | `@agent-kit/test`                   | Shared testing modules for driving the CLI against synthetic repos. For plugin authors.                                       |
+| Path                              | Package                              | What it is                                                                                                                           |
+| --------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/cli`                    | `@houserules/cli`                    | The installer and its 16-module core payload. Ships the `houserules` binary.                                                         |
+| `packages/payload`                | `@houserules/payload`                | The shared payload libs (`config`, `entry-ledger`, and friends), zero dependencies.                                                  |
+| `packages/api`                    | `@houserules/api`                    | The plugin API package: action types, module definitions, and the `houserules.config.json` schema that plugin authors build against. |
+| `packages/plugin-prose`           | `@houserules/plugin-prose`           | Comment discipline, writing voice, a prose output style, and the PR-description skill.                                               |
+| `packages/plugin-testing`         | `@houserules/plugin-testing`         | A runner-agnostic testing rule, split into opt-in per-language guides.                                                               |
+| `packages/plugin-changesets`      | `@houserules/plugin-changesets`      | Changesets integration and the optional per-commit changelog ledger.                                                                 |
+| `packages/plugin-backlog`         | `@houserules/plugin-backlog`         | An append-only backlog ledger, with the add skill and reviewer agent.                                                                |
+| `packages/plugin-decisions`       | `@houserules/plugin-decisions`       | An append-only decision ledger, the `/decide` skill, and the decision-reviewer agent.                                                |
+| `packages/plugin-persona-auditor` | `@houserules/plugin-persona-auditor` | A blind-rank-then-reconcile persona-auditor agent template.                                                                          |
+| `packages/plugin-accessibility`   | `@houserules/plugin-accessibility`   | A WCAG 2.2 rule, framework guides, and a router over changed markup.                                                                 |
+| `packages/plugin-typescript`      | `@houserules/plugin-typescript`      | A path-scoped TypeScript rule: interface vs type, and `unknown` over `any`.                                                          |
+| `packages/plugin-three`           | `@houserules/plugin-three`           | Three.js authoring patterns, with opt-in Threlte and React Three Fiber guides.                                                       |
+| `packages/plugin-svelte`          | `@houserules/plugin-svelte`          | Svelte 5 conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.                                                   |
+| `packages/plugin-design`          | `@houserules/plugin-design`          | A DTCG design system an agent queries by name, or `design-tailwind` for a Tailwind repo.                                             |
+| `packages/plugin-github`          | `@houserules/plugin-github`          | Syncs the backlog and decision ledgers to GitHub Projects, with adopt and sync skills.                                               |
+| `packages/test`                   | `@houserules/test`                   | Shared testing modules for driving the CLI against synthetic repos. For plugin authors.                                              |
 
 Every package has its own README. Plugins are independent, so install only the ones a repo
 needs.
 
 ## Requirements
 
-Node 22 or newer. The workspace itself uses pnpm, though the installed kit does not care what
+Node 22 or newer. The workspace itself uses pnpm, though what it installs does not care what
 package manager your repo uses.
 
 ## Contributing
 
-Setup, the check order, and how to run the kit against itself are in
+Setup, the check order, and how to run houserules against itself are in
 [CONTRIBUTING.md](CONTRIBUTING.md). Please read the
 [Code of Conduct](CODE_OF_CONDUCT.md) first.
 

@@ -4,14 +4,14 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
 import { KIT_ROOT } from '../../paths.js';
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 
 /**
- * The `keywords` entry a package declares to say it contributes agent-kit modules. Gating
+ * The `keywords` entry a package declares to say it contributes houserules modules. Gating
  * discovery on it is what keeps this check from scanning `node_modules` wholesale and
  * guessing from names.
  */
-const PLUGIN_KEYWORD = 'agent-kit-plugin';
+const PLUGIN_KEYWORD = 'houserules-plugin';
 
 interface PackageJson {
   name?: string;
@@ -33,7 +33,7 @@ function readPackageJson(dir: string): PackageJson | null {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.error(
-        `agent-kit: could not read ${join(dir, 'package.json')} (${(error as Error).message}). Treating ${dir} as if it were not a package.`,
+        `houserules: could not read ${join(dir, 'package.json')} (${(error as Error).message}). Treating ${dir} as if it were not a package.`,
       );
     }
     return null;
@@ -62,7 +62,7 @@ function asCandidate(
  * Plugin packages sitting beside the running CLI in its own checkout.
  *
  * This is the case a dependency scan cannot see. A repo can consume a plugin by relative path
- * (`../agent-kit/packages/plugin-accessibility`) without naming it in its own package.json at
+ * (`../houserules/packages/plugin-accessibility`) without naming it in its own package.json at
  * all, and then nothing in the host repo mentions the plugin until config does.
  */
 function siblingPlugins(): PluginCandidate[] {
@@ -108,7 +108,7 @@ function dependencyPlugins(root: string): PluginCandidate[] {
 /** Where each config entry actually points, best-effort and never throwing. */
 function registeredDirs(root: string, ctx: Ctx): Set<string> {
   const dirs = new Set<string>();
-  for (const entry of ctx.claude.kitConfig?.plugins ?? []) {
+  for (const entry of ctx.claude.houseConfig?.plugins ?? []) {
     const name = entry.name;
     if (name.startsWith('./') || name.startsWith('../') || isAbsolute(name)) {
       dirs.add(canonical(resolve(root, name)));
@@ -152,10 +152,10 @@ function unregistered(
 /**
  * Plugins this install could offer but never registers.
  *
- * `buildRegistry` iterates `kit.config.json`'s `plugins` array and nothing else, so a plugin
+ * `buildRegistry` iterates `houserules.config.json`'s `plugins` array and nothing else, so a plugin
  * that is present and resolvable but unlisted contributes no modules and is invisible
  * everywhere. `modules` then reports "Every module is already installed", which is true of the
- * registry it built and misleading about the kit.
+ * registry it built and misleading about houserules.
  *
  * The two discovery modes carry different signal, so they are reported differently. A plugin
  * the repo DEPENDS on and does not register is an oversight worth a WARN: someone installed
@@ -177,7 +177,7 @@ export function checkPluginRegistration(root: string, ctx: Ctx): CheckResult {
   for (const packageName of sortedNames(declared)) {
     findings.push({
       level: 'WARN',
-      msg: `plugin ${packageName} is a dependency of this repo but is not in kit.config.json "plugins", so none of its modules are available`,
+      msg: `plugin ${packageName} is a dependency of this repo but is not in houserules.config.json "plugins", so none of its modules are available`,
     });
   }
 

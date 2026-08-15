@@ -12,7 +12,7 @@ const PLUGINS = [{ name: PLUGIN_PERSONA_AUDITOR, alias: 'persona-auditor' }];
 
 describe('persona-auditor', () => {
   const personaAuditorTemplate =
-    '.claude/kit-templates/agents/persona-auditor.agent.md.template';
+    '.claude/templates/agents/persona-auditor.agent.md.template';
 
   it('does not stage the persona-auditor template by default', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });

@@ -19,7 +19,7 @@ import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn, type RunResult } from '#test/run';
 import {
   claudeMdPath,
-  editKitConfig,
+  editHouseConfig,
   hookCommandsFor,
   readClaudeMd,
   readJson,
@@ -36,9 +36,9 @@ function plantRetiredHookAlongsideUserHook(
   { hashMismatchesDisk = false }: { hashMismatchesDisk?: boolean } = {},
 ): { retired: string; settingsPath: string; manifestPath: string } {
   const retired = '.claude/scripts/compact-tool-output.mjs';
-  const content = '// retired kit hook\nprocess.exit(0);\n';
+  const content = '// retired houserules hook\nprocess.exit(0);\n';
   writeFileSync(join(root, retired), content);
-  const manifestPath = join(root, '.claude/kit-manifest.json');
+  const manifestPath = join(root, '.claude/houserules.manifest.json');
   const manifest = readJson(manifestPath);
   manifest.files[retired] = hashMismatchesDisk
     ? sha256('something else')
@@ -63,7 +63,7 @@ function plantRetiredHookAlongsideUserHook(
   return { retired, settingsPath, manifestPath };
 }
 
-describe('update without --force on a kit script with a local edit', () => {
+describe('update without --force on a houserules script with a local edit', () => {
   let root: string;
   let guardPath: string;
   let edited: string;
@@ -112,17 +112,17 @@ describe('update reporting the local edits it kept', () => {
     const result = runCli(['update', root]);
 
     expect(unwrapped(result.stdout)).toContain(
-      'See what changed: npx agent-kit doctor --json',
+      'See what changed: npx houserules doctor --json',
     );
   });
 
-  it('blames a formatter when several kit files read as edited, with the update remedy', () => {
+  it('blames a formatter when several houserules files read as edited, with the update remedy', () => {
     editKitScripts(3);
 
     const result = runCli(['update', root]);
 
     expect(unwrapped(result.stdout)).toContain(
-      'A repo-wide formatter run is the likely cause. Run `npx agent-kit update --force` to restore them',
+      'A repo-wide formatter run is the likely cause. Run `npx houserules update --force` to restore them',
     );
   });
 
@@ -145,7 +145,7 @@ describe('update reporting the local edits it kept', () => {
   });
 });
 
-describe('update --force on a kit script with a local edit', () => {
+describe('update --force on a houserules script with a local edit', () => {
   let root: string;
   let guardPath: string;
   let result: RunResult;
@@ -161,12 +161,12 @@ describe('update --force on a kit script with a local edit', () => {
     expect(result.status, result.stderr).toBe(0);
   });
 
-  it('restores the kit version, discarding the local edit', () => {
+  it('restores houserules version, discarding the local edit', () => {
     expect(readFileSync(guardPath, 'utf8')).not.toContain('my local tweak');
   });
 });
 
-describe('update on a kit-owned file that is stale relative to the shipped kit content', () => {
+describe('update on a kit-owned file that is stale relative to the shipped houserules content', () => {
   let root: string;
   let lintPath: string;
   let result: RunResult;
@@ -175,7 +175,7 @@ describe('update on a kit-owned file that is stale relative to the shipped kit c
     root = useInstalledRepo('pnpm-monorepo');
     lintPath = join(root, '.claude/scripts/lint-format-fix.mjs');
     writeFileSync(lintPath, '// OLD KIT VERSION\n');
-    const manifestPath = join(root, '.claude/kit-manifest.json');
+    const manifestPath = join(root, '.claude/houserules.manifest.json');
     const manifest = readJson(manifestPath) as {
       files: Record<string, string>;
     };
@@ -190,7 +190,7 @@ describe('update on a kit-owned file that is stale relative to the shipped kit c
     expect(result.status, result.stderr).toBe(0);
   });
 
-  it('replaces the stale content with the current kit version, since the file was unedited by the user', () => {
+  it('replaces the stale content with the current houserules version, since the file was unedited by the user', () => {
     const refreshed = readFileSync(lintPath, 'utf8');
     expect(refreshed).not.toContain('OLD KIT VERSION');
     expect(refreshed).toContain('loadConfigSafe');
@@ -199,12 +199,12 @@ describe('update on a kit-owned file that is stale relative to the shipped kit c
 
 describe('update --dry-run on reference templates committed before they were gitignored', () => {
   let root: string;
-  const reviewerTpl = '.claude/kit-templates/agents/reviewer.agent.md.template';
+  const reviewerTpl = '.claude/templates/agents/reviewer.agent.md.template';
   let result: RunResult;
 
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
-    runIn(root, 'git', ['add', '-f', '.claude/kit-templates']);
+    runIn(root, 'git', ['add', '-f', '.claude/templates']);
     runIn(root, 'git', ['commit', '-qm', 'committed templates']);
     result = runCli(['update', '--dry-run', root]);
   });
@@ -220,12 +220,12 @@ describe('update --dry-run on reference templates committed before they were git
 
 describe('update on reference templates committed before they were gitignored', () => {
   let root: string;
-  const reviewerTpl = '.claude/kit-templates/agents/reviewer.agent.md.template';
+  const reviewerTpl = '.claude/templates/agents/reviewer.agent.md.template';
   let result: RunResult;
 
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
-    runIn(root, 'git', ['add', '-f', '.claude/kit-templates']);
+    runIn(root, 'git', ['add', '-f', '.claude/templates']);
     runIn(root, 'git', ['commit', '-qm', 'committed templates']);
     result = runCli(['update', root]);
   });
@@ -242,12 +242,9 @@ describe('update on reference templates committed before they were gitignored', 
     expect(existsSync(join(root, reviewerTpl))).toBeTruthy();
   });
 
-  it('keeps kit-templates/.gitignore tracked', () => {
+  it('keeps templates/.gitignore tracked', () => {
     expect(
-      runIn(root, 'git', [
-        'ls-files',
-        '.claude/kit-templates/.gitignore',
-      ]).trim(),
+      runIn(root, 'git', ['ls-files', '.claude/templates/.gitignore']).trim(),
     ).toBeTruthy();
   });
 });
@@ -315,7 +312,7 @@ describe('init on a fresh pnpm monorepo', () => {
   });
 });
 
-describe('update on kit scripts committed before they were gitignored', () => {
+describe('update on houserules scripts committed before they were gitignored', () => {
   let root: string;
   const guardScript = '.claude/scripts/guard-bash.mjs';
   let result: RunResult;
@@ -357,7 +354,7 @@ describe('update with scripts.commit: true (opted in to committing scripts)', ()
 
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
-    const configPath = join(root, '.claude/kit.config.json');
+    const configPath = join(root, '.claude/houserules.config.json');
     const config = readJson(configPath);
     config.scripts = { commit: true };
     writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -433,12 +430,12 @@ describe('update on a repo with a legacy ledger still outside .claude/ledgers', 
   });
 });
 
-describe('update on a repo with no prior kit install', () => {
+describe('update on a repo with no prior houserules install', () => {
   it('refuses with exit 1 and points at the missing manifest', () => {
     const root = useRepo('non-js');
     const r = runCli(['update', root]);
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/kit-manifest\.json/);
+    expect(r.stderr).toMatch(/houserules.manifest\.json/);
   });
 });
 
@@ -481,10 +478,10 @@ describe('claudeMd.managed: false', () => {
   it('leaves an existing CLAUDE.md completely untouched by update', () => {
     const root = useInstalledRepo('npm-single');
     const pristine =
-      '# single-app\n\nPre-existing user CLAUDE.md — the kit must never edit this.\n';
+      '# single-app\n\nPre-existing user CLAUDE.md — houserules must never edit this.\n';
     writeFileSync(claudeMdPath(root), pristine);
 
-    const configPath = join(root, '.claude/kit.config.json');
+    const configPath = join(root, '.claude/houserules.config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as Record<
       string,
       unknown
@@ -497,7 +494,7 @@ describe('claudeMd.managed: false', () => {
   });
 });
 
-describe('migrating a prior kit hook entry', () => {
+describe('migrating a prior houserules hook entry', () => {
   it('upgrades the historical unguarded stock command to the guarded form', () => {
     const root = useInstalledRepo('npm-single');
 
@@ -523,7 +520,7 @@ describe('migrating a prior kit hook entry', () => {
     );
   });
 
-  it('preserves a user-edited variant of a kit hook rather than duplicating it', () => {
+  it('preserves a user-edited variant of a houserules hook rather than duplicating it', () => {
     const root = useInstalledRepo('npm-single');
 
     const path = join(root, '.claude/settings.json');
@@ -567,7 +564,7 @@ describe('doctor and update on a retired, unmodified, wired hook script', () => 
   it('doctor reports the retired hook as still wired', () => {
     const r = runCli(['doctor', root]);
     expect(r.stdout).toMatch(
-      /retired kit hook script compact-tool-output\.mjs.*still wired/,
+      /retired houserules hook script compact-tool-output\.mjs.*still wired/,
     );
   });
 
@@ -598,7 +595,7 @@ describe('doctor and update on a retired, unmodified, wired hook script', () => 
       expect(existsSync(join(root, retired))).toBeFalsy();
     });
 
-    it('unwires the retired kit hook from settings.json', () => {
+    it('unwires the retired houserules hook from settings.json', () => {
       const cmds = hookCommandsFor(settingsOf(root), 'PostToolUse');
       expect(cmds.some((c) => c.includes('compact-tool-output'))).toBeFalsy();
     });
@@ -656,7 +653,7 @@ describe('update when the install predates a new default module', () => {
 
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo', { modules: '-session-context' });
-    manifestPath = join(root, '.claude/kit-manifest.json');
+    manifestPath = join(root, '.claude/houserules.manifest.json');
     result = runCli(['update', root]);
   });
 
@@ -688,7 +685,7 @@ describe('update on an install whose manifest names a retired module', () => {
     retiredScript = join(root, '.claude/scripts/backlog-log.mjs');
     const content = '// a retired module file left on disk\n';
     writeFileSync(retiredScript, content);
-    const manifestPath = join(root, '.claude/kit-manifest.json');
+    const manifestPath = join(root, '.claude/houserules.manifest.json');
     const manifest = readJson(manifestPath);
     manifest.modules = [...manifest.modules, 'backlog'];
     manifest.files['.claude/scripts/backlog-log.mjs'] = sha256(content);
@@ -702,7 +699,9 @@ describe('update on an install whose manifest names a retired module', () => {
   });
 
   it('names the plugin package that restores the module', () => {
-    expect(result.stdout + result.stderr).toMatch(/@agent-kit\/plugin-backlog/);
+    expect(result.stdout + result.stderr).toMatch(
+      /@houserules\/plugin-backlog/,
+    );
   });
 
   it('leaves the retired module’s files on disk', () => {
@@ -733,7 +732,7 @@ describe('update on a body-owned rule with a trimmed frontmatter', () => {
   });
 
   it('records the manifest entry as a body/frontmatter hash pair', () => {
-    const manifest = readJson(join(root, '.claude/kit-manifest.json'));
+    const manifest = readJson(join(root, '.claude/houserules.manifest.json'));
     expect(manifest.files[rulePath]).toEqual({
       body: expect.any(String),
       frontmatter: expect.any(String),
@@ -741,7 +740,7 @@ describe('update on a body-owned rule with a trimmed frontmatter', () => {
   });
 });
 
-describe('update on a body-owned rule whose body the kit has since changed', () => {
+describe('update on a body-owned rule whose body houserules has since changed', () => {
   const rulePath = '.claude/rules/code-cleanliness.md';
   let root: string;
   let trimmedFrontmatter: string;
@@ -756,7 +755,7 @@ describe('update on a body-owned rule whose body the kit has since changed', () 
     const olderBody = '# an older version of the testing rule\n';
     writeFileSync(join(root, rulePath), trimmedFrontmatter + olderBody);
 
-    const manifestPath = join(root, '.claude/kit-manifest.json');
+    const manifestPath = join(root, '.claude/houserules.manifest.json');
     const manifest = readJson(manifestPath);
     manifest.files[rulePath] = {
       ...manifest.files[rulePath],
@@ -790,7 +789,7 @@ describe('update on a body-owned rule recorded with a legacy whole-file manifest
 
   beforeEach(() => {
     root = useInstalledRepo('npm-single', { modules: 'code-cleanliness' });
-    manifestPath = join(root, '.claude/kit-manifest.json');
+    manifestPath = join(root, '.claude/houserules.manifest.json');
     const manifest = readJson(manifestPath);
     manifest.files[rulePath] = sha256(
       readFileSync(join(root, rulePath), 'utf8'),
@@ -822,7 +821,7 @@ const FIXTURE_PLUGIN = join(KIT_ROOT, 'test/plugin-fixture');
 const OPTION_MODULE = 'fixture/fixture-langs';
 
 function ensureFixtureSelfLink(): void {
-  const link = join(FIXTURE_PLUGIN, 'node_modules', '@agent-kit', 'cli');
+  const link = join(FIXTURE_PLUGIN, 'node_modules', '@houserules', 'cli');
   if (existsSync(link)) return;
   mkdirSync(dirname(link), { recursive: true });
   symlinkSync(KIT_ROOT, link, 'dir');
@@ -835,7 +834,7 @@ describe('update against an install whose option selection was never recorded', 
     ensureFixtureSelfLink();
     root = useRepo('npm-single');
     runCli(['init', '--yes', root]);
-    editKitConfig(root, (config) => {
+    editHouseConfig(root, (config) => {
       (config as Record<string, unknown>).plugins = [
         { name: FIXTURE_PLUGIN, alias: 'fixture' },
       ];
@@ -848,7 +847,7 @@ describe('update against an install whose option selection was never recorded', 
       `${OPTION_MODULE}=alpha,beta`,
       root,
     ]);
-    editKitConfig(root, (config) => {
+    editHouseConfig(root, (config) => {
       delete (config as Record<string, unknown>).moduleOptions;
     });
   });
@@ -903,7 +902,7 @@ describe('update, given a plugin module whose payload-dist file is missing', () 
     cpSync(FIXTURE_PLUGIN, pluginCopy, { recursive: true });
     root = useRepo('npm-single');
     runCli(['init', '--yes', root]);
-    editKitConfig(root, (config) => {
+    editHouseConfig(root, (config) => {
       (config as Record<string, unknown>).plugins = [
         { name: pluginCopy, alias: 'fixture' },
       ];
@@ -939,7 +938,9 @@ describe('update, given a plugin module whose payload-dist file is missing', () 
   });
 
   it("still renders the healthy built-in modules' plan instead of aborting everything", () => {
-    expect(unwrap(result.stdout)).toContain('kit files already up to date');
+    expect(unwrap(result.stdout)).toContain(
+      'houserules files already up to date',
+    );
   });
 
   it('keeps the missing path on the same line as its list marker', () => {
@@ -961,7 +962,7 @@ describe('init, given a plugin module whose payload-dist file is missing', () =>
     root = useRepo('npm-single');
     mkdirSync(join(root, '.claude'), { recursive: true });
     writeFileSync(
-      join(root, '.claude/kit.config.json'),
+      join(root, '.claude/houserules.config.json'),
       JSON.stringify({
         version: 2,
         packageManager: 'npm',
@@ -990,6 +991,8 @@ describe('init, given a plugin module whose payload-dist file is missing', () =>
   });
 
   it('writes no manifest, so no module is recorded as installed without its files', () => {
-    expect(existsSync(join(root, '.claude/kit-manifest.json'))).toBe(false);
+    expect(existsSync(join(root, '.claude/houserules.manifest.json'))).toBe(
+      false,
+    );
   });
 });

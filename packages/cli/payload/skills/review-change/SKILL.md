@@ -1,10 +1,10 @@
 ---
 name: review-change
-description: Dispatch the per-target reviewer agents for a change, mapped by kit.config.json pathPrefix, and reconcile their OK / Conflict / Gap verdicts. Use to review a working-tree or branch change before handing off.
+description: Dispatch the per-target reviewer agents for a change, mapped by houserules.config.json pathPrefix, and reconcile their OK / Conflict / Gap verdicts. Use to review a working-tree or branch change before handing off.
 allowed-tools: Bash, Read, Agent
 ---
 
-Review the current change by dispatching the **per-target reviewer agents** the kit ships: one
+Review the current change by dispatching the **per-target reviewer agents** houserules ships: one
 read-only auditor per area, each checking the change against that area's authoritative source.
 
 ## 1. Find the changed areas
@@ -18,7 +18,7 @@ base is the changesets `baseBranch`.
 
 ## 2. Map changed paths → reviewers
 
-Read `.claude/kit.config.json`. Each entry in `targets[]` has a `pathPrefix` and a `name`, and the
+Read `.claude/houserules.config.json`. Each entry in `targets[]` has a `pathPrefix` and a `name`, and the
 matching reviewer agent is `${name}-reviewer`, installed at `.claude/agents/${name}-reviewer.md`.
 For each changed file, find the target whose `pathPrefix` it falls under, longest prefix wins, and
 collect the set of `${name}-reviewer` agents whose area was touched. Skip a target with no
@@ -45,8 +45,8 @@ Collect the verdicts into one table of area → OK / Conflict / Gap, with a one-
 
 ## Notes
 
-- Reviewer agents ship as **DRAFTs** (`npx agent-kit modules --modules=reviewers`). Each needs its
-  authoritative source filled in before its verdict means anything, and `npx agent-kit doctor` flags
+- Reviewer agents ship as **DRAFTs** (`npx houserules modules --modules=reviewers`). Each needs its
+  authoritative source filled in before its verdict means anything, and `npx houserules doctor` flags
   any still-DRAFT reviewer. A DRAFT reviewer's verdict is not trustworthy, so treat it as unreviewed.
 - This dispatches reviewers. It does not run tests. For scoped verification, use `/verify-changed`.
 - This is the general per-target dispatcher, not a design or accessibility specialist. A change

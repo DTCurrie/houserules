@@ -1,9 +1,9 @@
 {
-  "name": "@agent-kit/plugin-fixture-peer-badrange",
+  "name": "@houserules/plugin-fixture-peer-badrange",
   "version": "1.0.0",
   "private": true,
   "main": "index.cjs",
   "peerDependencies": {
-    "@agent-kit/cli": "not a range"
+    "@houserules/cli": "not a range"
   }
 }

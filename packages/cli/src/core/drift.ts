@@ -8,25 +8,25 @@ import {
   bodyHashes,
   wholeFileHash,
   extractBody,
-  type KitManifest,
-} from '@agent-kit/api/internal';
+  type HouseManifest,
+} from '@houserules/api/internal';
 import type { Effect, PruneResult } from '../plan.js';
 
 /**
- * Why a file no longer matches what the kit would write.
+ * Why a file no longer matches what houserules would write.
  *
  * `stale` and `yours` are the distinction the drift engine exists for. `stale` means
- * disk matches what the kit last wrote but the kit's canonical content moved on, so the
- * KIT changed and `update` refreshes it silently. `yours` means disk differs from what
- * the kit last wrote, so YOU changed it, and it is never overwritten without `--force`.
+ * disk matches what houserules last wrote but houserules' canonical content moved on, so
+ * houserules changed and `update` refreshes it silently. `yours` means disk differs from what
+ * houserules last wrote, so YOU changed it, and it is never overwritten without `--force`.
  * A content-hash lockfile cannot tell these apart. The manifest can, because it records
- * what the kit itself last wrote. Do not collapse them.
+ * what houserules itself last wrote. Do not collapse them.
  *
- * `conflict` is both at once: you edited the file AND the kit shipped a newer version of
+ * `conflict` is both at once: you edited the file AND houserules shipped a newer version of
  * it since. That is the only local edit that leaves you a decision to make, which is why
  * it is split out. A settled `yours` is a fact about the install, not a problem with it,
  * and reporting the two the same way leaves doctor permanently yellow on a repo that
- * followed the kit's own advice to edit a file.
+ * followed houserules' own advice to edit a file.
  */
 export type FileStatus =
   'ok' | 'missing' | 'stale' | 'yours' | 'conflict' | 'no-marker' | 'orphaned';
@@ -62,10 +62,10 @@ export interface DriftReport {
 
 export interface ComputeDriftOptions {
   /**
-   * The receipt of what the kit last wrote. Without it a local edit cannot be told from
+   * The receipt of what houserules last wrote. Without it a local edit cannot be told from
    * a conflict, because the comparison is recorded hash against canonical hash.
    */
-  manifest: KitManifest | null;
+  manifest: HouseManifest | null;
   prune?: PruneResult | null;
 }
 
@@ -90,7 +90,7 @@ function readText(root: string, relativePath: string): string | null {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.error(
-        `agent-kit: could not read ${relativePath} (${(error as Error).message}). Drift is being computed against it as if absent.`,
+        `houserules: could not read ${relativePath} (${(error as Error).message}). Drift is being computed against it as if absent.`,
       );
     }
     return null;
@@ -98,9 +98,9 @@ function readText(root: string, relativePath: string): string | null {
 }
 
 /**
- * Which side of a local edit the kit is on. `skip-modified` only establishes that YOU
- * changed the file. Comparing what the kit last wrote against what it would write now
- * establishes whether the KIT changed too, which is the difference between a settled
+ * Which side of a local edit houserules is on. `skip-modified` only establishes that YOU
+ * changed the file. Comparing what houserules last wrote against what it would write now
+ * establishes whether houserules changed too, which is the difference between a settled
  * edit and a merge you still owe.
  */
 function editedStatus(
@@ -118,10 +118,10 @@ function editedStatus(
  *
  * @param readHost Returns the destination file's current text, or null if it is absent.
  *   For a region action this is the whole host file, not the region body.
- * @param recordedHash The manifest's hash for this dest, which is what the kit last
+ * @param recordedHash The manifest's hash for this dest, which is what houserules last
  *   wrote. For a region that is the BODY's hash, matching what `Effect.hash` carries.
  * @param recordedDefaultFrontmatter A body action's manifest-recorded default
- *   frontmatter hash, used to tell a customization the kit's shipped default has moved
+ *   frontmatter hash, used to tell a customization houserules' shipped default has moved
  *   past from one it has not. Ignored for every other action kind.
  */
 export function classifyEffect(
@@ -226,11 +226,11 @@ export function orphanDrift(prune?: PruneResult | null): FileDrift[] {
  *
  * A body-owned dest whose manifest entry is still the legacy whole-file string reads as
  * undefined here, which `editedStatus` treats as `yours`. The entry predates body
- * ownership, so the kit cannot prove its own copy of the body moved on, and `conflict`
+ * ownership, so houserules cannot prove its own copy of the body moved on, and `conflict`
  * would be an alarm it cannot justify.
  */
 function recordedHashFor(
-  manifest: KitManifest | null,
+  manifest: HouseManifest | null,
   effect: Effect,
 ): string | undefined {
   return effect.action.kind === 'body'
@@ -240,7 +240,7 @@ function recordedHashFor(
 
 /** The manifest's recorded default frontmatter hash for a body-owned dest, or undefined. */
 function recordedDefaultFrontmatterFor(
-  manifest: KitManifest | null,
+  manifest: HouseManifest | null,
   effect: Effect,
 ): string | undefined {
   return effect.action.kind === 'body'
@@ -249,7 +249,7 @@ function recordedDefaultFrontmatterFor(
 }
 
 /**
- * Reports what on disk no longer matches what the kit would write, and why.
+ * Reports what on disk no longer matches what houserules would write, and why.
  *
  * Derived from the effects `computeEffects()` already produced rather than
  * re-implementing the comparison, so doctor and update cannot disagree about what has

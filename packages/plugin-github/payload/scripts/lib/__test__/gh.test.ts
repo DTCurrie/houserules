@@ -41,36 +41,36 @@ describe('parseGitHubRemoteUrl', () => {
   it.each([
     {
       name: 'ssh remote with .git suffix',
-      url: 'git@github.com:DTCurrie/agent-kit.git',
-      expected: { owner: 'DTCurrie', repo: 'agent-kit' },
+      url: 'git@github.com:DTCurrie/houserules.git',
+      expected: { owner: 'DTCurrie', repo: 'houserules' },
     },
     {
       name: 'https remote with .git suffix',
-      url: 'https://github.com/DTCurrie/agent-kit.git',
-      expected: { owner: 'DTCurrie', repo: 'agent-kit' },
+      url: 'https://github.com/DTCurrie/houserules.git',
+      expected: { owner: 'DTCurrie', repo: 'houserules' },
     },
     {
       name: 'https remote without .git suffix',
-      url: 'https://github.com/DTCurrie/agent-kit',
-      expected: { owner: 'DTCurrie', repo: 'agent-kit' },
+      url: 'https://github.com/DTCurrie/houserules',
+      expected: { owner: 'DTCurrie', repo: 'houserules' },
     },
     {
       name: 'ssh remote without .git suffix',
-      url: 'git@github.com:DTCurrie/agent-kit',
-      expected: { owner: 'DTCurrie', repo: 'agent-kit' },
+      url: 'git@github.com:DTCurrie/houserules',
+      expected: { owner: 'DTCurrie', repo: 'houserules' },
     },
     {
       name: 'trailing newline from git remote get-url',
-      url: 'git@github.com:DTCurrie/agent-kit.git\n',
-      expected: { owner: 'DTCurrie', repo: 'agent-kit' },
+      url: 'git@github.com:DTCurrie/houserules.git\n',
+      expected: { owner: 'DTCurrie', repo: 'houserules' },
     },
   ])('parses $name to $expected', ({ url, expected }) => {
     expect(parseGitHubRemoteUrl(url)).toEqual(expected);
   });
 
   it.each([
-    'git@gitlab.com:DTCurrie/agent-kit.git',
-    'https://gitlab.com/DTCurrie/agent-kit.git',
+    'git@gitlab.com:DTCurrie/houserules.git',
+    'https://gitlab.com/DTCurrie/houserules.git',
     'not a url at all',
     '',
   ])('returns null for a non-GitHub remote %j', (url) => {

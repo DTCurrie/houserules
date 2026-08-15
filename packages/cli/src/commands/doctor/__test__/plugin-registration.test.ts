@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished } from 'vitest';
 
 import { makeCtx } from '#test/ctx-builder';
-import type { KitConfig } from '@agent-kit/api';
-import type { KitManifest } from '@agent-kit/api/internal';
+import type { HouseConfig } from '@houserules/api';
+import type { HouseManifest } from '@houserules/api/internal';
 import type { Ctx } from '../../../detect.js';
 import { checkPluginRegistration } from '../plugin-registration.js';
 
@@ -38,13 +38,13 @@ function hostRootDependingOnFakePlugin(): { root: string; pluginDir: string } {
     join(pluginDir, 'package.json'),
     JSON.stringify({
       name: '@fake/plugin',
-      keywords: ['agent-kit-plugin'],
+      keywords: ['houserules-plugin'],
     }),
   );
   return { root, pluginDir };
 }
 
-const MANIFEST: KitManifest = {
+const MANIFEST: HouseManifest = {
   kitVersion: '1.0.0',
   installedAt: '2026-01-01T00:00:00.000Z',
   modules: ['core'],
@@ -53,16 +53,16 @@ const MANIFEST: KitManifest = {
 
 function ctxWith(
   plugins: Array<{ name: string; alias: string }>,
-  manifest: KitManifest | null = MANIFEST,
+  manifest: HouseManifest | null = MANIFEST,
 ): Ctx {
-  const kitConfig = {
+  const houseConfig = {
     version: 2,
     packageManager: 'pnpm',
     targets: [],
     plugins,
-  } as unknown as KitConfig;
+  } as unknown as HouseConfig;
   const base = makeCtx();
-  return { ...base, claude: { ...base.claude, manifest, kitConfig } };
+  return { ...base, claude: { ...base.claude, manifest, houseConfig } };
 }
 
 describe('checkPluginRegistration', () => {
@@ -73,7 +73,7 @@ describe('checkPluginRegistration', () => {
   it('names those plugins in a readout so they are still discoverable', () => {
     const { readouts } = checkPluginRegistration('/repo', ctxWith([]));
 
-    expect(readouts.join('\n')).toContain('@agent-kit/plugin-accessibility');
+    expect(readouts.join('\n')).toContain('@houserules/plugin-accessibility');
   });
 
   it('reports every available plugin on one line rather than one line each', () => {
@@ -91,7 +91,7 @@ describe('checkPluginRegistration', () => {
     expect(readouts.join('\n')).not.toContain('plugin-accessibility');
   });
 
-  it('says nothing at all on a repo with no kit installed', () => {
+  it('says nothing at all on a repo with no houserules installed', () => {
     expect(checkPluginRegistration('/repo', ctxWith([], null))).toEqual({
       findings: [],
       readouts: [],
@@ -100,7 +100,7 @@ describe('checkPluginRegistration', () => {
 });
 
 describe('checkPluginRegistration, dependency-declared plugins', () => {
-  it('warns when a dependency of the repo is not registered in kit.config.json', () => {
+  it('warns when a dependency of the repo is not registered in houserules.config.json', () => {
     const { root } = hostRootDependingOnFakePlugin();
 
     const { findings } = checkPluginRegistration(root, ctxWith([]));
@@ -108,12 +108,12 @@ describe('checkPluginRegistration, dependency-declared plugins', () => {
     expect(findings).toEqual([
       {
         level: 'WARN',
-        msg: 'plugin @fake/plugin is a dependency of this repo but is not in kit.config.json "plugins", so none of its modules are available',
+        msg: 'plugin @fake/plugin is a dependency of this repo but is not in houserules.config.json "plugins", so none of its modules are available',
       },
     ]);
   });
 
-  it('does not warn once the dependency is registered in kit.config.json', () => {
+  it('does not warn once the dependency is registered in houserules.config.json', () => {
     const { root, pluginDir } = hostRootDependingOnFakePlugin();
 
     const { findings } = checkPluginRegistration(

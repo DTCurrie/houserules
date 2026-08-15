@@ -38,7 +38,7 @@ through.
 ## Notes
 
 - Scope math and command selection live in `verify-changed.mjs`, configured by the `verify` block and
-  the per-target `verifyCommands` in `.claude/kit.config.json`. Tune there, not here.
+  the per-target `verifyCommands` in `.claude/houserules.config.json`. Tune there, not here.
 - Preview the scope without running anything. `node .claude/scripts/verify-changed.mjs` prints the
   plan, and `--json` emits it machine-readably.
 - This replaces a hand-maintained "shared packages" list. Dependents come from the workspace

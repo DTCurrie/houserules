@@ -14,7 +14,7 @@ payload-dist/
 *.tgz
 .notes/
 
-# This repo dogfoods the kit, so .claude/ is assembled by `pnpm dogfood` and is not source.
+# This repo dogfoods houserules, so .claude/ is assembled by `pnpm dogfood` and is not source.
 # `.claude/*` rather than `.claude/`, because git cannot re-include a path whose parent
 # directory is itself excluded.
 #

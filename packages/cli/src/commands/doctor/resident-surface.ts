@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
-import { listWorkspacePackages } from '@agent-kit/payload/workspaces';
+import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { frontmatterBlock } from '../../core/frontmatter.js';
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 
 // The always-loaded surface is paid on every turn (CONVENTIONS §1). ~3-4K tokens
 // is the sane target. Take the upper end as the ceiling and ~200 lines alongside.
@@ -237,7 +237,7 @@ export function measureSkillAgentDescriptions(
 }
 
 /**
- * The resident-surface budget, which makes the kit's #1 lever measurable instead of only
+ * The resident-surface budget, which makes houserules' #1 lever measurable instead of only
  * prose. Read-only, and WARNs past budget rather than ERRORing.
  */
 export function checkResidentSurface(root: string): CheckResult {

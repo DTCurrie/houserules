@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-svelte': minor
+'@houserules/plugin-svelte': minor
 ---
 
 Initial release. Svelte 5 authoring conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.

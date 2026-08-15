@@ -18,7 +18,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { repoRoot } from '@agent-kit/payload/kit-config';
+import { repoRoot } from '@houserules/payload/config';
 import {
   matchPatterns,
   criteriaFor,
@@ -56,7 +56,7 @@ function loadCorpus(): Criterion[] | undefined {
   const path = corpusPath();
   if (!existsSync(path)) {
     console.error(
-      `No WCAG corpus at ${path}. The accessibility module installs it, run \`npx agent-kit init\` or \`update\` to add it.`,
+      `No WCAG corpus at ${path}. The accessibility module installs it, run \`npx houserules init\` or \`update\` to add it.`,
     );
     return undefined;
   }

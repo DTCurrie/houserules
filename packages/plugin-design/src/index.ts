@@ -1,4 +1,4 @@
-import { definePlugin, scriptPermission } from '@agent-kit/api';
+import { definePlugin, scriptPermission } from '@houserules/api';
 
 import { checkChromeAvailable } from './chrome-check.js';
 import {
@@ -16,7 +16,7 @@ import type {
   Ctx,
   ModuleDef,
   PluginApi,
-} from '@agent-kit/api';
+} from '@houserules/api';
 
 /**
  * The file types the design rule claims. Narrower than the accessibility rule's markup list on
@@ -119,7 +119,7 @@ function designModule(api: PluginApi): ModuleDef {
           ];
       const adviseText = tailwindSelected
         ? `Design system driven by the Tailwind theme, so no ${TOKENS_PATH} was seeded. Queries answer from this repo's own \`@theme\` block merged with Tailwind's defaults. Query it with \`node .claude/scripts/design.mjs token <name>\`, list names with \`list\`, and print the spacing, type, and radius scales with \`scales\`. See the design-tailwind advisory for the full Tailwind flow. The rule installs at .claude/rules/design.md, path-scoped via its \`paths:\` frontmatter so Claude Code loads it only when UI code is in the working set. Trim \`paths:\` to what this repo has, and keep the frontmatter, since a rule WITHOUT \`paths:\` is loaded on every turn. The rule covers ${STYLED_GLOBS.length} extensions by default: ${STYLED_GLOBS.join(', ')}.`
-        : `Design system seeded at ${TOKENS_PATH} in W3C DTCG format (Design Tokens Format Module 2025.10). It is YOURS: the kit writes it once and never refreshes it, and the values it ships are brand-neutral placeholders. Replace them before trusting any design check, because a check against placeholders returns confident nonsense. Query it with \`node .claude/scripts/design.mjs token <name>\`, list names with \`list\`, and print the spacing, type, and radius scales with \`scales\`. The rule installs at .claude/rules/design.md, path-scoped via its \`paths:\` frontmatter so Claude Code loads it only when UI code is in the working set. Trim \`paths:\` to what this repo has, and keep the frontmatter, since a rule WITHOUT \`paths:\` is loaded on every turn. The rule covers ${STYLED_GLOBS.length} extensions by default: ${STYLED_GLOBS.join(', ')}.`;
+        : `Design system seeded at ${TOKENS_PATH} in W3C DTCG format (Design Tokens Format Module 2025.10). It is YOURS: houserules writes it once and never refreshes it, and the values it ships are brand-neutral placeholders. Replace them before trusting any design check, because a check against placeholders returns confident nonsense. Query it with \`node .claude/scripts/design.mjs token <name>\`, list names with \`list\`, and print the spacing, type, and radius scales with \`scales\`. The rule installs at .claude/rules/design.md, path-scoped via its \`paths:\` frontmatter so Claude Code loads it only when UI code is in the working set. Trim \`paths:\` to what this repo has, and keep the frontmatter, since a rule WITHOUT \`paths:\` is loaded on every turn. The rule covers ${STYLED_GLOBS.length} extensions by default: ${STYLED_GLOBS.join(', ')}.`;
       return [
         api.payload.rule(
           id,
@@ -293,7 +293,7 @@ function designTailwindModule(api: PluginApi): ModuleDef {
           : []),
         {
           kind: 'advise',
-          text: `Tailwind theme wired as the design system. No ${TOKENS_PATH} is seeded, and design.mjs answers token, list, and scales queries from this repo's own @theme block merged with Tailwind's defaults. It reads whichever stylesheet imports Tailwind, or the one you name with --theme <path>. \`check\` also scans each file's class names with \`@tailwindcss/oxide\` and judges them against the same theme, alongside any \`<style>\` block declarations, naming an arbitrary value's nearest theme step and reporting a contrast finding for a \`bg-*\`/\`text-*\` pairing on one element. That half needs \`@tailwindcss/oxide\` installed separately from \`tailwindcss\`, and \`check\` says so rather than reporting a clean file when it is missing. The kit never writes into the Tailwind compile path, so your entry stylesheet and build config are untouched. A starter \`@theme\` installs at .claude/kit-templates/tailwind-theme.css.template, a reference to copy from, not a file the kit ever writes into your CSS. ${referenceLine} It needs the design module for the script itself. If this repo already had ${TOKENS_PATH} from an earlier install, nothing reads it now and the kit will not delete it, since a seed is yours. Remove it yourself, and \`agent-kit doctor\` will remind you while it is still there.`,
+          text: `Tailwind theme wired as the design system. No ${TOKENS_PATH} is seeded, and design.mjs answers token, list, and scales queries from this repo's own @theme block merged with Tailwind's defaults. It reads whichever stylesheet imports Tailwind, or the one you name with --theme <path>. \`check\` also scans each file's class names with \`@tailwindcss/oxide\` and judges them against the same theme, alongside any \`<style>\` block declarations, naming an arbitrary value's nearest theme step and reporting a contrast finding for a \`bg-*\`/\`text-*\` pairing on one element. That half needs \`@tailwindcss/oxide\` installed separately from \`tailwindcss\`, and \`check\` says so rather than reporting a clean file when it is missing. houserules never writes into the Tailwind compile path, so your entry stylesheet and build config are untouched. A starter \`@theme\` installs at .claude/templates/tailwind-theme.css.template, a reference to copy from, not a file houserules ever writes into your CSS. ${referenceLine} It needs the design module for the script itself. If this repo already had ${TOKENS_PATH} from an earlier install, nothing reads it now and houserules will not delete it, since a seed is yours. Remove it yourself, and \`houserules doctor\` will remind you while it is still there.`,
           module: id,
         },
       ];

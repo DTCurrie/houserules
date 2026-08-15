@@ -1,10 +1,10 @@
-import { definePlugin, hookFragment, scriptPermission } from '@agent-kit/api';
-import type { Action, ModuleDef, PluginApi } from '@agent-kit/api';
+import { definePlugin, hookFragment, scriptPermission } from '@houserules/api';
+import type { Action, ModuleDef, PluginApi } from '@houserules/api';
 
 /**
  * The plugin's own config slice, which today recognizes nothing.
  *
- * Every setting this plugin has lives at the top level of `kit.config.json`, under `projects`,
+ * Every setting this plugin has lives at the top level of `houserules.config.json`, under `projects`,
  * because the payload scripts are what read them and a script does not know which alias its
  * plugin was declared under. It therefore cannot find its own `plugins[]` entry.
  *
@@ -22,7 +22,7 @@ function readConfig(config: unknown): void {
   for (const key of Object.keys(config as Record<string, unknown>)) {
     if (key === 'autoSync') {
       throw new Error(
-        'projects config key "autoSync" belongs at the top level of kit.config.json, as `projects.autoSync`, not inside this plugin\'s `config` block. The scripts read it from there.',
+        'projects config key "autoSync" belongs at the top level of houserules.config.json, as `projects.autoSync`, not inside this plugin\'s `config` block. The scripts read it from there.',
       );
     }
     throw new Error(`projects config has an unknown key "${key}"`);

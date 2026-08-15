@@ -16,16 +16,16 @@ import {
   REGION_START,
   allHookCommands,
   claudeMdPath,
-  editKitConfig,
+  editHouseConfig,
   hookCommandsFor,
-  kitConfigPath,
+  houseConfigPath,
   manifestOf,
   readClaudeMd,
   readJson,
   settingsOf,
 } from '#test/installed-tree';
 import { selectModuleOptions } from '../../ui.js';
-import type { ModuleDef } from '@agent-kit/api';
+import type { ModuleDef } from '@houserules/api';
 import type { RegisteredModule } from '../../plugin-registry.js';
 
 function optionlessModule(id: string): RegisteredModule {
@@ -90,7 +90,7 @@ describe('init --yes on a pnpm monorepo', () => {
       '.claude/scripts/session-context.mjs',
       '.claude/scripts/rename.mjs',
       '.claude/scripts/lib/workspaces.mjs',
-      '.claude/kit-templates/CLAUDE.md.template',
+      '.claude/templates/CLAUDE.md.template',
     ];
 
     expect(
@@ -102,14 +102,14 @@ describe('init --yes on a pnpm monorepo', () => {
   it('does not stage the archivist template when the ledger module is off', () => {
     expect(
       existsSync(
-        join(root, '.claude/kit-templates/agents/archivist.agent.md.template'),
+        join(root, '.claude/templates/agents/archivist.agent.md.template'),
       ),
     ).toBe(false);
   });
 
-  it('gitignores everything under kit-templates except the .gitignore itself', () => {
+  it('gitignores everything under templates except the .gitignore itself', () => {
     const templatesIgnore = readFileSync(
-      join(root, '.claude/kit-templates/.gitignore'),
+      join(root, '.claude/templates/.gitignore'),
       'utf8',
     );
     expect(templatesIgnore).toMatch(/^\*$/m);
@@ -134,8 +134,8 @@ describe('init --yes on a pnpm monorepo', () => {
     );
   });
 
-  it('writes a kit.config.json v2 with changesets disabled since the module is not in the default set', () => {
-    const config = readJson(kitConfigPath(root));
+  it('writes a houserules.config.json v2 with changesets disabled since the module is not in the default set', () => {
+    const config = readJson(houseConfigPath(root));
     expect(config.version).toBe(2);
     expect(config.changesets.enabled).toBe(false);
     expect(config.changesets.stopCheck).toBe(false);
@@ -143,7 +143,7 @@ describe('init --yes on a pnpm monorepo', () => {
   });
 
   it('derives a target’s prefix and fixCommands, omitting changelogPath without the ledger module', () => {
-    const config = readJson(kitConfigPath(root));
+    const config = readJson(houseConfigPath(root));
     const targets = config.targets as Array<{
       packageName?: string;
       prefix?: string;
@@ -156,7 +156,7 @@ describe('init --yes on a pnpm monorepo', () => {
     expect(cityville?.changelogPath).toBe(undefined);
   });
 
-  it('wires every kit script into a settings.json hook', () => {
+  it('wires every houserules script into a settings.json hook', () => {
     const allCommands = allHookCommands(root).join('\n');
     const hookScripts = ['guard-bash', 'lint-format-fix', 'session-context'];
 
@@ -226,9 +226,9 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
 
   it('adds the managed CLAUDE.md block without touching any byte outside the markers', () => {
     const claudeAfter = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
-    expect(claudeAfter).toContain('<!-- agent-kit:claude-md start -->');
+    expect(claudeAfter).toContain('<!-- houserules:claude-md start -->');
     const withoutBlock = claudeAfter.replace(
-      /\n*<!-- agent-kit:claude-md start -->[\s\S]*?<!-- agent-kit:claude-md end -->\n*/,
+      /\n*<!-- houserules:claude-md start -->[\s\S]*?<!-- houserules:claude-md end -->\n*/,
       '\n\n',
     );
     expect(withoutBlock.trim()).toBe(claudeBefore.trim());
@@ -236,11 +236,11 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
 
   it('retires the hand-merge staging file', () => {
     expect(
-      existsSync(join(root, '.claude/kit-templates/CLAUDE.additions.md')),
+      existsSync(join(root, '.claude/templates/CLAUDE.additions.md')),
     ).toBe(false);
   });
 
-  it('merges settings.json, keeping the user’s existing entries and adding the kit hook', () => {
+  it('merges settings.json, keeping the user’s existing entries and adding houserules hook', () => {
     const settings = settingsOf(root);
     expect(settings.permissions?.allow?.[0]).toBe('Bash(echo hi)');
     expect(hookCommandsFor(settings, 'PreToolUse')[0]).toBe(
@@ -260,7 +260,7 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
   });
 
   it('resolves a single root-level target using the existing lint:fix script', () => {
-    const config = readJson(kitConfigPath(root));
+    const config = readJson(houseConfigPath(root));
     expect(config.targets.length).toBe(1);
     expect(config.targets[0].pathPrefix).toBe('');
     expect(config.targets[0].fixCommands).toEqual(['lint:fix']);
@@ -334,7 +334,7 @@ describe('init on an existing CLAUDE.md', () => {
     const root = useRepo('npm-single');
     const heading = '# single-app\n\n';
     const prose =
-      'Pre-existing user CLAUDE.md. The kit must never edit this.\n';
+      'Pre-existing user CLAUDE.md. houserules must never edit this.\n';
     expect(readClaudeMd(root)).toBe(`${heading}${prose}`);
 
     expect(runCli(['init', '--yes', root]).status).toBe(0);
@@ -392,14 +392,14 @@ describe('installing over an existing settings.json with user content', () => {
     expect(settingsOf(root).someUnrelatedKey).toEqual({ keepMe: true });
   });
 
-  it('appends the kit’s hook after the user’s hook in a shared matcher group, never reordering it', () => {
+  it('appends houserules’ hook after the user’s hook in a shared matcher group, never reordering it', () => {
     const group = (settingsOf(root).hooks?.PreToolUse ?? []).find(
       (g) => g.matcher === 'Bash',
     );
     expect(group?.hooks?.[0]?.command).toBe('node ./my-own-hook.js');
   });
 
-  it('does not duplicate kit hook entries on a second install', () => {
+  it('does not duplicate houserules hook entries on a second install', () => {
     const once = hookCommandsFor(settingsOf(root), 'PreToolUse');
     expect(runCli(['init', '--yes', root]).status).toBe(0);
     const twice = hookCommandsFor(settingsOf(root), 'PreToolUse');
@@ -408,7 +408,7 @@ describe('installing over an existing settings.json with user content', () => {
 });
 
 describe('the settings.json backup', () => {
-  it('is written once, before the first kit write, and is never overwritten by a later run', () => {
+  it('is written once, before the first houserules write, and is never overwritten by a later run', () => {
     const root = useRepo('npm-single');
     seedUserSettings(root);
     const original = readFileSync(join(root, '.claude/settings.json'), 'utf8');
@@ -456,7 +456,7 @@ describe('init below the git toplevel', () => {
   it('refuses with exit 1, naming the git root problem and a cd fix', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/below the git root/);
-    expect(result.stderr).toMatch(/cd .* npx agent-kit init/);
+    expect(result.stderr).toMatch(/cd .* npx houserules init/);
   });
 
   it('writes nothing to the subdirectory', () => {
@@ -508,13 +508,13 @@ const KIT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const FIXTURE_PLUGIN = join(KIT_ROOT, 'test/plugin-fixture');
 
 function ensureFixtureSelfLink(): void {
-  const link = join(FIXTURE_PLUGIN, 'node_modules', '@agent-kit', 'cli');
+  const link = join(FIXTURE_PLUGIN, 'node_modules', '@houserules', 'cli');
   if (existsSync(link)) return;
   mkdirSync(dirname(link), { recursive: true });
   symlinkSync(KIT_ROOT, link, 'dir');
 }
 
-describe('init --module-option against a kit.config.json that already exists', () => {
+describe('init --module-option against a houserules.config.json that already exists', () => {
   const OPTION_MODULE = 'fixture/fixture-langs';
   let root: string;
 
@@ -522,7 +522,7 @@ describe('init --module-option against a kit.config.json that already exists', (
     ensureFixtureSelfLink();
     root = useRepo('npm-single');
     runCli(['init', '--yes', root]);
-    editKitConfig(root, (config) => {
+    editHouseConfig(root, (config) => {
       (config as Record<string, unknown>).plugins = [
         { name: FIXTURE_PLUGIN, alias: 'fixture' },
       ];
@@ -543,7 +543,7 @@ describe('init --module-option against a kit.config.json that already exists', (
   it('persists the resolved selection rather than losing it with the skipped seed', () => {
     initWithOptions('alpha,beta');
 
-    expect(readJson(kitConfigPath(root)).moduleOptions).toEqual({
+    expect(readJson(houseConfigPath(root)).moduleOptions).toEqual({
       [OPTION_MODULE]: ['alpha', 'beta'],
     });
   });
@@ -551,7 +551,7 @@ describe('init --module-option against a kit.config.json that already exists', (
   it('keeps the plugin declaration the user added by hand', () => {
     initWithOptions('alpha,beta');
 
-    expect(readJson(kitConfigPath(root)).plugins).toEqual([
+    expect(readJson(houseConfigPath(root)).plugins).toEqual([
       { name: FIXTURE_PLUGIN, alias: 'fixture' },
     ]);
   });
@@ -561,7 +561,7 @@ describe('init --module-option against a kit.config.json that already exists', (
 
     initWithOptions('beta');
 
-    expect(readJson(kitConfigPath(root)).moduleOptions).toEqual({
+    expect(readJson(houseConfigPath(root)).moduleOptions).toEqual({
       [OPTION_MODULE]: ['beta'],
     });
   });

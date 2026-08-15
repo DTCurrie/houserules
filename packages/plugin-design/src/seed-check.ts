@@ -3,13 +3,13 @@ import { join } from 'node:path';
 
 import { isUntouchedSeed } from './tokens-seed.js';
 
-import type { CheckResult, Ctx, Finding } from '@agent-kit/api';
+import type { CheckResult, Ctx, Finding } from '@houserules/api';
 
-/** Where the kit seeds the design system. Also the root of the design workspace. */
+/** Where houserules seeds the design system. Also the root of the design workspace. */
 export const TOKENS_PATH = '.claude/design/tokens.json';
 
 /**
- * Warns when the design system is missing, unparseable, or still exactly what the kit seeded.
+ * Warns when the design system is missing, unparseable, or still exactly what houserules seeded.
  *
  * An untouched seed is the finding that matters. Every downstream design check compares real
  * code against these values, so a repo that never replaced them is measuring its UI against
@@ -27,7 +27,7 @@ export function checkDesignTokens(ctx: Ctx): CheckResult {
   if (!existsSync(absolute)) {
     findings.push({
       level: 'WARN',
-      msg: `design: no design system at ${TOKENS_PATH}. Run \`npx agent-kit init\` to seed one, or write it by hand.`,
+      msg: `design: no design system at ${TOKENS_PATH}. Run \`npx houserules init\` to seed one, or write it by hand.`,
     });
     return { findings, readouts };
   }
@@ -52,7 +52,7 @@ export function checkDesignTokens(ctx: Ctx): CheckResult {
   if (isUntouchedSeed(contents)) {
     findings.push({
       level: 'WARN',
-      msg: `design: ${TOKENS_PATH} is still the kit's placeholder seed, so every design check measures against placeholders. Replace the values with this repo's own, or bootstrap a first draft from existing code with \`node .claude/scripts/design.mjs extract\`.`,
+      msg: `design: ${TOKENS_PATH} is still houserules' placeholder seed, so every design check measures against placeholders. Replace the values with this repo's own, or bootstrap a first draft from existing code with \`node .claude/scripts/design.mjs extract\`.`,
     });
     return { findings, readouts };
   }
@@ -66,7 +66,7 @@ export function checkDesignTokens(ctx: Ctx): CheckResult {
  *
  * A missing token file is the CORRECT state here, so {@link checkDesignTokens}'s warning would
  * be backwards. What is worth reporting is the opposite case: a `tokens.json` left over from
- * before `design-tailwind` was installed. Nothing reads it any more, and the kit will never
+ * before `design-tailwind` was installed. Nothing reads it any more, and houserules will never
  * remove it, because a seed is never manifest-tracked and so `computePrune` cannot reach it.
  * Left unsaid, it sits there looking like the design system while every query answers from the
  * theme.
@@ -84,7 +84,7 @@ export function checkStaleTokenSeed(ctx: Ctx): CheckResult {
     findings: [
       {
         level: 'WARN',
-        msg: `design: ${TOKENS_PATH} predates design-tailwind and nothing reads it now, since queries answer from the Tailwind theme. The kit will not delete it, because a seed belongs to you. Remove it yourself, or drop the design-tailwind module to go back to it.`,
+        msg: `design: ${TOKENS_PATH} predates design-tailwind and nothing reads it now, since queries answer from the Tailwind theme. houserules will not delete it, because a seed belongs to you. Remove it yourself, or drop the design-tailwind module to go back to it.`,
       },
     ],
     readouts: [],

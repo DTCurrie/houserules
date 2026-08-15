@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
- * Dev-only tool, never published. Wires this repo to run its own kit by seeding
- * `.claude/kit.config.json` and `.claude/settings.json`, then running the real installer
+ * Dev-only tool, never published. Wires this repo to run its own houserules by seeding
+ * `.claude/houserules.config.json` and `.claude/settings.json`, then running the real installer
  * (`node dist/cli.js init --yes`) over this repo's own workspace. `.claude/` is gitignored.
  *
  * This runs the SAME plan/apply pipeline a user's `init` runs: every module's `plan()`
- * executes for real, `.claude/kit-manifest.json` records what it installed, and an
+ * executes for real, `.claude/houserules.manifest.json` records what it installed, and an
  * option-gated reference doc only appears when the module option that ships it was chosen.
  *
  * A relink pass then runs AFTER apply (see `relink()` below): any manifest-tracked
  * destination whose bytes are an exact, unique match for a payload source is swapped back
  * to a symlink at that source, so a payload prose edit shows up in `.claude/` immediately,
  * with no rebuild and no re-run of this script. Compiled scripts, `appendBody` rules, and
- * anything the kit only owns part of stay real, copied files. `doctor` sees no drift either
+ * anything houserules only owns part of stay real, copied files. `doctor` sees no drift either
  * way: a symlink reads through to the same bytes the manifest recorded.
  *
- * Usage: `pnpm dogfood`, with `--force` to overwrite an existing kit.config.json/settings.json
+ * Usage: `pnpm dogfood`, with `--force` to overwrite an existing houserules.config.json/settings.json
  * seed. Safe to re-run: a second run with the same inputs writes nothing new.
  */
 
@@ -60,7 +60,7 @@ const EXTRA_WORKSPACE_PACKAGE_DIRS = ['cli/test/plugin-fixture'];
  * Every workspace package, the CLI first: everything directly under `packages/` plus the
  * extra paths `pnpm-workspace.yaml` names individually.
  *
- * Used to build the `targets` array this repo's own `kit.config.json` seed carries. That
+ * Used to build the `targets` array this repo's own `houserules.config.json` seed carries. That
  * array is what `verify-changed.mjs` and the backlog scripts read at RUNTIME, since the CLI's
  * own `init` derives its working `Ctx.targets` from the tree directly and never consults this
  * file's `targets` for that purpose.
@@ -156,7 +156,7 @@ function titleCase(s) {
 
 /**
  * Mirrors `detectVerifyCommands` in `src/detect.ts`, close enough for a seed: a package's
- * `check` and `test` scripts, in that order. `@agent-kit/test` and `plugin-testing` are the
+ * `check` and `test` scripts, in that order. `@houserules/test` and `plugin-testing` are the
  * only two of fourteen packages with no `test` script, so this naturally leaves them at
  * `["check"]`, which is what step 5 of the brief asked for by name.
  */
@@ -168,7 +168,7 @@ function verifyCommandsFor(scripts) {
 }
 
 /**
- * One `KitConfigTarget` per workspace package, for `verify-changed.mjs` and the backlog
+ * One `HouseConfigTarget` per workspace package, for `verify-changed.mjs` and the backlog
  * scripts to read at runtime. `fixCommands` is left unset for all of them: this repo's
  * lint/format fixers live only at the workspace root (`lint:fix`, `format`), never per
  * package, which is exactly what the top-level `fix` block below already covers.
@@ -279,7 +279,7 @@ const MODULE_OPTIONS = {
   'design/design-game': ['hud', 'visual'],
 };
 
-const kitConfig = {
+const houseConfig = {
   version: 2,
   packageManager: 'pnpm',
   // This repo's lint/format fixers live only at the workspace root (`lint:fix`, `format`),
@@ -332,9 +332,9 @@ const kitConfig = {
 };
 
 const settings = {
-  // Never written by the installer itself (`output-prose`'s module comment: "the kit never
+  // Never written by the installer itself (`output-prose`'s module comment: "houserules never
   // writes outputStyle into settings.json, which would clobber the user's choice"), so it is
-  // seeded here, before init runs, the same way kit.config.json is. The frontmatter `name`
+  // seeded here, before init runs, the same way houserules.config.json is. The frontmatter `name`
   // from payload/output-styles/output-prose.md, NOT the filename slug: Claude Code matches
   // outputStyle by name and silently falls back to Default on a mismatch.
   outputStyle: 'Prose',
@@ -359,15 +359,18 @@ function ensureFile(name, content) {
 
 mkdirSync(claudeDir, { recursive: true });
 
-// kit.config.json is rewritten every run, not seeded once. Its `plugins` list and the
+// houserules.config.json is rewritten every run, not seeded once. Its `plugins` list and the
 // `--modules` flag below are two halves of one definition, so keeping a stale config while
 // passing modules from the current literal fails with "Unknown module <alias>/<id>".
 const results = [
   (() => {
-    const filePath = join(claudeDir, 'kit.config.json');
+    const filePath = join(claudeDir, 'houserules.config.json');
     const existed = existsSync(filePath);
-    writeFileSync(filePath, `${JSON.stringify(kitConfig, null, 2)}\n`);
-    return { action: existed ? 'rewrote' : 'wrote', name: 'kit.config.json' };
+    writeFileSync(filePath, `${JSON.stringify(houseConfig, null, 2)}\n`);
+    return {
+      action: existed ? 'rewrote' : 'wrote',
+      name: 'houserules.config.json',
+    };
   })(),
   ensureFile('settings.json', `${JSON.stringify(settings, null, 2)}\n`),
 ];
@@ -407,7 +410,7 @@ console.log(
 );
 execFileSync(process.execPath, initArgs, { stdio: 'inherit', cwd: repoRoot });
 
-/** Files the kit only owns PART of. Never relinked, whatever surface they happen to sit in. */
+/** Files houserules only owns PART of. Never relinked, whatever surface they happen to sit in. */
 const SHARED_HOST_FILES = new Set([
   '.claude/settings.json',
   'CLAUDE.md',
@@ -439,7 +442,7 @@ function sameBytes(a, b) {
 }
 
 /**
- * Runs AFTER apply, over what `.claude/kit-manifest.json` says the install just wrote.
+ * Runs AFTER apply, over what `.claude/houserules.manifest.json` says the install just wrote.
  * Swaps a destination back to a symlink at its payload source when the two are byte-identical
  * and the source is the one this destination structurally corresponds to (its `.claude/`-relative
  * path, resolved against `owners`). Everything else — an `appendBody` routing tail, a script, a
@@ -448,7 +451,7 @@ function sameBytes(a, b) {
  * without it taking effect.
  */
 function relink() {
-  const manifestPath = join(claudeDir, 'kit-manifest.json');
+  const manifestPath = join(claudeDir, 'houserules.manifest.json');
   if (!existsSync(manifestPath)) return;
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 

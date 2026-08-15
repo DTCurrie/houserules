@@ -1,7 +1,7 @@
 packages:
   - 'packages/*'
   # The plugin-resolver suite loads this fixture through the real Node resolver, so its
-  # `@agent-kit/cli/plugin` import has to resolve the way a consumer's would. Declaring it a
+  # `@houserules/cli/plugin` import has to resolve the way a consumer's would. Declaring it a
   # workspace package is what creates that link. Without it the import resolves only on a
   # machine where someone made the symlink by hand, and `pnpm check` passes or fails by
   # environment. It ships nothing: `private: true`, no scripts, and outside the CLI's `files`.

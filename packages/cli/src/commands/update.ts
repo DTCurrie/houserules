@@ -21,27 +21,27 @@ import {
   resolveRecordedModuleIds,
 } from '../retired-modules.js';
 import { MODULES, buildPlan, computeEffects, computePrune } from '../plan.js';
-import { KitError } from '../kit-error.js';
+import { HouseError } from '../house-error.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import {
   parseSettingsText,
   removeHooksByScript,
   renderSettings,
-} from '@agent-kit/api/internal';
+} from '@houserules/api/internal';
 import { apply } from '../apply.js';
 import { formatterMangleHint } from '../modules/formatter-mangle.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
-import type { Answers } from '@agent-kit/api';
+import type { Answers } from '@houserules/api';
 import type { PlanResult, PruneResult } from '../plan.js';
 
-/** Committed rendered ledgers, or nothing when the kit must not manage that directory. */
+/** Committed rendered ledgers, or nothing when houserules must not manage that directory. */
 function strayLedgerSurfaces(root: string, ctx: Ctx): string[] {
   const dir = ledgerDirFor(ctx);
   return ctx.git.isRepo && dir ? trackedLedgerSurfaces(root, dir) : [];
 }
 
-/** Committed ledger `.jsonl` logs, or nothing when the kit must not manage that directory. */
+/** Committed ledger `.jsonl` logs, or nothing when houserules must not manage that directory. */
 function strayLedgerLogs(root: string, ctx: Ctx): string[] {
   const dir = ledgerDirFor(ctx);
   return ctx.git.isRepo && dir ? trackedLedgerLogs(root, dir) : [];
@@ -87,7 +87,7 @@ function showNextSteps(
   if (flags.nextSteps) ui.nextSteps(advisories);
   else
     ui.message(
-      `${advisories.length} post-install next step${advisories.length === 1 ? '' : 's'} — see: npx agent-kit update --next-steps`,
+      `${advisories.length} post-install next step${advisories.length === 1 ? '' : 's'} — see: npx houserules update --next-steps`,
     );
 }
 
@@ -131,12 +131,12 @@ function untrackAndReport(
 function showLocalEdits(root: string, dests: string[]): void {
   if (!dests.length) return;
   ui.message(
-    `${dests.length} file(s) differ from what the kit last wrote, so they were kept. See what changed: npx agent-kit doctor --json, where every drift entry carries a diff.`,
+    `${dests.length} file(s) differ from what houserules last wrote, so they were kept. See what changed: npx houserules doctor --json, where every drift entry carries a diff.`,
   );
   const hint = formatterMangleHint(
     root,
     dests,
-    'Run `npx agent-kit update --force` to restore them',
+    'Run `npx houserules update --force` to restore them',
   );
   if (hint) ui.message(hint);
 }
@@ -147,7 +147,7 @@ function showLocalEdits(root: string, dests: string[]): void {
  * `computePrune` can never see a plan that is missing a module's files: continuing past
  * either would delete them and look identical to a deliberate removal.
  *
- * @throws KitError from any of the gates or from `computeEffects` itself, for the caller
+ * @throws HouseError from any of the gates or from `computeEffects` itself, for the caller
  *   to report and exit 1 on.
  */
 function resolveUpdatePlan(
@@ -171,13 +171,13 @@ function resolveUpdatePlan(
     assertOptionsRecorded(
       registry,
       updateModuleIds,
-      ctx.claude.kitConfig?.moduleOptions,
+      ctx.claude.houseConfig?.moduleOptions,
     );
   }
   const moduleOptions = resolveModuleOptions(
     registry,
     updateModuleIds,
-    ctx.claude.kitConfig?.moduleOptions,
+    ctx.claude.houseConfig?.moduleOptions,
   );
   const answers: Answers = {
     moduleIds: updateModuleIds,
@@ -194,19 +194,19 @@ function resolveUpdatePlan(
 }
 
 /**
- * Refreshes kit-owned files to this kit version. Local edits are honored, so a manifest
- * hash mismatch skips the file unless `--force`. Files and hooks the current kit no
+ * Refreshes kit-owned files to houserules version. Local edits are honored, so a manifest
+ * hash mismatch skips the file unless `--force`. Files and hooks the current houserules no
  * longer ships are pruned when they are kit-owned and unmodified. Genuinely-new default
  * modules are advertised, never auto-enabled.
  */
 export async function update(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);
   const ctx = detect(root);
-  const registry = buildRegistry(root, ctx.claude.kitConfig, MODULES);
+  const registry = buildRegistry(root, ctx.claude.houseConfig, MODULES);
   const manifest = ctx.claude.manifest;
   if (!manifest) {
     console.error(
-      'No .claude/kit-manifest.json — this repo has no kit install to update. Run: npx agent-kit init',
+      'No .claude/houserules.manifest.json — this repo has no houserules install to update. Run: npx houserules init',
     );
     return 1;
   }
@@ -217,13 +217,13 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   }
 
   ui.intro(
-    `agent-kit ${flags.kitVersion} — update (installed: v${manifest.kitVersion})`,
+    `houserules ${flags.kitVersion} — update (installed: v${manifest.kitVersion})`,
   );
 
-  // Targets come from the user-edited kit.config.json when present: config is
+  // Targets come from the user-edited houserules.config.json when present: config is
   // the contract. Detection is only the fallback.
-  const targets = ctx.claude.kitConfig?.targets?.length
-    ? ctx.claude.kitConfig.targets
+  const targets = ctx.claude.houseConfig?.targets?.length
+    ? ctx.claude.houseConfig.targets
     : ctx.targets;
 
   let planResult: PlanResult;
@@ -238,7 +238,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       flags,
     ));
   } catch (e) {
-    if (e instanceof KitError) {
+    if (e instanceof HouseError) {
       console.error(e.message);
       return 1;
     }
@@ -307,11 +307,11 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       lines.push(
         `! ${k} — retired, but locally edited: kept (--force to remove)`,
       );
-    ui.note(lines.join('\n'), 'Prune (retired by this kit version)');
+    ui.note(lines.join('\n'), 'Prune (retired by houserules version)');
   }
   if (addable.length)
     ui.message(
-      `New default module(s) available: ${addable.join(', ')} — enable with: npx agent-kit modules --modules=${addable.join(',')}`,
+      `New default module(s) available: ${addable.join(', ')} — enable with: npx houserules modules --modules=${addable.join(',')}`,
     );
 
   // A git-index migration, not a target-file write, so it lives here rather than in
@@ -319,16 +319,12 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   const strayTemplates = ctx.git.isRepo ? trackedTemplateFiles(root) : [];
 
   // Same migration for .claude/scripts/, skipped when the repo opted in to committing them.
-  const commitScripts = ctx.claude.kitConfig?.scripts?.commit === true;
+  const commitScripts = ctx.claude.houseConfig?.scripts?.commit === true;
   const strayScripts =
     ctx.git.isRepo && !commitScripts ? trackedScriptFiles(root) : [];
 
   if (flags.dryRun) {
-    reportWouldUntrack(
-      strayTemplates,
-      'kit-templates',
-      'reference template(s)',
-    );
+    reportWouldUntrack(strayTemplates, 'templates', 'reference template(s)');
     reportWouldUntrack(strayScripts, 'scripts', 'hook script(s)');
     reportWouldUntrack(
       strayLedgerSurfaces(root, ctx),
@@ -360,12 +356,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   );
   ui.written(written);
 
-  untrackAndReport(
-    root,
-    strayTemplates,
-    'kit-templates',
-    'reference template(s)',
-  );
+  untrackAndReport(root, strayTemplates, 'templates', 'reference template(s)');
   untrackAndReport(root, strayScripts, 'scripts', 'hook script(s)');
   untrackAndReport(
     root,

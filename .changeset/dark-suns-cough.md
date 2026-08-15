@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-accessibility': minor
+'@houserules/plugin-accessibility': minor
 ---
 
 Initial release. WCAG routing and lookup for agents editing HTML and HTML-like markup.

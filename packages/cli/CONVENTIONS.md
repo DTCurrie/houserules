@@ -13,7 +13,7 @@ Auto-loaded context is paid on **every turn of every session**, before any work.
 `CLAUDE.md`, any globless `.claude/rules/*.md` (§6), the skill and agent `description:` frontmatter
 that the harness lists every turn, and the machine-local memory index (§5).
 
-`npx agent-kit doctor` measures the in-repo part of that and fails past **4000 tokens or 200 lines**
+`npx houserules doctor` measures the in-repo part of that and fails past **4000 tokens or 200 lines**
 (`RESIDENT_TOKEN_BUDGET` / `RESIDENT_LINE_BUDGET` in `src/commands/doctor/resident-surface.ts`). Skill and agent
 _bodies_ are excluded, because they load on invocation, not on every turn. The memory index lives
 outside the repo, so doctor cannot see it. Budget it by hand.
@@ -67,11 +67,11 @@ Match the tier to the work, not to the importance of the change.
 
 **Cheap tier.** Reviewer, changeset-writer, and backlog-reviewer agents do mechanical,
 rubric-driven, narrow-tool work: a fixed procedure over a grep-located range, returning a small
-verdict. Put `model: haiku` (or the cheapest capable tier) in their frontmatter, which the kit's
-agents already do, and add `effort: low` for the most mechanical ones. The kit sets both on
+verdict. Put `model: haiku` (or the cheapest capable tier) in their frontmatter, which houserules'
+agents already do, and add `effort: low` for the most mechanical ones. houserules sets both on
 `changeset-writer` and `backlog-reviewer`.
 
-**Default tier.** Reserve it for open-ended judgement. The kit's `task-worker` is `model: sonnet`
+**Default tier.** Reserve it for open-ended judgement. houserules' `task-worker` is `model: sonnet`
 with `effort: medium` precisely because implementing a slice is not rubric-driven, and the shipped
 `debugger` template leaves `model` unset so it inherits the session model.
 
@@ -87,7 +87,7 @@ for the hardest verify and judge stages.
 ## 4. Read-only fan-out discipline
 
 An agent that audits code gets **only** `Read, Grep, Glob`, so it is structurally incapable of side
-effects and the orchestrator never has to supervise it. The kit's `reviewer` and `persona-auditor`
+effects and the orchestrator never has to supervise it. houserules' `reviewer` and `persona-auditor`
 templates ship exactly that grant.
 
 Some agents genuinely need `Bash`, and the tool grant alone will not constrain them. An archivist
@@ -128,8 +128,8 @@ machine-local, per-developer, and not in git. Nothing to copy, so adopt the disc
 ## 6. Guardrail / authoritative-source docs
 
 For each axis the repo keeps re-deriving (architecture, API conventions, security, voice, balance),
-write a small `.claude/rules/<topic>.md`. The kit ships a starting point at
-`.claude/kit-templates/rules/GUARDRAIL.md.template`, restored by `npx agent-kit update` if it goes
+write a small `.claude/rules/<topic>.md`. houserules ships a starting point at
+`.claude/templates/rules/GUARDRAIL.md.template`, restored by `npx houserules update` if it goes
 missing. Each doc carries terse locked decisions **with their rationale**, a "if a change is in
 tension with this, the change is wrong" precedence line, and `description` frontmatter. The payoff is
 converting open-ended judgement into a cheap lookup against a locked answer, which avoids the most
@@ -171,7 +171,7 @@ source file the comment rule pointed at a rule that was not in context. The fix 
 target, not narrow it. Check the direction of every cross-rule reference before trimming a glob
 list.
 
-The kit's own `code-comments` and `prose-voice` modules are worked examples of the pattern: both ship
+houserules' own `code-comments` and `prose-voice` modules are worked examples of the pattern: both ship
 as `paths:`-scoped rules with no hook and no CLAUDE.md pointer, over the same source extensions so
 the deference between them resolves. `code-cleanliness` goes further,
 splitting a `paths:`-scoped rule from a pull-only `.claude/reference/design-principles.md` that the
@@ -184,11 +184,11 @@ If the source of truth is scattered across many files (docs/, a split spec, a sc
 deterministic generator can stitch them into one grep-able `.claude/reference/<name>.md` with a
 stable heading skeleton and a `GENERATED — do not edit, regenerate with <cmd>` header.
 
-Two kit modules cover the reusable half of this:
+Two houserules modules cover the reusable half of this:
 
 - **`regen`** wires a PostToolUse(Edit|Write) hook that re-runs a user-owned generator when an edited
-  file matches a target's `regen { sourceGlob, command }` in `kit.config.json`. The generator is
-  yours, and the freshness wiring is the kit's.
+  file matches a target's `regen { sourceGlob, command }` in `houserules.config.json`. The generator is
+  yours, and the freshness wiring is houserules'.
 - **`read-guard`** enforces the pull-only access rule, redirecting unbounded whole-file reads of
   generated or oversized files toward `grep` or a windowed read. Reads that already carry
   `offset`/`limit` pass untouched.
@@ -200,10 +200,10 @@ never auto-loaded.
 
 ## 8. What stays yours
 
-The kit packages disciplines, not domain knowledge. These stay per-repo by design, and no future
+houserules packages disciplines, not domain knowledge. These stay per-repo by design, and no future
 module will absorb them:
 
-- **Guardrail doc content** (§6). The kit ships the template and the loading mechanics. The locked
+- **Guardrail doc content** (§6). houserules ships the template and the loading mechanics. The locked
   decisions are yours, and a guardrail doc someone else wrote is worthless.
 - **Reviewer authoritative sources** (§4). Reviewer agents install as explicit DRAFTs, and `doctor`
   keeps flagging them until you fill in what each area's source of truth actually is. A DRAFT
@@ -211,7 +211,7 @@ module will absorb them:
 - **Generator transforms** (§7). The corpus shape is repo-specific.
 - **Nested per-package conventions** (§2). Only you know which packages are dense enough to earn a
   file.
-- **`kit.config.json` targets, prefixes, and verify commands.** Detection seeds them, but the file,
+- **`houserules.config.json` targets, prefixes, and verify commands.** Detection seeds them, but the file,
   not detection, is the contract.
 
 ### The one exception: an external published standard
@@ -221,7 +221,7 @@ standard** does not. WCAG 2.2 is the same 87 success criteria in every repo on e
 versioned by someone else, and no team's copy is more authoritative than another's. Shipping it
 is closer to shipping a lookup table than to shipping someone else's architecture decisions.
 
-`@agent-kit/plugin-accessibility` is the worked example, and it shows the shape such a plugin has
+`@houserules/plugin-accessibility` is the worked example, and it shows the shape such a plugin has
 to take:
 
 - **Generated from the upstream source at a pinned version, never hand-authored.** A hand-written
@@ -230,7 +230,7 @@ to take:
 - **Pull-only** (§7). A standard is too big to auto-load, and almost none of it is relevant to any
   one change.
 - **Routing is the actual product.** The corpus is inert without something that answers "which
-  part of this applies to my change". That router is the kit's own work, and it is the part worth
+  part of this applies to my change". That router is houserules' own work, and it is the part worth
   writing.
 - **The licence travels with it.** Check what redistribution the standard permits before shipping
   a line of it, and carry the required notice in the generated file and the package `LICENSE`.
@@ -258,7 +258,7 @@ Each of these is a standing habit, not a script:
 
 ## 10. Output and input compression (what's real, as of mid-2026)
 
-- **Shortening replies is a style problem. Cutting your bill is not.** The kit's opt-in
+- **Shortening replies is a style problem. Cutting your bill is not.** houserules' opt-in
   `output-prose` output style (adapted from caveman, MIT) drops filler and packaging for shorter
   replies, at a readability cost. It does that well. **It does not reduce token spend.** The words
   in a reply are a small part of what a session costs, next to the system prompt, the files read,
@@ -279,7 +279,7 @@ Each of these is a standing habit, not a script:
 - **Measure the artifact you ship, not the one you tested.** This style has been measured three
   times. The first figure was never measured at all. The second used a broken metric. The third
   described a version that a same-day edit had already replaced. Re-run after editing the
-  artifact, or the numbers quietly describe something else. **The kit publishes no savings
+  artifact, or the numbers quietly describe something else. **houserules publishes no savings
   figure**, and the docs describe what to expect rather than what was measured.
 - **The withdrawn measurement is worth reading before building another one.** The harness summed
   each API response's `output_tokens` once per transcript content-block record. Claude Code writes
@@ -296,16 +296,16 @@ Each of these is a standing habit, not a script:
   tokens. Splitting an em-dashed clause into two sentences is roughly token-neutral.
 - **Tool-output compression via hooks isn't reliable.** PostToolUse output replacement
   (`updatedToolOutput`) is not honored on current Claude Code, verified inert on 2.1.208, where the
-  hook runs but the model still receives the raw output. The kit therefore ships no tool-output
+  hook runs but the model still receives the raw output. houserules therefore ships no tool-output
   compressor. Claude Code's own large-output persistence covers the worst case, and the durable lever
   stays subagents: route high-volume reads and runs through one so the transcript never hits the main
   thread.
 
 ## 11. Plugin surface semver policy
 
-`@agent-kit/api` (`PluginApi`, `Plugin`, `definePlugin`, `PayloadBuilders`, and the `Action`
+`@houserules/api` (`PluginApi`, `Plugin`, `definePlugin`, `PayloadBuilders`, and the `Action`
 union) is public API the moment a plugin depends on it. A plugin declares
-`peerDependencies: { "@agent-kit/api": ">=0.0.0 <1.0.0" }`, so a breaking change to this
+`peerDependencies: { "@houserules/api": ">=0.0.0 <1.0.0" }`, so a breaking change to this
 surface breaks every plugin still on that range. See
 [README.md](README.md#writing-a-plugin) for what a plugin author sees.
 
@@ -314,7 +314,7 @@ surface breaks every plugin still on that range. See
   breaking.
 - **Major.** Removing or narrowing anything a plugin can call: a required field gets a
   stricter type, a builder's signature narrows, or a builder is removed. Changing what an
-  existing `Action` kind means once the kit applies it, so a plugin emitting the same action
+  existing `Action` kind means once houserules applies it, so a plugin emitting the same action
   as before now gets a different result on the target repo. Tightening a payload invariant
   (below), since an already-published plugin's payload could violate the new rule.
 - **Patch.** A fix that keeps every documented contract as it was.
@@ -322,10 +322,10 @@ surface breaks every plugin still on that range. See
 The payload invariants are part of the contract, not an implementation detail. A plugin's
 payload scripts must have zero npm dependencies and must run on bare node, and a hook script
 must exit 0 on every failure path rather than crash a turn. `payload/__test__/dependencies.test.ts`
-and `payload/__test__/execution.test.ts` enforce both against the kit's own payload the same
+and `payload/__test__/execution.test.ts` enforce both against houserules' own payload the same
 way a plugin's would be held to them.
 
-`.claude/scripts/lib/*.mjs` is a public runtime API too, versioned with `@agent-kit/payload`,
+`.claude/scripts/lib/*.mjs` is a public runtime API too, versioned with `@houserules/payload`,
 the package that ships those libs, because plugin payload scripts import them instead of
 vendoring copies (see the decision "The CLI package ships substrate that plugins build on",
 which `node .claude/scripts/decision-log.mjs list` will find). A signature change to a lib
@@ -333,28 +333,28 @@ function follows this same minor/major split.
 
 ## 12. How a plugin's payload reaches a shared lib
 
-The six shared libs (`backlog-id`, `entry-ledger`, `kit-config`, `ledger-index`, `proc`,
-`workspaces`) ship from `@agent-kit/payload`, not from the CLI. Import one by package name,
+The six shared libs (`backlog-id`, `entry-ledger`, `config`, `ledger-index`, `proc`,
+`workspaces`) ship from `@houserules/payload`, not from the CLI. Import one by package name,
 for values as well as types:
 
 ```ts
-import { repoRoot } from '@agent-kit/payload/kit-config';
-import type { LedgerEntry } from '@agent-kit/payload/ledger-index';
+import { repoRoot } from '@houserules/payload/config';
+import type { LedgerEntry } from '@houserules/payload/ledger-index';
 ```
 
-Add `@agent-kit/payload` to `peerDependencies`, not `dependencies`, alongside `@agent-kit/api`
-(§11), only if a payload script imports a shared lib. Then run `agent-kit-payload` after your
-`tsc`, which is a bin `@agent-kit/cli` publishes:
+Add `@houserules/payload` to `peerDependencies`, not `dependencies`, alongside `@houserules/api`
+(§11), only if a payload script imports a shared lib. Then run `houserules-payload` after your
+`tsc`, which is a bin `@houserules/cli` publishes:
 
 ```json
-"build": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload && publint"
+"build": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && houserules-payload && publint"
 ```
 
 It takes your payload root, defaulting to `payload-dist`, and does two things. It rewrites every
-`@agent-kit/payload/*` specifier in your emitted `.mjs` to the relative path the installed
+`@houserules/payload/*` specifier in your emitted `.mjs` to the relative path the installed
 layout needs, since everything flattens into one `.claude/scripts/lib/` directory in the target
 repo. And it writes `payload-dist/payload-imports.json` recording which libs each emitted file
-imports, which the installer reads to copy those libs from `@agent-kit/payload`'s own payload
+imports, which the installer reads to copy those libs from `@houserules/payload`'s own payload
 build. You declare no lib copies yourself, and you cannot forget one.
 
 Three things worth knowing:
@@ -364,7 +364,7 @@ Three things worth knowing:
 - **A misspelled lib fails your build**, naming the file and the lib, rather than shipping a script
   that dies with `ERR_MODULE_NOT_FOUND` in someone's repo.
 - **Never hand-write the rewritten form.** Import by package name and let the tool do it. A bare
-  `@agent-kit/*` specifier surviving into an emitted `.mjs` would try to resolve from
+  `@houserules/*` specifier surviving into an emitted `.mjs` would try to resolve from
   `.claude/scripts/` in a user's repo on every hook, which is why the CLI's own test suite fails on
   one.
 
@@ -373,16 +373,16 @@ ordinary relative path, and nothing rewrites it.
 
 **A lib is passed its inputs, never reaches for config itself.** `readGateInputs(ledgerDirectory,
 autoSync)` is the pattern: the payload script is the composition root, and a pure lib takes what it
-needs as parameters rather than loading `kit.config.json` on its own. Write your own libs the same
+needs as parameters rather than loading `houserules.config.json` on its own. Write your own libs the same
 way, so they stay testable without a filesystem.
 
 **What your `package.json` and tsconfig split need, for an author outside this workspace:**
 
-- `peerDependencies: { "@agent-kit/api": ">=0.0.0 <1.0.0" }`, pinned to the range of the
+- `peerDependencies: { "@houserules/api": ">=0.0.0 <1.0.0" }`, pinned to the range of the
   `PluginApi` surface you built against (§11). This is what lets the resolver reject an
   incompatible version at install time instead of failing inside your script.
-- A `peerDependencies` entry on `@agent-kit/payload`, not `dependencies`, if any of your payload
-  scripts import a shared lib. `agent-kit-payload` resolves that package by name to rewrite the
+- A `peerDependencies` entry on `@houserules/payload`, not `dependencies`, if any of your payload
+  scripts import a shared lib. `houserules-payload` resolves that package by name to rewrite the
   specifier and to copy the libs your build declares. A plugin with no payload scripts, or one
   that imports no shared lib, does not need this entry.
 - `payload-dist` listed in `package.json`'s `files`, alongside `dist`. Without it, `npm publish`
@@ -397,8 +397,8 @@ way, so they stay testable without a filesystem.
     `outDir: "./payload-dist"`. This one is only needed if you ship `.mts` scripts at all: a
     prose-only plugin (rules, skills, agents, reference docs) has no compile step and needs no
     payload tsconfig.
-- `agent-kit-payload` runs after both `tsc` invocations, not before either: `tsc -p
-tsconfig.build.json && tsc -p tsconfig.payload.json && agent-kit-payload`. It rewrites the
+- `houserules-payload` runs after both `tsc` invocations, not before either: `tsc -p
+tsconfig.build.json && tsc -p tsconfig.payload.json && houserules-payload`. It rewrites the
   `.mjs` your payload `tsc` just emitted, so running it first would find nothing to rewrite.
 - The payload invariants from §11 apply to every script you ship this way: zero npm dependencies,
   node builtins only, and a hook script exits 0 on every failure path rather than crashing a turn.

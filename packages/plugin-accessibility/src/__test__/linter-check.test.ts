@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { checkAccessibilityLinter } from '../linter-check.js';
-import type { Ctx } from '@agent-kit/api';
+import type { Ctx } from '@houserules/api';
 
 function ctxWith(dependencies: Record<string, string>): Ctx {
   return {

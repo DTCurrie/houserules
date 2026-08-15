@@ -46,8 +46,8 @@ export interface SettingsPlan {
   text?: string;
 }
 
-/** The hooks + permissions the kit contributed, recorded so update/doctor can
- * reconcile precisely instead of guessing which entries are the kit's. */
+/** The hooks + permissions houserules contributed, recorded so update/doctor can
+ * reconcile precisely instead of guessing which entries are houserules'. */
 export interface SettingsSignature {
   hooks: { event: string; matcher: string | null; script: string | null }[];
   permissions: string[];
@@ -65,7 +65,7 @@ function kitBasenames(cmd: unknown): string[] {
   return [...String(cmd ?? '').matchAll(KIT_SCRIPT_RE)].map((m) => m[1]!);
 }
 
-// Every command format the kit has ever emitted, oldest first. Only these exact
+// Every command format houserules has ever emitted, oldest first. Only these exact
 // whitespace-normalized strings are eligible for in-place upgrade.
 const KIT_STOCK_FORMATS: ((basename: string) => string)[] = [
   (name) => `node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}"`,
@@ -110,7 +110,7 @@ function matchExistingHook(
   return { kind: 'none' };
 }
 
-// Keys the kit contributes as one scalar or object rather than a list, so the
+// Keys houserules contributes as one scalar or object rather than a list, so the
 // array-append rules do not fit them. Set only when the user has none.
 const SINGLE_VALUE_KEYS = ['statusLine'] as const;
 
@@ -118,12 +118,12 @@ const SINGLE_VALUE_KEYS = ['statusLine'] as const;
  * Folds one module's settings fragment into the existing file. Pure, with no filesystem
  * access, so the dry-run preview and the real write agree.
  *
- * The safety contract: user entries are never removed, rewritten, or reordered, and kit
+ * The safety contract: user entries are never removed, rewritten, or reordered, and houserules
  * entries append. Permissions merge as a set-union on exact strings. A hook counts as
  * already present when an existing command normalizes to the same string or mentions the
- * same kit script basename, and a user's edited variant always wins over the kit's stock
+ * same houserules script basename, and a user's edited variant always wins over houserules' stock
  * version. The one exception is an existing command that is byte-for-byte a known
- * historical stock form (see `KIT_STOCK_FORMATS`), which the kit upgrades in place and
+ * historical stock form (see `KIT_STOCK_FORMATS`), which houserules upgrades in place and
  * reports. Everything else in the file passes through untouched.
  */
 /** Sets a single-value key only when the user has none yet — never clobbers one they set. */
@@ -163,7 +163,7 @@ function mergePermissions(
 
 /**
  * Adds each fragment hook, upgrading a byte-for-byte historical stock command in place and
- * leaving a user's edited variant or an already-present kit hook untouched.
+ * leaving a user's edited variant or an already-present houserules hook untouched.
  */
 function mergeHooks(
   merged: Settings,
@@ -229,7 +229,7 @@ export function mergeSettings(
 /**
  * Drops hook entries whose command references one of `scriptBasenames`, without touching,
  * rewriting, or reordering any other hook. Empty groups and events left behind are
- * removed so the file stays clean. User hooks never reference a kit script basename, so
+ * removed so the file stays clean. User hooks never reference a houserules script basename, so
  * they are structurally untouched.
  */
 export function removeHooksByScript(
@@ -274,9 +274,9 @@ export function removeHooksByScript(
  *   fragment still does. A user's own identical permission string is indistinguishable
  *   from ours, so this can in principle remove a line the user also wanted. Which is
  *   why disabling reports every change it makes rather than doing it silently.
- * - Anything the kit never contributed is not even considered.
+ * - Anything houserules never contributed is not even considered.
  *
- * User hooks never reference a kit script basename, so they are structurally
+ * User hooks never reference a houserules script basename, so they are structurally
  * untouched. The same property `removeHooksByScript` relies on.
  */
 export function removeSettingsFragments(
@@ -328,7 +328,7 @@ export function removeSettingsFragments(
 }
 
 /**
- * Derives which hooks and permissions the kit contributed. Recorded in the manifest so
+ * Derives which hooks and permissions houserules contributed. Recorded in the manifest so
  * update and doctor can reconcile precisely instead of guessing which entries are ours.
  */
 export function settingsSignature(
@@ -354,7 +354,7 @@ export function settingsSignature(
   return { hooks, permissions: [...permissions] };
 }
 
-/** @throws SyntaxError. The caller decides what that means. The kit never repairs user JSON. */
+/** @throws SyntaxError. The caller decides what that means. houserules never repairs user JSON. */
 export function parseSettingsText(text: string): Settings {
   return JSON.parse(text);
 }

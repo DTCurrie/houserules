@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-github': minor
+'@houserules/plugin-github': minor
 ---
 
 Initial release. Syncs the backlog and decision ledgers to GitHub Projects.

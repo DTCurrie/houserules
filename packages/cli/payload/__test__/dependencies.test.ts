@@ -33,7 +33,7 @@ function importAndExportSpecifiersOf(source: string): string[] {
 /**
  * The one sanctioned bare import, and why it does not violate the rule: rename.mjs
  * drives the TARGET REPO's own TypeScript LanguageService, so it consumes a package
- * that repo already has rather than one the kit ships. It is also agent-invoked
+ * that repo already has rather than one houserules ships. It is also agent-invoked
  * rather than hook-wired, and its module only installs when TypeScript is detected.
  * A missing `typescript` is a legible error on an explicit command, never silent
  * breakage on every tool call. Anything else added here needs the same three
@@ -71,14 +71,14 @@ describe('the emitted payload script tree', () => {
     ).toEqual([]);
   });
 
-  it('rewrites every @agent-kit/cli/payload/ specifier before emit, leaving none behind', () => {
+  it('rewrites every @houserules/cli/payload/ specifier before emit, leaving none behind', () => {
     const offenders: string[] = [];
     for (const file of scripts) {
       const rel = file.slice(EMITTED_SCRIPTS_DIR.length + 1);
       for (const spec of importAndExportSpecifiersOf(
         readFileSync(file, 'utf8'),
       )) {
-        if (spec.startsWith('@agent-kit/')) offenders.push(`${rel} → ${spec}`);
+        if (spec.startsWith('@houserules/')) offenders.push(`${rel} → ${spec}`);
       }
     }
     expect(
@@ -88,9 +88,9 @@ describe('the emitted payload script tree', () => {
   });
 });
 
-describe('lib/kit-config.mjs, the highest-blast-radius file since every hook calls it', () => {
+describe('lib/config.mjs, the highest-blast-radius file since every hook calls it', () => {
   const source = readFileSync(
-    join(EMITTED_SCRIPTS_DIR, 'lib/kit-config.mjs'),
+    join(EMITTED_SCRIPTS_DIR, 'lib/config.mjs'),
     'utf8',
   );
 

@@ -9,13 +9,13 @@ import type {
   ModuleDef,
   PayloadBuilders,
   PluginApi,
-} from '@agent-kit/api';
+} from '@houserules/api';
 
 function buildApi(): PluginApi {
   return {
     // Unused here: none of these tests call plan(), only check(), so no builder is invoked.
     payload: {} as PayloadBuilders,
-    packageName: '@agent-kit/plugin-design',
+    packageName: '@houserules/plugin-design',
     alias: 'design',
     config: undefined,
   };

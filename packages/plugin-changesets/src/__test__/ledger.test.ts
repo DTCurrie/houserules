@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
 import { runIn, runScript } from '#test/run';
-import { kitConfigPath, readJson } from '#test/installed-tree';
+import { houseConfigPath, readJson } from '#test/installed-tree';
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -28,13 +28,13 @@ describe('ledger', () => {
   it('ships the archivist agent template the ledger module references', () => {
     expect(
       existsSync(
-        join(root, '.claude/kit-templates/agents/archivist.agent.md.template'),
+        join(root, '.claude/templates/agents/archivist.agent.md.template'),
       ),
     ).toBeTruthy();
   });
 
   it('retargets each target’s changelog to .claude/changelogs/ instead of CHANGELOG.md', () => {
-    const config = readJson(kitConfigPath(root));
+    const config = readJson(houseConfigPath(root));
     expect(config.ledger.enabled).toBe(true);
     const cityville = config.targets.find((t: any) => t.name === 'cityville');
     expect(cityville.changelogPath).toBe('.claude/changelogs/cityville.md');

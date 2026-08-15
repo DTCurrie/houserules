@@ -1,7 +1,7 @@
 # Design Tailwind Theming
 
 How to extend Tailwind's own theme into a design system, and how to build a theme that
-switches at runtime. `.claude/kit-templates/tailwind-theme.css.template` is a starter that
+switches at runtime. `.claude/templates/tailwind-theme.css.template` is a starter that
 covers every move described here. Copy it into your entry stylesheet and edit the values.
 
 ## Adding tokens without forking Tailwind

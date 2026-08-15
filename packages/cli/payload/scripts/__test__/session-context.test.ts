@@ -22,13 +22,13 @@ describe('session-context.mjs', () => {
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
     runIn(root, 'git', ['add', '-A']);
-    runIn(root, 'git', ['commit', '-qm', 'install kit']);
+    runIn(root, 'git', ['commit', '-qm', 'install houserules']);
   });
 
   it('prints only the branch line on a clean tree', () => {
     const r = runScript(root, SCRIPT, { input: '{}' });
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toMatch(/\[kit\] branch: main/);
+    expect(r.stdout).toMatch(/\[houserules\] branch: main/);
     expect(r.stdout.includes('uncommitted')).toBe(false);
   });
 

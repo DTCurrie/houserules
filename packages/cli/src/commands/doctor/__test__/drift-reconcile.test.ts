@@ -32,7 +32,7 @@ function messages(root: string): string[] {
 describe('reconcileDrift, given a manifest naming a retired built-in module', () => {
   it('reports the "moved into" ERROR finding rather than computing drift', () => {
     const root = useInstalledRepo('pnpm-monorepo');
-    const manifestPath = join(root, '.claude', 'kit-manifest.json');
+    const manifestPath = join(root, '.claude', 'houserules.manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     manifest.modules = ['backlog'];
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
@@ -57,7 +57,7 @@ describe('reconcileDrift, given a settings.json that fails to parse', () => {
 });
 
 function nameGoneFile(root: string): string {
-  const manifestPath = join(root, '.claude', 'kit-manifest.json');
+  const manifestPath = join(root, '.claude', 'houserules.manifest.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const dest = '.claude/scripts/already-deleted.mjs';
   manifest.files[dest] = 'deadbeef';
@@ -86,7 +86,7 @@ describe('reconcileDrift, given a manifest entry naming a file already gone from
 
     reconcileDrift(root, ctx, { ...FLAGS, fix: true }, registry);
 
-    const manifestPath = join(root, '.claude', 'kit-manifest.json');
+    const manifestPath = join(root, '.claude', 'houserules.manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     expect(manifest.files[dest]).toBe('deadbeef');
   });
@@ -100,7 +100,7 @@ describe('reconcileDrift, given a manifest entry naming a file already gone from
 
     reconcileDrift(root, ctx, { ...FLAGS, fix: true, prune: true }, registry);
 
-    const manifestPath = join(root, '.claude', 'kit-manifest.json');
+    const manifestPath = join(root, '.claude', 'houserules.manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     expect(manifest.files[dest]).toBeUndefined();
   });

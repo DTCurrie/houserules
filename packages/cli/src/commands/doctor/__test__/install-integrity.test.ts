@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { makeCtx } from '#test/ctx-builder';
-import type { KitConfig } from '@agent-kit/api';
-import type { KitManifest } from '@agent-kit/api/internal';
+import type { HouseConfig } from '@houserules/api';
+import type { HouseManifest } from '@houserules/api/internal';
 import type { Ctx } from '../../../detect.js';
 import { MODULES } from '../../../plan.js';
 import type { Registry } from '../../../plugin-registry.js';
@@ -19,7 +19,7 @@ const KIT_ROOT = resolve(
 const FIXTURE_ROOT = join(KIT_ROOT, 'test/plugin-fixture');
 
 function ensureFixtureSelfLink(): void {
-  const link = join(FIXTURE_ROOT, 'node_modules', '@agent-kit', 'cli');
+  const link = join(FIXTURE_ROOT, 'node_modules', '@houserules', 'cli');
   if (existsSync(link)) return;
   mkdirSync(dirname(link), { recursive: true });
   symlinkSync(KIT_ROOT, link, 'dir');
@@ -27,13 +27,13 @@ function ensureFixtureSelfLink(): void {
 
 function ctxWithFixturePlugin(modules: string[], files: string[] = []): Ctx {
   ensureFixtureSelfLink();
-  const kitConfig = {
+  const houseConfig = {
     version: 2,
     packageManager: 'pnpm',
     targets: [],
     plugins: [{ name: FIXTURE_ROOT, alias: 'fixture', config: {} }],
-  } as unknown as KitConfig;
-  const manifest: KitManifest = {
+  } as unknown as HouseConfig;
+  const manifest: HouseManifest = {
     kitVersion: '1.0.0',
     installedAt: '2026-01-01T00:00:00.000Z',
     modules,
@@ -42,11 +42,11 @@ function ctxWithFixturePlugin(modules: string[], files: string[] = []): Ctx {
   const base = makeCtx({
     git: { isRepo: false, top: '/repo', hasCommits: false, branch: 'main' },
   });
-  return { ...base, claude: { ...base.claude, manifest, kitConfig } };
+  return { ...base, claude: { ...base.claude, manifest, houseConfig } };
 }
 
 function registryFor(ctx: Ctx): Registry {
-  return buildRegistry(FIXTURE_ROOT, ctx.claude.kitConfig ?? null, MODULES);
+  return buildRegistry(FIXTURE_ROOT, ctx.claude.houseConfig ?? null, MODULES);
 }
 
 function retiredMessages(
@@ -57,8 +57,8 @@ function retiredMessages(
     .map((f) => f.msg);
 }
 
-describe('checkInstallIntegrity, kit version check', () => {
-  it('warns when the manifest kit version differs from the running CLI', () => {
+describe('checkInstallIntegrity, houserules version check', () => {
+  it('warns when the manifest houserules version differs from the running CLI', () => {
     const ctx = ctxWithFixturePlugin(['fixture/fixture-core']);
 
     const result = checkInstallIntegrity(
@@ -73,12 +73,12 @@ describe('checkInstallIntegrity, kit version check', () => {
     ).toEqual([
       expect.objectContaining({
         level: 'WARN',
-        msg: 'installed kit v1.0.0, this CLI is v2.0.0. Run: npx agent-kit update',
+        msg: 'installed houserules v1.0.0, this CLI is v2.0.0. Run: npx houserules update',
       }),
     ]);
   });
 
-  it('does not warn when the manifest kit version matches the running CLI', () => {
+  it('does not warn when the manifest houserules version matches the running CLI', () => {
     const ctx = ctxWithFixturePlugin(['fixture/fixture-core']);
 
     const result = checkInstallIntegrity(
@@ -139,7 +139,9 @@ describe('checkInstallIntegrity, plugin-aware retired-script check', () => {
     );
 
     expect(
-      result.findings.filter((f) => f.msg.includes('retired kit hook script')),
+      result.findings.filter((f) =>
+        f.msg.includes('retired houserules hook script'),
+      ),
     ).toEqual([]);
   });
 
@@ -157,11 +159,13 @@ describe('checkInstallIntegrity, plugin-aware retired-script check', () => {
     );
 
     expect(
-      result.findings.filter((f) => f.msg.includes('retired kit hook script')),
+      result.findings.filter((f) =>
+        f.msg.includes('retired houserules hook script'),
+      ),
     ).toEqual([
       expect.objectContaining({
         msg: expect.stringContaining(
-          'retired kit hook script ghost-script.mjs is no longer shipped',
+          'retired houserules hook script ghost-script.mjs is no longer shipped',
         ),
       }),
     ]);

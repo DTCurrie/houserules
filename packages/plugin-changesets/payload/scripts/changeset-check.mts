@@ -6,7 +6,7 @@
  * not. Exit 0 stays silent, and every failure path exits 0, because a nudge hook must
  * never break a session.
  *
- * Config (kit.config.json): changesets.enabled must be true, changesets.stopCheck
+ * Config (houserules.config.json): changesets.enabled must be true, changesets.stopCheck
  * (default true) is the kill-switch, changesets.baseBranch (default "main") is the
  * comparison base. Source scope is targets[].sourcePath, else workspace packages.
  */
@@ -21,9 +21,9 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import { loadConfigSafe } from '@agent-kit/payload/kit-config';
-import { listWorkspacePackages } from '@agent-kit/payload/workspaces';
-import { git, readStdinJson } from '@agent-kit/payload/proc';
+import { loadConfigSafe } from '@houserules/payload/config';
+import { listWorkspacePackages } from '@houserules/payload/workspaces';
+import { git, readStdinJson } from '@houserules/payload/proc';
 
 const STATE_DIR = '.claude/state';
 const STATE_FILE = 'changeset-check.json';

@@ -1,7 +1,7 @@
 {
-  "name": "@agent-kit/plugin-testing",
+  "name": "@houserules/plugin-testing",
   "version": "0.0.0",
-  "description": "agent-kit plugin: a runner-agnostic testing rule, split into opt-in per-language guides.",
+  "description": "houserules plugin: a runner-agnostic testing rule, split into opt-in per-language guides.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -27,7 +27,7 @@
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && agent-kit-payload && publint",
+      "command": "tsc -p tsconfig.build.json && houserules-payload && publint",
       "dependencies": [
         "../cli:build:ts",
         "../api:build"
@@ -44,7 +44,7 @@
       ]
     },
     "check": {
-      "//": "../test:build is load-bearing, not incidental: the suites under src/__test__/ import `#test/*`, which tsconfig.json maps into @agent-kit/test's dist/. Without it wireit may run this before that build and tsc fails with TS2307 on a module that is merely not built yet. `test` already declared it; `check` did not. See TEST-0d61d6.",
+      "//": "../test:build is load-bearing, not incidental: the suites under src/__test__/ import `#test/*`, which tsconfig.json maps into @houserules/test's dist/. Without it wireit may run this before that build and tsc fails with TS2307 on a module that is merely not built yet. `test` already declared it; `check` did not. See TEST-0d61d6.",
       "command": "tsc --noEmit -p tsconfig.json",
       "dependencies": [
         "../cli:build:ts",
@@ -89,18 +89,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
     "directory": "packages/plugin-testing"
   },
-  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-testing#readme",
-  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/plugin-testing#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
   "peerDependencies": {
-    "@agent-kit/api": ">=0.0.0 <1.0.0"
+    "@houserules/api": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
-    "@agent-kit/api": "workspace:*",
-    "@agent-kit/cli": "workspace:*",
-    "@agent-kit/test": "workspace:*",
+    "@houserules/api": "workspace:*",
+    "@houserules/cli": "workspace:*",
+    "@houserules/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.1.2",
     "publint": "^0.3.23",
@@ -111,8 +111,8 @@
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "keywords": [
-    "agent-kit",
-    "agent-kit-plugin",
+    "houserules",
+    "houserules-plugin",
     "claude-code",
     "testing",
     "test-conventions"

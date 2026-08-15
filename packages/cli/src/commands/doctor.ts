@@ -8,7 +8,7 @@ import { checkAgentToolScope } from './doctor/agent-tool-scope.js';
 import { checkConfigValidity } from './doctor/config-validity.js';
 import { reconcileDrift } from './doctor/drift-reconcile.js';
 import { checkEnvironment } from './doctor/environment.js';
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 import {
   printJsonReport,
   printTextReport,
@@ -23,7 +23,7 @@ import { checkSettingsWiring } from './doctor/settings-wiring.js';
 
 /**
  * Drift entries that move the exit code. A local edit never does, whether it is a settled
- * `yours` or a `conflict` the kit has also moved on from. Neither is overwritten without
+ * `yours` or a `conflict` houserules has also moved on from. Neither is overwritten without
  * `--force`, so counting them would leave doctor permanently red on an install that is
  * working exactly as intended.
  */
@@ -55,7 +55,7 @@ export function doctorExitCode(args: {
  * config the schema rejects. Drift you caused yourself never moves the exit code, because
  * there is no way to acknowledge a deliberate edit and it would leave doctor permanently
  * red on an install working as intended. A settled `yours` edit is a readout. A
- * `conflict`, where the kit shipped a newer version of a file you edited, is a warning
+ * `conflict`, where houserules shipped a newer version of a file you edited, is a warning
  * with a diff, since that one leaves you a merge to make.
  */
 export async function doctor(dir: string, flags: Flags): Promise<number> {

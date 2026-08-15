@@ -1,7 +1,7 @@
 {
-  "name": "@agent-kit/test",
+  "name": "@houserules/test",
   "version": "0.0.0",
-  "description": "agent-kit test: shared testing infrastructure for driving the agent-kit CLI against synthetic repos, for the CLI's own suites and for plugin authors.",
+  "description": "houserules test: shared testing infrastructure for driving the houserules CLI against synthetic repos, for the CLI's own suites and for plugin authors.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -87,17 +87,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
     "directory": "packages/test"
   },
-  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/test#readme",
-  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/test#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
   "peerDependencies": {
-    "@agent-kit/cli": ">=0.0.0 <1.0.0",
+    "@houserules/cli": ">=0.0.0 <1.0.0",
     "vitest": "^4.1.10"
   },
   "devDependencies": {
-    "@agent-kit/cli": "workspace:*",
+    "@houserules/cli": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.1.2",
     "publint": "^0.3.23",
@@ -108,7 +108,7 @@
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "keywords": [
-    "agent-kit",
-    "agent-kit-test"
+    "houserules",
+    "houserules-test"
   ]
 }

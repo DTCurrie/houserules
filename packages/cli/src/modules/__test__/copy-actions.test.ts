@@ -2,12 +2,12 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import type { Action } from '@agent-kit/api';
+import type { Action } from '@houserules/api';
 import type { PayloadImports } from '../../payload-imports.js';
 import { deriveLibActions } from '../copy-actions.js';
 
 const payloadPackageJson = createRequire(import.meta.url).resolve(
-  '@agent-kit/payload/package.json',
+  '@houserules/payload/package.json',
 );
 const payloadLibPath = (name: string) =>
   join(dirname(payloadPackageJson), 'payload-dist', 'scripts', 'lib', name);
@@ -23,7 +23,7 @@ function copyAction(module: string, dest: string): Action {
 }
 
 describe('deriveLibActions', () => {
-  it('plans a copy of the lib a script imports, sourced from @agent-kit/payload', () => {
+  it('plans a copy of the lib a script imports, sourced from @houserules/payload', () => {
     const actions = [copyAction('libs', '.claude/scripts/consumer.mjs')];
     const sidecar: PayloadImports = {
       version: 1,
@@ -94,7 +94,7 @@ describe('deriveLibActions', () => {
     expect(deriveLibActions(actions, sidecar, 'fixture-plugin')).toEqual([]);
   });
 
-  it('throws naming the plugin and the sidecar file when a named lib does not exist in @agent-kit/payload', () => {
+  it('throws naming the plugin and the sidecar file when a named lib does not exist in @houserules/payload', () => {
     const actions = [copyAction('bad-lib', '.claude/scripts/consumer.mjs')];
     const sidecar: PayloadImports = {
       version: 1,

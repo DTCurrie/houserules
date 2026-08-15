@@ -1,7 +1,7 @@
 {
-  "name": "@agent-kit/api",
+  "name": "@houserules/api",
   "version": "0.0.0",
-  "description": "agent-kit plugin contract: the plugin API, action types, module definitions, and the kit.config.json schema.",
+  "description": "houserules plugin contract: the plugin API, action types, module definitions, and the houserules.config.json schema.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -85,18 +85,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
     "directory": "packages/api"
   },
-  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/api#readme",
-  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/api#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
   "dependencies": {
-    "@agent-kit/payload": "workspace:*",
+    "@houserules/payload": "workspace:*",
     "type-fest": "^5.8.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@agent-kit/test": "workspace:*",
+    "@houserules/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.1.2",
     "publint": "^0.3.23",
@@ -107,8 +107,8 @@
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "keywords": [
-    "agent-kit",
-    "agent-kit-plugin",
+    "houserules",
+    "houserules-plugin",
     "claude-code",
     "plugin-api"
   ]

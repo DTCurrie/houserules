@@ -237,7 +237,7 @@ const DEFAULT_LEDGER_DIR = '.claude/ledgers';
  * The ledger directory, from `ledgers.dir` or the default.
  *
  * Falls back to the default for a path that escapes the repo, and for the repo root itself. The
- * root is refused because the kit self-ignores this directory with `*.md`, and that rule at the
+ * root is refused because houserules self-ignores this directory with `*.md`, and that rule at the
  * repo root would hide README.md, CLAUDE.md, and every other document in the project.
  */
 export function ledgerDir(repoRoot: string, configured?: string): string {
@@ -272,7 +272,7 @@ export function surfacePath(
  * clear. The repo-root area collects every entry logged without an `<area>`, which makes it the
  * one that accumulates stubs by accident.
  *
- * A configured target is exempt. Its surface is declared in `kit.config.json`, so an empty one
+ * A configured target is exempt. Its surface is declared in `houserules.config.json`, so an empty one
  * reads as "this area has nothing open" rather than as residue, and deleting it would churn a
  * file the repo means to have. An area with no target and no entries is residue, so it goes.
  */
@@ -358,7 +358,7 @@ function collapseRepeatedSuffix(name: string, basename: string): string {
  * Normalizing on READ rather than rewriting the ledger is deliberate. The ledger is append-only,
  * so a migration that rewrote historical `file` fields would edit records already appended and
  * possibly already pushed to the board. This is a pure projection instead, it is idempotent,
- * and a repo can roll back to an older kit without its history having been altered.
+ * and a repo can roll back to an older houserules without its history having been altered.
  *
  * The area is taken from the configured targets first, since that is authoritative. The trailing
  * directory name is the fallback, which is what makes an area the config no longer lists still
@@ -510,7 +510,7 @@ export function unknownAreaMessage(
     ...new Set([...targets.map((target) => target.name), ...existingAreas]),
   ];
   return (
-    `Unknown area "${arg}". No target named "${area}" is configured in kit.config.json, ` +
+    `Unknown area "${arg}". No target named "${area}" is configured in houserules.config.json, ` +
     `and no surface for it exists yet.\n` +
     `Valid areas: ${valid.join(', ')}.`
   );
@@ -559,7 +559,7 @@ export function findSurfaceFiles(dir: string, basename: string): string[] {
     // A read failure looks identical to "nothing rendered yet" to this function's return
     // shape, so the diagnostic goes to stderr, distinguishable from a fresh ledger directory.
     console.error(
-      `agent-kit: could not read ledger directory ${dir}: ${(e as Error).message}`,
+      `houserules: could not read ledger directory ${dir}: ${(e as Error).message}`,
     );
     return [];
   }

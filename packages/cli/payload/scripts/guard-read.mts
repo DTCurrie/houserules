@@ -8,7 +8,7 @@
  * back to Claude. Every other path exits 0, because a guard that crashes would block
  * every Read.
  *
- * Config (kit.config.json, readGuard, all defaulted): { enabled, maxBytes, denyGlobs }.
+ * Config (houserules.config.json, readGuard, all defaulted): { enabled, maxBytes, denyGlobs }.
  */
 
 import { statSync } from 'node:fs';
@@ -17,8 +17,8 @@ import { resolve } from 'node:path';
 import {
   READ_GUARD_DEFAULTS,
   loadConfigSafe,
-} from '@agent-kit/payload/kit-config';
-import { globToRe, readStdinJson, repoRoot } from '@agent-kit/payload/proc';
+} from '@houserules/payload/config';
+import { globToRe, readStdinJson, repoRoot } from '@houserules/payload/proc';
 
 interface ReadPayload {
   tool_input?: {
@@ -64,7 +64,7 @@ try {
       ? `matches a generated/denylisted pattern (${matchedGlob})`
       : `is large (${Math.round(size / 1024)} KB > ${Math.round(cfg.maxBytes / 1024)} KB)`;
     process.stderr.write(
-      `agent-kit read guard: ${rel} ${why}. Don't read it whole — ` +
+      `houserules read guard: ${rel} ${why}. Don't read it whole — ` +
         `grep for what you need (\`grep -n '<pattern>' ${rel}\`) then Read with offset+limit, ` +
         `or re-run this Read with an explicit limit if you truly need a window.\n`,
     );

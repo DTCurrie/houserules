@@ -1,9 +1,9 @@
 import type { Ctx } from '../../detect.js';
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 
 const MIN_NODE_MAJOR = 20;
 
-/** The host preconditions the kit cannot run without. */
+/** The host preconditions houserules cannot run without. */
 export function checkEnvironment(ctx: Ctx): CheckResult {
   const findings: Finding[] = [];
   const major = process.versions.node.split('.').map(Number)[0];

@@ -1,7 +1,7 @@
-import type { Action, ModuleGroup } from '@agent-kit/api';
+import type { Action, ModuleGroup } from '@houserules/api';
 import type { Ctx } from '../detect.js';
 import { script, skill } from './copy-actions.js';
-import { scriptPermission } from '@agent-kit/api';
+import { scriptPermission } from '@houserules/api';
 
 export const id = 'verify-changed';
 export const title = 'Diff-scoped verification (/verify-changed)';
@@ -24,7 +24,7 @@ export function defaultEnabled() {
  * multi-minute full-suite transcript never reaches the main context. Only the verdict
  * does.
  *
- * Config lives in the `verify` block that `render.ts` adds to kit.config.json when this
+ * Config lives in the `verify` block that `render.ts` adds to houserules.config.json when this
  * module is enabled.
  */
 export function plan(): Action[] {
@@ -48,7 +48,7 @@ export function plan(): Action[] {
     },
     {
       kind: 'advise',
-      text: 'verify-changed: tune the `verify` block + per-target verifyCommands in .claude/kit.config.json (default command is `verify`), then run /verify-changed before handing off.',
+      text: 'verify-changed: tune the `verify` block + per-target verifyCommands in .claude/houserules.config.json (default command is `verify`), then run /verify-changed before handing off.',
       module: id,
     },
   ];

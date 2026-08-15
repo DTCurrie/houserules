@@ -28,7 +28,7 @@
  * group when a token has none of its own, per the DTCG spec.
  *
  * Warns on stderr, without failing, when the loaded token FILE is still byte-identical to the
- * kit's seeded placeholders, since every check that follows would measure real code against
+ * houserules' seeded placeholders, since every check that follows would measure real code against
  * values nobody chose. Tailwind mode has no seed, so this warning never fires there, and the
  * source line is what tells a reader which mode ran.
  *
@@ -228,7 +228,7 @@ function loadTokensFromFile(
   const path = tokensPath(override);
   if (!existsSync(path)) {
     console.error(
-      `No design tokens at ${path}. Run \`npx agent-kit init\` to seed one, or write it by hand.`,
+      `No design tokens at ${path}. Run \`npx houserules init\` to seed one, or write it by hand.`,
     );
     return undefined;
   }
@@ -253,7 +253,7 @@ function loadTokensFromFile(
   console.error(`Tokens from ${path}.`);
   if (isUntouchedSeed(contents)) {
     console.error(
-      `${path} is still the kit's placeholder seed. Every check below measures against placeholders, not this repo's design. Bootstrap real values from existing code with \`node .claude/scripts/design.mjs extract\`.`,
+      `${path} is still houserules' placeholder seed. Every check below measures against placeholders, not this repo's design. Bootstrap real values from existing code with \`node .claude/scripts/design.mjs extract\`.`,
     );
   }
   return parsed;
@@ -729,12 +729,12 @@ interface ThemeGroupEntry {
   origin: 'repo' | 'tailwind';
 }
 
-/** Reads a projected Tailwind token's `$extensions['agent-kit'].origin`, tagged by `projectThemeToDtcg`. */
+/** Reads a projected Tailwind token's `$extensions['houserules'].origin`, tagged by `projectThemeToDtcg`. */
 function tokenOrigin(
   node: Record<string, unknown>,
 ): 'repo' | 'tailwind' | undefined {
   if (!isRecord(node.$extensions)) return undefined;
-  const agentKit = node.$extensions['agent-kit'];
+  const agentKit = node.$extensions['houserules'];
   if (!isRecord(agentKit)) return undefined;
   return agentKit.origin === 'repo' || agentKit.origin === 'tailwind'
     ? agentKit.origin

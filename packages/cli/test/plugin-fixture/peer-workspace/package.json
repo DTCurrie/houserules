@@ -1,9 +1,9 @@
 {
-  "name": "@agent-kit/plugin-fixture-peer-workspace",
+  "name": "@houserules/plugin-fixture-peer-workspace",
   "version": "1.0.0",
   "private": true,
   "main": "index.cjs",
   "peerDependencies": {
-    "@agent-kit/cli": "workspace:^"
+    "@houserules/cli": "workspace:^"
   }
 }

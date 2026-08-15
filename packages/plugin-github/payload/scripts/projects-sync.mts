@@ -30,7 +30,7 @@ import {
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { loadConfigSafe, repoRoot } from '@agent-kit/payload/kit-config';
+import { loadConfigSafe, repoRoot } from '@houserules/payload/config';
 import {
   appendEvent,
   ledgerDir,
@@ -38,7 +38,7 @@ import {
   nowIso,
   decodeBody,
   readLog,
-} from '@agent-kit/payload/entry-ledger';
+} from '@houserules/payload/entry-ledger';
 import {
   ghErr,
   ghExists,
@@ -60,8 +60,8 @@ import {
   indexBasename,
   loadIndex,
   serializeIndex,
-} from '@agent-kit/payload/ledger-index';
-import type { LedgerIndex } from '@agent-kit/payload/ledger-index';
+} from '@houserules/payload/ledger-index';
+import type { LedgerIndex } from '@houserules/payload/ledger-index';
 import {
   describeStep,
   planBootstrap,
@@ -183,7 +183,7 @@ function checkGate(action: string, owner: string, repo: string): void {
 
   if (autoSync === false) {
     console.error(
-      'projects.autoSync is set to false in kit.config.json. A maintainer turned sync off for this repo.',
+      'projects.autoSync is set to false in houserules.config.json. A maintainer turned sync off for this repo.',
     );
     process.exit(1);
   }

@@ -22,7 +22,7 @@ and take its OK/Conflict/Gap reconciliation. If none exist, skip the step and sa
 
 ## 3. Changeset / handoff hooks (don't re-run — just report)
 
-The kit's Stop hooks already enforce the auto-fix and changeset-nudge on every turn boundary. Do
+houserules' Stop hooks already enforce the auto-fix and changeset-nudge on every turn boundary. Do
 **not** re-run them. Only confirm the deterministic state they check:
 
 - **Changeset present** if the change is user-visible. `ls .changeset/*.md`, excluding README, shows a

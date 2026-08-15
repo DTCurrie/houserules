@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { makeAnswers, makeCtx } from '#test/ctx-builder';
-import type { KitConfig } from '@agent-kit/api';
+import type { HouseConfig } from '@houserules/api';
 import { plan } from '../core.js';
 
 describe('core plan, the ledger directory .gitignore', () => {
@@ -35,9 +35,9 @@ describe('core plan, the ledger directory .gitignore', () => {
 
   it('plans no ledger .gitignore write when the configured dir escapes the repo', () => {
     const ctx = makeCtx();
-    ctx.claude.kitConfig = {
+    ctx.claude.houseConfig = {
       ledgers: { dir: '../outside' },
-    } as unknown as KitConfig;
+    } as unknown as HouseConfig;
 
     const actions = plan(ctx, makeAnswers());
 

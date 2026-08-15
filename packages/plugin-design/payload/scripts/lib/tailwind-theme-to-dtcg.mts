@@ -145,7 +145,7 @@ function tokenNode(
   return {
     $value: value,
     $description: describeToken(origin, derivedFromMultiplier),
-    $extensions: { 'agent-kit': { origin } },
+    $extensions: { houserules: { origin } },
   };
 }
 

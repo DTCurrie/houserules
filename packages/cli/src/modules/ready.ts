@@ -1,4 +1,4 @@
-import type { Action, ModuleGroup } from '@agent-kit/api';
+import type { Action, ModuleGroup } from '@houserules/api';
 import { skill } from './copy-actions.js';
 
 export const id = 'ready';

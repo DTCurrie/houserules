@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { Ctx } from '../../detect.js';
 import type { Registry } from '../../plugin-registry.js';
 import { verifyDefaultsFor } from '../../render.js';
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 
 /**
  * Whether each installed module has what it needs to actually do its job.
@@ -21,10 +21,10 @@ export function checkModuleHealth(
   const findings: Finding[] = [];
   const readouts: string[] = [];
   const manifest = ctx.claude.manifest;
-  const config = ctx.claude.kitConfig;
+  const config = ctx.claude.houseConfig;
   const installed = (id: string) => Boolean(manifest?.modules?.includes(id));
 
-  // Null on a repo with no kit installed, which is also a repo with no module to check.
+  // Null on a repo with no houserules installed, which is also a repo with no module to check.
   for (const module of registry?.modules ?? []) {
     if (!installed(module.id) || !module.def.check) continue;
     // A plugin's check is third-party code running inside doctor. One that throws must not
@@ -61,8 +61,8 @@ export function checkModuleHealth(
     findings.push({
       level: 'WARN',
       msg:
-        'verify-changed module installed but no `verify` block in kit.config.json — add one by hand ' +
-        '(`update` will NOT: kit.config.json is user-owned and never rewritten). For this repo: ' +
+        'verify-changed module installed but no `verify` block in houserules.config.json — add one by hand ' +
+        '(`update` will NOT: houserules.config.json is user-owned and never rewritten). For this repo: ' +
         `"verify": ${JSON.stringify(verifyDefaultsFor(ctx.packageManager, ctx.isMonorepo))}`,
     });
   }

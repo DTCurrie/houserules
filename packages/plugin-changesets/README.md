@@ -1,7 +1,7 @@
-# @agent-kit/plugin-changesets
+# @houserules/plugin-changesets
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-changesets.svg)](https://www.npmjs.com/package/@agent-kit/plugin-changesets)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-changesets.svg)](https://www.npmjs.com/package/@agent-kit/plugin-changesets)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-changesets.svg)](https://www.npmjs.com/package/@houserules/plugin-changesets)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-changesets.svg)](https://www.npmjs.com/package/@houserules/plugin-changesets)
 
 An agent that finishes a change and stops there leaves nothing behind for the next release.
 Nobody remembers three weeks later which package a fix touched or what to write in the
@@ -14,11 +14,11 @@ and a Stop hook that nudges when package source changed with no changeset alongs
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-changesets
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-changesets
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the modules into `.claude/`. The `changesets` module is on by default in
 a monorepo, or when `.changeset/` already exists.
 
@@ -40,7 +40,7 @@ a monorepo, or when `.changeset/` already exists.
   plus the `changeset-condense` skill and the `changeset-writer` agent (haiku).
 
   If `.changeset/config.json` is missing after install, or `@changesets/cli` is not a
-  devDependency, `agent-kit doctor` reports it.
+  devDependency, `houserules doctor` reports it.
 
 - **`ledger`** is optional and off by default. It installs `package-changelog.mjs`, which
   writes a per-commit JSONL changelog to `.claude/changelogs/`, plus a template for
@@ -48,21 +48,21 @@ a monorepo, or when `.changeset/` already exists.
   history alongside changesets, not instead of them. `.claude/changelogs/` never collides with
   the `CHANGELOG.md` that `changeset version` owns, because changesets is still the canonical
   changelog. See
-  [`@agent-kit/cli`'s README](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli#readme)
+  [`@houserules/cli`'s README](https://github.com/DTCurrie/houserules/tree/main/packages/cli#readme)
   for why.
 
 ## Upgrading from the CLI core
 
 `changesets` and `ledger` were built-in CLI modules. A repo that recorded either before the
-split gets a `KitError` on its next `init` or `update` naming this package. Installing it and
-adding it to the `plugins` array in `.claude/kit.config.json` restores both modules and their
+split gets a `HouseError` on its next `init` or `update` naming this package. Installing it and
+adding it to the `plugins` array in `.claude/houserules.config.json` restores both modules and their
 files. Nothing is deleted in the meantime.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 

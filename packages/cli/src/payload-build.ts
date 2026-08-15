@@ -153,7 +153,8 @@ export function assemblePayload(
 /** Resolves the directory a plugin's build should verify its rewritten lib imports against. */
 function payloadLibDir(cwd: string): string {
   const require = createRequire(join(cwd, 'package.json'));
-  const payloadPackageJson = require.resolve('@agent-kit/payload/package.json');
+  const payloadPackageJson =
+    require.resolve('@houserules/payload/package.json');
   return join(dirname(payloadPackageJson), 'payload-dist', 'scripts', 'lib');
 }
 
@@ -163,15 +164,15 @@ function payloadLibDir(cwd: string): string {
  * it rewrote.
  *
  * @throws When a rewritten file references a lib that does not exist in
- *   `@agent-kit/payload`'s `payload-dist/scripts/lib/`.
+ *   `@houserules/payload`'s `payload-dist/scripts/lib/`.
  */
 /**
- * Checks every rewrite against the libs `@agent-kit/payload` actually ships, and against
+ * Checks every rewrite against the libs `@houserules/payload` actually ships, and against
  * the sidecar already on disk, before anything is written.
  *
  * @throws When a rewritten file references a lib that does not exist in
- *   `@agent-kit/payload`'s `payload-dist/scripts/lib/`, or when the emitted output looks
- *   stale (no `@agent-kit/payload` imports found, but the existing sidecar lists some).
+ *   `@houserules/payload`'s `payload-dist/scripts/lib/`, or when the emitted output looks
+ *   stale (no `@houserules/payload` imports found, but the existing sidecar lists some).
  */
 function validateRewrites(
   payloadRoot: string,
@@ -181,7 +182,7 @@ function validateRewrites(
   const hasLibImports = [...rewrites.values()].some(
     (result) => result.libs.length > 0,
   );
-  // Only a plugin that imports a shared lib needs `@agent-kit/payload` resolvable, so
+  // Only a plugin that imports a shared lib needs `@houserules/payload` resolvable, so
   // this stays unresolved for the common case of a plugin with none.
   const libDir = hasLibImports ? payloadLibDir(cwd) : undefined;
 
@@ -198,7 +199,7 @@ function validateRewrites(
 
   if (missing.length > 0) {
     throw new Error(
-      `payload-build found imports of libs that do not exist in @agent-kit/payload:\n${missing.join('\n')}`,
+      `payload-build found imports of libs that do not exist in @houserules/payload:\n${missing.join('\n')}`,
     );
   }
 

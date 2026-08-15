@@ -1,14 +1,14 @@
-# agent-kit
+# houserules
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/cli.svg)](https://www.npmjs.com/package/@agent-kit/cli)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/cli.svg)](https://www.npmjs.com/package/@agent-kit/cli)
-[![CI](https://github.com/DTCurrie/agent-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/DTCurrie/agent-kit/actions/workflows/ci.yml)
-[![license](https://img.shields.io/npm/l/@agent-kit/cli.svg)](https://github.com/DTCurrie/agent-kit/blob/main/LICENSE)
-[![node](https://img.shields.io/node/v/@agent-kit/cli.svg)](https://nodejs.org)
+[![npm](https://img.shields.io/npm/v/@houserules/cli.svg)](https://www.npmjs.com/package/@houserules/cli)
+[![downloads](https://img.shields.io/npm/dm/@houserules/cli.svg)](https://www.npmjs.com/package/@houserules/cli)
+[![CI](https://github.com/DTCurrie/houserules/actions/workflows/ci.yml/badge.svg)](https://github.com/DTCurrie/houserules/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/@houserules/cli.svg)](https://github.com/DTCurrie/houserules/blob/main/LICENSE)
+[![node](https://img.shields.io/node/v/@houserules/cli.svg)](https://nodejs.org)
 
 A Claude Code session spends most of its budget on context it pays for every turn, and on
-conclusions it derives a second time because the first one was never written down. agent-kit
-is a portable kit of infrastructure that pushes that work off the main agent's context window.
+conclusions it derives a second time because the first one was never written down. houserules
+is a portable collection of infrastructure that pushes that work off the main agent's context window.
 
 It installs hooks, skills, agents, and rules into any repo, detects what the repo already
 uses, and previews every write before making it.
@@ -49,16 +49,16 @@ reading that produced them. Four levers:
 ## Install
 
 ```
-pnpm add -D @agent-kit/cli
-pnpm exec agent-kit init
+pnpm add -D @houserules/cli
+pnpm exec houserules init
 ```
 
-The package is `@agent-kit/cli` and the binary it installs is `agent-kit`, the same split
-`@changesets/cli` uses for `changeset`. Every later command is just `agent-kit <cmd>`, since
+The package is `@houserules/cli` and the binary it installs is `houserules`, the same split
+`@changesets/cli` uses for `changeset`. Every later command is just `houserules <cmd>`, since
 the local binary is on the path once the package is a dependency.
 
 Preview without writing with `--dry-run`. Skip the prompts with `--yes`. From a local
-checkout, run `node /path/to/agent-kit/packages/cli/dist/cli.js init`.
+checkout, run `node /path/to/houserules/packages/cli/dist/cli.js init`.
 
 Requires Node 22 or newer.
 
@@ -71,26 +71,26 @@ Requires Node 22 or newer.
    targets to track.
 3. **Previews** the full plan: every file it would create, the exact `settings.json` diff,
    and what it skips because it's yours. Only then does it write.
-4. **Records** a receipt (`.claude/kit-manifest.json`, file hashes) so `update` can refresh
-   kit files without clobbering your edits, and `doctor` can tell drift from damage.
+4. **Records** a receipt (`.claude/houserules.manifest.json`, file hashes) so `update` can refresh
+   houserules files without clobbering your edits, and `doctor` can tell drift from damage.
 
 Non-destructive guarantees: it never runs package-manager installs, never touches
 `settings.local.json`, never rewrites unparseable JSON, backs up `settings.json` once before
 its first merge, and `--dry-run` writes nothing at all.
 
-In your `CLAUDE.md` the kit maintains a **marked block**, everything between
-`<!-- agent-kit:claude-md start -->` and `<!-- agent-kit:claude-md end -->`. It rewrites
+In your `CLAUDE.md` houserules maintains a **marked block**, everything between
+`<!-- houserules:claude-md start -->` and `<!-- houserules:claude-md end -->`. It rewrites
 only what is inside those markers. Every byte outside them is yours and is never modified.
-Opt out with `"claudeMd": { "managed": false }` in `.claude/kit.config.json` and the kit will
+Opt out with `"claudeMd": { "managed": false }` in `.claude/houserules.config.json` and houserules will
 not touch the file at all.
 
 ## Modules
 
-`@agent-kit/cli` ships exactly 16 modules. Everything else lives in a plugin package.
+`@houserules/cli` ships exactly 16 modules. Everything else lives in a plugin package.
 
 | Module             | Default                   | What you get                                                                                                                                                                                                                                                                                                                        |
 | ------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`             | always                    | shared libs, config-driven Bash guard (blocks `git commit/push/stash`, `gh pr create`), `kit.config.json`, read-only git permissions, CLAUDE.md seed (filled from detection) or staged additions                                                                                                                                    |
+| `core`             | always                    | shared libs, config-driven Bash guard (blocks `git commit/push/stash`, `gh pr create`), `houserules.config.json`, read-only git permissions, CLAUDE.md seed (filled from detection) or staged additions                                                                                                                             |
 | `lint-fix`         | on when fix scripts found | Stop hook: auto-fix changed packages, surface only unfixable residue (SubagentStop is wired but no-ops unless `fix.onSubagentStop`, since parallel subagents would each fix every package at once)                                                                                                                                  |
 | `session-context`  | on                        | SessionStart hook: 3-line branch/changes/targets header                                                                                                                                                                                                                                                                             |
 | `rename`           | on when TypeScript        | semantic TS rename via the LanguageService                                                                                                                                                                                                                                                                                          |
@@ -103,30 +103,30 @@ not touch the file at all.
 | `sweep`            | off                       | `/sweep` skill: shard a repo-wide mechanical edit into per-package writer subagents that report only counts. The orchestrator pays O(shards) and never sees the match set                                                                                                                                                           |
 | `read-guard`       | off                       | PreToolUse(Read) guard: redirects unbounded whole-file reads of lockfiles/`dist`/`*.min.*`/oversized files toward grep or a windowed read (reads with `offset`/`limit` pass untouched)                                                                                                                                              |
 | `regen`            | off                       | PostToolUse(Edit\|Write) hook: re-run a user-owned generator when an edited file matches a target's `regen { sourceGlob, command }`, so a generated reference snapshot never silently stales                                                                                                                                        |
-| `statusline`       | off                       | kit-aware `statusLine`: pending changeset debt + kit targets touched (wired only if you have no statusline of your own)                                                                                                                                                                                                             |
+| `statusline`       | off                       | kit-aware `statusLine`: pending changeset debt + houserules targets touched (wired only if you have no statusline of your own)                                                                                                                                                                                                      |
 | `code-cleanliness` | off                       | `.claude/rules/code-cleanliness.md`: intention-revealing names, functions under 20-30 lines, no magic values, no dead code. Path-scoped, plus `.claude/reference/design-principles.md` (SOLID, DRY, KISS, YAGNI, rule of three), pull-only and never auto-loaded, and the `/tidy` skill that audits a working diff against the rule |
 | `ci-settings`      | off                       | `.claude/settings.ci.json`: a deny list for unattended runs, blocking edits to `.github/**`, the lockfile, `dist/**`, and `.changeset/**`. Deliberately NOT merged into `settings.json`, since those denials would break interactive work. Opt in per run with `claude --settings .claude/settings.ci.json`                         |
 
 ## Plugins
 
 A plugin is a separate package that contributes more modules. Install it as a dependency
-and declare it in `.claude/kit.config.json` (see [Writing a plugin](#writing-a-plugin)) to
+and declare it in `.claude/houserules.config.json` (see [Writing a plugin](#writing-a-plugin)) to
 select its modules.
 
-| Package                             | Modules it ships                                                                                                                                                                                                                                                                                                                                                              |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@agent-kit/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`, `pr-description`                                                                                                                                                                                                                                                                                                        |
-| `@agent-kit/plugin-testing`         | ships `testing` (plus opt-in `testing-typescript`, `testing-javascript`, `testing-svelte`, and `testing-3d` language and framework guides, chosen through the module's options)                                                                                                                                                                                               |
-| `@agent-kit/plugin-changesets`      | ships `changesets`, `ledger`                                                                                                                                                                                                                                                                                                                                                  |
-| `@agent-kit/plugin-backlog`         | ships `backlog`                                                                                                                                                                                                                                                                                                                                                               |
-| `@agent-kit/plugin-decisions`       | ships `decisions`                                                                                                                                                                                                                                                                                                                                                             |
-| `@agent-kit/plugin-persona-auditor` | ships `persona-auditor`                                                                                                                                                                                                                                                                                                                                                       |
-| `@agent-kit/plugin-typescript`      | ships `typescript` (a path-scoped rule for the type-system decisions with a right answer, deferring comments to `code-comments` and naming to `code-cleanliness`)                                                                                                                                                                                                             |
-| `@agent-kit/plugin-accessibility`   | ships `accessibility` (WCAG rule, pull-only criteria reference, and the `wcag.mjs` router, plus opt-in React/Svelte/Vue/HTML guides chosen through the module's options) and `accessibility-review`                                                                                                                                                                           |
-| `@agent-kit/plugin-three`           | ships `three` (a path-scoped Three.js rule, plus opt-in Threlte and React Three Fiber guides chosen through the module's options)                                                                                                                                                                                                                                             |
-| `@agent-kit/plugin-svelte`          | ships `svelte` (a Svelte 5 rule plus an opt-in SvelteKit guide) and `svelte-mcp` (the Svelte MCP server configs, installed to `.claude/mcp/` for you to wire up)                                                                                                                                                                                                              |
-| `@agent-kit/plugin-design`          | ships `design` (a DTCG token set seeded to `.claude/design/tokens.json`, a path-scoped design rule, a pull-only principles reference, and the `design.mjs` query script), `design-review` (a design-diff review pass), and `design-game` (game-UI specific design guidance), plus opt-in `design-tailwind` to make the repo's own Tailwind v4 theme the design system instead |
-| `@agent-kit/plugin-github`          | ships `projects` (syncs the backlog and decision ledgers to a GitHub Project, so the durable record survives outside the repo)                                                                                                                                                                                                                                                |
+| Package                              | Modules it ships                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@houserules/plugin-prose`           | ships `code-comments`, `prose-voice`, `output-prose`, `pr-description`                                                                                                                                                                                                                                                                                                        |
+| `@houserules/plugin-testing`         | ships `testing` (plus opt-in `testing-typescript`, `testing-javascript`, `testing-svelte`, and `testing-3d` language and framework guides, chosen through the module's options)                                                                                                                                                                                               |
+| `@houserules/plugin-changesets`      | ships `changesets`, `ledger`                                                                                                                                                                                                                                                                                                                                                  |
+| `@houserules/plugin-backlog`         | ships `backlog`                                                                                                                                                                                                                                                                                                                                                               |
+| `@houserules/plugin-decisions`       | ships `decisions`                                                                                                                                                                                                                                                                                                                                                             |
+| `@houserules/plugin-persona-auditor` | ships `persona-auditor`                                                                                                                                                                                                                                                                                                                                                       |
+| `@houserules/plugin-typescript`      | ships `typescript` (a path-scoped rule for the type-system decisions with a right answer, deferring comments to `code-comments` and naming to `code-cleanliness`)                                                                                                                                                                                                             |
+| `@houserules/plugin-accessibility`   | ships `accessibility` (WCAG rule, pull-only criteria reference, and the `wcag.mjs` router, plus opt-in React/Svelte/Vue/HTML guides chosen through the module's options) and `accessibility-review`                                                                                                                                                                           |
+| `@houserules/plugin-three`           | ships `three` (a path-scoped Three.js rule, plus opt-in Threlte and React Three Fiber guides chosen through the module's options)                                                                                                                                                                                                                                             |
+| `@houserules/plugin-svelte`          | ships `svelte` (a Svelte 5 rule plus an opt-in SvelteKit guide) and `svelte-mcp` (the Svelte MCP server configs, installed to `.claude/mcp/` for you to wire up)                                                                                                                                                                                                              |
+| `@houserules/plugin-design`          | ships `design` (a DTCG token set seeded to `.claude/design/tokens.json`, a path-scoped design rule, a pull-only principles reference, and the `design.mjs` query script), `design-review` (a design-diff review pass), and `design-game` (game-UI specific design guidance), plus opt-in `design-tailwind` to make the repo's own Tailwind v4 theme the design system instead |
+| `@houserules/plugin-github`          | ships `projects` (syncs the backlog and decision ledgers to a GitHub Project, so the durable record survives outside the repo)                                                                                                                                                                                                                                                |
 
 Installing a plugin opts you into the plugin. Each module inside it still honors its own
 default: most default off, so you enable them individually with `--modules` or through
@@ -135,15 +135,15 @@ default: most default off, so you enable them individually with `--modules` or t
 ## After install
 
 ```
-npx agent-kit doctor    # validate: config vs repo reality, hooks wired, files intact
+npx houserules doctor    # validate: config vs repo reality, hooks wired, files intact
                          # --json for a machine-readable report (CI-stable shape)
-npx agent-kit update    # refresh kit files after a new kit release (your edits are kept, --force overrides)
+npx houserules update    # refresh houserules files after a new houserules release (your edits are kept, --force overrides)
                          # add --next-steps to reprint the post-install to-do list
-npx agent-kit modules   # list installed vs available modules, and enable more after init
+npx houserules modules   # list installed vs available modules, and enable more after init
                          # --disable=<ids> withdraws a module: prunes its files (your edits
                          # are kept unless --force) and unwires only the settings entries no
                          # remaining module still needs
-npx agent-kit report    # transcript telemetry for this repo's sessions (read-only)
+npx houserules report    # transcript telemetry for this repo's sessions (read-only)
                          # --json for a machine-readable report
 ```
 
@@ -153,91 +153,91 @@ error rather than a silent no-op.
 
 **Exit codes.** `doctor` is usable as a CI gate:
 
-| Code | Meaning                                               |
-| ---- | ----------------------------------------------------- |
-| 0    | success (`doctor`: no problems)                       |
-| 1    | error, or `doctor` found a problem / actionable drift |
-| 2    | `.claude/kit.config.json` does not satisfy the schema |
+| Code | Meaning                                                      |
+| ---- | ------------------------------------------------------------ |
+| 0    | success (`doctor`: no problems)                              |
+| 1    | error, or `doctor` found a problem / actionable drift        |
+| 2    | `.claude/houserules.config.json` does not satisfy the schema |
 
 ### `.claude/scripts/` is generated, not source
 
-The hook scripts are build output, so the kit self-gitignores them. `.claude/scripts/.gitignore`
+The hook scripts are build output, so houserules self-gitignores them. `.claude/scripts/.gitignore`
 and `.claude/state/.gitignore` are the only files there that git tracks. Your `settings.json`,
-`kit.config.json`, skills, agents and rules are all still committed. Only the generated `.mjs`
-stays out of your diffs, so a kit upgrade doesn't show up as a wall of machine-written churn.
+`houserules.config.json`, skills, agents and rules are all still committed. Only the generated `.mjs`
+stays out of your diffs, so a houserules upgrade doesn't show up as a wall of machine-written churn.
 
 If a repo already committed its scripts, `update` migrates it for you. The paths are
-`git rm --cached`'d, which is **staged only**. Files stay on disk, and the kit never commits.
+`git rm --cached`'d, which is **staged only**. Files stay on disk, and houserules never commits.
 `doctor` reports the state until you do.
 
 Because the scripts can be absent on a fresh clone while `settings.json` is committed, every hook
 command is guarded. A missing script prints
 
 ```
-[kit] changeset-check.mjs missing — run: npx agent-kit update
+[houserules] changeset-check.mjs missing — run: npx houserules update
 ```
 
 instead of a Node stack trace, and the hook exits cleanly rather than failing your turn.
 
-Want the old behavior? Set `scripts.commit: true` in `.claude/kit.config.json`. The kit then
+Want the old behavior? Set `scripts.commit: true` in `.claude/houserules.config.json`. houserules then
 skips the gitignore and the migration entirely.
 
 ### Drift: `stale` vs `yours`
 
-`doctor` reports every managed file whose contents no longer match what the kit would write,
+`doctor` reports every managed file whose contents no longer match what houserules would write,
 with a unified diff, and says **why** they differ:
 
 | Status      | Means                                                                    | Exit 1? |
 | ----------- | ------------------------------------------------------------------------ | ------- |
-| `stale`     | the kit changed, and your copy is what it last wrote                     | yes     |
-| `missing`   | a kit file is gone (a hook now wired to nothing)                         | yes     |
+| `stale`     | houserules changed, and your copy is what it last wrote                  | yes     |
+| `missing`   | a houserules file is gone (a hook now wired to nothing)                  | yes     |
 | `no-marker` | a managed block's markers were removed                                   | yes     |
 | `orphaned`  | no enabled module produces it any more                                   | yes     |
 | `yours`     | **you** edited it, so it is kept and never overwritten without `--force` | no      |
 
-That distinction is the point. A content-hash lockfile can only say "differs". The kit's
+That distinction is the point. A content-hash lockfile can only say "differs". houserules'
 manifest records what it last wrote, so it can tell a kit-side change from one of yours. **An
 edit you made on purpose never holds the exit code red.** Nothing lets you acknowledge one, so
 failing on it would leave `doctor` permanently red on an install working exactly as you intended.
 
 ```
-npx agent-kit doctor --fix            # reconcile stale/missing/no-marker, your edits survive
-npx agent-kit doctor --fix --force    # also overwrite the files you edited
-npx agent-kit doctor --fix --prune    # also delete orphans
+npx houserules doctor --fix            # reconcile stale/missing/no-marker, your edits survive
+npx houserules doctor --fix --force    # also overwrite the files you edited
+npx houserules doctor --fix --prune    # also delete orphans
 ```
 
-### Rules: you own the frontmatter, the kit owns the body
+### Rules: you own the frontmatter, houserules owns the body
 
 A rule's `paths:` globs decide when Claude Code loads it, and only your repo knows which
 suffixes it actually uses. So a rule file is split down the middle. Everything below the
-closing `---` is the kit's and stays refreshable forever. The frontmatter above it is yours.
+closing `---` is houserules' and stays refreshable forever. The frontmatter above it is yours.
 
 Trim `paths:` to your repo and nothing breaks. It is not drift, it is not a warning, and the
-rule body still updates. The only time the kit says anything is when it ships a new default
+rule body still updates. The only time houserules says anything is when it ships a new default
 `paths:` and yours differ, and then it tells you once and keeps your version.
 
 ### The formatter
 
-Everything the kit installs under `.claude/` is tracked by content hash, so a repo-wide
+Everything houserules installs under `.claude/` is tracked by content hash, so a repo-wide
 `prettier --write .` rewrites those bytes and `update` then reads your whole install as local
 edits and refuses to refresh it. Nothing warns you, because from the manifest's side it looks
 exactly like you edited every file.
 
-When prettier is detected, the kit maintains a marker-delimited block in `.prettierignore`
+When prettier is detected, houserules maintains a marker-delimited block in `.prettierignore`
 listing the subtrees it owns. Everything outside the markers is untouched, and a repo with no
-prettier never gains the file. eslint flat config is JavaScript, so the kit prints the
+prettier never gains the file. eslint flat config is JavaScript, so houserules prints the
 `ignores` entry for you to paste instead of editing it.
 
-Already hit this? `npx agent-kit doctor --fix --force` takes the kit's copies back.
+Already hit this? `npx houserules doctor --fix --force` takes houserules' copies back.
 
-### `kit.config.json` is schema-validated
+### `houserules.config.json` is schema-validated
 
-The config is validated against a schema generated from the kit's own zod definition and
-published inside `@agent-kit/cli` at `schema/kit.config.schema.json`. `init` seeds a `$schema`
+The config is validated against a schema generated from houserules' own zod definition and
+published inside `@houserules/cli` at `schema/houserules.config.schema.json`. `init` seeds a `$schema`
 reference into the file it writes, so editors give you completion and inline errors. A repo
-that depends on `@agent-kit/cli` gets the local
-`../node_modules/@agent-kit/cli/schema/kit.config.schema.json`. One that only ever runs
-`npx agent-kit` has no local copy, so it gets the published URL instead. `doctor` reports
+that depends on `@houserules/cli` gets the local
+`../node_modules/@houserules/cli/schema/houserules.config.schema.json`. One that only ever runs
+`npx houserules` has no local copy, so it gets the published URL instead. `doctor` reports
 any problem per field (`changesets.baseBranchh is not a known changesets setting`) and exits 2.
 
 ## Ledgers: what is committed and what is generated
@@ -252,11 +252,11 @@ node .claude/scripts/backlog-log.mjs render BACKLOG.md
 ```
 
 A monorepo separates areas by filename in that one directory, `studio.BACKLOG.md`, rather than
-by nesting a ledger beside each package. Point `ledgers.dir` in `.claude/kit.config.json`
-somewhere else if you prefer, though it cannot be the repo root: the kit self-ignores that
+by nesting a ledger beside each package. Point `ledgers.dir` in `.claude/houserules.config.json`
+somewhere else if you prefer, though it cannot be the repo root: houserules self-ignores that
 directory with `*.md`, and that rule at the root would hide every document in the project.
 
-Smoke test the backlog ledger, if `@agent-kit/plugin-backlog` is installed:
+Smoke test the backlog ledger, if `@houserules/plugin-backlog` is installed:
 
 ```
 node .claude/scripts/backlog-log.mjs add TEST BACKLOG.md "smoke" "remove me"
@@ -265,7 +265,7 @@ node .claude/scripts/backlog-log.mjs list
 
 ## Changesets are the canonical changelog
 
-Shipped by `@agent-kit/plugin-changesets`. The kit treats
+Shipped by `@houserules/plugin-changesets`. houserules treats
 [changesets](https://github.com/changesets/changesets) as the source of truth
 for "what shipped": one `.changeset/*.md` per meaningful change, `CHANGELOG.md` generated at
 release time by `changeset version`. The module wires the agent side of that:
@@ -286,10 +286,10 @@ release time by `changeset version`. The module wires the agent side of that:
   something no user ever saw.
 - **`changeset-check.mjs`** (Stop hook) nudges once when package source changed with no
   changeset alongside it. It is branch-aware, so a changeset already committed on the branch
-  counts. The kill-switch is `changesets.stopCheck: false` in `kit.config.json`, and it exits
+  counts. The kill-switch is `changesets.stopCheck: false` in `houserules.config.json`, and it exits
   silently on any git hiccup.
 - **Respects an existing setup.** If `.changeset/config.json` exists it is never touched. If
-  absent, a default is seeded, only with your consent. The kit never installs
+  absent, a default is seeded, only with your consent. houserules never installs
   `@changesets/cli` for you and prints the right command instead (pnpm-catalog-aware).
   Authoring does require it as a root devDependency: a `pnpx`/`npx`-only root script covers
   versioning and publishing but leaves nothing resolvable for `@changesets/write`.
@@ -301,7 +301,7 @@ Want commit-granular history _too_? Enable the `ledger` module. It writes to
 
 Only the first of these three reduces token spend. The other two shape how the agent writes, which
 is worth having and is not the same thing. `output-prose` and `prose-voice` are shipped by
-`@agent-kit/plugin-prose`.
+`@houserules/plugin-prose`.
 
 - **Kit-native discipline** (free, always): lean CLAUDE.md, grep-don't-read rules, haiku/low
   subagents, hooks that emit residue not transcripts.
@@ -310,7 +310,7 @@ is worth having and is not the same thing. `output-prose` and `prose-voice` are 
   setting, not a cost one.** It changes how the agent writes to you, not what it does, and it will
   not reduce your token bill: the words in a reply are a small part of what a session spends, and
   the style's own text is added to every request. Exact content, negations, and reported caveats
-  are preserved. What to expect is in `@agent-kit/plugin-prose`'s README.
+  are preserved. What to expect is in `@houserules/plugin-prose`'s README.
   Activate with `/config` → Output style → **Prose**, or
   set `"outputStyle": "Prose"` in `.claude/settings.local.json`. The value is the exact style
   `name` frontmatter field, **not** the `output-prose` filename, since this style's frontmatter
@@ -328,22 +328,22 @@ is worth having and is not the same thing. `output-prose` and `prose-voice` are 
 
 A plugin is a module provider. It contributes `ModuleDef`s, the same shape `core` and every
 built-in module use, and nothing else: no lifecycle hooks, no way to transform another
-module's actions, no path onto disk that isn't a declared action. The kit decides what those
+module's actions, no path onto disk that isn't a declared action. houserules decides what those
 actions mean against the real tree, so a plugin's plan shows up in `--dry-run` the same as a
-built-in module's does. The contract itself now lives in `@agent-kit/api`, a standalone
+built-in module's does. The contract itself now lives in `@houserules/api`, a standalone
 package the CLI depends on rather than defines. See the `PluginApi` and `Plugin` TSDoc in
-`@agent-kit/api`'s `src/index.ts` for the full contract, including what happens when a plugin
-throws. This package's own `src/plugin.ts` re-exports both, so `@agent-kit/cli/plugin` is
+`@houserules/api`'s `src/index.ts` for the full contract, including what happens when a plugin
+throws. This package's own `src/plugin.ts` re-exports both, so `@houserules/cli/plugin` is
 still the import path a plugin author uses.
 
 ### Declaring one
 
 A user installs your package as a dependency, then adds it to the `plugins` array in
-`.claude/kit.config.json`:
+`.claude/houserules.config.json`:
 
 ```json
 {
-  "plugins": [{ "name": "@agent-kit/plugin-prose", "alias": "prose" }],
+  "plugins": [{ "name": "@houserules/plugin-prose", "alias": "prose" }],
   "targets": []
 }
 ```
@@ -352,18 +352,18 @@ A user installs your package as a dependency, then adds it to the `plugins` arra
 `package.json`. `alias` namespaces every module id your plugin contributes: a module
 declaring id `prose-voice` under alias `prose` is selected as `prose/prose-voice`, in
 `--modules` and in `moduleOptions` keys alike. An optional `config` object is passed to your
-factory verbatim, through `PluginApi.config`, and the kit never reads inside it.
+factory verbatim, through `PluginApi.config`, and houserules never reads inside it.
 
 ### Building it
 
-Publish it as `@agent-kit/plugin-<name>`, with
+Publish it as `@houserules/plugin-<name>`, with
 
 ```json
-"peerDependencies": { "@agent-kit/api": ">=0.0.0 <1.0.0" }
+"peerDependencies": { "@houserules/api": ">=0.0.0 <1.0.0" }
 ```
 
 pinned to the range of the `PluginApi` surface you built against, the same form every
-first-party plugin in this workspace declares today. Add `@agent-kit/payload` as a peer too,
+first-party plugin in this workspace declares today. Add `@houserules/payload` as a peer too,
 at the same range, if your payload imports a shared lib from it. See
 [CONVENTIONS.md](CONVENTIONS.md#11-plugin-surface-semver-policy) for what changes at each
 bump.
@@ -372,7 +372,7 @@ The default export is a factory, wrapped in `definePlugin` for the parameter and
 types:
 
 ```ts
-import { definePlugin } from '@agent-kit/cli/plugin';
+import { definePlugin } from '@houserules/cli/plugin';
 
 export default definePlugin((api) => [
   {
@@ -389,38 +389,38 @@ export default definePlugin((api) => [
 ```
 
 `api.payload` is already bound to this plugin's own `payload-dist/`, so `plan()` never
-resolves a path itself. Lay out `payload-dist/` the same way the kit lays out its own
+resolves a path itself. Lay out `payload-dist/` the same way houserules lays out its own
 payload, since that is what each `api.payload` builder expects: `scripts/` (plus
 `scripts/lib/` for shared libraries), `rules/`, `skills/<name>/SKILL.md`, `agents/<name>.md`,
-`reference/`, and `kit-templates/`. A plugin's payload scripts carry the same invariants the
-kit's own do: zero npm dependencies, node builtins only, and a hook script that exits 0 on
+`reference/`, and `templates/`. A plugin's payload scripts carry the same invariants
+houserules' own do: zero npm dependencies, node builtins only, and a hook script that exits 0 on
 every failure path rather than crashing a turn.
 
 A payload script that needs shared logic imports it from `.claude/scripts/lib/*.mjs` rather
 than vendoring a copy. That surface is a public runtime API, versioned with
-`@agent-kit/payload`, the package that ships it. See
+`@houserules/payload`, the package that ships it. See
 [CONVENTIONS.md](CONVENTIONS.md#11-plugin-surface-semver-policy). For the mechanics of
 importing a shared lib from your own payload source and the build step that wires it up, see
 [CONVENTIONS.md §12](CONVENTIONS.md#12-how-a-plugins-payload-reaches-a-shared-lib).
 
-Your package builds its own `payload-dist/` from source, the same way `@agent-kit/cli`
+Your package builds its own `payload-dist/` from source, the same way `@houserules/cli`
 builds its own. `PluginApi.payload` reads from your plugin's `payload-dist/`, never from the
 CLI's, so ship one alongside your compiled `dist/`.
 
 ### Authoring outside this workspace
 
-The rest of this section assumes you are inside the `agent-kit` workspace. Most plugin
+The rest of this section assumes you are inside the `houserules` workspace. Most plugin
 authors are not. Here is the same path from a plain repo with no `workspace:*` protocol
 available.
 
-**Depend on a published `@agent-kit/cli`.** The published contract your plugin builds
-against is `@agent-kit/api`, kept as the `peerDependencies` range from the "Building it"
-section above. `@agent-kit/cli` itself is a devDependency: it ships the `agent-kit-payload`
-bin your build step runs and the `agent-kit` binary you use while developing. Add both the
+**Depend on a published `@houserules/cli`.** The published contract your plugin builds
+against is `@houserules/api`, kept as the `peerDependencies` range from the "Building it"
+section above. `@houserules/cli` itself is a devDependency: it ships the `houserules-payload`
+bin your build step runs and the `houserules` binary you use while developing. Add both the
 normal way:
 
 ```
-npm install --save-dev @agent-kit/cli @agent-kit/api
+npm install --save-dev @houserules/cli @houserules/api
 ```
 
 If your plugin lives in a repo that keeps a checkout of this workspace beside it, for example
@@ -428,17 +428,17 @@ while you develop against an unreleased CLI change, point at that checkout with 
 `file:` dependency instead:
 
 ```json
-"devDependencies": { "@agent-kit/cli": "link:../agent-kit/packages/cli" }
+"devDependencies": { "@houserules/cli": "link:../houserules/packages/cli" }
 ```
 
 **Prefer the type-only import.** `definePlugin` is a value import, so using it gives your
-plugin a runtime dependency on `@agent-kit/cli`, which re-exports it from `@agent-kit/api`.
+plugin a runtime dependency on `@houserules/cli`, which re-exports it from `@houserules/api`.
 `Plugin` is exported as a type, so importing only that type costs nothing at runtime and
-keeps `@agent-kit/api` a genuine peer dependency with no runtime import of `@agent-kit/cli`
+keeps `@houserules/api` a genuine peer dependency with no runtime import of `@houserules/cli`
 at all:
 
 ```ts
-import type { Plugin } from '@agent-kit/cli/plugin';
+import type { Plugin } from '@houserules/cli/plugin';
 
 const plugin: Plugin = (api) => [
   // ...
@@ -452,13 +452,13 @@ runtime import. Use the type-only form when you want zero runtime dependency on 
 which is the better default for a published plugin.
 
 **Know what the payload build actually does.** A plugin builds its own `payload-dist/` from
-`payload/`, the same way `@agent-kit/cli` builds its own. A prose-only plugin, one that ships
+`payload/`, the same way `@houserules/cli` builds its own. A prose-only plugin, one that ships
 only rules, reference docs, skills, agents, or output styles, has no compile step at all: it
 needs no `tsconfig.payload.json` and no `tsc` invocation, since none of those file types are
 compiled. A `tsconfig.payload.json`, a `tsc -p tsconfig.payload.json` build step, and an
-`agent-kit-payload` run exist only for a plugin that ships `.mts` scripts under
-`payload/scripts/`. `agent-kit-payload` is a bin `@agent-kit/cli` publishes: it assembles the
-prose directories, rewrites any `@agent-kit/payload/*` import in your emitted `.mjs`, and
+`houserules-payload` run exist only for a plugin that ships `.mts` scripts under
+`payload/scripts/`. `houserules-payload` is a bin `@houserules/cli` publishes: it assembles the
+prose directories, rewrites any `@houserules/payload/*` import in your emitted `.mjs`, and
 records which libs each script imports. `packages/plugin-accessibility/tsconfig.payload.json`
 is a starting point you can copy as-is: it carries no path into this workspace, since a
 payload script reaches a shared lib by package name instead (see
@@ -467,7 +467,7 @@ payload script reaches a shared lib by package name instead (see
 **Verify the plugin loads.** Run:
 
 ```
-agent-kit probe <path-to-plugin-package> [--alias <name>]
+houserules probe <path-to-plugin-package> [--alias <name>]
 ```
 
 It exits 0 and lists each module your plugin contributes along with the actions it plans, or
@@ -478,24 +478,24 @@ your package directory.
 
 **Two failure modes every first-time author hits:**
 
-- **Forgetting the payload build.** If your `.claude/kit.config.json` names the plugin but
+- **Forgetting the payload build.** If your `.claude/houserules.config.json` names the plugin but
   its `payload-dist/` is missing the file a module plans, `update` reports the plugin by name,
   says its payload build produces the missing file, and exits non-zero.
-- **`doctor` no longer warns that a plugin package "has no kit target".** It skips that check
+- **`doctor` no longer warns that a plugin package "has no houserules target".** It skips that check
   for any package a `plugins[]` entry resolves to. The warning still fires for an ordinary
   workspace package with no target, which is the case it exists for. If an older CLI told you
   to silence it by adding a target for your plugin, delete that target.
 
 ## Upgrading from a pre-split version
 
-A module now shipped by a plugin used to be built into the CLI. If your `.claude/kit.config.json`
+A module now shipped by a plugin used to be built into the CLI. If your `.claude/houserules.config.json`
 or manifest still names one of those modules and the plugin isn't installed, `update` exits 1
 without changing anything:
 
 ```
 This install uses modules that moved out of the CLI into plugins:
-  backlog moved to @agent-kit/plugin-backlog. Install it, then add
-  { "name": "@agent-kit/plugin-backlog", "alias": "<alias>" } to the "plugins" array in .claude/kit.config.json.
+  backlog moved to @houserules/plugin-backlog. Install it, then add
+  { "name": "@houserules/plugin-backlog", "alias": "<alias>" } to the "plugins" array in .claude/houserules.config.json.
 Nothing was changed. Installing the plugin restores the module and its files.
 ```
 
@@ -539,7 +539,7 @@ have all been resolved.
 A surface you committed at its old path is untracked for you, including a nested one such as
 `games/tower-push/BACKLOG.md`. The file stays on disk and the removal is staged, never committed,
 so you review it like any other change. Only a path the ledger itself records is offered, so a
-`BACKLOG.md` you wrote by hand and the kit never generated is left alone.
+`BACKLOG.md` you wrote by hand and houserules never generated is left alone.
 
 ## Support matrix & port hazards
 
@@ -547,7 +547,7 @@ so you review it like any other change. Only a path the ledger itself records is
 - **Package managers.** pnpm and npm are first-class, yarn-classic workspaces are best-effort,
   and npm-monorepo per-package filtering is not modeled (set `fix.filterFlag: ""` and use a root
   fix script). Workspace globs support the common shapes (`packages/*`). Exotic globs won't
-  detect, so edit `kit.config.json` by hand. That file, not detection, is the contract.
+  detect, so edit `houserules.config.json` by hand. That file, not detection, is the contract.
 - **POSIX shells only** (hooks use `"$CLAUDE_PROJECT_DIR"`). Windows via WSL/git-bash untested.
 - **`rename.mjs` is TypeScript-only** and needs `typescript` resolvable.
 - **The lint-fix hook assumes your fix scripts exist.** Doctor checks this.
@@ -558,8 +558,8 @@ so you review it like any other change. Only a path the ledger itself records is
 
 ## Contributing
 
-Setup, the check order, and how to run the kit against itself are in
-[CONTRIBUTING.md](https://github.com/DTCurrie/agent-kit/blob/main/CONTRIBUTING.md).
+Setup, the check order, and how to run houserules against itself are in
+[CONTRIBUTING.md](https://github.com/DTCurrie/houserules/blob/main/CONTRIBUTING.md).
 
 One constraint is worth stating here, because it is the one a new contributor trips over.
 `src/` is TypeScript and may use dependencies. **Everything under `payload/` is copied into
@@ -570,4 +570,4 @@ with no `node_modules` in reach.
 
 ## License
 
-MIT. See [LICENSE](https://github.com/DTCurrie/agent-kit/blob/main/LICENSE).
+MIT. See [LICENSE](https://github.com/DTCurrie/houserules/blob/main/LICENSE).

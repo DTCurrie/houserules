@@ -2,35 +2,38 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { listWorkspacePackages, readJson } from '@agent-kit/payload/workspaces';
+import {
+  listWorkspacePackages,
+  readJson,
+} from '@houserules/payload/workspaces';
 import type {
   PackageJson,
   WorkspacePackage,
-} from '@agent-kit/payload/workspaces';
-import type { Ctx, KitConfig, Settings, Target } from '@agent-kit/api';
+} from '@houserules/payload/workspaces';
+import type { Ctx, HouseConfig, Settings, Target } from '@houserules/api';
 import type {
   ChangesetInvocation,
-  KitManifest,
+  HouseManifest,
   PackageManagerInfo,
-} from '@agent-kit/api/internal';
+} from '@houserules/api/internal';
 
 /**
- * `Ctx` and `Target` are the plugin contract and live in `@agent-kit/api`, since a plugin's
+ * `Ctx` and `Target` are the plugin contract and live in `@houserules/api`, since a plugin's
  * `plan(ctx, answers)` codes against them. The nested shapes `Ctx` is built from, such as
  * `ChangesetsState` and `PackageManagerInfo`, were never part of that contract (`plugin.ts`
- * never re-exported them either), so they cross from `@agent-kit/api/internal` instead. This
+ * never re-exported them either), so they cross from `@houserules/api/internal` instead. This
  * file stays the sole PRODUCER: `detect()` and every helper that touches the filesystem or
  * shells out to git. Re-exported here so the ~30 CLI modules that read `Ctx`/`Target` off
  * `./detect.js` need no import change.
  */
-export type { Ctx, Target } from '@agent-kit/api';
+export type { Ctx, Target } from '@houserules/api';
 export type {
   ChangesetInvocation,
   PackageManagerInfo,
-} from '@agent-kit/api/internal';
+} from '@houserules/api/internal';
 // Consumed by detect()'s own return shape, not re-exported: nothing outside this file names
 // them, and plugin.ts never carried them either.
-import type { ChangesetsState, ClaudeState } from '@agent-kit/api/internal';
+import type { ChangesetsState, ClaudeState } from '@houserules/api/internal';
 
 // `prettier --write` writes but `prettier --check` only verifies. Wiring a checker
 // into the auto-fix hook would fail unfixably on every stop.
@@ -121,7 +124,7 @@ function git(root: string, args: string[]): string | null {
     ) {
       warnedGitMissing = true;
       console.error(
-        'agent-kit: git could not be run (is it installed and on PATH?). Git-derived detection will read as "not a repo".',
+        'houserules: git could not be run (is it installed and on PATH?). Git-derived detection will read as "not a repo".',
       );
     }
     return null;
@@ -142,7 +145,7 @@ function trackedFilesUnder(root: string, dir: string): string[] {
 
 /** Committed reference templates from installs that predate the self-gitignore. */
 export function trackedTemplateFiles(root: string): string[] {
-  return trackedFilesUnder(root, '.claude/kit-templates');
+  return trackedFilesUnder(root, '.claude/templates');
 }
 
 /** Committed hook scripts from installs that predate the self-gitignore. */
@@ -159,7 +162,7 @@ function ledgerRecordedFiles(ledgerFile: string): Set<string> {
     text = readFileSync(ledgerFile, 'utf8');
   } catch (error) {
     console.error(
-      `agent-kit: could not read ${ledgerFile} (${(error as Error).message}). Treating it as having no recorded files.`,
+      `houserules: could not read ${ledgerFile} (${(error as Error).message}). Treating it as having no recorded files.`,
     );
     return files;
   }
@@ -182,7 +185,7 @@ function ledgerRecordedFiles(ledgerFile: string): Set<string> {
  * Committed ledger `.jsonl` logs, which are no longer the durable record.
  *
  * They were, until the projects integration moved that role to a GitHub Project and left the
- * local file as a gitignored push queue. A repo that installed the kit before that has them
+ * local file as a gitignored push queue. A repo that installed houserules before that has them
  * tracked, and `update` untracks them the same way it already untracks the rendered markdown.
  *
  * Separate from {@link trackedLedgerSurfaces} rather than folded into it, because the two mean
@@ -206,8 +209,8 @@ export function trackedLedgerLogs(root: string, ledgerDir: string): string[] {
  *
  * Nested per-area surfaces, such as `games/tower-push/BACKLOG.md`, are derived from the
  * ledger entries' own `file` field rather than a directory scan or a target's `pathPrefix`.
- * The ledger only ever records a surface the kit itself wrote, so matching against it can
- * never sweep up a user's own hand-written file at a path the kit never produced.
+ * The ledger only ever records a surface houserules itself wrote, so matching against it can
+ * never sweep up a user's own hand-written file at a path houserules never produced.
  */
 export function trackedLedgerSurfaces(
   root: string,
@@ -303,7 +306,7 @@ function detectChangesets(
       ).length;
     } catch (error) {
       console.error(
-        `agent-kit: could not read .changeset/ (${(error as Error).message}). Treating pending changeset count as 0.`,
+        `houserules: could not read .changeset/ (${(error as Error).message}). Treating pending changeset count as 0.`,
       );
     }
   }
@@ -363,7 +366,7 @@ const PRETTIER_CONFIG_FILES = [
 ];
 
 /**
- * Whether prettier can run over this repo. The kit only writes its `.prettierignore` block
+ * Whether prettier can run over this repo. houserules only writes its `.prettierignore` block
  * when the answer is yes, so a repo with no formatter never gains a config file it did not
  * ask for.
  */
@@ -431,7 +434,7 @@ function detectClaudeState(root: string): ClaudeState {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         console.error(
-          `agent-kit: could not list .claude/${sub} (${(error as Error).message}). Treating it as empty.`,
+          `houserules: could not list .claude/${sub} (${(error as Error).message}). Treating it as empty.`,
         );
       }
       return [];
@@ -444,8 +447,8 @@ function detectClaudeState(root: string): ClaudeState {
     settingsParseError,
     settingsLocalExists: existsSync(join(dir, 'settings.local.json')),
     claudeMdExists: existsSync(join(root, 'CLAUDE.md')),
-    manifest: readJson<KitManifest>(join(dir, 'kit-manifest.json')),
-    kitConfig: readJson<KitConfig>(join(dir, 'kit.config.json')),
+    manifest: readJson<HouseManifest>(join(dir, 'houserules.manifest.json')),
+    houseConfig: readJson<HouseConfig>(join(dir, 'houserules.config.json')),
     agents: listNames('agents'),
     skills: listNames('skills'),
   };
@@ -459,7 +462,7 @@ function detectPnpmCatalogModeStrict(root: string): boolean {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.error(
-        `agent-kit: could not read pnpm-workspace.yaml (${(error as Error).message}). Treating catalog mode as not strict.`,
+        `houserules: could not read pnpm-workspace.yaml (${(error as Error).message}). Treating catalog mode as not strict.`,
       );
     }
     return false;

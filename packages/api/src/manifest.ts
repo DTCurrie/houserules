@@ -1,12 +1,12 @@
 import type { SettingsSignature } from './merge-settings.js';
 import type { PluginSource } from './plugin-source.js';
 
-export const MANIFEST_PATH = '.claude/kit-manifest.json';
+export const MANIFEST_PATH = '.claude/houserules.manifest.json';
 
 /**
  * The two hashes a body-owned file records. They answer different questions, so neither
- * substitutes for the other. `body` is what the kit last wrote below the frontmatter, and
- * a mismatch means YOU edited the part the kit owns. `frontmatter` is what the kit shipped
+ * substitutes for the other. `body` is what houserules last wrote below the frontmatter, and
+ * a mismatch means YOU edited the part houserules owns. `frontmatter` is what houserules shipped
  * as the DEFAULT, and it exists so a customized `paths:` can be told from an untouched one.
  */
 export interface BodyHashes {
@@ -14,14 +14,14 @@ export interface BodyHashes {
   frontmatter: string;
 }
 
-/** The receipt `.claude/kit-manifest.json`: what the kit installed and at what hash. */
-export interface KitManifest {
+/** The receipt `.claude/houserules.manifest.json`: what houserules installed and at what hash. */
+export interface HouseManifest {
   kitVersion: string;
   installedAt: string;
   modules: string[];
   /**
-   * repo-relative dest → what the kit wrote there. A plain string is a sha256 of the whole
-   * file. A {@link BodyHashes} is a body-owned file, where the kit wrote only the body.
+   * repo-relative dest → what houserules wrote there. A plain string is a sha256 of the whole
+   * file. A {@link BodyHashes} is a body-owned file, where houserules wrote only the body.
    * Manifests written before body ownership existed carry the plain string everywhere,
    * including at dests that are body-owned now, which is what the legacy migration in
    * `computeEffects` reads.
@@ -38,14 +38,14 @@ export interface KitManifest {
 }
 
 /**
- * The whole-file hash recorded for `dest`, for the files the kit owns end to end.
+ * The whole-file hash recorded for `dest`, for the files houserules owns end to end.
  *
  * @returns Undefined when the entry is body-owned, so a caller that means "whole file"
  *   never silently reads a body hash as one. At a body-owned dest a defined result is a
  *   LEGACY entry, written before the split existed.
  */
 export function wholeFileHash(
-  manifest: KitManifest | null | undefined,
+  manifest: HouseManifest | null | undefined,
   dest: string,
 ): string | undefined {
   const entry = manifest?.files?.[dest];
@@ -60,7 +60,7 @@ export function wholeFileHash(
  *   decides which of the two it is with {@link wholeFileHash}.
  */
 export function bodyHashes(
-  manifest: KitManifest | null | undefined,
+  manifest: HouseManifest | null | undefined,
   dest: string,
 ): BodyHashes | undefined {
   const entry = manifest?.files?.[dest];

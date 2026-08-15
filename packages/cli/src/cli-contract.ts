@@ -16,7 +16,7 @@ export interface Flags {
   moduleOption?: string[];
   /** `doctor` only: reconcile the drift found, instead of only reporting it. */
   fix: boolean;
-  /** `doctor --fix` only: also delete orphaned kit files. */
+  /** `doctor --fix` only: also delete orphaned houserules files. */
   prune: boolean;
   /** Machine-readable output on stdout. Human text goes to stderr. */
   json: boolean;
@@ -32,6 +32,6 @@ export const EXIT = {
   ok: 0,
   /** A command failed, or `doctor` found an ERROR-level problem. */
   error: 1,
-  /** `.claude/kit.config.json` does not satisfy the schema. */
+  /** `.claude/houserules.config.json` does not satisfy the schema. */
   badConfig: 2,
 } as const;

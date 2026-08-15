@@ -38,8 +38,8 @@ import {
 } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-import { loadConfigSafe, repoRootSafe } from '@agent-kit/payload/kit-config';
-import { makeId } from '@agent-kit/payload/backlog-id';
+import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
+import { makeId } from '@houserules/payload/backlog-id';
 import {
   SEPARATOR,
   appendEvent,
@@ -65,9 +65,12 @@ import {
   surfaceScope,
   takeChatFlag,
   unknownAreaMessage,
-} from '@agent-kit/payload/entry-ledger';
-import { findEntry, loadIndex } from '@agent-kit/payload/ledger-index';
-import type { LedgerEntry, LedgerIndex } from '@agent-kit/payload/ledger-index';
+} from '@houserules/payload/entry-ledger';
+import { findEntry, loadIndex } from '@houserules/payload/ledger-index';
+import type {
+  LedgerEntry,
+  LedgerIndex,
+} from '@houserules/payload/ledger-index';
 
 function requireRepoRoot(): string {
   const root = repoRootSafe();

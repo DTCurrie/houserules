@@ -38,7 +38,7 @@ describe('projectThemeToDtcg', () => {
     expect(token(group(document, 'color'), 'brand-500')).toEqual({
       $value: { colorSpace: 'oklch', components: [0.55, 0.2, 265] },
       $description: "declared in the repo's @theme block",
-      $extensions: { 'agent-kit': { origin: 'repo' } },
+      $extensions: { houserules: { origin: 'repo' } },
     });
   });
 
@@ -50,7 +50,7 @@ describe('projectThemeToDtcg', () => {
     expect(token(group(document, 'fontSize'), 'hero')).toEqual({
       $value: { value: 3, unit: 'rem' },
       $description: "declared in the repo's @theme block",
-      $extensions: { 'agent-kit': { origin: 'repo' } },
+      $extensions: { houserules: { origin: 'repo' } },
     });
   });
 
@@ -62,7 +62,7 @@ describe('projectThemeToDtcg', () => {
     expect(token(group(document, 'fontWeight'), 'thin')).toEqual({
       $value: 100,
       $description: "declared in Tailwind's default theme",
-      $extensions: { 'agent-kit': { origin: 'tailwind' } },
+      $extensions: { houserules: { origin: 'tailwind' } },
     });
   });
 
@@ -99,7 +99,7 @@ describe('projectThemeToDtcg', () => {
     expect(token(group(document, 'color'), 'red-500')).toEqual({
       $value: { colorSpace: 'oklch', components: [0.637, 0.237, 25.331] },
       $description: "declared in Tailwind's default theme",
-      $extensions: { 'agent-kit': { origin: 'tailwind' } },
+      $extensions: { houserules: { origin: 'tailwind' } },
     });
   });
 });
@@ -125,7 +125,7 @@ describe('projectThemeToDtcg, spacing multiplier projection', () => {
       $value: { value: 2, unit: 'rem' },
       $description:
         "derived from the --spacing multiplier in the repo's @theme block",
-      $extensions: { 'agent-kit': { origin: 'repo' } },
+      $extensions: { houserules: { origin: 'repo' } },
     });
     expect(Object.keys(spacing)).toHaveLength(35);
     expect(counts.repo).toBe(2);
@@ -151,18 +151,18 @@ describe('projectThemeToDtcg, spacing multiplier projection', () => {
     expect(token(spacing, 'lg')).toEqual({
       $value: { value: 2, unit: 'rem' },
       $description: "declared in the repo's @theme block",
-      $extensions: { 'agent-kit': { origin: 'repo' } },
+      $extensions: { houserules: { origin: 'repo' } },
     });
     expect(token(spacing, 'sm')).toEqual({
       $value: { value: 0.5, unit: 'rem' },
       $description: "declared in the repo's @theme block",
-      $extensions: { 'agent-kit': { origin: 'repo' } },
+      $extensions: { houserules: { origin: 'repo' } },
     });
     expect(token(spacing, '2')).toEqual({
       $value: { value: 0.5, unit: 'rem' },
       $description:
         "derived from the --spacing multiplier in Tailwind's default theme",
-      $extensions: { 'agent-kit': { origin: 'tailwind' } },
+      $extensions: { houserules: { origin: 'tailwind' } },
     });
     expect(counts.repo).toBe(3);
   });
@@ -187,13 +187,13 @@ describe('projectThemeToDtcg, spacing multiplier projection', () => {
     expect(token(spacing, '2')).toEqual({
       $value: { value: 100, unit: 'rem' },
       $description: "declared in the repo's @theme block",
-      $extensions: { 'agent-kit': { origin: 'repo' } },
+      $extensions: { houserules: { origin: 'repo' } },
     });
     expect(token(spacing, '4')).toEqual({
       $value: { value: 2, unit: 'rem' },
       $description:
         "derived from the --spacing multiplier in the repo's @theme block",
-      $extensions: { 'agent-kit': { origin: 'repo' } },
+      $extensions: { houserules: { origin: 'repo' } },
     });
     expect(Object.keys(spacing)).toHaveLength(35);
     expect(counts.repo).toBe(3);

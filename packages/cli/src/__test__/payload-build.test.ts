@@ -35,11 +35,15 @@ function stageRoot(): string {
 function stageCwd(): string {
   const cwd = mkdtempSync(join(tmpdir(), 'payload-build-cwd-'));
   roots.push(cwd);
-  mkdirSync(join(cwd, 'node_modules/@agent-kit'), { recursive: true });
-  symlinkSync(CLI_PACKAGE_DIR, join(cwd, 'node_modules/@agent-kit/cli'), 'dir');
+  mkdirSync(join(cwd, 'node_modules/@houserules'), { recursive: true });
+  symlinkSync(
+    CLI_PACKAGE_DIR,
+    join(cwd, 'node_modules/@houserules/cli'),
+    'dir',
+  );
   symlinkSync(
     PAYLOAD_PACKAGE_DIR,
-    join(cwd, 'node_modules/@agent-kit/payload'),
+    join(cwd, 'node_modules/@houserules/payload'),
     'dir',
   );
   return cwd;
@@ -99,13 +103,13 @@ describe('buildPayload', () => {
     writeAt(
       root,
       'scripts/init.mjs',
-      `import '${PAYLOAD_IMPORT_PREFIX}kit-config';\n`,
+      `import '${PAYLOAD_IMPORT_PREFIX}config';\n`,
     );
 
     buildPayload(root, cwd);
 
     expect(readAt(root, 'scripts/init.mjs')).toBe(
-      "import './lib/kit-config.mjs';\n",
+      "import './lib/config.mjs';\n",
     );
   });
 
@@ -115,13 +119,13 @@ describe('buildPayload', () => {
     writeAt(
       root,
       'scripts/lazy.mjs',
-      `const mod = await import('${PAYLOAD_IMPORT_PREFIX}kit-config');\n`,
+      `const mod = await import('${PAYLOAD_IMPORT_PREFIX}config');\n`,
     );
 
     buildPayload(root, cwd);
 
     expect(readAt(root, 'scripts/lazy.mjs')).toBe(
-      "const mod = await import('./lib/kit-config.mjs');\n",
+      "const mod = await import('./lib/config.mjs');\n",
     );
   });
 
@@ -148,7 +152,7 @@ describe('buildPayload', () => {
       root,
       'scripts/projects-sync.mjs',
       `import { readLog } from '${PAYLOAD_IMPORT_PREFIX}entry-ledger';\n` +
-        `import { loadConfigSafe } from '${PAYLOAD_IMPORT_PREFIX}kit-config';\n`,
+        `import { loadConfigSafe } from '${PAYLOAD_IMPORT_PREFIX}config';\n`,
     );
 
     buildPayload(root, cwd);
@@ -157,7 +161,7 @@ describe('buildPayload', () => {
     expect(sidecar).toEqual({
       version: 1,
       libs: {
-        'scripts/projects-sync.mjs': ['entry-ledger.mjs', 'kit-config.mjs'],
+        'scripts/projects-sync.mjs': ['entry-ledger.mjs', 'config.mjs'],
       },
     });
   });
@@ -223,7 +227,7 @@ describe('buildPayload', () => {
     );
 
     expect(() => buildPayload(root, cwd)).toThrow(
-      /payload-build found no @agent-kit\/payload\/ imports, but payload-imports\.json already lists 1/,
+      /payload-build found no @houserules\/payload\/ imports, but payload-imports\.json already lists 1/,
     );
   });
 
@@ -322,8 +326,8 @@ describe('assemblePayload', () => {
   });
 });
 
-describe('the agent-kit-payload bin, invoked the way a plugin build invokes it', () => {
-  const BIN = join(CLI_PACKAGE_DIR, 'bin/agent-kit-payload.mjs');
+describe('the houserules-payload bin, invoked the way a plugin build invokes it', () => {
+  const BIN = join(CLI_PACKAGE_DIR, 'bin/houserules-payload.mjs');
 
   function runBinIn(cwd: string, payloadRootArg: string) {
     return spawnSync(process.execPath, [BIN, payloadRootArg], {

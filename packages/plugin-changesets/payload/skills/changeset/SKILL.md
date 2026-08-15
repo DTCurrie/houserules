@@ -26,7 +26,7 @@ feature is one bullet there, however many commits it took.
    time.
 
 2. **Identify touched packages.** `git status --porcelain` and `git diff --name-only`, mapped
-   through the targets in `.claude/kit.config.json`.
+   through the targets in `.claude/houserules.config.json`.
 3. **Pick the bump level per package** (semver):
    - `patch`: fixes, internal refactors with no API change. The default.
    - `minor`: new user-facing capability, backwards-compatible.

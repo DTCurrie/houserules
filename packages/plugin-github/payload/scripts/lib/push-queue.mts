@@ -11,7 +11,7 @@
  */
 
 import type { LedgerKind } from './project-shape.mjs';
-import type { LedgerEntry } from '@agent-kit/payload/ledger-index';
+import type { LedgerEntry } from '@houserules/payload/ledger-index';
 import type { GhResult } from './gh.mjs';
 import { ghErr, ghOk } from './gh.mjs';
 

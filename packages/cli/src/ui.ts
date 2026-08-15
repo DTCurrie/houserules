@@ -1,9 +1,9 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import type { AdviseAction } from '@agent-kit/api';
+import type { AdviseAction } from '@houserules/api';
 import type { WrittenEntry } from './apply.js';
 import type { ChangesetInvocation, Ctx, Target } from './detect.js';
-import type { SettingsPlan } from '@agent-kit/api/internal';
+import type { SettingsPlan } from '@houserules/api/internal';
 import type { Effect, EffectOp } from './plan.js';
 import type { RegisteredModule } from './plugin-registry.js';
 
@@ -171,7 +171,9 @@ export function profileCard(ctx: Ctx): string {
       : null,
     ctx.claude.claudeMdExists ? 'CLAUDE.md' : pc.dim('no CLAUDE.md'),
     ctx.claude.manifest
-      ? pc.yellow(`kit v${ctx.claude.manifest.kitVersion} already installed`)
+      ? pc.yellow(
+          `houserules v${ctx.claude.manifest.kitVersion} already installed`,
+        )
       : null,
   ]
     .filter(Boolean)
@@ -215,7 +217,7 @@ export async function selectModules(
 }
 
 /**
- * Multiselect over the modules the repo does not already have, for `agent-kit modules`.
+ * Multiselect over the modules the repo does not already have, for `houserules modules`.
  * Unlike `selectModules` it has no preselect and never force-adds core, and an empty pick
  * is valid.
  */
@@ -283,7 +285,7 @@ export async function confirmTargets(targets: Target[]): Promise<Target[]> {
   note(rows, 'Detected targets');
   const keep = bail<string[]>(
     await p.multiselect({
-      message: 'Targets the kit should track',
+      message: 'Targets houserules should track',
       options: targets.map((t) => ({
         value: t.name,
         label: `${t.name} (${t.packageName})`,
@@ -296,7 +298,7 @@ export async function confirmTargets(targets: Target[]): Promise<Target[]> {
   const editPrefixes = bail<boolean>(
     await p.confirm({
       message:
-        'Edit backlog prefixes now? (also editable later in kit.config.json)',
+        'Edit backlog prefixes now? (also editable later in houserules.config.json)',
       initialValue: false,
     }),
   );
@@ -354,7 +356,9 @@ export function renderPreview({
     const matching = effects.filter((e) => e.op === op);
     if (!matching.length) continue;
     if (op === 'skip-identical' && matching.length > 3) {
-      lines.push(pc.dim(`= ${matching.length} kit files already up to date`));
+      lines.push(
+        pc.dim(`= ${matching.length} houserules files already up to date`),
+      );
       continue;
     }
     for (const { action } of matching) {
@@ -395,7 +399,9 @@ export function renderPreview({
         );
       }
     } else {
-      lines.push(pc.dim(`= ${settingsPlan.dest} already has every kit entry`));
+      lines.push(
+        pc.dim(`= ${settingsPlan.dest} already has every houserules entry`),
+      );
     }
   }
   return lines.join('\n');
@@ -410,7 +416,7 @@ export function nextSteps(advisories: AdviseAction[]): void {
   const lines = advisories.map((a, i) =>
     labelled(`${String(i + 1).padStart(2)}. `, a.text, messageWidth()),
   );
-  const body = `${pc.bold('Next steps (yours — the kit does not do these):')}\n\n${lines.join('\n')}`;
+  const body = `${pc.bold('Next steps (yours — houserules does not do these):')}\n\n${lines.join('\n')}`;
   if (isTTY()) p.log.message(body);
   else console.log(`\n${body}\n`);
 }

@@ -14,7 +14,7 @@ function writePayloadBackedFixture(pluginDir: string): void {
   writeFileSync(
     join(pluginDir, 'package.json'),
     JSON.stringify({
-      name: '@agent-kit/plugin-fixture-payload-backed',
+      name: '@houserules/plugin-fixture-payload-backed',
       version: '1.0.0',
       private: true,
       main: 'index.cjs',
@@ -52,7 +52,7 @@ function writeEscapingFixture(pluginDir: string): void {
   writeFileSync(
     join(pluginDir, 'package.json'),
     JSON.stringify({
-      name: '@agent-kit/plugin-fixture-escaping',
+      name: '@houserules/plugin-fixture-escaping',
       version: '1.0.0',
       private: true,
       main: 'index.cjs',
@@ -90,7 +90,7 @@ describe('probe, given a plugin whose action src escapes the plugin package', ()
   let escapingSrc: string;
 
   beforeEach(() => {
-    const workDir = mkdtempSync(join(tmpdir(), 'agent-kit-probe-escape-'));
+    const workDir = mkdtempSync(join(tmpdir(), 'houserules-probe-escape-'));
     pluginDir = join(workDir, 'plugin');
     writeEscapingFixture(pluginDir);
     escapingSrc = join(workDir, 'outside.md');
@@ -116,7 +116,7 @@ describe('probe, given a package that loads', () => {
   let pluginDir: string;
 
   beforeEach(() => {
-    const workDir = mkdtempSync(join(tmpdir(), 'agent-kit-probe-'));
+    const workDir = mkdtempSync(join(tmpdir(), 'houserules-probe-'));
     pluginDir = join(workDir, 'plugin');
     cpSync(MINIMAL_FIXTURE, pluginDir, { recursive: true });
   });
@@ -147,7 +147,7 @@ describe('probe, given a plugin whose payload-dist was never built', () => {
   let missingSrc: string;
 
   beforeEach(() => {
-    const workDir = mkdtempSync(join(tmpdir(), 'agent-kit-probe-unbuilt-'));
+    const workDir = mkdtempSync(join(tmpdir(), 'houserules-probe-unbuilt-'));
     pluginDir = join(workDir, 'plugin');
     writePayloadBackedFixture(pluginDir);
     missingSrc = join(pluginDir, 'payload-dist', 'rules', 'notes.md');
@@ -170,7 +170,7 @@ describe('probe, given a path that is not a plugin package', () => {
   let notAPlugin: string;
 
   beforeEach(() => {
-    notAPlugin = mkdtempSync(join(tmpdir(), 'agent-kit-probe-not-a-plugin-'));
+    notAPlugin = mkdtempSync(join(tmpdir(), 'houserules-probe-not-a-plugin-'));
   });
 
   afterEach(() => {

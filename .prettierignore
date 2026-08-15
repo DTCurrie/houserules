@@ -4,21 +4,20 @@ payload-dist
 .wireit
 .eslintcache
 pnpm-lock.yaml
-payload/kit-templates/
+payload/templates/
 CHANGELOG.md
 .claude/
-# Generated from the W3C source by `pnpm --filter @agent-kit/plugin-accessibility wcag:regen`.
+# Generated from the W3C source by `pnpm --filter @houserules/plugin-accessibility wcag:regen`.
 # Its acceptance is that regenerating produces a byte-identical file, so a formatter pass over
 # it would silently break reproducibility the next time the generator changes.
 packages/plugin-accessibility/payload/reference/wcag22.md
 
-# agent-kit:prettierignore start
-# Installed by agent-kit and tracked by content hash. Formatting these rewrites
-# bytes the kit owns, which makes `npx agent-kit update` skip them as your edits.
+# houserules:prettierignore start
+# Installed by houserules and tracked by content hash. Formatting these rewrites
+# bytes houserules owns, which makes `npx houserules update` skip them as your edits.
 .claude/agents/
-.claude/kit-manifest.json
-.claude/kit-templates/
-.claude/kit.config.json
+.claude/houserules.config.json
+.claude/houserules.manifest.json
 .claude/ledgers/
 .claude/output-styles/
 .claude/plans/
@@ -27,4 +26,5 @@ packages/plugin-accessibility/payload/reference/wcag22.md
 .claude/scripts/
 .claude/skills/
 .claude/state/
-# agent-kit:prettierignore end
+.claude/templates/
+# houserules:prettierignore end

@@ -15,7 +15,7 @@ export interface FrontmatterSplit {
 }
 
 /**
- * Splits a file into the frontmatter you own and the body the kit owns. This is the cut
+ * Splits a file into the frontmatter you own and the body houserules owns. This is the cut
  * `BodyAction` is defined in terms of, so the two halves must concatenate back to the
  * original byte for byte. A file with no frontmatter is all body, which is what makes a
  * rule stripped of its `paths:` still refreshable.
@@ -40,9 +40,9 @@ export function frontmatterBlock(text: string): string | null {
 /**
  * What the user has done with a body-owned file's frontmatter.
  *
- * - `default`      untouched, so the kit refreshes it along with the body, silently
- * - `customized`   yours, and the kit's default has not moved, so there is nothing to say
- * - `default-moved` yours, AND the kit shipped a different default since. The one case
+ * - `default`      untouched, so houserules refreshes it along with the body, silently
+ * - `customized`   yours, and houserules' default has not moved, so there is nothing to say
+ * - `default-moved` yours, AND houserules shipped a different default since. The one case
  *   worth a message, because it is the only one where you might want to look
  */
 export type FrontmatterState = 'default' | 'customized' | 'default-moved';
@@ -50,14 +50,14 @@ export type FrontmatterState = 'default' | 'customized' | 'default-moved';
 /**
  * Decides which of the three states a body-owned file's frontmatter is in. Pure, and the
  * single definition both the write path in `computeEffects` and the report path in
- * `computeDrift` read, so what the kit writes and what it says can never disagree.
+ * `computeDrift` read, so what houserules writes and what it says can never disagree.
  *
  * Three hashes are needed, not two. Comparing disk against the shipped default only says
- * they differ, not whether YOU moved or the KIT did. The recorded default is what
+ * they differ, not whether YOU moved or houserules did. The recorded default is what
  * separates them, exactly as the manifest separates `stale` from `yours` for whole files.
  *
- * @param recordedDefault What the kit last shipped here, from the manifest. Undefined for
- *   an entry written before body ownership existed, where the kit has no record of its own
+ * @param recordedDefault What houserules last shipped here, from the manifest. Undefined for
+ *   an entry written before body ownership existed, where houserules has no record of its own
  *   default. That resolves to `customized`, the choice that never overwrites.
  */
 export function classifyFrontmatter(args: {

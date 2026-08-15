@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildJsonSchema,
-  KitConfigError,
-  parseKitConfig,
-  validateKitConfig,
-} from '@agent-kit/api/internal';
+  HouseConfigError,
+  parseHouseConfig,
+  validateHouseConfig,
+} from '@houserules/api/internal';
 
 function repoFile(relativePath: string): string {
   return readFileSync(
@@ -25,7 +25,7 @@ const minimalConfig = {
 describe('buildJsonSchema', () => {
   it('matches the committed JSON Schema', () => {
     const committed: unknown = JSON.parse(
-      repoFile('../../../schema/kit.config.schema.json'),
+      repoFile('../../../schema/houserules.config.schema.json'),
     );
     expect(committed, 'stale — run `pnpm run schema`').toEqual(
       buildJsonSchema(),
@@ -37,31 +37,33 @@ describe('buildJsonSchema', () => {
   });
 });
 
-describe('parseKitConfig', () => {
+describe('parseHouseConfig', () => {
   it('parses a minimal valid config', () => {
-    expect(parseKitConfig(JSON.stringify(minimalConfig))).toEqual(
+    expect(parseHouseConfig(JSON.stringify(minimalConfig))).toEqual(
       minimalConfig,
     );
   });
 
   it('parses the shipped example config', () => {
     expect(() =>
-      parseKitConfig(repoFile('../../../kit.config.example.json')),
+      parseHouseConfig(repoFile('../../../houserules.config.example.json')),
     ).not.toThrow();
   });
 
   it('throws on JSON that does not parse', () => {
-    expect(() => parseKitConfig('{ not json')).toThrow(/not valid JSON/);
+    expect(() => parseHouseConfig('{ not json')).toThrow(/not valid JSON/);
   });
 
   it('names version as the problem when it is missing, since a literal field never reports "is required"', () => {
     const raw = JSON.stringify({ packageManager: 'pnpm', targets: [] });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
       expect(
-        (error as KitConfigError).problems.some((p) => p.startsWith('version')),
+        (error as HouseConfigError).problems.some((p) =>
+          p.startsWith('version'),
+        ),
       ).toBe(true);
     }
   });
@@ -71,11 +73,11 @@ describe('parseKitConfig', () => {
     (version) => {
       const raw = JSON.stringify({ ...minimalConfig, version });
       try {
-        parseKitConfig(raw);
+        parseHouseConfig(raw);
         expect.unreachable('should have thrown');
       } catch (error) {
         expect(
-          (error as KitConfigError).problems.some((p) =>
+          (error as HouseConfigError).problems.some((p) =>
             p.startsWith('version'),
           ),
         ).toBe(true);
@@ -86,10 +88,10 @@ describe('parseKitConfig', () => {
   it('names packageManager as required when it is missing', () => {
     const raw = JSON.stringify({ version: 2, targets: [] });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
-      expect((error as KitConfigError).problems).toContain(
+      expect((error as HouseConfigError).problems).toContain(
         'packageManager is required',
       );
     }
@@ -98,11 +100,11 @@ describe('parseKitConfig', () => {
   it('names packageManager as the problem when it is a number instead of a string', () => {
     const raw = JSON.stringify({ ...minimalConfig, packageManager: 5 });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
       expect(
-        (error as KitConfigError).problems.some((p) =>
+        (error as HouseConfigError).problems.some((p) =>
           p.startsWith('packageManager'),
         ),
       ).toBe(true);
@@ -115,11 +117,11 @@ describe('parseKitConfig', () => {
       lintableExtensions: 'ts,tsx',
     });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
       expect(
-        (error as KitConfigError).problems.some((p) =>
+        (error as HouseConfigError).problems.some((p) =>
           p.startsWith('lintableExtensions'),
         ),
       ).toBe(true);
@@ -129,11 +131,11 @@ describe('parseKitConfig', () => {
   it('rejects an empty packageManager, since the field requires at least one character', () => {
     const raw = JSON.stringify({ ...minimalConfig, packageManager: '' });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
       expect(
-        (error as KitConfigError).problems.some((p) =>
+        (error as HouseConfigError).problems.some((p) =>
           p.startsWith('packageManager'),
         ),
       ).toBe(true);
@@ -143,10 +145,10 @@ describe('parseKitConfig', () => {
   it('names an unrecognized root key by name', () => {
     const raw = JSON.stringify({ ...minimalConfig, bogus: true });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
-      expect((error as KitConfigError).problems).toContain(
+      expect((error as HouseConfigError).problems).toContain(
         'bogus is not a known field',
       );
     }
@@ -162,10 +164,10 @@ describe('parseKitConfig', () => {
       [section]: { bogus: true },
     });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
-      expect((error as KitConfigError).problems).toContain(
+      expect((error as HouseConfigError).problems).toContain(
         `${section}.bogus is not a known ${noun}`,
       );
     }
@@ -183,10 +185,10 @@ describe('parseKitConfig', () => {
       },
     });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
-      expect((error as KitConfigError).problems).toContain(
+      expect((error as HouseConfigError).problems).toContain(
         'fix.bogus is not a known field',
       );
     }
@@ -204,11 +206,11 @@ describe('parseKitConfig', () => {
       },
     });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
       expect(
-        (error as KitConfigError).problems.some((p) =>
+        (error as HouseConfigError).problems.some((p) =>
           p.startsWith('fix.onSubagentStop'),
         ),
       ).toBe(true);
@@ -222,11 +224,11 @@ describe('parseKitConfig', () => {
       targets: [{ name: 'core', prefix: 'CORE', label: 'Core' }],
     });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
       expect(
-        (error as KitConfigError).problems.some((p) =>
+        (error as HouseConfigError).problems.some((p) =>
           p.startsWith('targets.0.packageName'),
         ),
       ).toBe(true);
@@ -234,7 +236,7 @@ describe('parseKitConfig', () => {
   });
 });
 
-describe('KitConfigError', () => {
+describe('HouseConfigError', () => {
   it('carries one problem entry per validation failure', () => {
     const raw = JSON.stringify({
       version: 1,
@@ -242,35 +244,35 @@ describe('KitConfigError', () => {
       bogus: true,
     });
     try {
-      parseKitConfig(raw);
+      parseHouseConfig(raw);
       expect.unreachable('should have thrown');
     } catch (error) {
-      const problems = (error as KitConfigError).problems;
+      const problems = (error as HouseConfigError).problems;
       expect(problems.length).toBeGreaterThanOrEqual(3);
     }
   });
 
   it('renders every problem as a bullet in the error message', () => {
-    const error = new KitConfigError(['a is wrong', 'b is wrong']);
+    const error = new HouseConfigError(['a is wrong', 'b is wrong']);
     expect(error.message).toContain('  - a is wrong');
     expect(error.message).toContain('  - b is wrong');
   });
 });
 
-describe('validateKitConfig', () => {
+describe('validateHouseConfig', () => {
   it('returns an empty array for a valid config', () => {
-    expect(validateKitConfig(JSON.stringify(minimalConfig))).toEqual([]);
+    expect(validateHouseConfig(JSON.stringify(minimalConfig))).toEqual([]);
   });
 
   it('returns problems instead of throwing for an invalid config', () => {
     expect(() =>
-      validateKitConfig(JSON.stringify({ packageManager: 'pnpm' })),
+      validateHouseConfig(JSON.stringify({ packageManager: 'pnpm' })),
     ).not.toThrow();
   });
 
   it('reports a missing required field by name', () => {
     expect(
-      validateKitConfig(JSON.stringify({ packageManager: 'pnpm' })),
+      validateHouseConfig(JSON.stringify({ packageManager: 'pnpm' })),
     ).toEqual(expect.arrayContaining([expect.stringContaining('version')]));
   });
 
@@ -279,7 +281,7 @@ describe('validateKitConfig', () => {
       ...minimalConfig,
       changesets: { enabled: true, baseBranchh: 'main' },
     });
-    expect(validateKitConfig(raw)).toContain(
+    expect(validateHouseConfig(raw)).toContain(
       'changesets.baseBranchh is not a known changesets setting',
     );
   });

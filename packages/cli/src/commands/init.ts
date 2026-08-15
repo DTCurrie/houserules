@@ -14,14 +14,14 @@ import {
   computeEffects,
   resolveModuleIds,
 } from '../plan.js';
-import { KitError } from '../kit-error.js';
+import { HouseError } from '../house-error.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import { apply } from '../apply.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
 import type { Ctx } from '../detect.js';
-import type { Answers } from '@agent-kit/api';
+import type { Answers } from '@houserules/api';
 import type { PlanResult } from '../plan.js';
 import type { Registry } from '../plugin-registry.js';
 
@@ -38,29 +38,29 @@ function samePath(a: string, b: string): boolean {
 function preflight(root: string, ctx: Ctx): void {
   const major = process.versions.node.split('.').map(Number)[0];
   if (major === undefined || major < 20)
-    throw new KitError(
-      `Node ${process.versions.node} is too old — the kit needs >= 20.`,
+    throw new HouseError(
+      `Node ${process.versions.node} is too old — houserules needs >= 20.`,
     );
   if (!ctx.git.isRepo) {
-    throw new KitError(
+    throw new HouseError(
       `${root} is not a git work tree. Kit scripts resolve paths from the git root. Run git init first.`,
     );
   }
   // The payload's hooks resolve every path from the git toplevel, so a .claude/ written
   // in a subdir would never be found. That is a silently broken install.
   if (ctx.git.top && !samePath(root, ctx.git.top)) {
-    throw new KitError(
+    throw new HouseError(
       `Refusing to install below the git root.\n` +
         `  here:     ${root}\n` +
         `  git root: ${ctx.git.top}\n` +
-        `The kit's hooks resolve paths from the git toplevel, so a .claude/ here would never be found.\n` +
-        `Install from the toplevel instead:\n  cd ${ctx.git.top} && npx agent-kit init`,
+        `houserules' hooks resolve paths from the git toplevel, so a .claude/ here would never be found.\n` +
+        `Install from the toplevel instead:\n  cd ${ctx.git.top} && npx houserules init`,
     );
   }
   if (resolve(root) === KIT_ROOT)
-    throw new KitError('Refusing to install the kit into itself.');
+    throw new HouseError('Refusing to install houserules into itself.');
   const settingsError = settingsParseErrorMessage(ctx);
-  if (settingsError) throw new KitError(settingsError);
+  if (settingsError) throw new HouseError(settingsError);
 }
 
 /** Runs the full install: detect, choose, plan, preview, apply. */
@@ -71,16 +71,16 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   try {
     ctx = detect(root);
     preflight(root, ctx);
-    registry = buildRegistry(root, ctx.claude.kitConfig, MODULES);
+    registry = buildRegistry(root, ctx.claude.houseConfig, MODULES);
   } catch (e) {
-    if (e instanceof KitError) {
+    if (e instanceof HouseError) {
       console.error(e.message);
       return 1;
     }
     throw e;
   }
 
-  ui.intro(`agent-kit ${flags.kitVersion} — init`);
+  ui.intro(`houserules ${flags.kitVersion} — init`);
   ui.note(ui.profileCard(ctx), 'Detected');
 
   // Already installed? Default to the previously chosen modules.
@@ -100,7 +100,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   }
   if (installed) {
     ui.message(
-      `This repo already has kit v${installed.kitVersion}. init re-plans with your existing module set as the default. For a plain refresh of kit-owned files use: npx agent-kit update`,
+      `This repo already has houserules v${installed.kitVersion}. init re-plans with your existing module set as the default. For a plain refresh of kit-owned files use: npx houserules update`,
     );
   }
 
@@ -109,7 +109,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   let moduleOptions = resolveModuleOptions(
     registry,
     moduleIds,
-    ctx.claude.kitConfig?.moduleOptions,
+    ctx.claude.houseConfig?.moduleOptions,
     optionOverrides,
   );
   if (!flags.yes) {
@@ -118,7 +118,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
     moduleOptions = resolveModuleOptions(
       registry,
       moduleIds,
-      ctx.claude.kitConfig?.moduleOptions,
+      ctx.claude.houseConfig?.moduleOptions,
       optionOverrides,
     );
     const enabled = registry.modules.filter((m) => moduleIds.includes(m.id));
@@ -148,7 +148,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
       plugins: registry.plugins,
     });
   } catch (e) {
-    if (e instanceof KitError) {
+    if (e instanceof HouseError) {
       console.error(e.message);
       return 1;
     }
@@ -192,6 +192,6 @@ export async function init(dir: string, flags: Flags): Promise<number> {
 
   ui.written(written);
   ui.nextSteps(planResult.advisories);
-  ui.outro('Installed. Validate any time with: npx agent-kit doctor');
+  ui.outro('Installed. Validate any time with: npx houserules doctor');
   return 0;
 }

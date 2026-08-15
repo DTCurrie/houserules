@@ -6,7 +6,7 @@ import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
 
 import { checkTailwindAvailable } from '../tailwind-check.js';
 
-import type { Ctx } from '@agent-kit/api';
+import type { Ctx } from '@houserules/api';
 
 function ctxAt(root: string): Ctx {
   return { root } as Ctx;

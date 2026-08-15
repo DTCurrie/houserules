@@ -59,10 +59,10 @@ describe('prettierGuardActions, .prettierignore protection', () => {
       (a): a is Extract<typeof a, { kind: 'region' }> =>
         a.kind === 'region' && a.dest === '.prettierignore',
     );
-    expect(region?.body).toContain('.claude/kit-manifest.json');
+    expect(region?.body).toContain('.claude/houserules.manifest.json');
   });
 
-  it('protects .claude/kit.config.json even though it is a user-owned seed', () => {
+  it('protects .claude/houserules.config.json even though it is a user-owned seed', () => {
     const ctx = makeCtx({ prettier: true });
 
     const actions = prettierGuardActions(ctx, []);
@@ -71,7 +71,7 @@ describe('prettierGuardActions, .prettierignore protection', () => {
       (a): a is Extract<typeof a, { kind: 'region' }> =>
         a.kind === 'region' && a.dest === '.prettierignore',
     );
-    expect(region?.body).toContain('.claude/kit.config.json');
+    expect(region?.body).toContain('.claude/houserules.config.json');
   });
 
   it('plans no .prettierignore action for a repo without prettier', () => {
@@ -154,7 +154,7 @@ describe('prettierGuardActions, eslint flat config advisory', () => {
 describe('the .prettierignore block against a real prettier run', () => {
   const PROTECTED_SUBTREES = [
     '.claude/agents',
-    '.claude/kit-templates',
+    '.claude/templates',
     '.claude/reference',
     '.claude/rules',
     '.claude/scripts',
@@ -180,9 +180,9 @@ describe('the .prettierignore block against a real prettier run', () => {
     expect(after).toEqual(before);
   });
 
-  it('leaves .claude/kit-manifest.json byte-for-byte unchanged after `prettier --write .`', () => {
+  it('leaves .claude/houserules.manifest.json byte-for-byte unchanged after `prettier --write .`', () => {
     const root = useInstalledRepo('npm-single-prettier');
-    const manifestPath = join(root, '.claude/kit-manifest.json');
+    const manifestPath = join(root, '.claude/houserules.manifest.json');
     const before = readFileSync(manifestPath, 'utf8');
 
     execFileSync(

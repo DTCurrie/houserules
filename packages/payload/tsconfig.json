@@ -4,9 +4,9 @@
     "noEmit": true,
     "rootDir": ".",
     // Mirrors the `#test/*` alias in vitest.config.ts so `tsc --noEmit` resolves it, to
-    // @agent-kit/test's published subpaths.
+    // @houserules/test's published subpaths.
     "paths": {
-      "#test/*": ["./node_modules/@agent-kit/test/dist/*.d.ts"]
+      "#test/*": ["./node_modules/@houserules/test/dist/*.d.ts"]
     }
   },
   // tsconfig.payload.json excludes colocated tests so they stay out of payload-dist/.

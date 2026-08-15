@@ -16,7 +16,7 @@ import {
   surfaceForArea,
 } from './project-shape.mjs';
 import type { LedgerKind } from './project-shape.mjs';
-import type { LedgerEntry } from '@agent-kit/payload/ledger-index';
+import type { LedgerEntry } from '@houserules/payload/ledger-index';
 
 /** One `fieldValues` node, narrowed to the value shapes the boards use. */
 export interface BoardFieldValue {
@@ -45,8 +45,8 @@ export interface BoardItem {
  * One ledger entry as the board describes it.
  *
  * The core type under a local name, because here it is what a project board holds and in core it
- * is a ledger entry. Imported as a TYPE by package name, `@agent-kit/payload/ledger-index`, which
- * is the only supported way a payload lib reaches core substrate: `agent-kit-payload` rewrites
+ * is a ledger entry. Imported as a TYPE by package name, `@houserules/payload/ledger-index`, which
+ * is the only supported way a payload lib reaches core substrate: `houserules-payload` rewrites
  * that specifier to the relative path the flattened `.claude/scripts/lib/` layout needs.
  *
  * The import erases before emit, so the payload keeps its zero runtime dependencies by

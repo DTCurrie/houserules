@@ -66,7 +66,7 @@ function json(value: unknown): string {
 function gitInit(root: string): void {
   runIn(root, 'git', ['init', '-q', '-b', 'main']);
   runIn(root, 'git', ['config', 'user.email', 'kit-test@example.com']);
-  runIn(root, 'git', ['config', 'user.name', 'kit test']);
+  runIn(root, 'git', ['config', 'user.name', 'houserules test']);
   runIn(root, 'git', ['add', '-A']);
   runIn(root, 'git', ['commit', '-qm', 'fixture: initial']);
 }
@@ -80,7 +80,7 @@ const PKG_SCRIPTS = {
 };
 
 /**
- * The packages `buildRepo` writes for each shape whose `.claude/kit.config.json` seed gets
+ * The packages `buildRepo` writes for each shape whose `.claude/houserules.config.json` seed gets
  * combined with `opts.plugins` (see `useInstalledRepo`). `buildRepo` writes each
  * package.json and source file straight from this list, so `pluginFixtureFacts` below
  * derives `packageManager` and `targets` from it instead of restating them.
@@ -191,7 +191,7 @@ function pluginFixtureFacts(shape: RepoShape):
 }
 
 /**
- * A bare synthetic repo with no kit installed, removed after the current test.
+ * A bare synthetic repo with no houserules installed, removed after the current test.
  *
  * Reach for {@link useInstalledRepo} instead unless the test's subject is `init` itself, since
  * staging by running `init` couples the suite to a command it is not testing.
@@ -205,7 +205,7 @@ export function useRepo(shape: RepoShape): string {
 }
 
 /**
- * A repo with the kit ALREADY INSTALLED, staged by copying a snapshot rather than by
+ * A repo with houserules ALREADY INSTALLED, staged by copying a snapshot rather than by
  * running `init`.
  *
  * Prefer this everywhere. Staging by running `init` makes a suite fail when `init` breaks,
@@ -217,13 +217,13 @@ export function useRepo(shape: RepoShape): string {
  *
  * @param opts.modules Passed through as `--modules=`. Part of the cache key. A plugin's
  * module is selected as `<alias>/<moduleId>`, matching `opts.plugins`' aliases.
- * @param opts.plugins Plugins to declare in `.claude/kit.config.json` before `init` runs, as
+ * @param opts.plugins Plugins to declare in `.claude/houserules.config.json` before `init` runs, as
  * `{ name, alias }` pairs. `name` must be a filesystem path to the plugin package, since
  * test cannot resolve a plugin by npm name. Written as the whole seed file, so `init`
  * reads the declared plugin while resolving `--modules=` and renders everything else, the
  * CLAUDE.md region, scripts, and settings, with full knowledge of the modules selected. Part
  * of the cache key.
- * @param opts.config Merged into `.claude/kit.config.json` after `init`, for keys a fixture
+ * @param opts.config Merged into `.claude/houserules.config.json` after `init`, for keys a fixture
  * needs set that neither `init`'s detection nor its module set determines. Part of the cache
  * key.
  * @param opts.moduleOptions Passed through as repeated `--module-option <id>=<values>` flags,
@@ -282,12 +282,12 @@ function buildSnapshot(
   const staging = buildRepo(shape);
 
   // A plugin's modules can only be selected once the plugin is declared in
-  // `.claude/kit.config.json`, but that file is a seed `init` never overwrites once
+  // `.claude/houserules.config.json`, but that file is a seed `init` never overwrites once
   // present. Writing it here, before the one `init` call, means `init` reads the
   // plugin declaration to build its module registry and resolve `--modules=` and, since
   // that same registry drives everything else the run touches: the CLAUDE.md region,
   // scripts, and settings all see the full module set. The one thing the seed write
-  // itself skips over is `renderKitConfig`, which never runs because the seed's
+  // itself skips over is `renderHouseConfig`, which never runs because the seed's
   // destination already exists, so the two boolean toggles it would have derived from
   // the module set (`changesets.enabled`/`stopCheck`, `ledger.enabled`) are computed
   // here instead, the same way `hasModule` does it: an id matches bare or by
@@ -313,7 +313,7 @@ function buildSnapshot(
   publishSnapshot(staging, snapshot, key);
 }
 
-/** Writes `.claude/kit.config.json` for a plugin-declaring fixture, ahead of the `init` call. */
+/** Writes `.claude/houserules.config.json` for a plugin-declaring fixture, ahead of the `init` call. */
 function seedPluginConfig(
   staging: string,
   shape: RepoShape,
@@ -325,7 +325,7 @@ function seedPluginConfig(
     rmSync(staging, { recursive: true, force: true });
     throw new Error(
       `useInstalledRepo(${key}): no PLUGIN_FIXTURE_PACKAGES entry for shape "${shape}". ` +
-        'A plugin declaration writes the whole kit.config.json seed up front, which ' +
+        'A plugin declaration writes the whole houserules.config.json seed up front, which ' +
         'needs packageManager/targets derived for the shape. Add one in repo.ts.',
     );
   }
@@ -344,7 +344,7 @@ function seedPluginConfig(
     : facts.targets;
   write(
     staging,
-    '.claude/kit.config.json',
+    '.claude/houserules.config.json',
     json({
       version: 2,
       packageManager: facts.packageManager,
@@ -386,11 +386,11 @@ function publishSnapshot(staging: string, snapshot: string, key: string): void {
 }
 
 /**
- * Merges `patch` into the staged `.claude/kit.config.json`, one level deep so a fixture can
+ * Merges `patch` into the staged `.claude/houserules.config.json`, one level deep so a fixture can
  * set `changesets.stopCheck` without restating the whole block.
  */
 function patchConfig(root: string, patch: Record<string, unknown>): void {
-  const configPath = join(root, '.claude/kit.config.json');
+  const configPath = join(root, '.claude/houserules.config.json');
   const config = JSON.parse(readFileSync(configPath, 'utf8')) as Record<
     string,
     unknown
@@ -521,7 +521,7 @@ function buildRepo(shape: RepoShape): string {
     write(
       root,
       'CLAUDE.md',
-      '# single-app\n\nPre-existing user CLAUDE.md. The kit must never edit this.\n',
+      '# single-app\n\nPre-existing user CLAUDE.md. houserules must never edit this.\n',
     );
     write(
       root,
@@ -608,7 +608,7 @@ function buildRepo(shape: RepoShape): string {
     write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
     write(root, 'src/index.js', 'export const x = 1;\n');
   } else if (shape === 'committed-scripts') {
-    // The state every pre-gitignore install is in: kit scripts tracked by git.
+    // The state every pre-gitignore install is in: houserules scripts tracked by git.
     // gitInit() commits everything below, so these land in the index. This is what
     // the migration has to detect and stage out.
     write(

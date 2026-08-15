@@ -15,7 +15,7 @@
  *   --run      run each package's verify commands; print "<pkg>: PASS|FAIL" (+ a
  *              trimmed residue tail on failure); exit 2 if any package failed.
  *
- * Config (kit.config.json, verify block — mirrors fix): verify.runner / filterFlag /
+ * Config (houserules.config.json, verify block — mirrors fix): verify.runner / filterFlag /
  * runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
  * "main"); per-target verifyCommands overrides commands for that package.
  */
@@ -27,12 +27,12 @@ import {
   repoRoot,
   resolveTargetCommands,
   type RunnerBlock,
-} from '@agent-kit/payload/kit-config';
+} from '@houserules/payload/config';
 import {
   listWorkspacePackages,
   type WorkspacePackage,
-} from '@agent-kit/payload/workspaces';
-import { git, tail } from '@agent-kit/payload/proc';
+} from '@houserules/payload/workspaces';
+import { git, tail } from '@houserules/payload/proc';
 
 const argv = new Set(process.argv.slice(2));
 const MODE = argv.has('--run') ? 'run' : argv.has('--json') ? 'json' : 'plan';
@@ -221,7 +221,7 @@ function main() {
 
   if (MODE === 'run' && COMMANDS === undefined) {
     process.stdout.write(
-      'verify-changed: no "verify" block configured — add one to .claude/kit.config.json (commands: [...]).\n',
+      'verify-changed: no "verify" block configured — add one to .claude/houserules.config.json (commands: [...]).\n',
     );
     process.exit(0);
   }

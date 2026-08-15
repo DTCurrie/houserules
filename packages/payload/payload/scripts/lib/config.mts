@@ -31,7 +31,7 @@ export interface ConfigTarget {
 
 /**
  * The shape the hooks read, typed loosely on purpose. `src/core/config.ts` holds the
- * strict zod schema and is the authority on what a valid kit.config.json looks like. This
+ * strict zod schema and is the authority on what a valid houserules.config.json looks like. This
  * reader is the other half of that split. It runs inside a user's repo with no
  * dependencies and has to cope with a config the schema would reject outright, because a
  * hook that dies on a bad config is noise on every tool call. Every field is therefore
@@ -40,7 +40,7 @@ export interface ConfigTarget {
  * The two cannot be one type. The payload compiles with `rootDir=payload` and can never
  * import from `src/`, which would drag zod into a user's repo.
  */
-export interface KitConfig {
+export interface HouseConfig {
   version?: number;
   packageManager?: string;
   fix?: RunnerBlock;
@@ -154,22 +154,22 @@ const EMPTY = Object.freeze({ targets: [] });
 const cache = new Map();
 
 /**
- * Reads `<repo>/.claude/kit.config.json`, the declarative file adapting the scripts to a
+ * Reads `<repo>/.claude/houserules.config.json`, the declarative file adapting the scripts to a
  * repo's package layout and toolchain. CLI-style scripts demand a config and exit loudly
  * without one. Hooks must call `loadConfigSafe()` instead.
  */
 export function loadConfig(
   root: string = repoRoot(),
   { required = true }: { required?: boolean } = {},
-): KitConfig {
+): HouseConfig {
   if (cache.has(root)) return cache.get(root);
-  const path = resolve(root, '.claude/kit.config.json');
+  const path = resolve(root, '.claude/houserules.config.json');
   let config;
   if (!existsSync(path)) {
     if (required) {
       console.error(
-        `agent-kit: missing ${path}\n` +
-          'Run `npx agent-kit init` (or copy kit.config.example.json) to create it.',
+        `houserules: missing ${path}\n` +
+          'Run `npx houserules init` (or copy houserules.config.example.json) to create it.',
       );
       process.exit(1);
     }
@@ -180,7 +180,7 @@ export function loadConfig(
     } catch (e) {
       if (required) {
         console.error(
-          `agent-kit: ${path} is not valid JSON: ${(e as Error).message}`,
+          `houserules: ${path} is not valid JSON: ${(e as Error).message}`,
         );
         process.exit(1);
       }
@@ -197,7 +197,7 @@ export function loadConfig(
  * in the worst case. A hook that crashes on a missing or broken config is noise on every
  * single tool call.
  */
-export function loadConfigSafe(): KitConfig {
+export function loadConfigSafe(): HouseConfig {
   try {
     return loadConfig(repoRoot(), { required: false });
   } catch {

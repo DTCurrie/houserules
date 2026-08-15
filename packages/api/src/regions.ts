@@ -6,12 +6,12 @@ export interface RegionSpec {
   anchor: 'eof' | 'after-h1';
   pad?: boolean;
   /**
-   * A marker pair an earlier kit version wrote, recognized on read so its block is adopted.
+   * A marker pair an earlier houserules version wrote, recognized on read so its block is adopted.
    *
    * Read-side only. Every write emits `start`/`end`, so an install converges on the current
    * markers in one update and never carries both. Without this an install whose markers were
    * renamed matches nothing, and `upsertRegion` inserts a SECOND block while the original is
-   * orphaned in place, still claiming to be kit-maintained.
+   * orphaned in place, still claiming to be houserules-maintained.
    */
   legacy?: { start: string; end: string };
 }
@@ -59,9 +59,9 @@ function buildBlock(body: string, spec: RegionSpec): string {
  * Whether the block on disk sits under the legacy markers rather than the current pair.
  *
  * Callers use this to decide that a recorded hash is not comparable. A manifest written by the
- * kit generation that used those markers computed its region hash with that generation's
+ * houserules generation that used those markers computed its region hash with that generation's
  * semantics, so measuring today's body against it reports drift that says nothing about whether
- * the user edited anything. The block is kit-owned either way, and bytes outside the markers are
+ * the user edited anything. The block is houserules-owned either way, and bytes outside the markers are
  * never touched, so adopting it is the migration working rather than an edit being lost.
  */
 export function hasLegacyRegion(content: string, spec: RegionSpec): boolean {

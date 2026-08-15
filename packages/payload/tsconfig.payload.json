@@ -13,8 +13,8 @@
     // helpers, no polyfills, no tslib. erasableSyntaxOnly keeps every construct
     // erasable, so `.mjs` emit is the source minus its types and nothing else.
     "erasableSyntaxOnly": true,
-    // Declarations are emitted so both @agent-kit/cli (a relative import into this
-    // package's payload-dist) and any plugin (a `@agent-kit/payload/<lib>` package-name
+    // Declarations are emitted so both @houserules/cli (a relative import into this
+    // package's payload-dist) and any plugin (a `@houserules/payload/<lib>` package-name
     // import) can typecheck against these libs.
     "declaration": true,
     "sourceMap": false,

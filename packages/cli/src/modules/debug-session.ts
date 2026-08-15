@@ -1,11 +1,11 @@
-import type { Action, ModuleGroup } from '@agent-kit/api';
+import type { Action, ModuleGroup } from '@houserules/api';
 import {
   script,
   selfGitignoreAction,
   skill,
   template,
 } from './copy-actions.js';
-import { hookFragment } from '@agent-kit/api';
+import { hookFragment } from '@houserules/api';
 
 export const id = 'debug-session';
 export const title = 'Hypothesis-driven debug session (/debug-session)';
@@ -63,7 +63,7 @@ export function plan(): Action[] {
     },
     {
       kind: 'advise',
-      text: 'Debug sessions: run /debug-session "<bug>" for the hypothesis→trace→cleanup loop. For an off-context debugger, instantiate .claude/kit-templates/agents/debugger.agent.md.template per target.',
+      text: 'Debug sessions: run /debug-session "<bug>" for the hypothesis→trace→cleanup loop. For an off-context debugger, instantiate .claude/templates/agents/debugger.agent.md.template per target.',
       module: id,
     },
   ];

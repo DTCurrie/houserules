@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractBody, upsertRegion } from '@agent-kit/api/internal';
-import type { RegionSpec } from '@agent-kit/api';
+import { extractBody, upsertRegion } from '@houserules/api/internal';
+import type { RegionSpec } from '@houserules/api';
 
 const SPEC: RegionSpec = {
   id: 'claude-md',
-  start: '<!-- agent-kit:claude-md start -->',
-  end: '<!-- agent-kit:claude-md end -->',
+  start: '<!-- houserules:claude-md start -->',
+  end: '<!-- houserules:claude-md end -->',
   anchor: 'eof',
 };
 

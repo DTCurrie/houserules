@@ -1,4 +1,4 @@
-import type { Action, ModuleGroup } from '@agent-kit/api';
+import type { Action, ModuleGroup } from '@houserules/api';
 import { selfGitignoreAction, skill } from './copy-actions.js';
 
 export const id = 'plans';

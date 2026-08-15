@@ -7,7 +7,7 @@ import { realpathSync } from 'node:fs';
 import {
   repoRoot,
   repoRootSafe,
-} from '../../../../payload-dist/scripts/lib/kit-config.mjs';
+} from '../../../../payload-dist/scripts/lib/config.mjs';
 
 function inDirectory<TResult>(directory: string, run: () => TResult): TResult {
   const previous = process.cwd();

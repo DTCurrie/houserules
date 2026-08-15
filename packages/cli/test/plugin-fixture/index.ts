@@ -1,11 +1,11 @@
-import { definePlugin, hookFragment } from '@agent-kit/cli/plugin';
+import { definePlugin, hookFragment } from '@houserules/cli/plugin';
 import type {
   Action,
   Answers,
   Ctx,
   ModuleDef,
   PluginApi,
-} from '@agent-kit/cli/plugin';
+} from '@houserules/cli/plugin';
 
 interface FixtureConfig {
   note?: string;

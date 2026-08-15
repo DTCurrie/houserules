@@ -14,13 +14,13 @@ export default defineConfig({
       },
       // Colocated suites live up to three directories deep, so a relative path to the shared
       // testing modules reads as `../../../test/repo.js`. The `#test/*` alias reads the same
-      // either way, but now resolves through @agent-kit/test, a published package, rather
+      // either way, but now resolves through @houserules/test, a published package, rather
       // than a relative path into this package's own `test/` directory. A prefix alias rather
       // than one entry per module, so adding a module needs no config change here, only an
       // export in that package.
       {
         find: /^#test\/(.*)$/,
-        replacement: '@agent-kit/test/$1',
+        replacement: '@houserules/test/$1',
       },
     ],
   },
@@ -32,7 +32,7 @@ export default defineConfig({
       'src/**/__test__/**/*.test.ts',
       'payload/**/__test__/**/*.test.ts',
     ],
-    globalSetup: ['@agent-kit/test/global-setup'],
+    globalSetup: ['@houserules/test/global-setup'],
     // Several suites shell out to the CLI against mkdtemp fixtures; the default
     // 5s timeout is not enough for an end-to-end init + update + doctor chain.
     testTimeout: 30_000,

@@ -9,7 +9,7 @@
  *   show   <target> <short-or-full-sha>
  *   list   <target>
  *
- * Targets are defined in .claude/kit.config.json (the `targets` array. `name` is the key).
+ * Targets are defined in .claude/houserules.config.json (the `targets` array. `name` is the key).
  *
  * Storage (per target):
  *   <changelogPath>            — human-readable index (subject, file count, backlog, reason, changes)
@@ -29,8 +29,8 @@ import { dirname, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
-import { loadConfig, repoRoot } from '@agent-kit/payload/kit-config';
-import { BACKLOG_ID } from '@agent-kit/payload/backlog-id';
+import { loadConfig, repoRoot } from '@houserules/payload/config';
+import { BACKLOG_ID } from '@houserules/payload/backlog-id';
 
 const REPO_ROOT = repoRoot();
 const SEPARATOR = '---';
@@ -84,7 +84,7 @@ function getTarget(name: string): ResolvedTarget {
   const t = TARGETS[name];
   if (!t) {
     console.error(
-      `Unknown target "${name}". Valid: ${Object.keys(TARGETS).join(', ') || '(none — check .claude/kit.config.json)'}.`,
+      `Unknown target "${name}". Valid: ${Object.keys(TARGETS).join(', ') || '(none — check .claude/houserules.config.json)'}.`,
     );
     process.exit(1);
   }
@@ -456,7 +456,7 @@ function usage() {
       '  package-changelog.mjs show   <target> <short-or-full-sha>',
       '  package-changelog.mjs list   <target>',
       '',
-      `Targets (from .claude/kit.config.json): ${Object.keys(TARGETS).join(', ') || '(none defined)'}`,
+      `Targets (from .claude/houserules.config.json): ${Object.keys(TARGETS).join(', ') || '(none defined)'}`,
       '',
       '--changes is required and should be a markdown bullet list of what shipped.',
       'Pass via heredoc for multiline:',

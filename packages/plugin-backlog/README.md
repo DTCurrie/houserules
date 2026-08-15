@@ -1,7 +1,7 @@
-# @agent-kit/plugin-backlog
+# @houserules/plugin-backlog
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-backlog.svg)](https://www.npmjs.com/package/@agent-kit/plugin-backlog)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-backlog.svg)](https://www.npmjs.com/package/@agent-kit/plugin-backlog)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-backlog.svg)](https://www.npmjs.com/package/@houserules/plugin-backlog)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-backlog.svg)](https://www.npmjs.com/package/@houserules/plugin-backlog)
 
 An agent mid-task that finds real work outside its current scope has two bad options: fix it
 inline and bloat the diff, or mention it in a chat message that scrolls away and is gone.
@@ -16,11 +16,11 @@ into plugins, install this package to restore it under its plugin id.
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-backlog
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-backlog
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the module into `.claude/`. This module is off by default, so select it
 when `init` asks.
 
@@ -35,18 +35,18 @@ when `init` asks.
   gut-checks whether a fresh entry is worth tracking before the skill continues.
 
   A repo-wide entry renders to `.claude/ledgers/BACKLOG.md`. An entry scoped to a target
-  named in `kit.config.json` renders to `.claude/ledgers/<target>.BACKLOG.md`. The rendered
+  named in `houserules.config.json` renders to `.claude/ledgers/<target>.BACKLOG.md`. The rendered
   file is generated from the ledger, so a hand edit to it does not survive the next entry.
 
-  The ledger directory is local to the repo and gitignored. `@agent-kit/plugin-github` is an
+  The ledger directory is local to the repo and gitignored. `@houserules/plugin-github` is an
   optional companion that syncs it to a GitHub Project, which gives the ledger a durable home
   outside the repo.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 

@@ -18,8 +18,13 @@ import { describe, expect, it, onTestFinished } from 'vitest';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 
-import type { CopyAction, KitConfig, Answers, ModuleDef } from '@agent-kit/api';
-import { KitError } from '../kit-error.js';
+import type {
+  CopyAction,
+  HouseConfig,
+  Answers,
+  ModuleDef,
+} from '@houserules/api';
+import { HouseError } from '../house-error.js';
 import { buildPayload } from '../payload-build.js';
 import { PluginResolutionError } from '../plugin-registry.js';
 import { buildRegistry } from '../plugin-resolver.js';
@@ -30,7 +35,7 @@ const LIBS_FIXTURE = join(FIXTURE_ROOT, 'libs');
 const BAD_LIB_FIXTURE = join(FIXTURE_ROOT, 'bad-lib');
 
 const payloadPackageJson = createRequire(import.meta.url).resolve(
-  '@agent-kit/payload/package.json',
+  '@houserules/payload/package.json',
 );
 function payloadLibPath(name: string): string {
   return join(
@@ -43,7 +48,7 @@ function payloadLibPath(name: string): string {
 }
 
 function ensureFixtureSelfLink(): void {
-  const cliLink = join(FIXTURE_ROOT, 'node_modules', '@agent-kit', 'cli');
+  const cliLink = join(FIXTURE_ROOT, 'node_modules', '@houserules', 'cli');
   if (!existsSync(cliLink)) {
     mkdirSync(dirname(cliLink), { recursive: true });
     symlinkSync(KIT_ROOT, cliLink, 'dir');
@@ -51,7 +56,7 @@ function ensureFixtureSelfLink(): void {
   const payloadLink = join(
     FIXTURE_ROOT,
     'node_modules',
-    '@agent-kit',
+    '@houserules',
     'payload',
   );
   if (!existsSync(payloadLink)) {
@@ -67,7 +72,7 @@ function makeRoot(): string {
   return root;
 }
 
-function buildConfig(plugins: KitConfig['plugins']): KitConfig {
+function buildConfig(plugins: HouseConfig['plugins']): HouseConfig {
   return {
     version: 2,
     packageManager: 'pnpm',
@@ -297,7 +302,7 @@ describe('buildRegistry', () => {
     expect(() => buildRegistry(makeRoot(), config, [])).toThrow(/unparseable/);
   });
 
-  it('plans a copy of the shared lib a plugin script imports, sourced from @agent-kit/payload', () => {
+  it('plans a copy of the shared lib a plugin script imports, sourced from @houserules/payload', () => {
     const config = buildConfig([{ name: LIBS_FIXTURE, alias: 'libs' }]);
 
     const registry = buildRegistry(makeRoot(), config, []);
@@ -360,7 +365,7 @@ describe('buildRegistry', () => {
     expect(libDests).toEqual([]);
   });
 
-  it("resolves a derived lib copy inside @agent-kit/payload, not the plugin's package", () => {
+  it("resolves a derived lib copy inside @houserules/payload, not the plugin's package", () => {
     const config = buildConfig([{ name: LIBS_FIXTURE, alias: 'libs' }]);
 
     const registry = buildRegistry(makeRoot(), config, []);
@@ -382,7 +387,7 @@ describe('buildRegistry', () => {
     const registry = buildRegistry(makeRoot(), config, []);
 
     expect(() => runPlan(registry.get('badlib/bad-lib')!.def)).toThrow(
-      KitError,
+      HouseError,
     );
     expect(() => runPlan(registry.get('badlib/bad-lib')!.def)).toThrow(
       /bad-lib.*payload-imports\.json.*nonexistent-lib/s,

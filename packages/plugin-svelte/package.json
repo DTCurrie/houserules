@@ -1,7 +1,7 @@
 {
-  "name": "@agent-kit/plugin-svelte",
+  "name": "@houserules/plugin-svelte",
   "version": "0.0.0",
-  "description": "agent-kit plugin: Svelte 5 authoring conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.",
+  "description": "houserules plugin: Svelte 5 authoring conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -27,7 +27,7 @@
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && agent-kit-payload && publint",
+      "command": "tsc -p tsconfig.build.json && houserules-payload && publint",
       "dependencies": [
         "../cli:build:ts",
         "../api:build"
@@ -84,18 +84,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
     "directory": "packages/plugin-svelte"
   },
-  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/plugin-svelte#readme",
-  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/plugin-svelte#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
   "peerDependencies": {
-    "@agent-kit/api": ">=0.0.0 <1.0.0"
+    "@houserules/api": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
-    "@agent-kit/api": "workspace:*",
-    "@agent-kit/cli": "workspace:*",
-    "@agent-kit/test": "workspace:*",
+    "@houserules/api": "workspace:*",
+    "@houserules/cli": "workspace:*",
+    "@houserules/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.1.2",
     "publint": "^0.3.23",
@@ -106,8 +106,8 @@
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "keywords": [
-    "agent-kit",
-    "agent-kit-plugin",
+    "houserules",
+    "houserules-plugin",
     "svelte",
     "claude-code"
   ]

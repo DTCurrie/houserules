@@ -116,7 +116,7 @@ export function renderTokenSeed(): string {
 }
 
 /**
- * Whether a token file is still byte-identical to what the kit seeded. Trailing whitespace is
+ * Whether a token file is still byte-identical to what houserules seeded. Trailing whitespace is
  * normalized so that a formatter run does not read as a real edit.
  */
 export function isUntouchedSeed(contents: string): boolean {

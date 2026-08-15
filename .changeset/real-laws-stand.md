@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-persona-auditor': minor
+'@houserules/plugin-persona-auditor': minor
 ---
 
 Initial release. A blind-rank-then-reconcile persona-auditor agent template.

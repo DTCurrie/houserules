@@ -136,7 +136,7 @@ describe('design.mjs', () => {
     const result = design(root, 'token', 'spacing.md');
 
     expect(result.status).toBe(0);
-    expect(result.stderr).toMatch(/still the kit's placeholder seed/i);
+    expect(result.stderr).toMatch(/still houserules' placeholder seed/i);
     expect(result.stderr).toMatch(/design\.mjs extract/);
   });
 
@@ -147,7 +147,7 @@ describe('design.mjs', () => {
     const result = design(root, 'token', 'spacing.md');
 
     expect(result.status).toBe(0);
-    expect(result.stderr).toMatch(/still the kit's placeholder seed/i);
+    expect(result.stderr).toMatch(/still houserules' placeholder seed/i);
   });
 
   it('does not warn about the seed once a value has been changed', () => {

@@ -3,7 +3,7 @@
  *
  * Zero dependencies by design. The payload may not import Playwright, Puppeteer, or `ws`, and
  * `payload/__test__/dependencies.test.ts` enforces that. Node's `WebSocket` has been global and
- * stable since 22.4, and the kit already requires node `>=22`, so the protocol is reachable
+ * stable since 22.4, and houserules already requires node `>=22`, so the protocol is reachable
  * without any of them.
  *
  * Chrome is discovered, never installed. Every failure path returns a message rather than
@@ -281,7 +281,7 @@ export async function launchSession(
     };
   }
 
-  const profileDir = mkdtempSync(join(tmpdir(), 'agent-kit-design-'));
+  const profileDir = mkdtempSync(join(tmpdir(), 'houserules-design-'));
   const chrome = spawn(
     executable,
     [

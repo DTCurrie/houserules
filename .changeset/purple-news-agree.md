@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-prose': minor
+'@houserules/plugin-prose': minor
 ---
 
 Initial release. Comment discipline, writing voice, and a terse prose output style.

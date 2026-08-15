@@ -6,14 +6,14 @@
  * Exit 2 with stderr blocks the tool call and feeds the reason back to Claude. Exit 0
  * allows. Wire it as a PreToolUse hook with matcher "Bash".
  *
- * Config (.claude/kit.config.json, all default on):
+ * Config (.claude/houserules.config.json, all default on):
  *   "guard": { "gitCommit": true, "gitPush": true, "gitStash": true, "prCreate": true,
  *              "custom": [{ "pattern": "\\bdocker\\s+system\\s+prune\\b", "message": "..." }] }
  * A missing or unreadable config falls back to the four defaults.
  */
 
-import { GUARD_DEFAULTS, loadConfigSafe } from '@agent-kit/payload/kit-config';
-import { readStdinJson } from '@agent-kit/payload/proc';
+import { GUARD_DEFAULTS, loadConfigSafe } from '@houserules/payload/config';
+import { readStdinJson } from '@houserules/payload/proc';
 
 interface BashPayload {
   tool_input?: { command?: string };
@@ -69,7 +69,7 @@ for (const rule of guard.custom ?? []) {
       re: new RegExp(rule.pattern),
       msg:
         rule.message ??
-        `Blocked by kit.config.json guard rule: ${rule.pattern}`,
+        `Blocked by houserules.config.json guard rule: ${rule.pattern}`,
     });
   } catch {
     // Invalid user regex: skip the rule rather than break every Bash call.
@@ -78,7 +78,7 @@ for (const rule of guard.custom ?? []) {
 
 for (const d of DENY) {
   if (d.re.test(cmd)) {
-    process.stderr.write(`Blocked by agent-kit guard: ${d.msg}\n`);
+    process.stderr.write(`Blocked by houserules guard: ${d.msg}\n`);
     process.exit(2);
   }
 }

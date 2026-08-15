@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { readJson } from '@agent-kit/payload/workspaces';
+import { readJson } from '@houserules/payload/workspaces';
 import { apply } from '../../apply.js';
 import type { Flags } from '../../cli-contract.js';
 import {
@@ -10,7 +10,7 @@ import {
   FORCE_ONLY,
   type DriftReport,
 } from '../../core/drift.js';
-import { MANIFEST_PATH, type KitManifest } from '@agent-kit/api/internal';
+import { MANIFEST_PATH, type HouseManifest } from '@houserules/api/internal';
 import type { Ctx } from '../../detect.js';
 import { formatterMangleHint } from '../../modules/formatter-mangle.js';
 import { resolveModuleOptions } from '../../module-options.js';
@@ -18,13 +18,13 @@ import { buildPlan, computeEffects, computePrune } from '../../plan.js';
 import type { PlanResult } from '../../plan.js';
 import type { Registry } from '../../plugin-registry.js';
 import { findRetired, retiredModuleAdvice } from '../../retired-modules.js';
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 
 const DRIFT_EXPLANATIONS: Record<string, string> = {
   missing: 'missing. `doctor --fix` recreates it',
-  stale: 'stale. The kit has a newer version, and `update` refreshes it',
+  stale: 'stale. houserules has a newer version, and `update` refreshes it',
   conflict:
-    'you edited it and the kit shipped a newer version since. Merge by hand, or `--fix --force` to take the kit copy',
+    'you edited it and houserules shipped a newer version since. Merge by hand, or `--fix --force` to take houserules copy',
   'no-marker': 'managed markers removed. `doctor --fix` re-inserts the block',
   orphaned:
     'orphaned. No enabled module produces it, and `--fix --prune` removes it',
@@ -57,8 +57,8 @@ export function reconcileDrift(
 
   if (!manifest) return { drift, findings, readouts: [] };
 
-  const targets = ctx.claude.kitConfig?.targets?.length
-    ? ctx.claude.kitConfig.targets
+  const targets = ctx.claude.houseConfig?.targets?.length
+    ? ctx.claude.houseConfig.targets
     : ctx.targets;
   const moduleIds = manifest.modules ?? ['core'];
   const retired = findRetired(moduleIds, registry);
@@ -78,9 +78,9 @@ export function reconcileDrift(
   const moduleOptions = resolveModuleOptions(
     registry,
     moduleIds,
-    ctx.claude.kitConfig?.moduleOptions,
+    ctx.claude.houseConfig?.moduleOptions,
   );
-  const planAgainst = (against: KitManifest | null, force: boolean) =>
+  const planAgainst = (against: HouseManifest | null, force: boolean) =>
     computeEffects(
       root,
       buildPlan(
@@ -94,14 +94,14 @@ export function reconcileDrift(
   try {
     const planResult = planAgainst(manifest, flags.force);
     // A plugin with no built payload is an ERROR finding naming that plugin, not a thrown
-    // KitError reported as "could not compute drift: <absolute path>". The rest of the drift
+    // HouseError reported as "could not compute drift: <absolute path>". The rest of the drift
     // report still renders, and `--fix` still applies, because the broken plugin's dests are
     // folded into `plannedDests` and so appear in neither the drift set nor the prune set.
     for (const problem of planResult.brokenPlugins)
       findings.push({ level: 'ERROR', msg: problem.message });
     drift = driftReportFor(root, planResult, manifest);
 
-    let settledManifest: KitManifest | null = manifest;
+    let settledManifest: HouseManifest | null = manifest;
     let settledPlanResult = planResult;
 
     if (flags.fix) {
@@ -115,7 +115,7 @@ export function reconcileDrift(
         registry,
       );
       // Re-derive against the reconciled tree so the report reflects reality.
-      const reconciled = readJson<KitManifest>(join(root, MANIFEST_PATH));
+      const reconciled = readJson<HouseManifest>(join(root, MANIFEST_PATH));
       settledManifest = reconciled;
       settledPlanResult = planAgainst(reconciled, false);
       drift = driftReportFor(root, settledPlanResult, reconciled);
@@ -140,7 +140,7 @@ export function reconcileDrift(
 function driftReportFor(
   root: string,
   planResult: PlanResult,
-  manifest: KitManifest | null,
+  manifest: HouseManifest | null,
 ): DriftReport {
   return computeDrift(root, planResult.effects, {
     manifest,
@@ -159,7 +159,7 @@ function driftReportFor(
  */
 function staleManifestFindings(
   root: string,
-  manifest: KitManifest | null,
+  manifest: HouseManifest | null,
   planResult: PlanResult,
 ): Finding[] {
   return computePrune(root, { manifest, plannedDests: planResult.plannedDests })
@@ -183,7 +183,7 @@ function applyFixableChanges(
   planResult: PlanResult,
   drift: DriftReport,
   flags: Flags,
-  manifest: KitManifest,
+  manifest: HouseManifest,
   moduleIds: string[],
   registry: Registry,
 ): void {
@@ -248,15 +248,15 @@ function classifyDriftFindings(
     findings.push({
       level: 'WARN',
       msg:
-        `${file.path}: the kit shipped a new default \`paths:\` for this rule, but ` +
-        `your customized \`paths:\` were kept. Check the kit's CHANGELOG for what changed`,
+        `${file.path}: houserules shipped a new default \`paths:\` for this rule, but ` +
+        `your customized \`paths:\` were kept. Check houserules' CHANGELOG for what changed`,
     });
   }
 
   const mangleHint = formatterMangleHint(
     root,
     settled,
-    'Run `npx agent-kit doctor --fix --force` to restore them',
+    'Run `npx houserules doctor --fix --force` to restore them',
   );
   if (mangleHint) findings.push({ level: 'WARN', msg: mangleHint });
 
@@ -264,13 +264,13 @@ function classifyDriftFindings(
 }
 
 /**
- * A settled local edit is reported as context rather than as a warning. The kit itself
+ * A settled local edit is reported as context rather than as a warning. houserules itself
  * tells you to edit some of what it installs, so warning about the result would leave
  * doctor permanently yellow and bury the drift that does need a decision.
  */
 function settledReadout(settled: string[]): string[] {
   if (!settled.length) return [];
   return [
-    `your edits on ${settled.length} kit file(s), kept as-is: ${settled.join(', ')}`,
+    `your edits on ${settled.length} houserules file(s), kept as-is: ${settled.join(', ')}`,
   ];
 }

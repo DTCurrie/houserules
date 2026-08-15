@@ -1,11 +1,11 @@
-import { definePlugin } from '@agent-kit/api';
+import { definePlugin } from '@houserules/api';
 import type {
   Action,
   Answers,
   Ctx,
   ModuleDef,
   PluginApi,
-} from '@agent-kit/api';
+} from '@houserules/api';
 
 /**
  * The base rule holds everything that applies to any test runner with a `describe`/`it`

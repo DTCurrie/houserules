@@ -4,7 +4,7 @@
 
 ## Packages touched
 
-<!-- List the affected packages, e.g. @agent-kit/cli, @agent-kit/plugin-testing. -->
+<!-- List the affected packages, e.g. @houserules/cli, @houserules/plugin-testing. -->
 
 ## Checklist
 

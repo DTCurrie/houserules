@@ -1,4 +1,4 @@
-import type { Action, CheckResult, ModuleGroup } from '@agent-kit/api';
+import type { Action, CheckResult, ModuleGroup } from '@houserules/api';
 import type { Ctx } from '../detect.js';
 import { script } from './copy-actions.js';
 

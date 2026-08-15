@@ -1,14 +1,14 @@
 {
-  "name": "@agent-kit/cli",
+  "name": "@houserules/cli",
   "version": "0.0.0",
-  "description": "agent-kit: an interactive installer for a portable Claude Code context-discipline kit: hooks, skills, agents, changesets integration, and token-efficiency tooling.",
+  "description": "houserules: an interactive installer for portable Claude Code context discipline: hooks, skills, agents, changesets integration, and token-efficiency tooling.",
   "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "agent-kit": "bin/agent-kit.mjs",
-    "agent-kit-payload": "bin/agent-kit-payload.mjs"
+    "houserules": "bin/houserules.mjs",
+    "houserules-payload": "bin/houserules-payload.mjs"
   },
   "files": [
     "bin",
@@ -16,7 +16,7 @@
     "payload-dist",
     "!payload-dist/scripts/lib/**",
     "schema",
-    "kit.config.example.json",
+    "houserules.config.example.json",
     "CONVENTIONS.md"
   ],
   "exports": {
@@ -25,7 +25,7 @@
       "types": "./dist/plugin.d.ts",
       "default": "./dist/plugin.js"
     },
-    "./schema": "./schema/kit.config.schema.json"
+    "./schema": "./schema/houserules.config.schema.json"
   },
   "scripts": {
     "build": "wireit",
@@ -49,7 +49,7 @@
       "files": [
         "package.json",
         "bin/**",
-        "kit.config.example.json",
+        "houserules.config.example.json",
         "CONVENTIONS.md"
       ],
       "output": []
@@ -105,7 +105,7 @@
         "../../.prettierrc.json"
       ],
       "output": [
-        "schema/kit.config.schema.json"
+        "schema/houserules.config.schema.json"
       ]
     },
     "check": {
@@ -137,7 +137,7 @@
         "!test/**/node_modules/**",
         "payload/**",
         "vitest.config.ts",
-        "kit.config.example.json"
+        "houserules.config.example.json"
       ],
       "output": []
     },
@@ -176,11 +176,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DTCurrie/agent-kit.git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/DTCurrie/agent-kit/tree/main/packages/cli#readme",
-  "bugs": "https://github.com/DTCurrie/agent-kit/issues",
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/cli#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
   "keywords": [
     "claude",
     "claude-code",
@@ -188,13 +188,13 @@
     "hooks",
     "changesets",
     "tooling",
-    "agent-kit"
+    "houserules"
   ],
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "dependencies": {
-    "@agent-kit/api": "workspace:*",
-    "@agent-kit/payload": "workspace:*",
+    "@houserules/api": "workspace:*",
+    "@houserules/payload": "workspace:*",
     "@clack/prompts": "^0.11.0",
     "commander": "^15.0.0",
     "dequal": "^2.0.3",
@@ -203,7 +203,7 @@
     "semver": "^7.8.5"
   },
   "devDependencies": {
-    "@agent-kit/test": "workspace:*",
+    "@houserules/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.1.2",
     "@types/semver": "^7.8.0",

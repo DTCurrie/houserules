@@ -67,7 +67,7 @@ Review the design-system fit of a working-tree change. Arguments (optional file 
 ## Accessibility is a separate review
 
 Contrast and hit-target thresholds are also WCAG success criteria.
-`@agent-kit/plugin-accessibility` owns the accessibility verdict. Run its
+`@houserules/plugin-accessibility` owns the accessibility verdict. Run its
 `/accessibility-review` skill for focus states, keyboard behavior, and screen-reader
 concerns. This skill reports the design-system angle only and does not duplicate that work.
 

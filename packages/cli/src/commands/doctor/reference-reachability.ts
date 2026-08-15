@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
-import type { CheckResult, Finding } from '@agent-kit/api';
+import type { CheckResult, Finding } from '@houserules/api';
 
 const REFERENCE_DIR = join('.claude', 'reference');
 
@@ -59,9 +59,9 @@ const resolveLink = (root: string, source: string, link: string) =>
  * silent without needing to know anything about options.
  *
  * The two directions are scoped differently, on purpose. A dangling link is wrong whoever
- * wrote either end, so that half reads every file. The orphan half is about docs the KIT
+ * wrote either end, so that half reads every file. The orphan half is about docs houserules
  * installed, so it reads only manifest-tracked ones. A doc you dropped into
- * `.claude/reference/` yourself is yours, and the kit telling you to go link it is
+ * `.claude/reference/` yourself is yours, and houserules telling you to go link it is
  * presumptuous.
  */
 export function checkReferenceReachability(

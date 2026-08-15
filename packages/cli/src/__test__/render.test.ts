@@ -4,13 +4,13 @@ import {
   renderChangesetConfig,
   renderClaudeAdditions,
   renderClaudeMd,
-  renderKitConfig,
+  renderHouseConfig,
   renderReviewerDraft,
   schemaRefFor,
   verifyDefaultsFor,
 } from '../render.js';
 import type { PackageManagerInfo } from '../detect.js';
-import { parseKitConfig } from '@agent-kit/api/internal';
+import { parseHouseConfig } from '@houserules/api/internal';
 import { makeAnswers, makeCtx, makeTarget } from '#test/ctx-builder';
 
 describe('verifyDefaultsFor', () => {
@@ -35,51 +35,51 @@ describe('verifyDefaultsFor', () => {
 });
 
 describe('schemaRefFor', () => {
-  it('points at the local node_modules copy when @agent-kit/cli is a dependency', () => {
+  it('points at the local node_modules copy when @houserules/cli is a dependency', () => {
     const ctx = makeCtx({
       rootPkg: {
         name: 'my-repo',
-        dependencies: { '@agent-kit/cli': '^1.0.0' },
+        dependencies: { '@houserules/cli': '^1.0.0' },
       },
     });
     expect(schemaRefFor(ctx)).toBe(
-      '../node_modules/@agent-kit/cli/schema/kit.config.schema.json',
+      '../node_modules/@houserules/cli/schema/houserules.config.schema.json',
     );
   });
 
-  it('points at the local node_modules copy when @agent-kit/cli is a devDependency', () => {
+  it('points at the local node_modules copy when @houserules/cli is a devDependency', () => {
     const ctx = makeCtx({
       rootPkg: {
         name: 'my-repo',
-        devDependencies: { '@agent-kit/cli': '^1.0.0' },
+        devDependencies: { '@houserules/cli': '^1.0.0' },
       },
     });
     expect(schemaRefFor(ctx)).toBe(
-      '../node_modules/@agent-kit/cli/schema/kit.config.schema.json',
+      '../node_modules/@houserules/cli/schema/houserules.config.schema.json',
     );
   });
 
-  it('falls back to the published URL when @agent-kit/cli is not a dependency', () => {
+  it('falls back to the published URL when @houserules/cli is not a dependency', () => {
     const ctx = makeCtx({
       rootPkg: { name: 'my-repo', dependencies: { react: '^18.0.0' } },
     });
     expect(schemaRefFor(ctx)).toBe(
-      'https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json',
+      'https://github.com/DTCurrie/houserules/blob/main/schema/houserules.config.schema.json',
     );
   });
 
   it('falls back to the published URL when there is no root package.json', () => {
     const ctx = makeCtx({ rootPkg: null });
     expect(schemaRefFor(ctx)).toBe(
-      'https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json',
+      'https://github.com/DTCurrie/houserules/blob/main/schema/houserules.config.schema.json',
     );
   });
 });
 
-describe('renderKitConfig', () => {
+describe('renderHouseConfig', () => {
   it('reports npm as the package manager when detection found none', () => {
     const ctx = makeCtx({ packageManager: null });
-    const config = JSON.parse(renderKitConfig(ctx, makeAnswers()));
+    const config = JSON.parse(renderHouseConfig(ctx, makeAnswers()));
     expect(config.packageManager).toBe('npm');
   });
 
@@ -87,14 +87,14 @@ describe('renderKitConfig', () => {
     const ctx = makeCtx({
       packageManager: { name: 'pnpm', source: 'lockfile' },
     });
-    const config = JSON.parse(renderKitConfig(ctx, makeAnswers()));
+    const config = JSON.parse(renderHouseConfig(ctx, makeAnswers()));
     expect(config.packageManager).toBe('pnpm');
   });
 
   it('omits the verify block when the verify-changed module is not selected', () => {
     const ctx = makeCtx();
     const config = JSON.parse(
-      renderKitConfig(ctx, makeAnswers({ moduleIds: ['core'] })),
+      renderHouseConfig(ctx, makeAnswers({ moduleIds: ['core'] })),
     );
     expect(config.verify).toBeUndefined();
   });
@@ -102,7 +102,7 @@ describe('renderKitConfig', () => {
   it('includes the verify block when the verify-changed module is selected', () => {
     const ctx = makeCtx();
     const config = JSON.parse(
-      renderKitConfig(
+      renderHouseConfig(
         ctx,
         makeAnswers({ moduleIds: ['core', 'verify-changed'] }),
       ),
@@ -113,7 +113,10 @@ describe('renderKitConfig', () => {
   it('enables changesets in the config when the changesets module is selected', () => {
     const ctx = makeCtx();
     const config = JSON.parse(
-      renderKitConfig(ctx, makeAnswers({ moduleIds: ['core', 'changesets'] })),
+      renderHouseConfig(
+        ctx,
+        makeAnswers({ moduleIds: ['core', 'changesets'] }),
+      ),
     );
     expect(config.changesets).toEqual({
       enabled: true,
@@ -125,7 +128,7 @@ describe('renderKitConfig', () => {
   it('disables changesets in the config when the changesets module is not selected', () => {
     const ctx = makeCtx();
     const config = JSON.parse(
-      renderKitConfig(ctx, makeAnswers({ moduleIds: ['core'] })),
+      renderHouseConfig(ctx, makeAnswers({ moduleIds: ['core'] })),
     );
     expect(config.changesets).toEqual({
       enabled: false,
@@ -137,7 +140,7 @@ describe('renderKitConfig', () => {
   it('adds a changelogPath and logPath per target when the ledger module is selected', () => {
     const ctx = makeCtx();
     const config = JSON.parse(
-      renderKitConfig(
+      renderHouseConfig(
         ctx,
         makeAnswers({
           moduleIds: ['core', 'ledger'],
@@ -154,7 +157,7 @@ describe('renderKitConfig', () => {
   it('omits changelogPath and logPath per target when the ledger module is not selected', () => {
     const ctx = makeCtx();
     const config = JSON.parse(
-      renderKitConfig(ctx, makeAnswers({ moduleIds: ['core'] })),
+      renderHouseConfig(ctx, makeAnswers({ moduleIds: ['core'] })),
     );
     expect(config.targets[0].changelogPath).toBeUndefined();
   });
@@ -162,7 +165,7 @@ describe('renderKitConfig', () => {
   it('carries a target fixCommands override into the rendered target', () => {
     const ctx = makeCtx();
     const config = JSON.parse(
-      renderKitConfig(
+      renderHouseConfig(
         ctx,
         makeAnswers({
           targets: [makeTarget({ fixCommands: ['custom:fix'] })],
@@ -175,7 +178,7 @@ describe('renderKitConfig', () => {
   it('produces one target entry per answer target', () => {
     const ctx = makeCtx();
     const config = JSON.parse(
-      renderKitConfig(
+      renderHouseConfig(
         ctx,
         makeAnswers({
           targets: [makeTarget({ name: 'a' }), makeTarget({ name: 'b' })],
@@ -190,23 +193,23 @@ describe('renderKitConfig', () => {
 
   it('ends with a trailing newline', () => {
     const ctx = makeCtx();
-    expect(renderKitConfig(ctx, makeAnswers())).toMatch(/\n$/);
+    expect(renderHouseConfig(ctx, makeAnswers())).toMatch(/\n$/);
   });
 
   it('persists chosen module options and round-trips through the config schema', () => {
     const ctx = makeCtx();
-    const rendered = renderKitConfig(
+    const rendered = renderHouseConfig(
       ctx,
       makeAnswers({ moduleOptions: { testing: ['python', 'go'] } }),
     );
-    const parsed = parseKitConfig(rendered);
+    const parsed = parseHouseConfig(rendered);
     expect(parsed.moduleOptions).toEqual({ testing: ['python', 'go'] });
   });
 
   it('omits the moduleOptions key when no module has chosen options', () => {
     const ctx = makeCtx();
     const config = JSON.parse(
-      renderKitConfig(ctx, makeAnswers({ moduleOptions: {} })),
+      renderHouseConfig(ctx, makeAnswers({ moduleOptions: {} })),
     );
     expect(config.moduleOptions).toBeUndefined();
   });
@@ -388,8 +391,8 @@ describe('renderClaudeMd', () => {
   it('emits exactly one start marker and one end marker', () => {
     const ctx = makeCtx();
     const md = renderClaudeMd(ctx, makeAnswers());
-    const starts = md.match(/<!-- agent-kit:claude-md start -->/g) ?? [];
-    const ends = md.match(/<!-- agent-kit:claude-md end -->/g) ?? [];
+    const starts = md.match(/<!-- houserules:claude-md start -->/g) ?? [];
+    const ends = md.match(/<!-- houserules:claude-md end -->/g) ?? [];
     expect(starts).toHaveLength(1);
     expect(ends).toHaveLength(1);
   });
@@ -397,8 +400,8 @@ describe('renderClaudeMd', () => {
   it('places the start marker before the end marker', () => {
     const ctx = makeCtx();
     const md = renderClaudeMd(ctx, makeAnswers());
-    expect(md.indexOf('<!-- agent-kit:claude-md start -->')).toBeLessThan(
-      md.indexOf('<!-- agent-kit:claude-md end -->'),
+    expect(md.indexOf('<!-- houserules:claude-md start -->')).toBeLessThan(
+      md.indexOf('<!-- houserules:claude-md end -->'),
     );
   });
 
@@ -407,8 +410,8 @@ describe('renderClaudeMd', () => {
     const answers = makeAnswers({ moduleIds: ['core', 'changesets'] });
     const md = renderClaudeMd(ctx, answers);
     const additions = renderClaudeAdditions(ctx, answers).trimEnd();
-    const start = md.indexOf('<!-- agent-kit:claude-md start -->');
-    const end = md.indexOf('<!-- agent-kit:claude-md end -->');
+    const start = md.indexOf('<!-- houserules:claude-md start -->');
+    const end = md.indexOf('<!-- houserules:claude-md end -->');
     const between = md.slice(start, end);
     expect(between).toContain(additions);
   });

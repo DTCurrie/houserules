@@ -1,7 +1,7 @@
-# @agent-kit/plugin-accessibility
+# @houserules/plugin-accessibility
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-accessibility.svg)](https://www.npmjs.com/package/@agent-kit/plugin-accessibility)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-accessibility.svg)](https://www.npmjs.com/package/@agent-kit/plugin-accessibility)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-accessibility.svg)](https://www.npmjs.com/package/@houserules/plugin-accessibility)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-accessibility.svg)](https://www.npmjs.com/package/@houserules/plugin-accessibility)
 
 An agent editing markup gets accessibility wrong in predictable ways: a click handler on a
 `<div>`, an `<img>` with no `alt` decision, a label that is not associated with its control.
@@ -12,11 +12,11 @@ lookup the agent can run: **decide which success criteria the change is subject 
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-accessibility
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-accessibility
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the modules into `.claude/`. Both modules are off by default, so select
 them when `init` asks.
 
@@ -52,7 +52,7 @@ one read. Missing one costs a defect.
 `eslint-plugin-jsx-a11y`, `eslint-plugin-vuejs-accessibility`, and Svelte's own compiler
 warnings already do the mechanical checking, and they are better at it than anything shipped
 here would be. This plugin owns the routing and the reasoning, and points at those for the rest.
-`agent-kit doctor` warns when a repo has a markup framework and no accessibility linter
+`houserules doctor` warns when a repo has a markup framework and no accessibility linter
 configured for it.
 
 Nothing here decides contrast ratios, real focus order, or whether alt text is meaningful. Those
@@ -65,7 +65,7 @@ than guessing.
 read that window. Never read it whole, and never `@-import` it. The `read-guard` module makes
 that mechanical rather than advisory.
 
-The file is generated, not hand-written. `pnpm --filter @agent-kit/plugin-accessibility wcag:regen`
+The file is generated, not hand-written. `pnpm --filter @houserules/plugin-accessibility wcag:regen`
 rebuilds it from the W3C source at a pinned tag, and regenerating produces a byte-identical file.
 
 ## Credits
@@ -82,11 +82,11 @@ which permits derivative works in supporting materials accompanying software. Th
 covering the rest of this package does not cover that file. The full notice is in this package's
 `LICENSE`.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 

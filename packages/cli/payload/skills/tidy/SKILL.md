@@ -4,7 +4,7 @@ description: Tidy and clean up the working diff by auditing it against the code-
 allowed-tools: Read, Edit, Grep, Glob, Bash
 ---
 
-Audit the current working diff against the kit's installed `code-cleanliness` rule and fix the
+Audit the current working diff against houserules' installed `code-cleanliness` rule and fix the
 mechanical violations it finds. This is rule-driven, not judgment-driven. Every finding cites the
 clause it violates. It is narrower than `simplify`, which handles reuse, efficiency, and altitude.
 

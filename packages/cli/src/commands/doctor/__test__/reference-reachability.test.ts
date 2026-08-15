@@ -111,14 +111,14 @@ describe('checkReferenceReachability', () => {
     ]);
   });
 
-  it('leaves a doc the kit never installed alone, since an unlinked file of your own is yours', () => {
+  it('leaves a doc houserules never installed alone, since an unlinked file of your own is yours', () => {
     const root = useRepo('pnpm-monorepo');
     write(root, '.claude/reference/mine.md', '# Mine\n');
 
     expect(messages(root, ctxInstalling())).toEqual([]);
   });
 
-  it('still warns about a dangling link out of a file the kit never installed', () => {
+  it('still warns about a dangling link out of a file houserules never installed', () => {
     const root = useRepo('pnpm-monorepo');
     write(root, '.claude/reference/mine.md', '# Mine\n');
     write(root, '.claude/rules/mine.md', 'See `../reference/ghost.md`.\n');

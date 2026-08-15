@@ -4,9 +4,9 @@ import { join } from 'node:path';
 
 import { makeCtx } from '#test/ctx-builder';
 import { useRepo } from '#test/repo';
-import type { KitManifest } from '@agent-kit/api/internal';
+import type { HouseManifest } from '@houserules/api/internal';
 import type { Ctx } from '../../../detect.js';
-import type { ModuleDef } from '@agent-kit/api';
+import type { ModuleDef } from '@houserules/api';
 import { MODULES } from '../../../plan.js';
 import type { Registry } from '../../../plugin-registry.js';
 import { checkModuleHealth } from '../module-health.js';
@@ -23,7 +23,7 @@ function registryOf(defs: ModuleDef[]): Registry {
 const BUILT_INS = registryOf(MODULES);
 
 function ctxWith(modules: string[], overrides: Partial<Ctx> = {}): Ctx {
-  const manifest: KitManifest = {
+  const manifest: HouseManifest = {
     kitVersion: '1.0.0',
     installedAt: '2026-01-01T00:00:00.000Z',
     modules,
@@ -52,7 +52,7 @@ describe('checkModuleHealth, per-module prerequisites', () => {
 
   it('warns with a ready-to-paste verify block when verify-changed has none', () => {
     const ctx = ctxWith(['verify-changed']);
-    ctx.claude.kitConfig = { version: 2 } as Ctx['claude']['kitConfig'];
+    ctx.claude.houseConfig = { version: 2 } as Ctx['claude']['houseConfig'];
 
     expect(checkModuleHealth('/repo', ctx, BUILT_INS).findings).toContainEqual(
       expect.objectContaining({

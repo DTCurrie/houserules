@@ -1,4 +1,4 @@
-/** Where a plugin came from and what the kit resolved it to. Recorded in the manifest. */
+/** Where a plugin came from and what houserules resolved it to. Recorded in the manifest. */
 export interface PluginSource {
   /** The `name` from config: an npm package name or a repo-relative path. */
   name: string;

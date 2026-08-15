@@ -6,20 +6,20 @@ import {
   resolveModuleOptions,
 } from '../module-options.js';
 import { MODULES, buildPlan, computeEffects, computePrune } from '../plan.js';
-import { KitError } from '../kit-error.js';
+import { HouseError } from '../house-error.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import {
   parseSettingsText,
   removeSettingsFragments,
   renderSettings,
-} from '@agent-kit/api/internal';
+} from '@houserules/api/internal';
 import { apply } from '../apply.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
-import type { KitManifest } from '@agent-kit/api/internal';
+import type { HouseManifest } from '@houserules/api/internal';
 import type { Ctx } from '../detect.js';
-import type { Answers } from '@agent-kit/api';
+import type { Answers } from '@houserules/api';
 import type { PlanResult } from '../plan.js';
 import type { Registry, RegisteredModule } from '../plugin-registry.js';
 
@@ -30,7 +30,7 @@ import type { Registry, RegisteredModule } from '../plugin-registry.js';
  * now, and that distinction is the point. An id the registry cannot resolve is a user error
  * whatever the install state, while an id that is merely installed already is a no-op. Folding
  * the two together is what let a typo, or a module whose plugin is missing from
- * `kit.config.json`, read back as "you already have that".
+ * `houserules.config.json`, read back as "you already have that".
  *
  * @param installed Module ids the manifest records, which make a request redundant.
  */
@@ -61,7 +61,7 @@ export function parseRequested(
  * The modules this run is ADDING that declare options, and so have a question to ask.
  *
  * Keyed on what was chosen, never on the whole enabled set. A module installed long ago
- * has its options settled in `kit.config.json`, and re-asking on every `modules` run would
+ * has its options settled in `houserules.config.json`, and re-asking on every `modules` run would
  * turn a command about adding things into a settings editor. Changing a settled selection is
  * `--reconfigure`.
  */
@@ -88,7 +88,7 @@ async function reconfigureModules(
   root: string,
   ctx: Ctx,
   flags: Flags,
-  manifest: KitManifest,
+  manifest: HouseManifest,
   installed: Set<string>,
   registry: Registry,
   optionOverrides: Record<string, string[]>,
@@ -123,14 +123,14 @@ async function reconfigureModules(
   }
 
   const moduleIds = [...installed];
-  const targets = ctx.claude.kitConfig?.targets?.length
-    ? ctx.claude.kitConfig.targets
+  const targets = ctx.claude.houseConfig?.targets?.length
+    ? ctx.claude.houseConfig.targets
     : ctx.targets;
 
   let moduleOptions = resolveModuleOptions(
     registry,
     moduleIds,
-    ctx.claude.kitConfig?.moduleOptions,
+    ctx.claude.houseConfig?.moduleOptions,
     optionOverrides,
   );
   if (flags.yes) {
@@ -158,7 +158,7 @@ async function reconfigureModules(
       { manifest, plugins: registry.plugins },
     );
   } catch (e) {
-    if (e instanceof KitError) {
+    if (e instanceof HouseError) {
       console.error(e.message);
       return 1;
     }
@@ -212,7 +212,7 @@ async function reconfigureModules(
   );
   ui.written(written);
   ui.outro(
-    `Reconfigured ${requested.join(', ')}. Validate any time with: npx agent-kit doctor`,
+    `Reconfigured ${requested.join(', ')}. Validate any time with: npx houserules doctor`,
   );
   return 0;
 }
@@ -227,7 +227,7 @@ async function disableModules(
   root: string,
   ctx: Ctx,
   flags: Flags,
-  manifest: KitManifest,
+  manifest: HouseManifest,
   installed: Set<string>,
   registry: Registry,
   optionOverrides: Record<string, string[]>,
@@ -249,7 +249,7 @@ async function disableModules(
   const refused = requested.filter((id) => locked.has(id));
   if (refused.length) {
     console.error(
-      `Cannot disable ${refused.join(', ')}. The kit does not function without it.`,
+      `Cannot disable ${refused.join(', ')}. houserules does not function without it.`,
     );
     return 1;
   }
@@ -260,13 +260,13 @@ async function disableModules(
   }
 
   const remaining = [...installed].filter((id) => !doomed.includes(id));
-  const targets = ctx.claude.kitConfig?.targets?.length
-    ? ctx.claude.kitConfig.targets
+  const targets = ctx.claude.houseConfig?.targets?.length
+    ? ctx.claude.houseConfig.targets
     : ctx.targets;
   const moduleOptions = resolveModuleOptions(
     registry,
     [...installed],
-    ctx.claude.kitConfig?.moduleOptions,
+    ctx.claude.houseConfig?.moduleOptions,
     optionOverrides,
   );
   const base = { targets, seedChangesetConfig: false, moduleOptions };
@@ -287,7 +287,7 @@ async function disableModules(
       },
     );
   } catch (e) {
-    if (e instanceof KitError) {
+    if (e instanceof HouseError) {
       console.error(e.message);
       return 1;
     }
@@ -364,7 +364,7 @@ async function disableModules(
   );
   ui.written(written);
   ui.outro(
-    `Disabled ${doomed.join(', ')}. Validate any time with: npx agent-kit doctor`,
+    `Disabled ${doomed.join(', ')}. Validate any time with: npx houserules doctor`,
   );
   return 0;
 }
@@ -382,11 +382,11 @@ async function disableModules(
 export async function modules(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);
   const ctx = detect(root);
-  const registry = buildRegistry(root, ctx.claude.kitConfig, MODULES);
+  const registry = buildRegistry(root, ctx.claude.houseConfig, MODULES);
   const manifest = ctx.claude.manifest;
   if (!manifest) {
     console.error(
-      'No .claude/kit-manifest.json — nothing installed here yet. Run: npx agent-kit init',
+      'No .claude/houserules.manifest.json — nothing installed here yet. Run: npx houserules init',
     );
     return 1;
   }
@@ -396,7 +396,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
     return 1;
   }
 
-  ui.intro(`agent-kit ${flags.kitVersion} — modules`);
+  ui.intro(`houserules ${flags.kitVersion} — modules`);
 
   const installed = new Set(manifest.modules ?? ['core']);
 
@@ -404,7 +404,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
   try {
     optionOverrides = parseModuleOptionFlags(flags.moduleOption ?? []);
   } catch (e) {
-    if (e instanceof KitError) {
+    if (e instanceof HouseError) {
       console.error(e.message);
       return 1;
     }
@@ -444,8 +444,8 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
   if (requested.unresolvable.length) {
     console.error(
       `Unknown module(s): ${requested.unresolvable.join(', ')}\n` +
-        'If these come from a plugin, check the "plugins" array in .claude/kit.config.json. ' +
-        'Diagnose with: npx agent-kit doctor',
+        'If these come from a plugin, check the "plugins" array in .claude/houserules.config.json. ' +
+        'Diagnose with: npx houserules doctor',
     );
     return 1;
   }
@@ -491,14 +491,14 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
 
   const moduleIds = [...new Set([...installed, ...chosen])];
   // Config is the contract when the user has edited it. Detection is the fallback.
-  const targets = ctx.claude.kitConfig?.targets?.length
-    ? ctx.claude.kitConfig.targets
+  const targets = ctx.claude.houseConfig?.targets?.length
+    ? ctx.claude.houseConfig.targets
     : ctx.targets;
 
   let addedOptions = resolveModuleOptions(
     registry,
     moduleIds,
-    ctx.claude.kitConfig?.moduleOptions,
+    ctx.claude.houseConfig?.moduleOptions,
     optionOverrides,
   );
   if (!flags.yes) {
@@ -527,7 +527,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
       plugins: registry.plugins,
     });
   } catch (e) {
-    if (e instanceof KitError) {
+    if (e instanceof HouseError) {
       console.error(e.message);
       return 1;
     }
@@ -576,7 +576,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
   ui.written(written);
   ui.nextSteps(advisories);
   ui.outro(
-    `Added ${chosen.join(', ')}. Validate any time with: npx agent-kit doctor`,
+    `Added ${chosen.join(', ')}. Validate any time with: npx houserules doctor`,
   );
   return 0;
 }

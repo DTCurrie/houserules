@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-/** The two ledgers the kit keeps. */
+/** The two ledgers houserules keeps. */
 export type LedgerKind = 'backlog' | 'decisions';
 
 /**

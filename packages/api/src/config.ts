@@ -60,8 +60,8 @@ const targetSchema = z.strictObject({
 });
 
 /**
- * One plugin the kit loads. `config` is the deliberate hole in an otherwise strict schema:
- * the kit validates that a plugin was declared correctly and never looks inside what that
+ * One plugin houserules loads. `config` is the deliberate hole in an otherwise strict schema:
+ * houserules validates that a plugin was declared correctly and never looks inside what that
  * plugin was configured with. Each plugin validates its own slice, because only it knows the
  * shape, and a plugin that silently accepts a typo'd key is a plugin whose config does nothing.
  */
@@ -85,19 +85,21 @@ const pluginEntrySchema = z.strictObject({
   config: z
     .unknown()
     .optional()
-    .describe('Passed to the plugin verbatim. The kit never reads inside it.'),
+    .describe(
+      'Passed to the plugin verbatim. houserules never reads inside it.',
+    ),
 });
 
 /**
- * The strict validator for `.claude/kit.config.json`. An unknown key is a typo the user
+ * The strict validator for `.claude/houserules.config.json`. An unknown key is a typo the user
  * wants told about, which is the whole reason this schema exists.
  *
  * Defaults deliberately live in the payload (`GUARD_DEFAULTS`, `READ_GUARD_DEFAULTS` in
- * `scripts/lib/kit-config.mjs`), not here. This schema answers "is this valid", not
+ * `scripts/lib/config.mjs`), not here. This schema answers "is this valid", not
  * "what does it mean when absent". Duplicating the defaults would let the CLI reader and
  * the payload reader drift, and the hooks are the ones that have to cope with absence.
  */
-const KitConfigSchema = z.strictObject({
+const HouseConfigSchema = z.strictObject({
   // Documentation keys the shipped example carries. Declared so a strict parse
   // does not reject the very file we tell people to copy.
   _help: z.string().optional(),
@@ -201,7 +203,7 @@ const KitConfigSchema = z.strictObject({
         .boolean()
         .optional()
         .describe(
-          'Let the kit maintain its marked block in CLAUDE.md. Set false to opt out; the kit then never touches the file.',
+          'Let houserules maintain its marked block in CLAUDE.md. Set false to opt out; houserules then never touches the file.',
         ),
     })
     .optional(),
@@ -220,7 +222,7 @@ const KitConfigSchema = z.strictObject({
         .boolean()
         .optional()
         .describe(
-          'Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx agent-kit update`.',
+          'Keep .claude/scripts/ committed instead of gitignored. Off by default: the scripts are build output, refreshed by `npx houserules update`.',
         ),
     })
     .optional(),
@@ -237,12 +239,14 @@ const KitConfigSchema = z.strictObject({
       'Per-module option selections, keyed by module id. Persisted so update and doctor never have to ask again.',
     ),
 
-  targets: z.array(targetSchema).describe('The packages/areas the kit tracks.'),
+  targets: z
+    .array(targetSchema)
+    .describe('The packages/areas houserules tracks.'),
 });
 
-/** The validated shape of `.claude/kit.config.json`. */
-export type KitConfig = Simplify<z.infer<typeof KitConfigSchema>>;
-export type KitConfigTarget = Simplify<z.infer<typeof targetSchema>>;
+/** The validated shape of `.claude/houserules.config.json`. */
+export type HouseConfig = Simplify<z.infer<typeof HouseConfigSchema>>;
+export type HouseConfigTarget = Simplify<z.infer<typeof targetSchema>>;
 
 /**
  * The published JSON Schema, which powers editor IntelliSense via `$schema`.
@@ -250,13 +254,15 @@ export type KitConfigTarget = Simplify<z.infer<typeof targetSchema>>;
  * hand-written config looks like.
  */
 export function buildJsonSchema(): Record<string, unknown> {
-  const { $schema, ...body } = z.toJSONSchema(KitConfigSchema, { io: 'input' });
+  const { $schema, ...body } = z.toJSONSchema(HouseConfigSchema, {
+    io: 'input',
+  });
   return {
     $schema,
-    $id: 'https://github.com/DTCurrie/agent-kit/blob/main/schema/kit.config.schema.json',
-    title: 'agent-kit config',
+    $id: 'https://github.com/DTCurrie/houserules/blob/main/schema/houserules.config.schema.json',
+    title: 'houserules config',
     description:
-      'Per-repo configuration for agent-kit (.claude/kit.config.json).',
+      'Per-repo configuration for houserules (.claude/houserules.config.json).',
     ...body,
   };
 }
@@ -281,31 +287,31 @@ function problemsFrom(error: z.ZodError): string[] {
   });
 }
 
-export class KitConfigError extends Error {
+export class HouseConfigError extends Error {
   readonly problems: string[];
 
   constructor(problems: string[], cause?: unknown) {
     super(
-      `Invalid .claude/kit.config.json:\n${problems.map((p) => `  - ${p}`).join('\n')}`,
+      `Invalid .claude/houserules.config.json:\n${problems.map((p) => `  - ${p}`).join('\n')}`,
       cause === undefined ? undefined : { cause },
     );
-    this.name = 'KitConfigError';
+    this.name = 'HouseConfigError';
     this.problems = problems;
   }
 }
 
-/** @throws KitConfigError with one entry per problem. */
-export function parseKitConfig(raw: string): KitConfig {
+/** @throws HouseConfigError with one entry per problem. */
+export function parseHouseConfig(raw: string): HouseConfig {
   let data: unknown;
   try {
     data = JSON.parse(raw);
   } catch (error) {
-    throw new KitConfigError(
+    throw new HouseConfigError(
       [`not valid JSON: ${(error as Error).message}`],
       error,
     );
   }
-  const result = KitConfigSchema.safeParse(data, {
+  const result = HouseConfigSchema.safeParse(data, {
     // Only the callback sees `input`, so a missing field can be told apart from a
     // wrong-typed one here but not from the issue list afterwards.
     error: (issue) =>
@@ -313,17 +319,17 @@ export function parseKitConfig(raw: string): KitConfig {
         ? 'is required'
         : undefined,
   });
-  if (!result.success) throw new KitConfigError(problemsFrom(result.error));
+  if (!result.success) throw new HouseConfigError(problemsFrom(result.error));
   return result.data;
 }
 
 /** Validation that never throws. For doctor, which reports rather than aborts. */
-export function validateKitConfig(raw: string): string[] {
+export function validateHouseConfig(raw: string): string[] {
   try {
-    parseKitConfig(raw);
+    parseHouseConfig(raw);
     return [];
   } catch (error) {
-    if (error instanceof KitConfigError) return error.problems;
+    if (error instanceof HouseConfigError) return error.problems;
     throw error;
   }
 }

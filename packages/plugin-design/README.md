@@ -1,7 +1,7 @@
-# @agent-kit/plugin-design
+# @houserules/plugin-design
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-design.svg)](https://www.npmjs.com/package/@agent-kit/plugin-design)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-design.svg)](https://www.npmjs.com/package/@agent-kit/plugin-design)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-design.svg)](https://www.npmjs.com/package/@houserules/plugin-design)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-design.svg)](https://www.npmjs.com/package/@houserules/plugin-design)
 
 A linter checks syntax and a test checks behavior. Neither knows that the button should have
 been `color.brand.primary` rather than a hex value someone typed. So an agent editing UI code
@@ -14,11 +14,11 @@ name rather than by reading the whole token file.
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-design
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-design
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the modules into `.claude/`. All four modules are off by default, so
 select them when `init` asks.
 
@@ -28,7 +28,7 @@ select them when `init` asks.
 
   - **`.claude/design/tokens.json`**, a seeded design system in
     [W3C DTCG format](https://www.designtokens.org/tr/drafts/format/), Design Tokens Format
-    Module 2025.10. The kit writes it once and never refreshes it, because the values belong
+    Module 2025.10. houserules writes it once and never refreshes it, because the values belong
     to you.
   - **`.claude/rules/design.md`**, a path-scoped rule holding the non-negotiables and a
     routing table.
@@ -51,7 +51,7 @@ select them when `init` asks.
   `design.mjs` queries and audits, in place of the DTCG token seed. No
   `.claude/design/tokens.json` is written. `check` also judges class names, not only CSS
   declarations. It installs a starter `@theme` at
-  `.claude/kit-templates/tailwind-theme.css.template` to copy from, and a pull-only
+  `.claude/templates/tailwind-theme.css.template` to copy from, and a pull-only
   reference at `.claude/reference/design-tailwind-theming.md` covering how to extend
   Tailwind into a design system and build a theme that switches at runtime. Needs the
   `design` module for the script itself, and is off by default even in a repo that already
@@ -59,7 +59,7 @@ select them when `init` asks.
   checking additionally needs
   [`@tailwindcss/oxide`](https://www.npmjs.com/package/@tailwindcss/oxide), which is not a
   dependency of `tailwindcss` itself and arrives with `@tailwindcss/vite`,
-  `@tailwindcss/postcss`, or the Tailwind CLI. Theme queries work without it. The kit never
+  `@tailwindcss/postcss`, or the Tailwind CLI. Theme queries work without it. houserules never
   writes into the Tailwind compile path: it reads whatever stylesheet already imports
   Tailwind.
 
@@ -99,34 +99,34 @@ node .claude/scripts/design.mjs token color.brand.primary --theme src/app.css
 Tailwind's defaults. `scaffold` prints a starter semantic layer to stdout and writes
 nothing. `--theme <path>` points every query command, including `token`, `list`, `scales`,
 and `check`, at the stylesheet Tailwind compiles, for a repo with more than one. See
-[`.claude/reference/design-tailwind-theming.md`](https://github.com/DTCurrie/agent-kit/blob/main/packages/plugin-design/payload/reference/design-tailwind-theming.md)
+[`.claude/reference/design-tailwind-theming.md`](https://github.com/DTCurrie/houserules/blob/main/packages/plugin-design/payload/reference/design-tailwind-theming.md)
 for how to extend the theme and build one that switches at runtime.
 
 ## Replace the seed
 
-The values the kit ships are brand-neutral placeholders, chosen to look obviously generic. A
+The values houserules ships are brand-neutral placeholders, chosen to look obviously generic. A
 seed that looks finished never gets edited, and an unedited seed means every design check
-measures real code against values nobody chose. `npx agent-kit doctor` warns while the file is
+measures real code against values nobody chose. `npx houserules doctor` warns while the file is
 still untouched.
 
 This does not apply with `design-tailwind` installed: there is no seed, since the repo's own
 Tailwind theme is the source of truth. If a repo adds `design-tailwind` after an earlier
-install already wrote `.claude/design/tokens.json`, nothing reads that file anymore. The kit
-will not delete it, since a seed is yours to remove, and `npx agent-kit doctor` says so while
+install already wrote `.claude/design/tokens.json`, nothing reads that file anymore. houserules
+will not delete it, since a seed is yours to remove, and `npx houserules doctor` says so while
 it is still there.
 
 ## Relationship to accessibility
 
-`@agent-kit/plugin-accessibility` owns WCAG. This plugin defers to it and does not duplicate
+`@houserules/plugin-accessibility` owns WCAG. This plugin defers to it and does not duplicate
 its coverage. Where the two meet is contrast: a foreground and background **token pair** is two
 known values, so the ratio is arithmetic, while contrast as actually rendered depends on the
 page and stays outside what either plugin settles from source.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 

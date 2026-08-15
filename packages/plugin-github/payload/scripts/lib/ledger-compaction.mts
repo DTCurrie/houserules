@@ -28,7 +28,7 @@ import {
   isRemovedBeforeSync,
 } from './push-queue.mjs';
 import type { BacklogState, LedgerRecord, PushOp } from './push-queue.mjs';
-import type { LedgerEntry } from '@agent-kit/payload/ledger-index';
+import type { LedgerEntry } from '@houserules/payload/ledger-index';
 
 /** An entry removed outright, identified for a manifest of what compaction dropped. */
 export interface DroppedEntry {

@@ -372,7 +372,7 @@ describe('planBackfill over a projection of real board items', () => {
     const item = draftItem(
       'PVTI_9',
       'Adopt wireit',
-      'Some body text\n\n<!-- agent-kit:entry:DEC-9 -->',
+      'Some body text\n\n<!-- houserules:entry:DEC-9 -->',
     );
     item.fieldValues.nodes.push(
       {
@@ -428,7 +428,7 @@ describe('a backfilled board rebuilds the entry it was filled from', () => {
     const entry = localEntry({
       id: 'DEC-7',
       title: 'Split the ledger',
-      surface: 'agent-kit.DECISIONS.md',
+      surface: 'houserules.DECISIONS.md',
       date: '2026-08-06',
       scope: ['packages/cli/src', 'packages/plugin-github'],
     });
@@ -454,7 +454,7 @@ describe('a backfilled board rebuilds the entry it was filled from', () => {
     expect(rebuilt).toMatchObject({
       id: 'DEC-7',
       title: 'Split the ledger',
-      surface: 'agent-kit.DECISIONS.md',
+      surface: 'houserules.DECISIONS.md',
       date: '2026-08-06',
       scope: ['packages/cli/src', 'packages/plugin-github'],
       body: 'The reasoning',
@@ -468,7 +468,7 @@ describe('planBackfill for backlog', () => {
       localEntry({ id: 'B-1', surface: 'plugin-backlog.BACKLOG.md' }),
     ];
     const board = [
-      boardEntry({ id: 'B-1', surface: 'agent-kit.BACKLOG.md', issue: 12 }),
+      boardEntry({ id: 'B-1', surface: 'houserules.BACKLOG.md', issue: 12 }),
     ];
 
     expect(planBackfill('backlog', local, board).ops).toContainEqual({

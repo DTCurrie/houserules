@@ -1,5 +1,5 @@
 import { renderReviewerDraft } from '../render.js';
-import type { Action, Answers, ModuleGroup } from '@agent-kit/api';
+import type { Action, Answers, ModuleGroup } from '@houserules/api';
 import type { Ctx } from '../detect.js';
 import { skill } from './copy-actions.js';
 

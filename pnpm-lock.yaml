@@ -237,7 +237,7 @@ importers:
 
   packages/api:
     dependencies:
-      '@agent-kit/payload':
+      '@houserules/payload':
         specifier: workspace:*
         version: link:../payload
       type-fest:
@@ -247,12 +247,12 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -271,15 +271,15 @@ importers:
 
   packages/cli:
     dependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/payload':
-        specifier: workspace:*
-        version: link:../payload
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -296,12 +296,12 @@ importers:
         specifier: ^7.8.5
         version: 7.8.5
     devDependencies:
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -329,13 +329,16 @@ importers:
 
   packages/cli/test/plugin-fixture:
     devDependencies:
-      '@agent-kit/cli':
+      '@houserules/cli':
         specifier: workspace:*
         version: link:../..
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../../../payload
 
   packages/payload:
     devDependencies:
-      '@agent-kit/test':
+      '@houserules/test':
         specifier: workspace:*
         version: link:../test
       '@types/node':
@@ -359,21 +362,21 @@ importers:
 
   packages/plugin-accessibility:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/payload':
-        specifier: workspace:*
-        version: link:../payload
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -392,21 +395,21 @@ importers:
 
   packages/plugin-backlog:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/payload':
-        specifier: workspace:*
-        version: link:../payload
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -425,21 +428,21 @@ importers:
 
   packages/plugin-changesets:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/payload':
-        specifier: workspace:*
-        version: link:../payload
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -458,21 +461,21 @@ importers:
 
   packages/plugin-decisions:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/payload':
-        specifier: workspace:*
-        version: link:../payload
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -491,18 +494,18 @@ importers:
 
   packages/plugin-design:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@tailwindcss/oxide':
         specifier: ^4.3.3
         version: 4.3.3
@@ -527,21 +530,21 @@ importers:
 
   packages/plugin-github:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/payload':
-        specifier: workspace:*
-        version: link:../payload
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -560,18 +563,18 @@ importers:
 
   packages/plugin-persona-auditor:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -590,18 +593,18 @@ importers:
 
   packages/plugin-prose:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -620,18 +623,18 @@ importers:
 
   packages/plugin-svelte:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -650,18 +653,18 @@ importers:
 
   packages/plugin-testing:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -680,18 +683,18 @@ importers:
 
   packages/plugin-three:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -710,18 +713,18 @@ importers:
 
   packages/plugin-typescript:
     devDependencies:
-      '@agent-kit/api':
-        specifier: workspace:*
-        version: link:../api
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@agent-kit/test':
-        specifier: workspace:*
-        version: link:../test
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/api':
+        specifier: workspace:*
+        version: link:../api
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@houserules/test':
+        specifier: workspace:*
+        version: link:../test
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -740,12 +743,12 @@ importers:
 
   packages/test:
     devDependencies:
-      '@agent-kit/cli':
-        specifier: workspace:*
-        version: link:../cli
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@houserules/cli':
+        specifier: workspace:*
+        version: link:../cli
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2

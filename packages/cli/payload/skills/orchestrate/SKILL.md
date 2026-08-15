@@ -262,8 +262,8 @@ slice's reason, a revise round in flight), then move on.
 
 **Formatting is orchestrator work, not worker work.** A fixer run by one worker rewrites files its
 siblings still hold open, so the edits collide and N workers redo the same whole-repo pass N times.
-One run at the wave barrier (§7) is cleaner and cheaper. If the kit's `lint-fix` module is installed,
-confirm `fix.onSubagentStop` is not `true` in `.claude/kit.config.json`. That setting fires the fixer
+One run at the wave barrier (§7) is cleaner and cheaper. If houserules' `lint-fix` module is installed,
+confirm `fix.onSubagentStop` is not `true` in `.claude/houserules.config.json`. That setting fires the fixer
 at every worker's exit, which is exactly the collision above.
 
 **That setting covers only half of it.** `fix.onSubagentStop` governs a WORKER's exit. A `Stop` hook
@@ -358,7 +358,7 @@ Every slice reviewed (`DONE` or `BLOCKED`), and only then. This is the wave **ba
 where the tree is quiet enough to touch globally:
 
 1. **Fix once.** Run the repo's auto-fix (`lint:fix` / `format:fix`, or the `fix.commands` in
-   `.claude/kit.config.json`) across the packages the wave touched. One run, after the fan-out has
+   `.claude/houserules.config.json`) across the packages the wave touched. One run, after the fan-out has
    settled. Nothing was formatting mid-flight, so this is the first pass over a consistent tree.
 2. **Verify what actually changed.** Run `/verify-changed` if installed (it scopes to the changed
    packages plus dependents, off-context), otherwise the repo's verify on the touched packages.

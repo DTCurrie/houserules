@@ -1,5 +1,5 @@
 ---
-'@agent-kit/plugin-changesets': minor
+'@houserules/plugin-changesets': minor
 ---
 
 Initial release. Changesets integration and the optional per-commit changelog ledger.

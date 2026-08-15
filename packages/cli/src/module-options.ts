@@ -1,4 +1,4 @@
-import { KitError } from './kit-error.js';
+import { HouseError } from './house-error.js';
 import type { Registry } from './plugin-registry.js';
 
 /**
@@ -9,7 +9,7 @@ import type { Registry } from './plugin-registry.js';
  * `voice/prose-voice` survives. Whitespace around the id and around each value is
  * trimmed, and empty entries from a trailing comma are dropped.
  *
- * @throws KitError when a value has no `=`, an empty id, an empty value list, or an id
+ * @throws HouseError when a value has no `=`, an empty id, an empty value list, or an id
  *   repeated across two flags.
  */
 export function parseModuleOptionFlags(
@@ -19,7 +19,7 @@ export function parseModuleOptionFlags(
   for (const raw of values) {
     const eqIndex = raw.indexOf('=');
     if (eqIndex === -1) {
-      throw new KitError(
+      throw new HouseError(
         `Invalid --module-option "${raw}". Expected the form id=value1,value2.`,
       );
     }
@@ -30,12 +30,12 @@ export function parseModuleOptionFlags(
       .map((value) => value.trim())
       .filter((value) => value.length > 0);
     if (!id || list.length === 0) {
-      throw new KitError(
+      throw new HouseError(
         `Invalid --module-option "${raw}". Expected the form id=value1,value2.`,
       );
     }
     if (id in overrides) {
-      throw new KitError(`--module-option "${id}" was given more than once.`);
+      throw new HouseError(`--module-option "${id}" was given more than once.`);
     }
     overrides[id] = list;
   }
@@ -47,9 +47,9 @@ export function parseModuleOptionFlags(
  *
  * The failure this exists for is the upgrade path. An install made before selections were
  * persisted has the files a real selection produced sitting on disk and in the manifest, and
- * nothing in `kit.config.json` saying which selection that was. `resolveModuleOptions` then
+ * nothing in `houserules.config.json` saying which selection that was. `resolveModuleOptions` then
  * falls back to the module's `defaults`, the plan stops producing every non-default file, and
- * `computePrune` retires them under the heading "retired by this kit version". That heading is
+ * `computePrune` retires them under the heading "retired by houserules version". That heading is
  * false and the deletion is silent, which is the whole class of bug this guard closes.
  *
  * Deliberately NOT "never prune an options-derived file". A `--reconfigure` that drops a value
@@ -57,7 +57,7 @@ export function parseModuleOptionFlags(
  * recorded at all, which is knowable here, before any plan exists.
  *
  * @param overrides Selections named on the command line this run, which count as recorded.
- * @throws KitError naming each module and the command that settles it. Callers that mean to
+ * @throws HouseError naming each module and the command that settles it. Callers that mean to
  *   accept the defaults pass `--force`, which skips this entirely.
  */
 export function assertOptionsRecorded(
@@ -80,11 +80,11 @@ export function assertOptionsRecorded(
       // A module with empty `defaults` has nothing to put after the `=`, and an empty value
       // list is the one thing parseModuleOptionFlags refuses. Bare --reconfigure prompts.
       return values.length
-        ? `  npx agent-kit modules --reconfigure=${id} --module-option ${id}=${values.join(',')}`
-        : `  npx agent-kit modules --reconfigure=${id}`;
+        ? `  npx houserules modules --reconfigure=${id} --module-option ${id}=${values.join(',')}`
+        : `  npx houserules modules --reconfigure=${id}`;
     })
     .join('\n');
-  throw new KitError(
+  throw new HouseError(
     `No recorded option selection for: ${unrecorded.join(', ')}.\n` +
       'Planning would fall back to each module’s defaults and retire the files any other ' +
       'selection installed, which reads as a deliberate removal but is not one.\n' +
@@ -108,7 +108,7 @@ export function assertOptionsRecorded(
  * Precedence is explicit beats persisted beats default. An `--module-option` on the command
  * line is the user speaking now, so it outranks what a previous run wrote to config.
  *
- * @param persisted `moduleOptions` from `.claude/kit.config.json`, or undefined on a repo that
+ * @param persisted `moduleOptions` from `.claude/houserules.config.json`, or undefined on a repo that
  *   has no config yet.
  * @param overrides Selections named on the command line this run.
  */

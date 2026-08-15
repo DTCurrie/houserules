@@ -1,7 +1,7 @@
-# @agent-kit/plugin-persona-auditor
+# @houserules/plugin-persona-auditor
 
-[![npm](https://img.shields.io/npm/v/@agent-kit/plugin-persona-auditor.svg)](https://www.npmjs.com/package/@agent-kit/plugin-persona-auditor)
-[![downloads](https://img.shields.io/npm/dm/@agent-kit/plugin-persona-auditor.svg)](https://www.npmjs.com/package/@agent-kit/plugin-persona-auditor)
+[![npm](https://img.shields.io/npm/v/@houserules/plugin-persona-auditor.svg)](https://www.npmjs.com/package/@houserules/plugin-persona-auditor)
+[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-persona-auditor.svg)](https://www.npmjs.com/package/@houserules/plugin-persona-auditor)
 
 An agent asked to check whether a system's choice serves a given persona will read the
 selection code first if you let it, and then rationalize whatever that code already decided.
@@ -18,18 +18,18 @@ moved into plugins, install this package to restore it under its plugin id.
 ## Install
 
 ```
-pnpm add -D @agent-kit/plugin-persona-auditor
-pnpm exec agent-kit init
+pnpm add -D @houserules/plugin-persona-auditor
+pnpm exec houserules init
 ```
 
-Requires [`@agent-kit/cli`](https://github.com/DTCurrie/agent-kit/tree/main/packages/cli).
+Requires [`@houserules/cli`](https://github.com/DTCurrie/houserules/tree/main/packages/cli).
 `init` is what writes the module into `.claude/`. This module is off by default, so select it
 when `init` asks.
 
 ## Modules
 
 - **`persona-auditor`** installs
-  `.claude/kit-templates/agents/persona-auditor.agent.md.template`, a read-only,
+  `.claude/templates/agents/persona-auditor.agent.md.template`, a read-only,
   haiku-model agent template. Fill in `<COMPONENT>`, `<PERSONA>`, the priorities source, and
   the option data source, and instantiate one copy per component you want audited. The
   template forbids reading the selection or scoring code, ranks the options blind, then
@@ -37,11 +37,11 @@ when `init` asks.
   `DEFENSIBLE_ALT`, `PRIORITY_UNDERWEIGHTED`, `CONSTRAINT_UNSTATED`, `OPTION_OVERLOOKED`, or
   `DATA_STALE`.
 
-## Part of agent-kit
+## Part of houserules
 
-[agent-kit](https://github.com/DTCurrie/agent-kit) is a portable kit of Claude Code
+[houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
 infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
-The [package list](https://github.com/DTCurrie/agent-kit#packages) has the rest.
+The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License
 
