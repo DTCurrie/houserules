@@ -7,8 +7,11 @@
 [![license](https://img.shields.io/npm/l/@houserules/cli.svg)](./LICENSE)
 [![node](https://img.shields.io/node/v/@houserules/cli.svg)](https://nodejs.org)
 
+> [!WARNING]
+> This package is still a work-in-progress and every API should be considered experimental and likely to break. There will be no guarantee of backwards compatibility until version 1.0.0. Use at your own risk.
+
 A Claude Code session spends most of its budget on context it pays for every turn and on
-conclusions it derives twice. houserules pushes that work off the main agent's context window:
+conclusions it derives twice. `houserules` pushes that work off the main agent's context window:
 into disposable subagents, onto disk as ledgers and changesets, into deterministic hook scripts,
 and behind grep-able snapshots.
 

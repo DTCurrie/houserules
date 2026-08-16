@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "libs": {
+    "scripts/consumer.mjs": ["nonexistent-lib.mjs"]
+  }
+}
