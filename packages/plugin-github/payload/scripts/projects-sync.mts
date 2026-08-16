@@ -1285,7 +1285,7 @@ function handleCreateDraft(
   project: ResolvedProject,
   ctx: PushContext,
 ): GhResult<SyncResult> {
-  // The marker is what lets `pull` recognise this draft as ours later. Creating without one is
+  // The marker is what lets `pull` recognize this draft as ours later. Creating without one is
   // how all 41 existing drafts ended up unmappable: the issue paths appended it and this one did
   // not, so a decision reached the board and then vanished from every projection of it.
   const created = addDraftIssueMutation(

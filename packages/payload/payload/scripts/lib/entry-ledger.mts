@@ -156,7 +156,7 @@ export function readLog<TRecord>(logFile: string): TRecord[] {
  * different ignore rules and cannot share one. `.jsonl` and not `.log`, because `*.log` is a
  * common ignore pattern this file must avoid.
  *
- * Older trees are migrated in place, newest layout first, so there is one path afterwards and
+ * Older trees are migrated in place, newest layout first, so there is one path afterward and
  * never a split ledger. A rename that fails leaves the older file authoritative rather than
  * starting a second one.
  */

@@ -6,7 +6,7 @@
  * Backlog IDs come from the backlog ledger: the latest add/update per id wins, and a
  * remove tombstones the entry so nothing is injected. Decision IDs come from the decision
  * ledger and are never tombstoned. A superseded decision still injects,
- * labelled superseded, with one ancestry line per prior record it descends from.
+ * labeled superseded, with one ancestry line per prior record it descends from.
  *
  * Every failure path exits 0 and prints nothing, because an injector must never block a
  * prompt.

@@ -28,10 +28,10 @@ names for the files at hand.
 
 For each criterion in play, report the number and name, then one of: **Pass** | **Fail**
 (with `file:line` and the specific violation) | **Cannot determine from source** (name what
-a rendered page or human judgement would need to settle, such as contrast ratio, real focus
+a rendered page or human judgment would need to settle, such as contrast ratio, real focus
 order, or whether alt text is meaningful).
 
-Do not guess at what you cannot see. A visual property, a runtime behavior, or a judgement
+Do not guess at what you cannot see. A visual property, a runtime behavior, or a judgment
 call on wording is a legitimate "cannot determine from source", not a gap to paper over
 with an assumed pass.
 

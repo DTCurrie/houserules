@@ -158,7 +158,7 @@ compiled CSS can verify it the same way it verifies `bg-brand-500`.
 
 ## Recommendation: a semantic layer over the raw palette
 
-This is a design opinion, not a Tailwind behaviour. Tailwind does not require it and will
+This is a design opinion, not a Tailwind behavior. Tailwind does not require it and will
 compile a theme without one.
 
 Name the raw palette by its own scale, `--color-brand-500`, `--color-neutral-950`, and then

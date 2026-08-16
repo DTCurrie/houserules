@@ -11,7 +11,7 @@
  *
  * <line> and <col> are 1-based and must land on the identifier. Scope is the nearest
  * tsconfig.json above <file>, so a cross-package symbol is renamed only within its own
- * package. Verify with the package's typecheck afterwards.
+ * package. Verify with the package's typecheck afterward.
  */
 import path from 'node:path';
 import process from 'node:process';

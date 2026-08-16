@@ -65,7 +65,7 @@ export function checkDesignTokens(ctx: Ctx): CheckResult {
  * The token-file check for a repo where the Tailwind theme is the design system instead.
  *
  * A missing token file is the CORRECT state here, so {@link checkDesignTokens}'s warning would
- * be backwards. What is worth reporting is the opposite case: a `tokens.json` left over from
+ * be backward. What is worth reporting is the opposite case: a `tokens.json` left over from
  * before `design-tailwind` was installed. Nothing reads it any more, and houserules will never
  * remove it, because a seed is never manifest-tracked and so `computePrune` cannot reach it.
  * Left unsaid, it sits there looking like the design system while every query answers from the

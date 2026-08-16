@@ -278,7 +278,7 @@ describe('ledger-inject.mjs', () => {
       expect(r.stdout).toMatch(/accepted/);
     });
 
-    it('injects a superseded decision, labelled superseded', () => {
+    it('injects a superseded decision, labeled superseded', () => {
       const root = useInstalledRepo('pnpm-monorepo');
       decideEntry(
         root,

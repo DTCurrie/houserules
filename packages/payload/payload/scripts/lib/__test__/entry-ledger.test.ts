@@ -205,7 +205,7 @@ describe('ledgerDir', () => {
     expect(ledgerDir(root)).toBe(join(root, '.claude/ledgers'));
   });
 
-  it('honours a configured directory', () => {
+  it('honors a configured directory', () => {
     const root = tempRoot();
 
     expect(ledgerDir(root, 'docs/ledgers')).toBe(join(root, 'docs/ledgers'));

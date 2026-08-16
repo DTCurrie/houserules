@@ -56,7 +56,7 @@ here would be. This plugin owns the routing and the reasoning, and points at tho
 configured for it.
 
 Nothing here decides contrast ratios, real focus order, or whether alt text is meaningful. Those
-need a rendered page or human judgement, and the rule, the skill, and the agent all say so rather
+need a rendered page or human judgment, and the rule, the skill, and the agent all say so rather
 than guessing.
 
 ## The reference is pull-only

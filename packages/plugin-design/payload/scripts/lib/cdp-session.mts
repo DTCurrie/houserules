@@ -147,7 +147,7 @@ function connect(url: string): Promise<Connection> {
  * Resolves once the child has actually exited, or after {@link EXIT_WAIT_MS} either way.
  *
  * `kill()` only sends the signal. Chrome still holds files open in its profile directory for a
- * moment afterwards, and deleting it in that window fails intermittently with `ENOTEMPTY`.
+ * moment afterward, and deleting it in that window fails intermittently with `ENOTEMPTY`.
  */
 function processExited(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null)

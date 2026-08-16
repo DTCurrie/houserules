@@ -158,8 +158,8 @@ the resource rule above is what finds the real parallelism, and it is usually mu
 single plan's phase boundaries suggest. Record which plan each slice came from, and update BOTH that
 plan's status and the wave's when it lands.
 
-**When you drop a slice, re-home its scope.** A slice cancelled mid-program usually carried more
-than the reason it was cancelled for. Read its brief before deleting it and move whatever is still
+**When you drop a slice, re-home its scope.** A slice canceled mid-program usually carried more
+than the reason it was canceled for. Read its brief before deleting it and move whatever is still
 wanted into another slice, or you will rediscover the orphaned half several slices later.
 
 **Orchestrator-owned files** never appear in any worker's `owns`: lockfiles, generated indexes,

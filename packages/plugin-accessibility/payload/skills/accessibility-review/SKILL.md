@@ -27,7 +27,7 @@ Review the accessibility of a working-tree change. Arguments (optional file filt
 5. **Run the repo's own accessibility linter if one exists** (eslint-plugin-jsx-a11y,
    axe, svelte-check a11y rules, or similar) and reconcile its output with your review. The
    linter owns mechanical findings such as a missing `alt` or a missing label. This skill
-   owns the findings that need judgement, such as whether an accessible name matches its
+   owns the findings that need judgment, such as whether an accessible name matches its
    visible label or whether a focus move after a route change makes sense.
 6. **Report per criterion.** For each criterion in play, state whether the change satisfies
    it, violates it, or cannot be determined from source. Separate the three groups instead of
@@ -36,7 +36,7 @@ Review the accessibility of a working-tree change. Arguments (optional file filt
 ## Contrast, focus order, and alt text cannot be settled from source
 
 Color contrast ratios, real tab and focus order, and whether alt text is meaningful all
-depend on rendered output or human judgement, not on markup alone. Never guess these from
+depend on rendered output or human judgment, not on markup alone. Never guess these from
 source. Flag them for a human reviewer or a rendered/browser check, and say plainly in the
 report that they were not verified.
 

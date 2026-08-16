@@ -30,7 +30,7 @@ find out whether it already has one.
    tooling, or docs-only changes, record the decision explicitly and stop:
    `node .claude/scripts/changeset-write.mjs --empty --summary "<why no release>"`.
 4. **Pick the bump per package.** `patch` for fixes and internal changes (the default), `minor`
-   for backwards-compatible features, `major` for breaking changes. **Never record a major on
+   for backward-compatible features, `major` for breaking changes. **Never record a major on
    your own authority: report back and ask first.**
 5. **Write the summary.** One short sentence, 15 words or fewer, in changelog voice, naming what
    changed for the package's users. No semicolons and no second clause. Use exact names and

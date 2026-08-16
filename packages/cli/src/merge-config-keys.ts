@@ -1,7 +1,7 @@
 /**
  * The keys houserules reconciles inside `.claude/houserules.config.json`, a file the USER owns.
  *
- * This is the JSON analogue of what {@link ./merge-settings.ts} does to `settings.json`. The
+ * This is the JSON analog of what {@link ./merge-settings.ts} does to `settings.json`. The
  * file belongs to the user end to end, and houserules writes only the named keys, so every other
  * key, and the user's own edits to the managed ones, survive a run untouched.
  */

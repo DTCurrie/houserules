@@ -37,7 +37,7 @@ function writeComponent(name: string, text: string): string {
 }
 
 describe('checkTailwindClasses', () => {
-  it('names the arbitrary colour and the off-scale padding at the real line number', async () => {
+  it('names the arbitrary color and the off-scale padding at the real line number', async () => {
     const { root, designSystem, tokens } = await setup();
     const filePath = writeComponent(
       'Comp.tsx',
@@ -57,13 +57,13 @@ describe('checkTailwindClasses', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const colourFinding = result.value.findings.find((finding) =>
+    const colorFinding = result.value.findings.find((finding) =>
       finding.message.includes('#3b82f6'),
     );
     const paddingFinding = result.value.findings.find((finding) =>
       finding.message.includes('13px'),
     );
-    expect(colourFinding).toEqual({
+    expect(colorFinding).toEqual({
       line: 2,
       message:
         '#3b82f6 matches no token. This is a new value and needs a design decision before it joins the token set.',
@@ -91,7 +91,7 @@ describe('checkTailwindClasses', () => {
     expect(result.value.findings).toEqual([]);
   });
 
-  it('resolves a bg-* and text-* pairing sharing one theme colour through the theme, ratio 1.00:1', async () => {
+  it('resolves a bg-* and text-* pairing sharing one theme color through the theme, ratio 1.00:1', async () => {
     const { root, designSystem, tokens } = await setup();
     const filePath = writeComponent(
       'Comp.tsx',
@@ -116,7 +116,7 @@ describe('checkTailwindClasses', () => {
     ]);
   });
 
-  it('reports a contrast ratio for a bg-* and text-* pairing sharing one arbitrary colour', async () => {
+  it('reports a contrast ratio for a bg-* and text-* pairing sharing one arbitrary color', async () => {
     const { root, designSystem, tokens } = await setup();
     const filePath = writeComponent(
       'Comp.tsx',

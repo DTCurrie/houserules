@@ -313,7 +313,7 @@ export function parseHouseConfig(raw: string): HouseConfig {
   }
   const result = HouseConfigSchema.safeParse(data, {
     // Only the callback sees `input`, so a missing field can be told apart from a
-    // wrong-typed one here but not from the issue list afterwards.
+    // wrong-typed one here but not from the issue list afterward.
     error: (issue) =>
       issue.code === 'invalid_type' && issue.input === undefined
         ? 'is required'

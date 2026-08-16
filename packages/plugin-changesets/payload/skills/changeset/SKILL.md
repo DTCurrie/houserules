@@ -29,7 +29,7 @@ feature is one bullet there, however many commits it took.
    through the targets in `.claude/houserules.config.json`.
 3. **Pick the bump level per package** (semver):
    - `patch`: fixes, internal refactors with no API change. The default.
-   - `minor`: new user-facing capability, backwards-compatible.
+   - `minor`: new user-facing capability, backward-compatible.
    - `major`: breaking change. **Confirm with the user before recording a major.**
 4. **Write the summary.** This is the canonical spec, and the `changeset-writer` agent follows it
    too.

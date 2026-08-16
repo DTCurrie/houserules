@@ -71,7 +71,7 @@ verdict. Put `model: haiku` (or the cheapest capable tier) in their frontmatter,
 agents already do, and add `effort: low` for the most mechanical ones. houserules sets both on
 `changeset-writer` and `backlog-reviewer`.
 
-**Default tier.** Reserve it for open-ended judgement. houserules' `task-worker` is `model: sonnet`
+**Default tier.** Reserve it for open-ended judgment. houserules' `task-worker` is `model: sonnet`
 with `effort: medium` precisely because implementing a slice is not rubric-driven, and the shipped
 `debugger` template leaves `model` unset so it inherits the session model.
 
@@ -132,7 +132,7 @@ write a small `.claude/rules/<topic>.md`. houserules ships a starting point at
 `.claude/templates/rules/GUARDRAIL.md.template`, restored by `npx houserules update` if it goes
 missing. Each doc carries terse locked decisions **with their rationale**, a "if a change is in
 tension with this, the change is wrong" precedence line, and `description` frontmatter. The payoff is
-converting open-ended judgement into a cheap lookup against a locked answer, which avoids the most
+converting open-ended judgment into a cheap lookup against a locked answer, which avoids the most
 expensive failure: work that points the wrong way and gets reverted.
 
 **`.claude/rules/*.md` is auto-loaded, and the frontmatter decides when** (verified against Claude
@@ -232,7 +232,7 @@ to take:
 - **Routing is the actual product.** The corpus is inert without something that answers "which
   part of this applies to my change". That router is houserules' own work, and it is the part worth
   writing.
-- **The licence travels with it.** Check what redistribution the standard permits before shipping
+- **The license travels with it.** Check what redistribution the standard permits before shipping
   a line of it, and carry the required notice in the generated file and the package `LICENSE`.
 
 The bar is: published, externally versioned, identical across repos, and licensed for

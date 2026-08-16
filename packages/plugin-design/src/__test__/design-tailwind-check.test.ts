@@ -30,7 +30,7 @@ function writeComponent(root: string, name: string, text: string): void {
 }
 
 describe('design.mjs check, Tailwind class checking', () => {
-  it('names the arbitrary colour and the off-scale padding and exits 1', () => {
+  it('names the arbitrary color and the off-scale padding and exits 1', () => {
     const root = useTailwindRepo({ withOxide: true });
     writeComponent(
       root,
@@ -68,7 +68,7 @@ describe('design.mjs check, Tailwind class checking', () => {
     expect(result.stdout).not.toContain('Comp.tsx:');
   });
 
-  it('reports a contrast ratio for a bg-* and text-* pairing sharing one theme colour', () => {
+  it('reports a contrast ratio for a bg-* and text-* pairing sharing one theme color', () => {
     const root = useTailwindRepo({ withOxide: true });
     writeComponent(
       root,
@@ -127,7 +127,7 @@ describe('design.mjs check, Tailwind class checking', () => {
     ],
     ['comp.astro', '---\n---\n<div class="bg-[#3b82f6] p-[13px]" />\n', 3],
   ])(
-    'finds the same arbitrary colour in a %s file, at line %#',
+    'finds the same arbitrary color in a %s file, at line %#',
     (name, content, line) => {
       const root = useTailwindRepo({ withOxide: true });
       writeComponent(root, name, content);

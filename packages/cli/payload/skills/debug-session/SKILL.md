@@ -16,7 +16,7 @@ rather than a memory exercise.
 
 - Restate the bug in one line: the observed behavior, the expected behavior, and the exact trigger
   (route, command, input) that reproduces it.
-- Write **1–3 explicit, falsifiable hypotheses**, labelled `H1`, `H2`, `H3`. Each must name a
+- Write **1–3 explicit, falsifiable hypotheses**, labeled `H1`, `H2`, `H3`. Each must name a
   suspected cause _and_ the observation that would confirm or reject it. "Something's off in auth"
   is not a hypothesis. "H1: the session token is null by the time `requireUser` runs" is.
 - Say which hypothesis you'll test first and why. Don't instrument everything at once.

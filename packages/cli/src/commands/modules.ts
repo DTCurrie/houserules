@@ -457,7 +457,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
   const statusTable = registry.modules
     .map((m) => {
       const mark = installed.has(m.id) ? '✓ installed' : '○ available';
-      return ui.labelled(
+      return ui.labeled(
         `${mark}  `,
         `${m.id}${m.def.locked ? ' (always)' : ''} — ${m.def.title}`,
       );

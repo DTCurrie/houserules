@@ -155,7 +155,7 @@ function ensureChangelogHeader(target: ResolvedTarget) {
       `Per-commit record of changes to \`${target.sourcePath}/\`. Maintained by`,
       '`.claude/scripts/package-changelog.mjs` and the corresponding archivist agent.',
       '',
-      'Each entry summarises what shipped as a bullet list. For the full diff or',
+      'Each entry summarizes what shipped as a bullet list. For the full diff or',
       'any prior file state, use git directly:',
       '',
       '```',
@@ -276,7 +276,7 @@ function assertRecordable(
   }
   if (!changesInput || !changesInput.trim()) {
     console.error(
-      'Missing required --changes "<bullet list>". The archivist agent must summarise what shipped.',
+      'Missing required --changes "<bullet list>". The archivist agent must summarize what shipped.',
     );
     process.exit(1);
   }

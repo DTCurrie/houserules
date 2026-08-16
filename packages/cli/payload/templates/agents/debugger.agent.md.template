@@ -4,7 +4,7 @@ name: "<domain>-debugger"
 tools: Read, Edit, Write, Grep, Glob, Bash
 user-invocable: true
 ---
-<!-- Leave `model` unset (inherit the session model). Debugging is open-ended judgement,
+<!-- Leave `model` unset (inherit the session model). Debugging is open-ended judgment,
      not the mechanical, rubric-driven work that warrants `model: haiku` (CONVENTIONS §3). -->
 
 You are the <PROJECT> <DOMAIN> debugger. You run the full hypothesis→instrument→observe→resolve loop

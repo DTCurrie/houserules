@@ -20,7 +20,7 @@ Push the backlog and decision ledgers to the linked GitHub Project boards.
    `node .claude/scripts/projects-sync.mjs push`
 
    A push ends by pulling a fresh index and then dropping from the queue every entry the
-   board confirms. An empty queue afterwards means it worked.
+   board confirms. An empty queue afterward means it worked.
 
 ## The two local files, so you read the right one
 

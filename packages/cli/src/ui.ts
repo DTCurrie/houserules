@@ -36,8 +36,8 @@ const LIST_MARKER = /^(?:[-*+]|\d+\.)[ \t]+/;
 /**
  * Word-wraps to `width`, measured on visible characters so ANSI codes do not count. A
  * token is never split, because paths, commands, and flags have to stay copy-pasteable,
- * so an over-long word overflows its line. A break inside a coloured span is closed
- * with a reset so the colour cannot bleed into the rest of the output.
+ * so an over-long word overflows its line. A break inside a colored span is closed
+ * with a reset so the color cannot bleed into the rest of the output.
  *
  * A list marker stays on the same line as its first word, and continuation lines hang
  * under that word. Treating the marker as an ordinary word let an item longer than `width`
@@ -72,7 +72,7 @@ export function wrap(text: string, width = messageWidth()): string {
 }
 
 /** Renders "label  body", hanging the wrapped continuation lines under the body column. */
-export function labelled(
+export function labeled(
   label: string,
   text: string,
   width = noteWidth(),
@@ -83,8 +83,8 @@ export function labelled(
   );
 }
 
-// Wrap BEFORE colouring: splitting an already-coloured string strands its reset
-// code on the first line, bleeding colour into everything after it.
+// Wrap BEFORE coloring: splitting an already-colored string strands its reset
+// code on the first line, bleeding color into everything after it.
 function bullet(
   text: string,
   width: number,
@@ -124,7 +124,7 @@ function cancel(text: string): void {
 
 function bail<T>(value: T | symbol): T {
   if (p.isCancel(value)) {
-    cancel('Cancelled — nothing written.');
+    cancel('Canceled — nothing written.');
     process.exit(1);
   }
   return value;
@@ -178,7 +178,7 @@ export function profileCard(ctx: Ctx): string {
   ]
     .filter(Boolean)
     .join(', ');
-  const row = (name: string, value: string) => labelled(name.padEnd(13), value);
+  const row = (name: string, value: string) => labeled(name.padEnd(13), value);
   return [
     row('repo', elideStart(ctx.root, noteWidth() - 13)),
     row('package mgr', pm),
@@ -276,7 +276,7 @@ export async function confirmTargets(targets: Target[]): Promise<Target[]> {
   if (!targets.length) return targets;
   const rows = targets
     .map((t) =>
-      labelled(
+      labeled(
         `  ${t.name}  `,
         `prefix=${t.prefix}  src=${t.sourcePath || '(root)'}  fix=${t.fixCommands?.join('+') ?? '—'}`,
       ),
@@ -414,7 +414,7 @@ export function renderPreview({
 export function nextSteps(advisories: AdviseAction[]): void {
   if (!advisories.length) return;
   const lines = advisories.map((a, i) =>
-    labelled(`${String(i + 1).padStart(2)}. `, a.text, messageWidth()),
+    labeled(`${String(i + 1).padStart(2)}. `, a.text, messageWidth()),
   );
   const body = `${pc.bold('Next steps (yours — houserules does not do these):')}\n\n${lines.join('\n')}`;
   if (isTTY()) p.log.message(body);

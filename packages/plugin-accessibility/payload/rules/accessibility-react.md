@@ -38,7 +38,7 @@ assumes.
   element, so `role` or `aria-*` on it does nothing. Use a real element instead.
 - **Install `eslint-plugin-jsx-a11y`.** It catches the mechanical half of this file, the
   missing `alt`, the redundant role, the `<div onClick>` with no keyboard handler. It does
-  not catch anything needing runtime or visual judgement, such as color contrast, the actual
+  not catch anything needing runtime or visual judgment, such as color contrast, the actual
   tab order, or whether an `alt` string is a meaningful description.
 
 ## Examples

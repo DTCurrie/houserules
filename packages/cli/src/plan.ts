@@ -462,7 +462,7 @@ function effectForSeed(
 ): Effect {
   if (!exists) pendingContent.set(action.dest, action.content);
   // A seed with managedKeys reconciles those keys into a file that already exists. Every
-  // other byte, including the user's edits to the managed keys' neighbours, is preserved.
+  // other byte, including the user's edits to the managed keys' neighbors, is preserved.
   const mergedText =
     exists && action.managedKeys?.length
       ? mergeManagedKeys(
