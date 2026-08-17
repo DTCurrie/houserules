@@ -1,7 +1,6 @@
 # @houserules/plugin-github
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-github.svg)](https://www.npmjs.com/package/@houserules/plugin-github)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-github.svg)](https://www.npmjs.com/package/@houserules/plugin-github)
 
 GitHub integrations for houserules. Every module this plugin ships is selected as
 `<alias>/<module>`, so the alias names the service and the module names the integration.

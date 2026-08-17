@@ -1,7 +1,6 @@
 # @houserules/plugin-design
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-design.svg)](https://www.npmjs.com/package/@houserules/plugin-design)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-design.svg)](https://www.npmjs.com/package/@houserules/plugin-design)
 
 A linter checks syntax and a test checks behavior. Neither knows that the button should have
 been `color.brand.primary` rather than a hex value someone typed. So an agent editing UI code

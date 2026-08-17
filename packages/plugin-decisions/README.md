@@ -1,7 +1,6 @@
 # @houserules/plugin-decisions
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-decisions.svg)](https://www.npmjs.com/package/@houserules/plugin-decisions)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-decisions.svg)](https://www.npmjs.com/package/@houserules/plugin-decisions)
 
 A design decision settled in conversation is gone the moment the context that produced it
 scrolls away. The next agent, or the same one a week later, re-argues a question that was

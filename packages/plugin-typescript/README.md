@@ -1,7 +1,6 @@
 # @houserules/plugin-typescript
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-typescript.svg)](https://www.npmjs.com/package/@houserules/plugin-typescript)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-typescript.svg)](https://www.npmjs.com/package/@houserules/plugin-typescript)
 
 An agent writing TypeScript reaches for `any` the moment data arrives from outside the
 program, and picks between `interface` and `type` by whichever it saw last. Neither choice

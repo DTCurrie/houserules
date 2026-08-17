@@ -1,7 +1,6 @@
 # @houserules/plugin-persona-auditor
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-persona-auditor.svg)](https://www.npmjs.com/package/@houserules/plugin-persona-auditor)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-persona-auditor.svg)](https://www.npmjs.com/package/@houserules/plugin-persona-auditor)
 
 An agent asked to check whether a system's choice serves a given persona will read the
 selection code first if you let it, and then rationalize whatever that code already decided.

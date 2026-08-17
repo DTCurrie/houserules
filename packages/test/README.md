@@ -1,7 +1,6 @@
 # @houserules/test
 
 [![npm](https://img.shields.io/npm/v/@houserules/test.svg)](https://www.npmjs.com/package/@houserules/test)
-[![downloads](https://img.shields.io/npm/dm/@houserules/test.svg)](https://www.npmjs.com/package/@houserules/test)
 
 Shared testing infrastructure for driving the [houserules](https://github.com/DTCurrie/houserules)
 CLI against synthetic repos. Built for the CLI's own suites, and published so a plugin author

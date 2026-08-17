@@ -1,7 +1,6 @@
 # @houserules/plugin-testing
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-testing.svg)](https://www.npmjs.com/package/@houserules/plugin-testing)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-testing.svg)](https://www.npmjs.com/package/@houserules/plugin-testing)
 
 An agent asked to fix a bug will often write a test that passes before the fix and after it,
 which proves nothing. Left alone, it also drifts toward asserting `toBeDefined()`, chasing a

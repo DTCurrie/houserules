@@ -1,9 +1,8 @@
 # houserules
 
 [![npm](https://img.shields.io/npm/v/@houserules/cli.svg)](https://www.npmjs.com/package/@houserules/cli)
-[![downloads](https://img.shields.io/npm/dm/@houserules/cli.svg)](https://www.npmjs.com/package/@houserules/cli)
 [![CI](https://github.com/DTCurrie/houserules/actions/workflows/ci.yml/badge.svg)](https://github.com/DTCurrie/houserules/actions/workflows/ci.yml)
-[![license](https://img.shields.io/npm/l/@houserules/cli.svg)](https://github.com/DTCurrie/houserules/blob/main/LICENSE)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DTCurrie/houserules/badge)](https://scorecard.dev/viewer/?uri=github.com/DTCurrie/houserules)
 [![node](https://img.shields.io/node/v/@houserules/cli.svg)](https://nodejs.org)
 
 A Claude Code session spends most of its budget on context it pays for every turn, and on

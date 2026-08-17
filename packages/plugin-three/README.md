@@ -1,7 +1,6 @@
 # @houserules/plugin-three
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-three.svg)](https://www.npmjs.com/package/@houserules/plugin-three)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-three.svg)](https://www.npmjs.com/package/@houserules/plugin-three)
 
 An agent writing Three.js reaches for a wrapper object around a scene graph node instead of
 extending the class directly, and allocates a new `Vector3` inside the render loop instead of

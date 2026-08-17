@@ -1,7 +1,6 @@
 # @houserules/plugin-accessibility
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-accessibility.svg)](https://www.npmjs.com/package/@houserules/plugin-accessibility)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-accessibility.svg)](https://www.npmjs.com/package/@houserules/plugin-accessibility)
 
 An agent editing markup gets accessibility wrong in predictable ways: a click handler on a
 `<div>`, an `<img>` with no `alt` decision, a label that is not associated with its control.

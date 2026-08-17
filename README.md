@@ -1,10 +1,8 @@
 # houserules
 
 [![npm](https://img.shields.io/npm/v/@houserules/cli.svg)](https://www.npmjs.com/package/@houserules/cli)
-[![downloads](https://img.shields.io/npm/dm/@houserules/cli.svg)](https://www.npmjs.com/package/@houserules/cli)
 [![CI](https://github.com/DTCurrie/houserules/actions/workflows/ci.yml/badge.svg)](https://github.com/DTCurrie/houserules/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DTCurrie/houserules/badge)](https://scorecard.dev/viewer/?uri=github.com/DTCurrie/houserules)
-[![license](https://img.shields.io/npm/l/@houserules/cli.svg)](./LICENSE)
 [![node](https://img.shields.io/node/v/@houserules/cli.svg)](https://nodejs.org)
 
 > [!WARNING]

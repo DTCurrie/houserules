@@ -1,7 +1,6 @@
 # @houserules/plugin-changesets
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-changesets.svg)](https://www.npmjs.com/package/@houserules/plugin-changesets)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-changesets.svg)](https://www.npmjs.com/package/@houserules/plugin-changesets)
 
 An agent that finishes a change and stops there leaves nothing behind for the next release.
 Nobody remembers three weeks later which package a fix touched or what to write in the

@@ -1,7 +1,6 @@
 # @houserules/plugin-svelte
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-svelte.svg)](https://www.npmjs.com/package/@houserules/plugin-svelte)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-svelte.svg)](https://www.npmjs.com/package/@houserules/plugin-svelte)
 
 An agent trained on older Svelte reaches for `export let`, a `$:` reactive statement, and
 `on:click` by reflex, because that is what most of its training data still shows. None of

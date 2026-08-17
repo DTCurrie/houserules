@@ -1,7 +1,6 @@
 # @houserules/plugin-prose
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-prose.svg)](https://www.npmjs.com/package/@houserules/plugin-prose)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-prose.svg)](https://www.npmjs.com/package/@houserules/plugin-prose)
 
 An agent left to its own judgment writes a file header nobody reads, restates a variable name
 in a comment above it, adds an em dash where a period would do, and pads a PR description with

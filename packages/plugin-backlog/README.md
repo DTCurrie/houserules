@@ -1,7 +1,6 @@
 # @houserules/plugin-backlog
 
 [![npm](https://img.shields.io/npm/v/@houserules/plugin-backlog.svg)](https://www.npmjs.com/package/@houserules/plugin-backlog)
-[![downloads](https://img.shields.io/npm/dm/@houserules/plugin-backlog.svg)](https://www.npmjs.com/package/@houserules/plugin-backlog)
 
 An agent mid-task that finds real work outside its current scope has two bad options: fix it
 inline and bloat the diff, or mention it in a chat message that scrolls away and is gone.
