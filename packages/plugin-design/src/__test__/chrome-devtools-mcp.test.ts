@@ -75,6 +75,27 @@ describe('chrome-devtools-mcp', () => {
     ]);
   });
 
+  it('installs the mode-switching skill and tracks it in the manifest', () => {
+    const root = installedWith();
+
+    expect(
+      existsSync(join(root, '.claude/skills/chrome-devtools-mode/SKILL.md')),
+    ).toBe(true);
+    expect(
+      Object.keys(manifestOf(root).files).includes(
+        '.claude/skills/chrome-devtools-mode/SKILL.md',
+      ),
+    ).toBe(true);
+  });
+
+  it('installs the mode-switching skill for the slim variant too', () => {
+    const root = installedWith(['slim']);
+
+    expect(
+      existsSync(join(root, '.claude/skills/chrome-devtools-mode/SKILL.md')),
+    ).toBe(true);
+  });
+
   it('installs the full stdio config with the expected command and args', () => {
     const root = installedWith();
 

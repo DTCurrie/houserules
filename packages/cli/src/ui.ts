@@ -241,6 +241,22 @@ export async function selectNewModules(
 }
 
 /**
+ * Prefixes a module's follow-up question with the module asking it, and with the plugin that
+ * module came from.
+ *
+ * The questions are asked back to back, one per option-bearing module, and a question phrased
+ * as "install the slim variant instead?" says nothing about which install it means. Installing
+ * two plugins that each ask something leaves the user guessing which answer lands where.
+ * `def.id` rather than the registry's namespaced id, since the alias is already in the tag.
+ */
+export function optionPromptMessage(
+  m: RegisteredModule,
+  prompt: string,
+): string {
+  return `${pc.dim(m.def.id)}${pluginTag(m)}  ${prompt}`;
+}
+
+/**
  * Asks each enabled module's follow-up question, in order. A module with no `options`
  * declaration is skipped, and a run where nothing is enabled with options asks nothing.
  *
@@ -257,7 +273,7 @@ export async function selectModuleOptions(
     if (!options) continue;
     const picked = bail<string[]>(
       await p.multiselect({
-        message: options.prompt,
+        message: optionPromptMessage(m, options.prompt),
         options: options.choices.map((choice) => ({
           value: choice.value,
           label: choice.label,

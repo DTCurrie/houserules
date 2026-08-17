@@ -75,10 +75,24 @@ select them when `init` asks.
   test assertions, `playwright-mcp` in `@houserules/plugin-testing` is the cheaper pick, and the
   advise text in both modules says so.
 
-  The default surface is 50 tool definitions, paid on every turn whether you use them or not. The
-  `slim` module option swaps in a 3-tool variant instead. The shipped args pin
-  `chrome-devtools-mcp@1.7.0`, so the counts here stay true, and carry `--headless`, `--isolated`,
-  and `--no-usage-statistics`, since upstream defaults telemetry on.
+  The default surface is 29 tool definitions, about 23KB of schema paid on every turn whether you
+  use them or not. The `slim` module option swaps in a 3-tool variant instead: `navigate`,
+  `evaluate`, and `screenshot`, about 1KB. Slim ships no accessibility snapshot, so it has no
+  element uids and no `click` or `fill`, and the page is driven by passing JavaScript to
+  `evaluate`. The shipped args pin `chrome-devtools-mcp@1.7.0`, so the counts here stay true, and
+  carry `--headless`, `--isolated`, and `--no-usage-statistics`, since upstream defaults telemetry
+  on.
+
+  The counts are measured against the pinned version by handshaking with the server and reading
+  `tools/list`, not counted from its source. The package defines 52 tools and registers 29 under
+  these args, leaving 23 behind flags such as `--memoryDebugging` and `--categoryExtensions`.
+  Re-measure when bumping the pin.
+
+  The module also installs the **`/chrome-devtools-mode`** skill, which switches a wired-in
+  config between the two surfaces by toggling `--slim` in the file the client actually reads.
+  Re-running houserules only rewrites the reference copy under `.claude/mcp/`, which is not that
+  file, and the skill refuses to edit the reference copy: it is hash-tracked, so a local edit
+  makes `update` skip it from then on.
 
   It does not replace `design.mjs render`. That tier drives Chrome over CDP and returns composited
   contrast and rendered geometry as text, deterministically, with no model in the loop. This module
