@@ -1,0 +1,9 @@
+{
+  "name": "@houserules/plugin-fixture-peer-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "peerDependencies": {
+    "@houserules/cli": "workspace:^"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "./payload",
+    "outDir": "./payload-dist",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    // Payload output is executed directly by node in a user's repo, with no
+    // helpers, no polyfills, no tslib. erasableSyntaxOnly keeps every construct
+    // erasable, so `.mjs` emit is the source minus its types and nothing else.
+    "erasableSyntaxOnly": true,
+    // Declarations are emitted for this package's own hook scripts. workspaces and
+    // config, which src/ consumes from payload-dist (e.g. detect.ts), now live in
+    // @houserules/payload — scripts/build-payload.mjs copies their compiled .mjs/.d.mts
+    // into this package's payload-dist/scripts/lib/ after this project runs, which is
+    // what keeps that relative import working unchanged. Build order is
+    // payload → src, wired in the `build` script.
+    "declaration": true,
+    "sourceMap": false,
+    "removeComments": false,
+    "types": ["node"]
+  },
+  "include": ["payload/**/*.mts"],
+  // Colocated payload tests must never reach payload-dist/, which package.json ships.
+  // The include above only matches `.mts` and tests are `.test.ts`, so this is belt and
+  // braces — but relying on an extension mismatch is fragile, and a future `.mts` test
+  // would otherwise ship silently.
+  "exclude": ["payload/**/__test__/**"]
+}

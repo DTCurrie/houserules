@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    // The colocated tests import the payload readers from source (`../../payload/scripts/
+    // lib/*.mts`), which is how vitest resolves them. Deliberately NOT in
+    // tsconfig.payload.json: that config emits, so it keeps rejecting a `.mts` specifier in
+    // shipped payload code. That rejection is load-bearing, since an emitted `.mts` import is
+    // an ERR_MODULE_NOT_FOUND in the user's repo.
+    "allowImportingTsExtensions": true,
+    // Mirrors the `#test/*` alias in vitest.config.ts so `tsc --noEmit` resolves it, to
+    // @houserules/test's published subpaths. Kept out of tsconfig.build.json: nothing under
+    // src/ that ships may reference it.
+    "paths": {
+      "#test/tailwind-fixture": ["./test/tailwind-fixture.ts"],
+      "#test/*": ["./node_modules/@houserules/test/dist/*.d.ts"]
+    }
+  },
+  // tsconfig.build.json excludes colocated tests so they stay out of dist/. Typechecking
+  // must still see them, so the inherited exclude is cleared here.
+  "exclude": [],
+  // Both test locations. Dropping the payload glob is how four packages ended up with suites
+  // that `pnpm check` never read, and vitest strips types rather than checking them, so nothing
+  // else would catch it.
+  "include": ["src/**/*.ts", "test/**/*.ts", "payload/**/__test__/**/*.ts"]
+}

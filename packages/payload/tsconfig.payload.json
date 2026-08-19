@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "./payload",
+    "outDir": "./payload-dist",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    // Payload output is executed directly by node in a user's repo, with no
+    // helpers, no polyfills, no tslib. erasableSyntaxOnly keeps every construct
+    // erasable, so `.mjs` emit is the source minus its types and nothing else.
+    "erasableSyntaxOnly": true,
+    // Declarations are emitted so both @houserules/cli (a relative import into this
+    // package's payload-dist) and any plugin (a `@houserules/payload/<lib>` package-name
+    // import) can typecheck against these libs.
+    "declaration": true,
+    "sourceMap": false,
+    "removeComments": false,
+    "types": ["node"]
+  },
+  "include": ["payload/**/*.mts"],
+  // Colocated payload tests must never reach payload-dist/, which package.json ships.
+  "exclude": ["payload/**/__test__/**"]
+}

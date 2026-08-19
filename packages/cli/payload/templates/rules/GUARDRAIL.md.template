@@ -1,0 +1,44 @@
+---
+description: "<one sentence: what locked-in decisions this doc governs and when to read it>"
+# Scope this doc to the files it governs. With `paths:`, Claude Code loads it ONLY when a
+# matching file is in the working set. WITHOUT it, the file is resident on every turn.
+paths:
+  - "<glob/**>"
+---
+
+# <Topic>
+
+<1-2 sentences on what this document is for: the locked-in decisions on this axis plus the
+rationale, so the agent doesn't re-litigate them every task.>
+
+**Precedence:** if a change is in tension with what's below, the change is wrong, or this doc
+must be revised first. This is a living document. Append as you learn, and don't quietly rewrite
+the locked-in goals.
+
+## <Decision area>
+
+- **<Decision>.** <The locked-in answer.> <The rationale or evidence behind it, so a future
+  agent trusts it instead of re-deriving it.>
+- **<Decision>.** <...>
+
+## <Decision area>
+
+- ...
+
+## Things that are _not_ the goal
+
+- **<Tempting-but-wrong direction>.** <Why it's explicitly not what we want.>
+
+<!--
+HOW TO USE THIS TEMPLATE (delete this comment in the real file):
+- One guardrail doc per axis the repo keeps re-deriving: architecture.md, api-conventions.md,
+  security.md, voice.md, gameplay.md, etc. Keep each well under ~10KB.
+- Files under .claude/rules/ ARE auto-loaded. The `paths:` frontmatter is what makes that
+  conditional, loaded only when a matching file is in play, instead of every-turn resident.
+  Keep `paths:` tight and you need no CLAUDE.md pointer. If this doc belongs elsewhere
+  (pull-only), move it out of .claude/rules/ and link it from CLAUDE.md with a conditional
+  trigger: "- [docs/<topic>.md]: read before any change to <X>."
+  In each subagent that needs it, cite only the doc(s) relevant to that agent's job.
+- The value collapses if it gets auto-loaded every turn, or if the team treats it as a suggestion
+  and lets it drift from real behavior. Locked decisions only.
+-->

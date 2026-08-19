@@ -1,0 +1,29 @@
+node_modules/
+dist/
+payload-dist/
+# Each plugin fixture's payload-dist is hand-authored test data, not build output, and the rule
+# above matches a directory of that name at any depth. Negate the directory itself and not the
+# files under it, because git cannot re-include a path whose parent directory is excluded. The
+# glob is per-fixture: the fixtures hold their payload-dist one level down, so a pattern naming
+# the shared parent matches nothing and silently ignores every fixture under it.
+!packages/cli/test/plugin-fixture/*/payload-dist/
+# wireit's per-script fingerprints and local cache. Build state, regenerated on demand.
+.wireit/
+# eslint's own cache. Prettier's default cache already sits under node_modules/.cache.
+.eslintcache
+*.log
+.DS_Store
+*.tgz
+.notes/
+
+# This repo dogfoods houserules, so .claude/ is assembled by `pnpm dogfood` and is not source.
+# `.claude/*` rather than `.claude/`, because git cannot re-include a path whose parent
+# directory is itself excluded.
+#
+# `.claude/ledgers/` is re-included for one reason only: so the .gitignore INSIDE it stays
+# tracked and travels with a clone. That nested file ignores the directory's whole contents.
+# Nothing under here is committed. GitHub Projects holds the durable record, and the local
+# .jsonl is a push queue that `projects-sync.mjs` compacts down to what has not reached a
+# board yet.
+.claude/*
+!.claude/ledgers/

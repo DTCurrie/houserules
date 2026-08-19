@@ -1,0 +1,65 @@
+name: Bug report
+description: Report something that is not working as expected.
+labels:
+  - bug
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the bug. Include the command you ran and its output.
+    validations:
+      required: true
+  - type: textarea
+    id: what-expected
+    attributes:
+      label: What you expected
+      description: Describe what should have happened instead.
+    validations:
+      required: false
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Steps to reproduce the bug, starting from a clean repo if possible.
+      placeholder: |
+        1. Run `houserules init`
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      description: Which package does this bug affect?
+      options:
+        - '@houserules/cli'
+        - '@houserules/plugin-accessibility'
+        - '@houserules/plugin-backlog'
+        - '@houserules/plugin-changesets'
+        - '@houserules/plugin-decisions'
+        - '@houserules/plugin-design'
+        - '@houserules/plugin-persona-auditor'
+        - '@houserules/plugin-prose'
+        - '@houserules/plugin-svelte'
+        - '@houserules/plugin-testing'
+        - '@houserules/plugin-three'
+        - '@houserules/plugin-typescript'
+        - '@houserules/test'
+        - Not sure
+    validations:
+      required: false
+  - type: input
+    id: houserules-version
+    attributes:
+      label: houserules version
+      description: Output of `houserules --version`, or the version pinned in your package.json.
+    validations:
+      required: false
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      description: Output of `node --version`.
+    validations:
+      required: false

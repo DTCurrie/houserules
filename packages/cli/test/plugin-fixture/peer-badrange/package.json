@@ -1,0 +1,9 @@
+{
+  "name": "@houserules/plugin-fixture-peer-badrange",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "peerDependencies": {
+    "@houserules/cli": "not a range"
+  }
+}

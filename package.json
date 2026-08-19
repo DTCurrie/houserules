@@ -1,0 +1,150 @@
+{
+  "name": "houserules-workspace",
+  "version": "0.0.0",
+  "author": "Devin T. Currie (https://github.com/DTCurrie)",
+  "private": true,
+  "description": "Workspace root for houserules and its first-party plugins. Not published.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/houserules.git"
+  },
+  "packageManager": "pnpm@11.20.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "wireit",
+    "check": "wireit",
+    "test": "wireit",
+    "lint": "wireit",
+    "lint:fix": "eslint . --fix",
+    "schema": "pnpm --filter @houserules/cli schema",
+    "format": "prettier --cache --write .",
+    "format:check": "prettier --cache --check .",
+    "change": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish",
+    "dogfood": "pnpm --filter @houserules/cli dogfood",
+    "dogfood:watch": "pnpm --filter @houserules/cli dogfood:watch",
+    "attw": "wireit",
+    "verify:packages": "node scripts/verify-packages.mjs",
+    "verify:payload-copy-set": "node scripts/verify-payload-copy-set.mjs",
+    "verify:payload-test-coverage": "node scripts/verify-payload-test-coverage.mjs",
+    "verify:payload-lib-declarations": "node scripts/verify-payload-lib-declarations.mjs",
+    "verify:checker-determinism": "node scripts/verify-checker-determinism.mjs",
+    "verify:knip": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles",
+    "verify:knip:audit": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles --include-entry-exports"
+  },
+  "wireit": {
+    "lint": {
+      "//": "node_modules is excluded because packages/cli/test/plugin-fixture/node_modules/@houserules/cli symlinks back to packages/cli, and a glob that follows it recurses until wireit runs out of heap.",
+      "command": "eslint --cache --cache-location .eslintcache .",
+      "files": [
+        "eslint.config.mjs",
+        "packages/*/src/**/*.ts",
+        "packages/*/test/**/*.ts",
+        "packages/*/payload/**/*.mts",
+        "packages/*/payload/**/__test__/**/*.ts",
+        "packages/*/scripts/**/*.mjs",
+        "packages/*/*.ts",
+        "scripts/**/*.mjs",
+        "*.ts",
+        "*.mjs",
+        "!**/node_modules/**"
+      ],
+      "output": []
+    },
+    "build": {
+      "dependencies": [
+        "./packages/api:build",
+        "./packages/cli:build",
+        "./packages/payload:build",
+        "./packages/plugin-accessibility:build",
+        "./packages/plugin-backlog:build",
+        "./packages/plugin-changesets:build",
+        "./packages/plugin-decisions:build",
+        "./packages/plugin-design:build",
+        "./packages/plugin-github:build",
+        "./packages/plugin-persona-auditor:build",
+        "./packages/plugin-prose:build",
+        "./packages/plugin-svelte:build",
+        "./packages/plugin-testing:build",
+        "./packages/plugin-three:build",
+        "./packages/plugin-typescript:build",
+        "./packages/test:build"
+      ]
+    },
+    "check": {
+      "dependencies": [
+        "./packages/api:check",
+        "./packages/cli:check",
+        "./packages/payload:check",
+        "./packages/plugin-accessibility:check",
+        "./packages/plugin-backlog:check",
+        "./packages/plugin-changesets:check",
+        "./packages/plugin-decisions:check",
+        "./packages/plugin-design:check",
+        "./packages/plugin-github:check",
+        "./packages/plugin-persona-auditor:check",
+        "./packages/plugin-prose:check",
+        "./packages/plugin-svelte:check",
+        "./packages/plugin-testing:check",
+        "./packages/plugin-three:check",
+        "./packages/plugin-typescript:check",
+        "./packages/test:check"
+      ]
+    },
+    "test": {
+      "//": "Fifteen entries, not sixteen. @houserules/test ships no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
+      "dependencies": [
+        "./packages/api:test",
+        "./packages/cli:test",
+        "./packages/payload:test",
+        "./packages/plugin-accessibility:test",
+        "./packages/plugin-backlog:test",
+        "./packages/plugin-changesets:test",
+        "./packages/plugin-decisions:test",
+        "./packages/plugin-design:test",
+        "./packages/plugin-github:test",
+        "./packages/plugin-persona-auditor:test",
+        "./packages/plugin-prose:test",
+        "./packages/plugin-svelte:test",
+        "./packages/plugin-testing:test",
+        "./packages/plugin-three:test",
+        "./packages/plugin-typescript:test"
+      ]
+    },
+    "attw": {
+      "dependencies": [
+        "./packages/api:attw",
+        "./packages/cli:attw",
+        "./packages/plugin-accessibility:attw",
+        "./packages/plugin-backlog:attw",
+        "./packages/plugin-changesets:attw",
+        "./packages/plugin-decisions:attw",
+        "./packages/plugin-design:attw",
+        "./packages/plugin-github:attw",
+        "./packages/plugin-persona-auditor:attw",
+        "./packages/plugin-prose:attw",
+        "./packages/plugin-svelte:attw",
+        "./packages/plugin-testing:attw",
+        "./packages/plugin-three:attw",
+        "./packages/plugin-typescript:attw",
+        "./packages/test:attw"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.1",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "globals": "^17.9.0",
+    "knip": "^6.32.0",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.66.0",
+    "wireit": "^0.14.13"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    // Mirrors the `#test/*` alias in vitest.config.ts so `tsc --noEmit` resolves it, to
+    // @houserules/test's published subpaths. Kept out of tsconfig.build.json: nothing under
+    // src/ that ships may reference it.
+    "paths": {
+      "#test/*": ["./node_modules/@houserules/test/dist/*.d.ts"]
+    }
+  },
+  // tsconfig.build.json excludes colocated tests so they stay out of dist/. Typechecking
+  // must still see them, so the inherited exclude is cleared here.
+  "exclude": [],
+  // The payload glob is what reaches the hook-script suites. `src/**` never covers them.
+  "include": ["src/**/*.ts", "payload/**/__test__/**/*.ts"]
+}

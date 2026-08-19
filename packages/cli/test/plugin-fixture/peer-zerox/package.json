@@ -1,0 +1,9 @@
+{
+  "name": "@houserules/plugin-fixture-peer-zerox",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "peerDependencies": {
+    "@houserules/cli": "^0.2.0"
+  }
+}

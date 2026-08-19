@@ -1,0 +1,74 @@
+{
+  "$schema": "../node_modules/@houserules/cli/schema/houserules.config.schema.json",
+  "_help": "houserules per-repo config, schema v2. `npx houserules init` generates this from detection; edit freely afterward — `npx houserules doctor` validates it against the repo. Consumed by: guard-bash.mjs (guard), lint-format-fix.mjs (fix + targets), changeset-check.mjs (changesets + targets), package-changelog.mjs (targets, when ledger.enabled), verify-changed.mjs (verify + targets[].verifyCommands, when the verify-changed module is enabled).",
+  "version": 2,
+  "packageManager": "pnpm",
+  "fix": {
+    "runner": "pnpm",
+    "filterFlag": "--filter",
+    "runScriptPrefix": ["run"],
+    "commands": ["lint:fix", "format:fix"]
+  },
+  "verify": {
+    "runner": "pnpm",
+    "filterFlag": "--filter",
+    "runScriptPrefix": ["run"],
+    "commands": ["verify"]
+  },
+  "lintableExtensions": [
+    "ts",
+    "tsx",
+    "js",
+    "jsx",
+    "mjs",
+    "cjs",
+    "svelte",
+    "md",
+    "json",
+    "css",
+    "html"
+  ],
+  "generatedFilePattern": "/(?:CHANGELOG|BACKLOG)\\.md$",
+  "guard": {
+    "gitCommit": true,
+    "gitPush": true,
+    "gitStash": true,
+    "prCreate": true,
+    "custom": [
+      {
+        "pattern": "\\bdocker\\s+system\\s+prune\\b",
+        "message": "Example custom rule — delete or replace."
+      }
+    ]
+  },
+  "changesets": {
+    "enabled": true,
+    "stopCheck": true,
+    "baseBranch": "main"
+  },
+  "ledger": { "enabled": false },
+  "targets": [
+    {
+      "name": "core",
+      "prefix": "CORE",
+      "packageName": "@your-scope/core",
+      "pathPrefix": "packages/core/",
+      "sourcePath": "packages/core/src",
+      "label": "Core",
+      "fixCommands": ["fix"]
+    },
+    {
+      "name": "app",
+      "prefix": "APP",
+      "packageName": "@your-scope/app",
+      "pathPrefix": "apps/app/",
+      "sourcePath": "apps/app/src",
+      "label": "App"
+    }
+  ],
+  "_notes": {
+    "targets[].fixCommands": "optional per-target override of fix.commands — real repos diverge (root `fix` vs package `lint:fix`).",
+    "targets[].changelogPath / logPath": "only used when ledger.enabled; default to .claude/changelogs/<name>.md|.log so they never collide with changesets' CHANGELOG.md.",
+    "singlePackage": "for a non-monorepo use one target with pathPrefix \"\" and sourcePath \"src\", plus fix.filterFlag \"\"."
+  }
+}
