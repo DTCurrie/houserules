@@ -1,6 +1,6 @@
 {
   "name": "@houserules/api",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "houserules plugin contract: the plugin API, action types, module definitions, and the houserules.config.json schema.",
   "type": "module",
   "publishConfig": {

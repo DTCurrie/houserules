@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-typescript",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "houserules plugin: a path-scoped TypeScript rule covering the type-system decisions that have a right answer.",
   "type": "module",
   "publishConfig": {
