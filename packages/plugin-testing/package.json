@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-testing",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "houserules plugin: a runner-agnostic testing rule, split into opt-in per-language guides.",
   "type": "module",
   "publishConfig": {
