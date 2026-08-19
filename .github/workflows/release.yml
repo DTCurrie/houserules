@@ -1,0 +1,45 @@
+name: Release
+
+# Changesets release flow: on every push to main, this either (a) opens/updates a
+# "Version Packages" PR that runs `changeset version`, or (b) if that PR was just
+# merged, publishes to npm with `changeset publish`.
+#
+# One-time setup (manual): add an NPM_TOKEN repo secret with publish rights.
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # No version input. pnpm/action-setup reads the root package.json packageManager
+      # field, so the pinned version has one source of truth that local runs share.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+      # `changeset publish` reaches each package's build through its `prepack`, which runs
+      # wireit. Sharing the cache means publishing does not recompile what CI already built.
+      - uses: google/wireit@9d7c2e5346f8ef1b1ab6014c4e96c74e234f7ed5 # setup-github-actions-caching/v2
+      - run: pnpm install --frozen-lockfile
+      - name: Create release PR or publish to npm
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          version: pnpm version-packages
+          publish: pnpm release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true

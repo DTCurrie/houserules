@@ -1,0 +1,11 @@
+{
+  "name": "@houserules/plugin-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "devDependencies": {
+    "@houserules/cli": "workspace:*",
+    "@houserules/payload": "workspace:*"
+  }
+}

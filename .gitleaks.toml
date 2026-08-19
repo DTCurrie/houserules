@@ -1,0 +1,21 @@
+# gitleaks config. Run a full-history scan with:
+#   gitleaks git --log-opts="--all" --redact
+#
+# The full history was scanned on 2026-08-07, before the repository went public, and no
+# credential has ever been committed. The one allowlist entry below is the single finding from
+# that scan, verified by reading the code rather than by trusting the variable name.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+  [rules.allowlist]
+  # SEED_TOKENS_SHA256 is a checksum of the design token seed, not a credential. It matches the
+  # generic-api-key rule on entropy alone, since a sha256 digest and a real key look identical
+  # to an entropy test. The value is kept in sync with renderTokenSeed() by
+  # packages/plugin-design/src/__test__/design-script.test.ts, so changing it breaks that test.
+  regexTarget = "line"
+  regexes = ['''SEED_TOKENS_SHA256''']
+  paths = ['''packages/plugin-design/payload/scripts/design\.mts''']

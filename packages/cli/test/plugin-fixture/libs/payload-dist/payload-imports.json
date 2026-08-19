@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "libs": {
+    "scripts/consumer.mjs": [
+      "backlog-id.mjs"
+    ],
+    "scripts/consumer2.mjs": [
+      "backlog-id.mjs"
+    ]
+  }
+}

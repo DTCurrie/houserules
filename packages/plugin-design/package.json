@@ -1,0 +1,134 @@
+{
+  "name": "@houserules/plugin-design",
+  "version": "0.0.0",
+  "description": "houserules plugin: a DTCG design system an agent can query, plus the rule that points at it.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "payload-dist"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "build:payload": "rm -rf payload-dist && tsc -p tsconfig.payload.json && houserules-payload",
+    "check": "wireit",
+    "prepack": "npm run build",
+    "test": "wireit",
+    "attw": "wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && houserules-payload && publint",
+      "dependencies": [
+        "../cli:build:ts",
+        "../api:build",
+        "../payload:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "!src/**/__test__/**",
+        "payload/**",
+        "!payload/**/__test__/**",
+        "tsconfig.build.json",
+        "tsconfig.payload.json"
+      ],
+      "output": [
+        "dist/**",
+        "payload-dist/**"
+      ]
+    },
+    "check": {
+      "command": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json",
+      "dependencies": [
+        "../cli:build:ts",
+        "../api:build",
+        "../test:build",
+        "../payload:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "!test/**/node_modules/**",
+        "tsconfig.json",
+        "tsconfig.build.json",
+        "payload/**/*.mts",
+        "payload/**/__test__/**/*.ts",
+        "tsconfig.payload.json"
+      ],
+      "output": []
+    },
+    "test": {
+      "command": "vitest run",
+      "dependencies": [
+        "build",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "test/**",
+        "!test/**/node_modules/**",
+        "payload/**",
+        "vitest.config.ts"
+      ],
+      "output": []
+    },
+    "attw": {
+      "command": "attw --pack . --profile esm-only",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "package.json"
+      ],
+      "output": []
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
+    "directory": "packages/plugin-design"
+  },
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/plugin-design#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
+  "peerDependencies": {
+    "@houserules/api": ">=0.0.0 <1.0.0"
+  },
+  "devDependencies": {
+    "@houserules/api": "workspace:*",
+    "@houserules/cli": "workspace:*",
+    "@houserules/payload": "workspace:*",
+    "@houserules/test": "workspace:*",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@tailwindcss/oxide": "^4.3.3",
+    "@types/node": "^26.1.2",
+    "publint": "^0.3.23",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "wireit": "^0.14.13"
+  },
+  "license": "MIT",
+  "author": "Devin T. Currie (https://github.com/DTCurrie)",
+  "keywords": [
+    "houserules",
+    "houserules-plugin",
+    "design",
+    "design-tokens",
+    "design-system",
+    "dtcg",
+    "claude-code"
+  ]
+}

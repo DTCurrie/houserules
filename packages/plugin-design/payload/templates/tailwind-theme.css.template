@@ -1,0 +1,73 @@
+/*
+ * Starter design system on top of Tailwind v4. Copy the parts you want into your own entry
+ * stylesheet, next to your own `@import "tailwindcss"`. houserules never writes into your CSS,
+ * so nothing here takes effect until you paste it somewhere Tailwind compiles.
+ *
+ * See ../reference/design-tailwind-theming.md for why each block is shaped the way it is.
+ */
+
+/*
+ * Raw palette. The only place a color literal belongs. Nothing outside this block should
+ * reference these names directly, components go through the semantic layer below instead.
+ * `--color-*: initial` first removes Tailwind's default palette, so `bg-red-500` and every
+ * other default color utility stop compiling, and only the names redeclared after it survive.
+ */
+@theme {
+  --color-*: initial;
+
+  --color-brand-500: oklch(0.55 0.2 265);
+  --color-brand-700: oklch(0.4 0.18 265);
+  --color-danger-500: oklch(0.6 0.24 25);
+  --color-neutral-0: oklch(1 0 0);
+  --color-neutral-950: oklch(0.15 0 0);
+
+  /* Redeclared because `--color-*: initial` only clears the color namespace, not this one. */
+  --spacing: 0.25rem;
+  --radius-lg: 0.75rem;
+}
+
+/*
+ * Runtime-themeable inputs. Plain custom properties, not `@theme` tokens, so the theme
+ * override below can change one and have every alias built on it follow.
+ */
+:root {
+  --surface: oklch(1 0 0);
+  --surface-raised: oklch(0.98 0 0);
+  --text: oklch(0.15 0 0);
+}
+
+/*
+ * Semantic layer: the names components actually use, such as `bg-surface` or `text-text`.
+ * `@theme inline` here is required, not a style choice. Plain `@theme` would substitute each
+ * alias's value once, against `:root`'s own cascade, so a utility built from `--color-surface`
+ * would stay pinned to the light value even under the `[data-theme="midnight"]` override
+ * below. `inline` keeps the utility reading `--surface` directly, so it resolves against
+ * whichever element's cascade it is actually compiled into.
+ */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-text: var(--text);
+  --color-accent: var(--color-brand-500);
+  --color-accent-strong: var(--color-brand-700);
+  --color-danger: var(--color-danger-500);
+}
+
+/*
+ * A second theme. Not a second `@theme` block, an override of the plain custom properties
+ * above under a selector. Switch it by setting `data-theme="midnight"` on an ancestor element.
+ */
+[data-theme='midnight'] {
+  --surface: oklch(0.2 0.01 260);
+  --surface-raised: oklch(0.25 0.01 260);
+  --text: oklch(0.95 0 0);
+}
+
+/* Lets a class such as `theme-midnight:bg-surface` vary only under that override. */
+@custom-variant theme-midnight (&:where([data-theme='midnight'] *));
+
+/* A repeated pattern promoted to a utility instead of copy-pasted across components. */
+@utility card {
+  border-radius: var(--radius-lg);
+  padding: calc(var(--spacing) * 6);
+}

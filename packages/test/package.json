@@ -1,0 +1,114 @@
+{
+  "name": "@houserules/test",
+  "version": "0.0.0",
+  "description": "houserules test: shared testing infrastructure for driving the houserules CLI against synthetic repos, for the CLI's own suites and for plugin authors.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./repo": {
+      "types": "./dist/repo.d.ts",
+      "default": "./dist/repo.js"
+    },
+    "./run": {
+      "types": "./dist/run.d.ts",
+      "default": "./dist/run.js"
+    },
+    "./installed-tree": {
+      "types": "./dist/installed-tree.d.ts",
+      "default": "./dist/installed-tree.js"
+    },
+    "./doctor-report": {
+      "types": "./dist/doctor-report.d.ts",
+      "default": "./dist/doctor-report.js"
+    },
+    "./runner-stub": {
+      "types": "./dist/runner-stub.d.ts",
+      "default": "./dist/runner-stub.js"
+    },
+    "./global-setup": {
+      "types": "./dist/global-setup.d.ts",
+      "default": "./dist/global-setup.js"
+    },
+    "./hook-input": {
+      "types": "./dist/hook-input.d.ts",
+      "default": "./dist/hook-input.js"
+    }
+  },
+  "scripts": {
+    "build": "wireit",
+    "check": "wireit",
+    "prepack": "npm run build",
+    "attw": "wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsc -p tsconfig.json && publint",
+      "dependencies": [
+        "../cli:build:ts"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "!src/**/__test__/**",
+        "tsconfig.json"
+      ],
+      "output": [
+        "dist/**"
+      ]
+    },
+    "check": {
+      "command": "tsc --noEmit -p tsconfig.json",
+      "dependencies": [
+        "../cli:build:ts"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "tsconfig.json"
+      ],
+      "output": []
+    },
+    "attw": {
+      "command": "attw --pack . --profile esm-only",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "package.json"
+      ],
+      "output": []
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
+    "directory": "packages/test"
+  },
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/test#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
+  "peerDependencies": {
+    "@houserules/cli": ">=0.0.0 <1.0.0",
+    "vitest": "^4.1.10"
+  },
+  "devDependencies": {
+    "@houserules/cli": "workspace:*",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@types/node": "^26.1.2",
+    "publint": "^0.3.23",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "wireit": "^0.14.13"
+  },
+  "license": "MIT",
+  "author": "Devin T. Currie (https://github.com/DTCurrie)",
+  "keywords": [
+    "houserules",
+    "houserules-test"
+  ]
+}

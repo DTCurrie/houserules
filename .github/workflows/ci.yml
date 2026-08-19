@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The LTS lines only. What keeps `engines: >=22` honest is @types/node pinned to ^22,
+        # which turns reaching for a newer Node API into a compile error rather than something
+        # this matrix has to catch at runtime.
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # No version input. pnpm/action-setup reads the root package.json packageManager
+      # field, so the pinned version has one source of truth that local runs share.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      # Shares wireit's fingerprint cache across runs, so an unchanged package is restored
+      # rather than rebuilt. Sets WIREIT_CACHE=github, which is what re-enables caching under
+      # CI=true. Needs wireit >= 0.14.12 for the current Actions cache backend.
+      - uses: google/wireit@9d7c2e5346f8ef1b1ab6014c4e96c74e234f7ed5 # setup-github-actions-caching/v2
+      - run: pnpm install --frozen-lockfile
+      # Kept as its own step even though `pnpm test` now depends on the builds through wireit.
+      # A build failure reads as a build failure in the log instead of as a test failure.
+      - run: pnpm build
+      - run: pnpm test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # No version input. pnpm/action-setup reads the root package.json packageManager
+      # field, so the pinned version has one source of truth that local runs share.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      # This job runs in parallel with `test`, so it does not inherit that job's build. The
+      # shared wireit cache is what keeps it from repeating the same compilation from scratch.
+      - uses: google/wireit@9d7c2e5346f8ef1b1ab6014c4e96c74e234f7ed5 # setup-github-actions-caching/v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm lint
+      - run: pnpm format:check
+      # Source-only, so it belongs here rather than in `packages` where it would wait on a
+      # build it does not need. Entry-file exports are excluded on purpose: see AGENTKIT-025dda
+      # and run `pnpm verify:knip:audit` by hand for that sweep.
+      - run: pnpm verify:knip
+
+  # What actually reaches npm. `check` and `test` both run against the working tree, so neither
+  # can see a `files` array that omits something or a test that leaked into dist/. Only a real
+  # tarball shows that, which is what these two steps produce.
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # No version input. pnpm/action-setup reads the root package.json packageManager
+      # field, so the pinned version has one source of truth that local runs share.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: google/wireit@9d7c2e5346f8ef1b1ab6014c4e96c74e234f7ed5 # setup-github-actions-caching/v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # publint runs inside each package's build. attw and the tarball assertions do not, so
+      # they need naming here or they never run in CI.
+      - run: pnpm attw
+      - run: pnpm verify:packages
+      - run: pnpm verify:payload-copy-set
+      - run: pnpm verify:payload-test-coverage
+      - run: pnpm verify:payload-lib-declarations
+      - run: pnpm verify:checker-determinism

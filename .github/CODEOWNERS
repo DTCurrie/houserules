@@ -1,0 +1,3 @@
+# Default owner for everything in the repo, unless a later, more specific
+# pattern overrides it.
+* @DTCurrie
