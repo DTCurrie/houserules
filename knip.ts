@@ -85,6 +85,15 @@ const config: KnipConfig = {
     'packages/plugin-github': {
       entry: ['src/index.ts', 'payload/scripts/**/*.mts'],
     },
+    'packages/plugin-prose': {
+      entry: ['src/index.ts', 'payload/scripts/**/*.mts'],
+    },
+    'packages/plugin-svelte': {
+      entry: ['src/index.ts', 'payload/scripts/**/*.mts'],
+    },
+    'packages/plugin-testing': {
+      entry: ['src/index.ts', 'payload/scripts/**/*.mts'],
+    },
   },
 };
 

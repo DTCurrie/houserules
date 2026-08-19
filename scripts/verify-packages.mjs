@@ -29,6 +29,13 @@ const REQUIRED_PACKAGE_JSON_FIELDS = [
 
 const TARBALL_ENTRIES_TO_SCAN_FOR_VITEST = new Set(['.js', '.mjs', '.d.ts']);
 
+// Match the module-specifier position, not a bare `vitest` substring. The substring form failed
+// `@houserules/plugin-testing`, the one package whose SUBJECT is the test runner, on a doc
+// comment, a regex named `VITEST_CONFIG_NAME`, and its own installer description. A specifier is
+// the only place an actual import can appear.
+const VITEST_IMPORT_SPECIFIER =
+  /(?:\bfrom|\bimport|\brequire)\s*\(?\s*['"]vitest(?:\/[^'"]*)?['"]/;
+
 function findPublishablePackageDirs() {
   return readdirSync(packagesDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -90,8 +97,9 @@ function assertNoVitestImports(
     if (!TARBALL_ENTRIES_TO_SCAN_FOR_VITEST.has(extension)) continue;
     const extractedPath = join(extractedRoot, entry);
     const contents = readFileSync(extractedPath, 'utf8');
-    if (contents.includes('vitest')) {
-      failures.push(`imports vitest: ${entry}`);
+    const match = VITEST_IMPORT_SPECIFIER.exec(contents);
+    if (match) {
+      failures.push(`imports vitest: ${entry} (${match[0]})`);
     }
   }
 }
