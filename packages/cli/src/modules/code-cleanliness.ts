@@ -1,5 +1,5 @@
 import type { Action, ModuleGroup } from '@houserules/api';
-import { reference, rule, skill } from './copy-actions.js';
+import { reference, rule, script, skill } from './copy-actions.js';
 
 export const id = 'code-cleanliness';
 export const title =
@@ -38,6 +38,11 @@ export function plan(): Action[] {
       'pull-only SOLID/DRY/KISS/YAGNI reference the rule links to',
     ),
     skill(id, 'tidy', 'audit a working diff against the cleanliness rule'),
+    script(
+      id,
+      'catch-all-filename.mjs',
+      'flag types/constants/utils/shared/helpers basenames, the one cleanliness clause with no ESLint rule behind it',
+    ),
     {
       kind: 'advise',
       text: 'Cleanliness rule installed at .claude/rules/code-cleanliness.md, path-scoped via its `paths:` frontmatter so Claude Code loads it only when a matching source file is in the working set. Trim `paths:` to the languages this repo actually has, and keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn. Its companion .claude/reference/design-principles.md is deliberately NOT auto-loaded: the rule links to it, so it is read on demand when making an abstraction or structure decision. Leave it out of .claude/rules/, which would make it resident and defeat the split.',

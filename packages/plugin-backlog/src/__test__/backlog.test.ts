@@ -53,6 +53,12 @@ describe('backlog', () => {
       );
     });
 
+    it('does not install its own reviewer-gate script, since core now gates every subagent', () => {
+      expect(existsSync(join(root, '.claude/scripts/reviewer-gate.mjs'))).toBe(
+        false,
+      );
+    });
+
     it('points CLAUDE.md at the backlog-add skill', () => {
       expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).toContain(
         '`/backlog-add` skill',

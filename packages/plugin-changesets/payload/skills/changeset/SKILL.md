@@ -2,10 +2,16 @@
 name: changeset
 description: Record a pending release note (changeset) for the packages a change touched. Use after completing a user-visible change, before the user commits.
 argument-hint: [pkg[:level] ...] ["summary"]
-allowed-tools: Bash(node .claude/scripts/changeset-write.mjs:*), Bash(git status:*), Bash(git diff:*), Read, Glob, Grep
+allowed-tools: Bash(node .claude/scripts/changeset-write.mjs:*), Bash(node .claude/scripts/changeset-gate.mjs:*), Bash(git status:*), Bash(git diff:*), Read, Glob, Grep
 ---
 
 Record what this change means for the next release. Arguments (optional overrides): $ARGUMENTS
+
+**If you dispatched the `changeset-writer` subagent, its report is a recommendation, not a
+completed write.** `changeset-write.mjs` is refused for any subagent by the repo's ledger write
+gate, so the agent stops at package set, bump levels, summary, and the literal command. Run that
+command yourself at step 5 below. Read its recommendation, sanity-check it against the diff, and
+proceed from wherever the numbered steps below still apply, usually straight to step 5.
 
 **One changeset per feature, not one per change.** A feature is usually built over several
 turns, and each turn is not its own release note. Read the release notes a user will see: one
@@ -71,7 +77,12 @@ installed, so files match the version; the zero-dep writer remains as fallback.`
    node .claude/scripts/changeset-write.mjs --empty --summary "<why no release is needed>"
    ```
 
-6. **Report** the `.changeset/*.md` path and what it declares, and say whether you created it or
+6. **Check for package-set drift.** `node .claude/scripts/changeset-gate.mjs` flags a
+   just-written changeset whose declared packages are missing one the current diff also
+   touches. It also runs on its own as a Stop hook at the end of the turn, so this step just
+   surfaces the same finding immediately instead of waiting for it. If it reports drift, add
+   the missing package with `--amend` and re-run it.
+7. **Report** the `.changeset/*.md` path and what it declares, and say whether you created it or
    amended it.
 
 Never hand-edit `CHANGELOG.md`, which `changeset version` generates at release time, and never

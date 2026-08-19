@@ -37,6 +37,11 @@ guide assumes, and `svelte.md` for authoring conventions, which this guide does 
   - `server`: plain modules with no Svelte compilation, such as a data-loading function or
     a `.ts` utility.
 
+## Checked mechanically
+
+`test-config.mjs` catches a Svelte vitest config missing the `client`, `ssr`, or `server`
+project. Whether a given test belongs under browser mode or jsdom is still a human read.
+
 ## Example — a three-project `vitest.config.ts`
 
 Verified against Vitest 4.1: the merged `vitest.workspace.ts` file is gone, and

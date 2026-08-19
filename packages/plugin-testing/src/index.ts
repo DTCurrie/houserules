@@ -1,4 +1,4 @@
-import { definePlugin } from '@houserules/api';
+import { definePlugin, scriptPermission } from '@houserules/api';
 import type {
   Action,
   Answers,
@@ -69,9 +69,31 @@ function testingModule(api: PluginApi): ModuleDef {
           'path-scoped testing rule, loaded only when a test file is in play',
         ),
         ...guideActions,
+        api.payload.script(
+          id,
+          'test-layout.mjs',
+          'checks structural placement clauses of testing.md and testing-typescript/javascript.md: colocation in __test__, __test__ directory contents, one suffix convention, no .e2e.test tier, no test leaking into build output',
+        ),
+        api.payload.script(
+          id,
+          'test-config.mjs',
+          'checks vitest config clauses: expect.requireAssertions enabled, typecheck enabled for a type test, Svelte config split into client/ssr/server projects',
+        ),
+        {
+          kind: 'merge-settings',
+          module: id,
+          fragment: {
+            permissions: {
+              allow: [
+                scriptPermission('test-layout.mjs'),
+                scriptPermission('test-config.mjs'),
+              ],
+            },
+          },
+        },
         {
           kind: 'advise',
-          text: 'Testing rule installed at .claude/rules/testing.md, path-scoped via its `paths:` frontmatter so Claude Code loads it only when a test file is in the working set. Trim `paths:` to the suffixes this repo actually uses, and keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn. Two decisions from the language guides need confirming: pick ONE test suffix (.test.ts or .spec.ts) if the repo currently mixes them, and confirm tests are excluded from your build config. A test under a compiled source root is emitted into the published output and imports the test runner, which is a dev dependency.',
+          text: 'Testing rule installed at .claude/rules/testing.md, path-scoped via its `paths:` frontmatter so Claude Code loads it only when a test file is in the working set. Trim `paths:` to the suffixes this repo actually uses, and keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn. Two decisions from the language guides need confirming: pick ONE test suffix (.test.ts or .spec.ts) if the repo currently mixes them, and confirm tests are excluded from your build config. A test under a compiled source root is emitted into the published output and imports the test runner, which is a dev dependency. Two checkers back the mechanical clauses each rule now points at: `node .claude/scripts/test-layout.mjs <file...> <build-output-dir>` checks colocation in __test__, the __test__ directory contents, one suffix convention, no .e2e.test tier, and a test leaked into the build output; `node .claude/scripts/test-config.mjs <vitest.config.ts> [setup-file...]` checks expect.requireAssertions, typecheck for a type test, and (with the Svelte guide) the client/ssr/server project split. Both print "No findings." plus a "Not checked by this checker" list, and exit 1 only on a real finding. Wire either into a check gate once the repo has enough test files to be worth it.',
           module: id,
         },
       ];

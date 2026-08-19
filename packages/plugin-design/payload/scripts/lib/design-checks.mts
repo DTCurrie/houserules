@@ -438,6 +438,90 @@ function checkOffScaleDimension(
   return findings;
 }
 
+/**
+ * A sibling to {@link checkOffScaleDimension}, for the opposite miss: a value that already
+ * sits on a scale step but was hand-typed instead of referencing the token that owns that
+ * step. `checkOffScaleDimension` short-circuits on `scalePx.includes(targetPx)` on purpose,
+ * so an on-scale literal passed through unflagged until this.
+ */
+function checkOnScaleLiteralToken(
+  declarations: CssDeclaration[],
+  isTargetProperty: (property: string) => boolean,
+  scaleEntries: TokenEntry[],
+): Finding[] {
+  const findings: Finding[] = [];
+  const scalePx = scaleValuesInPixels(scaleEntries);
+  if (scalePx.length === 0) return findings;
+  for (const declaration of declarations) {
+    if (!isTargetProperty(declaration.property)) continue;
+    if (parseCssVarReference(declaration.value)) continue;
+    for (const token of declaration.value.split(/\s+/)) {
+      const dimension = parseDimension(token);
+      if (!dimension) continue;
+      const targetPx = toPixels(dimension);
+      if (targetPx === undefined || !scalePx.includes(targetPx)) continue;
+      const entry = scaleEntries.find((candidate) => {
+        const value = candidate.value;
+        return isDimensionValue(value) && toPixels(value) === targetPx;
+      });
+      if (!entry) continue;
+      findings.push({
+        line: declaration.line,
+        message: `${token} is exactly \`${entry.path}\`. Use \`${entry.path}\` instead of the literal.`,
+      });
+    }
+  }
+  return findings;
+}
+
+const FONT_WEIGHT_PROPERTY = 'font-weight';
+
+/**
+ * The two names `design.mts`' own `parseFontWeight` cannot resolve, since it only reads
+ * numeric weights out of a token file. A literal in CSS is fair game to write either way,
+ * so a checker over the literal has to know both.
+ */
+const NAMED_FONT_WEIGHTS: Record<string, number> = {
+  normal: 400,
+  bold: 700,
+};
+
+function parseFontWeightLiteral(value: string): number | undefined {
+  const trimmed = value.trim();
+  const named = NAMED_FONT_WEIGHTS[trimmed.toLowerCase()];
+  if (named !== undefined) return named;
+  const numeric = Number(trimmed);
+  return Number.isInteger(numeric) && numeric >= 1 && numeric <= 1000
+    ? numeric
+    : undefined;
+}
+
+/**
+ * The tokens-over-literals clause names "a named font weight typed inline" as its own
+ * example, distinct from color and dimension literals, and nothing in this file checked it.
+ */
+function checkUntokenizedFontWeight(
+  declarations: CssDeclaration[],
+  fontWeightEntries: TokenEntry[],
+): Finding[] {
+  const findings: Finding[] = [];
+  for (const declaration of declarations) {
+    if (declaration.property !== FONT_WEIGHT_PROPERTY) continue;
+    if (parseCssVarReference(declaration.value)) continue;
+    const weight = parseFontWeightLiteral(declaration.value);
+    if (weight === undefined) continue;
+    const literal = declaration.value.trim();
+    const match = fontWeightEntries.find((entry) => entry.value === weight);
+    findings.push({
+      line: declaration.line,
+      message: match
+        ? `${literal} is exactly \`${match.path}\`. Use \`${match.path}\` instead of the literal.`
+        : `${literal} matches no token. This is a new value and needs a design decision before it joins the token set.`,
+    });
+  }
+  return findings;
+}
+
 function linearizeChannel(channel: number): number {
   return channel <= SRGB_LINEAR_THRESHOLD
     ? channel / SRGB_LINEAR_DIVISOR
@@ -755,6 +839,7 @@ export function checkDesign(
   const spacingEntries = collectGroupEntries(root, 'spacing');
   const fontSizeEntries = collectGroupEntries(root, 'fontSize');
   const radiusEntries = collectGroupEntries(root, 'radius');
+  const fontWeightEntries = collectGroupEntries(root, 'fontWeight');
 
   const findings = [
     ...checkUntokenizedColors(declarations, colorEntries),
@@ -776,6 +861,18 @@ export function checkDesign(
       radiusEntries,
       'radius',
     ),
+    ...checkOnScaleLiteralToken(
+      declarations,
+      isSpacingProperty,
+      spacingEntries,
+    ),
+    ...checkOnScaleLiteralToken(
+      declarations,
+      isFontSizeProperty,
+      fontSizeEntries,
+    ),
+    ...checkOnScaleLiteralToken(declarations, isRadiusProperty, radiusEntries),
+    ...checkUntokenizedFontWeight(declarations, fontWeightEntries),
     ...checkTokenPairContrast(root, groups),
     ...checkHitTarget(groups),
   ].sort((a, b) => a.line - b.line);

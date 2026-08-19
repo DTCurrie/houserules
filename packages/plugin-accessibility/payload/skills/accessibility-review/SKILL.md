@@ -1,7 +1,7 @@
 ---
 name: accessibility-review
 description: Review changed markup for accessibility (a11y) against WCAG 2.2: contrast, screen reader, keyboard, and focus behavior in HTML, JSX, TSX, Svelte, Vue, and Astro. Use before handing off a change that touches markup.
-allowed-tools: Bash(git diff:*), Bash(git merge-base:*), Bash(node .claude/scripts/wcag.mjs:*), Read, Grep, Agent
+allowed-tools: Bash(git diff:*), Bash(git merge-base:*), Bash(node .claude/scripts/wcag.mjs:*), Bash(node .claude/scripts/a11y-markup.mjs:*), Read, Grep, Agent
 ---
 
 Review the accessibility of a working-tree change. Arguments (optional file filter): $ARGUMENTS
@@ -24,12 +24,22 @@ Review the accessibility of a working-tree change. Arguments (optional file filt
 4. **Check the changed markup against each named criterion**, plus the rule in
    `accessibility.md` (native elements over ARIA, accessible names, keyboard, focus, forms,
    color, structure).
-5. **Run the repo's own accessibility linter if one exists** (eslint-plugin-jsx-a11y,
+5. **Run the mechanical checker over the same files:**
+   ```
+   node .claude/scripts/a11y-markup.mjs <files>
+   ```
+   It decides four exact clauses (positive tabindex, a titleless iframe, a Vue attribute
+   bound to the literal `false`, an unkeyed Svelte each block) and whether the declared
+   frameworks have their accessibility linter installed. **UNMEASURED**: it has never run
+   against a real corpus of HTML, Vue, or Svelte markup, only against paired
+   fire-or-stay-silent fixtures. Treat a finding as a lead, not a verdict, and if it looks
+   wrong on a specific file, say so in the report instead of silently discarding it.
+6. **Run the repo's own accessibility linter if one exists** (eslint-plugin-jsx-a11y,
    axe, svelte-check a11y rules, or similar) and reconcile its output with your review. The
    linter owns mechanical findings such as a missing `alt` or a missing label. This skill
    owns the findings that need judgment, such as whether an accessible name matches its
    visible label or whether a focus move after a route change makes sense.
-6. **Report per criterion.** For each criterion in play, state whether the change satisfies
+7. **Report per criterion.** For each criterion in play, state whether the change satisfies
    it, violates it, or cannot be determined from source. Separate the three groups instead of
    giving one pass/fail verdict.
 

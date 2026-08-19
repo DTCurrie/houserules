@@ -51,6 +51,7 @@ function libActions(): Action[] {
     'ledger-index.mjs',
     'workspaces.mjs',
     'proc.mjs',
+    'findings.mjs',
   ]) {
     actions.push(lib(id, name));
   }
@@ -59,6 +60,13 @@ function libActions(): Action[] {
       id,
       'guard-bash.mjs',
       'PreToolUse guard: git commit/push/stash, gh pr create',
+    ),
+  );
+  actions.push(
+    script(
+      id,
+      'subagent-write-gate.mjs',
+      'PreToolUse guard: block any subagent from writing a ledger or changeset',
     ),
   );
   // Inert until a prompt actually references a logged ID. Verified on the stock CLI:
@@ -224,6 +232,11 @@ function settingsActions(): Action[] {
         },
         ...hookFragment('PreToolUse', 'Bash', 'guard-bash.mjs'),
       },
+    },
+    {
+      kind: 'merge-settings',
+      module: id,
+      fragment: hookFragment('PreToolUse', 'Bash', 'subagent-write-gate.mjs'),
     },
     {
       kind: 'merge-settings',

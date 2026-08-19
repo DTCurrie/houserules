@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 
-export default ts.config(
+const baseConfig = ts.config(
   {
     ignores: [
       '.claude/',
@@ -43,6 +43,27 @@ export default ts.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+      // Measured against this workspace in PROBE-eslint.md: 0 findings, so both fire
+      // clean at error. `no-unreachable` ships in eslint:recommended already; listed
+      // here to record the decision. naming-convention is restricted to the two
+      // selectors that need no type information — the repo has no root tsconfig.json,
+      // so a type-aware selector (booleans) cannot run without configuring
+      // parserOptions.project first, which PROBE-eslint.md left unmeasured.
+      'no-unreachable': 'error',
+      '@typescript-eslint/naming-convention': [
+        'error',
+        { selector: 'typeLike', format: ['PascalCase'] },
+        {
+          selector: 'typeParameter',
+          format: ['PascalCase'],
+          prefix: ['T'],
+        },
+      ],
+      // Kept at the default of 4. Raising it to 5 to accommodate the four sites this
+      // repo held would have left a rule that catches nothing until someone writes
+      // six-deep, which is the defect this rule exists to prevent. The four sites were
+      // fixed instead.
+      'max-depth': ['error', 4],
     },
   },
   // Tests drive the CLI through JSON artifacts on disk and deliberately poke
@@ -63,3 +84,40 @@ export default ts.config(
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },
 );
+
+export default baseConfig;
+
+// `max-lines-per-function` measured 447 findings across 184 files in
+// PROBE-eslint.md: turning it on repo-wide at any severity would print 447
+// warnings on every `pnpm lint` forever, training readers to skim past the
+// warning block instead of reading it, the same failure the precision floor
+// exists to prevent one level up. code-cleanliness.md's own wording, "past 20
+// to 30 lines, look again", is a HYBRID candidate-finder for a model to judge,
+// not a MECHANICAL pass/fail, so it belongs at `warn`, scoped to a diff, never
+// in the default config `pnpm lint` runs.
+//
+// The ESLint CLI's `--config` flag always reads a file's DEFAULT export, so this
+// named export needs the Node API rather than the CLI to run standalone. Over the
+// files changed in the working tree:
+//
+//   node -e "
+//   import('eslint').then(async ({ ESLint }) => {
+//     const { changedFilesConfig } = await import('./eslint.config.mjs');
+//     const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: changedFilesConfig });
+//     const results = await eslint.lintFiles(process.argv.slice(1));
+//     console.log((await eslint.loadFormatter('stylish')).format(results));
+//   });
+//   " -- $(git diff --name-only -- '*.ts' '*.mts')
+export const changedFilesConfig = ts.config(...baseConfig, {
+  files: [
+    'packages/*/src/**/*.ts',
+    'packages/*/test/**/*.ts',
+    'packages/*/payload/**/*.mts',
+    'packages/*/payload/**/__test__/**/*.ts',
+    'packages/*/*.ts',
+    '*.ts',
+  ],
+  rules: {
+    'max-lines-per-function': 'warn',
+  },
+});

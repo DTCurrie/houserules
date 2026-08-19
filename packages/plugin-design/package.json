@@ -109,6 +109,7 @@
   "devDependencies": {
     "@houserules/api": "workspace:*",
     "@houserules/cli": "workspace:*",
+    "@houserules/payload": "workspace:*",
     "@houserules/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
     "@tailwindcss/oxide": "^4.3.3",

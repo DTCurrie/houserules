@@ -2,7 +2,7 @@
 name: decide
 description: Record a decision to the decision ledger, with the rejected alternative and revisit trigger. Use when a discussion settles a design question or a new decision supersedes a prior one.
 argument-hint: decide|supersede|amend|rescope <args...>
-allowed-tools: Bash(node .claude/scripts/decision-log.mjs:*), Agent
+allowed-tools: Bash(node .claude/scripts/decision-log.mjs:*), Bash(node .claude/scripts/decision-lint.mjs:*), Agent
 ---
 
 Log a decision from context so re-deriving it later is a grep, not a reconstruction.
@@ -142,5 +142,10 @@ to `.claude/ledgers/studio.DECISIONS.md`. For a repo-wide decision, pass `DECISI
 3. Check whether Revisit when is path-watchable. If it is, add that path to `--scope`
    alongside "In the code". If it is not, leave it prose and move on.
 4. Run `node .claude/scripts/decision-log.mjs decide <prefix> <area> "<title>" "<body>"`
-   (or `supersede`/`amend` as appropriate).
-5. Spawn the `decision-reviewer` subagent on the new entry to check it against the bar.
+   (or `supersede`/`amend` as appropriate). This also re-renders the area's `DECISIONS.md`.
+5. Check the rendered surface for the two structural gaps a script can catch:
+   `node .claude/scripts/decision-lint.mjs <rendered-file>`. It flags a missing Rejected or
+   Revisit field, and a revisit trigger that names a path not yet in `--scope`. It cannot tell a
+   genuine field from an invented one, so a clean run is not a substitute for the bar in step 1.
+   Fix anything it finds with `rescope` or `amend` before moving on.
+6. Spawn the `decision-reviewer` subagent on the new entry to check it against the bar.

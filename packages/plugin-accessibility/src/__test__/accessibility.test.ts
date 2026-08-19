@@ -53,6 +53,21 @@ describe('accessibility', () => {
     expect(manifest.files['.claude/rules/accessibility.md']).toBeTruthy();
   });
 
+  it('installs the markup checker script alongside the wcag router', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'a11y/accessibility',
+      plugins: PLUGINS,
+    });
+
+    const manifest = manifestOf(root);
+    const settings = settingsOf(root);
+
+    expect(manifest.files['.claude/scripts/a11y-markup.mjs']).toBeTruthy();
+    expect(settings.permissions?.allow).toContain(
+      'Bash(node .claude/scripts/a11y-markup.mjs:*)',
+    );
+  });
+
   it('wires no hook and adds nothing to the always-loaded CLAUDE.md', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'a11y/accessibility',

@@ -324,7 +324,7 @@ describe('checkDesign, off-scale dimensions', () => {
     expect(finding?.message).toContain('Nearest is 0.25rem');
   });
 
-  it('reports nothing for a value already on the scale', () => {
+  it('flags a value already on the scale as an untokenized literal', () => {
     const css = `
 .card {
   padding: 1rem;
@@ -332,6 +332,133 @@ describe('checkDesign, off-scale dimensions', () => {
 `;
 
     const { findings } = checkDesign(css, spacingTokenSet());
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toBe(
+      '1rem is exactly `spacing.md`. Use `spacing.md` instead of the literal.',
+    );
+  });
+});
+
+describe('checkDesign, on-scale dimension literals', () => {
+  it('flags a font-size literal that lands exactly on a type scale step', () => {
+    const css = `
+.label {
+  font-size: 1.25rem;
+}
+`;
+
+    const { findings } = checkDesign(css, fontSizeTokenSet());
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toBe(
+      '1.25rem is exactly `fontSize.lg`. Use `fontSize.lg` instead of the literal.',
+    );
+  });
+
+  it('flags a radius literal that lands exactly on the radius scale', () => {
+    const css = `
+.card {
+  border-radius: 0.5rem;
+}
+`;
+
+    const { findings } = checkDesign(css, radiusTokenSet());
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toBe(
+      '0.5rem is exactly `radius.md`. Use `radius.md` instead of the literal.',
+    );
+  });
+
+  it('reports nothing when the value already references the token via var()', () => {
+    const css = `
+.card {
+  padding: var(--spacing-md);
+}
+`;
+
+    const { findings } = checkDesign(css, spacingTokenSet());
+
+    expect(findings).toEqual([]);
+  });
+
+  it('reports nothing for a spacing value the scale does not contain, since that is off-scale territory', () => {
+    const css = `
+.card {
+  padding: 0.6875rem;
+}
+`;
+
+    const { findings } = checkDesign(css, spacingTokenSet());
+
+    expect(
+      findings.some((finding) => finding.message.includes('is exactly')),
+    ).toBe(false);
+  });
+});
+
+describe('checkDesign, inline font-weight literals', () => {
+  const tokens = {
+    fontWeight: {
+      regular: { $value: 400 },
+      bold: { $value: 700 },
+    },
+  };
+
+  it('names the token when a numeric literal is exactly its value', () => {
+    const css = `
+.title {
+  font-weight: 700;
+}
+`;
+
+    const { findings } = checkDesign(css, tokens);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toBe(
+      '700 is exactly `fontWeight.bold`. Use `fontWeight.bold` instead of the literal.',
+    );
+  });
+
+  it('resolves a named weight to its numeric equivalent before matching', () => {
+    const css = `
+.title {
+  font-weight: bold;
+}
+`;
+
+    const { findings } = checkDesign(css, tokens);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toBe(
+      'bold is exactly `fontWeight.bold`. Use `fontWeight.bold` instead of the literal.',
+    );
+  });
+
+  it('reports a new-value finding for a weight matching no token', () => {
+    const css = `
+.title {
+  font-weight: 550;
+}
+`;
+
+    const { findings } = checkDesign(css, tokens);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toBe(
+      '550 matches no token. This is a new value and needs a design decision before it joins the token set.',
+    );
+  });
+
+  it('reports nothing when the value is a var() reference', () => {
+    const css = `
+.title {
+  font-weight: var(--font-weight-bold);
+}
+`;
+
+    const { findings } = checkDesign(css, tokens);
 
     expect(findings).toEqual([]);
   });
@@ -416,7 +543,7 @@ describe('checkDesign, px declarations against a rem scale', () => {
     expect(finding?.message).toContain('off the font size scale');
   });
 
-  it('does not flag a px padding that equals a rem spacing scale value', () => {
+  it('flags a px padding that equals a rem spacing scale value as untokenized, not off-scale', () => {
     const css = `
 .card {
   padding: 24px;
@@ -425,7 +552,10 @@ describe('checkDesign, px declarations against a rem scale', () => {
 
     const { findings } = checkDesign(css, spacingTokenSet());
 
-    expect(findings).toEqual([]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toBe(
+      '24px is exactly `spacing.lg`. Use `spacing.lg` instead of the literal.',
+    );
   });
 });
 

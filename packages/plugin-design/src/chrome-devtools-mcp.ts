@@ -1,3 +1,5 @@
+import { scriptPermission } from '@houserules/api';
+
 import { checkChromeAvailable } from './chrome-check.js';
 
 import type {
@@ -31,7 +33,7 @@ function adviseText(slim: boolean): string {
   const installed = slim
     ? `The slim variant is installed: ${SLIM_TOOL_COUNT} tools, navigate, evaluate, and screenshot, about 1KB of schema paid on every turn. It has no accessibility snapshot, so there are no element uids and no click, fill, or press_key. Drive the page by passing JavaScript to evaluate. The full variant is ${FULL_TOOL_COUNT} tools and about 23KB.`
     : `The full variant is installed: ${FULL_TOOL_COUNT} tools, about 23KB of schema paid on every turn whether you use them or not. The slim variant is ${SLIM_TOOL_COUNT} tools and about 1KB. Upstream docs list more tools than ${FULL_TOOL_COUNT} because the package defines 52 and leaves 23 behind flags the shipped args do not pass, such as --memoryDebugging and --categoryExtensions.`;
-  return `Chrome DevTools MCP config installed under .claude/mcp/: chrome-devtools.stdio.json and chrome-devtools.vscode.json. Neither is wired in yet, since houserules never writes .mcp.json. Copy the \`mcpServers\` block from chrome-devtools.stdio.json into this repo's own .mcp.json, or for VS Code copy chrome-devtools.vscode.json into its own MCP config. ${installed} Run \`/chrome-devtools-mode\` to switch a wired-in config between the two. Re-running houserules only rewrites the reference copy under .claude/mcp/, which is not the config your client reads. \`--no-usage-statistics\` is in the shipped args because upstream defaults telemetry on. \`--headless\` is in them too, so the browser runs with no window. Drop it yourself to watch the browser work. The version is pinned to chrome-devtools-mcp@1.7.0 so the tool counts above stay true. Bumping it is a deliberate edit to this payload file, not a no-op. A repo running the full variant and testing/playwright-mcp pays ${FULL_TOOL_COUNT + PLAYWRIGHT_TOOL_COUNT} tool definitions on every turn. Reach for Chrome DevTools for performance traces, Lighthouse audits, and heap snapshots. Reach for Playwright for cross-browser work and test assertions. This module does not replace \`node .claude/scripts/design.mjs render\`, which stays the deterministic tier for design checks.`;
+  return `Chrome DevTools MCP config installed under .claude/mcp/: chrome-devtools.stdio.json and chrome-devtools.vscode.json. Neither is wired in yet, since houserules never writes .mcp.json. Copy the \`mcpServers\` block from chrome-devtools.stdio.json into this repo's own .mcp.json, or for VS Code copy chrome-devtools.vscode.json into its own MCP config. ${installed} Run \`/chrome-devtools-mode\` to switch a wired-in config between the two. Re-running houserules only rewrites the reference copy under .claude/mcp/, which is not the config your client reads. \`--no-usage-statistics\` is in the shipped args because upstream defaults telemetry on. \`--headless\` is in them too, so the browser runs with no window. Drop it yourself to watch the browser work. The version is pinned to chrome-devtools-mcp@1.7.0 so the tool counts above stay true. Bumping it is a deliberate edit to this payload file, not a no-op. A repo running the full variant and testing/playwright-mcp pays ${FULL_TOOL_COUNT + PLAYWRIGHT_TOOL_COUNT} tool definitions on every turn. Reach for Chrome DevTools for performance traces, Lighthouse audits, and heap snapshots. Reach for Playwright for cross-browser work and test assertions. This module does not replace \`node .claude/scripts/design.mjs render\`, which stays the deterministic tier for design checks. .claude/scripts/mcp-config-check.mjs checks a wired-in config against \`chrome-devtools-mode\`'s edit-discipline clauses: the pinned version and the required flags stay as shipped, and every wired-in client agrees. Run it with \`node .claude/scripts/mcp-config-check.mjs <config files>\`, such as .mcp.json and .vscode/mcp.json. UNMEASURED: no repo in this monorepo wires \`.mcp.json\` for chrome-devtools, so this checker has never run against a real wired-in config, only against paired fire-or-stay-silent fixtures. Treat its findings as a starting point, and report a false positive rather than working around it.`;
 }
 
 /**
@@ -110,6 +112,18 @@ export function chromeDevtoolsMcpModule(api: PluginApi): ModuleDef {
           'chrome-devtools-mode',
           'switch the wired-in Chrome DevTools MCP server between the full and slim tool surfaces',
         ),
+        api.payload.script(
+          id,
+          'mcp-config-check.mjs',
+          "checks the chrome-devtools-mode skill's edit-discipline clauses against a wired-in MCP config: the pinned server version and its non-slim flags stay as shipped, and every wired-in client agrees",
+        ),
+        {
+          kind: 'merge-settings',
+          module: id,
+          fragment: {
+            permissions: { allow: [scriptPermission('mcp-config-check.mjs')] },
+          },
+        },
         {
           kind: 'advise',
           text: adviseText(slim),

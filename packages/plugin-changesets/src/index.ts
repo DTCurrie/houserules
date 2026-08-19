@@ -85,6 +85,11 @@ function changesetsModule(api: PluginApi): ModuleDef {
           'changeset-check.mjs',
           'Stop hook: nudge when package set changed with no changeset',
         ),
+        api.payload.script(
+          id,
+          'changeset-gate.mjs',
+          'Stop hook: package-set drift, major-bump confirmation, absorb ordering',
+        ),
         // Installed here rather than written lazily by the hook, so the state directory
         // never surfaces as untracked in the user's `git status`.
         {
@@ -123,6 +128,11 @@ function changesetsModule(api: PluginApi): ModuleDef {
             permissions: { allow: [scriptPermission('changeset-write.mjs')] },
             ...hookFragment('Stop', null, 'changeset-check.mjs'),
           },
+        },
+        {
+          kind: 'merge-settings',
+          module: id,
+          fragment: hookFragment('Stop', null, 'changeset-gate.mjs'),
         },
       ];
 

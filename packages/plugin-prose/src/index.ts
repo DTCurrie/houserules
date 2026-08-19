@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { definePlugin } from '@houserules/api';
+import { definePlugin, scriptPermission } from '@houserules/api';
 import type { Action, Ctx, ModuleDef, PluginApi } from '@houserules/api';
 
 /**
@@ -74,10 +74,22 @@ function proseVoiceModule(api: PluginApi): ModuleDef {
           'prose-voice',
           'path-scoped writing voice, loaded when a markdown or source file is in play',
         ),
+        api.payload.script(
+          id,
+          'prose-lint.mjs',
+          'checks the mechanical clauses of prose-voice.md: no semicolons, em-dash density',
+        ),
         {
           kind: 'advise',
-          text: 'Writing voice rule installed at .claude/rules/prose-voice.md. It applies to prose the agent authors: changesets, plans, docs, PR bodies, and the sentences inside code comments. The `paths:` list covers markdown plus the same source extensions as code-comments, since those rules defer sentence-level voice to this one. The `paths:` frontmatter is also what keeps it off the always-loaded surface, so keep it. A rule file WITHOUT `paths:` loads on every turn. Dot-directories are listed separately because `**` does not reliably descend into them.',
+          text: 'Writing voice rule installed at .claude/rules/prose-voice.md. It applies to prose the agent authors: changesets, plans, docs, PR bodies, and the sentences inside code comments. The `paths:` list covers markdown plus the same source extensions as code-comments, since those rules defer sentence-level voice to this one. The `paths:` frontmatter is also what keeps it off the always-loaded surface, so keep it. A rule file WITHOUT `paths:` loads on every turn. Dot-directories are listed separately because `**` does not reliably descend into them. Run `node .claude/scripts/prose-lint.mjs <file>...` to catch the two mechanical clauses, no semicolons and em-dash density, before calling a piece of prose done.',
           module: id,
+        },
+        {
+          kind: 'merge-settings',
+          module: id,
+          fragment: {
+            permissions: { allow: [scriptPermission('prose-lint.mjs')] },
+          },
         },
       ];
     },
@@ -215,10 +227,24 @@ function prDescriptionModule(api: PluginApi): ModuleDef {
           'pr-description',
           'reviewer-facing PR body, read from the diff rather than the transcript',
         ),
+        api.payload.script(
+          id,
+          'pr-description-lint.mjs',
+          'checks a drafted PR body: structure, banned phrases, changelog dumps, verify commands, layer headings',
+        ),
         {
           kind: 'advise',
-          text: "PR description skill installed. Run /pr-description before opening a pull request, optionally with a base branch. It reads the branch diff rather than the session transcript, names the layers from this repo's own CLAUDE.md layout and houserules.config.json targets, and returns the body as pasteable markdown. It creates or updates the PR only when you ask it to.",
+          text: "PR description skill installed. Run /pr-description before opening a pull request, optionally with a base branch. It reads the branch diff rather than the session transcript, names the layers from this repo's own CLAUDE.md layout and houserules.config.json targets, and returns the body as pasteable markdown. It creates or updates the PR only when you ask it to. The skill pipes its draft through `node .claude/scripts/pr-description-lint.mjs` on its own before returning the body, checking structure, banned phrases, changelog-shaped dumps, verify commands, and layer headings.",
           module: id,
+        },
+        {
+          kind: 'merge-settings',
+          module: id,
+          fragment: {
+            permissions: {
+              allow: [scriptPermission('pr-description-lint.mjs')],
+            },
+          },
         },
       ];
     },

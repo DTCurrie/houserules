@@ -199,6 +199,11 @@ Status vocabulary is fixed and greppable, extending the ROADMAP's:
 Update it **in place** at every transition, in the same pass as the transition. A slice table that
 lags the truth is worse than none.
 
+`.claude/scripts/plan-lint.mjs`, if installed, checks a status cell against this exact vocabulary
+and cross-checks the ROADMAP line against the sub-plan header it links to. Run
+`node .claude/scripts/plan-lint.mjs` after writing or updating the table, so a typo'd status does
+not silently break the resume grep in §9.
+
 ## 4. Dispatch a wave — one message, one worker per slice
 
 Send every slice in the wave as parallel `Agent` calls **in a single message**, each with
@@ -391,6 +396,10 @@ does not override this.
 All waves done → check the phase's own acceptance from the sub-plan, then update **both** the sub-plan
 header and the `ROADMAP.md` line to `DONE (<date>)` in one pass, with a `## Log` entry. This is
 `/plan-project`'s status-in-place discipline, and orchestration doesn't get to skip it.
+
+Run `node .claude/scripts/plan-lint.mjs` if installed, to confirm the update actually landed on
+both files. It has caught real drift of exactly this shape: a ROADMAP line marked `DONE` while
+its sub-plan header still read an earlier status.
 
 **Before reporting, promote durable decisions.** Skip this step if `.claude/scripts/decision-log.mjs`
 is absent. Re-read the phase's `## Notes & decisions` and the decisions-and-deviations section of

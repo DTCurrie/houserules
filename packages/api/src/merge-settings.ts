@@ -212,6 +212,22 @@ function mergeHooks(
   }
 }
 
+/**
+ * Every hook entry across a fragment list, flattened with the event it belongs to.
+ *
+ * The settings hook shape nests four deep, fragment to event to group to hook, and two
+ * callers walked all four inline. Flattening once keeps each caller at one level and means
+ * a change to the shape has one place to land rather than two.
+ */
+function* eachHook(
+  fragments: SettingsFragment[],
+): Generator<{ event: string; group: HookGroup; hook: HookEntry }> {
+  for (const fragment of fragments)
+    for (const [event, groups] of Object.entries(fragment.hooks ?? {}))
+      for (const group of groups ?? [])
+        for (const hook of group.hooks ?? []) yield { event, group, hook };
+}
+
 export function mergeSettings(
   existing: Settings | null,
   fragment: SettingsFragment,
@@ -286,11 +302,8 @@ export function removeSettingsFragments(
 ): { merged: Settings; changes: SettingsChange[] } {
   const scriptsOf = (fragments: SettingsFragment[]): Set<string> => {
     const out = new Set<string>();
-    for (const fragment of fragments)
-      for (const groups of Object.values(fragment.hooks ?? {}))
-        for (const group of groups ?? [])
-          for (const hook of group.hooks ?? [])
-            for (const base of kitBasenames(hook.command)) out.add(base);
+    for (const { hook } of eachHook(fragments))
+      for (const base of kitBasenames(hook.command)) out.add(base);
     return out;
   };
   const permissionsOf = (fragments: SettingsFragment[]): Set<string> => {
@@ -341,15 +354,13 @@ export function settingsSignature(
     for (const list of ['allow', 'deny', 'ask'] as const)
       for (const p of fragment.permissions?.[list] ?? [])
         permissions.add(`${list}:${p}`);
-    for (const [event, groups] of Object.entries(fragment.hooks ?? {}))
-      for (const group of groups ?? [])
-        for (const hook of group.hooks ?? []) {
-          const script = kitBasenames(hook.command)[0] ?? null;
-          const key = `${event}|${group.matcher ?? ''}|${script}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          hooks.push({ event, matcher: group.matcher ?? null, script });
-        }
+    for (const { event, group, hook } of eachHook([fragment])) {
+      const script = kitBasenames(hook.command)[0] ?? null;
+      const key = `${event}|${group.matcher ?? ''}|${script}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      hooks.push({ event, matcher: group.matcher ?? null, script });
+    }
   }
   return { hooks, permissions: [...permissions] };
 }

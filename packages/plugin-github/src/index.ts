@@ -75,11 +75,21 @@ function projectsModule(api: PluginApi): ModuleDef {
           'backlog-adopt',
           'adopt a reported GitHub issue into the backlog ledger and onto the project board',
         ),
+        api.payload.script(
+          id,
+          'adopt-lint.mjs',
+          'checks backlog-adopt for duplicate issue adoption, title drift, and ambiguous target resolution, offline',
+        ),
         {
           kind: 'merge-settings',
           module: id,
           fragment: {
-            permissions: { allow: [scriptPermission('projects-sync.mjs')] },
+            permissions: {
+              allow: [
+                scriptPermission('projects-sync.mjs'),
+                scriptPermission('adopt-lint.mjs'),
+              ],
+            },
           },
         },
         // No matcher, so it also fires on `/clear` and `/resume`. Those usually follow a chunk

@@ -96,6 +96,19 @@ describe('chrome-devtools-mcp', () => {
     ).toBe(true);
   });
 
+  it('installs the mcp-config-check script and tracks it in the manifest', () => {
+    const root = installedWith();
+
+    expect(existsSync(join(root, '.claude/scripts/mcp-config-check.mjs'))).toBe(
+      true,
+    );
+    expect(
+      Object.keys(manifestOf(root).files).includes(
+        '.claude/scripts/mcp-config-check.mjs',
+      ),
+    ).toBe(true);
+  });
+
   it('installs the full stdio config with the expected command and args', () => {
     const root = installedWith();
 

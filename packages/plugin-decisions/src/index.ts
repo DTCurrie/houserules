@@ -36,11 +36,21 @@ function decisionsModule(api: PluginApi): ModuleDef {
           'decision-reviewer',
           'gut-checks a fresh decision record against the bar (haiku)',
         ),
+        api.payload.script(
+          id,
+          'decision-lint.mjs',
+          'checks a rendered DECISIONS.md for missing Rejected/Revisit fields and unscoped path-watchable triggers',
+        ),
         {
           kind: 'merge-settings',
           module: id,
           fragment: {
-            permissions: { allow: [scriptPermission('decision-log.mjs')] },
+            permissions: {
+              allow: [
+                scriptPermission('decision-log.mjs'),
+                scriptPermission('decision-lint.mjs'),
+              ],
+            },
           },
         },
       ];

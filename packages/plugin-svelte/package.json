@@ -27,16 +27,19 @@
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && houserules-payload && publint",
+      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && houserules-payload && publint",
       "dependencies": [
         "../cli:build:ts",
-        "../api:build"
+        "../api:build",
+        "../payload:build"
       ],
       "files": [
         "src/**/*.ts",
         "!src/**/__test__/**",
         "tsconfig.build.json",
-        "payload/**"
+        "payload/**",
+        "!payload/**/__test__/**",
+        "tsconfig.payload.json"
       ],
       "output": [
         "dist/**",
@@ -44,15 +47,20 @@
       ]
     },
     "check": {
-      "command": "tsc --noEmit -p tsconfig.json",
+      "command": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json",
       "dependencies": [
         "../cli:build:ts",
         "../api:build",
-        "../test:build"
+        "../test:build",
+        "../payload:build"
       ],
       "files": [
         "src/**/*.ts",
-        "tsconfig.json"
+        "tsconfig.json",
+        "tsconfig.build.json",
+        "payload/**/*.mts",
+        "payload/**/__test__/**",
+        "tsconfig.payload.json"
       ],
       "output": []
     },
@@ -64,7 +72,8 @@
       ],
       "files": [
         "src/**/*.ts",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "payload/**"
       ],
       "output": []
     },
@@ -93,10 +102,11 @@
     "@houserules/api": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@houserules/api": "workspace:*",
     "@houserules/cli": "workspace:*",
+    "@houserules/payload": "workspace:*",
     "@houserules/test": "workspace:*",
-    "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.1.2",
     "publint": "^0.3.23",
     "typescript": "^6.0.3",

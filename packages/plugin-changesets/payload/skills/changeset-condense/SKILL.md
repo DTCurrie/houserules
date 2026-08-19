@@ -2,7 +2,7 @@
 name: changeset-condense
 description: Condense pending changesets, consolidating redundant .changeset/*.md entries into one. Use when a later changeset supersedes, extends, or fixes an earlier one.
 argument-hint: [id ...]
-allowed-tools: Bash(node .claude/scripts/changeset-write.mjs:*), Bash(git status:*), Bash(git log:*), Read, Glob, Grep
+allowed-tools: Bash(node .claude/scripts/changeset-write.mjs:*), Bash(node .claude/scripts/changeset-gate.mjs:*), Bash(git status:*), Bash(git log:*), Read, Glob, Grep
 ---
 
 Fold the pending changesets that describe one feature into one entry. Arguments (optional, limits
@@ -64,7 +64,11 @@ bullet announces something no user ever saw.
    never `rm` one, and never merge by writing a new changeset and deleting the originals. The
    script owns both the write and the delete.
 
-7. **Report** each surviving path, what it now declares, and which ids it absorbed. An absorbed
+7. **Check for package-set drift.** `node .claude/scripts/changeset-gate.mjs` flags a
+   just-written survivor whose declared packages are missing one the current diff also touches.
+   It also runs on its own as a Stop hook at the end of the turn, so this step surfaces the same
+   finding immediately.
+8. **Report** each surviving path, what it now declares, and which ids it absorbed. An absorbed
    changeset that was already committed shows up as a deletion in `git status`, which is expected
    and belongs in the same commit as the condense.
 

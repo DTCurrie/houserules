@@ -1,7 +1,7 @@
 ---
 name: design-review
 description: Review changed styled markup against the design system: tokens, spacing, contrast, hit targets, and component reuse in CSS, JSX, TSX, Svelte, Vue, and Astro. Use before handing off a UI change.
-allowed-tools: Bash(git diff:*), Bash(git merge-base:*), Bash(node .claude/scripts/design.mjs:*), Read, Grep, Agent
+allowed-tools: Bash(git diff:*), Bash(git merge-base:*), Bash(node .claude/scripts/design.mjs:*), Bash(node .claude/scripts/mcp-config-check.mjs:*), Read, Grep, Agent
 ---
 
 Review the design-system fit of a working-tree change. Arguments (optional file filter): $ARGUMENTS
@@ -56,7 +56,18 @@ Review the design-system fit of a working-tree change. Arguments (optional file 
    - Whether visual emphasis lands on the primary action.
    - Calibrate the depth of this to the size of the change. A one-line tweak does not need a
      full critique.
-6. **Report in two groups.** Mechanical findings first: everything `design.mjs check` named,
+6. **If the chrome-devtools MCP server is wired in, check its config.** Look for a
+   `chrome-devtools` entry in `.mcp.json` or `.vscode/mcp.json`. If one exists, run:
+   ```
+   node .claude/scripts/mcp-config-check.mjs .mcp.json .vscode/mcp.json
+   ```
+   passing whichever of those files exist. It checks the pinned server version, the required
+   flags, and that every wired-in client agrees. **UNMEASURED**: no repo in this monorepo
+   wires `.mcp.json` for chrome-devtools, so this checker has never run against a real
+   wired-in config, only against paired fire-or-stay-silent fixtures. Treat a finding as a
+   lead, not a verdict, and report a false positive rather than working around it. Skip this
+   step entirely if no client wires the server in.
+7. **Report in two groups.** Mechanical findings first: everything `design.mjs check` named,
    plus anything `design.mjs render` computed, each with file, line, and the exact token or
    scale value. Judgment findings second. Do not merge the two lists, since they carry
    different confidence. If nothing is wrong, say so plainly. "Nothing to report" is a valid

@@ -173,6 +173,11 @@ stale ROADMAP is worse than none, because it lies to the next session. Add a one
 with the date and what's next, and bump the `**Updated:**` date. If a phase is blocked, mark it
 `BLOCKED` and note why in the sub-plan. Don't leave it silently `IN PROGRESS`.
 
+If `.claude/scripts/plan-lint.mjs` is installed, run `node .claude/scripts/plan-lint.mjs` after
+the edit. It checks every phase's status cell against the fixed vocabulary and cross-checks each
+ROADMAP line against the sub-plan header it links to, so a pass that missed one half of the
+update does not sit undetected until the next resume.
+
 Before the workspace is discarded, re-read the phase's `## Notes & decisions` and offer to promote
 anything durable with `/decide`. It proposes, it does not bulk-write. Most notes are not decisions,
 and a bulk write is how a decision log fills with diary. Apply the bar from the `decide` skill: not

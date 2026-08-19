@@ -27,16 +27,19 @@
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && houserules-payload && publint",
+      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && houserules-payload && publint",
       "dependencies": [
         "../cli:build:ts",
-        "../api:build"
+        "../api:build",
+        "../payload:build"
       ],
       "files": [
         "src/**/*.ts",
         "!src/**/__test__/**",
         "payload/**",
-        "tsconfig.build.json"
+        "tsconfig.build.json",
+        "!payload/**/__test__/**",
+        "tsconfig.payload.json"
       ],
       "output": [
         "dist/**",
@@ -45,18 +48,22 @@
     },
     "check": {
       "//": "../test:build is load-bearing, not incidental: the suites under src/__test__/ import `#test/*`, which tsconfig.json maps into @houserules/test's dist/. Without it wireit may run this before that build and tsc fails with TS2307 on a module that is merely not built yet. `test` already declared it; `check` did not. See TEST-0d61d6.",
-      "command": "tsc --noEmit -p tsconfig.json",
+      "command": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json",
       "dependencies": [
         "../cli:build:ts",
         "../api:build",
-        "../test:build"
+        "../test:build",
+        "../payload:build"
       ],
       "files": [
         "src/**/*.ts",
         "tsconfig.json",
         "tsconfig.build.json",
         "payload/**",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "payload/**/*.mts",
+        "payload/**/__test__/**",
+        "tsconfig.payload.json"
       ],
       "output": []
     },
@@ -98,10 +105,11 @@
     "@houserules/api": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@houserules/api": "workspace:*",
     "@houserules/cli": "workspace:*",
+    "@houserules/payload": "workspace:*",
     "@houserules/test": "workspace:*",
-    "@arethetypeswrong/cli": "^0.18.5",
     "@types/node": "^26.1.2",
     "publint": "^0.3.23",
     "typescript": "^6.0.3",

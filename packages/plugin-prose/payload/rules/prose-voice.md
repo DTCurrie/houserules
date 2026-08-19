@@ -38,8 +38,10 @@ editing on the user's behalf in their voice.
 - **One idea per sentence.** Two ideas are two sentences.
 - **Avoid em dashes.** An em dash is almost always a comma, a period, or a sentence that
   reads better rewritten. Rewrite first. Keep one only when the aside genuinely interrupts
-  and no other punctuation carries it, and never more than one per paragraph.
-- **No semicolons.** A semicolon joins two independent clauses. Use a period instead.
+  and no other punctuation carries it, and never more than one per paragraph. Whether a
+  surviving em dash is genuinely unreplaceable is still a judgment call. Only the count is
+  checked.
+- **No semicolons.** Enforced by the checker below, not a judgment call.
 - **One aside per sentence, or none.** Do not stack parentheses, dashes, and subordinate
   clauses in the same sentence.
 - **Cut filler.** Delete "essentially", "in order to", "it's worth noting", "it should be
@@ -51,6 +53,12 @@ editing on the user's behalf in their voice.
   beats "does not handle certain edge cases well".
 - **Never reword exact content.** Code, commands, file paths, URLs, identifiers, error
   messages, and version numbers are copied byte for byte.
+
+## Checked mechanically
+
+`prose-lint.mjs` enforces the semicolon clause and counts em dashes per paragraph. Run it
+over a file before you call it done. It never rules on whether a surviving em dash earns its
+keep, or on filler, asides, or concreteness. Those stay a human read.
 
 ## Precision outranks brevity
 

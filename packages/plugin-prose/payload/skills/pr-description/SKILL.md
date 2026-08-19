@@ -2,7 +2,7 @@
 name: pr-description
 description: Write the pull request description for a change: a pasteable markdown body with an opening paragraph, one section per layer touched, an optional Why, and Testing last. Use before opening or updating a PR, or when asked for a PR body, PR summary, or gh pr create text.
 argument-hint: [base-branch]
-allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git status:*), Read, Glob, Grep
+allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git status:*), Bash(node .claude/scripts/pr-description-lint.mjs:*), Read, Glob, Grep
 ---
 
 Write the pull request description for the current change. Base branch, if given: $ARGUMENTS
@@ -110,3 +110,19 @@ focus state.
 - Name both the old and the new name when renaming or deprecating.
 - No auto-generated changelogs, file lists, or diff stats.
 - For sentence-level voice, follow `.claude/rules/prose-voice.md` if that rule is installed.
+
+## 5. Check it
+
+Before returning the fenced body, pipe it through the checker:
+
+```
+node .claude/scripts/pr-description-lint.mjs <<'EOF'
+<the fenced markdown you drafted>
+EOF
+```
+
+It catches the structural clauses above: the fenced wrapper, banned phrases, changelog-shaped
+dumps, whether Testing quotes this repo's own verify commands, and headings that name no
+configured layer. Fix any error finding and redraft before returning the body. A warn finding
+is worth a second look but is not a redraft on its own. It does not read intent, tense, or
+whether a decision was worth a Why section. Those stay yours to judge.

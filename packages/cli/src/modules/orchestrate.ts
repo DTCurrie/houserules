@@ -1,6 +1,6 @@
 import type { Action, Answers, ModuleGroup } from '@houserules/api';
 import type { Ctx } from '../detect.js';
-import { agent, skill } from './copy-actions.js';
+import { agent, script, skill } from './copy-actions.js';
 
 export const id = 'orchestrate';
 export const title = 'Phase execution via scoped workers (/orchestrate)';
@@ -37,6 +37,11 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       id,
       'task-worker',
       'the sonnet implementer /orchestrate dispatches: one slice, owned paths only, fixed report format',
+    ),
+    script(
+      id,
+      'plan-lint.mjs',
+      'validate a .claude/plans/ workspace: slice status vocabulary, ROADMAP/sub-plan sync, fix.onSubagentStop, blast-radius artifact shape',
     ),
     {
       kind: 'advise',

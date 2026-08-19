@@ -103,11 +103,12 @@ describe('projects plugin', () => {
     expect(module?.defaultEnabled(CTX)).toBe(false);
   });
 
-  it('plans the sync script, its nine libs, the hook, both skills, and both settings fragments', () => {
+  it('plans the sync script, its nine libs, the hook, both skills, the adopt checker, and both settings fragments', () => {
     const [module] = plugin(buildApi());
     const actions = module?.plan(CTX, ANSWERS) ?? [];
 
     expect(actions.map((action) => action.kind)).toEqual([
+      'copy',
       'copy',
       'copy',
       'copy',
@@ -140,6 +141,7 @@ describe('projects plugin', () => {
       '.claude/scripts/projects-sync-hook.mjs',
       '.claude/skills/ledger-sync/SKILL.md',
       '.claude/skills/backlog-adopt/SKILL.md',
+      '.claude/scripts/adopt-lint.mjs',
       undefined,
       undefined,
     ]);
@@ -178,7 +180,10 @@ describe('projects plugin', () => {
       mergeSettings?.kind === 'merge-settings' && mergeSettings.fragment,
     ).toEqual({
       permissions: {
-        allow: ['Bash(node .claude/scripts/projects-sync.mjs:*)'],
+        allow: [
+          'Bash(node .claude/scripts/projects-sync.mjs:*)',
+          'Bash(node .claude/scripts/adopt-lint.mjs:*)',
+        ],
       },
     });
   });

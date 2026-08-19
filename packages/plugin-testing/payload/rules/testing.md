@@ -71,12 +71,17 @@ that covers it is part of the change, not a follow-up.
 
 - **Tests colocate in a `__test__` directory beside the code they cover.** A test for
   `src/core/drift.ts` is `src/core/__test__/drift.test.ts`. Close enough to find without a
-  search, in a directory of its own so it does not clutter the module listing.
+  search, in a directory of its own so it does not clutter the module listing. Checked
+  mechanically: only that a test file sits inside a `__test__` directory. Whether it is
+  beside the right subject stays a human read, since a real corpus check found 40% of test
+  files name a tree or a concept rather than one sibling file, which is a judgment call, not
+  a path match.
 - **Split by SUBJECT, not by unit versus end-to-end, and setup does not count toward the
   subject.** A test that builds a repo, runs one command, then checks the result is about that
   command. Counting the setup makes everything look cross-cutting and nothing colocates. One
   file per subject, a `describe` per concern, and never a parallel `.e2e.test.ts` tier that
-  splits one subject across two places.
+  splits one subject across two places. Checked mechanically: only the `.e2e.test.ts` tier.
+  Whether a file is genuinely split by subject is still a human read.
 - **Assume every test has an owner.** "This one is cross-cutting" is almost always a misreading.
   An entry point is a unit, and so is a test that drives several components as long as one of
   them is the subject. Before filing something as ownerless, name the source file it is about
@@ -162,6 +167,8 @@ that covers it is part of the change, not a follow-up.
   means it should be several suites, split by the unit under test.
 - **No assertion-free test.** A test that runs code and asserts nothing passes forever and
   proves nothing. Vitest's `expect.requireAssertions` catches this and is worth turning on.
+  Checked mechanically: that some config or setup file turns it on. Whether an individual
+  test actually asserts something is Vitest's own runtime check, not this checker's.
 - **No snapshot standing in for an assertion.** A snapshot of a large structure fails on every
   unrelated change and gets updated without being read. Assert the fields the behavior is
   about.
@@ -185,3 +192,12 @@ that covers it is part of the change, not a follow-up.
 - How the sentence inside a description or comment reads: see `prose-voice.md`.
 - Naming, function size, and dead code in test helpers: see `code-cleanliness.md`. Helpers are
   code and the same rules apply.
+
+## Checked mechanically
+
+`test-layout.mjs`, run over a list of test file paths plus the build output directory, catches
+colocation in `__test__`, the `.e2e.test.ts` tier, and non-test files sitting inside a
+`__test__/`, each noted above. `test-config.mjs`, run over a repo's vitest config and setup
+files, catches whether `expect.requireAssertions` is turned on anywhere. Everything else in
+this rule, including whether a test would actually fail on the bug it claims to catch, is a
+human read.

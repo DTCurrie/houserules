@@ -4,6 +4,39 @@ import { makeAnswers, makeCtx } from '#test/ctx-builder';
 import type { HouseConfig } from '@houserules/api';
 import { plan } from '../core.js';
 
+describe('core plan, the subagent write gate', () => {
+  it('installs subagent-write-gate.mjs as a script', () => {
+    const actions = plan(makeCtx(), makeAnswers());
+
+    expect(
+      actions.some(
+        (a) => a.kind === 'copy' && a.src.endsWith('subagent-write-gate.mjs'),
+      ),
+    ).toBe(true);
+  });
+
+  it('wires subagent-write-gate.mjs as a PreToolUse(Bash) hook', () => {
+    const actions = plan(makeCtx(), makeAnswers());
+
+    const merge = actions.find(
+      (a): a is Extract<typeof a, { kind: 'merge-settings' }> =>
+        a.kind === 'merge-settings' &&
+        JSON.stringify(a.fragment).includes('subagent-write-gate.mjs'),
+    );
+
+    expect(merge).toBeDefined();
+    expect(
+      merge?.fragment.hooks?.PreToolUse?.some(
+        (group) =>
+          group.matcher === 'Bash' &&
+          group.hooks.some((h) =>
+            h.command.includes('subagent-write-gate.mjs'),
+          ),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe('core plan, the ledger directory .gitignore', () => {
   function ledgerIgnoreContent(): string {
     const actions = plan(makeCtx(), makeAnswers());

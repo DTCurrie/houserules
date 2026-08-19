@@ -503,6 +503,9 @@ importers:
       '@houserules/cli':
         specifier: workspace:*
         version: link:../cli
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@houserules/test':
         specifier: workspace:*
         version: link:../test
@@ -602,6 +605,9 @@ importers:
       '@houserules/cli':
         specifier: workspace:*
         version: link:../cli
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@houserules/test':
         specifier: workspace:*
         version: link:../test
@@ -632,6 +638,9 @@ importers:
       '@houserules/cli':
         specifier: workspace:*
         version: link:../cli
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@houserules/test':
         specifier: workspace:*
         version: link:../test
@@ -662,6 +671,9 @@ importers:
       '@houserules/cli':
         specifier: workspace:*
         version: link:../cli
+      '@houserules/payload':
+        specifier: workspace:*
+        version: link:../payload
       '@houserules/test':
         specifier: workspace:*
         version: link:../test

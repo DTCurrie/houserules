@@ -92,6 +92,15 @@ reference doc linked below.
 - Deeper design principles, such as when duplication should become an abstraction: see
   `../reference/design-principles.md`.
 
+### What is checked automatically
+
+Where the repo's ESLint config has them on: unreachable branches, `PascalCase` type names,
+`T`-prefixed generics, and nesting depth past `max-depth` are errors. Catch-all filenames are
+caught by `.claude/scripts/catch-all-filename.mjs`, where installed. `/tidy` runs both over your
+diff. A function past the length threshold surfaces as a candidate to judge, not a pass or fail.
+Everything else in this rule, including booleans read as predicates, magic values, abbreviations,
+and dead or speculative code beyond unreachable branches, is not yet automated.
+
 ## Examples
 
 **Bad — cryptic name and unexplained abbreviation:**

@@ -90,16 +90,26 @@ function accessibilityModule(api: PluginApi): ModuleDef {
           'criterion lookup and the routing table over changed markup',
         ),
         api.payload.lib(id, 'wcag-patterns.mjs'),
+        api.payload.script(
+          id,
+          'a11y-markup.mjs',
+          'checks tabindex/iframe attributes, a Vue bound-false attribute, a Svelte unkeyed each block, and whether the declared frameworks have their accessibility linter installed',
+        ),
         {
           kind: 'merge-settings',
           module: id,
           fragment: {
-            permissions: { allow: [scriptPermission('wcag.mjs')] },
+            permissions: {
+              allow: [
+                scriptPermission('wcag.mjs'),
+                scriptPermission('a11y-markup.mjs'),
+              ],
+            },
           },
         },
         {
           kind: 'advise',
-          text: `Accessibility rule installed at .claude/rules/accessibility.md, path-scoped via its \`paths:\` frontmatter so Claude Code loads it only when markup is in the working set. Trim \`paths:\` to the markup this repo actually has, and keep the frontmatter — a rule file WITHOUT \`paths:\` is loaded on every turn. The rule covers ${MARKUP_GLOBS.length} extensions by default: ${MARKUP_GLOBS.join(', ')}. This rule is guidance, not a linter. Install your framework's accessibility linter alongside it, such as eslint-plugin-jsx-a11y for JSX. The 87 WCAG 2.2 success criteria install at .claude/reference/wcag22.md, which is PULL-ONLY at roughly 48KB. Grep it for a criterion number or keyword and read that window. Enabling the read-guard module makes that access rule mechanical instead of advisory.`,
+          text: `Accessibility rule installed at .claude/rules/accessibility.md, path-scoped via its \`paths:\` frontmatter so Claude Code loads it only when markup is in the working set. Trim \`paths:\` to the markup this repo actually has, and keep the frontmatter — a rule file WITHOUT \`paths:\` is loaded on every turn. The rule covers ${MARKUP_GLOBS.length} extensions by default: ${MARKUP_GLOBS.join(', ')}. This rule is guidance, not a linter. Install your framework's accessibility linter alongside it, such as eslint-plugin-jsx-a11y for JSX. The 87 WCAG 2.2 success criteria install at .claude/reference/wcag22.md, which is PULL-ONLY at roughly 48KB. Grep it for a criterion number or keyword and read that window. Enabling the read-guard module makes that access rule mechanical instead of advisory. .claude/scripts/a11y-markup.mjs checks four mechanical clauses (positive tabindex, titleless iframe, a Vue attribute bound to the literal false, an unkeyed Svelte each block) plus whether the declared frameworks have their accessibility linter installed. Run it with \`node .claude/scripts/a11y-markup.mjs <files>\`. UNMEASURED: this checker has never run against a real corpus of HTML, Vue, or Svelte markup, only against paired fire-or-stay-silent fixtures. Treat its findings as a starting point, and report a false positive rather than working around it.`,
           module: id,
         },
       ];
