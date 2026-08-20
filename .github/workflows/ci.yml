@@ -35,6 +35,12 @@ jobs:
       # A build failure reads as a build failure in the log instead of as a test failure.
       - run: pnpm build
       - run: pnpm test
+        env:
+          # plugin-design's rendered tier drives a real headless Chrome. Chrome's sandbox needs
+          # unprivileged user namespaces, which ubuntu-24.04 denies, so it exits before opening
+          # its debugging port. The payload leaves the sandbox on by default and this opts the
+          # runner out, rather than shipping --no-sandbox to every user.
+          CHROME_NO_SANDBOX: '1'
 
   lint:
     runs-on: ubuntu-latest

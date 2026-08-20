@@ -322,10 +322,24 @@ export async function launchSession(
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-gpu',
+      // /dev/shm is small inside containers, and Chrome crashes on startup when it fills.
+      // Writing shared memory to a temp file instead costs nothing outside one.
+      '--disable-dev-shm-usage',
+      // Chrome's sandbox needs unprivileged user namespaces, which Ubuntu 24.04 and most
+      // hardened container images deny, so Chrome exits before it opens a port. Off by default
+      // because dropping the sandbox is a real weakening. CI opts in.
+      ...(process.env.CHROME_NO_SANDBOX ? ['--no-sandbox'] : []),
       'about:blank',
     ],
-    { stdio: 'ignore' },
+    // Chrome's own stderr is the only thing that says WHY a launch failed. Discarding it turns
+    // every cause into the same unhelpful timeout.
+    { stdio: ['ignore', 'ignore', 'pipe'] },
   );
+
+  let chromeStderr = '';
+  chrome.stderr?.on('data', (chunk: Buffer) => {
+    chromeStderr += chunk.toString();
+  });
 
   const abandon = async (
     error: string,
@@ -333,7 +347,8 @@ export async function launchSession(
     chrome.kill();
     await processExited(chrome);
     removeProfileDir(profileDir);
-    return { ok: false, error };
+    const reported = chromeStderr.trim();
+    return { ok: false, error: reported ? `${error}\n${reported}` : error };
   };
 
   const port = await waitForBoundPort(profileDir);
