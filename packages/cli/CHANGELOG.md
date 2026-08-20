@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.1.1
+
+### Patch Changes
+
+- afc7ff6: Resolve npm-installed plugins whose exports map does not expose `./package.json`.
+
 ## 0.1.0
 
 ### Minor Changes
