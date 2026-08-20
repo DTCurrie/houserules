@@ -13,7 +13,13 @@
 
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { accessSync, constants, mkdtempSync, rmSync } from 'node:fs';
+import {
+  accessSync,
+  constants,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,7 +32,6 @@ const CHROME_CANDIDATES = [
   '/usr/bin/chromium-browser',
 ];
 
-const DEBUG_PORT = 9411;
 const LAUNCH_POLL_INTERVAL_MS = 100;
 const LAUNCH_POLL_ATTEMPTS = 60;
 const DEFAULT_VIEWPORT = { width: 1280, height: 900 };
@@ -75,6 +80,32 @@ function wait(milliseconds: number): Promise<void> {
 }
 
 /** Polls the debugging endpoint until Chrome answers with a browser websocket URL. */
+/**
+ * Reads the port Chrome actually bound out of the `DevToolsActivePort` file it writes into the
+ * profile directory on startup.
+ *
+ * Asking for port 0 and reading back what was chosen is what keeps two sessions from colliding.
+ * A fixed port made this flaky under any concurrency, since the second Chrome cannot bind it, and
+ * made it briefly dangerous: a stale Chrome still holding the port would answer the poll, and the
+ * session would drive somebody else's browser.
+ */
+async function waitForBoundPort(
+  profileDir: string,
+): Promise<number | undefined> {
+  const portFile = join(profileDir, 'DevToolsActivePort');
+  for (let attempt = 0; attempt < LAUNCH_POLL_ATTEMPTS; attempt += 1) {
+    try {
+      const [port] = readFileSync(portFile, 'utf8').split('\n');
+      const parsed = Number.parseInt(port ?? '', 10);
+      if (Number.isInteger(parsed) && parsed > 0) return parsed;
+    } catch {
+      // Chrome has not written the file yet.
+    }
+    await wait(LAUNCH_POLL_INTERVAL_MS);
+  }
+  return undefined;
+}
+
 async function waitForDebuggerUrl(port: number): Promise<string | undefined> {
   for (let attempt = 0; attempt < LAUNCH_POLL_ATTEMPTS; attempt += 1) {
     try {
@@ -286,7 +317,7 @@ export async function launchSession(
     executable,
     [
       '--headless=new',
-      `--remote-debugging-port=${DEBUG_PORT}`,
+      '--remote-debugging-port=0',
       `--user-data-dir=${profileDir}`,
       '--no-first-run',
       '--no-default-browser-check',
@@ -305,9 +336,14 @@ export async function launchSession(
     return { ok: false, error };
   };
 
-  const debuggerUrl = await waitForDebuggerUrl(DEBUG_PORT);
-  if (!debuggerUrl) {
+  const port = await waitForBoundPort(profileDir);
+  if (!port) {
     return await abandon('Chrome started but never opened its debugging port.');
+  }
+
+  const debuggerUrl = await waitForDebuggerUrl(port);
+  if (!debuggerUrl) {
+    return await abandon(`Chrome bound port ${port} but never answered on it.`);
   }
 
   try {
