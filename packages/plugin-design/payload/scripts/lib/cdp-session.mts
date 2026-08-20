@@ -341,14 +341,35 @@ export async function launchSession(
     chromeStderr += chunk.toString();
   });
 
+  // A Chrome that dies on startup often says nothing at all, so the exit status is the only
+  // evidence left. Without it every cause reads as the same timeout.
+  let exit: { code: number | null; signal: string | null } | undefined;
+  chrome.on('exit', (code, signal) => {
+    exit = { code, signal };
+  });
+  let spawnError: string | undefined;
+  chrome.on('error', (error) => {
+    spawnError = error.message;
+  });
+
   const abandon = async (
     error: string,
   ): Promise<SessionResult<RenderSession>> => {
+    // Read the exit state BEFORE killing, or the kill below writes it and every launch reads as
+    // having exited on its own. Died-by-itself versus never-came-up is the whole diagnosis.
+    const exitedOnItsOwn = exit;
     chrome.kill();
     await processExited(chrome);
     removeProfileDir(profileDir);
-    const reported = chromeStderr.trim();
-    return { ok: false, error: reported ? `${error}\n${reported}` : error };
+    const detail = [
+      `chrome: ${executable}`,
+      spawnError ? `spawn failed: ${spawnError}` : undefined,
+      exitedOnItsOwn
+        ? `exited on its own with ${exitedOnItsOwn.signal ? `signal ${exitedOnItsOwn.signal}` : `code ${exitedOnItsOwn.code}`}`
+        : 'was still running when we gave up waiting',
+      chromeStderr.trim() || 'it wrote nothing to stderr',
+    ].filter(Boolean);
+    return { ok: false, error: [error, ...detail].join('\n  ') };
   };
 
   const port = await waitForBoundPort(profileDir);
