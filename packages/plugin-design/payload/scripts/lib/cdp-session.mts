@@ -33,7 +33,12 @@ const CHROME_CANDIDATES = [
 ];
 
 const LAUNCH_POLL_INTERVAL_MS = 100;
-const LAUNCH_POLL_ATTEMPTS = 60;
+// 6s was too short. A cold CI runner starting Chrome against a fresh profile, while test workers
+// compete for the CPU, was still coming up when the poll gave up: healthy process, no stderr, no
+// port file yet. Only a FAILED launch waits the full budget, since the poll returns the moment
+// Chrome answers.
+const LAUNCH_TIMEOUT_MS = 30_000;
+const LAUNCH_POLL_ATTEMPTS = LAUNCH_TIMEOUT_MS / LAUNCH_POLL_INTERVAL_MS;
 const DEFAULT_VIEWPORT = { width: 1280, height: 900 };
 const EXIT_WAIT_MS = 2000;
 const PROFILE_REMOVE_RETRIES = 10;
