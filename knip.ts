@@ -5,10 +5,9 @@ const config: KnipConfig = {
   // instead, because every `entry` below exists for a reason knip cannot see. See AGENTKIT-025dda.
   workspaces: {
     '.': {
-      // Dev-facing scripts invoked by hand, never imported. `probe-plugin.mjs` is documented
-      // in CLAUDE.md. `bootstrap-publish.mjs` is the one-off that puts each package on the
-      // registry so a trusted publisher can be configured for it.
-      entry: ['scripts/probe-plugin.mjs', 'scripts/bootstrap-publish.mjs'],
+      // Dev-facing probe documented in CLAUDE.md, invoked by hand as
+      // `node scripts/probe-plugin.mjs <pkg>`. Nothing in the workspace imports it.
+      entry: ['scripts/probe-plugin.mjs'],
     },
     'packages/cli': {
       entry: [

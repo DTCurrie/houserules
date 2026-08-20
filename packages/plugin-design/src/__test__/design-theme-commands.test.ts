@@ -49,9 +49,13 @@ describe('design.mjs theme', () => {
     const result = design(root, 'theme', '--all');
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain(
-      '  brand-500  oklch(0.55, 0.2, 265)  (repo)',
-    );
+    // Asserted as the isolated line rather than with toContain, so a failure prints the line it
+    // actually got. toContain against thousands of lines of Tailwind defaults reports only that
+    // the needle was absent, which cannot distinguish a missing token from a reformatted one.
+    const brandLine = result.stdout
+      .split('\n')
+      .find((line) => line.includes('brand-500'));
+    expect(brandLine).toBe('  brand-500  oklch(0.55, 0.2, 265)  (repo)');
     expect(result.stdout).toMatch(/\n {2}\S+ {2}.+ {2}\(default\)\n/);
   });
 

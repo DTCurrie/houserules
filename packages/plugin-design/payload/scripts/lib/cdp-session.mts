@@ -13,7 +13,13 @@
 
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { accessSync, constants, mkdtempSync, rmSync } from 'node:fs';
+import {
+  accessSync,
+  constants,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,9 +32,13 @@ const CHROME_CANDIDATES = [
   '/usr/bin/chromium-browser',
 ];
 
-const DEBUG_PORT = 9411;
 const LAUNCH_POLL_INTERVAL_MS = 100;
-const LAUNCH_POLL_ATTEMPTS = 60;
+// 6s was too short. A cold CI runner starting Chrome against a fresh profile, while test workers
+// compete for the CPU, was still coming up when the poll gave up: healthy process, no stderr, no
+// port file yet. Only a FAILED launch waits the full budget, since the poll returns the moment
+// Chrome answers.
+const LAUNCH_TIMEOUT_MS = 30_000;
+const LAUNCH_POLL_ATTEMPTS = LAUNCH_TIMEOUT_MS / LAUNCH_POLL_INTERVAL_MS;
 const DEFAULT_VIEWPORT = { width: 1280, height: 900 };
 const EXIT_WAIT_MS = 2000;
 const PROFILE_REMOVE_RETRIES = 10;
@@ -75,6 +85,32 @@ function wait(milliseconds: number): Promise<void> {
 }
 
 /** Polls the debugging endpoint until Chrome answers with a browser websocket URL. */
+/**
+ * Reads the port Chrome actually bound out of the `DevToolsActivePort` file it writes into the
+ * profile directory on startup.
+ *
+ * Asking for port 0 and reading back what was chosen is what keeps two sessions from colliding.
+ * A fixed port made this flaky under any concurrency, since the second Chrome cannot bind it, and
+ * made it briefly dangerous: a stale Chrome still holding the port would answer the poll, and the
+ * session would drive somebody else's browser.
+ */
+async function waitForBoundPort(
+  profileDir: string,
+): Promise<number | undefined> {
+  const portFile = join(profileDir, 'DevToolsActivePort');
+  for (let attempt = 0; attempt < LAUNCH_POLL_ATTEMPTS; attempt += 1) {
+    try {
+      const [port] = readFileSync(portFile, 'utf8').split('\n');
+      const parsed = Number.parseInt(port ?? '', 10);
+      if (Number.isInteger(parsed) && parsed > 0) return parsed;
+    } catch {
+      // Chrome has not written the file yet.
+    }
+    await wait(LAUNCH_POLL_INTERVAL_MS);
+  }
+  return undefined;
+}
+
 async function waitForDebuggerUrl(port: number): Promise<string | undefined> {
   for (let attempt = 0; attempt < LAUNCH_POLL_ATTEMPTS; attempt += 1) {
     try {
@@ -286,28 +322,69 @@ export async function launchSession(
     executable,
     [
       '--headless=new',
-      `--remote-debugging-port=${DEBUG_PORT}`,
+      '--remote-debugging-port=0',
       `--user-data-dir=${profileDir}`,
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-gpu',
+      // /dev/shm is small inside containers, and Chrome crashes on startup when it fills.
+      // Writing shared memory to a temp file instead costs nothing outside one.
+      '--disable-dev-shm-usage',
+      // Chrome's sandbox needs unprivileged user namespaces, which Ubuntu 24.04 and most
+      // hardened container images deny, so Chrome exits before it opens a port. Off by default
+      // because dropping the sandbox is a real weakening. CI opts in.
+      ...(process.env.CHROME_NO_SANDBOX ? ['--no-sandbox'] : []),
       'about:blank',
     ],
-    { stdio: 'ignore' },
+    // Chrome's own stderr is the only thing that says WHY a launch failed. Discarding it turns
+    // every cause into the same unhelpful timeout.
+    { stdio: ['ignore', 'ignore', 'pipe'] },
   );
+
+  let chromeStderr = '';
+  chrome.stderr?.on('data', (chunk: Buffer) => {
+    chromeStderr += chunk.toString();
+  });
+
+  // A Chrome that dies on startup often says nothing at all, so the exit status is the only
+  // evidence left. Without it every cause reads as the same timeout.
+  let exit: { code: number | null; signal: string | null } | undefined;
+  chrome.on('exit', (code, signal) => {
+    exit = { code, signal };
+  });
+  let spawnError: string | undefined;
+  chrome.on('error', (error) => {
+    spawnError = error.message;
+  });
 
   const abandon = async (
     error: string,
   ): Promise<SessionResult<RenderSession>> => {
+    // Read the exit state BEFORE killing, or the kill below writes it and every launch reads as
+    // having exited on its own. Died-by-itself versus never-came-up is the whole diagnosis.
+    const exitedOnItsOwn = exit;
     chrome.kill();
     await processExited(chrome);
     removeProfileDir(profileDir);
-    return { ok: false, error };
+    const detail = [
+      `chrome: ${executable}`,
+      spawnError ? `spawn failed: ${spawnError}` : undefined,
+      exitedOnItsOwn
+        ? `exited on its own with ${exitedOnItsOwn.signal ? `signal ${exitedOnItsOwn.signal}` : `code ${exitedOnItsOwn.code}`}`
+        : 'was still running when we gave up waiting',
+      chromeStderr.trim() || 'it wrote nothing to stderr',
+    ].filter(Boolean);
+    return { ok: false, error: [error, ...detail].join('\n  ') };
   };
 
-  const debuggerUrl = await waitForDebuggerUrl(DEBUG_PORT);
-  if (!debuggerUrl) {
+  const port = await waitForBoundPort(profileDir);
+  if (!port) {
     return await abandon('Chrome started but never opened its debugging port.');
+  }
+
+  const debuggerUrl = await waitForDebuggerUrl(port);
+  if (!debuggerUrl) {
+    return await abandon(`Chrome bound port ${port} but never answered on it.`);
   }
 
   try {

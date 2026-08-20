@@ -105,7 +105,7 @@ describe('design.mjs render', () => {
     });
 
     afterAll(async () => {
-      await session.close();
+      await session?.close();
     });
 
     it('reports composited contrast against the nearest opaque ancestor, not the page body', async () => {

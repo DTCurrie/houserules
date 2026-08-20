@@ -33,6 +33,7 @@ const KIT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const FIXTURE_ROOT = join(KIT_ROOT, 'test/plugin-fixture');
 const LIBS_FIXTURE = join(FIXTURE_ROOT, 'libs');
 const BAD_LIB_FIXTURE = join(FIXTURE_ROOT, 'bad-lib');
+const GATED_FIXTURE = join(FIXTURE_ROOT, 'exports-gated');
 
 const payloadPackageJson = createRequire(import.meta.url).resolve(
   '@houserules/payload/package.json',
@@ -175,6 +176,33 @@ describe('buildRegistry', () => {
 
     expect(seed?.content).toContain('from resolver test');
     expect(advise?.text).toContain('my-alias');
+  });
+
+  it('resolves an npm plugin whose exports map does not expose ./package.json', () => {
+    const root = makeRoot();
+    const link = join(
+      root,
+      'node_modules',
+      '@houserules',
+      'plugin-fixture-gated',
+    );
+    mkdirSync(dirname(link), { recursive: true });
+    symlinkSync(GATED_FIXTURE, link, 'dir');
+    const config = buildConfig([
+      { name: '@houserules/plugin-fixture-gated', alias: 'gated' },
+    ]);
+
+    const registry = buildRegistry(root, config, []);
+
+    expect(registry.modules.map((m) => m.id)).toEqual(['gated/gated']);
+    expect(registry.plugins).toEqual([
+      {
+        name: '@houserules/plugin-fixture-gated',
+        alias: 'gated',
+        version: '2.0.0',
+        dir: GATED_FIXTURE,
+      },
+    ]);
   });
 
   it('throws PluginResolutionError naming the plugin when an npm package cannot be resolved', () => {

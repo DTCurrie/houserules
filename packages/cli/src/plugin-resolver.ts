@@ -56,6 +56,36 @@ function isPathSpecifier(root: string, name: string): boolean {
   return existsSync(candidate) && statSync(candidate).isDirectory();
 }
 
+function failUnresolved(root: string, name: string, cause: unknown): never {
+  fail(
+    name,
+    `could not resolve npm package "${name}" from ${root}. Install it in the target repo, e.g. \`${installCommand(root, name)}\`.`,
+    cause,
+  );
+}
+
+/** Walks up from `start` to the nearest directory whose package.json declares `name`. */
+function packageDirFrom(start: string, name: string): string | undefined {
+  let dir = dirname(start);
+  for (;;) {
+    const manifest = join(dir, 'package.json');
+    if (existsSync(manifest)) {
+      try {
+        const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as {
+          name?: string;
+        };
+        if (pkg.name === name) return dir;
+      } catch {
+        // A build directory's bare `{"type":"module"}` shim, or a malformed manifest, is not
+        // the package we are after. Keep walking.
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
 /** Resolves a config `name` to the plugin's package directory, local or npm. */
 function resolvePluginDir(root: string, name: string): string {
   if (isPathSpecifier(root, name)) {
@@ -79,11 +109,22 @@ function resolvePluginDir(root: string, name: string): string {
   try {
     return dirname(requireFromRoot.resolve(join(name, 'package.json')));
   } catch (error) {
-    fail(
-      name,
-      `could not resolve npm package "${name}" from ${root}. Install it in the target repo, e.g. \`${installCommand(root, name)}\`.`,
-      error,
-    );
+    if (
+      (error as NodeJS.ErrnoException).code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+    ) {
+      failUnresolved(root, name, error);
+    }
+    // An exports map need not expose ./package.json, and most plugins do not. The entry point
+    // is exported by definition, so resolve that and walk back up to the package holding it.
+    let entry: string;
+    try {
+      entry = requireFromRoot.resolve(name);
+    } catch (entryError) {
+      failUnresolved(root, name, entryError);
+    }
+    const dir = packageDirFrom(entry, name);
+    if (dir === undefined) failUnresolved(root, name, error);
+    return dir;
   }
 }
 
