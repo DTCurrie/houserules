@@ -15,7 +15,7 @@
  * those sidecars point at, not a package with its own install pipeline.
  *
  * Falsifies the shape of AGENTKIT-beef33 across every package at once, rather than the one
- * package `packages/plugin-design/src/__test__/payload-lib-imports.test.ts` covers.
+ * package `packages/plugin-design/src/__tests__/payload-lib-imports.test.ts` covers.
  *
  * Usage: `node scripts/verify-payload-lib-declarations.mjs`
  *
@@ -57,7 +57,7 @@ function walkMjsFiles(dir) {
 function walkTsFiles(dir) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === '__test__') return [];
+    if (entry.name === '__tests__') return [];
     const full = join(dir, entry.name);
     if (entry.isDirectory()) return walkTsFiles(full);
     return entry.name.endsWith('.ts') ? [full] : [];

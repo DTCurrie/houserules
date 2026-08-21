@@ -338,8 +338,8 @@ surface breaks every plugin still on that range. See
 
 The payload invariants are part of the contract, not an implementation detail. A plugin's
 payload scripts must have zero npm dependencies and must run on bare node, and a hook script
-must exit 0 on every failure path rather than crash a turn. `payload/__test__/dependencies.test.ts`
-and `payload/__test__/execution.test.ts` enforce both against houserules' own payload the same
+must exit 0 on every failure path rather than crash a turn. `payload/__tests__/dependencies.test.ts`
+and `payload/__tests__/execution.test.ts` enforce both against houserules' own payload the same
 way a plugin's would be held to them.
 
 `.claude/scripts/lib/*.mjs` is a public runtime API too, versioned with `@houserules/payload`,

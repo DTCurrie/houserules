@@ -92,7 +92,7 @@ function readManifest(path: string): TailwindResult<PackageManifest> {
  * Deliberately not `createRequire(root).resolve(...)`, which also searches `NODE_PATH` and node's
  * global folders. A repo with no Tailwind then resolves whichever copy those point at, and the
  * false positive is not test-only: any host repo run from a `NODE_PATH`-polluted shell gets the
- * same wrong answer. The CLI's `payload/__test__/execution.test.ts` strips `NODE_PATH` for this
+ * same wrong answer. The CLI's `payload/__tests__/execution.test.ts` strips `NODE_PATH` for this
  * reason. `src/tailwind-check.ts` holds the CLI-side copy of this walk, since `src/` may not
  * import from `payload/`.
  */

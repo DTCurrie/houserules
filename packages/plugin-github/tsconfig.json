@@ -15,5 +15,5 @@
   "exclude": [],
   // The payload glob is what reaches the script suites. `src/**` never covers them, and most
   // of this package's tests live there, so without it `pnpm check` typechecks nothing.
-  "include": ["src/**/*.ts", "payload/**/__test__/**/*.ts"]
+  "include": ["src/**/*.ts", "payload/**/__tests__/**/*.ts"]
 }

@@ -35,7 +35,7 @@
       "command": "tsc -p tsconfig.build.json && publint",
       "files": [
         "src/**/*.ts",
-        "!src/**/__test__/**",
+        "!src/**/__tests__/**",
         "tsconfig.build.json"
       ],
       "output": [

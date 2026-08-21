@@ -33,7 +33,7 @@ export default defineConfig({
 ```
 
 ```ts
-// src/__test__/typescript.test.ts
+// src/__tests__/typescript.test.ts
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

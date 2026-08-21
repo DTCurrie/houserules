@@ -3,7 +3,7 @@
  * Dev-only tool, never published. Compares every package's `payload/` against its own
  * `payload-dist/` as built, and fails when a directory or file under `payload/` has no
  * counterpart in `payload-dist/`. `scripts` is excluded on both sides: `tsconfig.payload.json`
- * compiles it directly, so it is never copied by this comparison. `__test__` is excluded on
+ * compiles it directly, so it is never copied by this comparison. `__tests__` is excluded on
  * both sides too, since a colocated test must never reach the published package.
  *
  * Falsifies AGENTKIT-b947e5: a shared assembler that derives its copy set from what actually
@@ -22,11 +22,11 @@ import { join, relative } from 'node:path';
 const repoRoot = join(import.meta.dirname, '..');
 const packagesDir = join(repoRoot, 'packages');
 
-const SKIP_TOP_LEVEL_DIRS = new Set(['scripts', '__test__']);
+const SKIP_TOP_LEVEL_DIRS = new Set(['scripts', '__tests__']);
 
 function walkFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === '__test__') return [];
+    if (entry.name === '__tests__') return [];
     const full = join(dir, entry.name);
     return entry.isDirectory() ? walkFiles(full) : [full];
   });

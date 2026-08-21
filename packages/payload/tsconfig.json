@@ -12,5 +12,5 @@
   // tsconfig.payload.json excludes colocated tests so they stay out of payload-dist/.
   // Typechecking must still see them, so the inherited exclude is cleared here.
   "exclude": [],
-  "include": ["payload/**/*.mts", "payload/**/__test__/**/*.ts"]
+  "include": ["payload/**/*.mts", "payload/**/__tests__/**/*.ts"]
 }

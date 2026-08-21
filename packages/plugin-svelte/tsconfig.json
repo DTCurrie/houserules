@@ -13,5 +13,5 @@
   // tsconfig.build.json excludes colocated tests so they stay out of dist/. Typechecking
   // must still see them, so the inherited exclude is cleared here.
   "exclude": [],
-  "include": ["src/**/*.ts", "payload/**/__test__/**/*.ts"]
+  "include": ["src/**/*.ts", "payload/**/__tests__/**/*.ts"]
 }

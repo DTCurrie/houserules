@@ -45,7 +45,7 @@ scoping it to the file it protects hides it from whoever builds the thing.
 
 Take a decision to keep a baked asset and its generator uncompared, scoped to
 `src/sim/debugLevel.ts`. The code that would violate it is a test, and that test gets written
-at `src/sim/__test__/levelBake.test.ts`. `scope` on that path returns nothing, which reads as
+at `src/sim/__tests__/levelBake.test.ts`. `scope` on that path returns nothing, which reads as
 "no decision governs this file" and is indistinguishable from the truth. Scoping the record to
 `src/sim` reaches both.
 

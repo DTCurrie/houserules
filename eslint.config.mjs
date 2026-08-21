@@ -28,7 +28,7 @@ const baseConfig = ts.config(
       'packages/*/src/**/*.ts',
       'packages/*/test/**/*.ts',
       'packages/*/payload/**/*.mts',
-      'packages/*/payload/**/__test__/**/*.ts',
+      'packages/*/payload/**/__tests__/**/*.ts',
       'packages/*/*.ts',
       '*.ts',
     ],
@@ -77,8 +77,8 @@ const baseConfig = ts.config(
   {
     files: [
       'packages/*/test/**/*.ts',
-      'packages/*/src/**/__test__/**/*.ts',
-      'packages/*/payload/**/__test__/**/*.ts',
+      'packages/*/src/**/__tests__/**/*.ts',
+      'packages/*/payload/**/__tests__/**/*.ts',
       'packages/test/src/**/*.ts',
     ],
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
@@ -87,7 +87,7 @@ const baseConfig = ts.config(
   // from payload-dist/ means a source edit tests stale bytes until the next build, which
   // let a broken probe pass green (board issue 90).
   {
-    files: ['packages/payload/payload/scripts/lib/__test__/**/*.ts'],
+    files: ['packages/payload/payload/scripts/lib/__tests__/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -133,7 +133,7 @@ export const changedFilesConfig = ts.config(...baseConfig, {
     'packages/*/src/**/*.ts',
     'packages/*/test/**/*.ts',
     'packages/*/payload/**/*.mts',
-    'packages/*/payload/**/__test__/**/*.ts',
+    'packages/*/payload/**/__tests__/**/*.ts',
     'packages/*/*.ts',
     '*.ts',
   ],
