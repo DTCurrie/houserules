@@ -1,5 +1,11 @@
 # @houserules/api
 
+## 0.3.0
+
+### Minor Changes
+
+- e11c60f: Three.js upstream docs now cover only the chosen framework bindings.
+
 ## 0.2.0
 
 ### Minor Changes
