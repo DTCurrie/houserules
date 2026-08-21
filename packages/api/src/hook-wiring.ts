@@ -19,7 +19,10 @@ import type {
  */
 export function hookCommand(scriptName: string): string {
   const path = `"$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
-  return `[ -f ${path} ] && exec node ${path} || echo "[houserules] ${scriptName} missing. Run: npx houserules update"`;
+  // The fallback goes to stderr with a non-zero exit: on context-bearing events, stdout at
+  // exit 0 is injected into the model's context, so a plain echo turned the notice into
+  // fake hook output. Exit 1 surfaces it as the harness's non-blocking error instead.
+  return `[ -f ${path} ] && exec node ${path} || { echo "[houserules] ${scriptName} missing. Run: npx houserules update" >&2; exit 1; }`;
 }
 
 /** One settings fragment carrying a single hook entry. */

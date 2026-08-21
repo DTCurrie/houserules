@@ -13,34 +13,10 @@ import { fileURLToPath } from 'node:url';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 import { editHouseConfig } from '#test/installed-tree';
-
-// Mirrors `LedgerEntry`/`LedgerIndex` from @houserules/cli's `lib/ledger-index.mjs`, the seam a
-// pulled board index is written through. Declared locally rather than imported: that seam is
-// bridged into a payload script by `tsconfig.payload.json`'s `rootDirs`, which excludes this
-// test directory, so a real import here has no path to resolve under `tsc --noEmit`.
-interface LedgerEntry {
-  id: string;
-  itemId: string;
-  issue: number | null;
-  title: string;
-  body: string;
-  surface: string;
-  date: string;
-  chat: string | null;
-  status: string | null;
-  scope: string[];
-  under: string | null;
-  supersedes: string[];
-  supersededBy: string | null;
-}
-
-interface LedgerIndex {
-  version: number;
-  kind: 'backlog' | 'decisions';
-  pulledAt: string;
-  projects: number[];
-  entries: LedgerEntry[];
-}
+import type {
+  LedgerEntry,
+  LedgerIndex,
+} from '@houserules/payload/ledger-index';
 
 const LOG = '.claude/scripts/backlog-log.mjs';
 const PLUGIN_DIR = fileURLToPath(new URL('../../..', import.meta.url));
@@ -396,6 +372,96 @@ describe('backlog-log.mjs add', () => {
 
     expect(r.status).toBe(1);
     expect(r.stderr).toContain(`"${value}"`);
+  });
+});
+
+const PROJECTS_TOKEN = '.claude/ledgers/.projects.json';
+
+function seedProjectsToken(root: string) {
+  writeFile(root, PROJECTS_TOKEN, `${JSON.stringify({ projects: [1] })}\n`);
+}
+
+function seedQueuedAdd(root: string) {
+  seedLog(root, [
+    {
+      ts: '2026-01-01T00:00:00.000Z',
+      id: 'TEST-111111',
+      action: 'add',
+      file: ROOT_RECORD_FILE,
+      title: 'Queued item',
+      chat: null,
+      content: encodeBody('body one'),
+    },
+  ]);
+}
+
+describe('backlog-log.mjs remove, given a surface carrying an entry the queue does not', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = stage();
+    writeFile(
+      root,
+      ROOT_SURFACE,
+      backlogWith([
+        entryMarkdown('TEST-111111', 'Queued item', 'body one'),
+        entryMarkdown('TEST-222222', 'Unaccounted item', 'body two'),
+      ]),
+    );
+  });
+
+  it('refuses to write when no projects sync is configured', () => {
+    seedQueuedAdd(root);
+
+    const r = run(root, [
+      'remove',
+      'TEST-111111',
+      'BACKLOG.md',
+      'shipped it',
+      '--chat=none',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Refusing to rewrite');
+    expect(readFile(root, ROOT_SURFACE)).toContain('## [TEST-222222]');
+  });
+
+  it('refuses to write when a projects sync is configured but no index has been pulled', () => {
+    seedQueuedAdd(root);
+    seedProjectsToken(root);
+
+    const r = run(root, [
+      'remove',
+      'TEST-111111',
+      'BACKLOG.md',
+      'shipped it',
+      '--chat=none',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Refusing to rewrite');
+  });
+
+  it('writes when a projects sync is configured and a pulled index holds the entries instead', () => {
+    seedProjectsToken(root);
+    seedIndex(root, [
+      ledgerEntry({ id: 'TEST-111111', title: 'Queued item' }),
+      ledgerEntry({ id: 'TEST-333333', title: 'Board-only item' }),
+    ]);
+
+    const r = run(root, [
+      'remove',
+      'TEST-111111',
+      'BACKLOG.md',
+      'shipped it',
+      '--chat=none',
+    ]);
+
+    expect(r.status, r.stderr).toBe(0);
+    const text = readFile(root, ROOT_SURFACE);
+    expect(text).toContain('## [TEST-333333]');
+    expect(text).not.toContain('## [TEST-111111]');
+    expect(text).not.toContain('## [TEST-222222]');
   });
 });
 

@@ -1,13 +1,13 @@
 ---
 name: tidy
-description: Tidy and clean up the working diff by auditing it against the code-cleanliness rule: fix mechanical violations in naming, function size, magic values, and dead code. Use after writing or changing code. For general simplification and reuse cleanups, use `simplify` instead.
+description: Tidy and clean up the working diff against the installed code-cleanliness rule, covering naming, function size, magic values, and dead code. Use after writing or changing code, when the ask is to tidy, clean up, or polish what the diff touched. Reuse, efficiency, and architecture cleanups are out of scope here, so route those to `/review-change`.
 allowed-tools: Read, Edit, Grep, Glob, Bash
 ---
 
 Audit the current working diff against houserules' installed `code-cleanliness` rule.
 This is rule-driven, not judgment-driven: run its checkers over the diff, then fix what
 they find and apply judgment to the rest. Every finding cites the clause it violates. It
-is narrower than `simplify`, which handles reuse, efficiency, and altitude.
+is narrower than a general cleanup pass: reuse, efficiency, and altitude are not its job.
 
 ## 1. Scope
 
@@ -22,8 +22,8 @@ repo. A repo-wide mechanical pass is `/sweep`, not this skill.
 ## 2. Read the rule
 
 Load `.claude/rules/code-cleanliness.md`. If it is not installed, say so and stop. Do not fall
-back to a general cleanliness pass on your own judgment, because that is `simplify` with extra
-steps. This skill has no opinion of its own, only the rule's.
+back to a general cleanliness pass on your own judgment, because that is a judgment-driven
+cleanup wearing this skill's name. This skill has no opinion of its own, only the rule's.
 
 ## 3. Run the checkers
 
@@ -79,7 +79,7 @@ design-level duplication. Those belong to the repo's linter, `code-comments.md`,
 Fix the mechanical findings directly: local renames, extracted constants, deleted dead code, and
 early returns. Do not touch anything outside the Naming, Function size, Magic values, and Dead
 code sections. Performance, architecture, and reuse findings are out of scope here. Leave those
-for `simplify` and `/review-change`.
+for `/review-change`.
 
 The one correctness risk is renaming an exported symbol. A textual rename can miss a caller and
 silently break it. Check for `.claude/scripts/rename.mjs`:

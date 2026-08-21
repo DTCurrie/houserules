@@ -5,11 +5,11 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { loadDesignSystem } from '../../payload/scripts/lib/tailwind-design-system.mts';
+import { loadDesignSystem } from '../lib/tailwind-design-system.mts';
 import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
 
 const DESIGN_SCRIPT = fileURLToPath(
-  new URL('../../payload-dist/scripts/design.mjs', import.meta.url),
+  new URL('../../../payload-dist/scripts/design.mjs', import.meta.url),
 );
 
 const TWO_SHADE_ENTRY_CSS = `@import "tailwindcss";
@@ -49,13 +49,12 @@ describe('design.mjs theme', () => {
     const result = design(root, 'theme', '--all');
 
     expect(result.status).toBe(0);
-    // Asserted as the isolated line rather than with toContain, so a failure prints the line it
-    // actually got. toContain against thousands of lines of Tailwind defaults reports only that
-    // the needle was absent, which cannot distinguish a missing token from a reformatted one.
     const brandLine = result.stdout
       .split('\n')
       .find((line) => line.includes('brand-500'));
-    expect(brandLine).toBe('  brand-500  oklch(0.55, 0.2, 265)  (repo)');
+    expect(brandLine, 'the brand-500 line of `design theme --all` output').toBe(
+      '  brand-500  oklch(0.55, 0.2, 265)  (repo)',
+    );
     expect(result.stdout).toMatch(/\n {2}\S+ {2}.+ {2}\(default\)\n/);
   });
 

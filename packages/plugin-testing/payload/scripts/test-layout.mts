@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Checks test file placement and naming against the structural clauses of `testing.md`.
  *

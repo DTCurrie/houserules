@@ -93,12 +93,32 @@ export function runsAtRepoRoot(block: RunnerBlock | undefined): boolean {
   return !(block?.filterFlag ?? DEFAULT_FILTER_FLAG);
 }
 
+const rootByCwd = new Map<string, string>();
+
+/**
+ * The work tree root, throwing outside one. Memoized per process, keyed by the cwd it was
+ * resolved from.
+ *
+ * The memo is the point. `loadConfigSafe()` resolves the root internally and the hook
+ * calling it usually resolved the root too, so a hook invocation spawned
+ * `git rev-parse --show-toplevel` twice. A hook is a one-shot process, so the answer cannot
+ * go stale within one.
+ *
+ * The key is the cwd because the answer depends on it, and a long-lived caller such as a
+ * test can chdir between calls. Only a successful resolution is memoized, so a throw stays
+ * a throw and `repoRootSafe()` keeps reporting null outside a work tree.
+ */
 export function repoRoot(): string {
-  return execSync('git rev-parse --show-toplevel', {
+  const cwd = process.cwd();
+  const cached = rootByCwd.get(cwd);
+  if (cached !== undefined) return cached;
+  const root = execSync('git rev-parse --show-toplevel', {
     stdio: ['ignore', 'pipe', 'ignore'],
   })
     .toString()
     .trim();
+  rootByCwd.set(cwd, root);
+  return root;
 }
 
 /**
@@ -196,10 +216,14 @@ export function loadConfig(
  * The loader hooks must use. It never exits and never throws, returning an empty config
  * in the worst case. A hook that crashes on a missing or broken config is noise on every
  * single tool call.
+ *
+ * @param root Pass the root when the caller already resolved one, which skips the git
+ * spawn entirely. `proc.mts` holds its own root memo, so a script that resolved the root
+ * through that one would otherwise still pay a second spawn here.
  */
-export function loadConfigSafe(): HouseConfig {
+export function loadConfigSafe(root?: string): HouseConfig {
   try {
-    return loadConfig(repoRoot(), { required: false });
+    return loadConfig(root ?? repoRoot(), { required: false });
   } catch {
     return EMPTY;
   }

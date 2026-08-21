@@ -1,6 +1,6 @@
 ---
 name: ready
-description: Off-context pre-handoff roll-up: run the pre-handoff checks and return one ready / not-ready verdict plus the acceptance checklist. Use right before handing a finished change back.
+description: Use right before handing a finished change back, when the question is whether the change is ready. This is the entry point for pre-handoff work and it runs `/verify-changed` and `/review-change` off-context itself, so prefer it over either of those whenever a whole change is being handed off.
 allowed-tools: Bash, Read, Grep, Glob, Agent
 ---
 

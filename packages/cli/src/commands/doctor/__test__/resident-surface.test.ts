@@ -6,6 +6,7 @@ import { useRepo } from '#test/repo';
 import {
   checkResidentSurface,
   frontmatterDescription,
+  measureActiveOutputStyle,
   measureResident,
   measureSkillAgentDescriptions,
   parseImports,
@@ -273,6 +274,101 @@ describe('measureSkillAgentDescriptions', () => {
 
     expect(measureSkillAgentDescriptions(root)?.agents).toBe(1);
   });
+
+  it('counts a category-nested skill alongside a flat one', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/skills/flat/SKILL.md',
+      `---\ndescription: ${'a'.repeat(40)}\n---\n`,
+    );
+    write(
+      root,
+      '.claude/skills/category/nested/SKILL.md',
+      `---\ndescription: ${'b'.repeat(40)}\n---\n`,
+    );
+
+    expect(measureSkillAgentDescriptions(root)).toMatchObject({
+      skills: 2,
+      chars: 80,
+    });
+  });
+});
+
+describe('measureActiveOutputStyle', () => {
+  it('returns null when no outputStyle is set', () => {
+    const root = useRepo('pnpm-single');
+
+    expect(measureActiveOutputStyle(root)).toBeNull();
+  });
+
+  it('returns null when outputStyle is set but no matching style file exists', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/settings.json',
+      JSON.stringify({ outputStyle: 'Prose' }),
+    );
+
+    expect(measureActiveOutputStyle(root)).toBeNull();
+  });
+
+  it('counts the body of the style whose frontmatter name matches outputStyle', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/settings.json',
+      JSON.stringify({ outputStyle: 'Prose' }),
+    );
+    write(
+      root,
+      '.claude/output-styles/output-prose.md',
+      `---\nname: Prose\ndescription: short\n---\n${'c'.repeat(400)}`,
+    );
+
+    expect(measureActiveOutputStyle(root)).toMatchObject({
+      name: 'Prose',
+      chars: 400,
+      tokens: 100,
+    });
+  });
+
+  it('matches on the frontmatter name, not the filename slug', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/settings.json',
+      JSON.stringify({ outputStyle: 'Prose' }),
+    );
+    write(
+      root,
+      '.claude/output-styles/differently-named-file.md',
+      `---\nname: Prose\n---\n${'d'.repeat(40)}`,
+    );
+
+    expect(measureActiveOutputStyle(root)?.name).toBe('Prose');
+  });
+
+  it('prefers settings.local.json over settings.json when both set outputStyle', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/settings.json',
+      JSON.stringify({ outputStyle: 'Prose' }),
+    );
+    write(
+      root,
+      '.claude/settings.local.json',
+      JSON.stringify({ outputStyle: 'Other' }),
+    );
+    write(
+      root,
+      '.claude/output-styles/other.md',
+      `---\nname: Other\n---\n${'e'.repeat(40)}`,
+    );
+
+    expect(measureActiveOutputStyle(root)?.name).toBe('Other');
+  });
 });
 
 describe('checkResidentSurface', () => {
@@ -350,5 +446,24 @@ describe('checkResidentSurface', () => {
     const root = useRepo('pnpm-single');
 
     expect(checkResidentSurface(root)).toEqual({ findings: [], readouts: [] });
+  });
+
+  it('reports the active output style as its own resident readout', () => {
+    const root = useRepo('pnpm-single');
+    write(root, 'CLAUDE.md', 'a'.repeat(400));
+    write(
+      root,
+      '.claude/settings.json',
+      JSON.stringify({ outputStyle: 'Prose' }),
+    );
+    write(
+      root,
+      '.claude/output-styles/output-prose.md',
+      `---\nname: Prose\n---\n${'c'.repeat(400)}`,
+    );
+
+    expect(checkResidentSurface(root).readouts).toContainEqual(
+      expect.stringContaining('resident output style (Prose): ~100 tokens'),
+    );
   });
 });

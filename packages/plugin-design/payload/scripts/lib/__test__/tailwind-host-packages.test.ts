@@ -4,7 +4,7 @@ import {
   resolveHostPackage,
   OXIDE_PACKAGE,
   TAILWIND_PACKAGE,
-} from '../../payload/scripts/lib/tailwind-host-packages.mts';
+} from '../tailwind-host-packages.mts';
 import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
 
 describe('resolveHostPackage', () => {

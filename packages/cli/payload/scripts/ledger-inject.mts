@@ -37,9 +37,12 @@ interface PromptPayload {
 }
 
 /**
- * The harness caps `hookSpecificOutput.additionalContext` at 10,000 characters, shared
- * across every hook firing on the same event. Capped well under that so headroom
- * remains for any other UserPromptSubmit hook a repo adds later.
+ * The ceiling on what one prompt's injection adds to the turn.
+ *
+ * This hook runs on UserPromptSubmit and writes plain text to stdout, which is how that event
+ * injects context. The harness appends whatever it gets, so a prompt naming several long
+ * ledger bodies would crowd out the prompt itself. This cap is the script's own, sized to
+ * leave room for the prompt and for any other UserPromptSubmit hook a repo adds later.
  */
 export const MAX_INJECTED_CHARS = 6_000;
 const TRUNCATION_NOTICE =
@@ -218,7 +221,7 @@ function main(): void {
   try {
     const input = readStdinJson<PromptPayload>();
     // Claude Code has used both `prompt` and `prompt_text` for this event across
-    // versions — accept either so the injector doesn't silently no-op on one build.
+    // versions. Accept either so the injector doesn't silently no-op on one build.
     const prompt = String(input?.prompt ?? input?.prompt_text ?? '');
     if (!prompt) {
       process.exit(0);

@@ -122,3 +122,12 @@ export const handleError: HandleServerError = ({
   into a universal file.
 - `hooks.server.ts` runs on every server request. Keep its `handle` function cheap.
   Per-route work belongs in that route's load function or action, not in the hook.
+
+## Checked mechanically
+
+`.claude/scripts/svelte-lint.mjs`, where installed, flags a `+server.ts` export named
+something other than `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `fallback`, `OPTIONS`, or `HEAD`,
+and a `hooks.server.ts` or `hooks.client.ts` that does not export `handleError`. Run it with
+`node .claude/scripts/svelte-lint.mjs <files>`. It has never run against a real corpus, only
+paired fixtures, so treat a finding as a starting point and report a false positive rather than
+working around it.

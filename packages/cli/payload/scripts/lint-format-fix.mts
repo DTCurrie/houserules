@@ -34,9 +34,13 @@ interface HookInput {
   hook_event_name?: string;
 }
 
+// Resolved before the config load so the root is passed in rather than spawned twice.
+// `repoRoot()` falls back to the cwd instead of throwing, so this is safe at module scope.
+const root = repoRoot();
+
 // A Stop hook must never crash on a missing/broken config — it would fire on
 // every stop. No config or no targets → nothing to do.
-const config = loadConfigSafe();
+const config = loadConfigSafe(root);
 
 const exts = (
   config.lintableExtensions ?? [
@@ -199,7 +203,7 @@ function main() {
   if (input.hook_event_name === 'SubagentStop' && fix.onSubagentStop !== true)
     process.exit(0);
 
-  const cwd = repoRoot();
+  const cwd = root;
   const paths = changedPaths(cwd);
   const pkgs = affectedPackages(paths);
   if (pkgs.length === 0) process.exit(0);

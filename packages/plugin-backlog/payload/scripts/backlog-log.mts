@@ -36,6 +36,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
@@ -89,6 +90,27 @@ const LEDGER_DIR = ledgerDir(REPO_ROOT, CONFIG.ledgers?.dir);
 const LOG_FILE = ledgerPath(REPO_ROOT, 'backlog', CONFIG.ledgers?.dir);
 const SURFACE = 'BACKLOG.md';
 const BACKLOG_INDEX = loadIndex(LEDGER_DIR, 'backlog');
+
+/** The local enable token a projects sync bootstrap writes into the ledger directory. */
+const PROJECTS_ENABLE_TOKEN = '.projects.json';
+
+/**
+ * Whether the pulled index, rather than the queue, is the store this surface renders from.
+ *
+ * Without a projects sync the queue is the only durable copy of an entry, so a surface holding
+ * entries the queue cannot account for means the queue was truncated and rewriting would drop
+ * them. With a sync configured the model inverts: `backlog.jsonl` is a push queue drained to
+ * zero after a successful push, and the board is the durable store, pulled into
+ * `backlog.index.json`. A fully synced repo therefore sits at zero queued records with a
+ * rendered surface, which the queue comparison reads as corruption and refuses forever.
+ *
+ * The index has to be on disk for this. A repo that enabled the sync but has never pulled knows
+ * nothing about the board, so the queue comparison is still the only safe one there.
+ */
+function indexIsAuthoritative(): boolean {
+  if (!existsSync(resolve(LEDGER_DIR, PROJECTS_ENABLE_TOKEN))) return false;
+  return BACKLOG_INDEX !== null;
+}
 
 function resolveSurfaceArg(file?: string): string {
   return resolveSurfaceArgSeam(
@@ -253,7 +275,10 @@ function writeSurface(
 ): void {
   const relFile = relativeToRoot(REPO_ROOT, file);
   const nextContent = renderSurface(file, entries);
-  if (rebuildWouldDropEntries(file, nextContent, intentionallyDropped))
+  if (
+    !indexIsAuthoritative() &&
+    rebuildWouldDropEntries(file, nextContent, intentionallyDropped)
+  )
     failRebuild(relFile);
   // After the drop guard, never before it. An undeclared area losing its last entry is residue,
   // but a file on disk carrying entries the ledger cannot account for is still a refusal.

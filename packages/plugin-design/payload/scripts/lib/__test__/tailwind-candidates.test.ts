@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it, onTestFinished } from 'vitest';
 
-import { scanCandidates } from '../../payload/scripts/lib/tailwind-candidates.mts';
+import { scanCandidates } from '../tailwind-candidates.mts';
 import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
 
 function tempSourceDir(): string {

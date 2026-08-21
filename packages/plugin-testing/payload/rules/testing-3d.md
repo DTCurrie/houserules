@@ -6,7 +6,6 @@ paths:
   - '**/*.spec.ts'
   - '**/*.spec.tsx'
   - '**/*.spec.mts'
-  - '**/three/**'
 ---
 
 # Testing — 3D and WebGL

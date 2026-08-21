@@ -734,10 +734,10 @@ function tokenOrigin(
   node: Record<string, unknown>,
 ): 'repo' | 'tailwind' | undefined {
   if (!isRecord(node.$extensions)) return undefined;
-  const agentKit = node.$extensions['houserules'];
-  if (!isRecord(agentKit)) return undefined;
-  return agentKit.origin === 'repo' || agentKit.origin === 'tailwind'
-    ? agentKit.origin
+  const houserules = node.$extensions['houserules'];
+  if (!isRecord(houserules)) return undefined;
+  return houserules.origin === 'repo' || houserules.origin === 'tailwind'
+    ? houserules.origin
     : undefined;
 }
 
@@ -1160,4 +1160,9 @@ async function main(): Promise<number> {
   }
 }
 
-process.exit(await main());
+const exitCode = await main();
+// A bare process.exit() drops stdout still buffered in the pipe, which truncates large
+// output like `theme --all` mid-stream on Linux while the exit code stays 0. The empty
+// write's callback runs only after every queued stdout chunk has drained. The hard exit
+// itself stays, since some subcommands can leave live handles that would hang a natural exit.
+process.stdout.write('', () => process.exit(exitCode));

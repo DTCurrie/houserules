@@ -2,8 +2,8 @@
   "name": "@houserules/plugin-fixture-gated",
   "version": "2.0.0",
   "private": true,
-  "main": "index.cjs",
+  "main": "./dist/index.cjs",
   "exports": {
-    ".": "./index.cjs"
+    ".": "./dist/index.cjs"
   }
 }
