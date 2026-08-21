@@ -1,5 +1,11 @@
 # @houserules/plugin-prose
 
+## 0.1.2
+
+### Patch Changes
+
+- cb34f11: Drop duplicate payload peerDependencies, dedupe naming clause into code-cleanliness, take clack 1.x
+
 ## 0.1.1
 
 ### Patch Changes

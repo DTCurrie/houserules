@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-github",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "description": "houserules plugin: GitHub integrations. Ships a projects module that syncs the backlog and decision ledgers to GitHub Projects.",
   "type": "module",

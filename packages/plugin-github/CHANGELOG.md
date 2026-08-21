@@ -1,5 +1,16 @@
 # @houserules/plugin-github
 
+## 0.2.0
+
+### Minor Changes
+
+- cb34f11: Sync Scope/Under fields, keep markers on update pushes, add reconcile for surface orphans
+
+### Patch Changes
+
+- cb34f11: Drop duplicate payload peerDependencies, dedupe naming clause into code-cleanliness, take clack 1.x
+- cb34f11: Share ledger guard helpers from entry-ledger, ending drifting local copies across scripts
+
 ## 0.1.1
 
 ### Patch Changes

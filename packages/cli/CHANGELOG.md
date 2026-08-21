@@ -1,5 +1,21 @@
 # @houserules/cli
 
+## 0.2.0
+
+### Minor Changes
+
+- cb34f11: reviewers module ships review-package.mjs, packaging a commit range into one reviewable file
+- cb34f11: Update refreshes kit-wired hook entries, hookFragment carries if/timeout/async, one merged Bash gate
+
+### Patch Changes
+
+- cb34f11: Drop duplicate payload peerDependencies, dedupe naming clause into code-cleanliness, take clack 1.x
+- cb34f11: Share ledger guard helpers from entry-ledger, ending drifting local copies across scripts
+- Updated dependencies [cb34f11]
+- Updated dependencies [cb34f11]
+  - @houserules/payload@0.2.0
+  - @houserules/api@0.2.0
+
 ## 0.1.2
 
 ### Patch Changes
