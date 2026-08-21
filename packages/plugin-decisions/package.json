@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-decisions",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "houserules plugin: an append-only decision ledger, the /decide skill, and the decision-reviewer agent.",
   "type": "module",
   "publishConfig": {

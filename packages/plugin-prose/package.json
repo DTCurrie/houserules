@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-prose",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "houserules plugin: comment discipline, writing voice, and a terse prose output style.",
   "type": "module",
   "publishConfig": {

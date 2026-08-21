@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.2.0
+
+### Minor Changes
+
+- cb34f11: Share ledger guard helpers from entry-ledger, ending drifting local copies across scripts
+
 ## 0.1.1
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @houserules/plugin-changesets
 
+## 0.1.2
+
+### Patch Changes
+
+- cb34f11: Drop duplicate payload peerDependencies, dedupe naming clause into code-cleanliness, take clack 1.x
+- cb34f11: Share ledger guard helpers from entry-ledger, ending drifting local copies across scripts
+
 ## 0.1.1
 
 ### Patch Changes
