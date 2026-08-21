@@ -68,11 +68,14 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       actions.push({
         kind: 'merge-settings',
         module: id,
+        // 120s hook timeout replaces nothing: the script keeps its own per-spawn timeouts,
+        // this bounds the whole hook well under the harness's 600s default (board issue 83).
         fragment: hookFragment(
           event,
           null,
           'lint-format-fix.mjs',
           'Running lint/format auto-fix',
+          { timeout: 120 },
         ),
       });
   } else {

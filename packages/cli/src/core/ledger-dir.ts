@@ -1,6 +1,6 @@
-import type { Ctx } from '../detect.js';
+import { DEFAULT_LEDGER_DIR } from '@houserules/payload/entry-ledger';
 
-const DEFAULT_LEDGER_DIR = '.claude/ledgers';
+import type { Ctx } from '../detect.js';
 
 /**
  * The repo-relative ledger directory, or null when houserules must not manage it.

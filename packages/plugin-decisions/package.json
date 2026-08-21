@@ -99,8 +99,7 @@
   "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/plugin-decisions#readme",
   "bugs": "https://github.com/DTCurrie/houserules/issues",
   "peerDependencies": {
-    "@houserules/api": ">=0.0.0 <1.0.0",
-    "@houserules/payload": ">=0.0.0 <1.0.0"
+    "@houserules/api": ">=0.0.0 <1.0.0"
   },
   "devDependencies": {
     "@houserules/api": "workspace:*",

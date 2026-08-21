@@ -35,12 +35,14 @@ const REJECTED_WORD = /\bRejected\b/;
 const REVISIT_WORD = /\bRevisit\b/;
 const SCOPE_LINE = /^\*\*Scope:\*\* (.+)$/m;
 const PATH_TOKEN = /`([A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+)`/g;
+const SUPERSEDED_STATUS = /\*\*Status:\*\* superseded\b/;
 
 interface DecisionRecord {
   id: string;
   line: number;
   text: string;
   scope: string[];
+  superseded: boolean;
 }
 
 /** One rendered entry's body text and 1-indexed heading line, split on `## [id]` and `---`. */
@@ -58,7 +60,13 @@ function splitRecords(markdown: string): DecisionRecord[] {
     const scope = scopeMatch
       ? scopeMatch[1]!.split(',').map((s) => s.trim().replace(/^`|`$/g, ''))
       : [];
-    records.push({ id: currentId, line: currentLine, text, scope });
+    records.push({
+      id: currentId,
+      line: currentLine,
+      text,
+      scope,
+      superseded: SUPERSEDED_STATUS.test(text),
+    });
     currentId = null;
     bodyLines = [];
   };
@@ -90,10 +98,14 @@ function paragraphsMatching(text: string, pattern: RegExp): string[] {
 /**
  * The `decide` skill refuses to record a decision missing a Rejected or a Revisit field. This
  * catches the same gap after the fact, in whatever is already rendered.
+ *
+ * Superseded records are skipped: they are immutable history no action can add fields to,
+ * and their supersessor is the record that owes them.
  */
 export function checkRequiredFields(file: string, markdown: string): Report {
   const report = emptyReport();
   for (const record of splitRecords(markdown)) {
+    if (record.superseded) continue;
     if (paragraphsMatching(record.text, REJECTED_WORD).length === 0) {
       report.findings.push({
         rule: 'decide/required-fields',
@@ -129,6 +141,7 @@ export function checkPathWatchableScope(
 ): Report {
   const report = emptyReport();
   for (const record of splitRecords(markdown)) {
+    if (record.superseded) continue;
     const paragraphs = paragraphsMatching(record.text, REVISIT_WORD);
     if (paragraphs.length === 0) continue;
     const tokens = paragraphs.flatMap((paragraph) =>

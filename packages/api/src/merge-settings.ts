@@ -1,7 +1,15 @@
+import { hookCommand } from './hook-wiring.js';
+
 export interface HookEntry {
   type: 'command';
   command: string;
   statusMessage?: string;
+  /** A harness-evaluated condition. The hook runs only when it is truthy. */
+  if?: string;
+  /** Seconds the harness waits before treating the hook as failed. */
+  timeout?: number;
+  /** True when the harness should not block on this hook's completion. */
+  async?: boolean;
   [key: string]: unknown;
 }
 
@@ -65,17 +73,58 @@ function kitBasenames(cmd: unknown): string[] {
   return [...String(cmd ?? '').matchAll(KIT_SCRIPT_RE)].map((m) => m[1]!);
 }
 
-// Every command format houserules has ever emitted, oldest first. Only these exact
-// whitespace-normalized strings are eligible for in-place upgrade.
+// Every command format houserules has ever emitted, oldest first, before hookCommand grew a
+// guard. Kept as exact whitespace-normalized strings, since the shape check below only covers
+// the current guarded form.
 const KIT_STOCK_FORMATS: ((basename: string) => string)[] = [
   (name) => `node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}"`,
+  // The guarded wrapper before the 2026-08-20 sweep moved the fallback to stderr. Installs
+  // updated before that carry this form, and it is the population issue 86 was filed about.
+  (name) =>
+    `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || echo "[houserules] ${name} missing. Run: npx houserules update"`,
+  // The same wrapper from before the agent-kit to houserules rename.
+  (name) =>
+    `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || echo "[kit] ${name} missing — run: npx agent-kit update"`,
 ];
 
-function isRecognizedKitStock(command: unknown, basename: string): boolean {
+// A placeholder basename, standing in for hookCommand's own scriptName parameter so the shape
+// pattern below is derived from hookCommand's actual output rather than a second, hand-copied
+// literal that could drift from it.
+const SHAPE_PLACEHOLDER = 'ZZZKITSCRIPTPLACEHOLDERZZZ';
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stockShapePattern(): RegExp {
+  const template = normalizeCommand(hookCommand(SHAPE_PLACEHOLDER));
+  const withCapture = escapeRegExp(template)
+    .split(SHAPE_PLACEHOLDER)
+    .join('([\\w-]+\\.mjs)');
+  return new RegExp(`^${withCapture}$`);
+}
+
+/**
+ * True when `command` is a form houserules itself would emit to run `scriptBasename`: the
+ * current guarded wrapper hookCommand builds, a known historical stock string, or anything
+ * else matching that wrapper's shape for this basename. A user's edited variant, whether extra
+ * flags, a different guard, or a custom fallback message, never matches, so `mergeSettings` and
+ * `reconcileSettings` both leave it untouched rather than silently upgrading or dropping it.
+ */
+export function isKitStockCommand(
+  command: unknown,
+  scriptBasename: string,
+): boolean {
   const normalized = normalizeCommand(command);
-  return KIT_STOCK_FORMATS.some(
-    (f) => normalizeCommand(f(basename)) === normalized,
-  );
+  if (normalized === normalizeCommand(hookCommand(scriptBasename))) return true;
+  if (
+    KIT_STOCK_FORMATS.some(
+      (f) => normalizeCommand(f(scriptBasename)) === normalized,
+    )
+  )
+    return true;
+  const match = stockShapePattern().exec(normalized);
+  return match?.[1] === scriptBasename;
 }
 
 type HookMatch =
@@ -102,7 +151,7 @@ function matchExistingHook(
         candidateBases.includes(b),
       );
       if (!matchedBase) continue;
-      if (isRecognizedKitStock(hook.command, matchedBase))
+      if (isKitStockCommand(hook.command, matchedBase))
         return { kind: 'stock-upgrade', hook };
       return { kind: 'user-variant' };
     }
@@ -338,6 +387,66 @@ export function removeSettingsFragments(
     delete merged.permissions;
 
   return { merged, changes };
+}
+
+/**
+ * Drops a hook entry that update or doctor recognize as houserules' own but that no longer has
+ * anywhere to come from: it is in the previously `recorded` signature, no CURRENT fragment
+ * declares that {event, matcher, script} tuple, and the on-disk command still reads as
+ * houserules stock. That third condition is the safety check `removeHooksByScript` does not
+ * need, because a whole-signature reconcile runs even when the module that wired a hook stops
+ * shipping it, and a stale entry that the user has since hand-edited must survive exactly like
+ * any other user variant does.
+ *
+ * `recorded` absent means there is nothing to reconcile against, such as a manifest written
+ * before this feature existed, so nothing is dropped.
+ *
+ * @returns The reconciled settings, and every tuple actually dropped, for the caller to report.
+ */
+export function reconcileSettings(
+  existing: Settings | null,
+  fragments: SettingsFragment[],
+  recorded: SettingsSignature | undefined,
+): { merged: Settings; dropped: SettingsSignature['hooks'] } {
+  const merged: Settings = structuredClone(existing ?? {});
+  const dropped: SettingsSignature['hooks'] = [];
+  if (!recorded || !merged.hooks) return { merged, dropped };
+
+  const keyOf = (
+    event: string,
+    matcher: string | null,
+    script: string | null,
+  ) => `${event}|${matcher ?? ''}|${script}`;
+
+  const declared = new Set<string>();
+  for (const { event, group, hook } of eachHook(fragments)) {
+    const script = kitBasenames(hook.command)[0] ?? null;
+    declared.add(keyOf(event, group.matcher ?? null, script));
+  }
+
+  const recordedKeys = new Set(
+    recorded.hooks.map((h) => keyOf(h.event, h.matcher, h.script)),
+  );
+
+  for (const [event, groups] of Object.entries(merged.hooks)) {
+    const keptGroups: HookGroup[] = [];
+    for (const group of groups ?? []) {
+      const keptHooks = (group?.hooks ?? []).filter((hook) => {
+        const script = kitBasenames(hook.command)[0] ?? null;
+        const key = keyOf(event, group.matcher ?? null, script);
+        if (!recordedKeys.has(key) || declared.has(key)) return true;
+        if (!script || !isKitStockCommand(hook.command, script)) return true;
+        dropped.push({ event, matcher: group.matcher ?? null, script });
+        return false;
+      });
+      if (keptHooks.length) keptGroups.push({ ...group, hooks: keptHooks });
+    }
+    if (keptGroups.length) merged.hooks[event] = keptGroups;
+    else delete merged.hooks[event];
+  }
+  if (merged.hooks && !Object.keys(merged.hooks).length) delete merged.hooks;
+
+  return { merged, dropped };
 }
 
 /**

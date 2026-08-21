@@ -9,6 +9,7 @@
  *   backfill [--dry-run]   # bring an existing board up to the current field schema
  *   compact [--dry-run]    # shrink the local ledgers to what a push still owes
  *   status                 # print the resolved project per ledger, and gate state
+ *   reconcile [--enqueue | --drop]  # find and repair entries orphaned on a rendered surface
  *
  * bootstrap, push, and backfill need the local enable token (<ledger dir>/.projects.json) and
  * maintain or admin on the repository. pull needs neither. status prints the current gate state.
@@ -16,8 +17,14 @@
  * --dry-run runs every read the same way a real run would, but prints each planned step
  * instead of creating, linking, or pushing anything.
  *
+ * reconcile finds entries that a rendered `.md` surface carries but that are in neither the
+ * push queue nor the pulled index, unreachable by every other command. With no flag it only
+ * lists them, and exits 1 when it finds any, 0 when it finds none. --enqueue appends each one
+ * back to its ledger's queue so the next push creates it. --drop re-renders the surfaces from
+ * the queue and index, which removes the orphaned sections, and exits 0 either way.
+ *
  * Exit codes: 0 on success or bare usage, 1 on a preflight failure, a gate denial, a failed
- * push op, or any `gh` error.
+ * push op, an unrepaired `reconcile` finding, or any `gh` error.
  */
 
 import {
@@ -33,11 +40,14 @@ import { spawnSync } from 'node:child_process';
 import { loadConfigSafe, repoRoot } from '@houserules/payload/config';
 import {
   appendEvent,
+  encodeBody,
+  findSurfaceFiles,
   ledgerDir,
   ledgerPath,
   nowIso,
   decodeBody,
   readLog,
+  surfaceRelFile,
 } from '@houserules/payload/entry-ledger';
 import {
   ghErr,
@@ -106,6 +116,8 @@ import {
   planBackfill,
 } from './lib/backfill-plan.mjs';
 import type { BackfillOp, LocalEntry } from './lib/backfill-plan.mjs';
+import { findSurfaceOrphans, surfaceEntries } from './lib/surface-orphans.mjs';
+import type { SurfaceEntry } from './lib/surface-orphans.mjs';
 
 const REPO_ROOT = repoRoot();
 const CONFIG = loadConfigSafe();
@@ -824,6 +836,68 @@ function printPendingCounts(): void {
   );
 }
 
+/** The rendered surface filename for one ledger kind, matching each ledger script's own `SURFACE`. */
+const SURFACE_BASENAME: Record<LedgerKind, string> = {
+  backlog: 'BACKLOG.md',
+  decisions: 'DECISIONS.md',
+};
+
+/** The action a fresh queue entry for this kind writes, which `reconcile --enqueue` replays. */
+const BIRTH_ACTION: Record<LedgerKind, string> = {
+  backlog: 'add',
+  decisions: 'decide',
+};
+
+/**
+ * Every entry one kind's rendered surfaces carry that the queue and the index both forgot.
+ *
+ * Reads the same two sources {@link readPushQueue} folds, the raw ledger records and the pulled
+ * index, but only for their ids, since an orphan is defined by absence from both id sets rather
+ * than by any op it would produce.
+ */
+function surfaceOrphansForKind(kind: LedgerKind): SurfaceEntry[] {
+  const ledgerFile =
+    kind === 'backlog' ? backlogLedgerPath() : decisionsLedgerPath();
+  const queueIds = new Set(readLog<LedgerRecord>(ledgerFile).map((r) => r.id));
+  const indexIds = new Set(
+    (loadIndex(LEDGER_DIRECTORY, kind)?.entries ?? []).map((e) => e.id),
+  );
+
+  const orphans: SurfaceEntry[] = [];
+  for (const file of findSurfaceFiles(
+    LEDGER_DIRECTORY,
+    SURFACE_BASENAME[kind],
+  )) {
+    const relFile = surfaceRelFile(LEDGER_DIRECTORY, file);
+    const entries = surfaceEntries(relFile, readFileSync(file, 'utf8'));
+    orphans.push(...findSurfaceOrphans(entries, queueIds, indexIds));
+  }
+  return orphans;
+}
+
+/** Every surface-orphaned entry, by ledger kind. */
+function allSurfaceOrphans(): Record<LedgerKind, SurfaceEntry[]> {
+  const byKind = {} as Record<LedgerKind, SurfaceEntry[]>;
+  for (const kind of LEDGER_KINDS) byKind[kind] = surfaceOrphansForKind(kind);
+  return byKind;
+}
+
+/** Prints one line per surface-orphaned entry and returns how many there were. */
+function printSurfaceOrphans(
+  byKind: Record<LedgerKind, SurfaceEntry[]>,
+): number {
+  let total = 0;
+  for (const kind of LEDGER_KINDS) {
+    for (const orphan of byKind[kind]) {
+      total++;
+      console.log(
+        `${kind}: surface-orphaned ${orphan.id}  ${orphan.title}  (${orphan.surface})`,
+      );
+    }
+  }
+  return total;
+}
+
 function runStatus(): void {
   const { repo } = preflight();
   printGateState();
@@ -832,16 +906,69 @@ function runStatus(): void {
   const resolved = readEnableToken();
   if (!resolved) {
     console.log('No local project mapping yet. Run `bootstrap` first.');
+  } else {
+    for (const kind of LEDGER_KINDS) {
+      const project = resolved[projectKey(kind)];
+      console.log(
+        project
+          ? `${repo} ${kind}: #${project.number}`
+          : `${repo} ${kind}: not bootstrapped`,
+      );
+    }
+  }
+
+  const orphanTotal = printSurfaceOrphans(allSurfaceOrphans());
+  if (orphanTotal > 0) {
+    console.log('Run `reconcile` to see repair options for these.');
+  }
+}
+
+/**
+ * Appends `orphan` back to `kind`'s ledger queue with the same event shape a fresh add or decide
+ * writes, keeping its recorded id, title, surface, and body untouched. `--enqueue` is what lets a
+ * surface-orphaned entry rejoin a normal push instead of staying invisible to it forever.
+ */
+function enqueueOrphan(kind: LedgerKind, orphan: SurfaceEntry): void {
+  const ledgerFile =
+    kind === 'backlog' ? backlogLedgerPath() : decisionsLedgerPath();
+  appendEvent(ledgerFile, {
+    ts: nowIso(),
+    id: orphan.id,
+    action: BIRTH_ACTION[kind],
+    file: orphan.surface,
+    title: orphan.title,
+    chat: null,
+    content: encodeBody(orphan.body.trim()),
+  });
+}
+
+function runReconcile(enqueue: boolean, drop: boolean): void {
+  const byKind = allSurfaceOrphans();
+  const total = printSurfaceOrphans(byKind);
+  if (total === 0) {
+    console.log('No surface-orphaned entries.');
     return;
   }
 
-  for (const kind of LEDGER_KINDS) {
-    const project = resolved[projectKey(kind)];
-    console.log(
-      project
-        ? `${repo} ${kind}: #${project.number}`
-        : `${repo} ${kind}: not bootstrapped`,
+  if (!enqueue && !drop) {
+    console.error(
+      'Run again with --enqueue to restore these to the push queue, or --drop to remove them from the rendered surface.',
     );
+    process.exit(1);
+  }
+
+  if (enqueue) {
+    for (const kind of LEDGER_KINDS) {
+      for (const orphan of byKind[kind]) enqueueOrphan(kind, orphan);
+    }
+    console.log('Enqueued every surface-orphaned entry for the next push.');
+  }
+
+  if (drop) {
+    for (const kind of LEDGER_KINDS) {
+      if (byKind[kind].length > 0) renderSurfaces(kind);
+    }
+    console.log('Re-rendered surfaces, dropping every surface-orphaned entry.');
   }
 }
 
@@ -1253,7 +1380,11 @@ function handleUpdateIssue(
 ): GhResult<SyncResult> {
   const issueId = fetchIssueNodeId(ctx.owner, ctx.repo, op.issue);
   if (!issueId.ok) return issueId;
-  const updated = updateIssueMutation(issueId.value, op.title, op.body);
+  const updated = updateIssueMutation(
+    issueId.value,
+    op.title,
+    appendMarker(op.body, op.entryId),
+  );
   if (!updated.ok) return updated;
   const added = addIssueToProject(project.id, issueId.value);
   if (!added.ok) return added;
@@ -1306,7 +1437,10 @@ function handleUpdateDraft(
 ): GhResult<SyncResult> {
   const contentId = fetchDraftContentId(op.itemId);
   if (!contentId.ok) return contentId;
-  const updated = updateDraftIssueMutation(contentId.value, op.body);
+  const updated = updateDraftIssueMutation(
+    contentId.value,
+    appendMarker(op.body, op.entryId),
+  );
   if (!updated.ok) return updated;
   const fields = setFieldValues(project, op.itemId, fieldValuesFor(op));
   if (!fields.ok) return fields;
@@ -1819,6 +1953,7 @@ function usage(): void {
       '  projects-sync.mjs backfill [--dry-run]',
       '  projects-sync.mjs pull [--dry-run]',
       '  projects-sync.mjs status',
+      '  projects-sync.mjs reconcile [--enqueue | --drop]',
       '',
       'bootstrap creates or adopts one GitHub Project per (backlog, decisions),',
       'and writes the resolved project numbers to <ledger dir>/.projects.json. That file',
@@ -1835,6 +1970,10 @@ function usage(): void {
       '<ledger dir>/<kind>.index.json, which `scope` and prompt injection read instead of',
       'the boards themselves. It needs only read access on the repository, not the enable',
       'token backfill and push require.',
+      'reconcile finds entries a rendered surface carries that are in neither the queue nor',
+      'the index, so no other command can see them. With no flag it only lists them, and exits',
+      '1 when it finds any. --enqueue appends each one back to its ledger queue for the next',
+      'push. --drop re-renders the surfaces from the queue and index, removing them.',
       '--dry-run runs every read but prints each planned step instead of executing it.',
     ].join('\n'),
   );
@@ -1869,6 +2008,10 @@ switch (action) {
 
   case 'status':
     runStatus();
+    break;
+
+  case 'reconcile':
+    runReconcile(argv.includes('--enqueue'), argv.includes('--drop'));
     break;
 
   default:

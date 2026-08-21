@@ -32,7 +32,7 @@
  */
 
 import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
 import { makeId } from '@houserules/payload/backlog-id';
@@ -48,6 +48,7 @@ import {
   decodeBody,
   encodeBody,
   impliedSurfaceFiles,
+  indexIsAuthoritative,
   ledgerDir,
   ledgerPath,
   normalizeSurfaceRef,
@@ -62,6 +63,7 @@ import {
   resolveChat,
   resolveSurfaceArg,
   surfaceIsResidue,
+  surfaceRelFile,
   surfaceScope,
   takeChatFlag,
   todayDate,
@@ -109,35 +111,9 @@ function requireKnownArea(arg: string | undefined): void {
   if (message) fail(message);
 }
 
-/** The surface-relative path recorded on each entry: the file's location inside the ledger directory. */
-function surfaceRelFile(file: string): string {
-  return relative(LEDGER_DIR, resolve(file));
-}
-
 /** The synced entries cached locally, or none for a fresh clone that has never pulled. */
 function decisionsIndexEntries(): LedgerEntry[] {
   return loadIndex(LEDGER_DIR, 'decisions')?.entries ?? [];
-}
-
-/** The local enable token a projects sync bootstrap writes into the ledger directory. */
-const PROJECTS_ENABLE_TOKEN = '.projects.json';
-
-/**
- * Whether the pulled index, rather than the queue, is the store this surface renders from.
- *
- * Without a projects sync the queue is the only durable copy of a decision, so a surface
- * holding entries the queue cannot account for means the queue was truncated and rewriting
- * would destroy them. With a sync configured the model inverts: `decisions.jsonl` is a push
- * queue drained to zero after a successful push, and the board is the durable store, pulled
- * into `decisions.index.json`. A fully synced repo therefore sits at zero queued entries with
- * a rendered surface, which the queue comparison reads as corruption and refuses forever.
- *
- * The index has to be on disk for this. A repo that enabled the sync but has never pulled
- * knows nothing about the board, so the queue comparison is still the only safe one there.
- */
-function indexIsAuthoritative(): boolean {
-  if (!existsSync(resolve(LEDGER_DIR, PROJECTS_ENABLE_TOKEN))) return false;
-  return loadIndex(LEDGER_DIR, 'decisions') !== null;
 }
 
 interface DecisionRecord {
@@ -444,7 +420,7 @@ function projectFileEntries(file: string): {
   supersededBy: Map<string, string>;
 } {
   const relFile = normalizeSurfaceRef(
-    surfaceRelFile(file),
+    surfaceRelFile(LEDGER_DIR, file),
     SURFACE,
     CONFIG.targets ?? [],
   );
@@ -528,7 +504,7 @@ function rerenderFile(
     .join('');
   const nextContent = decisionHeader(file) + body;
   if (
-    !indexIsAuthoritative() &&
+    !indexIsAuthoritative(LEDGER_DIR, 'decisions') &&
     rebuildWouldDropEntries(file, nextContent, intentionallyDropped)
   ) {
     console.error(
@@ -626,7 +602,7 @@ switch (action) {
       requireAccepted(superseded, target, '--supersedes');
     }
     const chat = resolveChat(chatFlag, REPO_ROOT);
-    const relFile = surfaceRelFile(file);
+    const relFile = surfaceRelFile(LEDGER_DIR, file);
     appendEvent(LOG_FILE, {
       ts,
       id,
@@ -676,7 +652,7 @@ switch (action) {
     const ts = nowIso();
     const id = makeId(prefix, newTitle, ts);
     const chat = resolveChat(chatFlag, REPO_ROOT);
-    const relFile = surfaceRelFile(file);
+    const relFile = surfaceRelFile(LEDGER_DIR, file);
     appendEvent(LOG_FILE, {
       ts,
       id,
@@ -719,7 +695,7 @@ switch (action) {
     );
     requireKnownId(entries, id, 'amend');
     const chat = resolveChat(chatFlag, REPO_ROOT);
-    const relFile = surfaceRelFile(file);
+    const relFile = surfaceRelFile(LEDGER_DIR, file);
     appendEvent(LOG_FILE, {
       ts: nowIso(),
       id,
@@ -751,7 +727,7 @@ switch (action) {
       ts: nowIso(),
       id,
       action: 'move',
-      file: surfaceRelFile(newFile),
+      file: surfaceRelFile(LEDGER_DIR, newFile),
       chat,
     });
     rerenderFile(oldFile, new Set([id]));
@@ -776,7 +752,7 @@ switch (action) {
       ts: nowIso(),
       id,
       action: 'rescope',
-      file: surfaceRelFile(file),
+      file: surfaceRelFile(LEDGER_DIR, file),
       scope,
       chat: resolveChat(chatFlag, REPO_ROOT),
     });

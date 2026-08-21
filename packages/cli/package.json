@@ -195,9 +195,9 @@
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "dependencies": {
+    "@clack/prompts": "^1.7.0",
     "@houserules/api": "workspace:*",
     "@houserules/payload": "workspace:*",
-    "@clack/prompts": "^0.11.0",
     "commander": "^15.0.0",
     "dequal": "^2.0.3",
     "diff": "^9.0.0",
@@ -205,8 +205,8 @@
     "semver": "^7.8.5"
   },
   "devDependencies": {
-    "@houserules/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
+    "@houserules/test": "workspace:*",
     "@types/node": "^26.1.2",
     "@types/semver": "^7.8.0",
     "prettier": "^3.9.6",

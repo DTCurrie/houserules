@@ -25,6 +25,7 @@ import { HouseError } from '../house-error.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import {
   parseSettingsText,
+  reconcileSettings,
   removeHooksByScript,
   renderSettings,
 } from '@houserules/api/internal';
@@ -271,6 +272,35 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       };
       planResult.settingsPlan.text = renderSettings(merged);
       planResult.settingsPlan.changes.push(...changes);
+    }
+  }
+
+  // Reconciles the recorded settings signature against what the CURRENT modules declare,
+  // dropping a still-recognizable houserules hook entry that nothing declares anymore even
+  // when its script survives on disk (a module rewiring its hook, not retiring the file
+  // `removeHooksByScript` above already handled). Folds into the same single write.
+  {
+    const base = planResult.settingsPlan
+      ? parseSettingsText(planResult.settingsPlan.text!)
+      : (ctx.claude.settings ?? {});
+    const { merged, dropped } = reconcileSettings(
+      base,
+      planResult.fragments,
+      manifest.settings,
+    );
+    if (dropped.length) {
+      planResult.settingsPlan ??= {
+        dest: '.claude/settings.json',
+        existedBefore: ctx.claude.settingsExists,
+        changes: [],
+      };
+      planResult.settingsPlan.text = renderSettings(merged);
+      planResult.settingsPlan.changes.push(
+        ...dropped.map(({ event, matcher, script }) => ({
+          kind: 'remove-hook' as const,
+          detail: `${event}${matcher ? `(${matcher})` : ''}: ${script}`,
+        })),
+      );
     }
   }
 

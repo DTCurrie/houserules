@@ -130,6 +130,12 @@ export interface PlanResult {
   settingsPlan: SettingsPlan | null;
   advisories: AdviseAction[];
   signature: SettingsSignature;
+  /**
+   * Every module's settings fragment this run resolved, exposed so a caller can reconcile
+   * a previously recorded {@link SettingsSignature} against what is CURRENTLY declared,
+   * such as `update`'s stale-hook cleanup.
+   */
+  fragments: SettingsFragment[];
   /** Every dest the current plan produces. The reference set prune diffs against. */
   plannedDests: Set<string>;
   /** Non-empty when a plugin's built payload is missing a file the plan needs. */
@@ -672,6 +678,7 @@ export function computeEffects(
     settingsPlan,
     advisories,
     signature,
+    fragments,
     plannedDests,
     brokenPlugins,
   };

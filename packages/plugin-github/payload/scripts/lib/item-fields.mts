@@ -5,7 +5,7 @@
  * decides WHICH entries move, this one decides WHAT each item's fields say once it is there.
  */
 
-import { areaForSurface } from './project-shape.mjs';
+import { areaForSurface, joinListField } from './project-shape.mjs';
 
 /**
  * `values` plus the provenance a backlog item needs to be rebuilt from the board alone.
@@ -51,9 +51,11 @@ export type FieldValue =
  * closed one. `Area` records the surface the entry came from, which is provenance rather than
  * routing: the surface already picked the board.
  *
- * Decision items get `Status`, `Decided`, `Supersedes`, and `Chat`. `Status` is `Accepted`
- * unless the op is `mark-superseded`. `Supersedes` is a comma-joined id list, empty when the
- * record supersedes nothing.
+ * Decision items get `Status`, `Decided`, `Supersedes`, `Chat`, `Scope`, and `Under`. `Status`
+ * is `Accepted` unless the op is `mark-superseded`. `Supersedes` is a comma-joined id list,
+ * empty when the record supersedes nothing. `Scope` is the same comma-join for the record's
+ * scope list, and `Under` is the parent decision id, both omitted when unset so a pulled index
+ * reads them back as empty rather than the literal string "null".
  */
 export function fieldValuesFor(op: PushOp): FieldValue[] {
   switch (op.op) {
@@ -85,13 +87,35 @@ export function fieldValuesFor(op: PushOp): FieldValue[] {
       if (op.chat !== null) {
         values.push({ field: 'Chat', kind: 'text', value: op.chat });
       }
+      if (op.scope.length > 0) {
+        values.push({
+          field: 'Scope',
+          kind: 'text',
+          value: joinListField(op.scope),
+        });
+      }
+      if (op.under !== null) {
+        values.push({ field: 'Under', kind: 'text', value: op.under });
+      }
       return values;
     }
-    case 'update-draft':
-      return [
+    case 'update-draft': {
+      const values: FieldValue[] = [
         { field: 'Status', kind: 'single-select', option: 'Accepted' },
         { field: 'Area', kind: 'text', value: areaForSurface(op.surface) },
       ];
+      if (op.scope.length > 0) {
+        values.push({
+          field: 'Scope',
+          kind: 'text',
+          value: joinListField(op.scope),
+        });
+      }
+      if (op.under !== null) {
+        values.push({ field: 'Under', kind: 'text', value: op.under });
+      }
+      return values;
+    }
     case 'mark-superseded':
       return [
         { field: 'Status', kind: 'single-select', option: 'Superseded' },

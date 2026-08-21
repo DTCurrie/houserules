@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 const SCRIPTS = fileURLToPath(
   new URL('../../payload-dist/scripts', import.meta.url),
@@ -30,15 +30,9 @@ function stageInstalledScripts(): string {
   return staged;
 }
 
-let dependencyFreeDir: string;
-let stagedRoot: string;
-let stagedScripts: string;
-
-beforeAll(() => {
-  dependencyFreeDir = mkdtempSync(join(tmpdir(), 'plugin-github-bare-'));
-  stagedScripts = stageInstalledScripts();
-  stagedRoot = join(stagedScripts, '..');
-});
+const dependencyFreeDir = mkdtempSync(join(tmpdir(), 'plugin-github-bare-'));
+const stagedScripts = stageInstalledScripts();
+const stagedRoot = join(stagedScripts, '..');
 
 afterAll(() => {
   rmSync(dependencyFreeDir, { recursive: true, force: true });
@@ -63,7 +57,7 @@ function runHook(script: string, input = '{}') {
 }
 
 describe('every lib module loads on bare node', () => {
-  const libDir = join(SCRIPTS, 'lib');
+  const libDir = join(stagedScripts, 'lib');
   const hasLibDir = existsSync(libDir);
 
   const libFiles = hasLibDir

@@ -83,6 +83,26 @@ const baseConfig = ts.config(
     ],
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },
+  // The payload package's lib suites must exercise source, not build output. Importing
+  // from payload-dist/ means a source edit tests stale bytes until the next build, which
+  // let a broken probe pass green (board issue 90).
+  {
+    files: ['packages/payload/payload/scripts/lib/__test__/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['*payload-dist*'],
+              message:
+                'Import the .mts source (../<lib>.mjs), not payload-dist build output. Build output goes stale between rebuilds.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
 
 export default baseConfig;

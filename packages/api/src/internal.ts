@@ -13,8 +13,10 @@
 export { extractBody, hasLegacyRegion, upsertRegion } from './regions.js';
 
 export {
+  isKitStockCommand,
   mergeSettings,
   parseSettingsText,
+  reconcileSettings,
   removeHooksByScript,
   removeSettingsFragments,
   renderSettings,

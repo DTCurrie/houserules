@@ -4,10 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { realpathSync } from 'node:fs';
 
-import {
-  repoRoot,
-  repoRootSafe,
-} from '../../../../payload-dist/scripts/lib/config.mjs';
+import { repoRoot, repoRootSafe } from '../config.mjs';
 
 function inDirectory<TResult>(directory: string, run: () => TResult): TResult {
   const previous = process.cwd();

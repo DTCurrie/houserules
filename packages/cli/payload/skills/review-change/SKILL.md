@@ -26,9 +26,20 @@ collect the set of `${name}-reviewer` agents whose area was touched. Skip a targ
 
 ## 3. Fan out — one message, read-only
 
+Build the change package once, before dispatching:
+
+```
+node .claude/scripts/review-package.mjs <base>..HEAD
+```
+
+It writes one file (log, stat, and a `-U10` diff) and prints the path. For a working-tree
+review with no commits yet, skip this and fall back to handing each reviewer its diff
+directly.
+
 Dispatch every matched reviewer in a **single message** as parallel `Agent` calls, each scoped to its
-own area's changed files. They are read-only by construction. Give each agent the change under review,
-meaning the diff for its files, and the instruction to return one verdict per its own contract:
+own area's changed files. They are read-only by construction. Give each agent the package file's
+path with the instruction to Read it once and review only its own area's files, and the
+instruction to return one verdict per its own contract:
 **OK**, **Conflict** (quote the rule and the conflicting code), or **Gap** (source silent).
 
 Do not review the code yourself here. The reviewers own the authoritative sources. Your job is the

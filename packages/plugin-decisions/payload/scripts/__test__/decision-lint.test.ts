@@ -9,14 +9,15 @@ const FILE = '.claude/ledgers/DECISIONS.md';
 
 function entry(
   body: string,
-  opts: { id?: string; scope?: string } = {},
+  opts: { id?: string; scope?: string; status?: string } = {},
 ): string {
   const id = opts.id ?? 'CORE-abc123';
   const scopeLine = opts.scope ? `**Scope:** ${opts.scope}\n` : '';
+  const status = opts.status ?? 'accepted';
   return [
     `## [${id}] A decision`,
     '',
-    '**Decided:** 2026-08-18 · **Status:** accepted',
+    `**Decided:** 2026-08-18 · **Status:** ${status}`,
     scopeLine,
     body,
     '',
@@ -90,6 +91,16 @@ describe('checkRequiredFields', () => {
     const report = checkRequiredFields(FILE, markdown);
     expect(report.findings).toHaveLength(2);
   });
+
+  it('skips a superseded record, whose supersessor owes the fields', () => {
+    const markdown = entry('The body carries neither field.', {
+      status: 'superseded',
+    });
+
+    const report = checkRequiredFields(FILE, markdown);
+
+    expect(report.findings).toHaveLength(0);
+  });
 });
 
 describe('checkPathWatchableScope', () => {
@@ -109,6 +120,17 @@ describe('checkPathWatchableScope', () => {
     );
     const report = checkPathWatchableScope(FILE, markdown);
     expect(report.findings).toEqual([]);
+  });
+
+  it('skips a superseded record even when its trigger names an unscoped path', () => {
+    const markdown = entry(
+      'Revisit when `packages/cli/src/commands/init.ts` changes shape.',
+      { scope: '`packages/api/src/ctx.ts`', status: 'superseded' },
+    );
+
+    const report = checkPathWatchableScope(FILE, markdown);
+
+    expect(report.findings).toHaveLength(0);
   });
 
   it('flags a path named in the revisit trigger that scope does not cover', () => {

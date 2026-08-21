@@ -16,10 +16,12 @@ import {
   encodeBody,
   findSurfaceFiles,
   impliedSurfaceFiles,
+  indexIsAuthoritative,
   ledgerDir,
   ledgerPath,
   normalizeSurfaceRef,
   parseEntries,
+  PROJECTS_ENABLE_TOKEN,
   readLog,
   rebuildWouldDropEntries,
   renderMetadata,
@@ -31,7 +33,8 @@ import {
   surfaceScope,
   resolveChat,
   takeChatFlag,
-} from '../../../../payload-dist/scripts/lib/entry-ledger.mjs';
+} from '../entry-ledger.mjs';
+import { emptyIndex, indexBasename, serializeIndex } from '../ledger-index.mjs';
 
 const roots: string[] = [];
 
@@ -731,5 +734,37 @@ describe('encodeBody', () => {
 
   it('encodes an absent body as the empty string', () => {
     expect(decodeBody(encodeBody(undefined))).toBe('');
+  });
+});
+
+describe('indexIsAuthoritative', () => {
+  it('returns false when no enable token is present, even with an index file on disk', () => {
+    const root = tempRoot();
+    writeAt(
+      root,
+      indexBasename('backlog'),
+      serializeIndex(emptyIndex('backlog', '2026-08-03T00:00:00.000Z')),
+    );
+
+    expect(indexIsAuthoritative(root, 'backlog')).toBe(false);
+  });
+
+  it('returns false when the enable token is present but no index has been pulled', () => {
+    const root = tempRoot();
+    writeAt(root, PROJECTS_ENABLE_TOKEN, '{}');
+
+    expect(indexIsAuthoritative(root, 'backlog')).toBe(false);
+  });
+
+  it('returns true when the enable token is present and a valid index has been pulled', () => {
+    const root = tempRoot();
+    writeAt(root, PROJECTS_ENABLE_TOKEN, '{}');
+    writeAt(
+      root,
+      indexBasename('backlog'),
+      serializeIndex(emptyIndex('backlog', '2026-08-03T00:00:00.000Z')),
+    );
+
+    expect(indexIsAuthoritative(root, 'backlog')).toBe(true);
   });
 });

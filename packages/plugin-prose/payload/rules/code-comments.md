@@ -36,9 +36,8 @@ rustdoc in Rust.
      reactivity requirement.
   3. **Non-obvious domain logic.** The code encodes a business rule, invariant, or domain
      concept that a new reader would not infer from the code itself.
-- **Prefer naming over commenting.** If a comment is needed to explain what a variable,
-  function, or block does, first try renaming it or extracting a function with a descriptive
-  name.
+- **Prefer naming over commenting.** See `code-cleanliness.md`'s Naming section if that rule
+  is installed.
 - **Never narrate the code.** No `// increment counter`, no `// loop over users`, no
   `// handle error`. These are noise.
 - **Never explain the change you just made.** Comments describe the code as it exists, not its
