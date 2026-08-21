@@ -205,15 +205,15 @@
     "semver": "^7.8.5"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.5",
+    "@arethetypeswrong/cli": "catalog:",
     "@houserules/test": "workspace:*",
-    "@types/node": "^26.1.2",
+    "@types/node": "catalog:",
     "@types/semver": "^7.8.0",
-    "prettier": "^3.9.6",
-    "publint": "^0.3.23",
-    "type-fest": "^5.8.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.10",
-    "wireit": "^0.14.13"
+    "prettier": "catalog:",
+    "publint": "catalog:",
+    "type-fest": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "wireit": "catalog:"
   }
 }
