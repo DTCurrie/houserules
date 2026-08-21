@@ -325,7 +325,7 @@ export async function confirmTargets(targets: Target[]): Promise<Target[]> {
           message: `Prefix for ${t.name}`,
           initialValue: t.prefix,
           validate: (v) =>
-            /^[A-Z][A-Z0-9]*$/.test(v)
+            /^[A-Z][A-Z0-9]*$/.test(v ?? '')
               ? undefined
               : 'uppercase ASCII, e.g. CORE',
         }),

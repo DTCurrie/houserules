@@ -60,6 +60,7 @@ function projectsModule(api: PluginApi): ModuleDef {
         api.payload.lib(id, 'ledger-compaction.mjs'),
         api.payload.lib(id, 'board-projection.mjs'),
         api.payload.lib(id, 'backfill-plan.mjs'),
+        api.payload.lib(id, 'surface-orphans.mjs'),
         api.payload.script(
           id,
           'projects-sync-hook.mjs',

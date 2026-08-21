@@ -1,7 +1,7 @@
 import { renderReviewerDraft } from '../render.js';
 import type { Action, Answers, ModuleGroup } from '@houserules/api';
 import type { Ctx } from '../detect.js';
-import { skill } from './copy-actions.js';
+import { script, skill } from './copy-actions.js';
 
 export const id = 'reviewers';
 export const title =
@@ -29,6 +29,12 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       id,
       'review-change',
       'dispatch per-target reviewers by changed path (OK/Conflict/Gap)',
+    ),
+    // One file per range, so N reviewers each pay one Read instead of re-deriving the diff.
+    script(
+      id,
+      'review-package.mjs',
+      'package a commit range (log, stat, -U10 diff) into one reviewable file',
     ),
   ];
   let reviewers = 0;

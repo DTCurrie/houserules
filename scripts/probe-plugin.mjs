@@ -11,6 +11,7 @@
  * collision, or a payload path pointing outside the package.
  */
 
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { detect } from '../packages/cli/dist/detect.js';
@@ -44,6 +45,45 @@ try {
 } catch (error) {
   console.error(`FAILED (${error.name}): ${error.message}`);
   process.exit(1);
+}
+
+// The plugin declares its dependency on the shared payload libs the same way every other
+// importer does: `@houserules/payload` in devDependencies (needed to typecheck payload
+// sources), never in peerDependencies (nothing resolves it through the installed plugin at
+// runtime, so a peer entry only produces an unmet-peer warning for consumers).
+const pluginRoot = resolve(repoRoot, packagePath);
+const payloadDir = resolve(pluginRoot, 'payload');
+const importsPayloadLib = (() => {
+  let entries;
+  try {
+    entries = readdirSync(payloadDir, { recursive: true });
+  } catch {
+    return false;
+  }
+  return entries
+    .filter((entry) => entry.endsWith('.mts'))
+    .some((entry) =>
+      readFileSync(resolve(payloadDir, entry), 'utf8').includes(
+        '@houserules/payload/',
+      ),
+    );
+})();
+if (importsPayloadLib) {
+  const pkg = JSON.parse(
+    readFileSync(resolve(pluginRoot, 'package.json'), 'utf8'),
+  );
+  if (pkg.peerDependencies?.['@houserules/payload']) {
+    console.error(
+      '  !! @houserules/payload must not be a peerDependency: nothing resolves it through the installed plugin at runtime',
+    );
+    process.exit(1);
+  }
+  if (!pkg.devDependencies?.['@houserules/payload']) {
+    console.error(
+      '  !! payload sources import @houserules/payload/* but package.json has no devDependency on it',
+    );
+    process.exit(1);
+  }
 }
 
 // The real detector against this repo, not a hand-made fixture. A fake Ctx goes stale the

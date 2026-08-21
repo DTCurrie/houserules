@@ -41,4 +41,15 @@ describe('reviewers', () => {
     expect(text).toMatch(/pathPrefix/);
     expect(text).toMatch(/OK.*Conflict.*Gap/s);
   });
+
+  it('installs review-package.mjs beside the dispatch skill', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'reviewers',
+    });
+
+    expect(
+      existsSync(join(root, '.claude/scripts/review-package.mjs')),
+      'review-package.mjs installed',
+    ).toBe(true);
+  });
 });

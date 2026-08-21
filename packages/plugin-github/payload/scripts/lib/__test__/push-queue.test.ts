@@ -238,6 +238,7 @@ describe('buildPushQueue', () => {
         op: 'create-draft',
         supersedes: ['DEC-1'],
         scope: [],
+        under: null,
       },
       {
         entryId: 'DEC-1',
@@ -281,6 +282,7 @@ describe('buildPushQueue', () => {
         op: 'create-draft',
         supersedes: [],
         scope: [],
+        under: null,
       },
       {
         entryId: 'DEC-2',
@@ -293,6 +295,7 @@ describe('buildPushQueue', () => {
         op: 'create-draft',
         supersedes: ['DEC-1'],
         scope: [],
+        under: null,
       },
       {
         entryId: 'DEC-1',
@@ -380,6 +383,7 @@ describe('buildPushQueue', () => {
         op: 'create-draft',
         supersedes: ['DEC-1'],
         scope: [],
+        under: null,
       },
     ]);
   });
@@ -412,8 +416,37 @@ describe('buildPushQueue', () => {
         op: 'update-draft',
         itemId: 'PVTI_1',
         scope: ['packages/plugin-github'],
+        under: null,
       },
     ]);
+  });
+
+  it('carries under from a decide record onto its create-draft op', () => {
+    const ops = buildPushQueue([], [decide('DEC-1', { under: 'DEC-parent' })]);
+
+    expect(ops).toContainEqual(
+      expect.objectContaining({ op: 'create-draft', under: 'DEC-parent' }),
+    );
+  });
+
+  it('carries under onto an update-draft op emitted for the same decision', () => {
+    const ops = buildPushQueue(
+      [],
+      [
+        decide('DEC-1', { under: 'DEC-parent' }),
+        synced('DEC-1', { itemId: 'PVTI_1' }),
+        {
+          ts: '2026-01-03T00:00:00Z',
+          id: 'DEC-1',
+          action: 'amend',
+          content: 'revised body',
+        },
+      ],
+    );
+
+    expect(ops).toContainEqual(
+      expect.objectContaining({ op: 'update-draft', under: 'DEC-parent' }),
+    );
   });
 
   it('keeps a shared id from bleeding between the backlog and decision ledgers', () => {
@@ -434,6 +467,7 @@ describe('buildPushQueue', () => {
         op: 'create-draft',
         supersedes: [],
         scope: [],
+        under: null,
       },
     ]);
   });
@@ -476,6 +510,7 @@ describe('summarizeQueue', () => {
         op: 'create-draft',
         supersedes: [],
         scope: [],
+        under: null,
       },
     ];
 
@@ -549,6 +584,7 @@ describe('syncedRecord', () => {
       op: 'create-draft',
       supersedes: [],
       scope: [],
+      under: null,
     };
 
     expect(
@@ -916,6 +952,7 @@ describe('an entry that exists only in the index, its queue records long gone', 
       op: 'update-draft',
       itemId: 'item-1',
       scope: ['packages/cli'],
+      under: null,
     });
   });
 

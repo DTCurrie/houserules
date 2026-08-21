@@ -25,15 +25,29 @@ export function hookCommand(scriptName: string): string {
   return `[ -f ${path} ] && exec node ${path} || { echo "[houserules] ${scriptName} missing. Run: npx houserules update" >&2; exit 1; }`;
 }
 
+/**
+ * The harness-level fields a hook entry can carry beyond `command` and `statusMessage`:
+ * a conditional guard, a timeout in seconds, and whether the hook runs asynchronously.
+ */
+export interface HookFragmentOptions {
+  if?: string;
+  timeout?: number;
+  async?: boolean;
+}
+
 /** One settings fragment carrying a single hook entry. */
 export function hookFragment(
   event: string,
   matcher: string | null,
   scriptName: string,
   statusMessage?: string,
+  options?: HookFragmentOptions,
 ): SettingsFragment {
   const hook: HookEntry = { type: 'command', command: hookCommand(scriptName) };
   if (statusMessage) hook.statusMessage = statusMessage;
+  if (options?.if !== undefined) hook.if = options.if;
+  if (options?.timeout !== undefined) hook.timeout = options.timeout;
+  if (options?.async !== undefined) hook.async = options.async;
   const group: HookGroup = matcher
     ? { matcher, hooks: [hook] }
     : { hooks: [hook] };

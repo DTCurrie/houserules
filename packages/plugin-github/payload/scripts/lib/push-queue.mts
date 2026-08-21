@@ -31,6 +31,7 @@ export interface LedgerRecord {
   content?: string;
   supersedes?: string[];
   scope?: string[];
+  under?: string | null;
   /** Set by the executor's own `synced` record, and by an entry adopted from an issue. */
   issue?: number;
   /** Set by the executor's `synced` record for a decision draft. */
@@ -79,8 +80,14 @@ export type PushOp =
       op: 'create-draft';
       supersedes: string[];
       scope: string[];
+      under: string | null;
     })
-  | (PushOpBase & { op: 'update-draft'; itemId: string; scope: string[] })
+  | (PushOpBase & {
+      op: 'update-draft';
+      itemId: string;
+      scope: string[];
+      under: string | null;
+    })
   /**
    * Flips an existing decision item to Superseded and names what replaced it.
    *
@@ -366,6 +373,7 @@ export interface DecisionState {
   supersedesList: string[];
   chat: string | null;
   scope: string[];
+  under: string | null;
   synced: boolean;
   syncedItemId: string | undefined;
   /**
@@ -390,6 +398,7 @@ function newDecisionState(r: LedgerRecord): DecisionState {
     supersedesList: r.supersedes ?? [],
     chat: r.chat ?? null,
     scope: r.scope ?? [],
+    under: r.under ?? null,
     synced: false,
     syncedItemId: undefined,
     markedSuperseded: false,
@@ -445,6 +454,7 @@ function decisionPrimaryOps(id: string, state: DecisionState): PushOp[] {
         op: 'create-draft' as const,
         supersedes: state.supersedesList,
         scope: state.scope,
+        under: state.under,
       },
     ];
   }
@@ -456,6 +466,7 @@ function decisionPrimaryOps(id: string, state: DecisionState): PushOp[] {
       op: 'update-draft' as const,
       itemId: state.syncedItemId!,
       scope: state.scope,
+      under: state.under,
     });
   }
   if (state.fileDirty) {
@@ -522,6 +533,7 @@ function decisionStateFromIndex(entry: LedgerEntry): DecisionState {
     supersedesList: entry.supersedes,
     chat: entry.chat,
     scope: entry.scope,
+    under: entry.under,
     synced: true,
     syncedItemId: entry.itemId || undefined,
     markedSuperseded: entry.status === SUPERSEDED_DECISION_STATUS,

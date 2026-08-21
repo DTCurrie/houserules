@@ -18,22 +18,20 @@
  *                                `git show <sha>` or `git show <sha>~1:<file>`.
  */
 
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
 import { loadConfig, repoRoot } from '@houserules/payload/config';
 import { BACKLOG_ID } from '@houserules/payload/backlog-id';
+import {
+  appendEvent,
+  nowIso,
+  SEPARATOR,
+} from '@houserules/payload/entry-ledger';
 
 const REPO_ROOT = repoRoot();
-const SEPARATOR = '---';
 const MAX_INLINE_FILES = 6;
 
 interface Target {
@@ -63,8 +61,6 @@ for (const t of config.targets) {
     label: t.label ?? t.name,
   };
 }
-
-const nowIso = () => new Date().toISOString();
 
 function shStr(cmd: string): string {
   return execSync(cmd, { encoding: 'utf8' });
@@ -234,11 +230,6 @@ function appendToChangelog(target: ResolvedTarget, entry: string) {
   writeFileSync(target.changelogFile, padded + entry);
 }
 
-function appendEvent(target: ResolvedTarget, record: Record<string, unknown>) {
-  mkdirSync(dirname(target.logFile), { recursive: true });
-  appendFileSync(target.logFile, JSON.stringify(record) + '\n');
-}
-
 interface RecordCommitOptions {
   reason?: string;
   backlog?: string;
@@ -318,7 +309,8 @@ function writeRecord(
     }),
   );
 
-  appendEvent(target, {
+  mkdirSync(dirname(target.logFile), { recursive: true });
+  appendEvent(target.logFile, {
     ts: nowIso(),
     action: 'record',
     sha: info.shortSha,

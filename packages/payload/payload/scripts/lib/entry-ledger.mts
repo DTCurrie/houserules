@@ -15,6 +15,7 @@ import { homedir } from 'node:os';
 import { dirname, relative, resolve } from 'node:path';
 
 import { ENTRY_HEAD } from './backlog-id.mjs';
+import { loadIndex, type LedgerKind } from './ledger-index.mjs';
 
 export const SEPARATOR = '---';
 
@@ -216,6 +217,32 @@ export function rebuildWouldDropEntries(
   );
 }
 
+/** The local enable token a projects sync bootstrap writes into the ledger directory. */
+export const PROJECTS_ENABLE_TOKEN = '.projects.json';
+
+/**
+ * Whether the pulled index, rather than the queue, is the store this ledger's surfaces render
+ * from.
+ *
+ * Without a projects sync the queue is the only durable copy of an entry, so a surface holding
+ * entries the queue cannot account for means the queue was truncated and rewriting would
+ * destroy them. With a sync configured the model inverts: the queue jsonl drains to zero after
+ * a successful push, and the board is the durable store, pulled into the index. A fully synced
+ * repo therefore sits at zero queued entries with a rendered surface, which the queue
+ * comparison reads as corruption and refuses forever.
+ *
+ * The index has to be on disk for this. A repo that enabled the sync but has never pulled
+ * knows nothing about the board, so the queue comparison is still the only safe one there.
+ */
+export function indexIsAuthoritative(
+  ledgerDirectory: string,
+  kind: LedgerKind,
+): boolean {
+  if (!existsSync(resolve(ledgerDirectory, PROJECTS_ENABLE_TOKEN)))
+    return false;
+  return loadIndex(ledgerDirectory, kind) !== null;
+}
+
 export function readSurface(file: string): string {
   return existsSync(file) ? readFileSync(file, 'utf8') : '';
 }
@@ -231,7 +258,7 @@ export function relativeToRoot(repoRoot: string, p: string): string {
   return relative(repoRoot, resolve(p));
 }
 
-const DEFAULT_LEDGER_DIR = '.claude/ledgers';
+export const DEFAULT_LEDGER_DIR = '.claude/ledgers';
 
 /**
  * The ledger directory, from `ledgers.dir` or the default.

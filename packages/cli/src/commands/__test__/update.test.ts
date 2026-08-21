@@ -546,6 +546,136 @@ describe('migrating a prior houserules hook entry', () => {
   });
 });
 
+function plantStaleSignatureEntry(
+  root: string,
+  { userEdited = false }: { userEdited?: boolean } = {},
+): { manifestPath: string; settingsPath: string } {
+  const event = 'PreToolUse';
+  const matcher = 'StaleMatcher';
+  const script = 'guard-bash.mjs';
+
+  const settingsPath = join(root, '.claude/settings.json');
+  const settings = settingsOf(root);
+  const stockCommand = hookCommandsFor(settings, event).find((c) =>
+    c.includes(script),
+  )!;
+  settings.hooks![event] = [
+    ...(settings.hooks![event] ?? []),
+    {
+      matcher,
+      hooks: [
+        {
+          type: 'command',
+          command: userEdited
+            ? `${stockCommand} --my-extra-flag`
+            : stockCommand,
+        },
+      ],
+    },
+  ];
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+
+  const manifestPath = join(root, '.claude/houserules.manifest.json');
+  const manifest = readJson(manifestPath) as {
+    settings?: {
+      hooks: {
+        event: string;
+        matcher: string | null;
+        script: string | null;
+      }[];
+      permissions: string[];
+    };
+  };
+  manifest.settings ??= { hooks: [], permissions: [] };
+  manifest.settings.hooks.push({ event, matcher, script });
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+  return { manifestPath, settingsPath };
+}
+
+describe('update reconciling a stale but still-recognizable hook entry no current module declares', () => {
+  it('drops the entry from settings.json even though its script still ships', () => {
+    const root = useInstalledRepo('npm-single');
+    plantStaleSignatureEntry(root);
+
+    const result = runCli(['update', root]);
+
+    expect(result.status, result.stderr).toBe(0);
+    const settings = settingsOf(root);
+    expect(
+      (settings.hooks?.PreToolUse ?? []).some(
+        (group) => group.matcher === 'StaleMatcher',
+      ),
+    ).toBeFalsy();
+    expect(existsSync(join(root, '.claude/scripts/guard-bash.mjs'))).toBe(true);
+  });
+
+  it('no longer records the dropped tuple in the written manifest signature', () => {
+    const root = useInstalledRepo('npm-single');
+    const { manifestPath } = plantStaleSignatureEntry(root);
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    const manifest = readJson(manifestPath) as {
+      settings?: {
+        hooks: {
+          event: string;
+          matcher: string | null;
+          script: string | null;
+        }[];
+      };
+    };
+    expect(
+      manifest.settings?.hooks.some(
+        (h) => h.matcher === 'StaleMatcher' && h.script === 'guard-bash.mjs',
+      ),
+    ).toBeFalsy();
+  });
+
+  it('preserves a hook the current modules still declare, at its own matcher', () => {
+    const root = useInstalledRepo('npm-single');
+    plantStaleSignatureEntry(root);
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    const after = hookCommandsFor(settingsOf(root), 'PreToolUse').filter((c) =>
+      c.includes('guard-bash.mjs'),
+    );
+    expect(after).toHaveLength(1);
+  });
+
+  it('preserves a user-added hook with a non-kit command', () => {
+    const root = useInstalledRepo('npm-single');
+    plantStaleSignatureEntry(root);
+    const settingsPath = join(root, '.claude/settings.json');
+    const settings = settingsOf(root);
+    settings.hooks!.PreToolUse = [
+      ...(settings.hooks!.PreToolUse ?? []),
+      { hooks: [{ type: 'command', command: 'node ./my-own-hook.js' }] },
+    ];
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    const after = hookCommandsFor(settingsOf(root), 'PreToolUse');
+    expect(after.some((c) => c.includes('my-own-hook.js'))).toBeTruthy();
+  });
+
+  it('preserves a user-edited variant of the stale entry rather than dropping it', () => {
+    const root = useInstalledRepo('npm-single');
+    plantStaleSignatureEntry(root, { userEdited: true });
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    const settings = settingsOf(root);
+    const staleGroup = (settings.hooks?.PreToolUse ?? []).find(
+      (group) => group.matcher === 'StaleMatcher',
+    );
+    expect(staleGroup, 'the user-edited entry must survive').toBeTruthy();
+    expect(staleGroup!.hooks?.[0]?.command).toMatch(/--my-extra-flag/);
+  });
+});
+
 describe('doctor and update on a retired, unmodified, wired hook script', () => {
   let root: string;
   let retired: string;

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import {
   listWorkspacePackages,
   parsePnpmWorkspaceGlobs,
-} from '../../../../payload-dist/scripts/lib/workspaces.mjs';
+} from '../workspaces.mjs';
 
 describe('parsePnpmWorkspaceGlobs', () => {
   it.each([

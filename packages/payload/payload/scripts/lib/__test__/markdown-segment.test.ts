@@ -7,7 +7,7 @@ import {
   classifyLines,
   stripCode,
   stripToProse,
-} from '../../../../payload-dist/scripts/lib/markdown-segment.mjs';
+} from '../markdown-segment.mjs';
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../../..', import.meta.url));
 

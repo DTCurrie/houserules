@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { scanComments } from '../../../../payload-dist/scripts/lib/comment-scan.mjs';
+import { scanComments } from '../comment-scan.mjs';
 
 describe('scanComments', () => {
   it('finds a plain line comment', () => {

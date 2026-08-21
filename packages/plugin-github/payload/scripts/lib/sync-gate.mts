@@ -22,6 +22,8 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { PROJECTS_ENABLE_TOKEN } from '@houserules/payload/entry-ledger';
+
 import type { RepoPermissions } from './gh.mjs';
 import { ghPermissions, ghRepo } from './gh.mjs';
 
@@ -180,4 +182,4 @@ export function readGateInputs(
 }
 
 /** Where the enable token lives, relative to the ledger directory. */
-export const ENABLE_TOKEN_BASENAME = '.projects.json';
+export const ENABLE_TOKEN_BASENAME = PROJECTS_ENABLE_TOKEN;

@@ -38,6 +38,7 @@ export type { RegionSpec } from './regions.js';
 export type { McpTransport, PayloadBuilders } from './copy-actions.js';
 
 export { hookCommand, hookFragment, scriptPermission } from './hook-wiring.js';
+export type { HookFragmentOptions } from './hook-wiring.js';
 
 /**
  * `HouseConfig`/`HouseConfigTarget` are contract, not internal, even though houserules' own

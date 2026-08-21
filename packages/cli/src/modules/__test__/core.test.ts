@@ -4,36 +4,29 @@ import { makeAnswers, makeCtx } from '#test/ctx-builder';
 import type { HouseConfig } from '@houserules/api';
 import { plan } from '../core.js';
 
-describe('core plan, the subagent write gate', () => {
-  it('installs subagent-write-gate.mjs as a script', () => {
+describe('core plan, the merged Bash gate', () => {
+  it('ships no separate subagent-write-gate.mjs script or hook, its checks live in guard-bash.mjs', () => {
     const actions = plan(makeCtx(), makeAnswers());
 
-    expect(
-      actions.some(
-        (a) => a.kind === 'copy' && a.src.endsWith('subagent-write-gate.mjs'),
-      ),
-    ).toBe(true);
+    expect(JSON.stringify(actions).includes('subagent-write-gate.mjs')).toBe(
+      false,
+    );
   });
 
-  it('wires subagent-write-gate.mjs as a PreToolUse(Bash) hook', () => {
+  it('wires guard-bash.mjs as the single PreToolUse(Bash) hook', () => {
     const actions = plan(makeCtx(), makeAnswers());
 
-    const merge = actions.find(
-      (a): a is Extract<typeof a, { kind: 'merge-settings' }> =>
-        a.kind === 'merge-settings' &&
-        JSON.stringify(a.fragment).includes('subagent-write-gate.mjs'),
-    );
+    const bashHookCommands = actions
+      .filter(
+        (a): a is Extract<typeof a, { kind: 'merge-settings' }> =>
+          a.kind === 'merge-settings',
+      )
+      .flatMap((a) => a.fragment.hooks?.PreToolUse ?? [])
+      .filter((group) => group.matcher === 'Bash')
+      .flatMap((group) => group.hooks.map((h) => h.command));
 
-    expect(merge).toBeDefined();
-    expect(
-      merge?.fragment.hooks?.PreToolUse?.some(
-        (group) =>
-          group.matcher === 'Bash' &&
-          group.hooks.some((h) =>
-            h.command.includes('subagent-write-gate.mjs'),
-          ),
-      ),
-    ).toBe(true);
+    expect(bashHookCommands).toHaveLength(1);
+    expect(bashHookCommands[0]).toContain('guard-bash.mjs');
   });
 });
 

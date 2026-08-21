@@ -115,6 +115,7 @@ describe('fieldValuesFor, given a decision op', () => {
       supersedes: [],
       chat: null,
       scope: [],
+      under: null,
     };
 
     expect(fieldValuesFor(op)).toContainEqual({
@@ -146,6 +147,7 @@ describe('fieldValuesFor, given a decision op', () => {
       supersedes: [],
       chat: null,
       scope: [],
+      under: null,
     };
 
     expect(
@@ -160,6 +162,7 @@ describe('fieldValuesFor, given a decision op', () => {
       supersedes: ['TEST-a', 'TEST-b'],
       chat: null,
       scope: [],
+      under: null,
     };
 
     expect(fieldValuesFor(op)).toContainEqual({
@@ -176,6 +179,7 @@ describe('fieldValuesFor, given a decision op', () => {
       supersedes: [],
       chat: null,
       scope: [],
+      under: null,
     };
 
     expect(fieldValuesFor(op).some((value) => value.field === 'Chat')).toBe(
@@ -190,12 +194,133 @@ describe('fieldValuesFor, given a decision op', () => {
       supersedes: [],
       chat: 'https://claude.ai/chat/abc',
       scope: [],
+      under: null,
     };
 
     expect(fieldValuesFor(op)).toContainEqual({
       field: 'Chat',
       kind: 'text',
       value: 'https://claude.ai/chat/abc',
+    });
+  });
+
+  it('omits Scope for a create-draft with an empty scope list', () => {
+    const op: PushOp = {
+      ...decisionOpBase,
+      op: 'create-draft',
+      supersedes: [],
+      scope: [],
+      under: null,
+    };
+
+    expect(fieldValuesFor(op).some((value) => value.field === 'Scope')).toBe(
+      false,
+    );
+  });
+
+  it('joins a two-path scope list with a comma and space for create-draft', () => {
+    const op: PushOp = {
+      ...decisionOpBase,
+      op: 'create-draft',
+      supersedes: [],
+      scope: ['packages/cli', 'packages/plugin-github'],
+      under: null,
+    };
+
+    expect(fieldValuesFor(op)).toContainEqual({
+      field: 'Scope',
+      kind: 'text',
+      value: 'packages/cli, packages/plugin-github',
+    });
+  });
+
+  it('omits Scope for an update-draft with an empty scope list', () => {
+    const op: PushOp = {
+      ...decisionOpBase,
+      op: 'update-draft',
+      itemId: 'PVTI_1',
+      scope: [],
+      under: null,
+    };
+
+    expect(fieldValuesFor(op).some((value) => value.field === 'Scope')).toBe(
+      false,
+    );
+  });
+
+  it('joins a two-path scope list with a comma and space for update-draft', () => {
+    const op: PushOp = {
+      ...decisionOpBase,
+      op: 'update-draft',
+      itemId: 'PVTI_1',
+      scope: ['packages/cli', 'packages/plugin-github'],
+      under: null,
+    };
+
+    expect(fieldValuesFor(op)).toContainEqual({
+      field: 'Scope',
+      kind: 'text',
+      value: 'packages/cli, packages/plugin-github',
+    });
+  });
+
+  it('omits Under for a create-draft with no under set', () => {
+    const op: PushOp = {
+      ...decisionOpBase,
+      op: 'create-draft',
+      supersedes: [],
+      scope: [],
+      under: null,
+    };
+
+    expect(fieldValuesFor(op).some((value) => value.field === 'Under')).toBe(
+      false,
+    );
+  });
+
+  it('includes Under for a create-draft whose under names a parent decision', () => {
+    const op: PushOp = {
+      ...decisionOpBase,
+      op: 'create-draft',
+      supersedes: [],
+      scope: [],
+      under: 'DEC-parent',
+    };
+
+    expect(fieldValuesFor(op)).toContainEqual({
+      field: 'Under',
+      kind: 'text',
+      value: 'DEC-parent',
+    });
+  });
+
+  it('omits Under for an update-draft with no under set', () => {
+    const op: PushOp = {
+      ...decisionOpBase,
+      op: 'update-draft',
+      itemId: 'PVTI_1',
+      scope: [],
+      under: null,
+    };
+
+    expect(fieldValuesFor(op).some((value) => value.field === 'Under')).toBe(
+      false,
+    );
+  });
+
+  it('includes Under for an update-draft whose under names a parent decision', () => {
+    const op: PushOp = {
+      ...decisionOpBase,
+      op: 'update-draft',
+      itemId: 'PVTI_1',
+      scope: [],
+      under: 'DEC-parent',
+    };
+
+    expect(fieldValuesFor(op)).toContainEqual({
+      field: 'Under',
+      kind: 'text',
+      value: 'DEC-parent',
     });
   });
 });
