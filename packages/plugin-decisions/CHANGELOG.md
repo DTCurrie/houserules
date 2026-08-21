@@ -1,5 +1,11 @@
 # @houserules/plugin-decisions
 
+## 0.1.3
+
+### Patch Changes
+
+- 7b5f72a: Adopt the Jest-standard **tests** directory name for test colocation.
+
 ## 0.1.2
 
 ### Patch Changes

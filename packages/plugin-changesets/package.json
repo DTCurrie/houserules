@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-changesets",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "houserules plugin: changesets integration (canonical changelog) and the optional per-commit changelog ledger.",
   "type": "module",
   "publishConfig": {
