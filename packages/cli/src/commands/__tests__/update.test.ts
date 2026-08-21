@@ -1126,3 +1126,70 @@ describe('init, given a plugin module whose payload-dist file is missing', () =>
     );
   });
 });
+
+describe('update on a consumer-less install with a ledger .gitignore from before the gating', () => {
+  it('prunes the file and leaves no empty .claude/ledgers/ behind', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const ignoreContent = '*\n!.gitignore\n';
+    mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
+    writeFileSync(join(root, '.claude/ledgers/.gitignore'), ignoreContent);
+    const manifestPath = join(root, '.claude/houserules.manifest.json');
+    const manifest = readJson(manifestPath);
+    manifest.files['.claude/ledgers/.gitignore'] = sha256(ignoreContent);
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    expect(existsSync(join(root, '.claude/ledgers'))).toBe(false);
+    expect(readJson(manifestPath).files['.claude/ledgers/.gitignore']).toBe(
+      undefined,
+    );
+  });
+});
+
+describe('update on an install with a pre-relocation settings.json.bak', () => {
+  it('moves it into .claude/backups/ unchanged', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    writeFileSync(join(root, '.claude/settings.json.bak'), 'pristine-bytes\n');
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    expect(existsSync(join(root, '.claude/settings.json.bak'))).toBe(false);
+    expect(
+      readFileSync(join(root, '.claude/backups/settings.json.bak'), 'utf8'),
+    ).toBe('pristine-bytes\n');
+  });
+
+  it('keeps the stray file when a backup already exists at the new location', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    writeFileSync(join(root, '.claude/settings.json.bak'), 'older-pristine\n');
+    mkdirSync(join(root, '.claude/backups'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/backups/settings.json.bak'),
+      'newer-backup\n',
+    );
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    expect(readFileSync(join(root, '.claude/settings.json.bak'), 'utf8')).toBe(
+      'older-pristine\n',
+    );
+    expect(
+      readFileSync(join(root, '.claude/backups/settings.json.bak'), 'utf8'),
+    ).toBe('newer-backup\n');
+  });
+
+  it('leaves the stray file alone on --dry-run', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    writeFileSync(join(root, '.claude/settings.json.bak'), 'pristine-bytes\n');
+
+    expect(runCli(['update', '--dry-run', root]).status).toBe(0);
+
+    expect(readFileSync(join(root, '.claude/settings.json.bak'), 'utf8')).toBe(
+      'pristine-bytes\n',
+    );
+    expect(existsSync(join(root, '.claude/backups/settings.json.bak'))).toBe(
+      false,
+    );
+  });
+});

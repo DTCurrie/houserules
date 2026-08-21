@@ -1,4 +1,5 @@
 import {
+  cpSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -77,4 +78,75 @@ export function useTailwindRepo(options: TailwindRepoOptions = {}): string {
  */
 export function useBareRepo(): string {
   return makeRepo('design-bare-');
+}
+
+/**
+ * Adds a synthetic package to `root`'s `node_modules`, for exercising package-name
+ * `@import` resolution. `manifest` is spread over a minimal `{ name, version }`, and each
+ * entry of `files` is written relative to the package directory.
+ */
+export function addPackage(
+  root: string,
+  name: string,
+  manifest: Record<string, unknown>,
+  files: Record<string, string>,
+): void {
+  const packageDirectory = join(root, 'node_modules', name);
+  mkdirSync(packageDirectory, { recursive: true });
+  writeFileSync(
+    join(packageDirectory, 'package.json'),
+    `${JSON.stringify({ name, version: '1.0.0', ...manifest }, null, 2)}\n`,
+  );
+  for (const [relative, content] of Object.entries(files)) {
+    const path = join(packageDirectory, relative);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, content);
+  }
+}
+
+function copyRealPackage(destination: string, packageName: string): void {
+  const manifest = requireFromHere.resolve(`${packageName}/package.json`);
+  mkdirSync(dirname(destination), { recursive: true });
+  cpSync(dirname(manifest), destination, { recursive: true });
+}
+
+/**
+ * A synthetic repo shaped like pnpm's strict layout: only `anchor` is linked at the top
+ * level, and `@tailwindcss/oxide` sits beside it inside the `.pnpm` virtual store, reachable
+ * only through the anchor's realpath. The store entries are real directories inside the repo
+ * (copied, not symlinked out), matching where pnpm's own store lives.
+ */
+export function usePnpmTailwindRepo(options: { anchor?: string } = {}): string {
+  const root = makeRepo('design-pnpm-');
+  const anchor = options.anchor ?? 'tailwindcss';
+  const storeModules = join(
+    root,
+    'node_modules/.pnpm',
+    `${anchor.replace('/', '+')}@fixture`,
+    'node_modules',
+  );
+
+  const anchorDirectory = join(storeModules, anchor);
+  if (anchor === 'tailwindcss') {
+    copyRealPackage(anchorDirectory, anchor);
+  } else {
+    mkdirSync(anchorDirectory, { recursive: true });
+    writeFileSync(
+      join(anchorDirectory, 'package.json'),
+      `${JSON.stringify({ name: anchor, version: '4.0.0', main: 'index.js' }, null, 2)}\n`,
+    );
+  }
+  copyRealPackage(
+    join(storeModules, '@tailwindcss/oxide'),
+    '@tailwindcss/oxide',
+  );
+
+  const topLevelLink = join(root, 'node_modules', anchor);
+  mkdirSync(dirname(topLevelLink), { recursive: true });
+  symlinkSync(anchorDirectory, topLevelLink, 'dir');
+
+  const cssPath = join(root, 'src/app.css');
+  mkdirSync(dirname(cssPath), { recursive: true });
+  writeFileSync(cssPath, DEFAULT_ENTRY_CSS);
+  return root;
 }
