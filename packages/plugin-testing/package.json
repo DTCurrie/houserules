@@ -110,7 +110,7 @@
     "@houserules/cli": "workspace:*",
     "@houserules/payload": "workspace:*",
     "@houserules/test": "workspace:*",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.2.0",
     "publint": "^0.3.23",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",

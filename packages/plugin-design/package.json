@@ -112,7 +112,7 @@
     "@houserules/test": "workspace:*",
     "@arethetypeswrong/cli": "^0.18.5",
     "@tailwindcss/oxide": "^4.3.3",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.2.0",
     "publint": "^0.3.23",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
