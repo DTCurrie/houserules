@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Checks Svelte and SvelteKit files against the mechanical and hybrid clauses of
  * `svelte.md` and `sveltekit.md` that a bare-node script can decide without a Svelte or

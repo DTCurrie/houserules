@@ -112,6 +112,43 @@ const REDIRECT_RE = new RegExp(
   `(?:^|[\\s;&|])>>?\\s*(?:\\S*/)?${LEDGER_TARGET}\\b`,
 );
 
+/**
+ * The stderr message refusing `cmd`, or null when the command cannot write a ledger or a
+ * changeset.
+ *
+ * Every check here is a regex over one string, so it runs before the transcript is opened.
+ * The transcript read is the expensive half of this gate and it grows with session length,
+ * while the overwhelming majority of Bash calls are not mutating, so answering "is there
+ * anything to refuse" first takes that cost off almost every invocation.
+ */
+function refusalFor(cmd: string): string | null {
+  const mutatingMatch =
+    cmd.match(BACKLOG_MUTATING_RE) ?? cmd.match(DECISION_MUTATING_RE);
+  if (mutatingMatch) {
+    return (
+      `Blocked by houserules subagent write gate: a subagent may not run ledger command ` +
+      `\`${mutatingMatch[1]}\`. Describe the issue and let the caller act on it.\n`
+    );
+  }
+
+  if (CHANGESET_WRITE_RE.test(cmd)) {
+    return (
+      'Blocked by houserules subagent write gate: a subagent may not author a changeset. ' +
+      'Changesets are one per feature, not one per incremental change. Describe the ' +
+      'change and let the caller record it.\n'
+    );
+  }
+
+  if (DIRECT_EDIT_RE.test(cmd) || REDIRECT_RE.test(cmd)) {
+    return (
+      'Blocked by houserules subagent write gate: a subagent may not edit a ledger or ' +
+      'changeset file directly.\n'
+    );
+  }
+
+  return null;
+}
+
 function runDiagnose(transcriptPath: string): never {
   const sidechainDetected = isSidechainTurn(transcriptPath);
   process.stdout.write(
@@ -135,36 +172,13 @@ function main(): void {
   const cmd = input?.tool_input?.command ?? '';
   if (!cmd) process.exit(0);
 
+  const refusal = refusalFor(cmd);
+  if (!refusal) process.exit(0);
+
   if (!isSidechainTurn(input?.transcript_path)) process.exit(0);
 
-  const mutatingMatch =
-    cmd.match(BACKLOG_MUTATING_RE) ?? cmd.match(DECISION_MUTATING_RE);
-  if (mutatingMatch) {
-    process.stderr.write(
-      `Blocked by houserules subagent write gate: a subagent may not run ledger command ` +
-        `\`${mutatingMatch[1]}\`. Describe the issue and let the caller act on it.\n`,
-    );
-    process.exit(2);
-  }
-
-  if (CHANGESET_WRITE_RE.test(cmd)) {
-    process.stderr.write(
-      'Blocked by houserules subagent write gate: a subagent may not author a changeset. ' +
-        'Changesets are one per feature, not one per incremental change. Describe the ' +
-        'change and let the caller record it.\n',
-    );
-    process.exit(2);
-  }
-
-  if (DIRECT_EDIT_RE.test(cmd) || REDIRECT_RE.test(cmd)) {
-    process.stderr.write(
-      'Blocked by houserules subagent write gate: a subagent may not edit a ledger or ' +
-        'changeset file directly.\n',
-    );
-    process.exit(2);
-  }
-
-  process.exit(0);
+  process.stderr.write(refusal);
+  process.exit(2);
 }
 
 main();

@@ -65,7 +65,10 @@ function failUnresolved(root: string, name: string, cause: unknown): never {
 }
 
 /** Walks up from `start` to the nearest directory whose package.json declares `name`. */
-function packageDirFrom(start: string, name: string): string | undefined {
+export function packageDirFrom(
+  start: string,
+  name: string,
+): string | undefined {
   let dir = dirname(start);
   for (;;) {
     const manifest = join(dir, 'package.json');
@@ -123,7 +126,15 @@ function resolvePluginDir(root: string, name: string): string {
       failUnresolved(root, name, entryError);
     }
     const dir = packageDirFrom(entry, name);
-    if (dir === undefined) failUnresolved(root, name, error);
+    if (dir === undefined) {
+      fail(
+        name,
+        `resolved "${name}" to ${entry}, whose package does not expose ./package.json, and no package.json above it declares the name "${name}". Reinstall it in the target repo, e.g. \`${installCommand(root, name)}\`.`,
+        new Error(
+          `no package.json naming "${name}" between ${dirname(entry)} and the filesystem root`,
+        ),
+      );
+    }
     return dir;
   }
 }

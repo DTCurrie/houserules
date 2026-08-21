@@ -115,7 +115,7 @@ function spawnPush(root: string): void {
 // hook's shared budget would blow it.
 function run(): void {
   const root = repoRoot();
-  const config = loadConfigSafe();
+  const config = loadConfigSafe(root);
   const ledgerDirectory = ledgerDir(root, config.ledgers?.dir);
 
   if (!hasSyncToken(ledgerDirectory)) return;

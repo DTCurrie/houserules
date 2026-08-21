@@ -98,7 +98,7 @@ orchestrator verifies the whole tree once, after every worker has reported.
 Reply with exactly this, and nothing else:
 
 ```
-SLICE <id>: DONE | BLOCKED
+SLICE <id>: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 Files
 - <path> — <one line: what changed there>
@@ -118,6 +118,13 @@ Requests
 Out of scope
 - <real problems found outside the objective, or "none">
 ```
+
+Pick the status by what the orchestrator has to do next. `DONE` means the objective is met and the
+acceptance is green. `DONE_WITH_CONCERNS` means the same, plus something you want read before it is
+approved, such as a deviation you had to make or an acceptance you do not fully trust. Say what the
+concern is in one line under `Deviations`. `NEEDS_CONTEXT` means you stopped because the brief left
+out something only the orchestrator has, such as the seam file or a missing decision, and naming it
+is cheaper than guessing. `BLOCKED` means you cannot finish inside your owned paths at all.
 
 Hard rules for the report: **no diffs, no file contents, no per-file logs, no narration.** One line
 per file. If a decision needs explaining, one sentence under `Deviations`. The orchestrator reads

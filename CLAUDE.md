@@ -7,7 +7,8 @@
 This block is maintained by `npx houserules update`. Content outside the markers around it
 is yours and never touched. For a fuller from-scratch skeleton to compare structure against, see
 `.claude/templates/CLAUDE.md.template`, a gitignored reference that `npx houserules update`
-restores if absent.
+restores if absent. For decisions the repo keeps re-deriving on one axis (architecture, API
+conventions), instantiate `.claude/templates/rules/GUARDRAIL.md.template` into `.claude/rules/`.
 
 ### Recording changes (changesets)
 
@@ -90,8 +91,9 @@ A pnpm workspace of sixteen packages. Every path in the Layout section below is 
 - `packages/api` is `@houserules/api`, the plugin contract package: action types, module
   definitions, and the `houserules.config.json` schema that plugin authors build against. See
   Layout below for where each shared type lives inside it.
-- `packages/payload` is `@houserules/payload`, the six shared payload libs (`backlog-id`,
-  `entry-ledger`, `config`, `ledger-index`, `proc`, `workspaces`) as their own package.
+- `packages/payload` is `@houserules/payload`, the nine shared payload libs (`backlog-id`,
+  `entry-ledger`, `config`, `ledger-index`, `proc`, `workspaces`, `comment-scan`, `findings`,
+  `markdown-segment`) as their own package.
   It ships no modules and installs nothing on its own. A payload script, in the CLI or in a
   plugin, imports one by package name, `@houserules/payload/config`, and the build rewrites
   that specifier to the relative path the flattened `.claude/scripts/lib/` layout needs.
@@ -282,9 +284,10 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
 - **Payload code crosses packages by PACKAGE NAME, and the build rewrites it.** Decision
   `AGENTKIT-deb26c`. Any payload file, script or lib, reaches a shared lib as
   `import { nowIso } from '@houserules/payload/entry-ledger'`, for values and types alike. There
-  is one form, not two. The six shared libs live in the standalone `@houserules/payload` package:
-  `backlog-id`, `entry-ledger`, `config`, `ledger-index`, `proc`, and `workspaces`. Anything
-  else under `./lib/` is the package's own and stays a relative import.
+  is one form, not two. The nine shared libs live in the standalone `@houserules/payload` package:
+  `backlog-id`, `entry-ledger`, `config`, `ledger-index`, `proc`, `workspaces`, `comment-scan`,
+  `findings`, and `markdown-segment`. Anything else under `./lib/` is the package's own and
+  stays a relative import.
   - **`houserules-payload` is what makes it safe**, a bin the CLI publishes that each plugin runs
     after its `tsc`. It rewrites those specifiers in the emitted `.mjs` to the relative form the
     flattened `.claude/scripts/` layout needs, and records what it rewrote in

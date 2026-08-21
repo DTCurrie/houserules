@@ -13,7 +13,7 @@ seam, and N one-screen reports. It never holds the code the workers wrote.
 
 **The economy, stated once:** you pay `O(slices × report)` plus the seam you write yourself. A worker
 that reads twelve files and writes six pays for that itself, in a context that dies when its slice
-does. That is also the anti-rot argument, because no worker accumulates the other slices' history.
+does.
 
 ## 0. Preconditions and arguments
 
@@ -74,93 +74,30 @@ A well-formed slice has:
   `pnpm --filter <pkg> test <path/to/file.test.ts>`.
 - **a brief that fits on one screen.** If it needs more than ~8 steps or touches more than ~6 files,
   split it.
-- **both bounds on a numeric or set-valued criterion.** A cap alone lets a worker satisfy the letter
-  with a degenerate answer, like one token used once.
-- **a named source for a criterion over observed values.** Without it, a browser's own defaults count
-  as violations too. Both are brief-authoring defects: fix the brief, not the model.
+- **both bounds on a numeric or set-valued criterion, and a named source for one over observed
+  values.** Miss either and the brief is the defect, not the model. `references/slicing.md` has both.
 
-**Reconcile the phase's acceptance against the slices', before you dispatch.** Read the sub-plan's own
-"done when" list and check each criterion against the union of the slice acceptances you just wrote.
-Assign every orphan to the slice that owns the code it covers, and add it to that brief's steps. Every
-slice can pass its own acceptance while the phase quietly fails its own, because a slice is scoped by
-file ownership and an acceptance criterion is not. A criterion no slice tests is one you write
-yourself at the barrier, in the most expensive context available, after the cheap workers with the
-right files already open have finished and gone. §8 checks the same list at phase close, and that is
-the backstop rather than the plan.
+Then apply four rules to the set you drew:
 
-**A whole-suite run is not a valid slice acceptance.** Workers in a wave run in parallel, so when one
-runs its acceptance its siblings are mid-edit. A red full suite there says nothing about the slice,
-and it pushes the worker to either report a spurious `BLOCKED` or reach outside its owned paths to
-fix a sibling's half-written file. Repo-wide verification is the wave barrier's job (§7), where the
-tree is quiet.
+- **Reconcile the phase's acceptance against the slices', before you dispatch.** Check each "done
+  when" criterion in the sub-plan against the union of the slice acceptances, and assign every orphan
+  to the slice that owns the code it covers. A slice is scoped by file ownership and a criterion is
+  not, so all of them can pass while the phase fails.
+- **Keep each acceptance narrow enough that a worker can iterate against it.** A whole-suite run is
+  never valid, because a wave's siblings are mid-edit while it runs. Two commands is the ceiling.
+  Pair a typecheck in only when the slice owns its project alone, and otherwise leave it at the
+  barrier and say so in the brief.
+- **File ownership is the parallelism constraint, not conceptual independence.** Two slices may run
+  in the same wave **iff their `owns` sets are disjoint**. They serialize, or one gives the file up.
+  A slice also owns the tests asserting its files' behavior, or it cannot finish.
+- **Slice by shared mutable resource, not by feature.** Files are the usual resource, not the only
+  one. Name everything two slices might both write, from the repo's fixer to a gitignored tool
+  directory to an append-only ledger, then draw the slices so each one is owned once.
 
-**A green test run is not a green typecheck.** Most JS runners (vitest, bun, jest through babel) strip
-types rather than check them, so a slice passes its named test file and still fails the repo's `tsc` at
-the barrier. Where the repo typechecks as a separate step, give the slice both commands: the behavior
-check on the owned tests, and the typecheck on the owned project. The barrier catches this either way.
-It catches it after the wave closed, which costs a residue pass instead of the worker's own retry.
-
-Two commands is the ceiling, not a starting point. Each one a slice carries is paid by every worker
-in the wave at once, so a package-wide typecheck handed to four slices is four package-wide
-typechecks. Prefer the narrowest command that could actually fail on this slice's changes.
-
-**The acceptance has to be cheap enough to iterate against, because iterating is what it is for.** A
-worker runs it, fixes what is red, and runs it again until it goes green. Hand it a command too slow
-or too broad for that loop and it will quietly stand up a narrower proxy, iterate against that, then
-run your acceptance at the end as a formality. That is two runs where you asked for one, and a green
-proxy proves nothing about the command you actually named. Narrow the acceptance until it can carry
-the loop. Never word the brief so the acceptance reads as a closing ceremony.
-
-**Pair the typecheck in only when its project is quiet.** `tsc` runs per project, not per file, so a
-package-scoped typecheck reads whatever a sibling is mid-write in that package, which is the same
-failure as the whole-suite run above. Slices in disjoint packages can each carry their own, and that
-is a reason to prefer slicing along package or tsconfig-project boundaries where the phase allows it.
-When slices in one wave share a project, leave the typecheck at the barrier and **say so in the
-brief**, so a worker does not add it back on its own.
-
-**File ownership is the parallelism constraint, not conceptual independence.** Two slices may run in
-the same wave **iff their `owns` sets are disjoint**. Two "unrelated" features that both edit a barrel
-export are not parallel. They serialize, or one of them gives that file up.
-
-**A slice owns the tests that assert its files' behavior, or it cannot finish.** If a slice changes
-`plan.ts`, it owns `plan.test.ts`. If it changes a warning string, it owns the suite asserting that
-string. Get this wrong and you get one of two failures, both of which surface at the barrier in the
-most expensive context you have: the worker ships a fix with no regression test, because the only
-valid home was outside its `owns`, or it breaks a sibling's assertion and correctly declines to
-repair it. Walk each slice's file list and ask what currently asserts these bytes.
-
-**A slice judged against a spec carries that spec, by path.** When the plan records a format, a
-standard, or a criteria doc that a slice's output has to conform to, name it on the brief's
-`Reference` line. "Never hand a worker the whole plan" means the plan, not the one document the slice
-is measured by. A worker left to infer a format invents one, and that surfaces at the barrier, in the
-most expensive context you have, after the worker who could have gotten it right is gone.
-
-**Slice by shared mutable resource, not by feature.** File ownership is the usual expression of
-this, but it is not the only resource two slices can contend for. Before a wave, name everything two
-slices might both write, then draw the slices so each one is owned once:
-
-- a repo-wide formatter or fixer, which rewrites files nobody assigned it
-- generated tool directories, especially gitignored ones nothing can restore
-- append-only logs and ledgers, where a write inside an isolated worktree is silently discarded
-  rather than conflicted
-- a package's build output, when two slices in that package both need to build
-
-**Lanes, when a resource cannot be partitioned.** Work whose SUBJECT is one of those shared
-resources does not belong in the main checkout beside slices that merely read it. Give it a lane: a
-worktree on its own branch, or a checkout pinned at HEAD for read-only falsification. Two costs to
-plan for. A worktree needs its own dependency install, and **it carries none of the tool directory**,
-so a lane worker cannot be pointed at a brief by path and cannot capture a baseline that assumes an
-installed tree. Give a lane worker its brief inline.
-
-**Slices in one wave may come from different plans.** Nothing here requires a wave's slices to share
-a phase, or even a project. When several plans are in flight, drawing waves across all of them by
-the resource rule above is what finds the real parallelism, and it is usually much wider than any
-single plan's phase boundaries suggest. Record which plan each slice came from, and update BOTH that
-plan's status and the wave's when it lands.
-
-**When you drop a slice, re-home its scope.** A slice canceled mid-program usually carried more
-than the reason it was canceled for. Read its brief before deleting it and move whatever is still
-wanted into another slice, or you will rediscover the orphaned half several slices later.
+Read `references/slicing.md` before you write the briefs. It carries how to word an acceptance a
+worker can iterate against, the test-ownership and carry-the-spec-by-path rules in full, lanes for a
+resource that cannot be partitioned, waves drawn across several plans, and what to do with a dropped
+slice's leftover scope.
 
 **Orchestrator-owned files** never appear in any worker's `owns`: lockfiles, generated indexes,
 barrel/export files, shared type modules, migrations, config. You edit those (§2). Workers that need a
@@ -170,11 +107,8 @@ change there **request it in their report**. They don't reach for it.
 
 Contract-first is what makes parallel slices safe. Before dispatching a wave, **you** write the shared
 surface it depends on: interfaces, type signatures, function stubs, config keys, the migration, the
-route table. Small, high-leverage, and exactly the judgment you're the expensive model for.
-
-Commit it to disk before fanning out. Workers then implement **against a fixed seam** instead of
-guessing at each other's shapes, which is the failure that makes parallel agent work produce
-merge-conflicted mush.
+route table. Commit it to disk before fanning out, so workers implement **against a fixed seam**
+instead of guessing at each other's shapes.
 
 If a wave's slices would have to negotiate an interface between themselves, the seam isn't written
 yet. Write it, then dispatch.
@@ -213,15 +147,8 @@ Send every slice in the wave as parallel `Agent` calls **in a single message**, 
 Mark the slices `DISPATCHED` before you send.
 
 `task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice,
-and **never restates or overrides a standing rule**. A brief that contradicts one silently disarms
-it, and the only thing standing between that and a corrupted wave is a worker with the judgment to
-refuse.
-
-The one most often violated is the fixer prohibition. `task-worker.md` says a worker does not run
-lint, format, or fix commands, because a fixer rewrites files its siblings still have open. A
-verification recipe written for in-context work says the opposite, and copying that recipe into a
-brief is the easiest mistake in this skill. **The fixer runs once, at the barrier (§7), and never
-in a worker.**
+and **never restates or overrides a standing rule**. The one most often violated is the fixer
+prohibition, covered in `references/fixer-and-residue.md`.
 
 > **Slice `<id>` — `<name>`.** Objective: `<the falsifiable done>`.
 > You own **only** these paths: `<owns>`. Do not edit anything outside them.
@@ -248,9 +175,8 @@ wave goes out and once when it closes**, and nowhere else. Same three columns, e
 | 2a route wiring  | `src/api/routes/auth.ts` | ⬜ pending |
 ```
 
-Every slice in the phase appears in every printing, including the waves that haven't opened yet.
-Progress is only legible against the whole, and a table that shows only the live wave hides how much
-is left.
+Every slice in the phase appears in every printing, including the waves that haven't opened yet,
+because a table showing only the live wave hides how much is left.
 
 Collapse the on-disk vocabulary into four display states, so the table stays scannable while the
 sub-plan stays greppable:
@@ -265,25 +191,13 @@ sub-plan stays greppable:
 No prose duplicating the table. One line under it for anything the columns can't carry (a blocked
 slice's reason, a revise round in flight), then move on.
 
-**Formatting is orchestrator work, not worker work.** A fixer run by one worker rewrites files its
-siblings still hold open, so the edits collide and N workers redo the same whole-repo pass N times.
-One run at the wave barrier (§7) is cleaner and cheaper. If houserules' `lint-fix` module is installed,
-confirm `fix.onSubagentStop` is not `true` in `.claude/houserules.config.json`. That setting fires the fixer
-at every worker's exit, which is exactly the collision above.
+**Formatting is orchestrator work, not worker work.** The fixer runs once at the barrier (§7), never
+in a worker. A lint or format finding inside a `DISPATCHED` slice's owned path is not residue, and
+you do not act on it.
 
-**That setting covers only half of it.** `fix.onSubagentStop` governs a WORKER's exit. A `Stop` hook
-fires at YOUR exit, and this pattern ends a turn every time you dispatch or review, with every
-worker still holding files open. So the repo-wide fixer runs against a tree mid-edit anyway, from the
-other direction.
-
-Two consequences, and the second one matters more:
-
-- Expect a fixer or linter to report problems in files a live slice is halfway through. A worker that
-  has added an import and not yet written the call is not a defect.
-- **A lint or format finding inside a `DISPATCHED` slice's owned path is not residue, and you do not
-  act on it.** Check the slice table before touching anything a hook names. Fixing it means editing a
-  running worker's file, which is precisely what every ownership rule here exists to prevent. Residue
-  is only what survives the barrier, when every slice is `DONE` or `BLOCKED` and the tree is quiet.
+Read `references/fixer-and-residue.md` when a hook or linter reports something while a wave is live.
+It carries why a worker-run fixer collides, the `fix.onSubagentStop` and `Stop` hook settings to
+check, and how to route residue at the barrier.
 
 ## 5. Review the report, not the diff
 
@@ -296,43 +210,32 @@ git status --short | grep '^ D\|^D '   # deletions: every one must be intentiona
 ls .claude/plans/<slug>/               # plan state still there
 ```
 
-Seconds to run. Destruction is what reports are worst at surfacing, because a worker that deleted
-something usually did it in service of a step that then succeeded, so its acceptance is green and its
-summary is accurate as far as it goes. A typechange means a real file became a symlink, which is
-almost never intended. A deletion outside `owns` is a defect regardless of what the report says about
-it. If plan state is gone, stop the wave and recover before anything else.
+Seconds to run. A deletion outside `owns` is a defect regardless of what the report says about it,
+and if plan state is gone, stop the wave and recover before anything else.
 
-Each worker returns a report: files touched (path + one line each), the acceptance command and its
-output tail, decisions and deviations, and anything blocked or out of scope. Mark the slice
-`IN REVIEW` and judge it against the brief:
+Each worker returns a report: files touched, the acceptance command and its output tail, decisions
+and deviations, and anything blocked or out of scope. Its first line is one of
+**`DONE` · `DONE_WITH_CONCERNS` · `NEEDS_CONTEXT` · `BLOCKED`**, which is the worker's own claim and
+not the slice's status. `DONE_WITH_CONCERNS` says read the deviation before approving,
+`NEEDS_CONTEXT` says the brief was missing something only you have, so answer it and resend rather
+than reslicing. Mark the slice `IN REVIEW` and judge it against the brief:
 
 - **Acceptance evidence present and passing?** No evidence, no approval. An unrun acceptance is a
-  `REVISE`, always. This is the one rule that keeps review from decaying into rubber-stamping. A brief
-  with two commands needs two tails. A test tail alone, where you also asked for a typecheck, is an
-  unrun acceptance.
-- **Did the acceptance actually RUN, or did the build system skip it?** An incremental runner
-  (wireit, turbo, nx, bazel) reports a cache hit as success. `Ran 0 scripts and skipped 26` is a
-  claim that a previous run with these inputs passed, not evidence that anything ran now. That is
-  usually fine and is the reason the cache exists. It is not fine as the sole evidence for a slice
-  that changed a dozen files, and it is worthless when the worker populated the cache itself moments
-  earlier. When a tail shows everything skipped on a large slice, verify one thing yourself directly.
+  `REVISE`, always. A brief with two commands needs two tails.
+- **Did the acceptance actually RUN, or did an incremental runner report a cache hit as success?**
 - **Could the evidence have come out any other way?** An observed value is evidence only if a broken
-  implementation would have produced a different one. One worker mirrored a route across the wrong
-  axis and confirmed it by reading the Z column back, but the fixture sat at z ≈ 0, where negating
-  changes nothing, so correct and broken produce the same output. The report was accurate and carried
-  no information. Where the acceptance is a value read rather than a command's exit code, ask what
-  the reading would have been if the code were wrong. If the worker did not say, send it back.
+  implementation would have produced a different one.
 - **Did it satisfy the letter and worsen the artifact?** A worker optimizes for the acceptance you
-  wrote. Ask what the change does to the shipped thing, not just to the check. One slice satisfied
-  "the tarball must not carry these files" by excluding them in `files` while leaving a package
-  `exports` entry pointing at them, which passes the check and publishes a package resolving to
-  nothing.
+  wrote. Ask what the change does to the shipped thing, not just to the check.
 - **Deviations.** Did it depart from the seam, the constraints, or the plan's architecture?
 - **Ownership.** Did it touch anything outside `owns`? Confirm cheaply with
   `git diff --name-only` (names, not content).
-- **Spot-read only what's load-bearing:** the seam implementation, a security-relevant branch, the one
-  hunk the brief called out. Read with `offset`/`limit`. A full diff read here forfeits the entire
-  point of the skill.
+- **Spot-read only what's load-bearing**, with `offset`/`limit`. A full diff read here forfeits the
+  entire point of the skill.
+
+Read `references/review-patterns.md` when a report reads green and you are deciding whether to
+believe it. It carries the worked failure for each check above, including the cache-hit tail and the
+observation that would have read the same either way.
 
 Verdict, one per slice:
 
@@ -351,11 +254,8 @@ so the fix costs a fraction of a cold respawn that re-reads everything. Mark the
 Name the specific defect and the acceptance to re-run, never "please improve this."
 
 **Cap: 2 revise rounds.** A third failure is evidence the _brief_ was wrong, not that the model is too
-weak. `RESLICE` it, or take that one slice in-context yourself. Escalating the worker's model is the
-last resort, not the first.
-
-(No `SendMessage` in your harness? Respawn with the original brief plus the defect list, and treat the
-extra cost as another reason to keep the cap at 2.)
+weak. `RESLICE` it, or take that one slice in-context yourself. `references/review-patterns.md` has
+the escalation order and the fallback for a harness with no `SendMessage`.
 
 ## 7. Close the wave
 
@@ -363,30 +263,19 @@ Every slice reviewed (`DONE` or `BLOCKED`), and only then. This is the wave **ba
 where the tree is quiet enough to touch globally:
 
 1. **Fix once.** Run the repo's auto-fix (`lint:fix` / `format:fix`, or the `fix.commands` in
-   `.claude/houserules.config.json`) across the packages the wave touched. One run, after the fan-out has
-   settled. Nothing was formatting mid-flight, so this is the first pass over a consistent tree.
+   `.claude/houserules.config.json`) across the packages the wave touched, in one pass over a tree
+   that is finally consistent.
 2. **Verify what actually changed.** Run `/verify-changed` if installed (it scopes to the changed
    packages plus dependents, off-context), otherwise the repo's verify on the touched packages.
 3. **Update the slice table** in place, then print the status table (§4), the wave-close printing.
-4. **Snapshot the state nothing can regenerate**, into a scratch directory. The plan workspace is the
-   whole reason a long run is resumable, and it is gitignored, so git is never the fallback. Copy the
-   plan directory plus any gitignored write-log, credential, or user-owned config the tool directory
-   carries. Skip everything the installer rewrites. It costs a second and it is the only thing
-   standing between a destructive slice and starting over.
+4. **Snapshot the state nothing can regenerate**, into a scratch directory: the plan workspace and
+   anything else gitignored that no command can rebuild. `references/closing.md` says what to copy.
 5. **Then** open the next wave. Never dispatch wave N+1 with an unreviewed slice from wave N. That is
    precisely how the architecture drifts while you aren't looking.
 
-**Residue** is what auto-fix couldn't fix, and it's yours by default. It's usually a handful of lines,
-and a brief costs more than the edit. Delegate only when it's genuinely bulk work:
-
-| Residue                                             | Do                                                                                           |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| ≤ ~5 files, or any of it needs judgment             | fix in-context yourself                                                                      |
-| Many files, **one** rule (a rename, an import swap) | `/sweep` (haiku shards, count-only reports)                                                  |
-| Many files, several mechanical rules                | one cleanup `task-worker` owning exactly those paths, with the fix command as its acceptance |
-
-Never send residue back to the slice workers. Their briefs are spent, and the residue crosses slice
-boundaries by definition. That's why it survived to the barrier.
+**Residue** is what auto-fix couldn't fix, and it's yours by default. Never send it back to the slice
+workers, whose briefs are spent. `references/fixer-and-residue.md` has the routing table for when it
+is genuinely bulk work.
 
 A `BLOCKED` slice stops the phase. Record why in the sub-plan and surface it to the user. `--auto`
 does not override this.
@@ -398,17 +287,20 @@ header and the `ROADMAP.md` line to `DONE (<date>)` in one pass, with a `## Log`
 `/plan-project`'s status-in-place discipline, and orchestration doesn't get to skip it.
 
 Run `node .claude/scripts/plan-lint.mjs` if installed, to confirm the update actually landed on
-both files. It has caught real drift of exactly this shape: a ROADMAP line marked `DONE` while
-its sub-plan header still read an earlier status.
+both files.
 
 **Before reporting, promote durable decisions.** Skip this step if `.claude/scripts/decision-log.mjs`
 is absent. Re-read the phase's `## Notes & decisions` and the decisions-and-deviations section of
-every report you reconciled. Run `/decide` on anything that clears its bar: not obvious from the
-code, a competent person could have chosen otherwise, and re-deriving it costs real time. This
-proposes, it does not bulk-write. Most notes and most deviations are not decisions. A worker
-deviation you accepted is a decision candidate, because you approved a departure from the brief and
-nothing else in the tree records why. A note that was decided and then reversed mid-phase graduates
-as two linked records: the original and a `supersede` that replaces it, not one flattened summary.
+every report you reconciled, and run `/decide` on anything that clears its bar.
+
+**An autonomous run collects its rulings.** A ruling is a judgment call you made mid-run that
+departed from the plan or filled a gap the plan left open, and under `--auto` the transcript is the
+only place it lives, because the user was not there to be asked. List every one in the phase-close
+report with a single line for what it costs if it turns out wrong. Record the durable ones with
+`/decide`, so a ruling that outlives this phase sits on disk instead of in a report read once.
+
+`references/closing.md` carries the bar a decision or a ruling has to clear, the supersede case, and
+what the snapshot in §7 is protecting.
 
 Then report to the user: slices run, what landed, the verify verdict, anything backlogged. **Stop
 here** unless the invocation was `all --auto`, in which case continue to the next phase's §1.
@@ -433,6 +325,7 @@ assume a `DISPATCHED` slice did nothing.
 - **What must never enter this context:** worker diffs, full file dumps, per-file logs, the match set
   of anything. If you're reading implementation here, you've stopped orchestrating and started
   working.
+- **No worker accumulates another slice's history**, which is the anti-rot argument for this shape.
 - **Worktree isolation** (`isolation: 'worktree'`) exists for waves that genuinely can't be made
   disjoint. Default to not using it. Correct slicing is cheaper than merging, and needing it usually
   means §1 was done wrong.

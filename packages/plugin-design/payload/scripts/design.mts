@@ -734,10 +734,10 @@ function tokenOrigin(
   node: Record<string, unknown>,
 ): 'repo' | 'tailwind' | undefined {
   if (!isRecord(node.$extensions)) return undefined;
-  const agentKit = node.$extensions['houserules'];
-  if (!isRecord(agentKit)) return undefined;
-  return agentKit.origin === 'repo' || agentKit.origin === 'tailwind'
-    ? agentKit.origin
+  const houserules = node.$extensions['houserules'];
+  if (!isRecord(houserules)) return undefined;
+  return houserules.origin === 'repo' || houserules.origin === 'tailwind'
+    ? houserules.origin
     : undefined;
 }
 

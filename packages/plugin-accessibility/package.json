@@ -60,6 +60,7 @@
         "tsconfig.json",
         "tsconfig.build.json",
         "payload/**/*.mts",
+        "payload/**/__test__/**/*.ts",
         "tsconfig.payload.json"
       ],
       "output": []

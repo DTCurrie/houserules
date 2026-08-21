@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Checks shipped markdown against the mechanical clauses of `prose-voice.md`.
  *

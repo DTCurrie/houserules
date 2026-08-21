@@ -43,6 +43,14 @@ Use `@-import` only for small, genuinely always-needed content. The trap is that
 cheap in the source file but expands to the full body in context. Never `@-import` a big reference
 "for convenience."
 
+### What a skill or agent `description:` says
+
+A `description:` states the conditions under which to reach for the surface, and nothing else. It
+is never a summary of the workflow inside, because a summarized workflow is a shortcut an agent
+takes instead of loading the body, and it then runs a half-remembered version of the steps. When
+two surfaces can match the same user phrase, each description says which one wins and why, so a
+roll-up names the skills it already invokes and each of those names the roll-up to prefer.
+
 ## 2. Nested CLAUDE.md / STYLE.md (load guidance on demand)
 
 Claude Code injects a directory's `CLAUDE.md` only when the working set is under that directory. Use

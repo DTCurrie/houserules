@@ -11,9 +11,8 @@ import type {
   PluginApi,
 } from '@houserules/api';
 
-function buildApi(): PluginApi {
+function apiWithNoPayloadBuilders(): PluginApi {
   return {
-    // Unused here: none of these tests call plan(), only check(), so no builder is invoked.
     payload: {} as PayloadBuilders,
     packageName: '@houserules/plugin-design',
     alias: 'design',
@@ -26,7 +25,7 @@ function ctxAt(root: string): Ctx {
 }
 
 function moduleById(id: string): ModuleDef {
-  const api = buildApi();
+  const api = apiWithNoPayloadBuilders();
   const found = designPlugin(api).find((moduleDef) => moduleDef.id === id);
   if (!found) throw new Error(`module ${id} not registered`);
   return found;

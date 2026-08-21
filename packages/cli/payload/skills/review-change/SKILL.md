@@ -1,6 +1,6 @@
 ---
 name: review-change
-description: Dispatch the per-target reviewer agents for a change, mapped by houserules.config.json pathPrefix, and reconcile their OK / Conflict / Gap verdicts. Use to review a working-tree or branch change before handing off.
+description: Use when the ask is a review of a working-tree or branch change by the per-target reviewer agents mapped by houserules.config.json pathPrefix. Use it directly only when review is wanted without the mechanical gates, such as mid-branch on work that is not finished. A full pre-handoff pass is `/ready`, which runs this skill already.
 allowed-tools: Bash, Read, Agent
 ---
 

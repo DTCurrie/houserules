@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Review changed styled markup against the design system: tokens, spacing, contrast, hit targets, and component reuse in CSS, JSX, TSX, Svelte, Vue, and Astro. Use before handing off a UI change.
+description: Review changed styled markup against the design system: tokens, spacing, contrast, hit targets, and component reuse in CSS, JSX, TSX, Svelte, Vue, and Astro. Use when a change touches styled markup and a design read is wanted on its own. A full pre-handoff pass is `/ready`, which is preferred when a whole change is being handed off.
 allowed-tools: Bash(git diff:*), Bash(git merge-base:*), Bash(node .claude/scripts/design.mjs:*), Bash(node .claude/scripts/mcp-config-check.mjs:*), Read, Grep, Agent
 ---
 

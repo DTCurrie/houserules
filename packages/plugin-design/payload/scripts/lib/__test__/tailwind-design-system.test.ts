@@ -14,7 +14,7 @@ import {
   findThemeEntryCss,
   isRepoDefinedThemeKey,
   loadDesignSystem,
-} from '../../payload/scripts/lib/tailwind-design-system.mts';
+} from '../tailwind-design-system.mts';
 import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
 
 function writeCssFile(dir: string, name: string, text: string): string {

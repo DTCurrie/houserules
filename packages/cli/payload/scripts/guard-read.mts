@@ -37,11 +37,15 @@ const filePath = ti.file_path ?? ti.path ?? '';
 if (!filePath || ti.offset != null || ti.limit != null) process.exit(0);
 
 try {
-  const cfg = { ...READ_GUARD_DEFAULTS, ...(loadConfigSafe().readGuard ?? {}) };
+  // Resolve a repo-relative path for glob matching (git root, else cwd). Resolved before
+  // the config load so the root is passed in rather than spawned for a second time.
+  const root = repoRoot();
+  const cfg = {
+    ...READ_GUARD_DEFAULTS,
+    ...(loadConfigSafe(root).readGuard ?? {}),
+  };
   if (cfg.enabled === false) process.exit(0);
 
-  // Resolve a repo-relative path for glob matching (git root, else cwd).
-  const root = repoRoot();
   const abs = resolve(root, filePath);
   const rel = abs.startsWith(root) ? abs.slice(root.length + 1) : filePath;
   const base = rel.split('/').pop() ?? rel;

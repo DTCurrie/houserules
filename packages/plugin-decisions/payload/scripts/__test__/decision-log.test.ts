@@ -246,6 +246,93 @@ describe('decision-log.mjs, given a local index of synced decisions', () => {
   });
 });
 
+const PROJECTS_TOKEN = '.claude/ledgers/.projects.json';
+
+function seedRenderedSurface(
+  root: string,
+  entries: { id: string; title: string }[],
+) {
+  const header =
+    '# Decisions — repo root\n\nAppend-only decision log. Add entries via `.claude/scripts/decision-log.mjs`.\n\n';
+  const body = entries
+    .map(
+      (e) =>
+        `## [${e.id}] ${e.title}\n\n**Decided:** 2026-01-01 · **Status:** accepted\n\nrendered body\n\n---\n\n`,
+    )
+    .join('');
+  writeFile(root, SURFACE, header + body);
+}
+
+function seedProjectsToken(root: string) {
+  writeFile(root, PROJECTS_TOKEN, JSON.stringify({ projects: [7] }) + '\n');
+}
+
+describe('decision-log.mjs decide, given a surface carrying entries the queue does not', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = installDecisions();
+    rmSync(join(root, LEDGER), { force: true });
+    seedRenderedSurface(root, [
+      { id: 'SIM-111111', title: 'Rendered decision one' },
+      { id: 'SIM-222222', title: 'Rendered decision two' },
+    ]);
+  });
+
+  it('refuses to write when no projects sync is configured', () => {
+    const r = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'T',
+      'B',
+      '--chat=none',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Refusing to rewrite');
+    expect(readFile(root, SURFACE)).toContain('## [SIM-111111]');
+  });
+
+  it('refuses to write when a projects sync is configured but no index has been pulled', () => {
+    seedProjectsToken(root);
+
+    const r = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'T',
+      'B',
+      '--chat=none',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Refusing to rewrite');
+  });
+
+  it('writes when a projects sync is configured and a pulled index holds fewer entries than the surface', () => {
+    seedProjectsToken(root);
+    seedIndex(root, [
+      indexEntry({ id: 'SIM-111111', title: 'Rendered decision one' }),
+    ]);
+
+    const r = run(root, [
+      'decide',
+      'SIM',
+      'DECISIONS.md',
+      'navcat over recast',
+      'chose navcat',
+      '--chat=none',
+    ]);
+
+    expect(r.status, r.stderr).toBe(0);
+    const text = readFile(root, SURFACE);
+    expect(text).toContain('navcat over recast');
+    expect(text).toContain('## [SIM-111111]');
+    expect(text).not.toContain('## [SIM-222222]');
+  });
+});
+
 describe('decision-log.mjs decide', () => {
   let root: string;
 

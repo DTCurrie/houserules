@@ -21,7 +21,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import { loadConfigSafe } from '@houserules/payload/config';
+import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { git, readStdinJson } from '@houserules/payload/proc';
 
@@ -117,13 +117,13 @@ const generatedFileRe = (pattern?: string): RegExp =>
   new RegExp(pattern ?? '/(?:CHANGELOG|BACKLOG)\\.md$');
 
 try {
-  const config = loadConfigSafe();
+  // Resolved before the config load so the root is passed in rather than spawned twice.
+  const root = repoRootSafe();
+  if (!root) process.exit(0);
+
+  const config = loadConfigSafe(root);
   const cs = config.changesets ?? {};
   if (cs.enabled !== true || cs.stopCheck === false) process.exit(0);
-
-  const rootOut = git(process.cwd(), ['rev-parse', '--show-toplevel']);
-  if (!rootOut) process.exit(0);
-  const root = rootOut.trim();
 
   let scopes: string[] = (config.targets ?? [])
     .map((t) => t.sourcePath)

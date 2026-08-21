@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
-import { frontmatterBlock } from '../../core/frontmatter.js';
+import { frontmatterBlock, splitFrontmatter } from '../../core/frontmatter.js';
 import type { CheckResult, Finding } from '@houserules/api';
 
 // The always-loaded surface is paid on every turn (CONVENTIONS §1). ~3-4K tokens
@@ -184,6 +184,28 @@ export interface SkillAgentMeasurement {
 }
 
 /**
+ * Every `SKILL.md` under `dir`, at any depth. Claude Code accepts a category-organized
+ * layout (`skills/<category>/<name>/SKILL.md`), not only the flat `skills/<name>/SKILL.md`
+ * one level down, so a directory holding a `SKILL.md` is not assumed to be a leaf.
+ */
+function findSkillFiles(dir: string): string[] {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const found: string[] = [];
+  if (entries.some((e) => e.isFile() && e.name === 'SKILL.md'))
+    found.push(join(dir, 'SKILL.md'));
+  for (const entry of entries) {
+    if (entry.isDirectory())
+      found.push(...findSkillFiles(join(dir, entry.name)));
+  }
+  return found;
+}
+
+/**
  * Claude Code puts every `description:` in the system prompt on every turn, the same
  * resident tier as CLAUDE.md. Bodies load only on invocation and are not counted.
  */
@@ -193,25 +215,18 @@ export function measureSkillAgentDescriptions(
   let chars = 0;
   let skills = 0;
   let agents = 0;
-  try {
-    for (const name of readdirSync(join(root, '.claude', 'skills'))) {
-      let text: string;
-      try {
-        text = readFileSync(
-          join(root, '.claude', 'skills', name, 'SKILL.md'),
-          'utf8',
-        );
-      } catch {
-        continue;
-      }
-      const desc = frontmatterDescription(text);
-      if (desc) {
-        chars += desc.length;
-        skills += 1;
-      }
+  for (const file of findSkillFiles(join(root, '.claude', 'skills'))) {
+    let text: string;
+    try {
+      text = readFileSync(file, 'utf8');
+    } catch {
+      continue;
     }
-  } catch {
-    /* no skills dir */
+    const desc = frontmatterDescription(text);
+    if (desc) {
+      chars += desc.length;
+      skills += 1;
+    }
   }
   try {
     for (const name of readdirSync(join(root, '.claude', 'agents')).filter(
@@ -236,6 +251,82 @@ export function measureSkillAgentDescriptions(
   return { chars, tokens: estimateTokens(chars), skills, agents };
 }
 
+interface OutputStyleSettings {
+  outputStyle?: string;
+}
+
+function readOutputStyleSettings(path: string): OutputStyleSettings | null {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The active style is settings.local.json's `outputStyle`, falling back to settings.json's.
+ * Mirrors the same precedence `output-prose`'s own check reads it with.
+ */
+function activeOutputStyleName(root: string): string | null {
+  const local = readOutputStyleSettings(
+    join(root, '.claude', 'settings.local.json'),
+  );
+  if (typeof local?.outputStyle === 'string') return local.outputStyle;
+  const main = readOutputStyleSettings(join(root, '.claude', 'settings.json'));
+  return typeof main?.outputStyle === 'string' ? main.outputStyle : null;
+}
+
+/**
+ * The `name:` frontmatter of an installed output style. Claude Code matches `outputStyle`
+ * against this, not the filename, so the lookup below has to key on it too.
+ */
+function frontmatterName(text: string): string | null {
+  const fm = frontmatterBlock(text);
+  if (fm === null) return null;
+  const m = /^name:[ \t]*(.*)$/m.exec(fm);
+  const captured = m?.[1];
+  if (captured === undefined) return null;
+  return captured.trim().replace(/^['"]|['"]$/g, '');
+}
+
+export interface OutputStyleMeasurement {
+  chars: number;
+  tokens: number;
+  name: string;
+}
+
+/**
+ * An active output style is injected into the system prompt on every turn, the same
+ * resident tier as CLAUDE.md. Only the body is counted, since the frontmatter itself
+ * never reaches the prompt.
+ */
+export function measureActiveOutputStyle(
+  root: string,
+): OutputStyleMeasurement | null {
+  const activeName = activeOutputStyleName(root);
+  if (!activeName) return null;
+  let names: string[];
+  try {
+    names = readdirSync(join(root, '.claude', 'output-styles')).filter((f) =>
+      f.endsWith('.md'),
+    );
+  } catch {
+    return null;
+  }
+  for (const name of names) {
+    let text: string;
+    try {
+      text = readFileSync(join(root, '.claude', 'output-styles', name), 'utf8');
+    } catch {
+      continue;
+    }
+    if (frontmatterName(text) !== activeName) continue;
+    const chars = splitFrontmatter(text).body.length;
+    return { chars, tokens: estimateTokens(chars), name: activeName };
+  }
+  return null;
+}
+
 /**
  * The resident-surface budget, which makes houserules' #1 lever measurable instead of only
  * prose. Read-only, and WARNs past budget rather than ERRORing.
@@ -245,7 +336,9 @@ export function checkResidentSurface(root: string): CheckResult {
   const readouts: string[] = [];
   const resident = measureResident(root);
   const skillsAgents = measureSkillAgentDescriptions(root);
+  const style = measureActiveOutputStyle(root);
   const skillAgentTokens = skillsAgents?.tokens ?? 0;
+  const styleTokens = style?.tokens ?? 0;
 
   if (resident) {
     const over =
@@ -261,8 +354,8 @@ export function checkResidentSurface(root: string): CheckResult {
           ? ` — OVER`
           : ` — ${RESIDENT_TOKEN_BUDGET - resident.tokens} tokens, ${RESIDENT_LINE_BUDGET - resident.lines} lines headroom`),
     );
-    // Either tier alone, or the two together, can push the always-loaded total over.
-    const combinedTokens = resident.tokens + skillAgentTokens;
+    // Every always-loaded tier alone, or any combination, can push the total over.
+    const combinedTokens = resident.tokens + skillAgentTokens + styleTokens;
     const combinedOver =
       combinedTokens > RESIDENT_TOKEN_BUDGET ||
       resident.lines > RESIDENT_LINE_BUDGET;
@@ -270,6 +363,7 @@ export function checkResidentSurface(root: string): CheckResult {
       const parts = [`root CLAUDE.md/rules (~${resident.tokens} tokens)`];
       if (skillAgentTokens)
         parts.push(`skill/agent descriptions (~${skillAgentTokens} tokens)`);
+      if (styleTokens) parts.push(`output style (~${styleTokens} tokens)`);
       findings.push({
         level: 'WARN',
         msg: `always-loaded context exceeds budget (~${combinedTokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}). ${parts.join(' + ')}. Trim root CLAUDE.md to a one-line index + on-demand files (CONVENTIONS §1)`,
@@ -301,6 +395,10 @@ export function checkResidentSurface(root: string): CheckResult {
   if (skillsAgents)
     readouts.push(
       `resident skill/agent descriptions (${skillsAgents.skills} skill(s) + ${skillsAgents.agents} agent(s)): ~${skillsAgents.tokens} tokens`,
+    );
+  if (style)
+    readouts.push(
+      `resident output style (${style.name}): ~${style.tokens} tokens`,
     );
 
   return { findings, readouts };

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { useInstalledRepo, useRepo } from '#test/repo';
+import { useInstalledRepo } from '#test/repo';
 import { runCli } from '#test/run';
 import { manifestOf } from '#test/installed-tree';
 
@@ -72,15 +72,12 @@ describe('orchestrate', () => {
 
   describe('enabled without the plans module', () => {
     let root: string;
-    let result: ReturnType<typeof runCli>;
 
     beforeEach(() => {
-      root = useRepo('npm-single');
-      result = runCli(['init', '--yes', '--modules=orchestrate', root]);
+      root = useInstalledRepo('npm-single', { modules: 'orchestrate' });
     });
 
     it('still installs', () => {
-      expect(result.status).toBe(0);
       expect(
         existsSync(join(root, '.claude/skills/orchestrate/SKILL.md')),
       ).toBeTruthy();
@@ -91,6 +88,8 @@ describe('orchestrate', () => {
     });
 
     it('points to the plans module in its advisory output', () => {
+      const result = runCli(['init', '--yes', '--modules=orchestrate', root]);
+
       expect(result.stdout).toMatch(/plans/);
     });
 

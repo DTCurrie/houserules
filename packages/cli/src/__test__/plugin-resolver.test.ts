@@ -48,28 +48,23 @@ function payloadLibPath(name: string): string {
   );
 }
 
-function ensureFixtureSelfLink(): void {
-  const cliLink = join(FIXTURE_ROOT, 'node_modules', '@houserules', 'cli');
-  if (!existsSync(cliLink)) {
-    mkdirSync(dirname(cliLink), { recursive: true });
-    symlinkSync(KIT_ROOT, cliLink, 'dir');
-  }
-  const payloadLink = join(
-    FIXTURE_ROOT,
-    'node_modules',
-    '@houserules',
-    'payload',
-  );
-  if (!existsSync(payloadLink)) {
-    mkdirSync(dirname(payloadLink), { recursive: true });
-    symlinkSync(dirname(payloadPackageJson), payloadLink, 'dir');
-  }
-}
-
 function makeRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'plugin-resolver-'));
   onTestFinished(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, 'package.json'), '{"name":"target-repo"}\n');
+  return root;
+}
+
+function linkGatedFixture(): string {
+  const root = makeRoot();
+  const link = join(
+    root,
+    'node_modules',
+    '@houserules',
+    'plugin-fixture-gated',
+  );
+  mkdirSync(dirname(link), { recursive: true });
+  symlinkSync(GATED_FIXTURE, link, 'dir');
   return root;
 }
 
@@ -123,7 +118,6 @@ describe('buildRegistry', () => {
   });
 
   it('loads a local-path plugin and namespaces its module ids under its alias', () => {
-    ensureFixtureSelfLink();
     const config = buildConfig([
       { name: FIXTURE_ROOT, alias: 'fixture', config: {} },
     ]);
@@ -146,7 +140,6 @@ describe('buildRegistry', () => {
   });
 
   it('records the plugin as the source on every module it contributes', () => {
-    ensureFixtureSelfLink();
     const config = buildConfig([
       { name: FIXTURE_ROOT, alias: 'fixture', config: {} },
     ]);
@@ -159,7 +152,6 @@ describe('buildRegistry', () => {
   });
 
   it('passes api.config and api.alias through to the plugin factory, observable in a planned action', () => {
-    ensureFixtureSelfLink();
     const config = buildConfig([
       {
         name: FIXTURE_ROOT,
@@ -179,15 +171,7 @@ describe('buildRegistry', () => {
   });
 
   it('resolves an npm plugin whose exports map does not expose ./package.json', () => {
-    const root = makeRoot();
-    const link = join(
-      root,
-      'node_modules',
-      '@houserules',
-      'plugin-fixture-gated',
-    );
-    mkdirSync(dirname(link), { recursive: true });
-    symlinkSync(GATED_FIXTURE, link, 'dir');
+    const root = linkGatedFixture();
     const config = buildConfig([
       { name: '@houserules/plugin-fixture-gated', alias: 'gated' },
     ]);
@@ -203,6 +187,17 @@ describe('buildRegistry', () => {
         dir: GATED_FIXTURE,
       },
     ]);
+  });
+
+  it("walks past the nested entry's own package.json, which names no plugin, up to the one that does", () => {
+    const root = linkGatedFixture();
+    const config = buildConfig([
+      { name: '@houserules/plugin-fixture-gated', alias: 'gated' },
+    ]);
+
+    const registry = buildRegistry(root, config, []);
+
+    expect(registry.plugins[0]?.dir).toBe(GATED_FIXTURE);
   });
 
   it('throws PluginResolutionError naming the plugin when an npm package cannot be resolved', () => {
@@ -277,7 +272,6 @@ describe('buildRegistry', () => {
   });
 
   it('throws when a plugin module id collides with a built-in', () => {
-    ensureFixtureSelfLink();
     const builtIns = [stubModule('fixture/fixture-core')];
     const config = buildConfig([{ name: FIXTURE_ROOT, alias: 'fixture' }]);
 
@@ -287,7 +281,6 @@ describe('buildRegistry', () => {
   });
 
   it('throws when two plugins share an alias', () => {
-    ensureFixtureSelfLink();
     const config = buildConfig([
       { name: FIXTURE_ROOT, alias: 'dup' },
       { name: 'this-package-is-never-reached', alias: 'dup' },
@@ -378,7 +371,6 @@ describe('buildRegistry', () => {
   });
 
   it('plans no lib copies for a plugin whose payload has no import sidecar', () => {
-    ensureFixtureSelfLink();
     const config = buildConfig([
       { name: FIXTURE_ROOT, alias: 'fixture', config: {} },
     ]);
@@ -423,7 +415,6 @@ describe('buildRegistry', () => {
   });
 
   it("the libs fixture's committed payload-dist matches a fresh build from its .mts sources", () => {
-    ensureFixtureSelfLink();
     const tmp = mkdtempSync(join(tmpdir(), 'libs-fixture-build-'));
     onTestFinished(() => rmSync(tmp, { recursive: true, force: true }));
     cpSync(join(LIBS_FIXTURE, 'payload'), join(tmp, 'payload'), {

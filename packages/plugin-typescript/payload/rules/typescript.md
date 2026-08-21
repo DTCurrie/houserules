@@ -81,4 +81,6 @@ try {
 - Naming, function size, magic values, and dead code: see `code-cleanliness.md` if that rule is
   installed.
 - How the sentence inside a comment reads: see `prose-voice.md` if that rule is installed.
-- Formatting and import order: the repo's own linter owns these, not this rule.
+- Formatting: the repo's own formatter owns it, not this rule.
+- Import order: the repo's linter owns it only where an import-order rule is configured. Where
+  none is configured, nothing enforces it and this rule makes no claim about it.

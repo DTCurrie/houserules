@@ -17,10 +17,9 @@ const KIT_ROOT = resolve(
 const ACCESSIBILITY = join(dirname(KIT_ROOT), 'plugin-accessibility');
 
 /**
- * A synthetic dependency plugin, not one of the real workspace packages: those all publish an
- * `exports` map with no `./package.json` entry, which blocks the very
- * `requireFromRoot.resolve(join(name, 'package.json'))` this check relies on to read a
- * dependency's `keywords`.
+ * A synthetic dependency plugin shaped like a published one: its `exports` map declares `"."`
+ * and nothing else, and its entry sits under `dist/`, so Node refuses to resolve
+ * `@fake/plugin/package.json` through the bare specifier.
  */
 function hostRootDependingOnFakePlugin(): { root: string; pluginDir: string } {
   const root = mkdtempSync(join(tmpdir(), 'plugin-registration-'));
@@ -33,14 +32,17 @@ function hostRootDependingOnFakePlugin(): { root: string; pluginDir: string } {
     }),
   );
   const pluginDir = join(root, 'node_modules', '@fake', 'plugin');
-  mkdirSync(pluginDir, { recursive: true });
+  mkdirSync(join(pluginDir, 'dist'), { recursive: true });
   writeFileSync(
     join(pluginDir, 'package.json'),
     JSON.stringify({
       name: '@fake/plugin',
       keywords: ['houserules-plugin'],
+      main: './dist/index.js',
+      exports: { '.': './dist/index.js' },
     }),
   );
+  writeFileSync(join(pluginDir, 'dist', 'index.js'), 'module.exports = {};\n');
   return { root, pluginDir };
 }
 
@@ -119,6 +121,17 @@ describe('checkPluginRegistration, dependency-declared plugins', () => {
     const { findings } = checkPluginRegistration(
       root,
       ctxWith([{ name: pluginDir, alias: 'fake' }]),
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('does not warn when the config registers the dependency by its package name', () => {
+    const { root } = hostRootDependingOnFakePlugin();
+
+    const { findings } = checkPluginRegistration(
+      root,
+      ctxWith([{ name: '@fake/plugin', alias: 'fake' }]),
     );
 
     expect(findings).toEqual([]);

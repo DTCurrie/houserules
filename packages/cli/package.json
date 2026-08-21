@@ -120,7 +120,8 @@
         "test/**/*.ts",
         "!test/**/node_modules/**",
         "payload/**/__test__/**/*.ts",
-        "tsconfig.json"
+        "tsconfig.json",
+        "tsconfig.build.json"
       ],
       "output": []
     },
@@ -162,6 +163,7 @@
         "../plugin-prose:build",
         "../plugin-svelte:build",
         "../plugin-testing:build",
+        "../plugin-github:build",
         "../plugin-three:build",
         "../plugin-typescript:build"
       ],

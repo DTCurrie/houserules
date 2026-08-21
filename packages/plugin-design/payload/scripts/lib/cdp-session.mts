@@ -84,7 +84,6 @@ function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-/** Polls the debugging endpoint until Chrome answers with a browser websocket URL. */
 /**
  * Reads the port Chrome actually bound out of the `DevToolsActivePort` file it writes into the
  * profile directory on startup.
@@ -111,6 +110,7 @@ async function waitForBoundPort(
   return undefined;
 }
 
+/** Polls the debugging endpoint until Chrome answers with a browser websocket URL. */
 async function waitForDebuggerUrl(port: number): Promise<string | undefined> {
   for (let attempt = 0; attempt < LAUNCH_POLL_ATTEMPTS; attempt += 1) {
     try {

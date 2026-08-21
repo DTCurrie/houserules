@@ -20,7 +20,6 @@
   ],
   "scripts": {
     "build": "wireit",
-    "build:payload": "rm -rf payload-dist && tsc -p tsconfig.payload.json && houserules-payload",
     "check": "wireit",
     "prepack": "npm run build",
     "test": "wireit",

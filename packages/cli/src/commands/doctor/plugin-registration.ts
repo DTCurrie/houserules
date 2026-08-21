@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
 import { KIT_ROOT } from '../../paths.js';
+import { packageDirFrom } from '../../plugin-resolver.js';
 import type { CheckResult, Finding } from '@houserules/api';
 
 /**
@@ -83,6 +84,30 @@ function siblingPlugins(): PluginCandidate[] {
   return found;
 }
 
+/**
+ * The package directory a bare specifier resolves to from `root`, throwing when it resolves to
+ * nothing.
+ *
+ * A published plugin's exports map declares `"."` and nothing else, so asking Node for
+ * `<name>/package.json` fails with ERR_PACKAGE_PATH_NOT_EXPORTED for every real one. The entry
+ * point is exported by definition, so resolve that and walk back up to the package holding it,
+ * which is the same route `resolvePluginDir` takes.
+ */
+function resolvePackageDir(requireFromRoot: NodeRequire, name: string): string {
+  try {
+    return dirname(requireFromRoot.resolve(join(name, 'package.json')));
+  } catch (error) {
+    if (
+      (error as NodeJS.ErrnoException).code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+    ) {
+      throw error;
+    }
+    const dir = packageDirFrom(requireFromRoot.resolve(name), name);
+    if (dir === undefined) throw error;
+    return dir;
+  }
+}
+
 /** Plugin packages the host repo depends on directly, which is the ordinary npm install. */
 function dependencyPlugins(root: string): PluginCandidate[] {
   const hostPackage = readPackageJson(root);
@@ -95,8 +120,10 @@ function dependencyPlugins(root: string): PluginCandidate[] {
   const found: PluginCandidate[] = [];
   for (const name of names) {
     try {
-      const dir = dirname(requireFromRoot.resolve(join(name, 'package.json')));
-      const candidate = asCandidate(dir, name);
+      const candidate = asCandidate(
+        resolvePackageDir(requireFromRoot, name),
+        name,
+      );
       if (candidate) found.push(candidate);
     } catch {
       /* Not installed, or not resolvable from here. Not this check's problem. */
@@ -121,9 +148,7 @@ function registeredDirs(root: string, ctx: Ctx): Set<string> {
     }
     try {
       const requireFromRoot = createRequire(join(root, 'package.json'));
-      dirs.add(
-        canonical(dirname(requireFromRoot.resolve(join(name, 'package.json')))),
-      );
+      dirs.add(canonical(resolvePackageDir(requireFromRoot, name)));
     } catch {
       /* An unresolvable entry is checkConfigValidity's and the resolver's problem. */
     }

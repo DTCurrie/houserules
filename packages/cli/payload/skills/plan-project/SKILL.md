@@ -15,18 +15,28 @@ not in the transcript, and **`ROADMAP.md` is the single source of truth for what
 updates its status _in place_ the moment it lands, so resuming is a grep rather than a re-derivation
 from scrollback.
 
-## 0. Is this big enough to persist?
+## 0. How much ceremony does this earn?
 
-A persisted plan earns its keep only for work that outlives one sitting. Scaffold **only** when at
-least one holds:
+There are three tiers, and the ask lands in exactly one:
+
+- **Do it inline.** A handful of files you will finish now, with the shape already obvious. Write no
+  plan at all.
+- **Plan inline, persist nothing.** Enough moving parts to be worth thinking through first, but still
+  one sitting. Use plan mode or an in-context plan and scaffold no `.claude/plans/` dir.
+- **Persist a workspace.** The rest of this skill.
+
+Name the tier out loud before doing anything, in one sentence, with the reason you picked it. The
+user can then override it in a word. Silently scaffolding is the failure this prevents, since a
+`.claude/plans/` dir for a one-sitting task is pure overhead that no one asks you to delete.
+
+The top tier has a bar. Scaffold **only** when at least one holds:
 
 - **3+ distinct phases** that can land independently and each leave the tree working.
 - Work you expect to **pause and resume** across sessions or days.
 - Enough moving parts that "what's left?" won't be obvious from `git diff` alone.
 
-If it's a handful of files you'll finish now, **stop and plan it inline** (or use plan mode) and
-scaffold nothing. A `.claude/plans/` dir for a one-sitting task is pure overhead. When it's a genuine
-toss-up, ask the user whether to track it as a project.
+When it's a genuine toss-up between the middle tier and this one, ask the user whether to track it
+as a project.
 
 ## 1. Name the plan and scaffold the workspace
 
@@ -55,6 +65,12 @@ not phases. Each phase must:
 - land independently and leave the tree in a working state, and
 - have a **falsifiable "done"**, the acceptance you could actually check (a test passes, a route
   returns 200, a flag flips).
+
+Cut the phases **vertically**, so each one is a thin end-to-end path someone can actually touch,
+rather than a layer of the stack. The default pull is horizontal, a schema phase then a service
+phase then a UI phase, and that shape has no working tree and no falsifiable acceptance until the
+last phase lands. Prefer one narrow feature wired all the way through over one whole layer built for
+features that do not exist yet.
 
 Ground the phases in the real code, not guesses. Read the repo's own docs and run targeted greps
 first. If a subsystem is unfamiliar, fan out **one read-only Explore subagent** to map its seams
@@ -141,6 +157,12 @@ Checkboxes mirror it: `[ ]` todo, `[~]` in progress, `[x]` done.
 <Captured as you implement: what you chose, what you ruled out, surprises. This is the durable
 memory that survives the transcript.>
 ```
+
+For a control-flow-heavy phase, one where the hard part is which function calls which and in what
+order, add an optional call-stack sketch to that phase file: the call tree in diff syntax, with `+`
+on the frames the phase adds and `-` on the ones it removes. Pin the signatures those frames depend
+on in `## Reference` beside it, so a slice implementing one frame compiles against the same shape as
+the slice implementing its caller.
 
 ## 4. Stop and hand off
 

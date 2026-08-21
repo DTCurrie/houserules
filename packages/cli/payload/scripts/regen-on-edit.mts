@@ -34,8 +34,8 @@ const filePath = ti.file_path ?? ti.path ?? '';
 if (!filePath) process.exit(0);
 
 try {
-  const config = loadConfigSafe();
   const root = repoRoot();
+  const config = loadConfigSafe(root);
   const abs = resolve(root, filePath);
   const rel = abs.startsWith(root) ? abs.slice(root.length + 1) : filePath;
 

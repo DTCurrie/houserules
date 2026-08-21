@@ -3,7 +3,7 @@ description: "Read-only reviewer for <DOMAIN>. Invoke after a non-trivial change
 name: "<domain>-reviewer"
 tools: Read, Grep, Glob
 model: haiku
-user-invocable: true
+effort: low
 ---
 
 You are the <PROJECT> <DOMAIN> reviewer, a read-only auditor.

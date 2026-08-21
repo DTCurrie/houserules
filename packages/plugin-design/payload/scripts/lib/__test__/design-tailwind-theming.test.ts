@@ -6,9 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { useInstalledRepo } from '#test/repo';
 import { useTailwindRepo } from '#test/tailwind-fixture';
 
-import { loadDesignSystem } from '../../payload/scripts/lib/tailwind-design-system.mts';
+import { loadDesignSystem } from '../tailwind-design-system.mts';
 
-const PLUGIN_DESIGN = fileURLToPath(new URL('../..', import.meta.url));
+const PLUGIN_DESIGN = fileURLToPath(new URL('../../../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_DESIGN, alias: 'design' }];
 
 const TEMPLATE_PATH = '.claude/templates/tailwind-theme.css.template';

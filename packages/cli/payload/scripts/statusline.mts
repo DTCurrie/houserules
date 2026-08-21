@@ -10,7 +10,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { loadConfigSafe } from '@houserules/payload/config';
+import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
 import { git } from '@houserules/payload/proc';
 
 interface StatusPayload {
@@ -27,10 +27,10 @@ try {
     /* no status payload — still print the git-derived bits */
   }
 
-  const root =
-    git(process.cwd(), ['rev-parse', '--show-toplevel'])?.trim() ||
-    status.workspace?.project_dir ||
-    process.cwd();
+  // A statusLine command re-runs on every render, so the root is resolved once and then
+  // handed to every reader below. `loadConfigSafe()` would otherwise spawn its own
+  // `git rev-parse --show-toplevel` on top of this one.
+  const root = repoRootSafe() || status.workspace?.project_dir || process.cwd();
 
   const segments: string[] = [];
 
@@ -46,7 +46,7 @@ try {
   if (pending) segments.push(`⛁ ${pending} changeset${pending > 1 ? 's' : ''}`);
 
   // Kit targets the working tree has touched.
-  const targets = loadConfigSafe().targets ?? [];
+  const targets = loadConfigSafe(root).targets ?? [];
   if (targets.length) {
     const changed = (git(root, ['status', '--porcelain']) ?? '')
       .split('\n')

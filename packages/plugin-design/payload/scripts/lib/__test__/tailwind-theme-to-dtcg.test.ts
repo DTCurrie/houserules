@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 import {
   loadDesignSystem,
   type TailwindTheme,
-} from '../../payload/scripts/lib/tailwind-design-system.mts';
-import { projectThemeToDtcg } from '../../payload/scripts/lib/tailwind-theme-to-dtcg.mts';
+} from '../tailwind-design-system.mts';
+import { projectThemeToDtcg } from '../tailwind-theme-to-dtcg.mts';
 import { useTailwindRepo } from '#test/tailwind-fixture';
 
 async function loadTheme(root: string): Promise<TailwindTheme> {

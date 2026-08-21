@@ -146,6 +146,15 @@ export default [
 ];
 ```
 
+## Checked mechanically
+
+`.claude/scripts/svelte-lint.mjs`, where installed, flags a bare `<slot>` element and, when
+this repo's ESLint config imports `eslint-plugin-svelte`, an `svelte/valid-compile` or
+`svelte/no-unused-svelte-ignore` rule that is not enabled. Run it with
+`node .claude/scripts/svelte-lint.mjs <files>`. It has never run against a real corpus, only
+paired fixtures, so treat a finding as a starting point and report a false positive rather than
+working around it.
+
 ## Where other rules apply
 
 - Type-system decisions, such as `interface` versus `type` and never `any`: see

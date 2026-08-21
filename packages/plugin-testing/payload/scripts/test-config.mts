@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Checks vitest config against the config-level clauses of `testing.md` and its guides.
  *

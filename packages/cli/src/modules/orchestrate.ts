@@ -1,6 +1,18 @@
+import { join } from 'node:path';
+
 import type { Action, Answers, ModuleGroup } from '@houserules/api';
 import type { Ctx } from '../detect.js';
+import { payloadPath } from '../paths.js';
 import { agent, script, skill } from './copy-actions.js';
+
+// The skill() builder copies SKILL.md alone, so the orchestrate skill's supporting
+// reference files need their own copy actions or the SKILL.md pointers dangle installed.
+const ORCHESTRATE_REFERENCES = [
+  'slicing.md',
+  'review-patterns.md',
+  'fixer-and-residue.md',
+  'closing.md',
+] as const;
 
 export const id = 'orchestrate';
 export const title = 'Phase execution via scoped workers (/orchestrate)';
@@ -33,6 +45,13 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       'orchestrate',
       'slice by file ownership → seam-first → waves of scoped workers → review reports',
     ),
+    ...ORCHESTRATE_REFERENCES.map((name): Action => ({
+      kind: 'copy',
+      src: join(payloadPath(), 'skills', 'orchestrate', 'references', name),
+      dest: `.claude/skills/orchestrate/references/${name}`,
+      module: id,
+      reason: 'deep-dive reference the orchestrate SKILL.md defers to',
+    })),
     agent(
       id,
       'task-worker',

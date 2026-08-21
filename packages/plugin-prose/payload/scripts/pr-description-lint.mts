@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Checks a drafted PR description against the mechanical and hybrid clauses of
  * `skills/pr-description/SKILL.md`.

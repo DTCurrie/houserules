@@ -7,7 +7,7 @@
  * stdout becomes session context, so this stays tiny. Every failure path exits 0.
  */
 
-import { loadConfigSafe } from '@houserules/payload/config';
+import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
 import { git } from '@houserules/payload/proc';
 
 // Past this many changed files, a per-target summary is more useful than a file list.
@@ -16,8 +16,8 @@ const MAX_INLINE_FILES = 25;
 const MAX_LISTED_FILES = 10;
 
 /** Counts changed files per configured target, so the summary can name where work landed. */
-function countByTarget(changed: string[]): Map<string, number> {
-  const targets = loadConfigSafe().targets ?? [];
+function countByTarget(changed: string[], root: string): Map<string, number> {
+  const targets = loadConfigSafe(root).targets ?? [];
   const byTarget = new Map<string, number>();
   for (const path of changed) {
     const target = targets.find((candidate) =>
@@ -35,9 +35,9 @@ function countByTarget(changed: string[]): Map<string, number> {
  * the file list is replaced by a per-target tally, since a session-start banner listing
  * eighty paths is noise rather than context.
  */
-function uncommittedLines(changed: string[]): string[] {
+function uncommittedLines(changed: string[], root: string): string[] {
   if (!changed.length) return [];
-  const byTarget = countByTarget(changed);
+  const byTarget = countByTarget(changed, root);
 
   if (changed.length > MAX_INLINE_FILES) {
     const summary = [...byTarget.entries()]
@@ -61,8 +61,7 @@ function uncommittedLines(changed: string[]): string[] {
 }
 
 try {
-  const cwd = process.cwd();
-  const root = git(cwd, ['rev-parse', '--show-toplevel'])?.trim();
+  const root = repoRootSafe();
   if (root) {
     const lines = [];
     const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])?.trim();
@@ -90,7 +89,7 @@ try {
       .split('\n')
       .filter(Boolean)
       .map((l) => l.slice(3).trim());
-    lines.push(...uncommittedLines(changed));
+    lines.push(...uncommittedLines(changed, root));
     console.log(lines.join('\n'));
   }
 } catch {

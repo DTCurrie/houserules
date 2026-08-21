@@ -4,10 +4,10 @@ import { join } from 'node:path';
 
 import { describe, expect, it, onTestFinished } from 'vitest';
 
-import { checkTailwindClasses } from '../../payload/scripts/lib/tailwind-checks.mts';
-import { loadDesignSystem } from '../../payload/scripts/lib/tailwind-design-system.mts';
-import type { LoadedDesignSystem } from '../../payload/scripts/lib/tailwind-design-system.mts';
-import { projectThemeToDtcg } from '../../payload/scripts/lib/tailwind-theme-to-dtcg.mts';
+import { checkTailwindClasses } from '../tailwind-checks.mts';
+import { loadDesignSystem } from '../tailwind-design-system.mts';
+import type { LoadedDesignSystem } from '../tailwind-design-system.mts';
+import { projectThemeToDtcg } from '../tailwind-theme-to-dtcg.mts';
 import { useTailwindRepo } from '#test/tailwind-fixture';
 
 interface Fixture {
