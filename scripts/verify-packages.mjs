@@ -2,7 +2,7 @@
 /**
  * Dev-only tool, never published. Packs every publishable package into a real tarball with
  * `npm pack` and asserts what must and must not be inside it, catching the drift a green
- * build cannot: a leaked `__test__` dir, a `vitest` import, or a missing README or LICENSE.
+ * build cannot: a leaked `__tests__` dir, a `vitest` import, or a missing README or LICENSE.
  *
  * Usage: `node scripts/verify-packages.mjs`
  *
@@ -75,8 +75,8 @@ function extractTarball(tarballPath, destinationDir) {
 
 function assertNoTestDirectories(entries, failures) {
   for (const entry of entries) {
-    if (entry.split('/').includes('__test__')) {
-      failures.push(`ships a __test__ path: ${entry}`);
+    if (entry.split('/').includes('__tests__')) {
+      failures.push(`ships a __tests__ path: ${entry}`);
     }
   }
 }

@@ -23,5 +23,5 @@
   },
   "include": ["payload/**/*.mts"],
   // Colocated payload tests must never reach payload-dist/, which package.json ships.
-  "exclude": ["payload/**/__test__/**"]
+  "exclude": ["payload/**/__tests__/**"]
 }

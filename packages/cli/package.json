@@ -72,7 +72,7 @@
       ],
       "files": [
         "payload/**",
-        "!payload/**/__test__/**",
+        "!payload/**/__tests__/**",
         "tsconfig.payload.json",
         "scripts/build-payload.mjs"
       ],
@@ -88,7 +88,7 @@
       ],
       "files": [
         "src/**/*.ts",
-        "!src/**/__test__/**",
+        "!src/**/__tests__/**",
         "tsconfig.build.json"
       ],
       "output": [
@@ -119,7 +119,7 @@
         "src/**/*.ts",
         "test/**/*.ts",
         "!test/**/node_modules/**",
-        "payload/**/__test__/**/*.ts",
+        "payload/**/__tests__/**/*.ts",
         "tsconfig.json",
         "tsconfig.build.json"
       ],

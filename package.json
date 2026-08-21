@@ -46,7 +46,7 @@
         "packages/*/src/**/*.ts",
         "packages/*/test/**/*.ts",
         "packages/*/payload/**/*.mts",
-        "packages/*/payload/**/__test__/**/*.ts",
+        "packages/*/payload/**/__tests__/**/*.ts",
         "packages/*/scripts/**/*.mjs",
         "packages/*/*.ts",
         "scripts/**/*.mjs",

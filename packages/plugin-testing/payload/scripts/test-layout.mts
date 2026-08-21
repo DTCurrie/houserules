@@ -27,8 +27,8 @@ const SPEC_SUFFIX = /\.spec\.[cm]?[jt]sx?$/;
 
 const DECLINED = [
   "what a test asserts, which is the rule's subject and not a path question",
-  'whether a file sitting outside __test__ is genuinely about the unit beside it, so ' +
-    'checkColocation only requires the __test__ directory itself, never a matching sibling ' +
+  'whether a file sitting outside __tests__ is genuinely about the unit beside it, so ' +
+    'checkColocation only requires the __tests__ directory itself, never a matching sibling ' +
     'subject file: a real corpus check found 40% of test files name a tree or a concept ' +
     'rather than one file, which the rule text itself calls a judgment call',
   'files not passed on argv, since the placement and naming checks never walk the tree ' +
@@ -50,31 +50,31 @@ export function checkPath(file: string): Report {
   return report;
 }
 
-/** A test file must sit inside a `__test__` directory, not loose beside its subject. */
+/** A test file must sit inside a `__tests__` directory, not loose beside its subject. */
 export function checkColocation(file: string): Report {
   const report = emptyReport();
   if (!TEST_SUFFIX.test(file) && !SPEC_SUFFIX.test(file)) return report;
   const segments = file.split('/');
-  if (segments.at(-2) !== '__test__') {
+  if (segments.at(-2) !== '__tests__') {
     report.findings.push({
       rule: 'testing/test-colocation',
       level: 'error',
       file,
       line: null,
-      msg: 'Test file does not sit inside a __test__ directory beside the code it covers.',
+      msg: 'Test file does not sit inside a __tests__ directory beside the code it covers.',
     });
   }
   return report;
 }
 
 /**
- * A `__test__` directory holds tests, not fixtures or setup. `__snapshots__` is excluded,
+ * A `__tests__` directory holds tests, not fixtures or setup. `__snapshots__` is excluded,
  * since Vitest writes that subdirectory itself rather than an author placing a fixture there.
  */
 export function checkDirContents(file: string): Report {
   const report = emptyReport();
   const segments = file.split('/');
-  if (!segments.includes('__test__')) return report;
+  if (!segments.includes('__tests__')) return report;
   if (segments.includes('__snapshots__')) return report;
   if (TEST_SUFFIX.test(file) || SPEC_SUFFIX.test(file)) return report;
   report.findings.push({
@@ -82,7 +82,7 @@ export function checkDirContents(file: string): Report {
     level: 'error',
     file,
     line: null,
-    msg: 'Non-test file inside a __test__ directory. Shared fixtures and setup belong in a plainly named test/ directory, not __test__/.',
+    msg: 'Non-test file inside a __tests__ directory. Shared fixtures and setup belong in a plainly named test/ directory, not __tests__/.',
   });
   return report;
 }
@@ -122,13 +122,13 @@ function walk(dir: string): string[] {
   });
 }
 
-/** Walks an already-built output directory for a leaked test file or `__test__` directory. */
+/** Walks an already-built output directory for a leaked test file or `__tests__` directory. */
 export function checkBuildOutput(dir: string): Report {
   const report = emptyReport();
   for (const file of walk(dir)) {
     const segments = file.split('/');
     if (
-      segments.includes('__test__') ||
+      segments.includes('__tests__') ||
       TEST_SUFFIX.test(file) ||
       SPEC_SUFFIX.test(file)
     ) {

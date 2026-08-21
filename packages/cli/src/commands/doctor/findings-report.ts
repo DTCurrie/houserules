@@ -18,7 +18,7 @@ export interface DoctorReport {
   configBlocked: boolean;
 }
 
-/** The `--json` shape. This is a CI contract, asserted in src/__test__/cli.test.ts. */
+/** The `--json` shape. This is a CI contract, asserted in src/__tests__/cli.test.ts. */
 export function printJsonReport(report: DoctorReport): void {
   const drifted = driftedFiles(report.drift);
   log.json({

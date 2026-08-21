@@ -276,7 +276,26 @@ describe('assemblePayload', () => {
     );
   });
 
-  it('excludes a __test__ directory at any depth under a copied directory', () => {
+  it('excludes a __tests__ directory at any depth under a copied directory', () => {
+    const packageRoot = stageRoot();
+    writeAt(packageRoot, 'payload/rules/example.md', 'kept\n');
+    writeAt(
+      packageRoot,
+      'payload/rules/__tests__/example.test.md',
+      'excluded\n',
+    );
+    const payloadRoot = join(packageRoot, 'payload-dist');
+
+    assemblePayload(payloadRoot, packageRoot);
+
+    expect(
+      existsSync(
+        join(packageRoot, 'payload-dist/rules/__tests__/example.test.md'),
+      ),
+    ).toBe(false);
+  });
+
+  it('excludes a legacy __test__ directory so a plugin authored against the old spelling ships no tests', () => {
     const packageRoot = stageRoot();
     writeAt(packageRoot, 'payload/rules/example.md', 'kept\n');
     writeAt(

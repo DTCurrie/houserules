@@ -257,7 +257,7 @@ function newChangesetIds(root: string): Set<string> {
  * reported as drift on the strength of a single edited test file.
  */
 function shipsNothing(path: string): boolean {
-  return /(^|\/)__test__\//.test(path) || /\.test\.[cm]?[jt]sx?$/.test(path);
+  return /(^|\/)__tests?__\//.test(path) || /\.test\.[cm]?[jt]sx?$/.test(path);
 }
 
 function touchedPackages(root: string): string[] {

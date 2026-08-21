@@ -11,7 +11,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['payload/**/__test__/**/*.test.ts'],
+    include: ['payload/**/__tests__/**/*.test.ts'],
     globalSetup: ['@houserules/test/global-setup'],
     testTimeout: 30_000,
     hookTimeout: 30_000,

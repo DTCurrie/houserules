@@ -29,5 +29,5 @@
   // The include above only matches `.mts` and tests are `.test.ts`, so this is belt and
   // braces — but relying on an extension mismatch is fragile, and a future `.mts` test
   // would otherwise ship silently.
-  "exclude": ["payload/**/__test__/**"]
+  "exclude": ["payload/**/__tests__/**"]
 }

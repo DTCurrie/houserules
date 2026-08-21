@@ -91,7 +91,7 @@ import type { LoadedDesignSystem } from './lib/tailwind-design-system.mjs';
 
 const TOKENS_PATH = '.claude/design/tokens.json';
 // Sha256 of the seed's trimmed serialized form, kept in sync with `renderTokenSeed()` in
-// packages/plugin-design/src/tokens-seed.ts by src/__test__/design-script.test.ts. A payload
+// packages/plugin-design/src/tokens-seed.ts by src/__tests__/design-script.test.ts. A payload
 // script cannot import that module, since payload scripts are node-builtins-only.
 const SEED_TOKENS_SHA256 =
   'bf974edf7ee0033bc5a9f572ababde403107396a36e7e9aed5c2eaf241ca9b83';

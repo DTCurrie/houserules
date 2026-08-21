@@ -22,7 +22,7 @@
  * A local copy still lands under `payload-dist/scripts/lib/` here, byte-identical to
  * `@houserules/payload`'s own build: this package's own compiled hook scripts (guard-bash.mjs
  * and friends) resolve `./lib/<name>.mjs` relative to their own real path, on bare node, which
- * is what lets `payload/__test__/execution.test.ts` and the per-script `payload/scripts/__test__/`
+ * is what lets `payload/__tests__/execution.test.ts` and the per-script `payload/scripts/__tests__/`
  * suites run them straight out of this package's build output without an install step, and it
  * is what keeps a plugin still on `LEGACY_PAYLOAD_IMPORT_PREFIX` typechecking against this
  * package's `./payload/*` compatibility export.
@@ -59,13 +59,17 @@ if (!existsSync(join(OUT, 'scripts'))) {
 mkdirSync(OUT, { recursive: true });
 
 function isUnderTestDir(relativePath) {
-  return relativePath.split(sep).includes('__test__');
+  return relativePath
+    .split(sep)
+    .some((s) => s === '__tests__' || s === '__test__');
 }
 
 const dirs = readdirSync(SOURCE, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
-  .filter((name) => name !== 'scripts' && name !== '__test__');
+  .filter(
+    (name) => name !== 'scripts' && name !== '__tests__' && name !== '__test__',
+  );
 
 for (const dir of dirs) {
   const from = join(SOURCE, dir);

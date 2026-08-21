@@ -14,6 +14,6 @@
   // must still see them, so the inherited exclude is cleared here.
   "exclude": [],
   // The payload glob is what reaches the script suites. `src/**` never covers them, so
-  // without it `pnpm check` typechecks nothing under payload/**/__test__/.
-  "include": ["src/**/*.ts", "payload/**/__test__/**/*.ts"]
+  // without it `pnpm check` typechecks nothing under payload/**/__tests__/.
+  "include": ["src/**/*.ts", "payload/**/__tests__/**/*.ts"]
 }

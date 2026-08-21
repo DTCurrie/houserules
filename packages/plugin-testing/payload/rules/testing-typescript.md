@@ -21,7 +21,7 @@ Vitest and TypeScript, but the principles they illustrate apply to any test runn
   mean every glob in the repo has to list both, and one of them eventually gets missed.
 - **Exclude tests from the build.** A test under a compiled source root is emitted into the
   published output and imports the test runner, which is a dev dependency. Add the exclude to
-  the build config, then check the output directory for a `__test__` after building. Checked
+  the build config, then check the output directory for a `__tests__` after building. Checked
   mechanically, once you point the checker at the built output directory.
 - **Write a type test when the type IS the product.** A published package's public surface, a
   generic whose inference is the feature, or a discriminated union whose exhaustiveness callers
@@ -153,7 +153,7 @@ it('errors on an unknown module', () => {
 **Good — the decision as a unit, plus one end-to-end test that it is wired in:**
 
 ```ts
-// src/__test__/plan.test.ts
+// src/__tests__/plan.test.ts
 describe('resolveModuleIds, given a context whose only default is core', () => {
   it('names the offending module when the id does not exist', () => {
     expect(() => resolveModuleIds(ctx, 'nope')).toThrow(
