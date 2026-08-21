@@ -3,6 +3,25 @@ import type { Action, ModuleDef, PluginApi } from '@houserules/api';
 
 const FRAMEWORK_GUIDES = ['threlte', 'r3f'];
 
+const FRAMEWORK_TITLES: Record<string, string> = {
+  threlte: 'Threlte',
+  r3f: 'React Three Fiber',
+};
+
+/**
+ * The section appended below `three-upstream-docs.md` linking each chosen framework's own
+ * upstream-docs file, or undefined when no framework guide was chosen so the base file
+ * carries no bindings section at all.
+ */
+function upstreamDocsLinks(chosenFrameworks: string[]): string | undefined {
+  if (chosenFrameworks.length === 0) return undefined;
+  const lines = chosenFrameworks.map(
+    (guide) =>
+      `- ${FRAMEWORK_TITLES[guide]}: \`three-upstream-docs-${guide}.md\` beside this file.\n`,
+  );
+  return `\n## Framework bindings installed in this repo\n\n${lines.join('')}`;
+}
+
 /**
  * Option values that install a pull-only reference rather than a path-scoped rule. Renderer
  * performance is reference material because it is read when a frame budget is the problem, not
@@ -45,16 +64,24 @@ function threeModule(api: PluginApi): ModuleDef {
     },
     plan(_ctx, answers): Action[] {
       const chosen = answers.moduleOptions[`${api.alias}/${id}`] ?? [];
-      const guideActions = chosen.flatMap((guide): Action[] => {
-        if (!FRAMEWORK_GUIDES.includes(guide)) return [];
-        return [
-          api.payload.rule(
-            id,
-            `three-${guide}`,
-            `${guide} binding guide for the Three.js rule, opt-in via three options`,
-          ),
-        ];
-      });
+      // Filtered from FRAMEWORK_GUIDES rather than from `chosen`, so the emitted actions
+      // and the appendBody below keep one deterministic order however the selection was
+      // recorded.
+      const chosenFrameworks = FRAMEWORK_GUIDES.filter((guide) =>
+        chosen.includes(guide),
+      );
+      const guideActions = chosenFrameworks.flatMap((guide): Action[] => [
+        api.payload.rule(
+          id,
+          `three-${guide}`,
+          `${guide} binding guide for the Three.js rule, opt-in via three options`,
+        ),
+        api.payload.reference(
+          id,
+          `three-upstream-docs-${guide}`,
+          `${guide} upstream docs for the Three.js rule, opt-in via three options`,
+        ),
+      ]);
       const referenceActions = chosen.flatMap((guide): Action[] => {
         if (!REFERENCE_GUIDES.includes(guide)) return [];
         return [
@@ -82,11 +109,13 @@ function threeModule(api: PluginApi): ModuleDef {
         ),
         // Unconditional, unlike the performance reference, because the base rule links it from
         // its own payload body rather than from `appendBody`. An option value would leave that
-        // link dangling in every install that skipped the option.
+        // link dangling in every install that skipped the option. The framework halves are
+        // conditional siblings, linked from here only when their guide was chosen.
         api.payload.reference(
           id,
           'three-upstream-docs',
-          'pull-only pointer to the upstream llms.txt docs for Three.js, Threlte, and R3F',
+          'pull-only pointer to the upstream llms.txt docs for Three.js and the chosen bindings',
+          upstreamDocsLinks(chosenFrameworks),
         ),
         // Unconditional for the same reason as three-upstream-docs: the base rule links it
         // from its own payload body, so it must always be present.

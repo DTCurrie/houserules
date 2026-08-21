@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-backlog",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "houserules plugin: an append-only backlog ledger, with the add skill and reviewer agent around it.",
   "type": "module",
   "publishConfig": {
@@ -35,9 +35,9 @@
       ],
       "files": [
         "src/**/*.ts",
-        "!src/**/__test__/**",
+        "!src/**/__tests__/**",
         "payload/**",
-        "!payload/**/__test__/**",
+        "!payload/**/__tests__/**",
         "tsconfig.build.json",
         "tsconfig.payload.json"
       ],
@@ -56,7 +56,7 @@
       ],
       "files": [
         "src/**/*.ts",
-        "payload/**/__test__/**",
+        "payload/**/__tests__/**",
         "tsconfig.json",
         "tsconfig.build.json",
         "payload/**/*.mts",

@@ -16,5 +16,5 @@
     "types": ["node"]
   },
   "include": ["payload/**/*.mts"],
-  "exclude": ["payload/**/__test__/**"]
+  "exclude": ["payload/**/__tests__/**"]
 }

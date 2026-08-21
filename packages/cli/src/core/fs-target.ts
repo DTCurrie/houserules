@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  rmdirSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -98,18 +99,61 @@ export class TargetRepo {
   remove(relativePath: string): void {
     if (this.dryRun) return;
     rmSync(this.path(relativePath), { force: true });
+    this.pruneEmptyParents(dirname(relativePath));
+  }
+
+  // A prune that removes a directory's last file must not leave the empty husk behind.
+  // Walks up from the removed file's parent, stopping at the first non-empty directory
+  // and never touching `.claude` itself or the repo root.
+  private pruneEmptyParents(relativeDir: string): void {
+    let dir = relativeDir;
+    while (dir !== '.' && dir !== '' && dir !== '.claude') {
+      try {
+        rmdirSync(this.path(dir));
+      } catch {
+        return;
+      }
+      dir = dirname(dir);
+    }
   }
 
   /**
-   * One-shot backup: copies `relativePath` to `<path>.bak` unless a backup is
+   * One-shot backup: copies `relativePath` into {@link BACKUP_DIR} unless a backup is
    * already there. Taken once, before houserules' first write to a file the user
    * owns. A second run must not overwrite the pristine original.
    */
   backupOnce(relativePath: string): void {
     if (this.dryRun) return;
     const source = this.path(relativePath);
-    const backup = `${source}.bak`;
+    const backup = this.path(backupDestFor(relativePath));
     if (!existsSync(source) || existsSync(backup)) return;
+    ensureBackupDir(this.root);
     copyFileSync(source, backup);
   }
+}
+
+/** Creates {@link BACKUP_DIR} and its self-gitignore under `rootAbsolute` when missing. */
+export function ensureBackupDir(rootAbsolute: string): void {
+  const dir = join(rootAbsolute, BACKUP_DIR);
+  mkdirSync(dir, { recursive: true });
+  const ignore = join(dir, '.gitignore');
+  if (!existsSync(ignore)) writeFileSync(ignore, '*\n');
+}
+
+/**
+ * Where one-shot merge backups live. Self-gitignored on first use, so a host repo never
+ * sees them as untracked noise the way the old beside-the-file `.bak` was.
+ */
+export const BACKUP_DIR = '.claude/backups';
+
+/**
+ * The repo-relative backup destination for `relativePath`. Flattened to one level, with a
+ * leading `.claude/` dropped and remaining separators folded, so two nested dests can
+ * never collide on a bare basename.
+ */
+export function backupDestFor(relativePath: string): string {
+  const flattened = relativePath
+    .replace(/^\.claude\//, '')
+    .replaceAll('/', '__');
+  return `${BACKUP_DIR}/${flattened}.bak`;
 }

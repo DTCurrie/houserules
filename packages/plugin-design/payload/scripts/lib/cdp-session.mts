@@ -2,7 +2,7 @@
  * A Chrome DevTools Protocol session over node's global `WebSocket`.
  *
  * Zero dependencies by design. The payload may not import Playwright, Puppeteer, or `ws`, and
- * `payload/__test__/dependencies.test.ts` enforces that. Node's `WebSocket` has been global and
+ * `payload/__tests__/dependencies.test.ts` enforces that. Node's `WebSocket` has been global and
  * stable since 22.4, and houserules already requires node `>=22`, so the protocol is reachable
  * without any of them.
  *

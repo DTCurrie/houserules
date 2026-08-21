@@ -1,6 +1,6 @@
 {
   "name": "@houserules/payload",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "houserules: shared payload libraries, copied into .claude/scripts/lib and executed on bare node with zero runtime dependencies.",
   "type": "module",
   "publishConfig": {
@@ -27,7 +27,7 @@
       "command": "tsc -p tsconfig.payload.json && publint",
       "files": [
         "payload/**",
-        "!payload/**/__test__/**",
+        "!payload/**/__tests__/**",
         "tsconfig.payload.json"
       ],
       "output": [
@@ -41,7 +41,7 @@
       ],
       "files": [
         "payload/**/*.mts",
-        "payload/**/__test__/**/*.ts",
+        "payload/**/__tests__/**/*.ts",
         "tsconfig.json",
         "tsconfig.payload.json"
       ],

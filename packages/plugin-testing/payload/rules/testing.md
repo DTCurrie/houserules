@@ -69,10 +69,10 @@ that covers it is part of the change, not a follow-up.
 
 ### Placement
 
-- **Tests colocate in a `__test__` directory beside the code they cover.** A test for
-  `src/core/drift.ts` is `src/core/__test__/drift.test.ts`. Close enough to find without a
+- **Tests colocate in a `__tests__` directory beside the code they cover.** A test for
+  `src/core/drift.ts` is `src/core/__tests__/drift.test.ts`. Close enough to find without a
   search, in a directory of its own so it does not clutter the module listing. Checked
-  mechanically: only that a test file sits inside a `__test__` directory. Whether it is
+  mechanically: only that a test file sits inside a `__tests__` directory. Whether it is
   beside the right subject stays a human read, since a real corpus check found 40% of test
   files name a tree or a concept rather than one sibling file, which is a judgment call, not
   a path match.
@@ -86,10 +86,10 @@ that covers it is part of the change, not a follow-up.
   An entry point is a unit, and so is a test that drives several components as long as one of
   them is the subject. Before filing something as ownerless, name the source file it is about
   and confirm that file does not exist. A test about a whole built tree is owned by that tree,
-  so it goes in `<that-tree>/__test__/`.
-- **Shared fixtures and setup are not tests, so they do not go in a `__test__/`.** Put them in
-  a plainly named `test/` directory. The distinction is worth holding: `__test__/` means tests
-  live here, `test/` means testing infrastructure lives here. A `__test__/` containing no tests
+  so it goes in `<that-tree>/__tests__/`.
+- **Shared fixtures and setup are not tests, so they do not go in a `__tests__/`.** Put them in
+  a plainly named `test/` directory. The distinction is worth holding: `__tests__/` means tests
+  live here, `test/` means testing infrastructure lives here. A `__tests__/` containing no tests
   misleads every reader who greps it.
 
 ### What to test, and at which level
@@ -196,8 +196,8 @@ that covers it is part of the change, not a follow-up.
 ## Checked mechanically
 
 `test-layout.mjs`, run over a list of test file paths plus the build output directory, catches
-colocation in `__test__`, the `.e2e.test.ts` tier, and non-test files sitting inside a
-`__test__/`, each noted above. `test-config.mjs`, run over a repo's vitest config and setup
+colocation in `__tests__`, the `.e2e.test.ts` tier, and non-test files sitting inside a
+`__tests__/`, each noted above. `test-config.mjs`, run over a repo's vitest config and setup
 files, catches whether `expect.requireAssertions` is turned on anywhere. Everything else in
 this rule, including whether a test would actually fail on the bug it claims to catch, is a
 human read.

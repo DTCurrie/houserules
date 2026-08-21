@@ -20,5 +20,5 @@
   // a devDependency, and package.json ships dist/, so an emitted test is a broken import
   // in an installed copy of the package. This package has none today, and the exclude is
   // what keeps that true the day someone adds one.
-  "exclude": ["src/**/__test__/**"]
+  "exclude": ["src/**/__tests__/**"]
 }

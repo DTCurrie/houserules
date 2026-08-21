@@ -31,7 +31,18 @@ export interface PayloadBuilders {
     reason: string,
     appendBody?: string,
   ): BodyAction;
-  reference(module: string, name: string, reason: string): CopyAction;
+  /**
+   * `appendBody` plays the same role as on `rule`: routing text composed from the user's
+   * selections, appended below the payload file's own content. Use it to link an OPTIONAL
+   * sibling reference, since a link shipped in the payload dangles wherever that option was
+   * not chosen.
+   */
+  reference(
+    module: string,
+    name: string,
+    reason: string,
+    appendBody?: string,
+  ): CopyAction;
   template(module: string, rel: string, reason?: string): CopyAction;
   /**
    * An MCP server config, namespaced by server name so two plugins shipping one cannot collide.
@@ -125,14 +136,16 @@ export function createPayloadBuilders(payloadRoot: string): PayloadBuilders {
       return action;
     },
 
-    reference(module, name, reason) {
-      return {
+    reference(module, name, reason, appendBody) {
+      const action: CopyAction = {
         kind: 'copy',
         src: at('reference', `${name}.md`),
         dest: `.claude/reference/${name}.md`,
         module,
         reason,
       };
+      if (appendBody) action.appendBody = appendBody;
+      return action;
     },
 
     template(module, rel, reason = 'reference template') {

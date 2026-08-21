@@ -17,6 +17,6 @@
   },
   "include": ["src/**/*.ts"],
   // No suite of its own lives here by design: every consumer's suite exercises this package.
-  // Excluded anyway, so a future __test__/ dir here never ships inside dist/.
-  "exclude": ["src/**/__test__/**"]
+  // Excluded anyway, so a future __tests__/ dir here never ships inside dist/.
+  "exclude": ["src/**/__tests__/**"]
 }

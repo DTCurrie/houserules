@@ -1,5 +1,19 @@
 # @houserules/plugin-decisions
 
+## 0.1.3
+
+### Patch Changes
+
+- 7b5f72a: Adopt the Jest-standard **tests** directory name for test colocation.
+
+## 0.1.2
+
+### Patch Changes
+
+- cb34f11: Drop duplicate payload peerDependencies, dedupe naming clause into code-cleanliness, take clack 1.x
+- cb34f11: decision-lint skips superseded records, whose supersessor owes the required fields
+- cb34f11: Share ledger guard helpers from entry-ledger, ending drifting local copies across scripts
+
 ## 0.1.1
 
 ### Patch Changes

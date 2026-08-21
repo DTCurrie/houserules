@@ -3,7 +3,7 @@
  * Regenerates schema/houserules.config.schema.json from the zod schema in `@houserules/api/internal`.
  *
  * Usage: `pnpm run schema`. Build first, since @houserules/api must be built.
- * `src/core/__test__/config.test.ts` fails if the committed file falls out of sync.
+ * `src/core/__tests__/config.test.ts` fails if the committed file falls out of sync.
  */
 
 import { writeFileSync } from 'node:fs';

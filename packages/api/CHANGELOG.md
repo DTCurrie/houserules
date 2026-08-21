@@ -1,5 +1,16 @@
 # @houserules/api
 
+## 0.2.0
+
+### Minor Changes
+
+- cb34f11: Update refreshes kit-wired hook entries, hookFragment carries if/timeout/async, one merged Bash gate
+
+### Patch Changes
+
+- Updated dependencies [cb34f11]
+  - @houserules/payload@0.2.0
+
 ## 0.1.1
 
 ### Patch Changes

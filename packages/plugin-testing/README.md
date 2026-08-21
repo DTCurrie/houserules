@@ -27,7 +27,7 @@ when `init` asks.
 - **`testing`** installs `.claude/rules/testing.md`, a path-scoped rule matched to
   `*.test.ts`, `*.test.tsx`, `*.test.mts`, `*.test.js`, `*.test.mjs`, and the `.spec.*`
   equivalents. It covers whether a test earns its place (it has to fail when the behavior it
-  covers breaks), where tests colocate (`__test__/`, split by subject), what to test and at
+  covers breaks), where tests colocate (`__tests__/`, split by subject), what to test and at
   what level, Arrange/Act/Assert structure, and naming that states the observable behavior
   rather than the implementation.
 

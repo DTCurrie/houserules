@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-accessibility",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "houserules plugin: WCAG routing and lookup for agents editing HTML and HTML-like markup.",
   "type": "module",
   "publishConfig": {
@@ -36,9 +36,9 @@
       ],
       "files": [
         "src/**/*.ts",
-        "!src/**/__test__/**",
+        "!src/**/__tests__/**",
         "payload/**",
-        "!payload/**/__test__/**",
+        "!payload/**/__tests__/**",
         "tsconfig.build.json",
         "tsconfig.payload.json"
       ],
@@ -60,7 +60,7 @@
         "tsconfig.json",
         "tsconfig.build.json",
         "payload/**/*.mts",
-        "payload/**/__test__/**/*.ts",
+        "payload/**/__tests__/**/*.ts",
         "tsconfig.payload.json"
       ],
       "output": []
