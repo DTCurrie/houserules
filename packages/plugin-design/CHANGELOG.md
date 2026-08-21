@@ -1,5 +1,15 @@
 # @houserules/plugin-design
 
+## 0.2.0
+
+### Minor Changes
+
+- e11c60f: CSS imports of package names and subpaths now resolve Node-style.
+
+### Patch Changes
+
+- e11c60f: Class scanning now finds a transitive @tailwindcss/oxide under pnpm's strict layout.
+
 ## 0.1.1
 
 ### Patch Changes
