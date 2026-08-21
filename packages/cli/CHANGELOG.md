@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.2.1
+
+### Patch Changes
+
+- 7b5f72a: Adopt the Jest-standard **tests** directory name for test colocation.
+
 ## 0.2.0
 
 ### Minor Changes
