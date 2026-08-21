@@ -1,5 +1,13 @@
 # @houserules/api
 
+## 0.1.1
+
+### Patch Changes
+
+- 269dd06: Route the missing-hook-script fallback to stderr so it is not injected as context
+- Updated dependencies [269dd06]
+  - @houserules/payload@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @houserules/plugin-three
 
+## 0.1.1
+
+### Patch Changes
+
+- 269dd06: Fix wireit check inputs so tsconfig and payload-test edits re-run typecheck
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-svelte",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "houserules plugin: Svelte 5 authoring conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.",
   "type": "module",
   "publishConfig": {
