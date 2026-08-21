@@ -166,8 +166,8 @@ describe('init --yes on a pnpm monorepo', () => {
     ).toEqual([]);
   });
 
-  it('does not create a settings.json.bak when settings.json did not pre-exist', () => {
-    expect(existsSync(join(root, '.claude/settings.json.bak'))).toBe(false);
+  it('does not create a backup when settings.json did not pre-exist', () => {
+    expect(existsSync(join(root, '.claude/backups'))).toBe(false);
   });
 
   it('leaves settings.local.json untouched', () => {
@@ -253,9 +253,15 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
     ).toBeTruthy();
   });
 
-  it('backs up the pre-merge settings.json to .bak', () => {
-    expect(readFileSync(join(root, '.claude/settings.json.bak'), 'utf8')).toBe(
-      settingsBefore,
+  it('backs up the pre-merge settings.json into .claude/backups/', () => {
+    expect(
+      readFileSync(join(root, '.claude/backups/settings.json.bak'), 'utf8'),
+    ).toBe(settingsBefore);
+  });
+
+  it('gitignores the whole backup directory', () => {
+    expect(readFileSync(join(root, '.claude/backups/.gitignore'), 'utf8')).toBe(
+      '*\n',
     );
   });
 
@@ -266,7 +272,7 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
     expect(config.targets[0].fixCommands).toEqual(['lint:fix']);
   });
 
-  it('is idempotent on a second run without overwriting .bak', () => {
+  it('is idempotent on a second run without overwriting the backup', () => {
     const after1 = treeHash(root);
     expect(runCli(['init', '--yes', root]).status).toBe(0);
     expect(treeHash(root)).toBe(after1);
@@ -414,11 +420,11 @@ describe('the settings.json backup', () => {
     const original = readFileSync(join(root, '.claude/settings.json'), 'utf8');
     expect(runCli(['init', '--yes', root]).status).toBe(0);
 
-    const backup = join(root, '.claude/settings.json.bak');
+    const backup = join(root, '.claude/backups/settings.json.bak');
     expect(existsSync(backup)).toBe(true);
     expect(
       readFileSync(backup, 'utf8'),
-      'the .bak must be the pristine pre-kit file',
+      'the backup must be the pristine pre-kit file',
     ).toBe(original);
 
     expect(runCli(['update', root]).status).toBe(0);

@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 import { claudeMdRegion } from '../core/claude-md-region.js';
-import { ledgerDirFor } from '../core/ledger-dir.js';
+import { ledgerConsumersPresent, ledgerDirFor } from '../core/ledger-dir.js';
 import { payloadPath } from '../paths.js';
 import {
   renderClaudeAdditions,
@@ -133,7 +133,7 @@ function selfGitignoredDirActions(ctx: Ctx): Action[] {
   // ledger plugin, because both write into this one directory and two modules cannot own the
   // same dest. The repo root is refused upstream: `*` there would hide every document.
   const ledgerDir = ledgerDirFor(ctx);
-  if (ledgerDir) {
+  if (ledgerDir && ledgerConsumersPresent(ctx)) {
     actions.push(
       selfGitignoreAction(
         id,

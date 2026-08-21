@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
@@ -71,7 +71,7 @@ function encodeBody(body: string): string {
 
 function appendLog(root: string, rel: string, record: unknown): void {
   const path = join(root, rel);
-  mkdirSync(join(root, '.claude'), { recursive: true });
+  mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(record)}\n`, { flag: 'a' });
 }
 

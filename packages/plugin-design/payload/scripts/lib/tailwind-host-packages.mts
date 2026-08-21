@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { isRecord } from './is-record.mjs';
@@ -115,6 +115,74 @@ function findPackageManifest(
   }
 }
 
+// Packages a repo lists directly whose own dependency set carries the transitive Tailwind
+// pieces. Under pnpm's strict layout only direct dependencies appear at the top level, so a
+// transitive package (`@tailwindcss/oxide`, usually) is reachable only through one of these.
+const STORE_ANCHOR_PACKAGES = [
+  TAILWIND_PACKAGE,
+  '@tailwindcss/vite',
+  '@tailwindcss/postcss',
+  '@tailwindcss/cli',
+];
+
+/**
+ * Second-chance lookup for a package the root walk cannot see: resolve each anchor the repo
+ * DOES link, follow its symlink to its real location in the package manager's store, and walk
+ * `node_modules` up from there. pnpm keeps a package's own dependencies beside its store
+ * entry, which is exactly where that walk lands.
+ *
+ * An anchor whose realpath escapes `root` is skipped. A globally linked copy's store is not
+ * the repo's, and following it risks the same wrong-copy answer the NODE_PATH stance above
+ * exists to prevent.
+ */
+function findManifestViaStore(
+  root: string,
+  packageName: string,
+): string | undefined {
+  // Realpathed so the containment check below compares like with like: the anchor side is
+  // already a realpath, and `root` itself may sit behind a symlink (macOS's /var/folders).
+  let rootAbsolute: string;
+  try {
+    rootAbsolute = realpathSync(resolve(root));
+  } catch {
+    return undefined;
+  }
+  for (const anchor of STORE_ANCHOR_PACKAGES) {
+    if (anchor === packageName) continue;
+    const anchorManifest = findPackageManifest(rootAbsolute, anchor);
+    if (anchorManifest === undefined) continue;
+    let anchorDirectory: string;
+    try {
+      anchorDirectory = realpathSync(dirname(anchorManifest));
+    } catch {
+      continue;
+    }
+    if (!anchorDirectory.startsWith(rootAbsolute + sep)) continue;
+    const found = findPackageManifest(anchorDirectory, packageName);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/**
+ * The directory of `packageName` as seen from `from`, walking `node_modules` upward from
+ * `from`'s realpath. Anchoring at the realpath is what makes the walk work from inside
+ * pnpm's virtual store, where a package's dependencies sit beside its real location.
+ */
+export function findPackageDirFrom(
+  from: string,
+  packageName: string,
+): string | undefined {
+  let start: string;
+  try {
+    start = realpathSync(from);
+  } catch {
+    return undefined;
+  }
+  const manifest = findPackageManifest(start, packageName);
+  return manifest === undefined ? undefined : dirname(manifest);
+}
+
 /**
  * Locates one of the host repo's own Tailwind packages, without importing it.
  *
@@ -130,7 +198,9 @@ export function resolveHostPackage(
   root: string,
   packageName: string,
 ): TailwindResult<HostPackage> {
-  const manifestPath = findPackageManifest(root, packageName);
+  const manifestPath =
+    findPackageManifest(root, packageName) ??
+    findManifestViaStore(root, packageName);
   if (manifestPath === undefined) {
     return {
       ok: false,

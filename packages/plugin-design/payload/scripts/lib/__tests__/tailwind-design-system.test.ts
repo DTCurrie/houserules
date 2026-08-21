@@ -15,7 +15,11 @@ import {
   isRepoDefinedThemeKey,
   loadDesignSystem,
 } from '../tailwind-design-system.mts';
-import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
+import {
+  addPackage,
+  useBareRepo,
+  useTailwindRepo,
+} from '#test/tailwind-fixture';
 
 function writeCssFile(dir: string, name: string, text: string): string {
   const path = join(dir, name);
@@ -101,6 +105,73 @@ describe('loadDesignSystem', () => {
     expect(result.error).toBe(
       `tailwindcss is not installed in ${root}. Install it in that repo with \`npm install -D tailwindcss@4\`.`,
     );
+  });
+
+  it('resolves a tokens package imported by name through its exports style condition', async () => {
+    const root = useTailwindRepo({
+      css: '@import "tailwindcss";\n@import "@acme/tailwind-config";\n',
+    });
+    addPackage(
+      root,
+      '@acme/tailwind-config',
+      { exports: { '.': { style: './tokens.css' } } },
+      { 'tokens.css': '@theme {\n  --color-acme-500: #123456;\n}\n' },
+    );
+
+    const result = await loadDesignSystem(root, join(root, 'src/app.css'));
+
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.theme.get(['--color-acme-500'])).toBe('#123456');
+  });
+
+  it('resolves a tokens package that declares only a style field', async () => {
+    const root = useTailwindRepo({
+      css: '@import "tailwindcss";\n@import "acme-tokens";\n',
+    });
+    addPackage(
+      root,
+      'acme-tokens',
+      { style: 'theme/main.css' },
+      { 'theme/main.css': '@theme {\n  --color-acme-700: #654321;\n}\n' },
+    );
+
+    const result = await loadDesignSystem(root, join(root, 'src/app.css'));
+
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.theme.get(['--color-acme-700'])).toBe('#654321');
+  });
+
+  it('resolves a package subpath import, appending .css when the literal path is not a file', async () => {
+    const root = useTailwindRepo({
+      css: '@import "tailwindcss";\n@import "@acme/tailwind-config/colors";\n',
+    });
+    addPackage(
+      root,
+      '@acme/tailwind-config',
+      {},
+      { 'colors.css': '@theme {\n  --color-acme-100: #abcdef;\n}\n' },
+    );
+
+    const result = await loadDesignSystem(root, join(root, 'src/app.css'));
+
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.theme.get(['--color-acme-100'])).toBe('#abcdef');
+  });
+
+  it('names the unresolvable import in the failure instead of throwing', async () => {
+    const root = useTailwindRepo({
+      css: '@import "tailwindcss";\n@import "@acme/missing";\n',
+    });
+
+    const result = await loadDesignSystem(root, join(root, 'src/app.css'));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain('@acme/missing');
+    expect(result.error).toContain('not installed');
   });
 });
 
