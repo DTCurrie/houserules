@@ -2,4 +2,4 @@
 '@houserules/plugin-design': patch
 ---
 
-Remove stale WCAG license notice, unused build:payload script, and fix payload doc comments
+Remove stale WCAG license notice and unused build:payload script, fix payload doc comments, stop theme --all truncating on Linux by draining stdout before exit
