@@ -140,7 +140,7 @@
     "@changesets/cli": "^2.31.1",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.8.0",
-    "globals": "^17.9.0",
+    "globals": "^17.11.0",
     "knip": "^6.32.0",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
