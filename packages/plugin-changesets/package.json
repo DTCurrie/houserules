@@ -106,12 +106,12 @@
     "@houserules/cli": "workspace:*",
     "@houserules/payload": "workspace:*",
     "@houserules/test": "workspace:*",
-    "@arethetypeswrong/cli": "^0.18.5",
-    "@types/node": "^26.1.2",
-    "publint": "^0.3.23",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.10",
-    "wireit": "^0.14.13"
+    "@arethetypeswrong/cli": "catalog:",
+    "@types/node": "catalog:",
+    "publint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "wireit": "catalog:"
   },
   "license": "MIT",
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
