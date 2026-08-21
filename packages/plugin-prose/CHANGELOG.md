@@ -1,5 +1,11 @@
 # @houserules/plugin-prose
 
+## 0.1.1
+
+### Patch Changes
+
+- 269dd06: Add missing node shebangs to prose payload scripts
+
 ## 0.1.0
 
 ### Minor Changes

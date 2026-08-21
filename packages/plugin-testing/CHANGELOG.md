@@ -1,5 +1,11 @@
 # @houserules/plugin-testing
 
+## 0.1.1
+
+### Patch Changes
+
+- 269dd06: Normalize agent frontmatter, scope testing-3d rule to tests, point svelte rule at svelte-lint, add missing script shebangs
+
 ## 0.1.0
 
 ### Minor Changes

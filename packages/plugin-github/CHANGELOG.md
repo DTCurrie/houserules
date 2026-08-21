@@ -1,5 +1,11 @@
 # @houserules/plugin-github
 
+## 0.1.1
+
+### Patch Changes
+
+- 269dd06: Memoize repo-root resolution and drop duplicate git spawns from hot hooks
+
 ## 0.1.0
 
 ### Minor Changes

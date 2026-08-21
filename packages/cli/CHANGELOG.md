@@ -1,5 +1,16 @@
 # @houserules/cli
 
+## 0.1.2
+
+### Patch Changes
+
+- 269dd06: Fix wireit check inputs so tsconfig and payload-test edits re-run typecheck
+- 269dd06: Fix doctor resolution for exports-gated plugins, budget nested skills and output styles, install orchestrate reference files
+- Updated dependencies [269dd06]
+- Updated dependencies [269dd06]
+  - @houserules/payload@0.1.1
+  - @houserules/api@0.1.1
+
 ## 0.1.1
 
 ### Patch Changes

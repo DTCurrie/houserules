@@ -1,6 +1,6 @@
 {
   "name": "@houserules/payload",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "houserules: shared payload libraries, copied into .claude/scripts/lib and executed on bare node with zero runtime dependencies.",
   "type": "module",
   "publishConfig": {
