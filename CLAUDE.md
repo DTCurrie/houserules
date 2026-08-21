@@ -133,27 +133,27 @@ A pnpm workspace of sixteen packages. Every path in the Layout section below is 
   `src/cli-contract.ts`. `packages/api/src/config.ts` is the zod schema for
   `houserules.config.json`.
 - `schema/houserules.config.schema.json` is **generated** from that zod schema by `pnpm run schema`.
-  Never hand-edit it. `src/core/__test__/config.test.ts` fails when it falls out of sync.
+  Never hand-edit it. `src/core/__tests__/config.test.ts` fails when it falls out of sync.
 - `payload/`: everything copied into user repos. Scripts are authored as `.mts` and compiled
   to `payload-dist/scripts/*.mjs`. The prose dirs (`skills/`, `agents/`, `rules/`,
   `templates/`) are copied through verbatim. `output-styles/` moved to `plugin-prose`
   along with the `output-prose` module, so it is no longer one of this package's prose dirs.
   **`payload-dist/` is what
   ships and what `payloadPath()` reads.** Zero runtime dependencies, node builtins only, POSIX
-  shells, enforced by `payload/__test__/dependencies.test.ts` (imports) and `payload/__test__/execution.test.ts`
+  shells, enforced by `payload/__tests__/dependencies.test.ts` (imports) and `payload/__tests__/execution.test.ts`
   (actually executing each emitted script on bare node). Hook scripts must never crash: config
   via `loadConfigSafe()`, exit 0 on any failure path.
-- Tests live in a `__test__/` **beside the code they are about**, per
+- Tests live in a `__tests__/` **beside the code they are about**, per
   `packages/plugin-testing/payload/rules/testing.md` which this repo dogfoods. The split is by SUBJECT, not by unit-versus-e2e: a fixture-driven
-  CLI test is still a test of its one subject, so `src/commands/__test__/modules.test.ts` holds
+  CLI test is still a test of its one subject, so `src/commands/__tests__/modules.test.ts` holds
   both the pure `parseRequested` cases and the ones that drive the command against a real tree.
   Never add a `.e2e.test.ts` tier. If a file gets unwieldy, split it by CONCERN.
   - **The filename names the unit, and every `describe` in it is about that unit.** A file named
-    for a theme is a grouping, and a grouping hides which unit is covered. `src/**/__test__/`,
-    `src/modules/__test__/` (named for the module it covers), `src/commands/doctor/__test__/`
-    (one file per doctor check), `payload/scripts/__test__/`, and `payload/__test__/` for the
+    for a theme is a grouping, and a grouping hides which unit is covered. `src/**/__tests__/`,
+    `src/modules/__tests__/` (named for the module it covers), `src/commands/doctor/__tests__/`
+    (one file per doctor check), `payload/scripts/__tests__/`, and `payload/__tests__/` for the
     two invariants over the whole built tree (`dependencies`, `execution`). The shared libs'
-    own tests live at `packages/payload/payload/scripts/lib/__test__/` in the standalone
+    own tests live at `packages/payload/payload/scripts/lib/__tests__/` in the standalone
     `@houserules/payload` package, not under `packages/cli/payload/scripts/lib/`, which does
     not exist.
   - **The shared testing modules live in `packages/test`, published as `@houserules/test`**, one
@@ -173,8 +173,8 @@ A pnpm workspace of sixteen packages. Every path in the Layout section below is 
   - Test files carry **no comments and no file header**. The `describe` name, the `it` name, and
     a named helper are the three places meaning goes.
 - **Tests must never reach the published package**, and a green suite will not catch it.
-  `tsconfig.build.json` excludes `src/**/__test__/**` and `tsconfig.payload.json` excludes
-  `payload/**/__test__/**`, since `dist/` and `payload-dist/` are both `files` entries. A
+  `tsconfig.build.json` excludes `src/**/__tests__/**` and `tsconfig.payload.json` excludes
+  `payload/**/__tests__/**`, since `dist/` and `payload-dist/` are both `files` entries. A
   shipped test would carry a `vitest` import into a user's install. `tsconfig.json` clears the
   inherited exclude so `pnpm check` still typechecks them. Verify with a real
   `pnpm pack` and grep the tarball, not with `find` over `dist/`.
@@ -189,7 +189,7 @@ A pnpm workspace of sixteen packages. Every path in the Layout section below is 
   `tsconfig.build.json` is the EMIT config: it excludes tests so they stay out of `dist/`.
   `tsconfig.json` is the CHECK config: it `extends` the build one, sets `noEmit` and
   `rootDir: "."`, clears the exclude with `exclude: []`, and lists **both** test locations in
-  `include`, `src/**/*.ts` and `payload/**/__test__/**/*.ts`. Drop the payload glob and the
+  `include`, `src/**/*.ts` and `payload/**/__tests__/**/*.ts`. Drop the payload glob and the
   hook-script suites silently go unchecked, which is not hypothetical: four packages had
   drifted off this pattern and `pnpm check` was skipping five suites entirely. Vitest strips
   types rather than checking them, so nothing else would have caught it. A package's wireit
@@ -224,7 +224,7 @@ A pnpm workspace of sixteen packages. Every path in the Layout section below is 
   `publint`. Wireit's declared `output` plus its default `clean: true` is what guarantees a
   deleted source ships no orphan, replacing the old `rm -rf` prefixes. Required before any
   `dist/` probe.
-- `pnpm check`: `tsc --noEmit` over `src/` + `test/` + colocated `__test__/` dirs.
+- `pnpm check`: `tsc --noEmit` over `src/` + `test/` + colocated `__tests__/` dirs.
 - `pnpm test`: full suite, including end-to-end init/update/doctor on fixtures. A bare `npx
 vitest`, outside the script, now needs a prior `pnpm build`, since the shared vitest global
   setup no longer builds the CLI itself.
@@ -296,7 +296,7 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
     happening to ship what its scripts import. A plugin declares nothing and cannot forget.
   - **Never let a bare `@houserules/*` specifier reach an emitted `.mjs`.** The payload is a copy
     target, not a dependency: it is copied into a user's repo and runs standalone on bare node, on
-    every hook. `payload/__test__/dependencies.test.ts` fails on a surviving specifier, and that
+    every hook. `payload/__tests__/dependencies.test.ts` fails on a surviving specifier, and that
     test is the guard now, replacing the types-only exports map that used to fail such an import at
     runtime by accident.
   - **A value a lib needs is still passed in.** `readGateInputs(ledgerDirectory, autoSync)` is the
@@ -311,7 +311,7 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
 - Two readers of houserules.config.json, one shape: the CLI validates strictly via zod
   (`packages/api/src/config.ts`), and the payload reads it defensively and **dependency-free**
   (`loadConfigSafe()`). They share only the inferred `HouseConfig` type. Never make the payload
-  import zod. `payload/__test__/dependencies.test.ts` enforces this.
+  import zod. `payload/__tests__/dependencies.test.ts` enforces this.
 - init never runs package-manager installs and never touches settings.local.json.
 - Managed regions: houserules maintains its own marker-delimited block inside files the user
   owns (CLAUDE.md, and `.prettierignore` when prettier is detected). It writes ONLY between

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import {
@@ -10,6 +10,7 @@ import {
   untrackFromIndex,
 } from '../detect.js';
 import type { Ctx } from '../detect.js';
+import { backupDestFor, ensureBackupDir } from '../core/fs-target.js';
 import { ledgerDirFor } from '../core/ledger-dir.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import {
@@ -35,6 +36,62 @@ import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
 import type { Answers } from '@houserules/api';
 import type { PlanResult, PruneResult } from '../plan.js';
+
+// The two dests whose pre-relocation backups sat beside them as `<dest>.bak`. Static on
+// purpose: only these ever merged, and globbing `.claude/*.bak` would sweep up files the
+// user made themselves.
+const LEGACY_BACKUP_DESTS = [
+  '.claude/settings.json',
+  '.claude/houserules.config.json',
+];
+
+interface LegacyBackupMove {
+  from: string;
+  to: string;
+  /** False when a backup already sits at the new location, so the stray file is kept. */
+  movable: boolean;
+}
+
+/** Pre-relocation `<dest>.bak` files still beside their dest, and where each would go. */
+function legacyBackupMoves(root: string): LegacyBackupMove[] {
+  const moves: LegacyBackupMove[] = [];
+  for (const dest of LEGACY_BACKUP_DESTS) {
+    const from = `${dest}.bak`;
+    if (!existsSync(join(root, from))) continue;
+    const to = backupDestFor(dest);
+    moves.push({ from, to, movable: !existsSync(join(root, to)) });
+  }
+  return moves;
+}
+
+/**
+ * Moves each movable legacy backup into the backup directory. Runs before apply(), so the
+ * pristine pre-kit copy wins over the post-merge bytes backupOnce would otherwise capture
+ * on this same run.
+ */
+function migrateLegacyBackups(root: string, moves: LegacyBackupMove[]): void {
+  for (const move of moves) {
+    if (!move.movable) {
+      ui.message(
+        `backups: ${move.from} kept in place, a backup already exists at ${move.to}.`,
+      );
+      continue;
+    }
+    ensureBackupDir(root);
+    renameSync(join(root, move.from), join(root, move.to));
+    ui.message(`backups: moved ${move.from} to ${move.to}.`);
+  }
+}
+
+function reportWouldMoveBackups(moves: LegacyBackupMove[]): void {
+  for (const move of moves) {
+    ui.message(
+      move.movable
+        ? `backups: ${move.from} would move to ${move.to}.`
+        : `backups: ${move.from} kept in place, a backup already exists at ${move.to}.`,
+    );
+  }
+}
 
 /** Committed rendered ledgers, or nothing when houserules must not manage that directory. */
 function strayLedgerSurfaces(root: string, ctx: Ctx): string[] {
@@ -353,7 +410,10 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   const strayScripts =
     ctx.git.isRepo && !commitScripts ? trackedScriptFiles(root) : [];
 
+  const backupMoves = legacyBackupMoves(root);
+
   if (flags.dryRun) {
+    reportWouldMoveBackups(backupMoves);
     reportWouldUntrack(strayTemplates, 'templates', 'reference template(s)');
     reportWouldUntrack(strayScripts, 'scripts', 'hook script(s)');
     reportWouldUntrack(
@@ -372,6 +432,8 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     ui.outro('Dry run — nothing written.');
     return hasBrokenPlugins ? 1 : 0;
   }
+
+  migrateLegacyBackups(root, backupMoves);
 
   const { written } = apply(
     root,

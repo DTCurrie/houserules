@@ -18,7 +18,7 @@
   "include": [
     "src/**/*.ts",
     "test/**/*.ts",
-    "payload/**/__test__/**/*.ts",
+    "payload/**/__tests__/**/*.ts",
     "scripts/**/*.ts",
     "*.ts"
   ]

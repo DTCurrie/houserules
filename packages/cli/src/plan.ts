@@ -252,7 +252,12 @@ function sha256(content: Buffer | string): string {
 // A copy action's src is checked by the caller (checkPayloadMissing) before this runs, so
 // existence is already guaranteed here.
 function readAction(action: CopyAction | WriteAction | SeedAction): Buffer {
-  if (action.kind === 'copy') return readFileSync(action.src);
+  if (action.kind === 'copy') {
+    const payload = readFileSync(action.src);
+    return action.appendBody
+      ? Buffer.concat([payload, Buffer.from(action.appendBody, 'utf8')])
+      : payload;
+  }
   return Buffer.from(action.content, 'utf8');
 }
 

@@ -95,12 +95,12 @@ describe('test-config.mjs typecheck-enabled', () => {
     const root = stage();
     writeFile(
       root,
-      'src/__test__/types.test.ts',
+      'src/__tests__/types.test.ts',
       'expectTypeOf(1).toEqualTypeOf<number>();\n',
     );
     writeFile(root, 'vitest.config.ts', 'export default { test: {} };\n');
 
-    const r = run(root, ['src/__test__/types.test.ts', 'vitest.config.ts']);
+    const r = run(root, ['src/__tests__/types.test.ts', 'vitest.config.ts']);
 
     expect(r.status).toBe(1);
     expect(r.stdout).toContain('testing-typescript/typecheck-enabled');
@@ -110,7 +110,7 @@ describe('test-config.mjs typecheck-enabled', () => {
     const root = stage();
     writeFile(
       root,
-      'src/__test__/types.test.ts',
+      'src/__tests__/types.test.ts',
       'expectTypeOf(1).toEqualTypeOf<number>();\n',
     );
     writeFile(
@@ -119,7 +119,7 @@ describe('test-config.mjs typecheck-enabled', () => {
       'expect.requireAssertions();\nexport default { test: { typecheck: { enabled: true } } };\n',
     );
 
-    const r = run(root, ['src/__test__/types.test.ts', 'vitest.config.ts']);
+    const r = run(root, ['src/__tests__/types.test.ts', 'vitest.config.ts']);
 
     expect(r.status).toBe(0);
     expect(r.stdout).not.toContain('testing-typescript/typecheck-enabled');
@@ -129,7 +129,7 @@ describe('test-config.mjs typecheck-enabled', () => {
     const root = stage();
     writeFile(
       root,
-      'src/__test__/plain.test.ts',
+      'src/__tests__/plain.test.ts',
       "it('adds', () => expect(1 + 1).toBe(2));\n",
     );
     writeFile(
@@ -138,7 +138,7 @@ describe('test-config.mjs typecheck-enabled', () => {
       'expect.requireAssertions();\nexport default { test: {} };\n',
     );
 
-    const r = run(root, ['src/__test__/plain.test.ts', 'vitest.config.ts']);
+    const r = run(root, ['src/__tests__/plain.test.ts', 'vitest.config.ts']);
 
     expect(r.status).toBe(0);
     expect(r.stdout).not.toContain('testing-typescript/typecheck-enabled');

@@ -1,5 +1,21 @@
 # @houserules/cli
 
+## 0.2.2
+
+### Patch Changes
+
+- e11c60f: Merge backups moved to a gitignored .claude/backups/ directory.
+- e11c60f: Three.js upstream docs now cover only the chosen framework bindings.
+- e11c60f: The ledger directory is only created when a ledger-consuming plugin is installed.
+- Updated dependencies [e11c60f]
+  - @houserules/api@0.3.0
+
+## 0.2.1
+
+### Patch Changes
+
+- 7b5f72a: Adopt the Jest-standard **tests** directory name for test colocation.
+
 ## 0.2.0
 
 ### Minor Changes

@@ -14,6 +14,12 @@ export interface CopyAction extends ActionBase {
   dest: string;
   mode?: number;
   reason: string;
+  /**
+   * Text appended below the payload bytes, composed from the user's selections. Folded into
+   * the recorded content hash, so a changed selection refreshes the file on update. Only
+   * meaningful for text payloads.
+   */
+  appendBody?: string;
 }
 
 export interface WriteAction extends ActionBase {

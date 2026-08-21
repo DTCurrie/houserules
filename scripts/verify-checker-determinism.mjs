@@ -276,12 +276,12 @@ const FIXTURES = {
 
   'test-layout.mjs'(dir) {
     writeFile(dir, 'src/foo.test.ts', 'export {};\n');
-    writeFile(dir, 'src/__test__/bar.test.ts', 'export {};\n');
-    writeFile(dir, 'dist/leaked/__test__/baz.test.ts', 'export {};\n');
+    writeFile(dir, 'src/__tests__/bar.test.ts', 'export {};\n');
+    writeFile(dir, 'dist/leaked/__tests__/baz.test.ts', 'export {};\n');
     return {
       args: [
         join(dir, 'src/foo.test.ts'),
-        join(dir, 'src/__test__/bar.test.ts'),
+        join(dir, 'src/__tests__/bar.test.ts'),
         join(dir, 'dist'),
       ],
     };

@@ -13,9 +13,9 @@ conclusions it derives twice. `houserules` pushes that work off the main agent's
 into disposable subagents, onto disk as ledgers and changesets, into deterministic hook scripts,
 and behind grep-able snapshots.
 
-The name is the shape of it. Your language and framework ship a printed rulebook, and it is a
-good one. House rules are the conventions your table actually plays by, layered on top. This
-installs them, in a form the agent reads every turn.
+As the name implies, your chosen language and framework ship a "rulebook". House rules are the
+conventions your "table" actually plays by, layered on top. This installs them, in a form the
+agent reads every turn.
 
 Install it and run `init` in any repo. It detects what the repo already uses, proposes a set
 of modules, previews every write, and then applies them.

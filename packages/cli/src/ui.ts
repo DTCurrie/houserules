@@ -2,6 +2,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import type { AdviseAction } from '@houserules/api';
 import type { WrittenEntry } from './apply.js';
+import { BACKUP_DIR } from './core/fs-target.js';
 import type { ChangesetInvocation, Ctx, Target } from './detect.js';
 import type { SettingsPlan } from '@houserules/api/internal';
 import type { Effect, EffectOp } from './plan.js';
@@ -404,7 +405,7 @@ export function renderPreview({
     if (settingsPlan.changes.length) {
       lines.push(
         ...bullet(
-          `± ${settingsPlan.dest} ${settingsPlan.existedBefore ? '(merge into existing; .bak kept)' : '(create)'}`,
+          `± ${settingsPlan.dest} ${settingsPlan.existedBefore ? `(merge into existing; backup kept in ${BACKUP_DIR}/)` : '(create)'}`,
           width,
           OP_STYLE.merge[1],
         ),

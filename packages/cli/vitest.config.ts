@@ -26,11 +26,11 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    // The root __test__/ holds only shared fixtures and global setup, never a test. Every
+    // The root __tests__/ holds only shared fixtures and global setup, never a test. Every
     // test lives beside the unit it covers.
     include: [
-      'src/**/__test__/**/*.test.ts',
-      'payload/**/__test__/**/*.test.ts',
+      'src/**/__tests__/**/*.test.ts',
+      'payload/**/__tests__/**/*.test.ts',
     ],
     globalSetup: ['@houserules/test/global-setup'],
     // Several suites shell out to the CLI against mkdtemp fixtures; the default

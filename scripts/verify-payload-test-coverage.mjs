@@ -7,7 +7,7 @@
  * Two configs have to agree, and each one alone produces a green signal over work that did not
  * happen. `tsconfig.json`'s `include` decides whether `pnpm check` reads a payload test.
  * `vitest.config.ts`'s `include` decides whether `pnpm test` runs it. A package missing the first
- * typechecks nothing under `payload/**\/__test__/`. A package missing the second never executes
+ * typechecks nothing under `payload/**\/__tests__/`. A package missing the second never executes
  * those suites at all, and reports success while doing it.
  *
  * What this proves: the globs are present. What it does not prove: that any given test is
@@ -25,8 +25,8 @@ import { join } from 'node:path';
 const repoRoot = join(import.meta.dirname, '..');
 const packagesDir = join(repoRoot, 'packages');
 
-const TSCONFIG_GLOB = 'payload/**/__test__/**/*.ts';
-const VITEST_GLOB = 'payload/**/__test__/**/*.test.ts';
+const TSCONFIG_GLOB = 'payload/**/__tests__/**/*.ts';
+const VITEST_GLOB = 'payload/**/__tests__/**/*.test.ts';
 
 /** Every `.mts` under a package's `payload/scripts/`, which is what makes the globs load-bearing. */
 function payloadScriptCount(packageDir) {
@@ -38,7 +38,7 @@ function payloadScriptCount(packageDir) {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry);
       if (statSync(full).isDirectory()) {
-        if (entry !== '__test__') walk(full);
+        if (entry !== '__tests__') walk(full);
       } else if (entry.endsWith('.mts')) {
         count += 1;
       }

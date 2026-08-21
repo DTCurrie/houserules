@@ -104,6 +104,85 @@ describe('three', () => {
     expect(existsSync(guidePath(root, 'r3f'))).toBe(false);
   });
 
+  it('ships upstream docs without any binding section when no guide was chosen', () => {
+    const root = installedWith([]);
+
+    const docs = readFileSync(
+      join(root, '.claude/reference/three-upstream-docs.md'),
+      'utf8',
+    );
+
+    expect(docs).not.toContain('Framework bindings installed in this repo');
+    expect(docs).not.toContain('React Three Fiber');
+    expect(docs).not.toContain('Threlte');
+    expect(
+      existsSync(
+        join(root, '.claude/reference/three-upstream-docs-threlte.md'),
+      ),
+    ).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/reference/three-upstream-docs-r3f.md')),
+    ).toBe(false);
+  });
+
+  it('links only the Threlte docs for a threlte-only install, with no R3F mention anywhere', () => {
+    const root = installedWith(['threlte']);
+
+    const docs = readFileSync(
+      join(root, '.claude/reference/three-upstream-docs.md'),
+      'utf8',
+    );
+
+    expect(docs).toContain(
+      'Threlte: `three-upstream-docs-threlte.md` beside this file.',
+    );
+    expect(docs).not.toContain('React Three Fiber');
+    expect(
+      existsSync(
+        join(root, '.claude/reference/three-upstream-docs-threlte.md'),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/reference/three-upstream-docs-r3f.md')),
+    ).toBe(false);
+  });
+
+  it('links only the R3F docs for an r3f-only install, with no Threlte mention anywhere', () => {
+    const root = installedWith(['r3f']);
+
+    const docs = readFileSync(
+      join(root, '.claude/reference/three-upstream-docs.md'),
+      'utf8',
+    );
+
+    expect(docs).toContain(
+      'React Three Fiber: `three-upstream-docs-r3f.md` beside this file.',
+    );
+    expect(docs).not.toContain('Threlte');
+    expect(
+      existsSync(join(root, '.claude/reference/three-upstream-docs-r3f.md')),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(root, '.claude/reference/three-upstream-docs-threlte.md'),
+      ),
+    ).toBe(false);
+  });
+
+  it('links both docs files, Threlte first, when both guides are chosen', () => {
+    const root = installedWith(['r3f', 'threlte']);
+
+    const docs = readFileSync(
+      join(root, '.claude/reference/three-upstream-docs.md'),
+      'utf8',
+    );
+
+    expect(docs).toContain(
+      '- Threlte: `three-upstream-docs-threlte.md` beside this file.\n' +
+        '- React Three Fiber: `three-upstream-docs-r3f.md` beside this file.',
+    );
+  });
+
   it('keeps every guide glob covered by the base rule globs', () => {
     const root = installedWith(['threlte', 'r3f']);
     const baseGlobs = pathGlobs(

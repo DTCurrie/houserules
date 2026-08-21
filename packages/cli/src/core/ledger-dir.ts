@@ -23,3 +23,30 @@ export function ledgerDirFor(ctx: Ctx): string | null {
   }
   return normalized.split('/').includes('..') ? null : normalized;
 }
+
+// Matched against a plugin entry's last path segment rather than its full name, because an
+// entry may be an npm name (`@houserules/plugin-backlog`) or a repo-relative path
+// (`packages/plugin-backlog`), and both end in the package directory.
+const LEDGER_CONSUMER_PLUGINS = new Set([
+  'plugin-backlog',
+  'plugin-decisions',
+  'plugin-github',
+]);
+
+/**
+ * Whether anything in this install writes into the ledger directory: one of the
+ * ledger-consuming plugins, or an explicit `ledgers.dir` opting in. A third-party plugin
+ * that keeps a ledger opts in the same way, by setting `ledgers.dir`. Core consults this
+ * before planning the directory's self-gitignore, so a consumer-less install never grows
+ * an empty `.claude/ledgers/`.
+ */
+export function ledgerConsumersPresent(ctx: Ctx): boolean {
+  if (ctx.claude.houseConfig?.ledgers?.dir) return true;
+  const plugins = ctx.claude.houseConfig?.plugins ?? [];
+  return plugins.some((plugin) => {
+    const lastSegment = plugin.name.replace(/\/+$/, '').split('/').at(-1);
+    return (
+      lastSegment !== undefined && LEDGER_CONSUMER_PLUGINS.has(lastSegment)
+    );
+  });
+}

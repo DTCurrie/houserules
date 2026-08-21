@@ -35,10 +35,10 @@
       ],
       "files": [
         "src/**/*.ts",
-        "!src/**/__test__/**",
+        "!src/**/__tests__/**",
         "tsconfig.build.json",
         "payload/**",
-        "!payload/**/__test__/**",
+        "!payload/**/__tests__/**",
         "tsconfig.payload.json"
       ],
       "output": [
@@ -59,7 +59,7 @@
         "tsconfig.json",
         "tsconfig.build.json",
         "payload/**/*.mts",
-        "payload/**/__test__/**",
+        "payload/**/__tests__/**",
         "tsconfig.payload.json"
       ],
       "output": []

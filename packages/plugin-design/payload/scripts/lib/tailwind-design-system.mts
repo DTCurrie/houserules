@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, isAbsolute, join } from 'node:path';
 
 import {
+  findPackageDirFrom,
   resolveHostPackage,
   TAILWIND_PACKAGE,
 } from './tailwind-host-packages.mjs';
@@ -132,6 +133,109 @@ export function findThemeEntryCss(
   return { ok: true, value: { path, alternates } };
 }
 
+/** Splits a package specifier into its package name and optional subpath. */
+function splitSpecifier(id: string): { packageName: string; subpath: string } {
+  const segments = id.split('/');
+  const nameSegmentCount = id.startsWith('@') ? 2 : 1;
+  return {
+    packageName: segments.slice(0, nameSegmentCount).join('/'),
+    subpath: segments.slice(nameSegmentCount).join('/'),
+  };
+}
+
+function styleEntryFromExports(exportsField: unknown): string | undefined {
+  const dot =
+    isRecord(exportsField) && '.' in exportsField
+      ? exportsField['.']
+      : exportsField;
+  if (typeof dot === 'string') return dot.endsWith('.css') ? dot : undefined;
+  if (isRecord(dot)) {
+    const condition = dot.style ?? dot.default;
+    if (typeof condition === 'string' && condition.endsWith('.css'))
+      return condition;
+  }
+  return undefined;
+}
+
+/**
+ * The CSS file a package specifier names, dependency-free: a subpath is tried literally and
+ * with `.css` appended, and a bare package name goes through the `exports` "." style
+ * condition, then the `style` field, then a `main` naming a `.css`, then `index.css`. The
+ * style condition first matches Tailwind's own resolver, so a package behaves here as it
+ * does under the host's real build.
+ */
+function resolveCssEntry(
+  packageDirectory: string,
+  subpath: string,
+): string | undefined {
+  if (subpath) {
+    const literal = join(packageDirectory, subpath);
+    if (existsSync(literal)) return literal;
+    const withExtension = `${literal}.css`;
+    return existsSync(withExtension) ? withExtension : undefined;
+  }
+  let manifest: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(
+      readFileSync(join(packageDirectory, 'package.json'), 'utf8'),
+    );
+    if (isRecord(parsed)) manifest = parsed;
+  } catch {
+    // No readable manifest: fall through to the index.css convention.
+  }
+  const candidates = [
+    styleEntryFromExports(manifest.exports),
+    typeof manifest.style === 'string' ? manifest.style : undefined,
+    typeof manifest.main === 'string' && manifest.main.endsWith('.css')
+      ? manifest.main
+      : undefined,
+    'index.css',
+  ];
+  for (const relative of candidates) {
+    if (relative === undefined) continue;
+    const path = join(packageDirectory, relative);
+    if (existsSync(path)) return path;
+  }
+  return undefined;
+}
+
+/**
+ * The file an `@import` id names. A relative or absolute id stays a filesystem path.
+ * Anything else is a package specifier, located by walking `node_modules` up from the
+ * importing stylesheet's own directory, so a shared tokens package resolves here the same
+ * way the host's bundler resolves it.
+ *
+ * @throws When the specifier resolves to nothing. The compile wrapper in
+ * {@link loadDesignSystem} turns the message into its `ok: false` result.
+ */
+function resolveStylesheet(
+  id: string,
+  base: string,
+  tailwindDirectory: string,
+): string {
+  if (id.startsWith('.')) return join(base, id);
+  if (isAbsolute(id)) return id;
+  const { packageName, subpath } = splitSpecifier(id);
+  // The tailwindDirectory fallback keeps the pre-package-resolution guarantee: the entry
+  // `@import "tailwindcss"` resolves even when the entry stylesheet sits outside any
+  // node_modules tree that holds Tailwind.
+  const packageDirectory =
+    findPackageDirFrom(base, packageName) ??
+    (packageName === TAILWIND_PACKAGE ? tailwindDirectory : undefined);
+  if (packageDirectory === undefined) {
+    throw new Error(
+      `@import "${id}" names a package that is not installed (looked in node_modules upward from ${base}).`,
+    );
+  }
+  const entry = resolveCssEntry(packageDirectory, subpath);
+  if (entry === undefined) {
+    throw new Error(
+      `@import "${id}" resolved to ${packageDirectory}, but no stylesheet was found there${subpath ? ` for "${subpath}"` : ''}.`,
+    );
+  }
+  return entry;
+}
+
 /**
  * Loads the host repo's own resolved Tailwind design system: the compiled theme plus a
  * candidate-to-CSS checker, both backed by the repo's real `@theme` block and utilities.
@@ -181,13 +285,14 @@ export async function loadDesignSystem(
   let loaded: unknown;
   try {
     loaded = await importedModule.__unstable__loadDesignSystem(cssText, {
-      base: root,
+      base: dirname(entryCssPath),
       loadStylesheet: async (id, base) => {
-        const path =
-          id === TAILWIND_PACKAGE
-            ? join(tailwindDirectory, 'index.css')
-            : join(base, id);
-        return { base, path, content: readFileSync(path, 'utf8') };
+        const path = resolveStylesheet(id, base, tailwindDirectory);
+        return {
+          base: dirname(path),
+          path,
+          content: readFileSync(path, 'utf8'),
+        };
       },
     });
   } catch (error) {

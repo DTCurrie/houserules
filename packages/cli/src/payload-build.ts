@@ -92,10 +92,14 @@ function rewriteImports(
 }
 
 /** Top-level `payload/` directories a plugin never wants copied verbatim into `payload-dist/`. */
-const SKIP_TOP_LEVEL_DIRS = new Set(['scripts', '__test__']);
+const SKIP_TOP_LEVEL_DIRS = new Set(['scripts', '__tests__', '__test__']);
 
 function isUnderTestDir(relativePath: string): boolean {
-  return relativePath.split(sep).includes('__test__');
+  // `__test__` is the pre-standard spelling: a plugin authored against the old rule must
+  // still never ship its tests, so both spellings stay excluded here.
+  return relativePath
+    .split(sep)
+    .some((s) => s === '__tests__' || s === '__test__');
 }
 
 /**
@@ -108,8 +112,8 @@ function isUnderTestDir(relativePath: string): boolean {
  * straight into `payload-dist/scripts`, so this function only asserts that output already
  * exists rather than duplicating it, and never touches it.
  *
- * `__test__` directories are excluded at any depth under a copied directory, mirroring
- * `tsconfig.payload.json`'s own `payload/**\/__test__/**` exclude for the scripts it compiles.
+ * `__tests__` directories are excluded at any depth under a copied directory, mirroring
+ * `tsconfig.payload.json`'s own `payload/**\/__tests__/**` exclude for the scripts it compiles.
  * A colocated test must never reach the published package, whichever surface it sits under.
  *
  * @throws When `payload/scripts` has sources but `payload-dist/scripts` is missing, meaning

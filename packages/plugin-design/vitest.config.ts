@@ -20,8 +20,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: [
-      'src/**/__test__/**/*.test.ts',
-      'payload/**/__test__/**/*.test.ts',
+      'src/**/__tests__/**/*.test.ts',
+      'payload/**/__tests__/**/*.test.ts',
     ],
     globalSetup: ['@houserules/test/global-setup'],
     testTimeout: 30_000,
