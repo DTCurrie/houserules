@@ -1,5 +1,11 @@
 # @houserules/plugin-changesets
 
+## 0.2.0
+
+### Minor Changes
+
+- b986353: changeset-write keeps a local record of each changeset it writes
+
 ## 0.1.4
 
 ### Patch Changes

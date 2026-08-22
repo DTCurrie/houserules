@@ -1,5 +1,16 @@
 # @houserules/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- b986353: orchestrate wires optional skills into its lifecycle and gains a context-size gate
+- f73b0fc: `houserules report` adds hook, guard, skill, outcome, and friction sections plus repeatable `--slug`.
+
+### Patch Changes
+
+- 67870fc: doctor verifies every installed script's imports resolve
+
 ## 0.2.3
 
 ### Patch Changes
