@@ -1,6 +1,6 @@
 packages:
-  - "packages/*"
-  - "packages/cli/test/plugin-fixture"
+  - 'packages/*'
+  - 'packages/cli/test/plugin-fixture'
 # One definition per shared external dependency. A package references these as `catalog:`,
 # so a version bump is one line here instead of an edit to every manifest. `pnpm publish`
 # rewrites `catalog:` to the range below, so nothing odd reaches a tarball. Workspace-internal
