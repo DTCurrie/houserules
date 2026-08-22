@@ -1,5 +1,13 @@
 # @houserules/api
 
+## 0.3.1
+
+### Patch Changes
+
+- 6a5152b: External dependency versions are now managed through the pnpm workspace catalog.
+- Updated dependencies [6a5152b]
+  - @houserules/payload@0.2.1
+
 ## 0.3.0
 
 ### Minor Changes
