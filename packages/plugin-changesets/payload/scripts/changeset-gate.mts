@@ -255,9 +255,48 @@ function newChangesetIds(root: string): Set<string> {
  * package whose only diff is a test ships identical bytes and needs no changeset entry. Counting
  * it produced a false positive the first time this gate ran for real: `plugin-backlog` was
  * reported as drift on the strength of a single edited test file.
+ *
+ * tsconfigs are excluded the same way: they configure the compiler and are not `files` entries.
+ * An `exclude` edit CAN change what `dist/` emits, so this trades that rare false negative for
+ * the common false positive, a repo-wide tsconfig sweep reporting every package as drift.
  */
 function shipsNothing(path: string): boolean {
-  return /(^|\/)__tests?__\//.test(path) || /\.test\.[cm]?[jt]sx?$/.test(path);
+  return (
+    /(^|\/)__tests?__\//.test(path) ||
+    /\.test\.[cm]?[jt]sx?$/.test(path) ||
+    /(^|\/)tsconfig[^/]*\.json$/.test(path)
+  );
+}
+
+/**
+ * True when `path` is a package.json whose only difference from `ref` is its `wireit` block.
+ *
+ * Wireit config (dependency graph, input globs) never changes what a consumer of the published
+ * tarball observes, and a repo-wide glob rename otherwise reports every package as drift. A file
+ * git cannot show at `ref`, or that does not parse on either side, counts as a real change.
+ */
+function wireitOnlyEdit(
+  root: string,
+  path: string,
+  ref: string | null,
+): boolean {
+  if (!ref || !/(^|\/)package\.json$/.test(path)) return false;
+  const before = git(root, ['show', `${ref}:${path}`]);
+  if (before === null) return false;
+  let pair: [Record<string, unknown>, Record<string, unknown>];
+  try {
+    pair = [
+      JSON.parse(before) as Record<string, unknown>,
+      JSON.parse(readFileSync(join(root, path), 'utf8')) as Record<
+        string,
+        unknown
+      >,
+    ];
+  } catch {
+    return false;
+  }
+  for (const pkg of pair) delete pkg.wireit;
+  return JSON.stringify(pair[0]) === JSON.stringify(pair[1]);
 }
 
 function touchedPackages(root: string): string[] {
@@ -269,6 +308,7 @@ function touchedPackages(root: string): string[] {
     .map((line) => line.slice(3).trim().replace(/^"|"$/g, ''));
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])?.trim();
   let committed: string[] = [];
+  let mergeBase: string | null = null;
   if (
     branch &&
     branch !== 'main' &&
@@ -277,9 +317,15 @@ function touchedPackages(root: string): string[] {
     committed = (git(root, ['diff', '--name-only', 'main...HEAD']) ?? '')
       .split('\n')
       .filter(Boolean);
+    mergeBase = git(root, ['merge-base', 'main', 'HEAD'])?.trim() ?? null;
   }
+  // A branch-committed path diffs against the merge base, a merely-dirty one against HEAD.
+  const committedSet = new Set(committed);
   const touched = [...dirty, ...committed].filter(
-    (p) => !isChangesetMd(p) && !shipsNothing(p),
+    (p) =>
+      !isChangesetMd(p) &&
+      !shipsNothing(p) &&
+      !wireitOnlyEdit(root, p, committedSet.has(p) ? mergeBase : 'HEAD'),
   );
   const names = new Set<string>();
   for (const path of touched) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +20,17 @@ function installChangesets(): string {
     modules: 'cs/changesets',
     plugins: [{ name: PLUGIN_ROOT, alias: 'cs' }],
   });
+}
+
+function rewritePackageJson(
+  root: string,
+  dir: string,
+  mutate: (pkg: Record<string, unknown>) => void,
+): void {
+  const path = join(root, dir, 'package.json');
+  const pkg = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  mutate(pkg);
+  writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
 describe('parseDeclaredPackages', () => {
@@ -233,6 +244,84 @@ describe('changeset-gate.mjs', () => {
     appendFileSync(
       join(root, 'apps/studio/src/main.ts'),
       'export const two = 2;\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('ignores a package whose only dirty diff is its package.json wireit block', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.wireit = { build: { files: ['src/**', '!**/__tests__/**'] } };
+    });
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const two = 2;\n',
+    );
+    writeFileSync(
+      join(root, '.changeset/kit-wireit.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('ignores a wireit-only package.json edit committed on a branch', () => {
+    const root = installChangesets();
+    runIn(root, 'git', ['checkout', '-qb', 'feature']);
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.wireit = { build: { files: ['src/**'] } };
+    });
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'chore: wireit globs']);
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const two = 2;\n',
+    );
+    writeFileSync(
+      join(root, '.changeset/kit-wireit.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('still counts a package.json edit that reaches past the wireit block', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.wireit = { build: { files: ['src/**'] } };
+      pkg.version = '0.2.0';
+    });
+    writeFileSync(
+      join(root, '.changeset/kit-real.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('ignores a tsconfig-only diff', () => {
+    const root = installChangesets();
+    writeFileSync(
+      join(root, 'games/cityville/tsconfig.build.json'),
+      '{"exclude":["src/**/__tests__/**"]}\n',
+    );
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const two = 2;\n',
+    );
+    writeFileSync(
+      join(root, '.changeset/kit-tsconfig.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
     );
 
     const r = runScript(root, SCRIPT, { input: '{}' });
