@@ -7,13 +7,13 @@ const RETRY_SIMILARITY = 0.9;
 const BULK_TOP_N = 10;
 const RETRY_TOP_N = 5;
 
-export interface RetryRun {
+interface RetryRun {
   session: string;
   length: number;
   command: string;
 }
 
-export interface ToolBulk {
+interface ToolBulk {
   tool: string;
   results: number;
   bytes: number;

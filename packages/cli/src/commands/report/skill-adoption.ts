@@ -4,7 +4,7 @@ import type { Corpus } from './transcript-events.js';
 import { skillFires } from './transcript-events.js';
 import { renderTable } from './render-table.js';
 
-export interface SkillCount {
+interface SkillCount {
   skill: string;
   model: number;
   user: number;

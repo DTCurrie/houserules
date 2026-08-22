@@ -2,7 +2,7 @@ import type { Corpus, HookFire } from './transcript-events.js';
 import { crashSignature, isCrash } from './hook-crash.js';
 import { renderTable } from './render-table.js';
 
-export interface HookHealthRow {
+interface HookHealthRow {
   hook: string;
   fires: number;
   nonZero: number;

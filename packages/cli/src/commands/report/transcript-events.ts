@@ -23,7 +23,7 @@ export interface HookFire {
   afterToolUseCount: number;
 }
 
-export interface ToolUse {
+interface ToolUse {
   id: string;
   name: string;
   /** First {@link COMMAND_PREVIEW_LENGTH} chars of a Bash command, empty for other tools. */
@@ -34,7 +34,7 @@ export interface ToolUse {
   isSidechain: boolean;
 }
 
-export interface ToolResultMeta {
+interface ToolResultMeta {
   toolUseId?: string;
   bytes: number;
   denied: boolean;
@@ -42,12 +42,12 @@ export interface ToolResultMeta {
 }
 
 /** A slash command the user typed. It injects the skill with no Skill tool call. */
-export interface CommandFire {
+interface CommandFire {
   skill: string;
   ts?: number;
 }
 
-export interface SessionEvents {
+interface SessionEvents {
   hookFires: HookFire[];
   toolUses: ToolUse[];
   toolUseIndexById: Map<string, number>;

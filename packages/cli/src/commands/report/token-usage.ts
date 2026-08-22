@@ -1,6 +1,6 @@
 import type { Corpus, FileUsage } from './transcript-events.js';
 
-export interface TokenTotals {
+interface TokenTotals {
   turns: number;
   input: number;
   output: number;
