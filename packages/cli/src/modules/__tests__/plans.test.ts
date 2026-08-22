@@ -23,6 +23,15 @@ describe('plans', () => {
       expect(text).toMatch(/Completeness self-audit/);
     });
 
+    it('ships a sonnet blast-radius-mapper agent with no edit tools', () => {
+      const agentText = readFileSync(
+        join(root, '.claude/agents/blast-radius-mapper.md'),
+        'utf8',
+      );
+      expect(agentText).toMatch(/model: sonnet/);
+      expect(agentText).toMatch(/^tools: Read, Grep, Glob, Bash$/m);
+    });
+
     it('installs the /plan-project skill without wiring a hook', () => {
       expect(
         existsSync(join(root, '.claude/skills/plan-project/SKILL.md')),
@@ -76,9 +85,12 @@ describe('plans', () => {
       expect(manifest.modules.includes('plans')).toBe(false);
     });
 
-    it('installs no skill or workspace', () => {
+    it('installs no skill, agent, or workspace', () => {
       expect(
         existsSync(join(root, '.claude/skills/plan-project/SKILL.md')),
+      ).toBe(false);
+      expect(
+        existsSync(join(root, '.claude/agents/blast-radius-mapper.md')),
       ).toBe(false);
       expect(existsSync(join(root, '.claude/plans/.gitignore'))).toBe(false);
     });

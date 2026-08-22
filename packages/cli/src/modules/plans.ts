@@ -1,5 +1,5 @@
 import type { Action, ModuleGroup } from '@houserules/api';
-import { selfGitignoreAction, skill } from './copy-actions.js';
+import { agent, selfGitignoreAction, skill } from './copy-actions.js';
 
 export const id = 'plans';
 export const title = 'Phased-implementation planning (/plan-project)';
@@ -35,6 +35,11 @@ export function plan(): Action[] {
       id,
       'blast-radius',
       'fan out read-only explorers once → archive a dated impact map under .claude/plans/',
+    ),
+    agent(
+      id,
+      'blast-radius-mapper',
+      'the sonnet explorer /blast-radius dispatches: one search angle, read-only, fixed report format',
     ),
     // Living project state, not commit artifacts, and it churns every phase. A
     // directory-local .gitignore keeps it out of commits without touching the repo's own.
