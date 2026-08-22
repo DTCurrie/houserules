@@ -261,7 +261,9 @@ Verdict, one per slice:
 | **REVISE**  | fixable within the same slice                                            | §6                                                         |
 | **RESLICE** | the slice was mis-specified (scope wrong, seam missing, two jobs in one) | slice → `BLOCKED`, rewrite the brief, redispatch next wave |
 
-Out-of-scope discoveries a worker reported go to `/backlog-add`, not into this phase.
+Out-of-scope discoveries a worker reported go to `/backlog-add`, not into this phase. When no
+backlog skill is installed, append them to a `## Deferred` section in the sub-plan instead,
+creating it if absent, so the discovery survives for the user to triage. Never drop one silently.
 
 ## 6. Revise in place, capped at 2 rounds
 
@@ -312,7 +314,8 @@ both files.
 (components, styles, templates), or its sub-plan carries a `ui` signal on its `**Signals:**`
 line, run `/accessibility-review` and `/design-review`, each skipped silently when not
 installed. Their findings route like worker reports: a fix-worthy item becomes one revise pass
-over the owning slice's paths, and the rest go to `/backlog-add`.
+over the owning slice's paths, and the rest go to `/backlog-add`, or to the sub-plan's
+`## Deferred` section when no backlog skill is installed (§5).
 
 **The last phase also hands over the PR description.** When this close flips the ROADMAP to
 DONE and `/pr-description` is installed, produce the description alongside the acceptance
