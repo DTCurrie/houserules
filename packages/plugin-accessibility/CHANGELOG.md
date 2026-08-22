@@ -1,5 +1,11 @@
 # @houserules/plugin-accessibility
 
+## 0.1.3
+
+### Patch Changes
+
+- 6a5152b: External dependency versions are now managed through the pnpm workspace catalog.
+
 ## 0.1.2
 
 ### Patch Changes

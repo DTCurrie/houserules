@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-three",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "houserules plugin: Three.js authoring patterns, with opt-in Threlte and React Three Fiber guides.",
   "type": "module",
   "publishConfig": {
