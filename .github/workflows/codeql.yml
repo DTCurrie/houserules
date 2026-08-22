@@ -17,6 +17,12 @@ permissions:
 
 jobs:
   analyze:
+    # A changesets "Version Packages" PR touches only versions, changelogs, and consumed
+    # .changeset entries, nothing CodeQL analyzes, so skip it. Job-level because the
+    # trigger-level `branches` filter matches the base branch. GitHub reports a skipped job
+    # as passing for required status checks. head_ref is empty outside pull_request, so
+    # pushes and the schedule still run.
+    if: github.head_ref != 'changeset-release/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
