@@ -418,10 +418,29 @@ function skillAdoption(corpus, skillsDir) {
   return { counts, installed, dead };
 }
 
-// A /changeset fire landed if git history shows a .changeset/*.md file added within the
-// match window after it. Commit time is the only durable trace: the files themselves are
-// deleted again at release, and they carry no session id.
+// A /changeset fire landed if the outcome record in .claude/state/changesets.jsonl holds
+// an entry from the same session (`chat`, exact) or within the ledger window, each entry
+// matching one fire. Fires older than the record fall back to git history: a .changeset
+// file added within the match window, since commit time is the only durable trace once
+// the files are deleted at release.
 function changesetOutcome(corpus, root) {
+  const recorded = [];
+  const recordPath = join(root, '.claude', 'state', 'changesets.jsonl');
+  if (existsSync(recordPath)) {
+    for (const line of readFileSync(recordPath, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        recorded.push({
+          ts: Date.parse(entry.ts ?? '') || undefined,
+          chat: entry.chat,
+          used: false,
+        });
+      } catch {
+        // A record line that does not parse is the writer's defect to report, not this script's to throw on.
+      }
+    }
+  }
   const log = spawnSync(
     'git',
     [
@@ -446,15 +465,38 @@ function changesetOutcome(corpus, root) {
     }
   }
   const fires = skillFires(corpus, 'changeset');
-  const matched = fires.filter(
-    (fire) =>
+  let exact = 0;
+  let windowed = 0;
+  for (const fire of fires) {
+    const record = recorded.find(
+      (candidate) =>
+        !candidate.used &&
+        (candidate.chat === fire.sessionId ||
+          (candidate.ts &&
+            fire.ts &&
+            Math.abs(candidate.ts - fire.ts) <= LEDGER_MATCH_WINDOW_MS)),
+    );
+    if (record) {
+      record.used = true;
+      exact += 1;
+      continue;
+    }
+    if (
       fire.ts &&
       addTimes.some(
         (added) =>
           added >= fire.ts && added <= fire.ts + CHANGESET_MATCH_WINDOW_MS,
-      ),
-  ).length;
-  return { fires: fires.length, matched, filesAdded };
+      )
+    )
+      windowed += 1;
+  }
+  return {
+    fires: fires.length,
+    exact,
+    windowed,
+    recordEntries: recorded.length,
+    filesAdded,
+  };
 }
 
 // A ledger-writing skill fire landed if the ledger holds an `add` entry from the same
@@ -677,8 +719,9 @@ function report(corpus) {
     console.log('\n  outcomes:');
     const changesets = changesetOutcome(corpus, corpus.root);
     console.log(
-      `    /changeset:   fired ${changesets.fires}, a .changeset file was git-added within 72h for ${changesets.matched}` +
-        ` (${changesets.filesAdded} files added across history)`,
+      `    /changeset:   fired ${changesets.fires}, matched ${changesets.exact} via the outcome record` +
+        ` and ${changesets.windowed} via the 72h git window` +
+        ` (${changesets.recordEntries} record entries, ${changesets.filesAdded} files added across history)`,
     );
     for (const [skillName, ledgerFile] of [
       ['backlog-add', 'backlog.jsonl'],

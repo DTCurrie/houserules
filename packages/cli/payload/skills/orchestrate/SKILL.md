@@ -30,8 +30,9 @@ grep -l . .claude/plans/*/ROADMAP.md | xargs grep -H '^\*\*Status:\*\*'
 
 ### Arguments
 
-`/orchestrate [<plan-slug>] [<phase> | all] [--auto]`, both leading parts optional. A bare token that
-is a number or `all` is the **phase**. Anything else is the **plan slug**.
+`/orchestrate [<plan-slug>] [<phase> | all] [--auto] [--ignore-gates <key,key>]`, both leading
+parts optional. A bare token that is a number or `all` is the **phase**. Anything else is the
+**plan slug**.
 
 | Invocation                     | Means                                                   |
 | ------------------------------ | ------------------------------------------------------- |
@@ -62,10 +63,25 @@ before you slice anything. That one line is what lets the user stop you cheaply 
 **Default is check-in.** After each phase closes, report what landed and stop for the user. `--auto`
 suppresses only that pause. It never suppresses a `BLOCKED` stop (§7).
 
+**Gates.** A gate is a named stop condition that halts an `--auto` run at a phase boundary for
+user input. `--ignore-gates <key,key>` disables the named gates, for a run whose owner accepts
+the documented cost. The registry today is one key: `context-size` (§8). `BLOCKED` is not a
+gate and can never be ignored, because it marks a correctness stop, not a preference.
+
 ## 1. Slice the phase
 
 Read the phase sub-plan (`phase-N-<slug>.md`). Break its steps into **slices**: the unit one worker
 owns end to end.
+
+Two pre-slicing moments, each skipped silently when its skill is not installed:
+
+- **Wide or risky phase → `/blast-radius` first.** When the phase touches several packages, or its
+  sub-plan carries a `wide` signal on its `**Signals:**` line, run it before drawing slices and
+  let the impact map inform the `owns` sets and wave boundaries. A small phase never pays for a
+  fan-out map.
+- **Codemod-shaped step → `/sweep`, not slices.** A rote, rule-based, repo-wide step (an import
+  rename, an API swap) goes to `/sweep` as one unit instead of being drawn into file-owned
+  slices. Judgment-scoped work still slices. The two fan-out models stay distinct.
 
 A well-formed slice has:
 
@@ -265,12 +281,15 @@ where the tree is quiet enough to touch globally:
 1. **Fix once.** Run the repo's auto-fix (`lint:fix` / `format:fix`, or the `fix.commands` in
    `.claude/houserules.config.json`) across the packages the wave touched, in one pass over a tree
    that is finally consistent.
-2. **Verify what actually changed.** Run `/verify-changed` if installed (it scopes to the changed
+2. **Tidy once.** Run `/tidy` over the wave's diff, if that skill is installed, after the fixer
+   and before verify so its edits are proven by the same verification. Never inside a worker, for
+   the same reason as the fixer: it rewrites files siblings may still have open.
+3. **Verify what actually changed.** Run `/verify-changed` if installed (it scopes to the changed
    packages plus dependents, off-context), otherwise the repo's verify on the touched packages.
-3. **Update the slice table** in place, then print the status table (§4), the wave-close printing.
-4. **Snapshot the state nothing can regenerate**, into a scratch directory: the plan workspace and
+4. **Update the slice table** in place, then print the status table (§4), the wave-close printing.
+5. **Snapshot the state nothing can regenerate**, into a scratch directory: the plan workspace and
    anything else gitignored that no command can rebuild. `references/closing.md` says what to copy.
-5. **Then** open the next wave. Never dispatch wave N+1 with an unreviewed slice from wave N. That is
+6. **Then** open the next wave. Never dispatch wave N+1 with an unreviewed slice from wave N. That is
    precisely how the architecture drifts while you aren't looking.
 
 **Residue** is what auto-fix couldn't fix, and it's yours by default. Never send it back to the slice
@@ -289,6 +308,16 @@ header and the `ROADMAP.md` line to `DONE (<date>)` in one pass, with a `## Log`
 Run `node .claude/scripts/plan-lint.mjs` if installed, to confirm the update actually landed on
 both files.
 
+**A phase that touched UI surfaces gets its reviews now.** When the phase's diff reached UI code
+(components, styles, templates), or its sub-plan carries a `ui` signal on its `**Signals:**`
+line, run `/accessibility-review` and `/design-review`, each skipped silently when not
+installed. Their findings route like worker reports: a fix-worthy item becomes one revise pass
+over the owning slice's paths, and the rest go to `/backlog-add`.
+
+**The last phase also hands over the PR description.** When this close flips the ROADMAP to
+DONE and `/pr-description` is installed, produce the description alongside the acceptance
+checklist. The user still creates the PR.
+
 **Before reporting, promote durable decisions.** Skip this step if `.claude/scripts/decision-log.mjs`
 is absent. Re-read the phase's `## Notes & decisions` and the decisions-and-deviations section of
 every report you reconciled, and run `/decide` on anything that clears its bar.
@@ -304,6 +333,17 @@ what the snapshot in §7 is protecting.
 
 Then report to the user: slices run, what landed, the verify verdict, anything backlogged. **Stop
 here** unless the invocation was `all --auto`, in which case continue to the next phase's §1.
+
+**The context-size gate** runs at this boundary, only after the close checklist above has passed
+and never mid-wave. When the session's context has grown past roughly half the window (the
+harness's approaching-auto-compact warning is the strong signal), act by mode:
+
+- Check-in mode: add one line to the report suggesting `/clear`, then
+  `/orchestrate <slug> <next-phase>` in the fresh session. The plan docs are the state (§9), so
+  a compaction summary of them is redundant and `/clear` is cheaper than `/compact`.
+- `all --auto`: stop instead of opening the next phase and print the resume commands (`/clear`,
+  then `/orchestrate <slug> all --auto`). `--ignore-gates context-size` (§0) disables this stop
+  for a run whose owner accepts unbounded context growth.
 
 At the end of the last phase, flip the ROADMAP header to `**Status:** DONE` and hand over the
 per-phase acceptance checklist. `/ready` gives you that roll-up if it's installed.

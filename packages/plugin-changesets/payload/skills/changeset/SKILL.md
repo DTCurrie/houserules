@@ -58,8 +58,11 @@ installed, so files match the version; the zero-dep writer remains as fallback.`
 5. **Record it.** The script validates package names against the real workspace.
 
    ```
-   node .claude/scripts/changeset-write.mjs --pkg <name>:<level> [--pkg <name>:<level> ...] --summary "<summary>"
+   node .claude/scripts/changeset-write.mjs --pkg <name>:<level> [--pkg <name>:<level> ...] --summary "<summary>" --chat <session-id>
    ```
+
+   Pass the current session's id as `--chat` when you know it. It stamps the outcome
+   record that links the changeset to its session, and it is safe to omit.
 
    To fold this change into a pending changeset instead, name it with `--amend`:
 
