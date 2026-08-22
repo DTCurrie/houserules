@@ -28,6 +28,12 @@ updates:
     schedule:
       interval: 'weekly'
     open-pull-requests-limit: 10
+    ignore:
+      # changesets/action v2 requires @changesets/cli v3; this repo is on v2. Lift this
+      # when the CLI is upgraded to v3, and rename the action's version/publish inputs
+      # to version-script/publish-script in release.yml at the same time.
+      - dependency-name: 'changesets/action'
+        update-types: ['version-update:semver-major']
     groups:
       github-actions:
         patterns:
