@@ -1,6 +1,6 @@
 {
   "name": "@houserules/cli",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "houserules: an interactive installer for portable Claude Code context discipline: hooks, skills, agents, changesets integration, and token-efficiency tooling.",
   "type": "module",
   "publishConfig": {
