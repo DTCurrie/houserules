@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-persona-auditor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "houserules plugin: a blind-rank-then-reconcile persona-auditor agent template.",
   "type": "module",
   "publishConfig": {

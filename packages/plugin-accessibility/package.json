@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-accessibility",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "houserules plugin: WCAG routing and lookup for agents editing HTML and HTML-like markup.",
   "type": "module",
   "publishConfig": {
