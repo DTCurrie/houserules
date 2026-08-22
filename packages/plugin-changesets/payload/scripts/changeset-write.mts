@@ -24,6 +24,8 @@
  *                       Repeatable. Requires --amend. The survivor's bumps are the
  *                       union of its own, every absorbed file's, and any --pkg given,
  *                       at the highest level named for each package.
+ *   --chat <id>         session id to stamp on the outcome record, linking the
+ *                       changeset to the session that wrote it.
  *
  * Package names are validated against the packages that actually exist, the workspace
  * members or the root package in a single-package repo, never against a possibly-stale
@@ -31,13 +33,14 @@
  */
 
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
   unlinkSync,
 } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { execSync } from 'node:child_process';
@@ -46,6 +49,7 @@ import { parseArgs } from 'node:util';
 import { listPublishablePackageNames } from '@houserules/payload/workspaces';
 
 const LEVELS = new Set(['patch', 'minor', 'major']);
+const OUTCOME_RECORD = '.claude/state/changesets.jsonl';
 const LEVEL_RANK: Record<string, number> = { patch: 0, minor: 1, major: 2 };
 const RELEASE_LINE = /^\s*['"]?([^'"]+?)['"]?\s*:\s*(patch|minor|major)\s*$/;
 
@@ -110,6 +114,32 @@ function usage(message?: string): never {
 
 // Accepts the id, the filename, or the path the script itself printed, so amending never
 // needs the caller to reshape what they were handed.
+// Appends to the outcome record: the durable, session-linked trace of what was written,
+// which survives the changeset file's own deletion at release. Measurement metadata only,
+// so a failed write warns and never fails the changeset.
+function recordOutcome(
+  repoRoot: string,
+  file: string,
+  chat: string | undefined,
+  action: 'add' | 'amend',
+): void {
+  try {
+    const recordPath = join(repoRoot, OUTCOME_RECORD);
+    mkdirSync(dirname(recordPath), { recursive: true });
+    const entry = {
+      ts: new Date().toISOString(),
+      file,
+      action,
+      ...(chat ? { chat } : {}),
+    };
+    appendFileSync(recordPath, `${JSON.stringify(entry)}\n`);
+  } catch (e) {
+    console.error(
+      `note: could not record the changeset outcome: ${(e as Error)?.message ?? e}`,
+    );
+  }
+}
+
 function resolveAmendTarget(changesetDir: string, raw: string): string {
   const name = basename(raw).replace(/\.md$/i, '');
   if (!name || /^readme$/i.test(name)) {
@@ -161,6 +191,7 @@ let values: {
   empty?: boolean;
   amend?: string;
   absorb?: string[];
+  chat?: string;
 };
 try {
   ({ values } = parseArgs({
@@ -172,6 +203,7 @@ try {
       empty: { type: 'boolean' },
       amend: { type: 'string' },
       absorb: { type: 'string', multiple: true },
+      chat: { type: 'string' },
     },
     allowPositionals: false,
   }));
@@ -327,3 +359,10 @@ if (amendTarget) {
 } else {
   console.log(`.changeset/${id}.md`);
 }
+
+recordOutcome(
+  root,
+  amendTarget ? basename(amendTarget) : `${id}.md`,
+  values.chat,
+  amendTarget ? 'amend' : 'add',
+);

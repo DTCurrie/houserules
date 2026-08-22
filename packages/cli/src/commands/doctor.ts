@@ -19,6 +19,7 @@ import { checkModuleHealth } from './doctor/module-health.js';
 import { checkPluginRegistration } from './doctor/plugin-registration.js';
 import { checkReferenceReachability } from './doctor/reference-reachability.js';
 import { checkResidentSurface } from './doctor/resident-surface.js';
+import { checkScriptImports } from './doctor/script-imports.js';
 import { checkSettingsWiring } from './doctor/settings-wiring.js';
 
 /**
@@ -90,6 +91,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     checkReferenceReachability(root, ctx),
     checkEnvironment(ctx),
     checkInstallIntegrity(root, ctx, flags.kitVersion, config.registry),
+    checkScriptImports(root, ctx),
     config,
     checkSettingsWiring(root, ctx),
     checkModuleHealth(root, ctx, config.registry),

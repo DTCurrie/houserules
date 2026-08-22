@@ -28,6 +28,7 @@ interface CommandOptions {
   force?: boolean;
   nextSteps?: boolean;
   json?: boolean;
+  slug?: string[];
 }
 
 /** Null until a subcommand runs, which tells "no command given" apart from "exited 0". */
@@ -58,6 +59,7 @@ function flagsFrom(options: CommandOptions, command: Command): Flags {
     force: options.force ?? false,
     nextSteps: options.nextSteps ?? false,
     json: options.json ?? false,
+    slug: options.slug,
     kitVersion: KIT_VERSION,
   };
 }
@@ -212,6 +214,12 @@ program
   .description("transcript telemetry for this repo's sessions (read-only)")
   .argument('[dir]', 'target repo root (default: current directory)')
   .option('--json', 'machine-readable report on stdout')
+  .option(
+    '--slug <dir>',
+    'merge another ~/.claude/projects transcript dir into the corpus (repeatable)',
+    (value: string, previous: string[]) => [...previous, value],
+    [] as string[],
+  )
   .action(
     async (
       dir: string | undefined,

@@ -76,4 +76,39 @@ describe('report', () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/No transcripts found/);
   });
+
+  it('appends the metric family sections after the token tables', () => {
+    const r = runCli(['report', root], { env });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/-- hook health --/);
+    expect(r.stdout).toMatch(/no genuine blocks in this corpus/);
+    expect(r.stdout).toMatch(/-- skills --/);
+    expect(r.stdout).toMatch(/no skill fires in this corpus/);
+    expect(r.stdout).toMatch(/outcomes:/);
+    expect(r.stdout).toMatch(/-- friction --/);
+  });
+
+  it('merges a --slug transcript dir into the corpus', () => {
+    const extraDir = join(cfgDir, 'projects', 'extra-history');
+    mkdirSync(extraDir, { recursive: true });
+    writeFileSync(
+      join(extraDir, 'sess-99999999.jsonl'),
+      `${JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-4-8',
+          usage: { input_tokens: 7, output_tokens: 3 },
+        },
+      })}\n`,
+    );
+
+    const r = runCli(['report', root, '--slug', 'extra-history'], { env });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/transcript dirs: .*extra-history/);
+    expect(r.stdout).toMatch(/2 session\(s\):/);
+    expect(r.stdout).toMatch(/sess-999/);
+    expect(r.stdout).toMatch(/turns 2/);
+  });
 });

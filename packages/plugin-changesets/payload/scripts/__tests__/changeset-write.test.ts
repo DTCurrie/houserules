@@ -425,6 +425,88 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
   });
 });
 
+describe('changeset-write.mjs outcome record', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = installChangesets();
+    linkChangesetsCli(root);
+  });
+
+  function records(): {
+    ts: string;
+    file: string;
+    action: string;
+    chat?: string;
+  }[] {
+    return readFileSync(join(root, '.claude/state/changesets.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+  }
+
+  it('stamps one record line with the created file and the --chat id', () => {
+    const before = new Set(readdirSync(join(root, '.changeset')));
+
+    const r = runScript(root, SCRIPT, {
+      args: [
+        '--pkg',
+        '@fix/studio',
+        '--summary',
+        'Record me.',
+        '--chat',
+        'session-abc',
+      ],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(records()).toEqual([
+      {
+        ts: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) as string,
+        file: soleNewChangeset(root, before),
+        action: 'add',
+        chat: 'session-abc',
+      },
+    ]);
+  });
+
+  it('records an amend under the surviving filename, omitting chat when not passed', () => {
+    const before = new Set(readdirSync(join(root, '.changeset')));
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio', '--summary', 'First.'],
+    });
+    expect(first.status, first.stderr).toBe(0);
+    const file = soleNewChangeset(root, before);
+
+    const r = runScript(root, SCRIPT, {
+      args: ['--amend', file.replace(/\.md$/, ''), '--summary', 'Rewritten.'],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    const [, second] = records();
+    expect(second).toEqual({
+      ts: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) as string,
+      file,
+      action: 'amend',
+    });
+  });
+
+  it('warns without failing the changeset when the record cannot be written', () => {
+    const before = new Set(readdirSync(join(root, '.changeset')));
+    mkdirSync(join(root, '.claude/state/changesets.jsonl'), {
+      recursive: true,
+    });
+
+    const r = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/studio', '--summary', 'Still written.'],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toMatch(/could not record the changeset outcome/);
+    expect(newChangesets(root, before)).toHaveLength(1);
+  });
+});
+
 describe('changeset-write.mjs on a single-package repo', () => {
   it('defaults --pkg to the root package, seeding .changeset/config.json first', () => {
     const root = useInstalledRepo('npm-single', {
