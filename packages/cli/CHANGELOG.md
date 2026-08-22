@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.3.2
+
+### Patch Changes
+
+- d834e38: Orchestrate and ready skills fall back gracefully when no backlog plugin is installed.
+
 ## 0.3.1
 
 ### Patch Changes
