@@ -110,5 +110,7 @@
   "keywords": [
     "houserules",
     "houserules-test"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }

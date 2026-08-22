@@ -111,5 +111,7 @@
     "houserules-plugin",
     "claude-code",
     "plugin-api"
-  ]
+  ],
+  "peerDependencies": {},
+  "optionalDependencies": {}
 }

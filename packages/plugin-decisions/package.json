@@ -122,5 +122,7 @@
     "decisions",
     "decision-record",
     "adr"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }

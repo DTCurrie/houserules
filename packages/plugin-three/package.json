@@ -111,5 +111,7 @@
     "houserules-plugin",
     "threejs",
     "claude-code"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }

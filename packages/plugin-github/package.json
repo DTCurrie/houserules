@@ -123,5 +123,7 @@
     "github-projects",
     "backlog",
     "ledger"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }

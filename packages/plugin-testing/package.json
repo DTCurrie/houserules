@@ -124,5 +124,7 @@
     "claude-code",
     "testing",
     "test-conventions"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }

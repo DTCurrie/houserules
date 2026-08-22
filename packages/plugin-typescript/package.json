@@ -111,5 +111,7 @@
     "houserules-plugin",
     "typescript",
     "claude-code"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }

@@ -1,19 +1,13 @@
 packages:
-  - 'packages/*'
-  # The plugin-resolver suite loads this fixture through the real Node resolver, so its
-  # `@houserules/cli/plugin` import has to resolve the way a consumer's would. Declaring it a
-  # workspace package is what creates that link. Without it the import resolves only on a
-  # machine where someone made the symlink by hand, and `pnpm check` passes or fails by
-  # environment. It ships nothing: `private: true`, no scripts, and outside the CLI's `files`.
-  - 'packages/cli/test/plugin-fixture'
-
+  - "packages/*"
+  - "packages/cli/test/plugin-fixture"
 # One definition per shared external dependency. A package references these as `catalog:`,
 # so a version bump is one line here instead of an edit to every manifest. `pnpm publish`
 # rewrites `catalog:` to the range below, so nothing odd reaches a tarball. Workspace-internal
 # ranges (`@houserules/*` peers) stay inline, since changesets manages those.
 catalog:
   '@arethetypeswrong/cli': ^0.18.5
-  '@types/node': ^26.1.2
+  '@types/node': 26.2.0
   prettier: ^3.9.6
   publint: ^0.3.24
   type-fest: ^5.8.0

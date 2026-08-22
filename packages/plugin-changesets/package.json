@@ -123,5 +123,7 @@
     "changelog",
     "release",
     "semver"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }

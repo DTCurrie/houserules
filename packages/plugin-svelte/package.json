@@ -120,5 +120,7 @@
     "houserules-plugin",
     "svelte",
     "claude-code"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }
