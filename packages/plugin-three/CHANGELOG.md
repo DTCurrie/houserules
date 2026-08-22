@@ -1,5 +1,11 @@
 # @houserules/plugin-three
 
+## 0.2.1
+
+### Patch Changes
+
+- 6a5152b: External dependency versions are now managed through the pnpm workspace catalog.
+
 ## 0.2.0
 
 ### Minor Changes
