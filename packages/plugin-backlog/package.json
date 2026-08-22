@@ -122,5 +122,7 @@
     "backlog",
     "ledger",
     "technical-debt"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }

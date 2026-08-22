@@ -215,5 +215,7 @@
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wireit": "catalog:"
-  }
+  },
+  "peerDependencies": {},
+  "optionalDependencies": {}
 }

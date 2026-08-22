@@ -129,5 +129,7 @@
     "design-system",
     "dtcg",
     "claude-code"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }

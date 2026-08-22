@@ -113,5 +113,7 @@
     "persona",
     "audit",
     "design-review"
-  ]
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
 }
