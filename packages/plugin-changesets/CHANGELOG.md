@@ -1,5 +1,12 @@
 # @houserules/plugin-changesets
 
+## 0.1.4
+
+### Patch Changes
+
+- f1b13b5: changeset-gate no longer counts wireit-block and tsconfig-only edits as shippable (PLUGINCHANGE-553a5d).
+- 6a5152b: External dependency versions are now managed through the pnpm workspace catalog.
+
 ## 0.1.3
 
 ### Patch Changes

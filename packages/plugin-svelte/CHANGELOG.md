@@ -1,5 +1,11 @@
 # @houserules/plugin-svelte
 
+## 0.1.2
+
+### Patch Changes
+
+- 6a5152b: External dependency versions are now managed through the pnpm workspace catalog.
+
 ## 0.1.1
 
 ### Patch Changes
