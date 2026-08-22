@@ -1,5 +1,11 @@
 # @houserules/test
 
+## 0.1.1
+
+### Patch Changes
+
+- 6a5152b: External dependency versions are now managed through the pnpm workspace catalog.
+
 ## 0.1.0
 
 ### Minor Changes
