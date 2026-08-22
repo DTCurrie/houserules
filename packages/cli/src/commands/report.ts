@@ -1,199 +1,86 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { detect } from '../detect.js';
 import type { Flags } from '../cli-contract.js';
+import { computeFriction, renderFriction } from './report/friction.js';
+import {
+  computeGuardBlocks,
+  renderGuardEfficacy,
+} from './report/guard-efficacy.js';
+import { computeHookHealth, renderHookHealth } from './report/hook-health.js';
+import {
+  computeSkillAdoption,
+  renderSkillAdoption,
+} from './report/skill-adoption.js';
+import {
+  computeChangesetOutcome,
+  computeLedgerOutcome,
+  renderSkillOutcomes,
+} from './report/skill-outcomes.js';
+import { computeTokenUsage, renderTokenUsage } from './report/token-usage.js';
+import { readCorpus } from './report/transcript-events.js';
 
-interface Usage {
-  input_tokens?: number;
-  output_tokens?: number;
-  cache_read_input_tokens?: number;
-  cache_creation_input_tokens?: number;
-}
-
-interface TranscriptMessage {
-  role?: string;
-  model?: string;
-  usage?: Usage;
-  content?: unknown;
-}
-
-/** One line of a Claude Code transcript .jsonl file: only the fields report() reads. */
-interface TranscriptRecord {
-  type?: string;
-  isSidechain?: boolean;
-  message?: TranscriptMessage;
-}
-
-interface TranscriptAgg {
-  turns: number;
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  toolResults: number;
-  models: Set<string>;
-  sidechainTurns: number;
-  skippedLines: number;
-}
-
-// Anthropic cache multipliers relative to base input price: a cache READ bills at
-// ~0.1×, a cache WRITE at ~1.25×. Output is a different axis, reported separately.
-const CACHE_READ_WEIGHT = 0.1;
-const CACHE_WRITE_WEIGHT = 1.25;
-
-// Aggregates one Claude Code session log.
-function parseTranscript(text: string): TranscriptAgg {
-  const agg: TranscriptAgg = {
-    turns: 0,
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
-    toolResults: 0,
-    models: new Set(),
-    sidechainTurns: 0,
-    skippedLines: 0,
-  };
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue;
-    let rec: TranscriptRecord;
-    try {
-      rec = JSON.parse(line);
-    } catch {
-      agg.skippedLines += 1;
-      continue;
-    }
-    const msg = rec.message ?? {};
-    if (rec.type === 'assistant' || msg.role === 'assistant') {
-      agg.turns += 1;
-      if (rec.isSidechain) agg.sidechainTurns += 1;
-      if (msg.model) agg.models.add(msg.model);
-      const u = msg.usage ?? {};
-      agg.input += u.input_tokens ?? 0;
-      agg.output += u.output_tokens ?? 0;
-      agg.cacheRead += u.cache_read_input_tokens ?? 0;
-      agg.cacheWrite += u.cache_creation_input_tokens ?? 0;
-    } else if (rec.type === 'user' || msg.role === 'user') {
-      const content = msg.content;
-      if (Array.isArray(content))
-        agg.toolResults += content.filter(
-          (b) => (b as { type?: string })?.type === 'tool_result',
-        ).length;
-    }
-  }
-  return agg;
-}
-
-// Cost-weighted input-equivalent: fresh input at 1×, cache writes at 1.25×, cache
-// reads at 0.1×. So a session that offloaded work into the cache reads as cheaper.
-function weightedInput(a: TranscriptAgg): number {
-  return Math.round(
-    a.input +
-      a.cacheWrite * CACHE_WRITE_WEIGHT +
-      a.cacheRead * CACHE_READ_WEIGHT,
-  );
-}
-
-const n = (x: number) => x.toLocaleString('en-US');
-const pct = (num: number, den: number) =>
-  den ? `${Math.round((num / den) * 100)}%` : '0%';
+const LEDGERS: [skill: string, ledgerFile: string][] = [
+  ['backlog-add', 'backlog.jsonl'],
+  ['decide', 'decisions.jsonl'],
+];
 
 /**
- * Read-only transcript telemetry. Rolls this repo's session logs into per-session and
- * total token tables so adopters can watch cache_read climb and fresh input fall across
- * init and module toggles. Native `/usage` covers the live view. This is the trend view.
+ * Read-only transcript telemetry. Rolls this repo's session logs into the token tables
+ * plus one section per metric family: hook health, guard efficacy, skill adoption and
+ * outcomes, and friction. Native `/usage` covers the live view. This is the trend view.
+ * `--slug` merges extra transcript directories into the corpus, e.g. a pre-rename
+ * history dir.
  */
-export async function report(dir: string, _flags: Flags): Promise<number> {
+export async function report(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);
   const ctx = detect(root);
   const top = ctx.git.top ?? root;
   const base = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
-  const encoded = top.replaceAll('/', '-');
-  const projDir = join(base, 'projects', encoded);
+  const slugs = [top.replaceAll('/', '-'), ...(flags.slug ?? [])];
+  const corpus = readCorpus(join(base, 'projects'), slugs);
 
   console.log(`\n=== houserules report — ${top} ===\n`);
-  if (!existsSync(projDir)) {
-    console.log(`No transcripts found (looked in ${projDir}).`);
+  if (slugs.length > 1) console.log(`transcript dirs: ${slugs.join(', ')}`);
+  if (!corpus.files.length) {
+    const dirs = slugs.map((slug) => join(base, 'projects', slug));
+    const present = dirs.filter((d) => !corpus.missingDirs.includes(d));
+    if (present.length)
+      console.log(`No .jsonl transcripts in ${present.join(', ')}.`);
+    else console.log(`No transcripts found (looked in ${dirs.join(', ')}).`);
     return 0;
   }
-  const files = readdirSync(projDir)
-    .filter((f) => f.endsWith('.jsonl'))
-    .sort();
-  if (!files.length) {
-    console.log(`No .jsonl transcripts in ${projDir}.`);
-    return 0;
-  }
+  for (const missing of corpus.missingDirs)
+    console.log(`(no transcripts at ${missing})`);
 
-  const total: TranscriptAgg = {
-    turns: 0,
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
-    toolResults: 0,
-    models: new Set(),
-    sidechainTurns: 0,
-    skippedLines: 0,
-  };
-  console.log(`${files.length} session(s):\n`);
-  let skippedFiles = 0;
-  for (const file of files) {
-    let a: TranscriptAgg;
-    try {
-      a = parseTranscript(readFileSync(join(projDir, file), 'utf8'));
-    } catch (error) {
-      skippedFiles += 1;
-      console.error(
-        `  (skipped ${file}: could not read it — ${(error as Error).message})`,
-      );
-      continue;
-    }
-    total.turns += a.turns;
-    total.input += a.input;
-    total.output += a.output;
-    total.cacheRead += a.cacheRead;
-    total.cacheWrite += a.cacheWrite;
-    total.toolResults += a.toolResults;
-    total.sidechainTurns += a.sidechainTurns;
-    total.skippedLines += a.skippedLines;
-    for (const m of a.models) total.models.add(m);
-    const id = file.replace(/\.jsonl$/, '').slice(0, 8);
-    console.log(
-      `  ${id}  turns ${a.turns}  in ${n(a.input)}  out ${n(a.output)}  ` +
-        `cache_read ${n(a.cacheRead)}  cache_write ${n(a.cacheWrite)}  ` +
-        `tools ${a.toolResults}  weighted-in ${n(weightedInput(a))}` +
-        (a.skippedLines
-          ? `  (${a.skippedLines} line(s) could not be parsed and were skipped)`
-          : ''),
+  for (const unreadable of corpus.unreadableFiles)
+    console.error(
+      `  (skipped ${unreadable.file}: could not read it — ${unreadable.message})`,
     );
-  }
+  console.log(renderTokenUsage(computeTokenUsage(corpus)).join('\n'));
 
-  const cacheableIn = total.input + total.cacheRead + total.cacheWrite;
-  console.log('\n-- totals --');
+  console.log('');
+  console.log(renderHookHealth(computeHookHealth(corpus)).join('\n'));
+  console.log('');
+  console.log(renderGuardEfficacy(computeGuardBlocks(corpus)).join('\n'));
+  console.log('');
   console.log(
-    `  turns ${n(total.turns)} | fresh input ${n(total.input)} | output ${n(total.output)}`,
+    renderSkillAdoption(
+      computeSkillAdoption(corpus, join(top, '.claude', 'skills')),
+    ).join('\n'),
   );
+  console.log('');
   console.log(
-    `  cache_read ${n(total.cacheRead)} | cache_write ${n(total.cacheWrite)} | tool_results ${n(total.toolResults)}`,
+    renderSkillOutcomes(
+      computeChangesetOutcome(corpus, top),
+      LEDGERS.map(([skill, ledgerFile]) =>
+        computeLedgerOutcome(corpus, top, ledgerFile, skill),
+      ),
+    ).join('\n'),
   );
-  console.log(
-    `  cache-read share of input: ${pct(total.cacheRead, cacheableIn)} (cheap tier — the higher the better)`,
-  );
-  console.log(
-    `  cost-weighted input-equivalent: ${n(weightedInput(total))} (cache_read ×${CACHE_READ_WEIGHT}, cache_write ×${CACHE_WRITE_WEIGHT})`,
-  );
-  console.log(
-    `  models: ${[...total.models].join(', ') || '(none)'} | sidechain turns: ${pct(total.sidechainTurns, total.turns)}`,
-  );
-  console.log(
-    '\n(cache_read is cost-weighted, never summed flat with fresh input; native /usage covers the live view.)',
-  );
-  if (skippedFiles || total.skippedLines) {
-    console.log(
-      `(${skippedFiles} session file(s) and ${total.skippedLines} line(s) across the rest could not be parsed and were excluded from the totals above.)`,
-    );
-  }
+  console.log('');
+  console.log(renderFriction(computeFriction(corpus)).join('\n'));
+  console.log('');
   return 0;
 }

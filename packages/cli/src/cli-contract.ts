@@ -20,6 +20,11 @@ export interface Flags {
   prune: boolean;
   /** Machine-readable output on stdout. Human text goes to stderr. */
   json: boolean;
+  /**
+   * `report` only: repeated extra transcript directory names under
+   * `~/.claude/projects/` to merge into the corpus, e.g. a pre-rename history dir.
+   */
+  slug?: string[];
   kitVersion: string;
 }
 
