@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.3.1
+
+### Patch Changes
+
+- 0e49523: blast-radius fans out through a dedicated read-only sonnet mapper agent
+
 ## 0.3.0
 
 ### Minor Changes
