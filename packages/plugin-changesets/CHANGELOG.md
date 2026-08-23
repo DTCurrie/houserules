@@ -1,5 +1,12 @@
 # @houserules/plugin-changesets
 
+## 0.2.2
+
+### Patch Changes
+
+- 01cd6e4: changeset-write refuses summaries carrying ledger-id-shaped strings.
+- 01cd6e4: changeset-gate no longer flags package-root docs that ship in no tarball.
+
 ## 0.2.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.4.1
+
+### Patch Changes
+
+- 01cd6e4: The CLAUDE.md region's five skill sections collapse into imperative one-line triggers.
+
 ## 0.4.0
 
 ### Minor Changes
