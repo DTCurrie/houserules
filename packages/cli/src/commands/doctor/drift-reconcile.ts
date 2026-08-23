@@ -174,7 +174,7 @@ function staleManifestFindings(
  * Applies the fixable subset of `drift` to disk: a real write for each fixable path, plus,
  * under `--prune`, the deletion pass for every orphaned or already-gone manifest entry.
  * Routed through `apply()` rather than a bare `TargetRepo.remove`, so the manifest receipt
- * for a pruned dest is dropped in the same pass that deletes it (AGENTKIT-fec011). Mutates
+ * for a pruned dest is dropped in the same pass that deletes it. Mutates
  * the filesystem, never the report; the caller re-derives drift against the reconciled tree
  * afterward.
  */
@@ -198,7 +198,7 @@ function applyFixableChanges(
   );
   // `force: true` here matches the removal pass this replaces, which pruned every
   // orphaned dest unconditionally. Whether a locally-edited orphan should survive
-  // `--prune` without `--force` is a separate question from AGENTKIT-fec011.
+  // `--prune` without `--force` is a separate question, deliberately left open.
   const prune = flags.prune
     ? computePrune(root, {
         manifest,

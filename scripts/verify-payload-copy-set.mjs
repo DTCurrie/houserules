@@ -6,9 +6,9 @@
  * compiles it directly, so it is never copied by this comparison. `__tests__` is excluded on
  * both sides too, since a colocated test must never reach the published package.
  *
- * Falsifies AGENTKIT-b947e5: a shared assembler that derives its copy set from what actually
- * exists under `payload/`, rather than a hand-listed set, must never let a new payload
- * directory silently fail to ship.
+ * Falsifies the derived-copy-set decision: a shared assembler that derives its copy set from
+ * what actually exists under `payload/`, rather than a hand-listed set, must never let a new
+ * payload directory silently fail to ship.
  *
  * Usage: `node scripts/verify-payload-copy-set.mjs`
  *

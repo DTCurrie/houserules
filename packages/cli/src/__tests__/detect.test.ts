@@ -270,7 +270,7 @@ describe('detect', () => {
     });
   });
 
-  it('pairs lint:fix with a bare write-format script that has no format:fix, and leaves filterFlag empty so a single-package repo never gets a --filter that would run against a nonexistent workspace (AGENTKIT-4e98d7)', () => {
+  it('pairs lint:fix with a bare write-format script that has no format:fix, and leaves filterFlag empty so a single-package repo never gets a --filter that would run against a nonexistent workspace', () => {
     const root = useRepo('pnpm-single');
     const ctx = detect(root);
     expect(ctx.packageManager!.name).toBe('pnpm');

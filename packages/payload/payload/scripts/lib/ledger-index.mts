@@ -10,8 +10,8 @@ export type LedgerKind = 'backlog' | 'decisions';
  * The shape every reader works in, whichever half it came from. It lives here rather than beside
  * the code that fetches it because three packages consume it and none of them is the one that
  * talks to GitHub: `decision-log`, `backlog-log`, and this package's own `ledger-inject`. Core
- * owning the FORMAT is core owning an interface, per `AGENTKIT-116e0c`, and the dependency arrow
- * still points from plugin to core.
+ * owning the FORMAT is core owning an interface, and the dependency arrow still points from
+ * plugin to core.
  *
  * A backlog entry leaves `scope`, `under`, `supersedes`, and `supersededBy` empty. A decision
  * leaves `issue` null. `itemId` and `status` are empty for an entry that has not reached a board.

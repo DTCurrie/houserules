@@ -64,14 +64,12 @@ stays prose, and nobody is notified when it fires. That is honest. A decision th
 a minority of its own triggers while its wording implies full coverage is worse than one
 that plainly watches nothing.
 
-Path-watchable, real record: `AGENTKIT-a51421`'s trigger names three files, `init.ts`,
-`modules.ts`, and `doctor.ts` under `packages/cli/src/commands/`. Editing any of them to pass
-the resolved plugin set is exactly the condition, so those paths belong in `--scope`. As
-recorded they are not, which is why `scope` on any of the three today returns nothing.
+Path-watchable: a trigger that names three files, `init.ts`, `modules.ts`, and `doctor.ts`
+under `src/commands/`. Editing any of them is exactly the condition, so those paths belong
+in `--scope`. Record it without them and `scope` on any of the three returns nothing.
 
-Not path-watchable, real record: `AGENTKIT-c7e4ec`'s trigger is "WCAG 2.3 or 3.0 reaches
-Recommendation". No path in this repo changes when the W3C publishes a spec, so that one
-stays prose and no scope covers it.
+Not path-watchable: a trigger like "WCAG 3.0 reaches Recommendation". No path in the repo
+changes when the W3C publishes a spec, so that one stays prose and no scope covers it.
 
 ## Check for an existing decision first
 
@@ -124,7 +122,9 @@ When `[body]` is omitted, pipe it on stdin.
 
 CLAUDE.md holds only the few decisions that must be in context on every turn. The decision
 log holds the long tail, plus the full supersession history. A decision promoted into
-CLAUDE.md still gets a record here, and the CLAUDE.md line cites its id.
+CLAUDE.md still gets a record here. The CLAUDE.md line restates the rule in its own words and
+never cites the record's id. Ids stay in the ledger, because CLAUDE.md is committed and the id
+resolves only against the local ledger. `scope` and `list` find the record again.
 
 ## Where the file goes
 

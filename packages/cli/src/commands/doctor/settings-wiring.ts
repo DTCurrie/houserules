@@ -17,8 +17,8 @@ export const HOOK_SCRIPTS: Record<string, string[]> = {
 
 /**
  * Every hook script a module might wire, derived from {@link HOOK_SCRIPTS} rather than
- * restated, so a script added to that map is covered here without a second edit
- * (CLI-daafc3: three script names had drifted out of a hand-maintained copy of this list).
+ * restated, so a script added to that map is covered here without a second edit.
+ * Three script names had once drifted out of a hand-maintained copy of this list.
  */
 export const KIT_HOOK_SCRIPT_RE = new RegExp(
   `(${Array.from(new Set(Object.values(HOOK_SCRIPTS).flat()))

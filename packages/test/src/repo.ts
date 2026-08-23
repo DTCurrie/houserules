@@ -33,8 +33,8 @@ import { runCli, runIn } from './run.js';
  *   and an existing CLAUDE.md.
  * - `pnpm-single` is a single-package pnpm repo with a lockfile and no workspace yaml,
  *   whose fixers are `lint:fix` plus a writing `format` alongside a separate
- *   `format:check`. The shape AGENTKIT-4e98d7 broke: `filterFlag` must be empty and the
- *   writing `format` must be detected as a fixer.
+ *   `format:check`. The shape a past detect regression broke: `filterFlag` must be empty
+ *   and the writing `format` must be detected as a fixer.
  * - `npm-single-prettier` is a minimal root package with a `lint:fix` script and a
  *   `prettier` devDependency, so `ctx.prettier` is true and the `.prettierignore`
  *   protection block plans in. It carries no lockfile, no pre-existing `CLAUDE.md`, and

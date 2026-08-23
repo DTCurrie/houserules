@@ -4,7 +4,7 @@
  * sources are compiled by tsconfig.payload.json, which runs before this. Everything else
  * under payload/ is prose and is copied through verbatim, one entry per directory actually
  * present under payload/ rather than a hand-listed set, so a new surface directory ships
- * without this file changing (AGENTKIT-b947e5).
+ * without this file changing.
  *
  * This is the one package whose own assembly step cannot call the shared `assemblePayload`/
  * `buildPayload` (`src/payload-build.ts`, exposed as the `houserules-payload` bin): that
