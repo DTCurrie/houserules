@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.2.2
+
+### Patch Changes
+
+- c3268ac: Skills, rules, and rendered CLAUDE.md sections now forbid citing ledger ids in public text.
+
 ## 0.2.1
 
 ### Patch Changes

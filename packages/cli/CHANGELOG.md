@@ -1,5 +1,22 @@
 # @houserules/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- 459999a: Doctor reports path-scoped rule and on-invoke skill and agent prose weight.
+- 459999a: plan-lint flags plan-doc file paths that do not exist in the repo.
+- 459999a: Doctor scans settings hooks and config for hygiene problems and secret-shaped values.
+
+### Patch Changes
+
+- 459999a: Rendered verification discipline lists recorded completion-claim evasions with answers.
+- 459999a: Skill descriptions no longer narrate the skill's internal steps.
+- c3268ac: Skills, rules, and rendered CLAUDE.md sections now forbid citing ledger ids in public text.
+- Updated dependencies [c3268ac]
+  - @houserules/payload@0.2.2
+  - @houserules/api@0.3.2
+
 ## 0.3.2
 
 ### Patch Changes

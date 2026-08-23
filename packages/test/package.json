@@ -1,6 +1,6 @@
 {
   "name": "@houserules/test",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "houserules test: shared testing infrastructure for driving the houserules CLI against synthetic repos, for the CLI's own suites and for plugin authors.",
   "type": "module",
   "publishConfig": {

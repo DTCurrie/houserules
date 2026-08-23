@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-design",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "houserules plugin: a DTCG design system an agent can query, plus the rule that points at it.",
   "type": "module",
   "publishConfig": {

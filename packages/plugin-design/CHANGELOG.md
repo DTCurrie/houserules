@@ -1,5 +1,11 @@
 # @houserules/plugin-design
 
+## 0.2.2
+
+### Patch Changes
+
+- 459999a: Skill descriptions no longer narrate the skill's internal steps.
+
 ## 0.2.1
 
 ### Patch Changes
