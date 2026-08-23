@@ -105,8 +105,7 @@ function isUnderTestDir(relativePath: string): boolean {
 /**
  * Copies every `payload/<dir>` except `scripts` into `payload-dist/<dir>`, replacing whatever
  * was there. One entry per directory present under `payload/`, not a hand-listed set,
- * so a plugin adding a new surface directory ships without editing a build script
- * (AGENTKIT-b947e5).
+ * so a plugin adding a new surface directory ships without editing a build script.
  *
  * `scripts` is not copied here. `tsconfig.payload.json` compiles `payload/scripts/*.mts`
  * straight into `payload-dist/scripts`, so this function only asserts that output already

@@ -2,7 +2,7 @@ import type { KnipConfig } from 'knip';
 
 const config: KnipConfig = {
   // `includeEntryExports` is deliberately not set. `verify:knip:audit` passes the flag by hand
-  // instead, because every `entry` below exists for a reason knip cannot see. See AGENTKIT-025dda.
+  // instead, because every `entry` below exists for a reason knip cannot see.
   workspaces: {
     '.': {
       // Dev-facing probe documented in CLAUDE.md, invoked by hand as

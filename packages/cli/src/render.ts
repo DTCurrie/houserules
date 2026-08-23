@@ -241,6 +241,8 @@ function backlogSection(ctx: Ctx, answers: Answers): string[] {
     '',
     'Discover a real issue outside the current scope? **Do not fix it inline.** Log it with the',
     `\`/backlog-add\` skill instead. Prefixes by area: ${prefixes}.`,
+    'Entry ids stay in the ledger. Never cite one in code, docs, changesets, commit messages,',
+    'or issue text.',
     '',
   ];
 }
@@ -252,6 +254,8 @@ function decisionsSection(ctx: Ctx, answers: Answers): string[] {
     '',
     'Settled a design question that the code does not explain on its own? Record it with the',
     '`/decide` skill. See that skill for the bar a decision has to clear and what a record needs.',
+    'Record ids stay in the ledger. Never cite one in code, docs, changesets, commit messages,',
+    'or issue text.',
     '',
   ];
 }

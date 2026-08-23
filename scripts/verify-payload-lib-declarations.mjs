@@ -14,8 +14,8 @@
  * second declaration source. `@houserules/payload` itself is skipped, since it is the source
  * those sidecars point at, not a package with its own install pipeline.
  *
- * Falsifies the shape of AGENTKIT-beef33 across every package at once, rather than the one
- * package `packages/plugin-design/src/__tests__/payload-lib-imports.test.ts` covers.
+ * Falsifies the declared-lib-imports decision across every package at once, rather than the
+ * one package `packages/plugin-design/src/__tests__/payload-lib-imports.test.ts` covers.
  *
  * Usage: `node scripts/verify-payload-lib-declarations.mjs`
  *

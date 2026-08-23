@@ -19,11 +19,15 @@ via the `/changeset` skill. See that skill for what it does and when to run it.
 
 Discover a real issue outside the current scope? **Do not fix it inline.** Log it with the
 `/backlog-add` skill instead. Prefixes by area: `API` (packages/api/), `CLI` (packages/cli/), `PAYLOAD` (packages/payload/), `PLUGINACCESS` (packages/plugin-accessibility/), `PLUGINBACKLO` (packages/plugin-backlog/), `PLUGINCHANGE` (packages/plugin-changesets/), `PLUGINDECISI` (packages/plugin-decisions/), `PLUGINDESIGN` (packages/plugin-design/), `PLUGINGITHUB` (packages/plugin-github/), `PLUGINPERSON` (packages/plugin-persona-auditor/), `PLUGINPROSE` (packages/plugin-prose/), `PLUGINSVELTE` (packages/plugin-svelte/), `PLUGINTESTIN` (packages/plugin-testing/), `PLUGINTHREE` (packages/plugin-three/), `PLUGINTYPESC` (packages/plugin-typescript/), `TEST` (packages/test/), `PLUGINFIXTUR` (packages/cli/test/plugin-fixture/).
+Entry ids stay in the ledger. Never cite one in code, docs, changesets, commit messages,
+or issue text.
 
 ### Recording decisions
 
 Settled a design question that the code does not explain on its own? Record it with the
 `/decide` skill. See that skill for the bar a decision has to clear and what a record needs.
+Record ids stay in the ledger. Never cite one in code, docs, changesets, commit messages,
+or issue text.
 
 ### Planning large, multi-phase work
 
@@ -281,8 +285,8 @@ vitest`, outside the script, now needs a prior `pnpm build`, since the shared vi
   a file-existence guard that `exec`s node. `exec` is load-bearing, since a plain `node` would
   let any non-zero exit fall through to the fallback echo and swallow the code (changeset-check
   exits 2 on purpose).
-- **Payload code crosses packages by PACKAGE NAME, and the build rewrites it.** Decision
-  `AGENTKIT-deb26c`. Any payload file, script or lib, reaches a shared lib as
+- **Payload code crosses packages by PACKAGE NAME, and the build rewrites it.** Recorded in
+  the decision ledger. Any payload file, script or lib, reaches a shared lib as
   `import { nowIso } from '@houserules/payload/entry-ledger'`, for values and types alike. There
   is one form, not two. The nine shared libs live in the standalone `@houserules/payload` package:
   `backlog-id`, `entry-ledger`, `config`, `ledger-index`, `proc`, `workspaces`, `comment-scan`,

@@ -288,7 +288,7 @@ Each of these is a standing habit, not a script:
   tests. The unstyled model got it right and the styled one did not. Compression scales with tool
   use, and so does the cost of over-compressing, because the reply is the only human-readable
   record of what the tools did. The fix is a floor on the final message: it carries the outcome,
-  what changed, and where. Tracked as `AGENTKIT-7fd33a`.
+  what changed, and where.
 - **Compression rules delete function words, and some function words carry the claim.** A rule set
   that cuts articles, subjects, and hedges is training a habit that does not distinguish "just"
   from "not". A dropped negation inverts a sentence and still reads as clean terse output, so
@@ -306,7 +306,7 @@ Each of these is a standing habit, not a script:
   contamination landed almost entirely on the control arm and inflated the apparent effect. The
   premise was "checked" by scanning for records that mix text and `tool_use`, finding none, at the
   one level where the per-block split makes that impossible. **A verification that cannot fail is
-  not a verification.** Tracked as `AGENTKIT-b0e8a1`.
+  not a verification.**
 - **Authored prose is a separate lever.** `prose-voice` is a `paths:`-scoped rule covering the prose
   the agent writes (changesets, plans, docs, backlog entries, and the sentences inside code comments)
   rather than its chat replies, so it composes with any output style. It buys clarity more than

@@ -70,8 +70,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
       # Source-only, so it belongs here rather than in `packages` where it would wait on a
-      # build it does not need. Entry-file exports are excluded on purpose: see AGENTKIT-025dda
-      # and run `pnpm verify:knip:audit` by hand for that sweep.
+      # build it does not need. Entry-file exports are excluded on purpose, recorded in the
+      # decision ledger. Run `pnpm verify:knip:audit` by hand for that sweep.
       - run: pnpm verify:knip
 
   # What actually reaches npm. `check` and `test` both run against the working tree, so neither

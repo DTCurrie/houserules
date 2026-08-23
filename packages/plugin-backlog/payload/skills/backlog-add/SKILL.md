@@ -17,3 +17,6 @@ Log a deferred work item without bloating the current diff. Arguments: $ARGUMENT
    gut-check whether it's worth tracking. Reconcile its verdict before continuing.
 
 Do not start working the item. This only records it. Keep doing what you were doing.
+
+The id stays in the ledger. Never cite it in code, docs, changesets, commit messages, or
+issue text, because those are public and the id resolves only against the local ledger.
