@@ -123,7 +123,7 @@ function cancel(text: string): void {
   else console.error(text);
 }
 
-function bail<T>(value: T | symbol): T {
+function bail<TValue>(value: TValue | symbol): TValue {
   if (p.isCancel(value)) {
     cancel('Canceled — nothing written.');
     process.exit(1);

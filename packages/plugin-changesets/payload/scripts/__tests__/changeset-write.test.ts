@@ -561,7 +561,7 @@ describe('changeset-write.mjs on a single-package repo', () => {
     expect(
       existsSync(join(root, '.changeset/config.json')),
       'config seeded for repo without one',
-    ).toBeTruthy();
+    ).toBe(true);
     linkChangesetsCli(root);
     const r = runScript(root, SCRIPT, {
       args: ['--summary', 'First release note.'],

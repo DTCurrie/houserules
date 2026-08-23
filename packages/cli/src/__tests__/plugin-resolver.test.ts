@@ -146,9 +146,10 @@ describe('buildRegistry', () => {
 
     const registry = buildRegistry(makeRoot(), config, []);
 
-    for (const registered of registry.modules) {
-      expect(registered.source?.alias).toBe('fixture');
-    }
+    const offenders = registry.modules.filter(
+      (registered) => registered.source?.alias !== 'fixture',
+    );
+    expect(offenders).toEqual([]);
   });
 
   it('passes api.config and api.alias through to the plugin factory, observable in a planned action', () => {

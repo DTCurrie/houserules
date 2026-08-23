@@ -14,10 +14,8 @@ describe('renderTokenSeed', () => {
 
     expect(primary.colorSpace).toBe('srgb');
     expect(primary.components).toHaveLength(3);
-    for (const component of primary.components) {
-      expect(component).toBeGreaterThanOrEqual(0);
-      expect(component).toBeLessThanOrEqual(1);
-    }
+    const outOfRange = primary.components.filter((c: number) => c < 0 || c > 1);
+    expect(outOfRange, 'components out of the 0-1 range').toEqual([]);
   });
 
   it('writes dimensions as value/unit pairs, not CSS strings', () => {

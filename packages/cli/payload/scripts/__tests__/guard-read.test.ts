@@ -20,13 +20,13 @@ describe('guard-read.mjs', () => {
   });
 
   it('installs the guard script and wires it into a PreToolUse(Read) hook', () => {
-    expect(existsSync(join(root, GUARD))).toBeTruthy();
+    expect(existsSync(join(root, GUARD))).toBe(true);
     const settings = settingsOf(root);
     expect(
       hookCommandsFor(settings, 'PreToolUse').some((c) =>
         c.includes('guard-read.mjs'),
       ),
-    ).toBeTruthy();
+    ).toBe(true);
   });
 
   it('blocks an unbounded read of a denylisted lockfile', () => {

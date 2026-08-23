@@ -33,12 +33,15 @@ body:
       label: Affected package
       description: Which package does this bug affect?
       options:
+        - '@houserules/api'
         - '@houserules/cli'
+        - '@houserules/payload'
         - '@houserules/plugin-accessibility'
         - '@houserules/plugin-backlog'
         - '@houserules/plugin-changesets'
         - '@houserules/plugin-decisions'
         - '@houserules/plugin-design'
+        - '@houserules/plugin-github'
         - '@houserules/plugin-persona-auditor'
         - '@houserules/plugin-prose'
         - '@houserules/plugin-svelte'

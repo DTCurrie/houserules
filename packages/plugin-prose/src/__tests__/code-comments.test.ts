@@ -4,10 +4,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { allHookCommands, manifestOf } from '#test/installed-tree';
+import { allHookCommands, manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_PROSE = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_PROSE, alias: 'prose' }];
+
+/** Mirrors the frontmatter/body cut the CLI's `body` action hashes separately. */
+function splitFrontmatter(text: string): { frontmatter: string; body: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  if (!match) return { frontmatter: '', body: text };
+  return { frontmatter: match[0], body: text.slice(match[0].length) };
+}
 
 describe('code-comments', () => {
   it('installs a path-scoped rule that stays out of the always-loaded surface', () => {
@@ -28,11 +35,12 @@ describe('code-comments', () => {
     expect(ruleText).toMatch(/Hard cap: 200 characters/);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('prose/code-comments')).toBeTruthy();
+    expect(manifest.modules.includes('prose/code-comments')).toBe(true);
+    const { frontmatter, body } = splitFrontmatter(ruleText);
     expect(
       manifest.files['.claude/rules/code-comments.md'],
       'the rule BODY is kit-owned (update-refreshable)',
-    ).toBeTruthy();
+    ).toEqual({ body: sha256(body), frontmatter: sha256(frontmatter) });
 
     const cmds = allHookCommands(root);
     expect(cmds.some((c) => c.includes('code-comments'))).toBe(false);

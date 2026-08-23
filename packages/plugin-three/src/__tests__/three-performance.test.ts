@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf } from '#test/installed-tree';
+import { manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_THREE = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_THREE, alias: 'three' }];
@@ -76,11 +76,12 @@ describe('three renderer performance reference', () => {
   it('is tracked in the manifest as kit-owned', () => {
     const root = installedWith(['performance']);
 
+    const content = readFileSync(referencePath(root), 'utf8');
     const manifest = manifestOf(root);
 
-    expect(
-      manifest.files['.claude/reference/three-performance.md'],
-    ).toBeTruthy();
+    expect(manifest.files['.claude/reference/three-performance.md']).toBe(
+      sha256(content),
+    );
   });
 
   it('does not claim WebGPU reached Baseline', () => {

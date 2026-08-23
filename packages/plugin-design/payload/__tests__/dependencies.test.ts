@@ -51,7 +51,7 @@ const scripts = walk(EMITTED_SCRIPTS_DIR).filter((f) => f.endsWith('.mjs'));
 
 describe('the emitted payload script tree', () => {
   it('has scripts to check', () => {
-    expect(scripts.length).toBeGreaterThan(0);
+    expect(scripts).toHaveLength(15);
   });
 
   it('imports only node builtins, relative paths, or an explicitly allowed bare import', () => {

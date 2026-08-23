@@ -4,10 +4,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf, settingsOf } from '#test/installed-tree';
+import { manifestOf, settingsOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_DESIGN = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_DESIGN, alias: 'design' }];
+
+/** Mirrors the frontmatter/body cut the CLI's `body` action hashes separately. */
+function splitFrontmatter(text: string): { frontmatter: string; body: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  if (!match) return { frontmatter: '', body: text };
+  return { frontmatter: match[0], body: text.slice(match[0].length) };
+}
 
 function installed(): string {
   return useInstalledRepo('pnpm-monorepo', {
@@ -70,11 +77,25 @@ describe('design', () => {
     const manifest = manifestOf(root);
 
     expect(manifest.modules.includes('design/design')).toBe(true);
-    expect(manifest.files['.claude/rules/design.md']).toBeTruthy();
+    const { frontmatter, body } = splitFrontmatter(
+      readFileSync(join(root, '.claude/rules/design.md'), 'utf8'),
+    );
+    expect(manifest.files['.claude/rules/design.md']).toEqual({
+      body: sha256(body),
+      frontmatter: sha256(frontmatter),
+    });
     expect(
       manifest.files['.claude/reference/design-visual-principles.md'],
-    ).toBeTruthy();
-    expect(manifest.files['.claude/scripts/design.mjs']).toBeTruthy();
+    ).toBe(
+      sha256(
+        readFileSync(
+          join(root, '.claude/reference/design-visual-principles.md'),
+        ),
+      ),
+    );
+    expect(manifest.files['.claude/scripts/design.mjs']).toBe(
+      sha256(readFileSync(join(root, '.claude/scripts/design.mjs'))),
+    );
     expect(manifest.files['.claude/design/tokens.json']).toBeUndefined();
   });
 

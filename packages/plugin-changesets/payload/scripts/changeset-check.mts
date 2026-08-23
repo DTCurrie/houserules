@@ -35,11 +35,11 @@ function signatureOf(paths: string[]): string {
     .digest('hex');
 }
 
-// Best-effort: any failure (missing/corrupt file) means "no prior record", which
-// falls open to nudging — never to suppressing. A missing file is the ordinary first-run
-// case and stays silent. Anything else (corrupt JSON, a permission error) is unexpected,
-// so it gets a stderr line naming the failure — the fail-open behavior does not change,
-// but a reader watching stderr can now tell "nothing recorded yet" apart from "could not
+// Best-effort: any failure (missing or corrupt file) means no prior record. This falls
+// open to nudging, never to suppressing. A missing file is the ordinary first-run case
+// and stays silent. Anything else (corrupt JSON, a permission error) is unexpected, so
+// it gets a stderr line naming the failure. The fail-open behavior does not change, but
+// a reader watching stderr can now tell "nothing recorded yet" apart from "could not
 // read what was recorded."
 function readLastSignature(root: string): string | undefined {
   const statePath = join(root, STATE_DIR, STATE_FILE);

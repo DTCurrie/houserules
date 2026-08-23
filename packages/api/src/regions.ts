@@ -84,7 +84,8 @@ export function extractBody(content: string, spec: RegionSpec): string | null {
  * Splices `body` into the marker block inside a file the user owns. Bytes outside the
  * markers are never touched, which is the invariant the whole managed-region feature
  * rests on. The splice is by index rather than a reformat, so the prefix and suffix come
- * through verbatim. `src/core/__tests__/regions.test.ts` (RG2) asserts that byte for byte.
+ * through verbatim. `packages/cli/src/core/__tests__/regions.test.ts` asserts that byte
+ * for byte.
  *
  * Pure by construction, with no filesystem access, so the same call decides the dry-run
  * preview and the real write.

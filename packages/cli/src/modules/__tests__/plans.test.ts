@@ -16,7 +16,7 @@ describe('plans', () => {
 
     it('ships the /blast-radius worked-example skill', () => {
       const skillPath = join(root, '.claude/skills/blast-radius/SKILL.md');
-      expect(existsSync(skillPath)).toBeTruthy();
+      expect(existsSync(skillPath)).toBe(true);
       const text = readFileSync(skillPath, 'utf8');
       expect(text).toMatch(/\.claude\/plans\/blast-radius-/);
       expect(text).toMatch(/disclaimer|Snapshot at commit/i);
@@ -35,9 +35,9 @@ describe('plans', () => {
     it('installs the /plan-project skill without wiring a hook', () => {
       expect(
         existsSync(join(root, '.claude/skills/plan-project/SKILL.md')),
-      ).toBeTruthy();
+      ).toBe(true);
       const manifest = manifestOf(root);
-      expect(manifest.modules.includes('plans')).toBeTruthy();
+      expect(manifest.modules.includes('plans')).toBe(true);
     });
 
     it('templates a phase doc with a Reference section for the spec its work must conform to', () => {

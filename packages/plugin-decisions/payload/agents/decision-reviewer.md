@@ -18,7 +18,7 @@ that don't belong in the log, or that duplicate one already there, before they a
    - Re-deriving it costs real time, or getting it wrong causes real damage.
 2. **Required fields.** The record must carry a rejected alternative and a revisit trigger. A
    vague or circular one counts as missing: "revisit if it stops working" is not a falsifiable
-   trigger, and a rejected alternative that was never actually plausible is not a rejected
+   trigger, and a rejected alternative that was never plausible is not a rejected
    alternative.
 3. **Claims about the code.** A record that asserts an absence is a claim about the repo as it
    stands, and a claim is checkable. "We do not do X", "nothing asserts Y", "there is no Z":

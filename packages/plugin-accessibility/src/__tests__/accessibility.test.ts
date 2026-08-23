@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf, settingsOf } from '#test/installed-tree';
+import { manifestOf, settingsOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_ACCESSIBILITY = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_ACCESSIBILITY, alias: 'a11y' }];
@@ -14,6 +14,12 @@ function pathGlobs(ruleText: string): string[] {
   return [...body.matchAll(/^ {2}- ['"](.+?)['"]$/gm)]
     .map((m) => m[1])
     .filter((path): path is string => path !== undefined);
+}
+
+/** Everything after the closing `---`, the part a body-owned rule's manifest hash covers. */
+function ruleBody(ruleText: string): string {
+  const match = /^---\n[\s\S]*?\n---[ \t]*\n?/.exec(ruleText);
+  return match ? ruleText.slice(match[0].length) : ruleText;
 }
 
 describe('accessibility', () => {
@@ -47,10 +53,16 @@ describe('accessibility', () => {
       plugins: PLUGINS,
     });
 
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/accessibility.md'),
+      'utf8',
+    );
     const manifest = manifestOf(root);
 
-    expect(manifest.modules.includes('a11y/accessibility')).toBeTruthy();
-    expect(manifest.files['.claude/rules/accessibility.md']).toBeTruthy();
+    expect(manifest.modules.includes('a11y/accessibility')).toBe(true);
+    expect(manifest.files['.claude/rules/accessibility.md']).toEqual(
+      expect.objectContaining({ body: sha256(ruleBody(ruleText)) }),
+    );
   });
 
   it('installs the markup checker script alongside the wcag router', () => {
@@ -59,10 +71,16 @@ describe('accessibility', () => {
       plugins: PLUGINS,
     });
 
+    const scriptSource = readFileSync(
+      join(root, '.claude/scripts/a11y-markup.mjs'),
+      'utf8',
+    );
     const manifest = manifestOf(root);
     const settings = settingsOf(root);
 
-    expect(manifest.files['.claude/scripts/a11y-markup.mjs']).toBeTruthy();
+    expect(manifest.files['.claude/scripts/a11y-markup.mjs']).toBe(
+      sha256(scriptSource),
+    );
     expect(settings.permissions?.allow).toContain(
       'Bash(node .claude/scripts/a11y-markup.mjs:*)',
     );

@@ -16,12 +16,14 @@ import type {
  * non-zero exit would fall through to the echo, printing a false "missing" notice and
  * swallowing the code. changeset-check.mjs exits 2 on purpose to nudge Claude, so that
  * form would have silently disabled the changeset nudge.
+ *
+ * The fallback goes to stderr with a non-zero exit. On context-bearing events, stdout at
+ * exit 0 is injected into the model's context, so a plain echo turned the notice into fake
+ * hook output. Exit 1 surfaces it as the harness's non-blocking error instead.
  */
 export function hookCommand(scriptName: string): string {
   const path = `"$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
-  // The fallback goes to stderr with a non-zero exit: on context-bearing events, stdout at
-  // exit 0 is injected into the model's context, so a plain echo turned the notice into
-  // fake hook output. Exit 1 surfaces it as the harness's non-blocking error instead.
+  // Fallback: stderr + exit 1, not a stdout echo. See the TSDoc above for why.
   return `[ -f ${path} ] && exec node ${path} || { echo "[houserules] ${scriptName} missing. Run: npx houserules update" >&2; exit 1; }`;
 }
 

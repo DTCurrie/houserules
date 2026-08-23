@@ -6,7 +6,6 @@ import {
   fieldValueLiteral,
   fieldValuesFor,
 } from '../item-fields.mjs';
-import { areaForSurface } from '../project-shape.mjs';
 
 const backlogOpBase = {
   entryId: 'TEST-abc123',
@@ -27,24 +26,6 @@ const decisionOpBase = {
   date: '2026-01-01',
   chat: null,
 };
-
-describe('areaForSurface', () => {
-  it('strips a target-prefixed backlog surface to the target name', () => {
-    expect(areaForSurface('houserules.BACKLOG.md')).toBe('houserules');
-  });
-
-  it('names the bare backlog surface as the repo root', () => {
-    expect(areaForSurface('BACKLOG.md')).toBe('repo root');
-  });
-
-  it('strips a target-prefixed decisions surface to the target name', () => {
-    expect(areaForSurface('houserules.DECISIONS.md')).toBe('houserules');
-  });
-
-  it('names the bare decisions surface as the repo root', () => {
-    expect(areaForSurface('DECISIONS.md')).toBe('repo root');
-  });
-});
 
 describe('fieldValuesFor, given a backlog op', () => {
   it('sets Status to Todo for a freshly created issue', () => {

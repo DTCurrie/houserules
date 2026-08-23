@@ -49,7 +49,7 @@ describe('the emitted payload scripts', () => {
   const files = readdirSync(SCRIPTS).filter((f) => f.endsWith('.mjs'));
 
   it('has scripts to check', () => {
-    expect(files.length).toBeGreaterThan(0);
+    expect(files.length).toBeGreaterThanOrEqual(10);
   });
 
   it.each(files)('%s keeps its shebang', (file) => {

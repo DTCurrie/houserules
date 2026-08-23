@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf, settingsOf } from '#test/installed-tree';
+import { manifestOf, settingsOf, sha256 } from '#test/installed-tree';
 
 const CI_SETTINGS = '.claude/settings.ci.json';
 
@@ -32,7 +32,9 @@ describe('ci-settings', () => {
   it('is tracked as kit-owned so update can refresh it', () => {
     const root = useInstalledRepo('pnpm-monorepo', { modules: 'ci-settings' });
 
-    expect(manifestOf(root).files[CI_SETTINGS]).toBeTruthy();
+    expect(manifestOf(root).files[CI_SETTINGS]).toBe(
+      sha256(readFileSync(join(root, CI_SETTINGS), 'utf8')),
+    );
   });
 
   it('leaves settings.json alone, since these denials would break interactive work', () => {

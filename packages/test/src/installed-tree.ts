@@ -6,7 +6,7 @@ import { join } from 'node:path';
  * Throws on a missing or malformed file, unlike the payload's defensive reader. A test that
  * cannot find the artifact it is about should fail loudly rather than assert against null.
  */
-export function readJson<T = Record<string, any>>(path: string): T {
+export function readJson<T = Record<string, unknown>>(path: string): T {
   return JSON.parse(readFileSync(path, 'utf8')) as T;
 }
 
@@ -29,7 +29,7 @@ export interface Settings {
   // suite that asserts on a deny entry fail to typecheck while passing at runtime.
   permissions?: { allow?: string[]; deny?: string[]; ask?: string[] };
   hooks?: Record<string, HookGroup[]>;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export function settingsOf(root: string): Settings {
@@ -53,7 +53,7 @@ export function allHookCommands(root: string): string[] {
 export interface HouseManifestShape {
   files: Record<string, string>;
   modules: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export function manifestOf(root: string): HouseManifestShape {
@@ -77,7 +77,7 @@ export function writeManifest(
  * not the inferred `HouseConfig` from `src/core/config.ts`, which would couple the payload side
  * of the suite to the CLI side the repo works to keep apart.
  */
-export type InstalledHouseConfig = Record<string, any>;
+export type InstalledHouseConfig = Record<string, unknown>;
 
 export function houseConfigPath(root: string): string {
   return join(root, '.claude/houserules.config.json');

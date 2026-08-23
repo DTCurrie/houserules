@@ -68,7 +68,7 @@ export function tail(text: string, n: number): string {
 
 /**
  * A path glob compiled to an anchored RegExp: `*` stays within one segment, `**` spans
- * separators — and when a doublestar is followed by a slash it also matches zero
+ * separators, and when a doublestar is followed by a slash it also matches zero
  * directories — `?` is one non-separator character. Every other metacharacter is literal.
  */
 export function globToRe(glob: string): RegExp {

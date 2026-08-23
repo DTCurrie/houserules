@@ -4,10 +4,16 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { allHookCommands, manifestOf } from '#test/installed-tree';
+import { allHookCommands, manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_TYPESCRIPT = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_TYPESCRIPT, alias: 'ts' }];
+
+/** Everything after the closing `---`, the part a body-owned rule's manifest hash covers. */
+function ruleBody(ruleText: string): string {
+  const match = /^---\n[\s\S]*?\n---[ \t]*\n?/.exec(ruleText);
+  return match ? ruleText.slice(match[0].length) : ruleText;
+}
 
 describe('typescript', () => {
   it('installs a path-scoped rule that stays out of the always-loaded surface', () => {
@@ -50,13 +56,24 @@ describe('typescript', () => {
       missing,
       'svelte.md defers here, so a file it loads on without this rule leaves that pointer dangling',
     ).toEqual([]);
+  });
 
+  it('tracks the rule in the manifest, pinned to the installed bytes', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'ts/typescript',
+      plugins: PLUGINS,
+    });
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/typescript.md'),
+      'utf8',
+    );
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('ts/typescript')).toBeTruthy();
+    expect(manifest.modules.includes('ts/typescript')).toBe(true);
     expect(
       manifest.files['.claude/rules/typescript.md'],
       'the rule BODY is kit-owned (update-refreshable)',
-    ).toBeTruthy();
+    ).toEqual(expect.objectContaining({ body: sha256(ruleBody(ruleText)) }));
   });
 
   it('is not installed by default', () => {
@@ -163,7 +180,14 @@ describe('typescript', () => {
       .filter((glob): glob is string => glob !== undefined);
     const extensions = globs.map((glob) => glob.replace(/^\*\*\/\*/, ''));
 
-    expect(extensions.length).toBeGreaterThan(0);
+    expect(extensions).toEqual([
+      '.ts',
+      '.mts',
+      '.cts',
+      '.tsx',
+      '.svelte',
+      '.svelte.ts',
+    ]);
 
     const indexSource = readFileSync(
       join(PLUGIN_TYPESCRIPT, 'src/index.ts'),

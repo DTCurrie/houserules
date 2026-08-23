@@ -28,7 +28,8 @@ function repoWithStudioDependingOnCityville(): string {
 function useStubVerifyRunner(root: string, { fail = false } = {}): void {
   stubRunner(root, { fail, failMessage: 'type error TS2322' });
   editHouseConfig(root, (config) => {
-    config.verify.runner = './stub-runner.sh';
+    const verify = config.verify as { runner?: string };
+    verify.runner = './stub-runner.sh';
   });
 }
 
@@ -77,7 +78,7 @@ describe('verify-changed.mjs --json', () => {
       scope: { package: string; argv: string[][] }[];
     };
     const city = out.scope.find((s) => s.package === '@fix/cityville');
-    expect(city, r.stdout).toBeDefined();
+    expect(city?.package, r.stdout).toBe('@fix/cityville');
     expect(city!.argv).toEqual([]);
   });
 });

@@ -163,18 +163,6 @@ function matchExistingHook(
 // array-append rules do not fit them. Set only when the user has none.
 const SINGLE_VALUE_KEYS = ['statusLine'] as const;
 
-/**
- * Folds one module's settings fragment into the existing file. Pure, with no filesystem
- * access, so the dry-run preview and the real write agree.
- *
- * The safety contract: user entries are never removed, rewritten, or reordered, and houserules
- * entries append. Permissions merge as a set-union on exact strings. A hook counts as
- * already present when an existing command normalizes to the same string or mentions the
- * same houserules script basename, and a user's edited variant always wins over houserules' stock
- * version. The one exception is an existing command that is byte-for-byte a known
- * historical stock form (see `KIT_STOCK_FORMATS`), which houserules upgrades in place and
- * reports. Everything else in the file passes through untouched.
- */
 /** Sets a single-value key only when the user has none yet — never clobbers one they set. */
 function mergeSingleValueKeys(
   merged: Settings,
@@ -277,6 +265,18 @@ function* eachHook(
         for (const hook of group.hooks ?? []) yield { event, group, hook };
 }
 
+/**
+ * Folds one module's settings fragment into the existing file. Pure, with no filesystem
+ * access, so the dry-run preview and the real write agree.
+ *
+ * The safety contract: user entries are never removed, rewritten, or reordered, and houserules
+ * entries append. Permissions merge as a set-union on exact strings. A hook counts as
+ * already present when an existing command normalizes to the same string or mentions the
+ * same houserules script basename, and a user's edited variant always wins over houserules' stock
+ * version. The one exception is an existing command that is byte-for-byte a known
+ * historical stock form (see `KIT_STOCK_FORMATS`), which houserules upgrades in place and
+ * reports. Everything else in the file passes through untouched.
+ */
 export function mergeSettings(
   existing: Settings | null,
   fragment: SettingsFragment,

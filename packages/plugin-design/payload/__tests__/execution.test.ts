@@ -37,7 +37,7 @@ describe('the emitted payload scripts at the scripts root', () => {
   const files = readdirSync(SCRIPTS).filter((f) => f.endsWith('.mjs'));
 
   it('has scripts to check', () => {
-    expect(files.length).toBeGreaterThan(0);
+    expect(files).toHaveLength(2);
   });
 
   it.each(files)('%s keeps its shebang', (file) => {
@@ -94,7 +94,7 @@ describe('every lib module loads on bare node with no Tailwind installed', () =>
   }
 
   it('has lib files to check', () => {
-    expect(libFiles.length).toBeGreaterThan(0);
+    expect(libFiles).toHaveLength(13);
   });
 
   it.each(libFiles)('%s imports and exits 0', (file) => {

@@ -57,7 +57,7 @@ describe('orchestrate', () => {
 
     it('records the module in the manifest', () => {
       const manifest = manifestOf(root);
-      expect(manifest.modules.includes('orchestrate')).toBeTruthy();
+      expect(manifest.modules.includes('orchestrate')).toBe(true);
     });
 
     it('adds the /orchestrate carve-out against implementation subagents to CLAUDE.md', () => {
@@ -80,7 +80,7 @@ describe('orchestrate', () => {
     it('still installs', () => {
       expect(
         existsSync(join(root, '.claude/skills/orchestrate/SKILL.md')),
-      ).toBeTruthy();
+      ).toBe(true);
     });
 
     it('does not create a plans workspace', () => {

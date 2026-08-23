@@ -44,7 +44,7 @@ const baseConfig = ts.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       // Measured against this workspace in PROBE-eslint.md: 0 findings, so both fire
-      // clean at error. `no-unreachable` ships in eslint:recommended already; listed
+      // clean at error. `no-unreachable` already ships in eslint:recommended. Listed
       // here to record the decision. naming-convention is restricted to the two
       // selectors that need no type information — the repo has no root tsconfig.json,
       // so a type-aware selector (booleans) cannot run without configuring
@@ -69,7 +69,7 @@ const baseConfig = ts.config(
   // Tests drive the CLI through JSON artifacts on disk and deliberately poke
   // arbitrary shapes into them — a suite asserting houserules tolerates an unknown
   // settings key cannot type that key as part of Settings. `any` in a test helper
-  // is that intent, not a gap; src/ stays strict.
+  // is that intent, not a gap. src/ stays strict.
   //
   // `packages/test/src/**` is the one src/ tree that qualifies. The whole package is
   // testing infrastructure, and it keeps that infrastructure under src/ only because it is

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf } from '#test/installed-tree';
+import { manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_THREE = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_THREE, alias: 'three' }];
@@ -14,6 +14,12 @@ function pathGlobs(ruleText: string): string[] {
   return [...body.matchAll(/^ {2}- ['"](.+?)['"]$/gm)]
     .map((m) => m[1])
     .filter((glob): glob is string => glob !== undefined);
+}
+
+/** Everything after the closing `---`, the part a body-owned rule's manifest hash covers. */
+function ruleBody(ruleText: string): string {
+  const match = /^---\n[\s\S]*?\n---[ \t]*\n?/.exec(ruleText);
+  return match ? ruleText.slice(match[0].length) : ruleText;
 }
 
 function installedWith(guides: string[]): string {
@@ -45,11 +51,11 @@ describe('three', () => {
     ]);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('three/three')).toBeTruthy();
+    expect(manifest.modules.includes('three/three')).toBe(true);
     expect(
       manifest.files['.claude/rules/three.md'],
       'the rule BODY is kit-owned (update-refreshable)',
-    ).toBeTruthy();
+    ).toEqual(expect.objectContaining({ body: sha256(ruleBody(ruleText)) }));
   });
 
   it('teaches disposal ownership for geometries, materials, and textures', () => {
@@ -193,7 +199,7 @@ describe('three', () => {
     expect(
       baseDirGlob,
       'the base rule must ship a directory glob for a guide glob to nest under',
-    ).toBeDefined();
+    ).toBe('**/three/**');
 
     const uncovered = ['threlte', 'r3f'].flatMap((guide) =>
       pathGlobs(readFileSync(guidePath(root, guide), 'utf8'))

@@ -55,18 +55,41 @@ const AUTO_SYNC_CASES: { label: string; autoSync: boolean | undefined }[] = [
   { label: 'false', autoSync: false },
 ];
 
-function expectedReason(
-  hasEnableToken: boolean,
-  autoSync: boolean | undefined,
-  permissions: RepoPermissions | null,
-): string {
-  if (!hasEnableToken) return 'no-token';
-  if (autoSync === false) return 'auto-sync-disabled';
-  if (permissions === null) return 'permission-unknown';
-  if (!permissions.maintain && !permissions.admin)
-    return 'insufficient-permission';
-  return 'allowed';
-}
+// The 24 expected reasons, one per case, in the same nesting order the table below
+// builds its cases: hasEnableToken (true, false) x autoSync (unset, true, false) x
+// permissions (unknown, push-only, maintain, admin).
+const EXPECTED_REASONS = [
+  // hasEnableToken=true, autoSync=unset
+  'permission-unknown',
+  'insufficient-permission',
+  'allowed',
+  'allowed',
+  // hasEnableToken=true, autoSync=true
+  'permission-unknown',
+  'insufficient-permission',
+  'allowed',
+  'allowed',
+  // hasEnableToken=true, autoSync=false
+  'auto-sync-disabled',
+  'auto-sync-disabled',
+  'auto-sync-disabled',
+  'auto-sync-disabled',
+  // hasEnableToken=false, autoSync=unset
+  'no-token',
+  'no-token',
+  'no-token',
+  'no-token',
+  // hasEnableToken=false, autoSync=true
+  'no-token',
+  'no-token',
+  'no-token',
+  'no-token',
+  // hasEnableToken=false, autoSync=false
+  'no-token',
+  'no-token',
+  'no-token',
+  'no-token',
+];
 
 function reasonOf(verdict: GateVerdict): string {
   return verdict.allowed ? 'allowed' : verdict.reason;
@@ -82,17 +105,21 @@ function inputs(overrides: Partial<GateInputs>): GateInputs {
 }
 
 describe('evaluateGate', () => {
-  const table = [true, false].flatMap((hasEnableToken) =>
-    AUTO_SYNC_CASES.flatMap(({ label: autoSyncLabel, autoSync }) =>
-      PERMISSION_CASES.map(({ label: permissionLabel, permissions }) => ({
-        hasEnableToken,
-        autoSync,
-        permissions,
-        label: `token=${hasEnableToken} autoSync=${autoSyncLabel} permissions=${permissionLabel}`,
-        reason: expectedReason(hasEnableToken, autoSync, permissions),
-      })),
-    ),
-  );
+  const table = [true, false]
+    .flatMap((hasEnableToken) =>
+      AUTO_SYNC_CASES.flatMap(({ label: autoSyncLabel, autoSync }) =>
+        PERMISSION_CASES.map(({ label: permissionLabel, permissions }) => ({
+          hasEnableToken,
+          autoSync,
+          permissions,
+          label: `token=${hasEnableToken} autoSync=${autoSyncLabel} permissions=${permissionLabel}`,
+        })),
+      ),
+    )
+    .map((testCase, index) => ({
+      ...testCase,
+      reason: EXPECTED_REASONS[index],
+    }));
 
   it.each(table)(
     '$label -> $reason',

@@ -49,7 +49,9 @@ describe('playwright-mcp', () => {
       plugins: PLUGINS,
     });
 
-    const config = readJson(join(root, '.claude/mcp/playwright.stdio.json'));
+    const config = readJson<{
+      mcpServers: { playwright: { command: string; args: string[] } };
+    }>(join(root, '.claude/mcp/playwright.stdio.json'));
 
     expect(config.mcpServers.playwright.command).toBe('npx');
     expect(config.mcpServers.playwright.args).toEqual([
