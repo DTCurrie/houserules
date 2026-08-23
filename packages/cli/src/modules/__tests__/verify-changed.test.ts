@@ -30,8 +30,8 @@ describe('verify-changed install', () => {
     const config = readJson<InstalledHouseConfig>(
       join(root, '.claude/houserules.config.json'),
     );
-    expect(config.verify, 'verify block present').toBeTruthy();
-    expect(config.verify!.commands).toEqual(['verify']);
+    const verify = config.verify as { commands: string[] } | undefined;
+    expect(verify?.commands, 'verify block present').toEqual(['verify']);
   });
 
   it('records the module in the manifest', () => {

@@ -189,7 +189,7 @@ describe('classifyEffect', () => {
       KIT_LAST_WROTE,
     );
     expect(result.status).toBe('stale');
-    expect(result.yours).toBeFalsy();
+    expect(result.yours).toBe(false);
   });
 
   it('diffs against an empty string when readHost returns null for a non-region file', () => {
@@ -265,7 +265,7 @@ describe('classifyEffect', () => {
       KIT_LAST_WROTE,
     );
     expect(result.status).toBe('stale');
-    expect(result.yours).toBeFalsy();
+    expect(result.yours).toBe(false);
     expect(result.diff).toMatch(/old body/);
     expect(result.diff).not.toMatch(/suffix/);
   });
@@ -324,7 +324,7 @@ describe('classifyEffect', () => {
       KIT_LAST_WROTE,
     );
     expect(result.status).toBe('stale');
-    expect(result.yours).toBeFalsy();
+    expect(result.yours).toBe(false);
     expect(result.diff).toMatch(/old body/);
     expect(result.diff).toMatch(/new body/);
     expect(result.diff).not.toMatch(/paths:/);
@@ -610,7 +610,7 @@ describe('a file houserules would rewrite but was not edited (`stale`)', () => {
       '.claude/scripts/guard-bash.mjs',
     );
     expect(entry?.status).toBe('stale');
-    expect(entry?.yours).toBeFalsy();
+    expect(entry?.yours).toBe(false);
   });
 
   it('blocks the exit code', () => {

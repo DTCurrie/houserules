@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf, settingsOf } from '#test/installed-tree';
+import { manifestOf, settingsOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_ROOT, alias: 'cs' }];
@@ -29,8 +29,10 @@ describe('changeset-condense', () => {
     expect(existsSync(join(root, SKILL_PATH))).toBe(true);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('cs/changesets')).toBeTruthy();
-    expect(manifest.files[SKILL_PATH]).toBeTruthy();
+    expect(manifest.modules.includes('cs/changesets')).toBe(true);
+    expect(manifest.files[SKILL_PATH]).toBe(
+      sha256(readFileSync(join(root, SKILL_PATH))),
+    );
   });
 
   it('carries the routing terms a request to condense changesets would use', () => {

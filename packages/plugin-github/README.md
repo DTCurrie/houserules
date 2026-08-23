@@ -177,7 +177,7 @@ Setting it to `false` forbids sync repo-wide regardless of who runs it.
 
 - `bootstrap` creates fields only. It does not configure the board's saved view, so a new
   board opens as a default table of every field. Setting the view up is reproducible through
-  the API and simply is not done yet.
+  the API and is not done yet.
 - `pull` is a projection, not a merge. It rebuilds the local index from the boards, and an
   edit made directly on GitHub Projects reaches the index on the next pull. It does not
   write back into the queue, so the board wins and there is no conflict to resolve.

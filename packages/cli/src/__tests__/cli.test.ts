@@ -72,22 +72,23 @@ describe('--cwd', () => {
 
   it('is honored when no positional directory is given', () => {
     expect(runCli(['init', '--yes', '--cwd', viaCwd]).status).toBe(0);
-    expect(
-      readFileSync(join(viaCwd, '.claude/houserules.config.json'), 'utf8')
-        .length,
-    ).toBeGreaterThan(0);
+    const config = JSON.parse(
+      readFileSync(join(viaCwd, '.claude/houserules.config.json'), 'utf8'),
+    ) as { version: number };
+    expect(config.version).toBe(2);
   });
 
   it('loses to a positional directory when both are given', () => {
     expect(
       runCli(['init', '--yes', viaPositional, '--cwd', viaCwd]).status,
     ).toBe(0);
-    expect(
+    const config = JSON.parse(
       readFileSync(
         join(viaPositional, '.claude/houserules.config.json'),
         'utf8',
-      ).length,
-    ).toBeGreaterThan(0);
+      ),
+    ) as { version: number };
+    expect(config.version).toBe(2);
   });
 });
 
@@ -163,7 +164,9 @@ describe('doctor', () => {
         exitCode: number;
       };
       expect(asJson.exitCode).toBe(2);
-      expect(asJson.configProblems.length).toBeGreaterThan(0);
+      expect(asJson.configProblems.some((p) => p.includes('baseBranchh'))).toBe(
+        true,
+      );
     });
   });
 });

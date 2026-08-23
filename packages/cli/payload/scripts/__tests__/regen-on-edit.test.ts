@@ -20,18 +20,23 @@ describe('regen-on-edit.mjs', () => {
   });
 
   it('installs the regen script and wires it into a PostToolUse hook', () => {
-    expect(existsSync(join(root, REGEN))).toBeTruthy();
+    expect(existsSync(join(root, REGEN))).toBe(true);
     const settings = settingsOf(root);
     expect(
       hookCommandsFor(settings, 'PostToolUse').some((c) =>
         c.includes('regen-on-edit.mjs'),
       ),
-    ).toBeTruthy();
+    ).toBe(true);
   });
 
   it('runs the target generator when an edited file matches its sourceGlob', () => {
     editHouseConfig(root, (c) => {
-      const studio = c.targets.find((t: any) => t.name === 'studio');
+      const targets = c.targets as Array<{
+        name: string;
+        regen?: { sourceGlob: string; command: string };
+      }>;
+      const studio = targets.find((t) => t.name === 'studio');
+      if (!studio) throw new Error('fixture missing studio target');
       studio.regen = {
         sourceGlob: 'apps/studio/**',
         command: 'echo ran > regen-marker.txt',
@@ -43,12 +48,17 @@ describe('regen-on-edit.mjs', () => {
       readToolInput({ file_path: 'apps/studio/src/main.ts' }),
     );
     expect(r.status, r.stderr).toBe(0);
-    expect(existsSync(join(root, 'regen-marker.txt'))).toBeTruthy();
+    expect(existsSync(join(root, 'regen-marker.txt'))).toBe(true);
   });
 
   it('does not run the generator when the edited file does not match its sourceGlob', () => {
     editHouseConfig(root, (c) => {
-      const studio = c.targets.find((t: any) => t.name === 'studio');
+      const targets = c.targets as Array<{
+        name: string;
+        regen?: { sourceGlob: string; command: string };
+      }>;
+      const studio = targets.find((t) => t.name === 'studio');
+      if (!studio) throw new Error('fixture missing studio target');
       studio.regen = {
         sourceGlob: 'apps/studio/**',
         command: 'echo ran > regen-marker.txt',
@@ -65,7 +75,12 @@ describe('regen-on-edit.mjs', () => {
 
   it('exits 2 with a stderr tail of the failing generator’s output', () => {
     editHouseConfig(root, (c) => {
-      const studio = c.targets.find((t: any) => t.name === 'studio');
+      const targets = c.targets as Array<{
+        name: string;
+        regen?: { sourceGlob: string; command: string };
+      }>;
+      const studio = targets.find((t) => t.name === 'studio');
+      if (!studio) throw new Error('fixture missing studio target');
       studio.regen = {
         sourceGlob: 'apps/studio/**',
         command: 'echo boom >&2; exit 1',

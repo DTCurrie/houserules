@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf } from '#test/installed-tree';
+import { manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_ACCESSIBILITY = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_ACCESSIBILITY, alias: 'a11y' }];
@@ -30,10 +30,14 @@ describe('wcag22 reference corpus', () => {
       plugins: PLUGINS,
     });
 
+    const corpus = readFileSync(
+      join(root, '.claude/reference/wcag22.md'),
+      'utf8',
+    );
     const manifest = manifestOf(root);
 
-    expect(manifest.files['.claude/reference/wcag22.md']).toBeTruthy();
-    expect(manifest.files['.claude/rules/wcag22.md']).toBeFalsy();
+    expect(manifest.files['.claude/reference/wcag22.md']).toBe(sha256(corpus));
+    expect(manifest.files['.claude/rules/wcag22.md']).toBeUndefined();
   });
 
   it('carries the W3C attribution notice the Document License requires', () => {

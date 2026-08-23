@@ -4,7 +4,12 @@ import { join } from 'node:path';
 
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn, runScript } from '#test/run';
-import { editHouseConfig, readJson, settingsOf } from '#test/installed-tree';
+import {
+  editHouseConfig,
+  hookCommandsFor,
+  readJson,
+  settingsOf,
+} from '#test/installed-tree';
 import { recordedCalls, stubRunner } from '#test/runner-stub';
 import { makeAnswers, makeCtx } from '#test/ctx-builder';
 import { defaultEnabled, plan } from '../lint-fix.js';
@@ -16,7 +21,7 @@ describe('lint-fix without a detected fix command', () => {
   beforeEach(() => {
     root = useRepo('npm-single');
     const pkgPath = join(root, 'package.json');
-    const pkg = readJson(pkgPath);
+    const pkg = readJson<{ scripts: Record<string, string> }>(pkgPath);
     delete pkg.scripts['lint:fix'];
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
     runIn(root, 'git', ['add', '-A']);
@@ -30,19 +35,15 @@ describe('lint-fix without a detected fix command', () => {
   });
 
   it('still ships the fix script', () => {
-    expect(
-      existsSync(join(root, '.claude/scripts/lint-format-fix.mjs')),
-    ).toBeTruthy();
+    expect(existsSync(join(root, '.claude/scripts/lint-format-fix.mjs'))).toBe(
+      true,
+    );
   });
 
   it('does not wire the script into the Stop hook, since it would run a nonexistent target', () => {
     const settings = settingsOf(root);
-    const stopCmds = (settings.hooks?.Stop ?? []).flatMap((g: any) =>
-      g.hooks.map((h: any) => h.command),
-    );
-    expect(
-      stopCmds.some((c: string) => c.includes('lint-format-fix.mjs')),
-    ).toBeFalsy();
+    const stopCmds = hookCommandsFor(settings, 'Stop');
+    expect(stopCmds.some((c) => c.includes('lint-format-fix.mjs'))).toBe(false);
   });
 
   it('advises in stdout that no target has a detected fix command', () => {
@@ -174,7 +175,8 @@ describe('the per-extension fix-command gate', () => {
         commands: ['lint:fix', 'format:fix'],
         commandExtensions: { 'lint:fix': ['ts', 'tsx'] },
       };
-      for (const t of c.targets) delete t.fixCommands;
+      const targets = c.targets as Array<{ fixCommands?: string[] }>;
+      for (const t of targets) delete t.fixCommands;
     });
     runIn(root, 'git', ['add', '-A']);
     runIn(root, 'git', ['commit', '-qm', 'wip']);

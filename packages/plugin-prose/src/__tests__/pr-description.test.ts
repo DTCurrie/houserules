@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { allHookCommands, manifestOf } from '#test/installed-tree';
+import { allHookCommands, manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_PROSE = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_PROSE, alias: 'prose' }];
@@ -29,8 +29,10 @@ describe('pr-description', () => {
     expect(existsSync(join(root, SKILL_PATH))).toBe(true);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('prose/pr-description')).toBeTruthy();
-    expect(manifest.files[SKILL_PATH]).toBeTruthy();
+    expect(manifest.modules.includes('prose/pr-description')).toBe(true);
+    expect(manifest.files[SKILL_PATH]).toBe(
+      sha256(readFileSync(join(root, SKILL_PATH))),
+    );
   });
 
   it('carries the routing terms a request for a PR body would use', () => {

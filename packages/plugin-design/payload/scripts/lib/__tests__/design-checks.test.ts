@@ -516,7 +516,7 @@ describe('checkDesign, compact single-line CSS', () => {
     expect(compactResult.findings.map((finding) => finding.message)).toEqual(
       expandedResult.findings.map((finding) => finding.message),
     );
-    expect(compactResult.findings.length).toBeGreaterThan(0);
+    expect(compactResult.findings).toHaveLength(2);
   });
 
   it('reports accurate line numbers for declarations packed onto one line', () => {
@@ -525,7 +525,7 @@ describe('checkDesign, compact single-line CSS', () => {
     const { findings } = checkDesign(css, {});
     const label = findings.filter((finding) => finding.line === 4);
 
-    expect(label.length).toBeGreaterThan(0);
+    expect(label).toHaveLength(1);
   });
 });
 

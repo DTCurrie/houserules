@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn } from '#test/run';
 import {
+  type HouseManifestShape,
   manifestOf,
   readJson,
   sha256,
@@ -304,8 +305,9 @@ describe('doctor resident skill/agent description budget', () => {
     const skillCount = Number(match![1]);
     const agentCount = Number(match![2]);
     const tokens = Number(match![3]);
-    expect(skillCount + agentCount).toBeGreaterThan(0);
-    expect(tokens).toBeGreaterThan(0);
+    expect(skillCount).toBe(1);
+    expect(agentCount).toBe(2);
+    expect(tokens).toBeGreaterThanOrEqual(100);
   });
 
   it('omits the resident skill/agent descriptions line entirely, rather than folding it into resident context, when none are installed', () => {
@@ -619,7 +621,7 @@ describe('doctor on a manifest listing a module houserules no longer defines', (
   it('warns by name and still exits 0', () => {
     const root = useInstalledRepo('pnpm-monorepo');
     const manifestPath = join(root, '.claude/houserules.manifest.json');
-    const manifest = readJson(manifestPath);
+    const manifest = readJson<HouseManifestShape>(manifestPath);
     manifest.modules = [...manifest.modules, 'ghost-module'];
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 

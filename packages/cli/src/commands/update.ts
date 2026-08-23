@@ -252,6 +252,63 @@ function resolveUpdatePlan(
 }
 
 /**
+ * Folds a hook-script removal into `planResult.settingsPlan`, so settings.json is written
+ * once and never clobbers a user hook.
+ */
+function foldRemovedHooksSettings(
+  planResult: PlanResult,
+  ctx: Ctx,
+  removedScripts: string[],
+): void {
+  const base = planResult.settingsPlan
+    ? parseSettingsText(planResult.settingsPlan.text!)
+    : (ctx.claude.settings ?? {});
+  const { merged, changes } = removeHooksByScript(base, removedScripts);
+  if (!changes.length) return;
+  planResult.settingsPlan ??= {
+    dest: '.claude/settings.json',
+    existedBefore: ctx.claude.settingsExists,
+    changes: [],
+  };
+  planResult.settingsPlan.text = renderSettings(merged);
+  planResult.settingsPlan.changes.push(...changes);
+}
+
+/**
+ * Reconciles the recorded settings signature against what the CURRENT modules declare,
+ * dropping a still-recognizable houserules hook entry that nothing declares anymore even
+ * when its script survives on disk (a module rewiring its hook, not retiring the file
+ * `foldRemovedHooksSettings` above already handled). Folds into the same single write.
+ */
+function foldReconciledSettings(
+  planResult: PlanResult,
+  ctx: Ctx,
+  manifest: NonNullable<Ctx['claude']['manifest']>,
+): void {
+  const base = planResult.settingsPlan
+    ? parseSettingsText(planResult.settingsPlan.text!)
+    : (ctx.claude.settings ?? {});
+  const { merged, dropped } = reconcileSettings(
+    base,
+    planResult.fragments,
+    manifest.settings,
+  );
+  if (!dropped.length) return;
+  planResult.settingsPlan ??= {
+    dest: '.claude/settings.json',
+    existedBefore: ctx.claude.settingsExists,
+    changes: [],
+  };
+  planResult.settingsPlan.text = renderSettings(merged);
+  planResult.settingsPlan.changes.push(
+    ...dropped.map(({ event, matcher, script }) => ({
+      kind: 'remove-hook' as const,
+      detail: `${event}${matcher ? `(${matcher})` : ''}: ${script}`,
+    })),
+  );
+}
+
+/**
  * Refreshes kit-owned files to houserules version. Local edits are honored, so a manifest
  * hash mismatch skips the file unless `--force`. Files and hooks the current houserules no
  * longer ships are pruned when they are kit-owned and unmodified. Genuinely-new default
@@ -317,49 +374,10 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     force: flags.force,
   });
   if (prune.removedScripts.length) {
-    const base = planResult.settingsPlan
-      ? parseSettingsText(planResult.settingsPlan.text!)
-      : (ctx.claude.settings ?? {});
-    const { merged, changes } = removeHooksByScript(base, prune.removedScripts);
-    if (changes.length) {
-      planResult.settingsPlan ??= {
-        dest: '.claude/settings.json',
-        existedBefore: ctx.claude.settingsExists,
-        changes: [],
-      };
-      planResult.settingsPlan.text = renderSettings(merged);
-      planResult.settingsPlan.changes.push(...changes);
-    }
+    foldRemovedHooksSettings(planResult, ctx, prune.removedScripts);
   }
 
-  // Reconciles the recorded settings signature against what the CURRENT modules declare,
-  // dropping a still-recognizable houserules hook entry that nothing declares anymore even
-  // when its script survives on disk (a module rewiring its hook, not retiring the file
-  // `removeHooksByScript` above already handled). Folds into the same single write.
-  {
-    const base = planResult.settingsPlan
-      ? parseSettingsText(planResult.settingsPlan.text!)
-      : (ctx.claude.settings ?? {});
-    const { merged, dropped } = reconcileSettings(
-      base,
-      planResult.fragments,
-      manifest.settings,
-    );
-    if (dropped.length) {
-      planResult.settingsPlan ??= {
-        dest: '.claude/settings.json',
-        existedBefore: ctx.claude.settingsExists,
-        changes: [],
-      };
-      planResult.settingsPlan.text = renderSettings(merged);
-      planResult.settingsPlan.changes.push(
-        ...dropped.map(({ event, matcher, script }) => ({
-          kind: 'remove-hook' as const,
-          detail: `${event}${matcher ? `(${matcher})` : ''}: ${script}`,
-        })),
-      );
-    }
-  }
+  foldReconciledSettings(planResult, ctx, manifest);
 
   // init unions new defaults, but update (the path people use) did not.
   // Surface them, never enable them.

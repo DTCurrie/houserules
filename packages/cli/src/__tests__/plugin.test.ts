@@ -83,11 +83,12 @@ describe('a plugin authored against @houserules/cli/plugin', () => {
         action.kind === 'copy' || action.kind === 'body',
     );
 
-    expect(withSrc.length).toBeGreaterThan(0);
-    for (const action of withSrc) {
-      expect(action.src.startsWith(FIXTURE_ROOT)).toBe(true);
-      expect(existsSync(action.src)).toBe(true);
-    }
+    expect(withSrc.length).toBe(7);
+    const offenders = withSrc.filter(
+      (action) =>
+        !action.src.startsWith(FIXTURE_ROOT) || !existsSync(action.src),
+    );
+    expect(offenders).toEqual([]);
   });
 
   it("never points a src path into houserules' own payload-dist", async () => {
@@ -98,9 +99,10 @@ describe('a plugin authored against @houserules/cli/plugin', () => {
         action.kind === 'copy' || action.kind === 'body',
     );
 
-    for (const action of withSrc) {
-      expect(action.src.startsWith(CLI_PAYLOAD_ROOT)).toBe(false);
-    }
+    const offenders = withSrc
+      .filter((action) => action.src.startsWith(CLI_PAYLOAD_ROOT))
+      .map((action) => action.src);
+    expect(offenders).toEqual([]);
   });
 
   it("passes api.config through to a module, observable in a write action's content", async () => {

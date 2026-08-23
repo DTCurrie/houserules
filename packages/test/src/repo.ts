@@ -271,7 +271,7 @@ function cacheKeyFor(shape: RepoShape, opts: InstalledRepoOptions): string {
 
 /**
  * Builds one shape into `snapshot` by running `init` over a staging copy, then publishes it
- * atomically. Only called on a cache miss; the caller is responsible for the existence check.
+ * atomically. Only called on a cache miss. The caller is responsible for the existence check.
  */
 function buildSnapshot(
   shape: RepoShape,
@@ -418,219 +418,253 @@ function snapshotRoot(): string {
   return mkdtempSync(join(tmpdir(), 'kit-snapshots-'));
 }
 
+function buildPnpmMonorepo(root: string): void {
+  write(
+    root,
+    'pnpm-workspace.yaml',
+    [
+      'packages:',
+      '  - packages/*',
+      '  - toolkits/*',
+      '  - games/*',
+      '  - apps/*',
+      '',
+      'catalogMode: strict',
+      '',
+      'catalog:',
+      "  typescript: '6.0.3'",
+      '',
+      'catalogs:',
+      '  three-stack:',
+      "    three: '0.160.0'",
+      '',
+    ].join('\n'),
+  );
+  const monorepo = PLUGIN_FIXTURE_PACKAGES['pnpm-monorepo'];
+  if (!monorepo) throw new Error('unreachable: pnpm-monorepo has no spec');
+  write(
+    root,
+    'package.json',
+    json({
+      name: 'fix-root',
+      private: true,
+      packageManager: monorepo.packageManagerField,
+      scripts: {
+        build: 'wireit',
+        verify: 'wireit',
+        fix: 'wireit',
+        'format:check': 'prettier --check .',
+        change: 'pnpx @changesets/cli',
+      },
+      devDependencies: { typescript: 'catalog:' },
+    }),
+  );
+  write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
+  write(root, 'packages/.gitkeep', '');
+  write(root, 'toolkits/.gitkeep', '');
+  for (const pkg of monorepo.packages) {
+    write(
+      root,
+      `${pkg.dir}/package.json`,
+      json({ name: pkg.packageName, private: true, scripts: pkg.scripts }),
+    );
+    write(root, `${pkg.dir}/${pkg.sourceFile.rel}`, pkg.sourceFile.content);
+  }
+  write(
+    root,
+    '.changeset/config.json',
+    json({
+      changelog: '@changesets/cli/changelog',
+      commit: false,
+      access: 'restricted',
+      baseBranch: 'main',
+    }),
+  );
+  write(root, '.changeset/README.md', '# Changesets\n');
+  write(
+    root,
+    '.changeset/fuzzy-pandas-smile.md',
+    '---\n"@fix/studio": patch\n---\n\nPending one.\n',
+  );
+  write(
+    root,
+    '.changeset/brave-lions-jump.md',
+    '---\n"@fix/cityville": minor\n---\n\nPending two.\n',
+  );
+  write(
+    root,
+    '.claude/settings.local.json',
+    json({ permissions: { allow: ['WebFetch(domain:example.com)'] } }),
+  );
+}
+
+function buildNpmSingle(root: string): void {
+  const single = PLUGIN_FIXTURE_PACKAGES['npm-single']?.packages[0];
+  if (!single) throw new Error('unreachable: npm-single has no spec');
+  write(
+    root,
+    'package.json',
+    json({
+      name: single.packageName,
+      version: '1.0.0',
+      scripts: single.scripts,
+    }),
+  );
+  write(
+    root,
+    'package-lock.json',
+    json({ name: single.packageName, lockfileVersion: 3 }),
+  );
+  write(root, single.sourceFile.rel, single.sourceFile.content);
+  write(
+    root,
+    'CLAUDE.md',
+    '# single-app\n\nPre-existing user CLAUDE.md. houserules must never edit this.\n',
+  );
+  // The hook's script must exist, or doctor's install-hygiene check warns and every
+  // suite asserting warning counts on this shape absorbs an unrelated finding.
+  write(root, 'my-hook.js', 'process.exit(0);\n');
+  write(
+    root,
+    '.claude/settings.json',
+    `${JSON.stringify(
+      {
+        permissions: { allow: ['Bash(echo hi)'] },
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: 'Bash',
+              hooks: [
+                { type: 'command', command: 'node   ./my-hook.js   --check' },
+              ],
+            },
+          ],
+        },
+      },
+      null,
+      4,
+    )}\n`,
+  );
+}
+
+function buildNpmSinglePrettier(root: string): void {
+  write(
+    root,
+    'package.json',
+    json({
+      name: 'single-app-prettier',
+      version: '1.0.0',
+      scripts: { 'lint:fix': 'eslint . --fix', test: 'node --test' },
+      devDependencies: { prettier: '^3.0.0' },
+    }),
+  );
+  write(root, 'src/index.js', 'module.exports = 1;\n');
+}
+
+function buildPnpmFlowMonorepo(root: string): void {
+  write(root, 'pnpm-workspace.yaml', 'packages: ["libs/**", "!libs/legacy"]\n');
+  write(
+    root,
+    'package.json',
+    json({
+      name: 'flow-root',
+      private: true,
+      packageManager: 'pnpm@11.5.0',
+      scripts: { 'lint:fix': 'eslint . --fix' },
+    }),
+  );
+  write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
+  // Nested one level deeper than any `*` glob reaches. Only `**` finds it.
+  write(
+    root,
+    'libs/group/nested/package.json',
+    json({ name: '@flow/nested', scripts: PKG_SCRIPTS }),
+  );
+  write(root, 'libs/group/nested/src/index.ts', 'export const x = 1;\n');
+  write(
+    root,
+    'libs/plain/package.json',
+    json({ name: '@flow/plain', scripts: PKG_SCRIPTS }),
+  );
+  write(
+    root,
+    'libs/legacy/package.json',
+    json({ name: '@flow/legacy', scripts: PKG_SCRIPTS }),
+  );
+}
+
+function buildPnpmSingle(root: string): void {
+  write(
+    root,
+    'package.json',
+    json({
+      name: 'solo',
+      version: '1.0.0',
+      scripts: {
+        'lint:fix': 'eslint . --fix',
+        format: 'prettier --write .',
+        'format:check': 'prettier --check .',
+        test: 'node --test',
+      },
+    }),
+  );
+  write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
+  write(root, 'src/index.js', 'export const x = 1;\n');
+}
+
+function buildCommittedScripts(root: string): void {
+  // The state every pre-gitignore install is in: houserules scripts tracked by git.
+  // gitInit() commits everything below, so these land in the index. This is what
+  // the migration has to detect and stage out.
+  write(
+    root,
+    'package.json',
+    json({ name: 'legacy-install', version: '1.0.0' }),
+  );
+  for (const name of [
+    'changeset-check.mjs',
+    'session-context.mjs',
+    'guard-bash.mjs',
+  ]) {
+    write(root, `.claude/scripts/${name}`, '#!/usr/bin/env node\n');
+  }
+  write(root, '.claude/settings.json', json({ hooks: {} }));
+}
+
+function buildNonJs(root: string): void {
+  write(root, 'README.md', '# not a js repo\n');
+}
+
 /** Writes one shape into a fresh mkdtemp directory. Callers own the cleanup. */
 function buildRepo(shape: RepoShape): string {
   const root = mkdtempSync(join(tmpdir(), `kit-${shape}-`));
 
-  if (shape === 'pnpm-monorepo') {
-    write(
-      root,
-      'pnpm-workspace.yaml',
-      [
-        'packages:',
-        '  - packages/*',
-        '  - toolkits/*',
-        '  - games/*',
-        '  - apps/*',
-        '',
-        'catalogMode: strict',
-        '',
-        'catalog:',
-        "  typescript: '6.0.3'",
-        '',
-        'catalogs:',
-        '  three-stack:',
-        "    three: '0.160.0'",
-        '',
-      ].join('\n'),
-    );
-    const monorepo = PLUGIN_FIXTURE_PACKAGES['pnpm-monorepo'];
-    if (!monorepo) throw new Error('unreachable: pnpm-monorepo has no spec');
-    write(
-      root,
-      'package.json',
-      json({
-        name: 'fix-root',
-        private: true,
-        packageManager: monorepo.packageManagerField,
-        scripts: {
-          build: 'wireit',
-          verify: 'wireit',
-          fix: 'wireit',
-          'format:check': 'prettier --check .',
-          change: 'pnpx @changesets/cli',
-        },
-        devDependencies: { typescript: 'catalog:' },
-      }),
-    );
-    write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
-    write(root, 'packages/.gitkeep', '');
-    write(root, 'toolkits/.gitkeep', '');
-    for (const pkg of monorepo.packages) {
-      write(
-        root,
-        `${pkg.dir}/package.json`,
-        json({ name: pkg.packageName, private: true, scripts: pkg.scripts }),
-      );
-      write(root, `${pkg.dir}/${pkg.sourceFile.rel}`, pkg.sourceFile.content);
+  switch (shape) {
+    case 'pnpm-monorepo':
+      buildPnpmMonorepo(root);
+      break;
+    case 'npm-single':
+      buildNpmSingle(root);
+      break;
+    case 'npm-single-prettier':
+      buildNpmSinglePrettier(root);
+      break;
+    case 'pnpm-flow-monorepo':
+      buildPnpmFlowMonorepo(root);
+      break;
+    case 'pnpm-single':
+      buildPnpmSingle(root);
+      break;
+    case 'committed-scripts':
+      buildCommittedScripts(root);
+      break;
+    case 'non-js':
+      buildNonJs(root);
+      break;
+    default: {
+      const exhaustive: never = shape;
+      throw new Error(`unknown repo shape: ${exhaustive}`);
     }
-    write(
-      root,
-      '.changeset/config.json',
-      json({
-        changelog: '@changesets/cli/changelog',
-        commit: false,
-        access: 'restricted',
-        baseBranch: 'main',
-      }),
-    );
-    write(root, '.changeset/README.md', '# Changesets\n');
-    write(
-      root,
-      '.changeset/fuzzy-pandas-smile.md',
-      '---\n"@fix/studio": patch\n---\n\nPending one.\n',
-    );
-    write(
-      root,
-      '.changeset/brave-lions-jump.md',
-      '---\n"@fix/cityville": minor\n---\n\nPending two.\n',
-    );
-    write(
-      root,
-      '.claude/settings.local.json',
-      json({ permissions: { allow: ['WebFetch(domain:example.com)'] } }),
-    );
-  } else if (shape === 'npm-single') {
-    const single = PLUGIN_FIXTURE_PACKAGES['npm-single']?.packages[0];
-    if (!single) throw new Error('unreachable: npm-single has no spec');
-    write(
-      root,
-      'package.json',
-      json({
-        name: single.packageName,
-        version: '1.0.0',
-        scripts: single.scripts,
-      }),
-    );
-    write(
-      root,
-      'package-lock.json',
-      json({ name: single.packageName, lockfileVersion: 3 }),
-    );
-    write(root, single.sourceFile.rel, single.sourceFile.content);
-    write(
-      root,
-      'CLAUDE.md',
-      '# single-app\n\nPre-existing user CLAUDE.md. houserules must never edit this.\n',
-    );
-    // The hook's script must exist, or doctor's install-hygiene check warns and every
-    // suite asserting warning counts on this shape absorbs an unrelated finding.
-    write(root, 'my-hook.js', 'process.exit(0);\n');
-    write(
-      root,
-      '.claude/settings.json',
-      `${JSON.stringify(
-        {
-          permissions: { allow: ['Bash(echo hi)'] },
-          hooks: {
-            PreToolUse: [
-              {
-                matcher: 'Bash',
-                hooks: [
-                  { type: 'command', command: 'node   ./my-hook.js   --check' },
-                ],
-              },
-            ],
-          },
-        },
-        null,
-        4,
-      )}\n`,
-    );
-  } else if (shape === 'npm-single-prettier') {
-    write(
-      root,
-      'package.json',
-      json({
-        name: 'single-app-prettier',
-        version: '1.0.0',
-        scripts: { 'lint:fix': 'eslint . --fix', test: 'node --test' },
-        devDependencies: { prettier: '^3.0.0' },
-      }),
-    );
-    write(root, 'src/index.js', 'module.exports = 1;\n');
-  } else if (shape === 'pnpm-flow-monorepo') {
-    write(
-      root,
-      'pnpm-workspace.yaml',
-      'packages: ["libs/**", "!libs/legacy"]\n',
-    );
-    write(
-      root,
-      'package.json',
-      json({
-        name: 'flow-root',
-        private: true,
-        packageManager: 'pnpm@11.5.0',
-        scripts: { 'lint:fix': 'eslint . --fix' },
-      }),
-    );
-    write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
-    // Nested one level deeper than any `*` glob reaches. Only `**` finds it.
-    write(
-      root,
-      'libs/group/nested/package.json',
-      json({ name: '@flow/nested', scripts: PKG_SCRIPTS }),
-    );
-    write(root, 'libs/group/nested/src/index.ts', 'export const x = 1;\n');
-    write(
-      root,
-      'libs/plain/package.json',
-      json({ name: '@flow/plain', scripts: PKG_SCRIPTS }),
-    );
-    write(
-      root,
-      'libs/legacy/package.json',
-      json({ name: '@flow/legacy', scripts: PKG_SCRIPTS }),
-    );
-  } else if (shape === 'pnpm-single') {
-    write(
-      root,
-      'package.json',
-      json({
-        name: 'solo',
-        version: '1.0.0',
-        scripts: {
-          'lint:fix': 'eslint . --fix',
-          format: 'prettier --write .',
-          'format:check': 'prettier --check .',
-          test: 'node --test',
-        },
-      }),
-    );
-    write(root, 'pnpm-lock.yaml', "lockfileVersion: '9.0'\n");
-    write(root, 'src/index.js', 'export const x = 1;\n');
-  } else if (shape === 'committed-scripts') {
-    // The state every pre-gitignore install is in: houserules scripts tracked by git.
-    // gitInit() commits everything below, so these land in the index. This is what
-    // the migration has to detect and stage out.
-    write(
-      root,
-      'package.json',
-      json({ name: 'legacy-install', version: '1.0.0' }),
-    );
-    for (const name of [
-      'changeset-check.mjs',
-      'session-context.mjs',
-      'guard-bash.mjs',
-    ]) {
-      write(root, `.claude/scripts/${name}`, '#!/usr/bin/env node\n');
-    }
-    write(root, '.claude/settings.json', json({ hooks: {} }));
-  } else if (shape === 'non-js') {
-    write(root, 'README.md', '# not a js repo\n');
-  } else {
-    throw new Error(`unknown repo shape: ${shape}`);
   }
 
   gitInit(root);

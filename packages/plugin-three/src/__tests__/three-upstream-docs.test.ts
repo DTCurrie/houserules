@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf } from '#test/installed-tree';
+import { manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_THREE = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_THREE, alias: 'three' }];
@@ -53,7 +53,8 @@ describe('three upstream docs reference', () => {
       plugins: PLUGINS,
     });
 
-    expect(manifestOf(root).files[REFERENCE_PATH]).toBeTruthy();
+    const content = readFileSync(join(root, REFERENCE_PATH), 'utf8');
+    expect(manifestOf(root).files[REFERENCE_PATH]).toBe(sha256(content));
   });
 
   it('is installed for every reference link the base rule points at', () => {

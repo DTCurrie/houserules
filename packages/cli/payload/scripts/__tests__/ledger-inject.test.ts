@@ -211,13 +211,13 @@ describe('ledger-inject.mjs', () => {
     it('installs the injector and wires it into a UserPromptSubmit hook', () => {
       const root = useInstalledRepo('pnpm-monorepo');
 
-      expect(existsSync(join(root, INJECT))).toBeTruthy();
+      expect(existsSync(join(root, INJECT))).toBe(true);
       const settings = settingsOf(root);
       expect(
         hookCommandsFor(settings, 'UserPromptSubmit').some((c) =>
           c.includes('ledger-inject.mjs'),
         ),
-      ).toBeTruthy();
+      ).toBe(true);
     });
 
     it('injects a logged entry when the prompt references its ID', () => {

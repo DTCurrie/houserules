@@ -135,7 +135,14 @@ describe('init --yes on a pnpm monorepo', () => {
   });
 
   it('writes a houserules.config.json v2 with changesets disabled since the module is not in the default set', () => {
-    const config = readJson(houseConfigPath(root));
+    const config = readJson<{
+      version: number;
+      changesets: {
+        enabled: boolean;
+        stopCheck: boolean;
+        baseBranch: string;
+      };
+    }>(houseConfigPath(root));
     expect(config.version).toBe(2);
     expect(config.changesets.enabled).toBe(false);
     expect(config.changesets.stopCheck).toBe(false);
@@ -178,8 +185,8 @@ describe('init --yes on a pnpm monorepo', () => {
 
   it('seeds CLAUDE.md with facts from the repo and no unfilled <PROJECT_NAME>-style template placeholder', () => {
     const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
-    expect(claudeMd.includes('@fix/studio')).toBeTruthy();
-    expect(claudeMd.includes('@fix/cityville')).toBeTruthy();
+    expect(claudeMd.includes('@fix/studio')).toBe(true);
+    expect(claudeMd.includes('@fix/cityville')).toBe(true);
     expect(/<[A-Z][A-Z_]{3,}>/.test(claudeMd)).toBe(false);
   });
 
@@ -250,7 +257,7 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
       hookCommandsFor(settings, 'PreToolUse').some((command) =>
         command.includes('guard-bash.mjs'),
       ),
-    ).toBeTruthy();
+    ).toBe(true);
   });
 
   it('backs up the pre-merge settings.json into .claude/backups/', () => {
@@ -266,10 +273,12 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
   });
 
   it('resolves a single root-level target using the existing lint:fix script', () => {
-    const config = readJson(houseConfigPath(root));
+    const config = readJson<{
+      targets: Array<{ pathPrefix: string; fixCommands: string[] }>;
+    }>(houseConfigPath(root));
     expect(config.targets.length).toBe(1);
-    expect(config.targets[0].pathPrefix).toBe('');
-    expect(config.targets[0].fixCommands).toEqual(['lint:fix']);
+    expect(config.targets[0]!.pathPrefix).toBe('');
+    expect(config.targets[0]!.fixCommands).toEqual(['lint:fix']);
   });
 
   it('is idempotent on a second run without overwriting the backup', () => {
@@ -299,8 +308,8 @@ describe('init --yes --modules=-debug-session on a non-js repo', () => {
 
   it('enables core and session-context by default', () => {
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('core')).toBeTruthy();
-    expect(manifest.modules.includes('session-context')).toBeTruthy();
+    expect(manifest.modules.includes('core')).toBe(true);
+    expect(manifest.modules.includes('session-context')).toBe(true);
   });
 
   it('removes debug-session when subtracted via --modules=-debug-session', () => {
@@ -308,21 +317,20 @@ describe('init --yes --modules=-debug-session on a non-js repo', () => {
     expect(
       manifest.modules.includes('debug-session'),
       '--modules=-debug-session removed it',
-    ).toBeFalsy();
+    ).toBe(false);
     expect(
       existsSync(join(root, '.claude/scripts/debug-session-check.mjs')),
-    ).toBeFalsy();
+    ).toBe(false);
   });
 
   it('disables lint-fix for a repo with no fix scripts', () => {
     const manifest = manifestOf(root);
-    expect(
-      manifest.modules.includes('lint-fix'),
-      'no fix scripts → off',
-    ).toBeFalsy();
-    expect(
-      existsSync(join(root, '.claude/scripts/lint-format-fix.mjs')),
-    ).toBeFalsy();
+    expect(manifest.modules.includes('lint-fix'), 'no fix scripts → off').toBe(
+      false,
+    );
+    expect(existsSync(join(root, '.claude/scripts/lint-format-fix.mjs'))).toBe(
+      false,
+    );
   });
 });
 
@@ -466,7 +474,7 @@ describe('init below the git toplevel', () => {
   });
 
   it('writes nothing to the subdirectory', () => {
-    expect(existsSync(join(sub, '.claude'))).toBeFalsy();
+    expect(existsSync(join(sub, '.claude'))).toBe(false);
   });
 });
 
@@ -500,13 +508,18 @@ describe('init settings signature recorded in the manifest', () => {
 
   it('signs the wired guard-bash hook', () => {
     const manifest = manifestOf(root);
-    const hooks = manifest.settings.hooks as Array<{ script?: string }>;
-    expect(hooks.some((h) => h.script === 'guard-bash.mjs')).toBeTruthy();
+    const settings = manifest.settings as {
+      hooks: Array<{ script?: string }>;
+    };
+    expect(settings.hooks.some((h) => h.script === 'guard-bash.mjs')).toBe(
+      true,
+    );
   });
 
   it('signs the core module permission it always contributes', () => {
     const manifest = manifestOf(root);
-    expect(manifest.settings.permissions).toContain('allow:Bash(git status)');
+    const settings = manifest.settings as { permissions: string[] };
+    expect(settings.permissions).toContain('allow:Bash(git status)');
   });
 });
 

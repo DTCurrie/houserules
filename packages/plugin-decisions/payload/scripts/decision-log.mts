@@ -209,8 +209,8 @@ function projectDecisions(
     }
   }
   const superseded = new Set<string>();
-  for (const e of entries.values()) {
-    for (const target of e.supersedes) superseded.add(target);
+  for (const entry of entries.values()) {
+    for (const target of entry.supersedes) superseded.add(target);
   }
   return { entries, superseded };
 }
@@ -220,8 +220,8 @@ function supersededByOf(
   entries: Map<string, DecisionEntry>,
 ): Map<string, string> {
   const map = new Map<string, string>();
-  for (const e of entries.values()) {
-    for (const target of e.supersedes) map.set(target, e.id);
+  for (const entry of entries.values()) {
+    for (const target of entry.supersedes) map.set(target, entry.id);
   }
   return map;
 }
@@ -231,23 +231,23 @@ function underChildrenOf(
   entries: Map<string, DecisionEntry>,
 ): Map<string, string[]> {
   const map = new Map<string, string[]>();
-  for (const e of entries.values()) {
-    if (!e.under) continue;
-    const list = map.get(e.under) ?? [];
-    list.push(e.id);
-    map.set(e.under, list);
+  for (const entry of entries.values()) {
+    if (!entry.under) continue;
+    const list = map.get(entry.under) ?? [];
+    list.push(entry.id);
+    map.set(entry.under, list);
   }
   return map;
 }
 
 /** One line per node, indented by depth: id, title, status. Never a body. */
 function printEntryLine(
-  e: DecisionEntry,
+  entry: DecisionEntry,
   superseded: Set<string>,
   depth: number,
 ): void {
-  const status = superseded.has(e.id) ? 'superseded' : 'accepted';
-  console.log(`${'  '.repeat(depth)}${e.id}  ${e.title}  ${status}`);
+  const status = superseded.has(entry.id) ? 'superseded' : 'accepted';
+  console.log(`${'  '.repeat(depth)}${entry.id}  ${entry.title}  ${status}`);
 }
 
 function fail(message: string): never {
@@ -327,12 +327,12 @@ function staleScopes(
   superseded: Set<string>,
 ): { id: string; missing: string[] }[] {
   const stale: { id: string; missing: string[] }[] = [];
-  for (const e of entries.values()) {
-    if (superseded.has(e.id)) continue;
-    const missing = e.scope.filter(
+  for (const entry of entries.values()) {
+    if (superseded.has(entry.id)) continue;
+    const missing = entry.scope.filter(
       (p) => !existsSync(resolve(REPO_ROOT, normalizeScopePath(p))),
     );
-    if (missing.length) stale.push({ id: e.id, missing });
+    if (missing.length) stale.push({ id: entry.id, missing });
   }
   return stale;
 }
@@ -385,29 +385,29 @@ function metaRow(fields: Record<string, string | null>): string {
 }
 
 function renderEntry(
-  e: DecisionEntry,
+  entry: DecisionEntry,
   status: 'accepted' | 'superseded',
   supersededById: string | null,
 ): string {
-  const scope = e.scope.length
-    ? e.scope.map((p) => `\`${p}\``).join(', ')
+  const scope = entry.scope.length
+    ? entry.scope.map((p) => `\`${p}\``).join(', ')
     : null;
   const meta = [
-    metaRow({ Decided: e.date, Status: status }),
+    metaRow({ Decided: entry.date, Status: status }),
     metaRow({
-      Supersedes: e.supersedes.length ? e.supersedes.join(', ') : null,
-      Under: e.under,
+      Supersedes: entry.supersedes.length ? entry.supersedes.join(', ') : null,
+      Under: entry.under,
     }),
     metaRow({
       'Superseded by': status === 'superseded' ? supersededById : null,
     }),
-    metaRow({ Chat: e.chat }),
+    metaRow({ Chat: entry.chat }),
     metaRow({ Scope: scope }),
   ]
     .filter(Boolean)
     .join('\n');
-  const body = e.content ? decodeBody(e.content).trim() : '';
-  return `## [${e.id}] ${e.title}\n\n${meta}\n\n${body}\n\n${SEPARATOR}\n\n`;
+  const body = entry.content ? decodeBody(entry.content).trim() : '';
+  return `## [${entry.id}] ${entry.title}\n\n${meta}\n\n${body}\n\n${SEPARATOR}\n\n`;
 }
 
 /**
@@ -429,8 +429,9 @@ function projectFileEntries(file: string): {
     readLog<DecisionRecord>(LOG_FILE),
   );
   const entries = [...allEntries.values()].filter(
-    (e) =>
-      normalizeSurfaceRef(e.file, SURFACE, CONFIG.targets ?? []) === relFile,
+    (entry) =>
+      normalizeSurfaceRef(entry.file, SURFACE, CONFIG.targets ?? []) ===
+      relFile,
   );
   return { entries, superseded, supersededBy: supersededByOf(allEntries) };
 }
@@ -451,7 +452,7 @@ function allSurfaceFiles(): string[] {
   return impliedSurfaceFiles(
     LEDGER_DIR,
     SURFACE,
-    [...entries.values()].map((e) => e.file),
+    [...entries.values()].map((entry) => entry.file),
     CONFIG.targets ?? [],
   );
 }
@@ -465,19 +466,19 @@ function listEntries(
   file: string,
 ): { id: string; title: string; decided: string; status: string }[] {
   if (existsSync(file) && statSync(file).isFile()) {
-    return parseEntries(readSurface(file)).map((e) => ({
-      id: e.id,
-      title: e.title,
-      decided: e.meta.Decided ?? todayDate(),
-      status: e.meta.Status ?? 'accepted',
+    return parseEntries(readSurface(file)).map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      decided: entry.meta.Decided ?? todayDate(),
+      status: entry.meta.Status ?? 'accepted',
     }));
   }
   const { entries, superseded } = projectFileEntries(file);
-  return entries.map((e) => ({
-    id: e.id,
-    title: e.title,
-    decided: e.date,
-    status: superseded.has(e.id) ? 'superseded' : 'accepted',
+  return entries.map((entry) => ({
+    id: entry.id,
+    title: entry.title,
+    decided: entry.date,
+    status: superseded.has(entry.id) ? 'superseded' : 'accepted',
   }));
 }
 
@@ -494,11 +495,11 @@ function rerenderFile(
 ): void {
   const { entries, superseded, supersededBy } = projectFileEntries(file);
   const body = entries
-    .map((e) =>
+    .map((entry) =>
       renderEntry(
-        e,
-        superseded.has(e.id) ? 'superseded' : 'accepted',
-        supersededBy.get(e.id) ?? null,
+        entry,
+        superseded.has(entry.id) ? 'superseded' : 'accepted',
+        supersededBy.get(entry.id) ?? null,
       ),
     )
     .join('');
@@ -818,8 +819,10 @@ switch (action) {
       const entries = listEntries(f);
       if (!entries.length) continue;
       console.log(`# ${relativeToRoot(REPO_ROOT, f)}`);
-      for (const e of entries) {
-        console.log(`  ${e.id}  ${e.decided}  ${e.status}  ${e.title}`);
+      for (const entry of entries) {
+        console.log(
+          `  ${entry.id}  ${entry.decided}  ${entry.status}  ${entry.title}`,
+        );
       }
       console.log('');
     }
@@ -846,10 +849,10 @@ switch (action) {
     );
     requireKnownId(entries, id, 'ancestry');
     const walk = (nodeId: string, depth: number): void => {
-      const e = entries.get(nodeId);
-      if (!e) return;
-      printEntryLine(e, superseded, depth);
-      for (const parent of e.supersedes) walk(parent, depth + 1);
+      const entry = entries.get(nodeId);
+      if (!entry) return;
+      printEntryLine(entry, superseded, depth);
+      for (const parent of entry.supersedes) walk(parent, depth + 1);
     };
     walk(id, 0);
     break;
@@ -869,9 +872,9 @@ switch (action) {
     const supersededBy = supersededByOf(entries);
     let nodeId: string | undefined = id;
     while (nodeId) {
-      const e: DecisionEntry | undefined = entries.get(nodeId);
-      if (!e) break;
-      printEntryLine(e, superseded, 0);
+      const entry: DecisionEntry | undefined = entries.get(nodeId);
+      if (!entry) break;
+      printEntryLine(entry, superseded, 0);
       nodeId = supersededBy.get(nodeId);
     }
     break;
@@ -890,9 +893,9 @@ switch (action) {
     requireKnownId(entries, id, 'tree');
     const children = underChildrenOf(entries);
     const walk = (nodeId: string, depth: number): void => {
-      const e = entries.get(nodeId);
-      if (!e) return;
-      printEntryLine(e, superseded, depth);
+      const entry = entries.get(nodeId);
+      if (!entry) return;
+      printEntryLine(entry, superseded, depth);
       for (const child of children.get(nodeId) ?? []) walk(child, depth + 1);
     };
     walk(id, 0);
@@ -910,13 +913,13 @@ switch (action) {
       readLog<DecisionRecord>(LOG_FILE),
     );
     const queries = paths.map(normalizeScopePath);
-    for (const e of entries.values()) {
+    for (const entry of entries.values()) {
       if (
-        e.scope.some((p) =>
+        entry.scope.some((p) =>
           queries.some((q) => scopesOverlap(normalizeScopePath(p), q)),
         )
       )
-        printEntryLine(e, superseded, 0);
+        printEntryLine(entry, superseded, 0);
     }
     const stale = staleScopes(entries, superseded);
     if (stale.length) {

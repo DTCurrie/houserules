@@ -20,16 +20,27 @@ import { runCli, runIn, type RunResult } from '#test/run';
 import {
   claudeMdPath,
   editHouseConfig,
+  type HouseManifestShape,
   hookCommandsFor,
   readClaudeMd,
   readJson,
   REGION_END,
   REGION_START,
+  type Settings,
   settingsOf,
   sha256,
 } from '#test/installed-tree';
 import { splitFrontmatter } from '../../core/frontmatter.js';
 import { PRETTIERIGNORE_REGION } from '../../modules/prettier-guard.js';
+
+/**
+ * The manifest shape as these tests read it, where a body-owned rule's `files` entry is a
+ * `{ body, frontmatter }` pair rather than a single hash string.
+ */
+interface ManifestShape {
+  modules: string[];
+  files: Record<string, string | { body: string; frontmatter: string }>;
+}
 
 function plantRetiredHookAlongsideUserHook(
   root: string,
@@ -39,13 +50,14 @@ function plantRetiredHookAlongsideUserHook(
   const content = '// retired houserules hook\nprocess.exit(0);\n';
   writeFileSync(join(root, retired), content);
   const manifestPath = join(root, '.claude/houserules.manifest.json');
-  const manifest = readJson(manifestPath);
+  const manifest = readJson<HouseManifestShape>(manifestPath);
   manifest.files[retired] = hashMismatchesDisk
     ? sha256('something else')
     : sha256(content);
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   const settingsPath = join(root, '.claude/settings.json');
-  const settings = readJson(settingsPath);
+  const settings = readJson<Settings>(settingsPath);
+  settings.hooks ??= {};
   settings.hooks.PostToolUse = [
     {
       matcher: 'Bash',
@@ -214,7 +226,9 @@ describe('update --dry-run on reference templates committed before they were git
   });
 
   it('leaves the template tracked in git', () => {
-    expect(runIn(root, 'git', ['ls-files', reviewerTpl]).trim()).toBeTruthy();
+    expect(runIn(root, 'git', ['ls-files', reviewerTpl]).trim()).toBe(
+      reviewerTpl,
+    );
   });
 });
 
@@ -239,13 +253,13 @@ describe('update on reference templates committed before they were gitignored', 
   });
 
   it('leaves the working-tree template file on disk', () => {
-    expect(existsSync(join(root, reviewerTpl))).toBeTruthy();
+    expect(existsSync(join(root, reviewerTpl))).toBe(true);
   });
 
   it('keeps templates/.gitignore tracked', () => {
     expect(
       runIn(root, 'git', ['ls-files', '.claude/templates/.gitignore']).trim(),
-    ).toBeTruthy();
+    ).toBe('.claude/templates/.gitignore');
   });
 });
 
@@ -333,13 +347,13 @@ describe('update on houserules scripts committed before they were gitignored', (
   });
 
   it('leaves the working-tree script file on disk', () => {
-    expect(existsSync(join(root, guardScript))).toBeTruthy();
+    expect(existsSync(join(root, guardScript))).toBe(true);
   });
 
   it('keeps .claude/scripts/.gitignore tracked', () => {
     expect(
       runIn(root, 'git', ['ls-files', '.claude/scripts/.gitignore']).trim(),
-    ).toBeTruthy();
+    ).toBe('.claude/scripts/.gitignore');
   });
 
   it('stages the untrack without committing it', () => {
@@ -355,7 +369,7 @@ describe('update with scripts.commit: true (opted in to committing scripts)', ()
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
     const configPath = join(root, '.claude/houserules.config.json');
-    const config = readJson(configPath);
+    const config = readJson<{ scripts?: { commit: boolean } }>(configPath);
     config.scripts = { commit: true };
     writeFileSync(configPath, JSON.stringify(config, null, 2));
     rmSync(join(root, '.claude/scripts/.gitignore'), { force: true });
@@ -373,7 +387,9 @@ describe('update with scripts.commit: true (opted in to committing scripts)', ()
   });
 
   it('leaves the already-tracked scripts tracked rather than untracking them', () => {
-    expect(runIn(root, 'git', ['ls-files', guardScript]).trim()).toBeTruthy();
+    expect(runIn(root, 'git', ['ls-files', guardScript]).trim()).toBe(
+      guardScript,
+    );
   });
 });
 
@@ -606,7 +622,7 @@ describe('update reconciling a stale but still-recognizable hook entry no curren
       (settings.hooks?.PreToolUse ?? []).some(
         (group) => group.matcher === 'StaleMatcher',
       ),
-    ).toBeFalsy();
+    ).toBe(false);
     expect(existsSync(join(root, '.claude/scripts/guard-bash.mjs'))).toBe(true);
   });
 
@@ -629,7 +645,7 @@ describe('update reconciling a stale but still-recognizable hook entry no curren
       manifest.settings?.hooks.some(
         (h) => h.matcher === 'StaleMatcher' && h.script === 'guard-bash.mjs',
       ),
-    ).toBeFalsy();
+    ).toBe(false);
   });
 
   it('preserves a hook the current modules still declare, at its own matcher', () => {
@@ -658,7 +674,7 @@ describe('update reconciling a stale but still-recognizable hook entry no curren
     expect(runCli(['update', root]).status).toBe(0);
 
     const after = hookCommandsFor(settingsOf(root), 'PreToolUse');
-    expect(after.some((c) => c.includes('my-own-hook.js'))).toBeTruthy();
+    expect(after.some((c) => c.includes('my-own-hook.js'))).toBe(true);
   });
 
   it('preserves a user-edited variant of the stale entry rather than dropping it', () => {
@@ -671,7 +687,9 @@ describe('update reconciling a stale but still-recognizable hook entry no curren
     const staleGroup = (settings.hooks?.PreToolUse ?? []).find(
       (group) => group.matcher === 'StaleMatcher',
     );
-    expect(staleGroup, 'the user-edited entry must survive').toBeTruthy();
+    expect(staleGroup?.matcher, 'the user-edited entry must survive').toBe(
+      'StaleMatcher',
+    );
     expect(staleGroup!.hooks?.[0]?.command).toMatch(/--my-extra-flag/);
   });
 });
@@ -707,7 +725,7 @@ describe('doctor and update on a retired, unmodified, wired hook script', () => 
     const r = runCli(['update', '--dry-run', root]);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/compact-tool-output\.mjs/);
-    expect(existsSync(join(root, retired))).toBeTruthy();
+    expect(existsSync(join(root, retired))).toBe(true);
   });
 
   describe('after a real update', () => {
@@ -722,21 +740,23 @@ describe('doctor and update on a retired, unmodified, wired hook script', () => 
     });
 
     it('deletes the retired file', () => {
-      expect(existsSync(join(root, retired))).toBeFalsy();
+      expect(existsSync(join(root, retired))).toBe(false);
     });
 
     it('unwires the retired houserules hook from settings.json', () => {
       const cmds = hookCommandsFor(settingsOf(root), 'PostToolUse');
-      expect(cmds.some((c) => c.includes('compact-tool-output'))).toBeFalsy();
+      expect(cmds.some((c) => c.includes('compact-tool-output'))).toBe(false);
     });
 
     it('preserves the user hook in settings.json', () => {
       const cmds = hookCommandsFor(settingsOf(root), 'PostToolUse');
-      expect(cmds.some((c) => c.includes('user-hook.js'))).toBeTruthy();
+      expect(cmds.some((c) => c.includes('user-hook.js'))).toBe(true);
     });
 
     it('drops the retired file from the manifest', () => {
-      expect(retired in readJson(manifestPath).files).toBeFalsy();
+      expect(retired in readJson<HouseManifestShape>(manifestPath).files).toBe(
+        false,
+      );
     });
 
     it('leaves doctor clean again', () => {
@@ -761,7 +781,7 @@ describe('update on a retired hook script with local edits', () => {
   it('keeps the file, since its hash no longer matches the manifest', () => {
     const r = runCli(['update', root]);
     expect(r.status, r.stderr).toBe(0);
-    expect(existsSync(join(root, retired))).toBeTruthy();
+    expect(existsSync(join(root, retired))).toBe(true);
   });
 
   it('mentions the local edit in its output', () => {
@@ -772,7 +792,7 @@ describe('update on a retired hook script with local edits', () => {
   it('removes the file when --force is passed', () => {
     const r = runCli(['update', '--force', root]);
     expect(r.status, r.stderr).toBe(0);
-    expect(existsSync(join(root, retired))).toBeFalsy();
+    expect(existsSync(join(root, retired))).toBe(false);
   });
 });
 
@@ -800,8 +820,10 @@ describe('update when the install predates a new default module', () => {
 
   it('never auto-enables the advertised module', () => {
     expect(
-      readJson(manifestPath).modules.includes('session-context'),
-    ).toBeFalsy();
+      readJson<HouseManifestShape>(manifestPath).modules.includes(
+        'session-context',
+      ),
+    ).toBe(false);
   });
 });
 
@@ -816,7 +838,7 @@ describe('update on an install whose manifest names a retired module', () => {
     const content = '// a retired module file left on disk\n';
     writeFileSync(retiredScript, content);
     const manifestPath = join(root, '.claude/houserules.manifest.json');
-    const manifest = readJson(manifestPath);
+    const manifest = readJson<ManifestShape>(manifestPath);
     manifest.modules = [...manifest.modules, 'backlog'];
     manifest.files['.claude/scripts/backlog-log.mjs'] = sha256(content);
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
@@ -862,7 +884,9 @@ describe('update on a body-owned rule with a trimmed frontmatter', () => {
   });
 
   it('records the manifest entry as a body/frontmatter hash pair', () => {
-    const manifest = readJson(join(root, '.claude/houserules.manifest.json'));
+    const manifest = readJson<ManifestShape>(
+      join(root, '.claude/houserules.manifest.json'),
+    );
     expect(manifest.files[rulePath]).toEqual({
       body: expect.any(String),
       frontmatter: expect.any(String),
@@ -886,9 +910,9 @@ describe('update on a body-owned rule whose body houserules has since changed', 
     writeFileSync(join(root, rulePath), trimmedFrontmatter + olderBody);
 
     const manifestPath = join(root, '.claude/houserules.manifest.json');
-    const manifest = readJson(manifestPath);
+    const manifest = readJson<ManifestShape>(manifestPath);
     manifest.files[rulePath] = {
-      ...manifest.files[rulePath],
+      ...(manifest.files[rulePath] as { body: string; frontmatter: string }),
       body: sha256(olderBody),
     };
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
@@ -920,7 +944,7 @@ describe('update on a body-owned rule recorded with a legacy whole-file manifest
   beforeEach(() => {
     root = useInstalledRepo('npm-single', { modules: 'code-cleanliness' });
     manifestPath = join(root, '.claude/houserules.manifest.json');
-    const manifest = readJson(manifestPath);
+    const manifest = readJson<ManifestShape>(manifestPath);
     manifest.files[rulePath] = sha256(
       readFileSync(join(root, rulePath), 'utf8'),
     );
@@ -938,7 +962,7 @@ describe('update on a body-owned rule recorded with a legacy whole-file manifest
   });
 
   it('rewrites the manifest entry to the body/frontmatter hash shape', () => {
-    const entry = readJson(manifestPath).files[rulePath];
+    const entry = readJson<ManifestShape>(manifestPath).files[rulePath];
     expect(entry).toEqual({
       body: expect.any(String),
       frontmatter: expect.any(String),
@@ -1134,16 +1158,18 @@ describe('update on a consumer-less install with a ledger .gitignore from before
     mkdirSync(join(root, '.claude/ledgers'), { recursive: true });
     writeFileSync(join(root, '.claude/ledgers/.gitignore'), ignoreContent);
     const manifestPath = join(root, '.claude/houserules.manifest.json');
-    const manifest = readJson(manifestPath);
+    const manifest = readJson<HouseManifestShape>(manifestPath);
     manifest.files['.claude/ledgers/.gitignore'] = sha256(ignoreContent);
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
     expect(runCli(['update', root]).status).toBe(0);
 
     expect(existsSync(join(root, '.claude/ledgers'))).toBe(false);
-    expect(readJson(manifestPath).files['.claude/ledgers/.gitignore']).toBe(
-      undefined,
-    );
+    expect(
+      readJson<HouseManifestShape>(manifestPath).files[
+        '.claude/ledgers/.gitignore'
+      ],
+    ).toBe(undefined);
   });
 });
 

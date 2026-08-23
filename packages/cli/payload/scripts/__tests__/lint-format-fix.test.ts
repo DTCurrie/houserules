@@ -186,7 +186,11 @@ describe('lint-format-fix.mjs when a target sets fixCommands to null', () => {
     stubRunner(root);
     setRunner(root);
     editHouseConfig(root, (config: InstalledHouseConfig) => {
-      for (const target of config.targets)
+      const targets = config.targets as Array<{
+        name: string;
+        fixCommands: string[] | null;
+      }>;
+      for (const target of targets)
         if (target.name === 'cityville') target.fixCommands = null;
     });
   });

@@ -187,7 +187,9 @@ describe('pr-description-lint.mjs verify commands', () => {
   it("errors when the Testing section quotes none of this repo's verify commands", () => {
     const root = stage();
     editHouseConfig(root, (config) => {
-      config.targets[0].verifyCommands = ['pnpm --filter cityville test'];
+      (config.targets as { verifyCommands: string[] }[])[0]!.verifyCommands = [
+        'pnpm --filter cityville test',
+      ];
     });
 
     const r = lint(root, wrap(VALID_BODY));
@@ -199,7 +201,9 @@ describe('pr-description-lint.mjs verify commands', () => {
   it('passes once the Testing section names a configured verify command', () => {
     const root = stage();
     editHouseConfig(root, (config) => {
-      config.targets[0].verifyCommands = ['pnpm test'];
+      (config.targets as { verifyCommands: string[] }[])[0]!.verifyCommands = [
+        'pnpm test',
+      ];
     });
 
     const r = lint(root, wrap(VALID_BODY));

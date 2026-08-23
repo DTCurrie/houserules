@@ -38,9 +38,9 @@ describe('debug-session', () => {
 
     it('wires the backstop hook into SessionStart', () => {
       const cmds = hookCommandsFor(settingsOf(root), 'SessionStart');
-      expect(
-        cmds.some((c: string) => c.includes('debug-session-check.mjs')),
-      ).toBeTruthy();
+      expect(cmds.some((c) => c.includes('debug-session-check.mjs'))).toBe(
+        true,
+      );
     });
 
     it('passes doctor validation', () => {
@@ -91,7 +91,7 @@ describe('debug-session', () => {
         existsSync(
           join(root, '.claude/templates/agents/reviewer.agent.md.template'),
         ),
-      ).toBeTruthy();
+      ).toBe(true);
     });
 
     it('does not stage the debugger template, script, or skill', () => {

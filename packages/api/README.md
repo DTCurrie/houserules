@@ -33,9 +33,9 @@ export default definePlugin((api: PluginApi): ModuleDef[] => [
 ## What a plugin gets
 
 `PluginApi` carries three things, all bound to the plugin's own package so it resolves no paths of
-its own: `payload`, the action builders rooted at this plugin's `payload-dist/`; `packageName` and
-`alias`, its identity and the id namespace its modules are addressed under; and `config`, its slice
-of `.claude/houserules.config.json`, verbatim and unvalidated.
+its own. `payload` is the action builders rooted at this plugin's `payload-dist/`. `packageName`
+and `alias` are its identity and the id namespace its modules are addressed under. `config` is its
+slice of `.claude/houserules.config.json`, verbatim and unvalidated.
 
 Validate that config slice yourself and fail loudly. A plugin that silently accepts a typo'd key is
 a plugin whose config does nothing.

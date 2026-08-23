@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf } from '#test/installed-tree';
+import { manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_DESIGN = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_DESIGN, alias: 'design' }];
@@ -52,10 +52,14 @@ describe('design layout and performance references', () => {
 
     const manifest = manifestOf(root);
 
-    expect(manifest.files['.claude/reference/design-layout.md']).toBeTruthy();
-    expect(
-      manifest.files['.claude/reference/design-performance.md'],
-    ).toBeTruthy();
+    expect(manifest.files['.claude/reference/design-layout.md']).toBe(
+      sha256(readFileSync(join(root, '.claude/reference/design-layout.md'))),
+    );
+    expect(manifest.files['.claude/reference/design-performance.md']).toBe(
+      sha256(
+        readFileSync(join(root, '.claude/reference/design-performance.md')),
+      ),
+    );
   });
 
   it("names both new reference filenames in the rule's routing table", () => {

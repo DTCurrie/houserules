@@ -1,5 +1,15 @@
 /**
- * What a checker reports, and how it prints.
+ * `error` means the checker decided and a finding is a defect.
+ *
+ * `warn` means the checker found a CANDIDATE and a model still has to rule on it. This is
+ * the whole distinction between a mechanical clause and a hybrid one. A rule that says
+ * "past 20 to 30 lines, look again" produces candidates, not defects, and shipping those
+ * at `error` misreads the clause it is enforcing.
+ */
+export type Level = 'error' | 'warn';
+
+/**
+ * What a checker reports about one location, and how it prints.
  *
  * Two shapes already existed when this was written and neither was sufficient.
  * `@houserules/api`'s `Finding` carries a level but no location, because a doctor check
@@ -13,17 +23,6 @@
  * node in a user's repo, so it cannot import from a published package at runtime, and the
  * two shapes answer different questions anyway.
  */
-
-/**
- * `error` means the checker decided and a finding is a defect.
- *
- * `warn` means the checker found a CANDIDATE and a model still has to rule on it. This is
- * the whole distinction between a mechanical clause and a hybrid one. A rule that says
- * "past 20 to 30 lines, look again" produces candidates, not defects, and shipping those
- * at `error` misreads the clause it is enforcing.
- */
-export type Level = 'error' | 'warn';
-
 export interface Finding {
   /**
    * The clause this violates, not the checker that found it. Several checkers may report

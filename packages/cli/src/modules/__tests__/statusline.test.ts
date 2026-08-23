@@ -29,14 +29,14 @@ describe('statusline', () => {
 
     it('sets statusLine to houserules command', () => {
       const settings = settingsOf(root);
-      expect(settings.statusLine).toBeTruthy();
-      expect(settings.statusLine.command).toMatch(/statusline\.mjs/);
+      const statusLine = settings.statusLine as { command: string };
+      expect(statusLine.command).toMatch(/statusline\.mjs/);
     });
 
     it('installs the statusline script', () => {
-      expect(
-        existsSync(join(root, '.claude/scripts/statusline.mjs')),
-      ).toBeTruthy();
+      expect(existsSync(join(root, '.claude/scripts/statusline.mjs'))).toBe(
+        true,
+      );
     });
 
     it('passes doctor', () => {
@@ -65,7 +65,7 @@ describe('statusline', () => {
       expect(
         runCli(['init', '--yes', '--modules=statusline', root]).status,
       ).toBe(0);
-      const after = readJson(settingsPath);
+      const after = readJson<{ statusLine: { command: string } }>(settingsPath);
       expect(after.statusLine.command).toBe('my-own-statusline');
     });
   });

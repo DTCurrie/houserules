@@ -48,9 +48,9 @@ describe('persona-auditor', () => {
 
     it('records the module in the manifest', () => {
       const manifest = manifestOf(root);
-      expect(
-        manifest.modules.includes('persona-auditor/persona-auditor'),
-      ).toBeTruthy();
+      expect(manifest.modules.includes('persona-auditor/persona-auditor')).toBe(
+        true,
+      );
     });
 
     it('passes doctor', () => {

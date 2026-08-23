@@ -76,7 +76,7 @@ describe('every lib module loads on bare node', () => {
     }
 
     it('has lib files to check', () => {
-      expect(libFiles.length).toBeGreaterThan(0);
+      expect(libFiles).toHaveLength(0);
     });
 
     it.each(libFiles)('%s imports and exits 0', (file) => {

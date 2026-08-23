@@ -22,7 +22,7 @@ describe('ledger', () => {
   it('installs the ledger script', () => {
     expect(
       existsSync(join(root, '.claude/scripts/package-changelog.mjs')),
-    ).toBeTruthy();
+    ).toBe(true);
   });
 
   it('ships the archivist agent template the ledger module references', () => {
@@ -30,15 +30,18 @@ describe('ledger', () => {
       existsSync(
         join(root, '.claude/templates/agents/archivist.agent.md.template'),
       ),
-    ).toBeTruthy();
+    ).toBe(true);
   });
 
   it('retargets each target’s changelog to .claude/changelogs/ instead of CHANGELOG.md', () => {
-    const config = readJson(houseConfigPath(root));
+    const config = readJson<{
+      ledger: { enabled: boolean };
+      targets: { name: string; changelogPath: string; logPath: string }[];
+    }>(houseConfigPath(root));
     expect(config.ledger.enabled).toBe(true);
-    const cityville = config.targets.find((t: any) => t.name === 'cityville');
-    expect(cityville.changelogPath).toBe('.claude/changelogs/cityville.md');
-    expect(cityville.logPath).toBe('.claude/changelogs/cityville.log');
+    const cityville = config.targets.find((t) => t.name === 'cityville');
+    expect(cityville?.changelogPath).toBe('.claude/changelogs/cityville.md');
+    expect(cityville?.logPath).toBe('.claude/changelogs/cityville.log');
   });
 
   it('records a change into the retargeted changelog for a target', () => {
@@ -52,12 +55,12 @@ describe('ledger', () => {
       args: ['record', 'cityville', 'HEAD', '--changes', '- did a thing'],
     });
     expect(rec.status, rec.stderr).toBe(0);
-    expect(
-      existsSync(join(root, '.claude/changelogs/cityville.md')),
-    ).toBeTruthy();
-    expect(
-      existsSync(join(root, '.claude/changelogs/cityville.log')),
-    ).toBeTruthy();
+    expect(existsSync(join(root, '.claude/changelogs/cityville.md'))).toBe(
+      true,
+    );
+    expect(existsSync(join(root, '.claude/changelogs/cityville.log'))).toBe(
+      true,
+    );
   });
 
   it('skips a commit that does not touch the target, exiting 0 with a diagnostic', () => {

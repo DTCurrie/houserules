@@ -94,7 +94,9 @@ describe('design.mjs extract', () => {
     const result = extract(root);
 
     expect(() => JSON.parse(result.stdout)).not.toThrow();
-    expect(result.stderr.length).toBeGreaterThan(0);
+    expect(result.stderr).toContain(
+      'These values are proposed, not authoritative.',
+    );
   });
 
   it('puts the unsupported Tailwind v3 notice on stderr and still reads other sources', () => {

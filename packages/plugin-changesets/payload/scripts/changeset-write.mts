@@ -113,8 +113,6 @@ function usage(message?: string): never {
   process.exit(1);
 }
 
-// Accepts the id, the filename, or the path the script itself printed, so amending never
-// needs the caller to reshape what they were handed.
 // Appends to the outcome record: the durable, session-linked trace of what was written,
 // which survives the changeset file's own deletion at release. Measurement metadata only,
 // so a failed write warns and never fails the changeset.
@@ -141,6 +139,8 @@ function recordOutcome(
   }
 }
 
+// Accepts the id, the filename, or the path the script itself printed, so amending never
+// needs the caller to reshape what they were handed.
 function resolveAmendTarget(changesetDir: string, raw: string): string {
   const name = basename(raw).replace(/\.md$/i, '');
   if (!name || /^readme$/i.test(name)) {

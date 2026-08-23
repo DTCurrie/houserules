@@ -38,9 +38,7 @@ describe('design-review', () => {
     const toolsLine = agentText.match(/^tools:\s*(.+)$/m)?.[1] ?? '';
     const tools = toolsLine.split(',').map((tool) => tool.trim());
 
-    expect(tools.length).toBeGreaterThan(0);
-    expect(tools).not.toContain('Write');
-    expect(tools).not.toContain('Edit');
+    expect(tools).toEqual(['Read', 'Grep', 'Glob', 'Bash']);
   });
 
   it("permits the design.mjs script in the skill's allowed-tools", () => {

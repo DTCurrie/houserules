@@ -1,23 +1,3 @@
-/**
- * Separates markdown prose from code, so a prose checker never mistakes a code token for a
- * voice violation.
- *
- * A checker built on a naive fence toggle (`` ``` `` flips a boolean, then a same-line
- * backtick regex strips inline spans) measured 0% precision in `PROBE-regex.md`'s b1
- * candidate: both of its two findings were false positives, one from an inline-code span
- * that opens on one line and closes on the next (the toggle only matched a span with no
- * embedded newline), the other from a blockquoted "before" example that the document quotes
- * on purpose to forbid, not a violation of its own voice. This module fixes the first as a
- * lexing bug and treats the second as a naming decision, documented below.
- *
- * DECISION: a blockquoted line (`^ {0,3}>`) is classified `'quoted'`, never `'prose'`. A
- * checker built on `classifyLines` should skip `'quoted'` lines the same way it skips
- * `'code'` ones. The cost: a genuine callout or admonition written with `>` (not a quoted
- * bad example) also goes unchecked. That trade favors the false negative over the false
- * positive, because `prose-voice.md` itself is the corpus that motivated this fix, and it
- * blockquotes bad examples specifically to forbid them without committing them.
- */
-
 export type LineKind = 'prose' | 'code' | 'quoted';
 
 const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
@@ -114,6 +94,23 @@ export function stripCode(markdown: string): string {
  * surviving prose: `stripCode`'s fenced blocks, indented blocks, and inline spans, PLUS
  * blockquoted (`'quoted'`) lines, all replaced by same-length or same-line-count filler.
  * Line numbers are unchanged, same guarantee as `stripCode`.
+ *
+ * Separates markdown prose from code, so a prose checker never mistakes a code token for a
+ * voice violation. A checker built on a naive fence toggle (`` ``` `` flips a boolean, then
+ * a same-line backtick regex strips inline spans) measured 0% precision in
+ * `PROBE-regex.md`'s b1 candidate: both of its two findings were false positives, one from
+ * an inline-code span that opens on one line and closes on the next (the toggle only
+ * matched a span with no embedded newline), the other from a blockquoted "before" example
+ * that the document quotes on purpose to forbid, not a violation of its own voice. This
+ * module fixes the first as a lexing bug and treats the second as a naming decision,
+ * documented below.
+ *
+ * DECISION: a blockquoted line (`^ {0,3}>`) is classified `'quoted'`, never `'prose'`. A
+ * checker built on `classifyLines` should skip `'quoted'` lines the same way it skips
+ * `'code'` ones. The cost: a genuine callout or admonition written with `>` (not a quoted
+ * bad example) also goes unchecked. That trade favors the false negative over the false
+ * positive, because `prose-voice.md` itself is the corpus that motivated this fix, and it
+ * blockquotes bad examples specifically to forbid them without committing them.
  *
  * Calling `stripCode` alone reintroduces the blockquote false positive this module exists
  * to eliminate: a document that quotes a bad example to forbid it, such as

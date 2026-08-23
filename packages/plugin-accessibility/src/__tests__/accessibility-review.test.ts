@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf } from '#test/installed-tree';
+import { manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_ACCESSIBILITY = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_ACCESSIBILITY, alias: 'a11y' }];
@@ -23,11 +23,13 @@ describe('accessibility-review', () => {
   it('installs the skill and the reviewer agent', () => {
     const root = withReview();
 
+    const agent = readFileSync(join(root, AGENT), 'utf8');
+    const skill = readFileSync(join(root, SKILL), 'utf8');
     const manifest = manifestOf(root);
 
     expect(manifest.modules.includes('a11y/accessibility-review')).toBe(true);
-    expect(manifest.files[AGENT]).toBeTruthy();
-    expect(manifest.files[SKILL]).toBeTruthy();
+    expect(manifest.files[AGENT]).toBe(sha256(agent));
+    expect(manifest.files[SKILL]).toBe(sha256(skill));
   });
 
   it('keeps the reviewer agent read-only', () => {

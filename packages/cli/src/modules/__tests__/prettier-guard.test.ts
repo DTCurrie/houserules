@@ -167,7 +167,7 @@ describe('the .prettierignore block against a real prettier run', () => {
     const present = PROTECTED_SUBTREES.filter((dir) =>
       existsSync(join(root, dir)),
     );
-    expect(present.length).toBeGreaterThan(0);
+    expect(present).toEqual(['.claude/templates', '.claude/scripts']);
     const before = present.map((dir) => treeHash(join(root, dir)));
 
     execFileSync(

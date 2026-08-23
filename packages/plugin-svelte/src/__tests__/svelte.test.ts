@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf, readJson, sha256 } from '#test/installed-tree';
+import {
+  type HouseManifestShape,
+  manifestOf,
+  readJson,
+  sha256,
+} from '#test/installed-tree';
 import { runCli } from '#test/run';
 
 const PLUGIN_SVELTE = fileURLToPath(new URL('../..', import.meta.url));
@@ -17,6 +22,12 @@ function pathGlobs(ruleText: string): string[] {
     .filter((glob): glob is string => glob !== undefined);
 }
 
+/** Everything after the closing `---`, the part a body-owned rule's manifest hash covers. */
+function ruleBody(ruleText: string): string {
+  const match = /^---\n[\s\S]*?\n---[ \t]*\n?/.exec(ruleText);
+  return match ? ruleText.slice(match[0].length) : ruleText;
+}
+
 const PRE_RENAME_DESTS = [
   '.claude/mcp/mcp.http.json',
   '.claude/mcp/mcp.stdio.json',
@@ -25,7 +36,7 @@ const PRE_RENAME_DESTS = [
 
 function plantPreRenameMcpConfigs(root: string): void {
   const manifestPath = join(root, '.claude/houserules.manifest.json');
-  const manifest = readJson(manifestPath);
+  const manifest = readJson<HouseManifestShape>(manifestPath);
   for (const dest of PRE_RENAME_DESTS) {
     const content = `{ "mcpServers": {}, "dest": "${dest}" }\n`;
     writeFileSync(join(root, dest), content);
@@ -45,7 +56,7 @@ function installedWith(guides: string[]): string {
 }
 
 describe('svelte', () => {
-  it('installs the base rule path-scoped and tracks it in the manifest', () => {
+  it('installs the base rule path-scoped to Svelte files', () => {
     const root = installedWith([]);
 
     const ruleText = readFileSync(
@@ -61,13 +72,21 @@ describe('svelte', () => {
       '**/*.svelte.ts',
       '**/*.svelte.js',
     ]);
+  });
 
+  it('tracks the base rule in the manifest, pinned to the installed bytes', () => {
+    const root = installedWith([]);
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/svelte.md'),
+      'utf8',
+    );
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('svelte/svelte')).toBeTruthy();
+    expect(manifest.modules.includes('svelte/svelte')).toBe(true);
     expect(
       manifest.files['.claude/rules/svelte.md'],
       'the rule BODY is kit-owned (update-refreshable)',
-    ).toBeTruthy();
+    ).toEqual(expect.objectContaining({ body: sha256(ruleBody(ruleText)) }));
   });
 
   it('is not installed by default', () => {
@@ -109,7 +128,7 @@ describe('svelte', () => {
     expect(existsSync(join(root, '.claude/mcp/svelte.vscode.json'))).toBe(true);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('svelte/svelte-mcp')).toBeTruthy();
+    expect(manifest.modules.includes('svelte/svelte-mcp')).toBe(true);
   });
 
   it('namespaces every MCP dest by server name, so a second plugin cannot collide', () => {

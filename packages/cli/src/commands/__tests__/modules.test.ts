@@ -180,20 +180,18 @@ describe('modules command on an initialized pnpm monorepo', () => {
 
   it('does not install an off-by-default module before it is requested', () => {
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('read-guard')).toBeFalsy();
-    expect(
-      existsSync(join(root, '.claude/scripts/guard-read.mjs')),
-    ).toBeFalsy();
+    expect(manifest.modules.includes('read-guard')).toBe(false);
+    expect(existsSync(join(root, '.claude/scripts/guard-read.mjs'))).toBe(
+      false,
+    );
   });
 
   it('installs the module and records it in the manifest when requested', () => {
     const r = runCli(['modules', '--yes', '--modules=read-guard', root]);
     expect(r.status, r.stderr).toBe(0);
-    expect(
-      existsSync(join(root, '.claude/scripts/guard-read.mjs')),
-    ).toBeTruthy();
+    expect(existsSync(join(root, '.claude/scripts/guard-read.mjs'))).toBe(true);
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('read-guard')).toBeTruthy();
+    expect(manifest.modules.includes('read-guard')).toBe(true);
   });
 
   it('leaves doctor green after enabling a module', () => {
