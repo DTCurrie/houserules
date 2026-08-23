@@ -55,7 +55,7 @@ describe('decisions', () => {
 
     it('points CLAUDE.md at the decide skill', () => {
       expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).toContain(
-        '`/decide` skill',
+        'Record it with `/decide`',
       );
     });
   });

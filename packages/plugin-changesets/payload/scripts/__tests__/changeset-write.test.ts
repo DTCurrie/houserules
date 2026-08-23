@@ -67,7 +67,7 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
         '--pkg',
         '@fix/studio',
         '--summary',
-        'Add road planning; fixes CITYVILLE-abc123.',
+        'Add road planning; fixes the zoning bug.',
       ],
     });
     expect(r.status, r.stderr).toBe(0);
@@ -105,6 +105,51 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
     const r = runScript(root, SCRIPT, { args: ['--pkg', '@fix/studio'] });
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/non-empty --summary/);
+  });
+
+  it('refuses a summary carrying a ledger-id-shaped string, writing no file', () => {
+    const before = new Set(readdirSync(join(root, '.changeset')));
+    const r = runScript(root, SCRIPT, {
+      args: [
+        '--pkg',
+        '@fix/studio',
+        '--summary',
+        'Fix the bug from STUDIO-a1b2c3.',
+      ],
+    });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/STUDIO-a1b2c3/);
+    expect(r.stderr).toMatch(/Reword the summary/);
+    expect(newChangesets(root, before)).toEqual([]);
+  });
+
+  it('refuses an --amend summary carrying a ledger id, leaving the pending changeset unchanged', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/cityville', '--summary', 'Add road planning.'],
+    }).stdout.trim();
+    const pending = readFileSync(join(root, first), 'utf8');
+
+    const r = runScript(root, SCRIPT, {
+      args: ['--amend', first, '--summary', 'Reworked per CITYVILLE-0d9e8f.'],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/CITYVILLE-0d9e8f/);
+    expect(readFileSync(join(root, first), 'utf8')).toBe(pending);
+  });
+
+  it('accepts a summary whose id-like tokens do not match the ledger shape', () => {
+    const before = new Set(readdirSync(join(root, '.changeset')));
+    const r = runScript(root, SCRIPT, {
+      args: [
+        '--pkg',
+        '@fix/studio',
+        '--summary',
+        'Support SHA-256 digests, fixing the TS2305 import error.',
+      ],
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(newChangesets(root, before)).toHaveLength(1);
   });
 
   it('writes a changeset with no package bumps when --empty is passed', () => {

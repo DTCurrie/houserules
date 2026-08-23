@@ -46,6 +46,7 @@ import { pathToFileURL } from 'node:url';
 import { execSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
+import { BACKLOG_ID } from '@houserules/payload/backlog-id';
 import { listPublishablePackageNames } from '@houserules/payload/workspaces';
 
 const LEVELS = new Set(['patch', 'minor', 'major']);
@@ -245,6 +246,16 @@ if (!summary)
   usage(
     'A non-empty --summary (or piped stdin) is required — it becomes the changelog entry.',
   );
+
+// A summary is published in the CHANGELOG, and a ledger id resolves only against this
+// repo's local ledger. One id already reached a published CHANGELOG this way.
+const leakedIds = [...new Set(summary.match(BACKLOG_ID) ?? [])];
+if (leakedIds.length) {
+  console.error(
+    `Summary carries ledger id(s) ${leakedIds.join(', ')}. A changeset is published text, and ids resolve only against the local ledger. Reword the summary to state the context itself.`,
+  );
+  process.exit(1);
+}
 
 const dir = join(root, '.changeset');
 mkdirSync(dir, { recursive: true });

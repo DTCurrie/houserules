@@ -220,71 +220,54 @@ function scriptLines(ctx: Ctx): string[] {
   );
 }
 
-function changesetsSection(ctx: Ctx, answers: Answers): string[] {
-  if (!hasModule(answers.moduleIds, 'changesets')) return [];
-  return [
-    '### Recording changes (changesets)',
-    '',
-    'After completing a meaningful change to a package, record a changeset **before the commit**,',
-    'via the `/changeset` skill. See that skill for what it does and when to run it.',
-    '',
-  ];
-}
-
-function backlogSection(ctx: Ctx, answers: Answers): string[] {
-  if (!hasModule(answers.moduleIds, 'backlog')) return [];
-  const prefixes = answers.targets
-    .map((t) => `\`${t.prefix}\` (${t.pathPrefix || 'repo root'})`)
-    .join(', ');
-  return [
-    '### Tracking out-of-scope work',
-    '',
-    'Discover a real issue outside the current scope? **Do not fix it inline.** Log it with the',
-    `\`/backlog-add\` skill instead. Prefixes by area: ${prefixes}.`,
-    'Entry ids stay in the ledger. Never cite one in code, docs, changesets, commit messages,',
-    'or issue text.',
-    '',
-  ];
-}
-
-function decisionsSection(ctx: Ctx, answers: Answers): string[] {
-  if (!hasModule(answers.moduleIds, 'decisions')) return [];
-  return [
-    '### Recording decisions',
-    '',
-    'Settled a design question that the code does not explain on its own? Record it with the',
-    '`/decide` skill. See that skill for the bar a decision has to clear and what a record needs.',
-    'Record ids stay in the ledger. Never cite one in code, docs, changesets, commit messages,',
-    'or issue text.',
-    '',
-  ];
-}
-
-function plansSection(ctx: Ctx, answers: Answers): string[] {
-  if (!hasModule(answers.moduleIds, 'plans')) return [];
-  return [
-    '### Planning large, multi-phase work',
-    '',
-    'For an implementation too big to hold in one plan, run the `/plan-project` skill. It persists',
-    'to `.claude/plans/<name>/`, keeping `ROADMAP.md` current as each phase lands. See the skill',
-    'for the full scaffold and when to use it.',
-    '',
-  ];
+/**
+ * One resident bullet per installed skill-shipping module, imperative-shaped. What each
+ * skill does and when to run it lives in that skill's `description:` frontmatter, which
+ * Claude Code keeps in the system prompt every turn, so this section carries only what a
+ * description cannot: the prohibitions an agent can violate without ever invoking a skill.
+ */
+function skillTriggersSection(answers: Answers): string[] {
+  const has = (id: string) => hasModule(answers.moduleIds, id);
+  const bullets: string[] = [];
+  if (has('changesets'))
+    bullets.push(
+      '- After a meaningful change to a package: record a changeset with `/changeset`, **before',
+      '  the commit**.',
+    );
+  if (has('backlog'))
+    bullets.push(
+      '- Discovered a real issue outside the current scope? **Do not fix it inline.** Log it with',
+      "  `/backlog-add`. Area prefixes are listed in `houserules.config.json`'s targets, and the",
+      '  skill points at them when it runs.',
+    );
+  if (has('decisions'))
+    bullets.push(
+      '- Settled a design question the code does not explain on its own? Record it with `/decide`.',
+    );
+  if (has('plans') && has('orchestrate'))
+    bullets.push(
+      '- Too big to hold in one plan: scaffold with `/plan-project`, then execute each phase with',
+      '  `/orchestrate`.',
+    );
+  else if (has('plans'))
+    bullets.push(
+      '- For an implementation too big to hold in one plan, scaffold it with `/plan-project`.',
+    );
+  else if (has('orchestrate'))
+    bullets.push(
+      '- To implement a phase from `.claude/plans/<slug>/`, run `/orchestrate`.',
+    );
+  if (has('backlog') || has('decisions'))
+    bullets.push(
+      '- Ledger ids stay in the ledger. Never cite one in code, docs, changesets, commit',
+      '  messages, or issue text.',
+    );
+  if (!bullets.length) return [];
+  return ['### Skill triggers', '', ...bullets, ''];
 }
 
 // /orchestrate is the one sanctioned exception to "no implementation subagents". A
 // planned phase's slices are the parallel, bounded work that clause carves out for.
-function orchestrateSection(ctx: Ctx, answers: Answers): string[] {
-  if (!hasModule(answers.moduleIds, 'orchestrate')) return [];
-  return [
-    '### Executing a planned phase',
-    '',
-    'To implement a phase from `.claude/plans/<slug>/`, run `/orchestrate`. See that skill for how',
-    'it slices work and reviews it.',
-    '',
-  ];
-}
-
 function subagentExceptionLine(
   answers: Answers,
   { bold = true }: { bold?: boolean } = {},
@@ -338,17 +321,11 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   const body = [
     '### houserules sections',
     '',
-    'This block is maintained by `npx houserules update`. Content outside the markers around it',
-    'is yours and never touched. For a fuller from-scratch skeleton to compare structure against, see',
-    '`.claude/templates/CLAUDE.md.template`, a gitignored reference that `npx houserules update`',
-    'restores if absent. For decisions the repo keeps re-deriving on one axis (architecture, API',
-    'conventions), instantiate `.claude/templates/rules/GUARDRAIL.md.template` into `.claude/rules/`.',
+    'This block is maintained by `npx houserules update`. Content outside the markers is yours',
+    'and never touched. Templates for a fuller CLAUDE.md skeleton and for guardrail rules live',
+    'in `.claude/templates/`.',
     '',
-    ...changesetsSection(ctx, answers),
-    ...backlogSection(ctx, answers),
-    ...decisionsSection(ctx, answers),
-    ...plansSection(ctx, answers),
-    ...orchestrateSection(ctx, answers),
+    ...skillTriggersSection(answers),
     '### Conventions',
     '',
     '- **The user always handles `git commit` / `push` / PR-create.** Describe what is ready and stop.',
