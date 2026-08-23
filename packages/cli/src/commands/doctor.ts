@@ -14,6 +14,7 @@ import {
   printTextReport,
   type DoctorReport,
 } from './doctor/findings-report.js';
+import { checkInstallHygiene } from './doctor/install-hygiene.js';
 import { checkInstallIntegrity } from './doctor/install-integrity.js';
 import { checkModuleHealth } from './doctor/module-health.js';
 import { checkPluginRegistration } from './doctor/plugin-registration.js';
@@ -94,6 +95,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     checkScriptImports(root, ctx),
     config,
     checkSettingsWiring(root, ctx),
+    checkInstallHygiene(root, ctx),
     checkModuleHealth(root, ctx, config.registry),
     checkPluginRegistration(root, ctx),
   ];

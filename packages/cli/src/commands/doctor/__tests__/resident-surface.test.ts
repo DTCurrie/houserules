@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { useRepo } from '#test/repo';
@@ -7,6 +7,8 @@ import {
   checkResidentSurface,
   frontmatterDescription,
   measureActiveOutputStyle,
+  measureOnInvokeBodies,
+  measurePathScopedRules,
   measureResident,
   measureSkillAgentDescriptions,
   parseImports,
@@ -371,6 +373,90 @@ describe('measureActiveOutputStyle', () => {
   });
 });
 
+describe('measurePathScopedRules', () => {
+  it('returns null when the repo has no rules directory', () => {
+    const root = useRepo('pnpm-single');
+
+    expect(measurePathScopedRules(root)).toBeNull();
+  });
+
+  it('returns null when every rule is globless', () => {
+    const root = useRepo('pnpm-single');
+    write(root, '.claude/rules/always.md', '# always\n');
+
+    expect(measurePathScopedRules(root)).toBeNull();
+  });
+
+  it('counts a path-scoped rule and excludes a globless one', () => {
+    const root = useRepo('pnpm-single');
+    write(root, '.claude/rules/always.md', '# always\n');
+    write(
+      root,
+      '.claude/rules/scoped.md',
+      `---\npaths:\n  - src/**\n---\n${'a'.repeat(400)}`,
+    );
+
+    expect(measurePathScopedRules(root)).toMatchObject({
+      rules: 1,
+      chars: 426,
+    });
+  });
+});
+
+describe('measureOnInvokeBodies', () => {
+  it('returns null when the repo has neither skills nor agents', () => {
+    const root = useRepo('pnpm-single');
+
+    expect(measureOnInvokeBodies(root)).toBeNull();
+  });
+
+  it('returns null when every skill and agent body is empty', () => {
+    const root = useRepo('pnpm-single');
+    write(root, '.claude/skills/a/SKILL.md', '---\ndescription: ab\n---\n');
+    write(root, '.claude/agents/b.md', '---\ndescription: cde\n---\n');
+
+    expect(measureOnInvokeBodies(root)).toBeNull();
+  });
+
+  it('counts skill and agent bodies without their descriptions', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/skills/a/SKILL.md',
+      `---\ndescription: ab\n---\n${'x'.repeat(400)}`,
+    );
+    write(
+      root,
+      '.claude/agents/b.md',
+      `---\ndescription: cde\n---\n${'y'.repeat(400)}`,
+    );
+
+    expect(measureOnInvokeBodies(root)).toMatchObject({
+      skills: 1,
+      agents: 1,
+      chars: 800,
+      tokens: 200,
+    });
+  });
+
+  it('counts a skill whose SKILL.md is a symlink to a real file, as an installed dogfooded skill is', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      'payload-source/a-skill.md',
+      `---\ndescription: ${'d'.repeat(40)}\n---\n${'x'.repeat(400)}`,
+    );
+    mkdirSync(join(root, '.claude/skills/a'), { recursive: true });
+    symlinkSync(
+      join(root, 'payload-source/a-skill.md'),
+      join(root, '.claude/skills/a/SKILL.md'),
+    );
+
+    expect(measureSkillAgentDescriptions(root)?.skills).toBe(1);
+    expect(measureOnInvokeBodies(root)).toMatchObject({ skills: 1 });
+  });
+});
+
 describe('checkResidentSurface', () => {
   it('reports headroom when the resident surface is under budget', () => {
     const root = useRepo('pnpm-single');
@@ -465,5 +551,42 @@ describe('checkResidentSurface', () => {
     expect(checkResidentSurface(root).readouts).toContainEqual(
       expect.stringContaining('resident output style (Prose): ~100 tokens'),
     );
+  });
+
+  it('groups a globless rule, a path-scoped rule, a skill, and an agent into their own readouts', () => {
+    const root = useRepo('pnpm-single');
+    write(root, '.claude/rules/always.md', '# always\n');
+    write(
+      root,
+      '.claude/rules/scoped.md',
+      `---\npaths:\n  - src/**\n---\n${'a'.repeat(400)}`,
+    );
+    write(
+      root,
+      '.claude/skills/a/SKILL.md',
+      `---\ndescription: ab\n---\n${'x'.repeat(400)}`,
+    );
+    write(root, '.claude/agents/b.md', '---\ndescription: cde\n---\n');
+
+    const result = checkResidentSurface(root);
+
+    expect(result.readouts).toContainEqual(
+      expect.stringContaining('path-scoped rules (1 rule(s), on-demand)'),
+    );
+    expect(result.readouts).toContainEqual(
+      expect.stringContaining(
+        'on-invoke skill/agent bodies (1 skill(s) + 0 agent(s))',
+      ),
+    );
+    expect(result.readouts).toContainEqual(
+      expect.stringContaining(
+        'resident skill/agent descriptions (1 skill(s) + 1 agent(s))',
+      ),
+    );
+    const resident = result.readouts.find((r) =>
+      r.startsWith('resident context'),
+    );
+    expect(resident).toContain('.claude/rules/always.md');
+    expect(resident).not.toContain('scoped.md');
   });
 });

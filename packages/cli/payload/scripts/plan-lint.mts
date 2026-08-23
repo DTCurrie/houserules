@@ -232,9 +232,86 @@ export function checkNoPlanWorkspace(planWorkspaceDirs: string[]): Report {
   return report;
 }
 
+const PATH_CHECK_PREFIXES = ['packages/', '.claude/', 'scripts/'];
+const PATH_EXEMPT_CHARS = /[*?<>{}|$]/;
+/** A trailing `:36`, `:193-198`, or `:19,43` line annotation on a `path:line` reference. */
+const LINE_SUFFIX_RE = /:\d+(-\d+)?(,\d+(-\d+)?)*$/;
+
+/**
+ * Checks backtick-quoted paths in a phase doc against the filesystem, relative to `root`.
+ * A token is checked when it starts with `packages/`, `.claude/`, or `scripts/`, contains a
+ * `/`, and has no whitespace or glob metacharacters. This is the check that catches a plan
+ * naming a file that was renamed, moved, or never existed, such as a `tsconfig.build.json`
+ * a package never shipped.
+ */
+export function checkPlanPaths(
+  file: string,
+  markdown: string,
+  root: string,
+): Report {
+  const report = emptyReport();
+  const lines = markdown.split('\n');
+  let inFence = false;
+  lines.forEach((line, index) => {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      return;
+    }
+    if (inFence) return;
+
+    const tokenRe = /`([^`]+)`/g;
+    let match: RegExpExecArray | null;
+    while ((match = tokenRe.exec(line))) {
+      const token = match[1] ?? '';
+      if (!PATH_CHECK_PREFIXES.some((prefix) => token.startsWith(prefix)))
+        continue;
+      if (!token.includes('/')) continue;
+      if (/\s/.test(token)) continue;
+      if (PATH_EXEMPT_CHARS.test(token)) continue;
+
+      const after = line.slice(match.index + match[0].length);
+      if (/^\s?\(new\)/.test(after)) continue;
+
+      const checkedToken = token.replace(LINE_SUFFIX_RE, '');
+      let exists: boolean;
+      try {
+        exists = existsSync(join(root, checkedToken));
+      } catch {
+        continue;
+      }
+      if (exists) continue;
+
+      report.findings.push({
+        rule: 'plan-path/missing-file',
+        level: 'warn',
+        file,
+        line: index + 1,
+        msg: `path \`${token}\` does not exist in the repo`,
+      });
+    }
+  });
+  return report;
+}
+
 function parseStatusHeader(markdown: string): string | null {
   const match = markdown.match(/\*\*Status:\*\*\s*([^\n·]+)/);
   return match?.[1]?.trim() ?? null;
+}
+
+/** True when a `**Status:**` header value, parsed by `parseStatusHeader`, reads DONE. */
+function isDoneStatus(status: string | null): boolean {
+  return status !== null && /^DONE\b/.test(status);
+}
+
+/**
+ * True when a workspace `**Status:**` header reads DONE or SUPERSEDED. Only the
+ * workspace-level ROADMAP header counts as archived this way, not an individual phase doc's
+ * own header, since a superseded plan is retired as a whole rather than phase by phase.
+ */
+function isArchivedWorkspaceStatus(status: string | null): boolean {
+  return (
+    isDoneStatus(status) || (status !== null && /^SUPERSEDED\b/.test(status))
+  );
 }
 
 function listSubdirectories(dir: string): string[] {
@@ -266,6 +343,14 @@ function main(): void {
       continue;
     }
 
+    const roadmapPath = join(workspaceDir, 'ROADMAP.md');
+    const roadmapMarkdown = existsSync(roadmapPath)
+      ? readFileSync(roadmapPath, 'utf8')
+      : null;
+    const workspaceArchived = isArchivedWorkspaceStatus(
+      roadmapMarkdown === null ? null : parseStatusHeader(roadmapMarkdown),
+    );
+
     const phaseFiles = entries.filter((name) => /^phase-.*\.md$/.test(name));
     const subplanStatuses: Record<string, string | null> = {};
     for (const name of phaseFiles) {
@@ -273,12 +358,16 @@ function main(): void {
       const markdown = readFileSync(phasePath, 'utf8');
       const relFile = relative(root, phasePath);
       report.findings.push(...checkSliceStatuses(relFile, markdown).findings);
-      subplanStatuses[name] = parseStatusHeader(markdown);
+      const phaseStatus = parseStatusHeader(markdown);
+      if (!workspaceArchived && !isDoneStatus(phaseStatus)) {
+        report.findings.push(
+          ...checkPlanPaths(relFile, markdown, root).findings,
+        );
+      }
+      subplanStatuses[name] = phaseStatus;
     }
 
-    const roadmapPath = join(workspaceDir, 'ROADMAP.md');
-    if (existsSync(roadmapPath)) {
-      const roadmapMarkdown = readFileSync(roadmapPath, 'utf8');
+    if (roadmapMarkdown !== null) {
       const relFile = relative(root, roadmapPath);
       report.findings.push(
         ...checkRoadmapSync(relFile, roadmapMarkdown, subplanStatuses).findings,

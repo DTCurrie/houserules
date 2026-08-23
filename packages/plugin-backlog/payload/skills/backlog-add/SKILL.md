@@ -1,6 +1,6 @@
 ---
 name: backlog-add
-description: Log an out-of-scope discovery to the backlog ledger, then gut-check it with the backlog-reviewer agent. Use when deferring real work found mid-task instead of fixing it inline.
+description: Log an out-of-scope discovery to the backlog ledger. Use when deferring real work found mid-task instead of fixing it inline.
 argument-hint: <PREFIX> <BACKLOG.md|area> "<title>" "<summary>"
 allowed-tools: Bash(node .claude/scripts/backlog-log.mjs:*), Agent
 ---
