@@ -1,5 +1,13 @@
 # @houserules/plugin-prose
 
+## 0.1.4
+
+### Patch Changes
+
+- 459999a: prose-voice now says which form to pick for behavior-shaping guidance.
+- 459999a: Skill descriptions no longer narrate the skill's internal steps.
+- c3268ac: Skills, rules, and rendered CLAUDE.md sections now forbid citing ledger ids in public text.
+
 ## 0.1.3
 
 ### Patch Changes

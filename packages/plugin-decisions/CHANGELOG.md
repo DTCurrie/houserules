@@ -1,5 +1,11 @@
 # @houserules/plugin-decisions
 
+## 0.1.5
+
+### Patch Changes
+
+- c3268ac: Skills, rules, and rendered CLAUDE.md sections now forbid citing ledger ids in public text.
+
 ## 0.1.4
 
 ### Patch Changes

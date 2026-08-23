@@ -1,5 +1,12 @@
 # @houserules/test
 
+## 0.1.2
+
+### Patch Changes
+
+- c3268ac: Skills, rules, and rendered CLAUDE.md sections now forbid citing ledger ids in public text.
+- 459999a: Doctor scans settings hooks and config for hygiene problems and secret-shaped values.
+
 ## 0.1.1
 
 ### Patch Changes
