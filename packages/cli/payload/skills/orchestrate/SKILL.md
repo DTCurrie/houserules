@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Execute a planned phase by fanning out task-worker subagents per file-owned slice, then review each worker's report. Use to drive a .claude/plans/ phase to done.
+description: Execute a planned phase from .claude/plans/ with scoped task-worker subagents. Use to drive a planned phase to done.
 argument-hint: '[<plan-slug>] [<phase> | all] [--auto]'
 allowed-tools: Read, Edit, Write, Grep, Glob, Bash, Agent, SendMessage
 ---

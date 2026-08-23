@@ -523,6 +523,9 @@ function buildRepo(shape: RepoShape): string {
       'CLAUDE.md',
       '# single-app\n\nPre-existing user CLAUDE.md. houserules must never edit this.\n',
     );
+    // The hook's script must exist, or doctor's install-hygiene check warns and every
+    // suite asserting warning counts on this shape absorbs an unrelated finding.
+    write(root, 'my-hook.js', 'process.exit(0);\n');
     write(
       root,
       '.claude/settings.json',

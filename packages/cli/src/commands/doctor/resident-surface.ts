@@ -1,4 +1,10 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  type Dirent,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
@@ -176,6 +182,99 @@ export function frontmatterDescription(text: string): string | null {
   return captured.trim().replace(/^['"]|['"]$/g, '');
 }
 
+export interface PathScopedRulesMeasurement {
+  chars: number;
+  tokens: number;
+  rules: number;
+}
+
+/**
+ * The on-demand complement of `globlessRuleFiles`: every rule under `.claude/rules/` whose
+ * `paths:` frontmatter is non-empty, measured whole-file since it loads only when a matching
+ * file is already in the working set.
+ */
+export function measurePathScopedRules(
+  root: string,
+): PathScopedRulesMeasurement | null {
+  let names: string[];
+  try {
+    names = readdirSync(join(root, '.claude', 'rules')).filter((f) =>
+      f.endsWith('.md'),
+    );
+  } catch {
+    return null;
+  }
+  let chars = 0;
+  let rules = 0;
+  for (const name of names) {
+    let text: string;
+    try {
+      text = readFileSync(join(root, '.claude', 'rules', name), 'utf8');
+    } catch {
+      continue;
+    }
+    if (!ruleGlobs(text).length) continue;
+    chars += text.length;
+    rules += 1;
+  }
+  if (!rules) return null;
+  return { chars, tokens: estimateTokens(chars), rules };
+}
+
+export interface OnInvokeBodiesMeasurement {
+  chars: number;
+  tokens: number;
+  skills: number;
+  agents: number;
+}
+
+/**
+ * Skill and agent BODIES, which load only when Claude Code invokes the skill or agent, unlike
+ * their `description:` frontmatter which `measureSkillAgentDescriptions` already counts as
+ * resident. Counted separately so the two tiers are never double-summed.
+ */
+export function measureOnInvokeBodies(
+  root: string,
+): OnInvokeBodiesMeasurement | null {
+  let chars = 0;
+  let skills = 0;
+  for (const file of findSkillFiles(join(root, '.claude', 'skills'))) {
+    let text: string;
+    try {
+      text = readFileSync(file, 'utf8');
+    } catch {
+      continue;
+    }
+    const body = splitFrontmatter(text).body;
+    if (body) {
+      chars += body.length;
+      skills += 1;
+    }
+  }
+  let agents = 0;
+  try {
+    for (const name of readdirSync(join(root, '.claude', 'agents')).filter(
+      (f) => f.endsWith('.md'),
+    )) {
+      let text: string;
+      try {
+        text = readFileSync(join(root, '.claude', 'agents', name), 'utf8');
+      } catch {
+        continue;
+      }
+      const body = splitFrontmatter(text).body;
+      if (body) {
+        chars += body.length;
+        agents += 1;
+      }
+    }
+  } catch {
+    /* no agents dir */
+  }
+  if (!skills && !agents) return null;
+  return { chars, tokens: estimateTokens(chars), skills, agents };
+}
+
 export interface SkillAgentMeasurement {
   chars: number;
   tokens: number;
@@ -188,19 +287,45 @@ export interface SkillAgentMeasurement {
  * layout (`skills/<category>/<name>/SKILL.md`), not only the flat `skills/<name>/SKILL.md`
  * one level down, so a directory holding a `SKILL.md` is not assumed to be a leaf.
  */
+function isFileFollowingSymlinks(entry: Dirent, abs: string): boolean {
+  if (entry.isFile()) return true;
+  if (!entry.isSymbolicLink()) return false;
+  try {
+    return statSync(abs).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function isDirectoryFollowingSymlinks(entry: Dirent, abs: string): boolean {
+  if (entry.isDirectory()) return true;
+  if (!entry.isSymbolicLink()) return false;
+  try {
+    return statSync(abs).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 function findSkillFiles(dir: string): string[] {
-  let entries;
+  let entries: Dirent[];
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {
     return [];
   }
   const found: string[] = [];
-  if (entries.some((e) => e.isFile() && e.name === 'SKILL.md'))
+  if (
+    entries.some(
+      (e) =>
+        e.name === 'SKILL.md' && isFileFollowingSymlinks(e, join(dir, e.name)),
+    )
+  )
     found.push(join(dir, 'SKILL.md'));
   for (const entry of entries) {
-    if (entry.isDirectory())
-      found.push(...findSkillFiles(join(dir, entry.name)));
+    const abs = join(dir, entry.name);
+    if (isDirectoryFollowingSymlinks(entry, abs))
+      found.push(...findSkillFiles(abs));
   }
   return found;
 }
@@ -399,6 +524,16 @@ export function checkResidentSurface(root: string): CheckResult {
   if (style)
     readouts.push(
       `resident output style (${style.name}): ~${style.tokens} tokens`,
+    );
+  const pathScopedRules = measurePathScopedRules(root);
+  if (pathScopedRules)
+    readouts.push(
+      `path-scoped rules (${pathScopedRules.rules} rule(s), on-demand): ~${pathScopedRules.tokens} tokens`,
+    );
+  const onInvokeBodies = measureOnInvokeBodies(root);
+  if (onInvokeBodies)
+    readouts.push(
+      `on-invoke skill/agent bodies (${onInvokeBodies.skills} skill(s) + ${onInvokeBodies.agents} agent(s)): ~${onInvokeBodies.tokens} tokens`,
     );
 
   return { findings, readouts };

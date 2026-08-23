@@ -6,10 +6,12 @@ import {
   checkBlastRadiusShape,
   checkFixOnSubagentStop,
   checkNoPlanWorkspace,
+  checkPlanPaths,
   checkRoadmapSync,
   checkSliceStatuses,
 } from '../plan-lint.mjs';
 
+import { repoRootSafe } from '@houserules/payload/config';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 
@@ -143,6 +145,72 @@ describe('checkNoPlanWorkspace', () => {
   });
 });
 
+describe('checkPlanPaths', () => {
+  const root = repoRootSafe() ?? process.cwd();
+
+  it('reports nothing for an existing repo path', () => {
+    const report = checkPlanPaths(
+      'phase-1.md',
+      'Owns `packages/cli/payload/scripts/plan-lint.mts`.\n',
+      root,
+    );
+    expect(report.findings).toEqual([]);
+  });
+
+  it('flags a path that does not exist in the repo, at its line number', () => {
+    const markdown =
+      '# Phase 1\n\nOwns `packages/cli/src/does-not-exist.ts`.\n';
+    const report = checkPlanPaths('phase-1.md', markdown, root);
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]?.rule).toBe('plan-path/missing-file');
+    expect(report.findings[0]?.line).toBe(3);
+    expect(report.findings[0]?.msg).toContain(
+      'packages/cli/src/does-not-exist.ts',
+    );
+  });
+
+  it('flags a path absent from the repo since the historical failure it was written for', () => {
+    const markdown = 'Owns `packages/payload/tsconfig.build.json`.\n';
+    const report = checkPlanPaths('phase-1.md', markdown, root);
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]?.rule).toBe('plan-path/missing-file');
+  });
+
+  it('does not flag a missing path marked "(new)"', () => {
+    const markdown = 'Adds `packages/cli/src/does-not-exist.ts` (new).\n';
+    const report = checkPlanPaths('phase-1.md', markdown, root);
+    expect(report.findings).toEqual([]);
+  });
+
+  it('does not flag a glob', () => {
+    const markdown = 'Owns `packages/*/payload`.\n';
+    const report = checkPlanPaths('phase-1.md', markdown, root);
+    expect(report.findings).toEqual([]);
+  });
+
+  it('does not flag a missing path inside a fenced code block', () => {
+    const markdown = '```\nOwns `packages/cli/src/does-not-exist.ts`.\n```\n';
+    const report = checkPlanPaths('phase-1.md', markdown, root);
+    expect(report.findings).toEqual([]);
+  });
+
+  it.each([':36', ':193-198', ':19,43'])(
+    'reports nothing for an existing path with a %s line suffix',
+    (suffix) => {
+      const markdown = `Owns \`packages/cli/payload/scripts/plan-lint.mts${suffix}\`.\n`;
+      const report = checkPlanPaths('phase-1.md', markdown, root);
+      expect(report.findings).toEqual([]);
+    },
+  );
+
+  it('still flags a missing path carrying a line suffix', () => {
+    const markdown = 'Owns `packages/cli/src/does-not-exist.ts:36`.\n';
+    const report = checkPlanPaths('phase-1.md', markdown, root);
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]?.rule).toBe('plan-path/missing-file');
+  });
+});
+
 describe('plan-lint.mjs (installed)', () => {
   const SCRIPT = '.claude/scripts/plan-lint.mjs';
 
@@ -179,5 +247,89 @@ ${SLICE_TABLE('In Progress')}`,
     const result = runScript(root, SCRIPT);
     expect(result.status, result.stdout).toBe(1);
     expect(result.stdout).toContain('plan-lint/slice-status-vocabulary');
+  });
+
+  it('does not flag a missing plan-path in a phase doc whose own Status header is DONE', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+    const planDir = join(root, '.claude/plans/demo');
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(
+      join(planDir, 'ROADMAP.md'),
+      `# ROADMAP — demo
+
+**Status:** IN PROGRESS
+
+## Phases
+
+- [ ] **Phase 1 — Demo** · Status: DONE · [sub-plan](phase-1-demo.md)
+`,
+    );
+    writeFileSync(
+      join(planDir, 'phase-1-demo.md'),
+      `# Phase 1 — Demo
+
+**Status:** DONE
+
+Owns \`packages/cli/src/does-not-exist.ts\`.
+`,
+    );
+    const result = runScript(root, SCRIPT);
+    expect(result.stdout).not.toContain('plan-path/missing-file');
+  });
+
+  it('does not flag a missing plan-path anywhere in a workspace whose ROADMAP Status header is DONE', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+    const planDir = join(root, '.claude/plans/demo');
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(
+      join(planDir, 'ROADMAP.md'),
+      `# ROADMAP — demo
+
+**Status:** DONE
+
+## Phases
+
+- [x] **Phase 1 — Demo** · Status: DONE · [sub-plan](phase-1-demo.md)
+`,
+    );
+    writeFileSync(
+      join(planDir, 'phase-1-demo.md'),
+      `# Phase 1 — Demo
+
+**Status:** DONE
+
+Owns \`packages/cli/src/does-not-exist.ts\`.
+`,
+    );
+    const result = runScript(root, SCRIPT);
+    expect(result.stdout).not.toContain('plan-path/missing-file');
+  });
+
+  it('does not flag a missing plan-path anywhere in a workspace whose ROADMAP Status header is SUPERSEDED', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+    const planDir = join(root, '.claude/plans/demo');
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(
+      join(planDir, 'ROADMAP.md'),
+      `# ROADMAP — demo
+
+**Status:** SUPERSEDED
+
+## Phases
+
+- [x] **Phase 1 — Demo** · Status: DONE · [sub-plan](phase-1-demo.md)
+`,
+    );
+    writeFileSync(
+      join(planDir, 'phase-1-demo.md'),
+      `# Phase 1 — Demo
+
+**Status:** DONE
+
+Owns \`packages/cli/src/does-not-exist.ts\`.
+`,
+    );
+    const result = runScript(root, SCRIPT);
+    expect(result.stdout).not.toContain('plan-path/missing-file');
   });
 });

@@ -1,6 +1,6 @@
 ---
 name: blast-radius
-description: Map a change's blast radius once and archive a dated impact map to .claude/plans/, with per-file consumers and a completeness self-audit. Use before a wide or risky change.
+description: Map a change's blast radius once and archive a dated impact map to .claude/plans/. Use before a wide or risky change.
 argument-hint: <the change / symbol / module whose impact to map>
 allowed-tools: Bash, Read, Grep, Glob, Agent, Write
 ---

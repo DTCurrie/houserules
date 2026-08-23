@@ -65,6 +65,13 @@ it slices work and reviews it.
   one of them, since it rewrites files their siblings still have open.
 - **"Done" means every check passed, not that the edits were made.** Report a check that failed
   or never ran, with its output. Never claim success over one you did not see pass.
+  The recorded evasions, and what each one actually means:
+  | Excuse                            | Reality                                                                    |
+  | --------------------------------- | -------------------------------------------------------------------------- |
+  | "The edits are in, so it is done" | Done is the checks passing, with output you read.                          |
+  | "I know this fact from memory"    | State it only after running the command that could falsify it.             |
+  | "It passed earlier"               | A stale or cached pass is not this change's pass. Re-run on current bytes. |
+  | "The subagent reported success"   | The tree is the evidence. Check it before believing the report.            |
 - Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.
 - On AskUserQuestion timeout, stop and re-ask later. Never carry tentative selections forward.
 - Read the repo's own docs + targeted greps before fanning out Explore/Plan agents.
