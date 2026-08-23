@@ -1,3 +1,6 @@
+<!-- Gitignored reference, restored by `npx houserules update` if absent. Compare your
+     CLAUDE.md's structure against this skeleton rather than copying it wholesale. -->
+
 # <PROJECT_NAME>
 
 <one-line description>. <Optional: pointer to canonical guardrail docs, e.g.

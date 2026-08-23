@@ -299,6 +299,41 @@ function wireitOnlyEdit(
   return JSON.stringify(pair[0]) === JSON.stringify(pair[1]);
 }
 
+// npm packs these package-root files regardless of `files` (any case, any extension).
+const ALWAYS_PACKED =
+  /^(readme|license|licence|notice|copying|changelog|changes|history)(\.|$)/i;
+
+/**
+ * True for a package-root markdown file the published tarball cannot contain.
+ *
+ * npm packs a root doc only when `files` names it (the CLI ships CONVENTIONS.md that way) or
+ * when npm always includes it (README, LICENSE, CHANGELOG and their variants). Anything else
+ * at the package root, most commonly a CLAUDE.md, is repo documentation: it ships no bytes,
+ * so it owes no changeset entry. A `files` entry is matched by exact name. A glob that
+ * happens to cover the doc is the same rare false negative the tsconfig exclusion above
+ * already trades for, and a package with no `files` list packs everything, so its docs count.
+ */
+function unshippedRootDoc(root: string, path: string, relDir: string): boolean {
+  const name = path.startsWith(`${relDir}/`)
+    ? path.slice(relDir.length + 1)
+    : path;
+  if (name.includes('/') || !/\.md$/i.test(name) || ALWAYS_PACKED.test(name))
+    return false;
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(root, relDir, 'package.json'), 'utf8'),
+    ) as { files?: unknown };
+    if (!Array.isArray(pkg.files)) return false;
+    return !pkg.files.some(
+      (entry) =>
+        typeof entry === 'string' &&
+        entry.replace(/^\.\//, '').replace(/\/$/, '') === name,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function touchedPackages(root: string): string[] {
   const pkgs = listWorkspacePackages(root);
   const status = git(root, ['status', '--porcelain']) ?? '';
@@ -332,7 +367,8 @@ function touchedPackages(root: string): string[] {
     const owner = pkgs.find(
       (pkg) => path === pkg.relDir || path.startsWith(`${pkg.relDir}/`),
     );
-    if (owner) names.add(owner.name);
+    if (owner && !unshippedRootDoc(root, path, owner.relDir))
+      names.add(owner.name);
   }
   return [...names];
 }

@@ -264,25 +264,27 @@ describe('renderChangesetConfig', () => {
 });
 
 describe('renderClaudeAdditions', () => {
-  it('omits the changesets section when the changesets module is not selected', () => {
+  it('renders no Skill triggers section when no skill-shipping module is selected', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(
       ctx,
       makeAnswers({ moduleIds: ['core'] }),
     );
-    expect(body).not.toMatch(/Recording changes \(changesets\)/);
+    expect(body).not.toMatch(/### Skill triggers/);
+    expect(body).not.toMatch(/\/changeset/);
   });
 
-  it('includes the changesets section when the changesets module is selected', () => {
+  it('renders the changeset trigger when the changesets module is selected', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(
       ctx,
       makeAnswers({ moduleIds: ['core', 'changesets'] }),
     );
-    expect(body).toMatch(/Recording changes \(changesets\)/);
+    expect(body).toMatch(/### Skill triggers/);
+    expect(body).toMatch(/record a changeset with `\/changeset`/);
   });
 
-  it('lists the backlog prefix for each target when the backlog module is selected', () => {
+  it('points the backlog trigger at the config targets instead of listing prefixes', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(
       ctx,
@@ -291,7 +293,48 @@ describe('renderClaudeAdditions', () => {
         targets: [makeTarget({ prefix: 'WEB', pathPrefix: 'apps/web/' })],
       }),
     );
-    expect(body).toMatch(/`WEB` \(apps\/web\/\)/);
+    expect(body).toMatch(/Do not fix it inline/);
+    expect(body).toMatch(/houserules\.config\.json/);
+    expect(body).not.toMatch(/`WEB`/);
+  });
+
+  it('states the ledger-id prohibition once when both ledger modules are selected', () => {
+    const ctx = makeCtx();
+    const body = renderClaudeAdditions(
+      ctx,
+      makeAnswers({ moduleIds: ['core', 'backlog', 'decisions'] }),
+    );
+    expect(body.match(/stay in the ledger/g)).toHaveLength(1);
+  });
+
+  it('omits the ledger-id prohibition when neither ledger module is selected', () => {
+    const ctx = makeCtx();
+    const body = renderClaudeAdditions(
+      ctx,
+      makeAnswers({ moduleIds: ['core', 'changesets'] }),
+    );
+    expect(body).not.toMatch(/stay in the ledger/);
+  });
+
+  it('combines plan-project and orchestrate into one trigger when both are selected', () => {
+    const ctx = makeCtx();
+    const body = renderClaudeAdditions(
+      ctx,
+      makeAnswers({ moduleIds: ['core', 'plans', 'orchestrate'] }),
+    );
+    expect(body).toMatch(
+      /scaffold with `\/plan-project`, then execute each phase with/,
+    );
+  });
+
+  it('renders a plan-project trigger without orchestrate when plans is selected alone', () => {
+    const ctx = makeCtx();
+    const body = renderClaudeAdditions(
+      ctx,
+      makeAnswers({ moduleIds: ['core', 'plans'] }),
+    );
+    expect(body).toMatch(/scaffold it with `\/plan-project`/);
+    expect(body).not.toMatch(/\/orchestrate/);
   });
 
   it('omits the orchestrate exception line when orchestrate is not selected', () => {

@@ -61,7 +61,7 @@ describe('backlog', () => {
 
     it('points CLAUDE.md at the backlog-add skill', () => {
       expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).toContain(
-        '`/backlog-add` skill',
+        '`/backlog-add`',
       );
     });
   });

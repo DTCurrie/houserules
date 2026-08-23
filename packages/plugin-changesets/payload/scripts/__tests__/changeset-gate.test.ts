@@ -309,6 +309,89 @@ describe('changeset-gate.mjs', () => {
     expect(r.stderr).toMatch(/@fix\/cityville/);
   });
 
+  it('ignores a package-root CLAUDE.md the files list does not ship', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.files = ['src'];
+    });
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'chore: files list']);
+    writeFileSync(
+      join(root, 'games/cityville/CLAUDE.md'),
+      '# cityville\n\nRepo docs.\n',
+    );
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const two = 2;\n',
+    );
+    writeFileSync(
+      join(root, '.changeset/kit-docs.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('still counts a package-root doc the files list names', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.files = ['src', 'CONVENTIONS.md'];
+    });
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'chore: files list']);
+    writeFileSync(
+      join(root, 'games/cityville/CONVENTIONS.md'),
+      '# Conventions\n',
+    );
+    writeFileSync(
+      join(root, '.changeset/kit-conventions.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('still counts a README.md edit the files list omits, since npm packs it regardless', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.files = ['src'];
+    });
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'chore: files list']);
+    writeFileSync(join(root, 'games/cityville/README.md'), '# cityville\n');
+    writeFileSync(
+      join(root, '.changeset/kit-readme.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('counts a package-root CLAUDE.md when package.json has no files list', () => {
+    const root = installChangesets();
+    writeFileSync(
+      join(root, 'games/cityville/CLAUDE.md'),
+      '# cityville\n\nRepo docs.\n',
+    );
+    writeFileSync(
+      join(root, '.changeset/kit-nofiles.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
   it('ignores a tsconfig-only diff', () => {
     const root = installChangesets();
     writeFileSync(
