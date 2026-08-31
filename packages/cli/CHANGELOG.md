@@ -1,5 +1,15 @@
 # @houserules/cli
 
+## 0.4.2
+
+### Patch Changes
+
+- e351770: Deduplicate orchestrate skill prose between SKILL.md and its reference files.
+- 4a119d0: Rule-conformance fixes: tighter test helper types, corrected comments and shipped prose.
+- Updated dependencies [4a119d0]
+  - @houserules/api@0.3.3
+  - @houserules/payload@0.2.3
+
 ## 0.4.1
 
 ### Patch Changes
