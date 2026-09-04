@@ -218,8 +218,8 @@ catalogs:
       specifier: ^0.3.24
       version: 0.3.24
     type-fest:
-      specifier: ^5.8.0
-      version: 5.8.0
+      specifier: ^5.9.0
+      version: 5.9.0
     typescript:
       specifier: ^6.0.3
       version: 6.0.3
@@ -269,7 +269,7 @@ importers:
         version: link:../payload
       type-fest:
         specifier: 'catalog:'
-        version: 5.8.0
+        version: 5.9.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -343,7 +343,7 @@ importers:
         version: 0.3.24
       type-fest:
         specifier: 'catalog:'
-        version: 5.8.0
+        version: 5.9.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -376,7 +376,7 @@ importers:
         version: 0.3.24
       type-fest:
         specifier: 'catalog:'
-        version: 5.8.0
+        version: 5.9.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -2296,8 +2296,8 @@ packages:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
 
-  type-fest@5.8.0:
-    resolution: {integrity: sha512-YGYEVz3Fm5iy/AybuA0oyNFq7H4CgQNfRp/qfe8nurE1kuCeNm3/vfm9X4Mtl+qLyaKJUh5xrFZwogr41SMjYA==}
+  type-fest@5.9.0:
+    resolution: {integrity: sha512-yANm3Jr3GiJ1qgJlxGAVxTOIcEOk1rhQHamlXtnrCK7EHP4HeM9OGxtMg/W7HFdrVzw/ZWJKGVIJusVH85sLtw==}
     engines: {node: '>=20'}
 
   typescript-eslint@8.68.0:
@@ -3845,7 +3845,7 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
 
-  type-fest@5.8.0:
+  type-fest@5.9.0:
     dependencies:
       tagged-tag: 1.0.0
 
