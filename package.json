@@ -144,7 +144,7 @@
     "knip": "^6.32.2",
     "prettier": "catalog:",
     "typescript": "catalog:",
-    "typescript-eslint": "^8.68.0",
+    "typescript-eslint": "^8.69.0",
     "wireit": "catalog:"
   }
 }
