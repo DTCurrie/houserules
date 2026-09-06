@@ -389,6 +389,15 @@ describe('renderClaudeAdditions', () => {
 
     expect(body).toMatch(/Do not rewrite what is not yours to change/);
   });
+
+  it('tells the agent a missing [houserules] SessionStart banner means hooks are inactive', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+
+    expect(body).toMatch(/missing `\[houserules\]` SessionStart banner/);
+    expect(body).toMatch(
+      /installed hooks, including the Bash guard, are not active/,
+    );
+  });
 });
 
 describe('renderClaudeMd', () => {

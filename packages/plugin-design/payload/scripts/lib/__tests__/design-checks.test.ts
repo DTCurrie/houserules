@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { checkDesign } from '../design-checks.mts';
+import { checkDesign, extractCheckableSource } from '../design-checks.mts';
 import { parseColor } from '../dtcg-normalize.mts';
 
 function colorTokenSet(): Record<string, unknown> {
@@ -665,5 +665,119 @@ describe('checkDesign, a var() reference against either token-name shape', () =>
 
   it('reports no contrast finding when neither shape holds the token', () => {
     expect(contrastMessages({ color: { $type: 'color' } })).toEqual([]);
+  });
+});
+
+describe('extractCheckableSource', () => {
+  it('returns other extensions unchanged, since checkDesign already treats them as CSS', () => {
+    const css = '.card {\n  padding: 24px;\n}\n';
+
+    expect(extractCheckableSource(css, '.css')).toBe(css);
+  });
+
+  it("finds a multiline <style> block's declarations at their real file lines, with none unparsed", () => {
+    const source = [
+      '<script>',
+      '  let count = 0;',
+      '</script>',
+      '',
+      '<div class="card">{count}</div>',
+      '',
+      '<style>',
+      '  .card {',
+      '    color: #ff00ff;',
+      '    padding: 13px;',
+      '  }',
+      '</style>',
+      '',
+    ].join('\n');
+
+    const result = checkDesign(
+      extractCheckableSource(source, '.svelte'),
+      colorTokenSet(),
+    );
+
+    expect(result.unparsedCount).toBe(0);
+    expect(result.declarationCount).toBe(2);
+    expect(
+      result.findings.map((finding) => [finding.line, finding.message]),
+    ).toEqual([[9, expect.stringContaining('#ff00ff')]]);
+  });
+
+  it('finds a declaration inside a compact single-line <style> block at its one real file line', () => {
+    const source =
+      '<script>let open = true;</script>\n<div class:open>hi</div>\n<style>.row{color:#00ffaa;}</style>\n';
+
+    const result = checkDesign(
+      extractCheckableSource(source, '.svelte'),
+      colorTokenSet(),
+    );
+
+    expect(result.unparsedCount).toBe(0);
+    expect(result.declarationCount).toBe(1);
+    expect(result.findings).toEqual([
+      { line: 3, message: expect.stringContaining('#00ffaa') },
+    ]);
+  });
+
+  it('reads every <style> block when a component declares more than one', () => {
+    const source = [
+      '<style>',
+      '  .a { color: #111111; }',
+      '</style>',
+      '<div />',
+      '<style module>',
+      '  .b { color: #222222; }',
+      '</style>',
+    ].join('\n');
+
+    const result = checkDesign(
+      extractCheckableSource(source, '.svelte'),
+      colorTokenSet(),
+    );
+
+    expect(result.unparsedCount).toBe(0);
+    expect(result.declarationCount).toBe(2);
+    expect(result.findings.map((finding) => finding.line)).toEqual([2, 6]);
+  });
+
+  it('yields zero declarations and zero unparsed chunks for a Svelte file with no <style> block', () => {
+    const source = [
+      '<script>',
+      "  const classes = ['flex', 'gap-2'];",
+      '</script>',
+      '',
+      '<div class={[classes]} class:active={true}>hi</div>',
+      '',
+    ].join('\n');
+
+    const result = checkDesign(
+      extractCheckableSource(source, '.svelte'),
+      colorTokenSet(),
+    );
+
+    expect(result.declarationCount).toBe(0);
+    expect(result.unparsedCount).toBe(0);
+  });
+
+  it('never counts a Svelte script or markup chunk as unparsed CSS, unlike feeding it the whole file', () => {
+    const source = [
+      '<script>',
+      '  let count = $state(0);',
+      '  const classes = [count > 0 && "text-red-500"];',
+      '</script>',
+      '',
+      "<div class={[classes, 'gap-2']} class:active={count > 0}>",
+      '  {count}',
+      '</div>',
+    ].join('\n');
+
+    expect(checkDesign(source, colorTokenSet()).unparsedCount).toBeGreaterThan(
+      0,
+    );
+    expect(
+      checkDesign(extractCheckableSource(source, '.svelte'), colorTokenSet())
+        .unparsedCount,
+    ).toBe(0);
   });
 });
