@@ -82,7 +82,11 @@ import {
 } from './lib/tailwind-theme.mjs';
 import { readCssCustomProperties } from './lib/css-custom-properties.mjs';
 import { collectStyleTokenCandidates } from './lib/style-literals.mjs';
-import { checkDesign, ACCESSIBILITY_SCOPE_NOTE } from './lib/design-checks.mjs';
+import {
+  checkDesign,
+  extractCheckableSource,
+  ACCESSIBILITY_SCOPE_NOTE,
+} from './lib/design-checks.mjs';
 import type { Finding } from './lib/design-checks.mjs';
 import { launchSession } from './lib/cdp-session.mjs';
 import { checkRenderedPage } from './lib/rendered-checks.mjs';
@@ -945,7 +949,8 @@ async function runCheck(source: TokenSource, files: string[]): Promise<number> {
       continue;
     }
     const fileText = readFileSync(filePath, 'utf8');
-    const styleResult = checkDesign(fileText, source.tokens);
+    const checkableSource = extractCheckableSource(fileText, extname(filePath));
+    const styleResult = checkDesign(checkableSource, source.tokens);
 
     let classFindings: Finding[] = [];
     let classCoverageSummary: string | undefined;
