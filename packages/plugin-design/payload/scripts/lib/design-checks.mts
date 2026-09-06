@@ -225,6 +225,47 @@ function parseDeclarations(source: string): ParsedDeclarations {
   return { declarations, unparsedCount };
 }
 
+const STYLE_BLOCK_PATTERN = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+const STYLE_CLOSE_TAG = '</style>';
+const SINGLE_FILE_COMPONENT_EXTENSIONS = new Set(['.svelte', '.vue']);
+
+function blankNonNewlines(text: string): string {
+  return text.replace(/[^\n]/g, ' ');
+}
+
+/**
+ * For a single-file-component source (`.svelte`, `.vue`), returns only the contents of its
+ * `<style>` block(s), with everything else replaced by matching whitespace so a declaration's
+ * `line` still points at the real file line. Script and markup would otherwise reach
+ * `parseDeclarations` and get counted as unparsed CSS chunks. Any other extension is returned
+ * unchanged, since `checkDesign`'s other caller feeds it CSS it synthesized itself.
+ */
+export function extractCheckableSource(
+  source: string,
+  extension: string,
+): string {
+  if (!SINGLE_FILE_COMPONENT_EXTENSIONS.has(extension)) return source;
+
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (const match of source.matchAll(STYLE_BLOCK_PATTERN)) {
+    const content = match[1] ?? '';
+    const openTagLength =
+      match[0].length - content.length - STYLE_CLOSE_TAG.length;
+    const start = (match.index ?? 0) + openTagLength;
+    ranges.push({ start, end: start + content.length });
+  }
+
+  let result = '';
+  let cursor = 0;
+  for (const range of ranges) {
+    result += blankNonNewlines(source.slice(cursor, range.start));
+    result += source.slice(range.start, range.end);
+    cursor = range.end;
+  }
+  result += blankNonNewlines(source.slice(cursor));
+  return result;
+}
+
 function groupBySelector(declarations: CssDeclaration[]): CssDeclaration[][] {
   const groups: CssDeclaration[][] = [];
   let current: CssDeclaration[] = [];

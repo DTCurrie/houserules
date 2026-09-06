@@ -554,6 +554,12 @@ so you review it like any other change. Only a path the ledger itself records is
   tool-call budgets, or the savings evaporate.
 - **Don't auto-load big docs.** Guardrail docs are read on a trigger, never `@-imported`.
   See [CONVENTIONS.md](CONVENTIONS.md).
+- **Start Claude Code sessions at the repo root.** Claude Code loads project `.claude/settings.json`
+  from the session's working directory only, not from an ancestor. A session started in a
+  subdirectory of the install root runs with every installed hook inactive, including the Bash
+  guard. CLAUDE.md is the exception, since Claude Code loads it from ancestor directories too, and
+  the session-context hook's `[houserules] branch:` banner at session start is the tell: if it is
+  missing, relaunch from the repo root.
 
 ## Contributing
 
