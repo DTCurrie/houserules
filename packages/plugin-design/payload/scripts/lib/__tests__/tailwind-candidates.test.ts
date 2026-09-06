@@ -99,6 +99,32 @@ describe('scanCandidates', () => {
     expect(result.error).toContain('npm install -D @tailwindcss/oxide@4');
   });
 
+  it('reaches a class inside a Svelte class array and a class: directive without any Svelte-specific handling', async () => {
+    const root = useTailwindRepo({ withOxide: true });
+    const filePath = writeSource(
+      tempSourceDir(),
+      'Comp.svelte',
+      [
+        '<script>',
+        '  let count = $state(0);',
+        "  const classes = [count > 0 && 'text-red-500'];",
+        '</script>',
+        '',
+        "<div class={[classes, 'gap-2']} class:active={count > 0}>",
+        '  {count}',
+        '</div>',
+      ].join('\n'),
+    );
+
+    const result = await scanCandidates(root, filePath);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const found = result.value.map((entry) => entry.candidate);
+    expect(found).toContain('text-red-500');
+    expect(found).toContain('gap-2');
+  });
+
   it('reports the fix with no stack trace on a bare repo', async () => {
     const root = useBareRepo();
     const filePath = writeSource(
