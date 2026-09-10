@@ -478,6 +478,46 @@ describe('init below the git toplevel', () => {
   });
 });
 
+describe('orchestrate module, task-worker effort variants', () => {
+  it('lands the default low and xhigh variants, and not high', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+
+    expect(existsSync(join(root, '.claude/agents/task-worker-low.md'))).toBe(
+      true,
+    );
+    expect(existsSync(join(root, '.claude/agents/task-worker-xhigh.md'))).toBe(
+      true,
+    );
+    expect(existsSync(join(root, '.claude/agents/task-worker-high.md'))).toBe(
+      false,
+    );
+  });
+
+  it('lands only the effort named via --module-option, when narrowed', () => {
+    const root = useRepo('npm-single');
+
+    const result = runCli([
+      'init',
+      '--yes',
+      '--modules=orchestrate',
+      '--module-option',
+      'orchestrate=high',
+      root,
+    ]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(join(root, '.claude/agents/task-worker-high.md'))).toBe(
+      true,
+    );
+    expect(existsSync(join(root, '.claude/agents/task-worker-low.md'))).toBe(
+      false,
+    );
+    expect(existsSync(join(root, '.claude/agents/task-worker-xhigh.md'))).toBe(
+      false,
+    );
+  });
+});
+
 describe('ui.selectModuleOptions, given modules that declare no options', () => {
   it('returns the resolved defaults unchanged without prompting', async () => {
     const modules = [optionlessModule('backlog'), optionlessModule('rename')];
@@ -591,5 +631,48 @@ describe('init --module-option against a houserules.config.json that already exi
     expect(runCli(['update', root]).status).toBe(0);
 
     expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+  });
+});
+
+describe('research module', () => {
+  it('lands all three research agents when enabled', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'research' });
+
+    const spikePath = join(root, '.claude/agents/research-spike.md');
+    const synthPath = join(root, '.claude/agents/research-synth.md');
+    const refactorPlannerPath = join(
+      root,
+      '.claude/agents/refactor-planner.md',
+    );
+    expect(existsSync(spikePath)).toBe(true);
+    expect(existsSync(synthPath)).toBe(true);
+    expect(existsSync(refactorPlannerPath)).toBe(true);
+
+    const spikeText = readFileSync(spikePath, 'utf8');
+    expect(spikeText).not.toMatch(/isaac/i);
+  });
+
+  it('installs refactor-planner text that cites no .claude/rules/ path', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'research' });
+
+    const refactorPlannerText = readFileSync(
+      join(root, '.claude/agents/refactor-planner.md'),
+      'utf8',
+    );
+    expect(refactorPlannerText).not.toMatch(/\.claude\/rules\//);
+  });
+
+  it('lands none of the agents by default', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+
+    expect(existsSync(join(root, '.claude/agents/research-spike.md'))).toBe(
+      false,
+    );
+    expect(existsSync(join(root, '.claude/agents/research-synth.md'))).toBe(
+      false,
+    );
+    expect(existsSync(join(root, '.claude/agents/refactor-planner.md'))).toBe(
+      false,
+    );
   });
 });

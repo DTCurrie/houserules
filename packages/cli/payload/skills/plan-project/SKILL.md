@@ -78,6 +78,13 @@ before you commit to a phase boundary, and fan out only for what the docs and gr
 the design thinking itself, plan mode and the Plan agent are available. This skill's job is to
 **persist** the result, not to replace them.
 
+A phase whose work is answering questions rather than writing code can name the `research-spike`
+agent in its sub-plan, one spike per scoped question set, each writing one report into the plan
+workspace. A follow-up synthesis step names `research-synth` to merge those reports into one
+reference document, resolving contradictions explicitly. Both agents are optional installs from the
+`research` module. When they are absent, the phase says what to research and the implementer does it
+in-context.
+
 ## 3. Write the three doc types
 
 Create these under `.claude/plans/<slug>/`. Keep each lean and cross-linked, with relative links so

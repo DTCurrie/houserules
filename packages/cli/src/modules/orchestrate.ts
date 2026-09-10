@@ -1,6 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { Action, Answers, ModuleGroup } from '@houserules/api';
+import type {
+  Action,
+  Answers,
+  ModuleGroup,
+  ModuleOptions,
+} from '@houserules/api';
 import type { Ctx } from '../detect.js';
 import { payloadPath } from '../paths.js';
 import { agent, script, skill } from './copy-actions.js';
@@ -26,6 +32,44 @@ export function defaultEnabled(): boolean {
   return false;
 }
 
+const EFFORTS = ['low', 'high', 'xhigh'] as const;
+type Effort = (typeof EFFORTS)[number];
+
+export const options: ModuleOptions = {
+  prompt:
+    'Which task-worker effort variants should install alongside task-worker?',
+  choices: [
+    { value: 'low', label: 'Low' },
+    { value: 'high', label: 'High' },
+    { value: 'xhigh', label: 'Extra high' },
+  ],
+  defaults: ['low', 'xhigh'],
+};
+
+/**
+ * Renders one effort variant of `task-worker.md` from its single payload source. Swaps ONLY
+ * `name:`, `effort:`, and `description:` in the frontmatter, so `tools:` and `model:` pass
+ * through unchanged and the body stays byte-identical. Keeping one source file means a body
+ * edit never needs to land in three places.
+ */
+export function renderTaskWorkerVariant(effort: Effort): string {
+  const source = readFileSync(payloadPath('agents', 'task-worker.md'), 'utf8');
+  // Search from past the opening delimiter so the file's first line is not the match.
+  const frontmatterEnd = source.indexOf('\n---', '---\n'.length);
+  const frontmatter = source.slice(0, frontmatterEnd);
+  const body = source.slice(frontmatterEnd);
+
+  const rendered = frontmatter
+    .replace(/^name: .*$/m, `name: task-worker-${effort}`)
+    .replace(/^effort: .*$/m, `effort: ${effort}`)
+    .replace(
+      /^description: .*$/m,
+      `description: Same contract as task-worker at ${effort} effort. Dispatched by /orchestrate with an objective, owned paths, and an acceptance command.`,
+    );
+
+  return `${rendered}${body}`;
+}
+
 /**
  * The execution layer for planned phases: the skill plus the task-worker agent it
  * dispatches. The orchestrator slices a phase by file ownership, writes the shared seam
@@ -39,6 +83,9 @@ export function defaultEnabled(): boolean {
  */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const withPlans = answers.moduleIds.includes('plans');
+  const chosenEfforts = (answers.moduleOptions[id] ?? []).filter(
+    (value): value is Effort => (EFFORTS as readonly string[]).includes(value),
+  );
   return [
     skill(
       id,
@@ -62,6 +109,13 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       'plan-lint.mjs',
       'validate a .claude/plans/ workspace: slice status vocabulary, ROADMAP/sub-plan sync, fix.onSubagentStop, blast-radius artifact shape',
     ),
+    ...chosenEfforts.map((effort): Action => ({
+      kind: 'write',
+      dest: `.claude/agents/task-worker-${effort}.md`,
+      content: renderTaskWorkerVariant(effort),
+      module: id,
+      reason: `task-worker effort variant: ${effort}`,
+    })),
     {
       kind: 'advise',
       text: withPlans

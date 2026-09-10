@@ -8,10 +8,10 @@ are relative to `packages/cli/`.
 
 - `@houserules/cli` ships the binary **`houserules`**, so the package name and the command
   differ, the same split `@changesets/cli` uses for `changeset`. Install is
-  `pnpm add -D @houserules/cli`, then `houserules <cmd>`. Its core ships 16 built-in modules
+  `pnpm add -D @houserules/cli`, then `houserules <cmd>`. Its core ships 17 built-in modules
   (`src/plan.ts`'s `MODULES` array): `core`, `lint-fix`, `session-context`, `rename`,
   `reviewers`, `debug-session`, `plans`, `orchestrate`, `verify-changed`, `ready`, `sweep`,
-  `read-guard`, `regen`, `statusline`, `code-cleanliness`, `ci-settings`.
+  `read-guard`, `regen`, `statusline`, `code-cleanliness`, `ci-settings`, `research`.
 - Six plugins hold modules that moved out of the core: `plugin-prose`, `plugin-testing`,
   `plugin-changesets`, `plugin-backlog`, `plugin-decisions`, `plugin-persona-auditor`. Six
   were authored as plugins and were never in the core: `plugin-accessibility`,
