@@ -1,5 +1,11 @@
 # @houserules/plugin-backlog
 
+## 0.1.5
+
+### Patch Changes
+
+- 4a119d0: Rule-conformance fixes: tighter test helper types, corrected comments and shipped prose.
+
 ## 0.1.4
 
 ### Patch Changes
