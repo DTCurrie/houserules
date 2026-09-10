@@ -248,6 +248,9 @@ than reslicing. Mark the slice `IN REVIEW` and judge it against the brief:
 - **Did it satisfy the letter and worsen the artifact?** A worker optimizes for the acceptance you
   wrote. Ask what the change does to the shipped thing, not just to the check.
 - **Deviations.** Did it depart from the seam, the constraints, or the plan's architecture?
+  Before a `REVISE` that accuses the worker of departing from the brief, the spec, or the plan,
+  `Read` the cited step in full. A grep listing of a numbered list shows only each item's first
+  line, and a revise grounded on an extraction the worker can refute costs a full round.
 - **Ownership.** Did it touch anything outside `owns`? Confirm cheaply with
   `git diff --name-only` (names, not content).
 - **Spot-read only what's load-bearing**, with `offset`/`limit`. A full diff read here forfeits the
