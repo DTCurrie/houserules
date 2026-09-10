@@ -98,6 +98,10 @@ installed tree. Give a lane worker its brief inline.
 
 ## Waves across plans, and dropped slices
 
+A quality phase planned by the `refactor-planner` agent, where installed, arrives pre-sliced: its
+plan names each slice's owned paths, findings, and acceptance commands. Validate that slicing
+against the rules here instead of re-deriving it.
+
 **Slices in one wave may come from different plans.** Nothing here requires a wave's slices to share
 a phase, or even a project. When several plans are in flight, drawing waves across all of them by
 the resource rule above is what finds the real parallelism, and it is usually much wider than any

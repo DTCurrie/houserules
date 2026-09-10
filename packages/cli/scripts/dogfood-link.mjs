@@ -226,7 +226,10 @@ const PLUGINS = [
  * names their surfaces directly: the `code-cleanliness.md` rule it says it obeys, the
  * `.claude/plans/<name>/` workspaces its plan docs reference, and the `/orchestrate` skill
  * the "Exception" bullet under Cost & verification discipline names. `verify-changed` is
- * added per the brief's fixed seam (step 5).
+ * added per the brief's fixed seam (step 5). `research` pairs with those plan workspaces:
+ * its agents are dispatched by planned phases, and this repo runs planned phases on itself.
+ * `orchestrate` carries no explicit option entry below, so its defaults install the
+ * `task-worker-low` and `task-worker-xhigh` variants.
  *
  * Every other entry installs one plugin's rule/reference set for real, chosen so the
  * eighteen rules this repo's CLAUDE.md says it carries all actually install, and so the
@@ -242,6 +245,7 @@ const MODULES = [
   'plans',
   'orchestrate',
   'verify-changed',
+  'research',
   'a11y/accessibility',
   'cs/changesets',
   'prose/code-comments',

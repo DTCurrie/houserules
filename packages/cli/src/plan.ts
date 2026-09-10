@@ -25,6 +25,7 @@ import * as reviewers from './modules/reviewers.js';
 import * as debugSession from './modules/debug-session.js';
 import * as plans from './modules/plans.js';
 import * as orchestrate from './modules/orchestrate.js';
+import * as research from './modules/research.js';
 import * as verifyChanged from './modules/verify-changed.js';
 import * as ready from './modules/ready.js';
 import * as sweep from './modules/sweep.js';
@@ -167,6 +168,7 @@ export const MODULES: ModuleDef[] = [
   debugSession,
   plans,
   orchestrate,
+  research,
   verifyChanged,
   ready,
   sweep,

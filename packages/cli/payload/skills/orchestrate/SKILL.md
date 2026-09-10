@@ -158,6 +158,14 @@ Send every slice in the wave as parallel `Agent` calls **in a single message**, 
 
 Mark the slices `DISPATCHED` before you send.
 
+If the host repo installed effort variants, pick `subagent_type` by the slice's shape instead
+of defaulting every slice to `task-worker`. A mechanical or wide slice (sweeps, boilerplate,
+many small files) takes `task-worker-low`. A judgment-heavy slice (architecture calls, tricky
+seams) takes `task-worker-high`. The rare slice you would otherwise pull into your own context
+takes `task-worker-xhigh`. Everything else stays on the `task-worker` default. A variant exists
+only if `.claude/agents/task-worker-<effort>.md` is installed. If it is absent, fall back to
+`task-worker`.
+
 `task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice,
 and **never restates or overrides a standing rule**. The one most often violated is the fixer
 prohibition (below).
