@@ -2,4 +2,4 @@
 '@houserules/cli': patch
 ---
 
-Report reads subagent transcripts and counts missing-script hook failures as crashes.
+Report telemetry now covers subagent transcripts, hook crashes, and per-machine scope of unused skills.

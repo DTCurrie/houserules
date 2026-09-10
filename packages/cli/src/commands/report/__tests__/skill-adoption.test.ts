@@ -359,12 +359,12 @@ describe('renderSkillAdoption', () => {
       '  (model = Skill tool invocations; user = typed slash commands, built-ins included)',
       '  toolset-active sessions: 3 of 5 (any hook fire; adoption reads against these)',
       '',
-      '  dead skills (installed, zero fires): gamma',
-      '  (an unfired skill leaves no transcript trace, so dead cannot tell ignored from newly installed)',
+      '  unused here (installed, zero fires): gamma',
+      "  (zero fires in this repo's local transcripts. This machine only, so a skill run on another machine or repo still appears here. An unfired skill leaves no trace, so this cannot tell an unused skill from a newly installed one.)",
     ]);
   });
 
-  it('renders "none" for dead skills when every installed skill has fired', () => {
+  it('renders "none" for unused skills when every installed skill has fired', () => {
     const rendered = renderSkillAdoption({
       counts: [{ skill: 'alpha', model: 1, user: 0 }],
       installed: ['alpha'],
@@ -373,9 +373,9 @@ describe('renderSkillAdoption', () => {
       totalSessions: 1,
     });
 
-    expect(rendered.at(-2)).toBe('  dead skills (installed, zero fires): none');
+    expect(rendered.at(-2)).toBe('  unused here (installed, zero fires): none');
     expect(rendered.at(-1)).toBe(
-      '  (an unfired skill leaves no transcript trace, so dead cannot tell ignored from newly installed)',
+      "  (zero fires in this repo's local transcripts. This machine only, so a skill run on another machine or repo still appears here. An unfired skill leaves no trace, so this cannot tell an unused skill from a newly installed one.)",
     );
   });
 });

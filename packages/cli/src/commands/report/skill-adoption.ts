@@ -77,8 +77,8 @@ export function renderSkillAdoption(report: SkillAdoptionReport): string[] {
   if (report.installed.length)
     lines.push(
       '',
-      `  dead skills (installed, zero fires): ${report.dead.join(', ') || 'none'}`,
-      '  (an unfired skill leaves no transcript trace, so dead cannot tell ignored from newly installed)',
+      `  unused here (installed, zero fires): ${report.dead.join(', ') || 'none'}`,
+      "  (zero fires in this repo's local transcripts. This machine only, so a skill run on another machine or repo still appears here. An unfired skill leaves no trace, so this cannot tell an unused skill from a newly installed one.)",
     );
   return lines;
 }
