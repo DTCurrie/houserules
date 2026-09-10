@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.5.1
+
+### Patch Changes
+
+- 4b0520d: Report telemetry now covers subagent transcripts, hook crashes, and per-machine scope of unused skills.
+
 ## 0.5.0
 
 ### Minor Changes
