@@ -170,23 +170,37 @@ export function readCorpus(projectsBase: string, slugs: string[]): Corpus {
         });
         continue;
       }
-      ingestTranscript(corpus, file, text);
+      const usage = createFileUsage(file);
+      corpus.files.push(usage);
+      ingestTranscript(corpus, file, text, usage);
+      // Subagent transcripts live in `<session>/subagents/*.jsonl` and carry the parent's
+      // sessionId, so their tokens and skill invocations fold into the parent session row.
+      const subDir = join(dir, file.replace(/\.jsonl$/, ''), 'subagents');
+      if (!existsSync(subDir)) continue;
+      for (const subFile of readdirSync(subDir)
+        .filter((f) => f.endsWith('.jsonl'))
+        .sort()) {
+        try {
+          ingestTranscript(
+            corpus,
+            subFile,
+            readFileSync(join(subDir, subFile), 'utf8'),
+            usage,
+          );
+        } catch (error) {
+          corpus.unreadableFiles.push({
+            file: join(file.replace(/\.jsonl$/, ''), 'subagents', subFile),
+            message: (error as Error).message,
+          });
+        }
+      }
     }
   }
   return corpus;
 }
 
-/**
- * One pass over a transcript's lines, feeding both the per-file token aggregate and the
- * per-session event lists. Records with no sessionId fall back to the file name as the
- * session key.
- */
-export function ingestTranscript(
-  corpus: Corpus,
-  file: string,
-  text: string,
-): void {
-  const usage: FileUsage = {
+function createFileUsage(file: string): FileUsage {
+  return {
     file,
     turns: 0,
     input: 0,
@@ -198,8 +212,25 @@ export function ingestTranscript(
     sidechainTurns: 0,
     skippedLines: 0,
   };
-  corpus.files.push(usage);
-  const fallbackSession = file.replace(/\.jsonl$/, '');
+}
+
+/**
+ * One pass over a transcript's lines, feeding both the per-file token aggregate and the
+ * per-session event lists. Records with no sessionId fall back to the file name as the
+ * session key. Pass `into` to fold a subagent transcript's tokens and events into its
+ * parent session's row rather than opening a new one.
+ */
+export function ingestTranscript(
+  corpus: Corpus,
+  file: string,
+  text: string,
+  into?: FileUsage,
+): void {
+  const usage = into ?? createFileUsage(file);
+  if (!into) corpus.files.push(usage);
+  // A subagent transcript (folded into `into`) belongs to its parent session, so a record
+  // there with no sessionId falls back to the parent's id, never the agent file name.
+  const fallbackSession = (into?.file ?? file).replace(/\.jsonl$/, '');
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     corpus.lines += 1;

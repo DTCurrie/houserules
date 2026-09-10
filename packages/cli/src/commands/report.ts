@@ -29,9 +29,10 @@ const LEDGERS: [skill: string, ledgerFile: string][] = [
 /**
  * Read-only transcript telemetry. Rolls this repo's session logs into the token tables
  * plus one section per metric family: hook health, guard efficacy, skill adoption and
- * outcomes, and friction. Native `/usage` covers the live view. This is the trend view.
- * `--slug` merges extra transcript directories into the corpus, e.g. a pre-rename
- * history dir.
+ * outcomes, and friction. Subagent transcripts (`<session>/subagents/*.jsonl`) fold into
+ * their parent session, so tokens, skill fires, and sidechain share cover agent work too.
+ * Native `/usage` covers the live view. This is the trend view. `--slug` merges extra
+ * transcript directories into the corpus, e.g. a pre-rename history dir.
  */
 export async function report(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);

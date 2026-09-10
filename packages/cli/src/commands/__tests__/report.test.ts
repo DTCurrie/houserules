@@ -89,6 +89,62 @@ describe('report', () => {
     expect(r.stdout).toMatch(/-- friction --/);
   });
 
+  it('folds a subagent transcript into its parent session row', () => {
+    const top = runIn(root, 'git', ['rev-parse', '--show-toplevel']).trim();
+    const subDir = join(
+      cfgDir,
+      'projects',
+      top.replaceAll('/', '-'),
+      'sess-abcdef12',
+      'subagents',
+    );
+    mkdirSync(subDir, { recursive: true });
+    writeFileSync(
+      join(subDir, 'agent-deadbeef.jsonl'),
+      [
+        JSON.stringify({
+          type: 'assistant',
+          sessionId: 'sess-abcdef12',
+          isSidechain: true,
+          message: {
+            model: 'claude-haiku-4-5',
+            usage: { input_tokens: 5, output_tokens: 9 },
+            content: [
+              {
+                type: 'tool_use',
+                id: 't1',
+                name: 'Skill',
+                input: { skill: 'tidy' },
+              },
+            ],
+          },
+        }),
+        // No sessionId: must fall back to the parent session, never a new row.
+        JSON.stringify({
+          type: 'assistant',
+          isSidechain: true,
+          message: {
+            model: 'claude-haiku-4-5',
+            usage: { input_tokens: 1, output_tokens: 1 },
+          },
+        }),
+        '',
+      ].join('\n'),
+    );
+
+    const r = runCli(['report', root], { env });
+
+    expect(r.status, r.stderr).toBe(0);
+    // Folded, not counted as extra sessions.
+    expect(r.stdout).toMatch(/1 session\(s\):/);
+    // Base turn plus the two sidechain turns.
+    expect(r.stdout).toMatch(/turns 3/);
+    expect(r.stdout).toMatch(/sidechain turns: [1-9]\d?%/);
+    expect(r.stdout).toMatch(/claude-haiku-4-5/);
+    // A skill invoked only inside the subagent is now visible.
+    expect(r.stdout).toMatch(/\btidy\b/);
+  });
+
   it('merges a --slug transcript dir into the corpus', () => {
     const extraDir = join(cfgDir, 'projects', 'extra-history');
     mkdirSync(extraDir, { recursive: true });

@@ -169,6 +169,35 @@ describe('computeHookHealth', () => {
     ]);
   });
 
+  it('classifies a missing payload-script exit as a crash, not a block', () => {
+    const corpus = emptyCorpus(['slug']);
+    const lines = [
+      attachmentLine({
+        hookName: 'Stop',
+        exitCode: 1,
+        stderr:
+          '[houserules] lint-format-fix.mjs missing. Run: npx houserules update',
+        sessionId: 'sess-1',
+      }),
+      attachmentLine({
+        hookName: 'Stop',
+        exitCode: 1,
+        stderr:
+          '[houserules] lint-format-fix.mjs missing. Run: npx houserules update',
+        sessionId: 'sess-1',
+      }),
+    ];
+
+    ingestTranscript(corpus, 'missing-script.jsonl', lines.join('\n'));
+    const report = computeHookHealth(corpus);
+
+    const stop = report.rows.find((row) => row.hook === 'Stop');
+    expect(stop).toMatchObject({ nonZero: 2, crashes: 2, blocks: 0 });
+    expect(report.crashSignatures).toEqual([
+      { signature: 'missing script: lint-format-fix.mjs', count: 2 },
+    ]);
+  });
+
   it('counts Bash tool calls across sessions, sidechain included', () => {
     const corpus = emptyCorpus(['slug']);
     const lines = [
