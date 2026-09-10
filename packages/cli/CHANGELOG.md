@@ -1,5 +1,22 @@
 # @houserules/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- 8afd19d: New optional research module installs research-spike, research-synth, and refactor-planner agents for planned phases.
+- 67f79ed: Doctor and the managed CLAUDE.md block now surface the subdirectory-session hook bypass.
+- 8afd19d: Orchestrate module option installs generated task-worker effort variants (low, high, xhigh).
+
+### Patch Changes
+
+- e351770: Deduplicate orchestrate skill prose between SKILL.md and its reference files.
+- 4a119d0: Rule-conformance fixes: tighter test helper types, corrected comments and shipped prose.
+- a6e2f46: Add guardrails against truncated spec reads and over-verification in live debug loops.
+- Updated dependencies [4a119d0]
+  - @houserules/api@0.3.3
+  - @houserules/payload@0.2.3
+
 ## 0.4.1
 
 ### Patch Changes

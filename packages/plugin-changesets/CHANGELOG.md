@@ -1,5 +1,11 @@
 # @houserules/plugin-changesets
 
+## 0.2.3
+
+### Patch Changes
+
+- 4a119d0: Rule-conformance fixes: tighter test helper types, corrected comments and shipped prose.
+
 ## 0.2.2
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @houserules/plugin-prose
 
+## 0.1.5
+
+### Patch Changes
+
+- 67f79ed: The file-header exception now covers shebang scripts that also export functions.
+
 ## 0.1.4
 
 ### Patch Changes

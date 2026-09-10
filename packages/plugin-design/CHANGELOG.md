@@ -1,5 +1,11 @@
 # @houserules/plugin-design
 
+## 0.2.3
+
+### Patch Changes
+
+- 67f79ed: Design check now parses only the style blocks of Svelte and Vue files.
+
 ## 0.2.2
 
 ### Patch Changes
