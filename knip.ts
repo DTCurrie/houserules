@@ -39,6 +39,7 @@ const config: KnipConfig = {
         'src/modules/ready.ts',
         'src/modules/regen.ts',
         'src/modules/rename.ts',
+        'src/modules/research.ts',
         'src/modules/reviewers.ts',
         'src/modules/session-context.ts',
         'src/modules/statusline.ts',
