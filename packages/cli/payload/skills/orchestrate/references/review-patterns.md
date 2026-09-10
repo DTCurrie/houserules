@@ -29,6 +29,12 @@ intended.
 - **Did it satisfy the letter and worsen the artifact?** One slice satisfied "the tarball must not
   carry these files" by excluding them in `files` while leaving a package `exports` entry pointing
   at them, which passes the check and publishes a package resolving to nothing.
+- **Is the deviation real, or an artifact of how you read the spec?** One orchestrator listed a
+  sub-plan's steps with a first-line-only grep (`grep -nE '^\s+[0-9]+\.'`), which drops the
+  continuation lines of wrapped list items, then sent a `REVISE` flagging a change that was
+  step 5 of the spec. The worker pushed back with line numbers and the second pass approved,
+  a full round spent on the reviewer's own extraction. Grep locates. Before a deviation verdict,
+  `Read` the step you are judging against, in full.
 
 ## Revise rounds and what comes after the cap
 
