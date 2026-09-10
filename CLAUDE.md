@@ -53,6 +53,9 @@ in `.claude/templates/`.
   | "I know this fact from memory"    | State it only after running the command that could falsify it.             |
   | "It passed earlier"               | A stale or cached pass is not this change's pass. Re-run on current bytes. |
   | "The subagent reported success"   | The tree is the evidence. Check it before believing the report.            |
+- In a live loop where the user is blocked on each turn, a cheap reversible action is itself
+  the check: run it and let its result falsify, instead of multi-call pre-verification (doc
+  fetches, code surveys). Cap pre-action checks at the single cheapest one.
 - Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.
 - On AskUserQuestion timeout, stop and re-ask later. Never carry tentative selections forward.
 - Read the repo's own docs + targeted greps before fanning out Explore/Plan agents.
@@ -60,6 +63,7 @@ in `.claude/templates/`.
 ### Tool-use efficiency
 
 - `grep -n` to locate, then `Read` with `offset`/`limit`. Never read big files whole.
+  Grep output is location data, not content: never judge text against a grep listing of it.
 - Never `git stash` to baseline-check. Use `git diff --name-only` / `git show HEAD:<path>`.
 - Pipe long command output through `grep`, and batch related greps into one call.
 
