@@ -140,11 +140,11 @@
     "@changesets/cli": "^3.0.1",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.9.1",
-    "globals": "^17.11.0",
+    "globals": "^17.12.0",
     "knip": "^6.34.0",
     "prettier": "catalog:",
     "typescript": "catalog:",
-    "typescript-eslint": "^8.68.0",
+    "typescript-eslint": "^8.69.0",
     "wireit": "catalog:"
   }
 }
