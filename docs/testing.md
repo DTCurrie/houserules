@@ -6,10 +6,15 @@ writing, moving, or staging tests. The shared test package's own inventory lives
 
 - Tests live in a `__tests__/` **beside the code they are about**, per
   `packages/plugin-testing/payload/rules/testing.md` which this repo dogfoods. The split is
-  by SUBJECT, not by unit-versus-e2e: a fixture-driven CLI test is still a test of its one
-  subject, so `src/commands/__tests__/modules.test.ts` holds both the pure `parseRequested`
-  cases and the ones that drive the command against a real tree. Never add a `.e2e.test.ts`
-  tier. If a file gets unwieldy, split it by CONCERN.
+  by SUBJECT, not by layer: a fixture-driven CLI test is still a test of its one subject, so
+  `src/commands/__tests__/modules.test.ts` holds both the pure `parseRequested` cases and the
+  ones that drive the command against a real tree. Never add a `.e2e.test.ts` tier. If a file
+  gets unwieldy, split it by CONCERN. A process test proves wiring once, and a decision a
+  pure function makes is pinned at the default, so a payload script exports the function
+  that decides.
+- A test of shipped prose pins the clause by a stable token (a heading, a rule id, a path, a
+  promised number), never by a full sentence, since a prose-voice pass rewords sentences and
+  the test then fails on a change the rule did not make.
 - **The filename names the unit, and every `describe` in it is about that unit.** A file named
   for a theme is a grouping, and a grouping hides which unit is covered. In `packages/cli`:
   `src/**/__tests__/`, `src/modules/__tests__/` (named for the module it covers),
