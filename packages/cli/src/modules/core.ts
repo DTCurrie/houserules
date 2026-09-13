@@ -59,7 +59,7 @@ function libActions(): Action[] {
     script(
       id,
       'guard-bash.mjs',
-      'PreToolUse guard: git commit/push/stash, gh pr create, and subagent ledger/changeset writes',
+      'PreToolUse guard: git commit/push/stash, git checkout/restore/reset --hard/clean, gh pr create, and subagent ledger/changeset writes',
     ),
   );
   // Inert until a prompt actually references a logged ID. Verified on the stock CLI:

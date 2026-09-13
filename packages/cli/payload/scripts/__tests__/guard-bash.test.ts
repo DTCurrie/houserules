@@ -62,14 +62,15 @@ describe('gitDenyRules', () => {
       gitCommit: false,
       gitPush: false,
       gitStash: false,
+      gitDiscard: false,
       prCreate: false,
     });
     expect(rules).toEqual([]);
   });
 
-  it('emits exactly the four default rules when the defaults are all on', () => {
+  it('emits exactly the five default rules when the defaults are all on', () => {
     const rules = gitDenyRules(GUARD_DEFAULTS);
-    expect(rules).toHaveLength(4);
+    expect(rules).toHaveLength(5);
   });
 
   it('skips a custom rule with an invalid regex pattern instead of throwing', () => {
@@ -77,6 +78,7 @@ describe('gitDenyRules', () => {
       gitCommit: false,
       gitPush: false,
       gitStash: false,
+      gitDiscard: false,
       prCreate: false,
       custom: [{ pattern: '(unclosed' }],
     });
@@ -88,6 +90,7 @@ describe('gitDenyRules', () => {
       gitCommit: false,
       gitPush: false,
       gitStash: false,
+      gitDiscard: false,
       prCreate: false,
       custom: [{ pattern: 'docker system prune' }],
     });
@@ -115,6 +118,31 @@ describe('guardRefusalFor', () => {
   });
 
   it.each([
+    'git checkout -- src/isaac_module/models/world.py',
+    'git checkout HEAD -- src/world.py',
+    'git checkout .',
+    'git checkout main',
+    'git checkout -b feature',
+    'git -C /repo checkout -- src/world.py',
+    'git restore src/world.py',
+    'git restore --staged --worktree src/world.py',
+    'git restore --source=HEAD~1 src/world.py',
+    'git reset --hard',
+    'git reset --hard HEAD~1',
+    'git reset --merge',
+    'git clean -fd',
+    'git clean -n',
+    'git switch -f main',
+    'git switch --force main',
+    'git switch --discard-changes main',
+    'pnpm test; git checkout -- src/world.py',
+  ])('refuses "%s", since it discards uncommitted work', (cmd) => {
+    expect(guardRefusalFor(cmd)).toMatch(
+      /discard uncommitted work.*inverse with Edit/,
+    );
+  });
+
+  it.each([
     'ls -la',
     'git status',
     'git log --oneline',
@@ -124,6 +152,17 @@ describe('guardRefusalFor', () => {
     'node -e \'console.log("git stash")\'',
     'rg "git push" src/',
     'git log --grep "git commit"',
+    'git switch main',
+    'git switch -c feature-flag',
+    'git switch feature-flag',
+    'git switch --force-create feature',
+    'git reset --soft HEAD~1',
+    'git reset src/world.py',
+    'git reset HEAD~1',
+    'git diff -- src/world.py',
+    'git show HEAD:src/world.py',
+    'grep -rn "git checkout --" docs/',
+    'echo "never git restore a dirty tree"',
   ])(
     'returns null for "%s", since flags and quoted arguments must not be mistaken for the guarded subcommand',
     (cmd) => {
@@ -238,6 +277,18 @@ describe('guard-bash.mjs', () => {
     ).toBe(0);
     expect(
       runScript(root, SCRIPT, { input: payload('git commit -m x') }).status,
+    ).toBe(2);
+  });
+
+  it('allows a discard when config turns gitDiscard off, while the stash rule stays on', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    withConfig(root, { gitDiscard: false });
+    expect(
+      runScript(root, SCRIPT, { input: payload('git checkout -- src/x.ts') })
+        .status,
+    ).toBe(0);
+    expect(
+      runScript(root, SCRIPT, { input: payload('git stash') }).status,
     ).toBe(2);
   });
 

@@ -322,6 +322,7 @@ const houseConfig = {
     gitCommit: true,
     gitPush: true,
     gitStash: true,
+    gitDiscard: true,
     prCreate: true,
     custom: [],
   },
