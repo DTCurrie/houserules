@@ -82,7 +82,7 @@ describe('svelte', () => {
       'utf8',
     );
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('svelte/svelte')).toBe(true);
+    expect(manifest.modules).toContain('svelte/svelte');
     expect(
       manifest.files['.claude/rules/svelte.md'],
       'the rule BODY is kit-owned (update-refreshable)',
@@ -93,28 +93,35 @@ describe('svelte', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('svelte/svelte')).toBe(false);
-    expect(existsSync(join(root, '.claude/rules/svelte.md'))).toBe(false);
+    expect(manifest.modules).not.toContain('svelte/svelte');
+    expect(
+      existsSync(join(root, '.claude/rules/svelte.md')),
+      'svelte.md absent',
+    ).toBe(false);
   });
 
   it('installs the SvelteKit guide only when sveltekit was chosen', () => {
     const withGuide = installedWith(['sveltekit']);
     const withoutGuide = installedWith([]);
 
-    expect(existsSync(join(withGuide, '.claude/rules/sveltekit.md'))).toBe(
-      true,
-    );
-    expect(existsSync(join(withoutGuide, '.claude/rules/sveltekit.md'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(withGuide, '.claude/rules/sveltekit.md')),
+      'sveltekit.md installed',
+    ).toBe(true);
+    expect(
+      existsSync(join(withoutGuide, '.claude/rules/sveltekit.md')),
+      'sveltekit.md absent',
+    ).toBe(false);
   });
 
   it('is not installed by default for the svelte-mcp module either', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('svelte/svelte-mcp')).toBe(false);
-    expect(existsSync(join(root, '.claude/mcp'))).toBe(false);
+    expect(manifest.modules).not.toContain('svelte/svelte-mcp');
+    expect(existsSync(join(root, '.claude/mcp')), '.claude/mcp absent').toBe(
+      false,
+    );
   });
 
   it('installs all three MCP configs under .claude/mcp/ when svelte-mcp is enabled', () => {
@@ -123,12 +130,21 @@ describe('svelte', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/mcp/svelte.http.json'))).toBe(true);
-    expect(existsSync(join(root, '.claude/mcp/svelte.stdio.json'))).toBe(true);
-    expect(existsSync(join(root, '.claude/mcp/svelte.vscode.json'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/mcp/svelte.http.json')),
+      'svelte.http.json installed',
+    ).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/mcp/svelte.stdio.json')),
+      'svelte.stdio.json installed',
+    ).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/mcp/svelte.vscode.json')),
+      'svelte.vscode.json installed',
+    ).toBe(true);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('svelte/svelte-mcp')).toBe(true);
+    expect(manifest.modules).toContain('svelte/svelte-mcp');
   });
 
   it('namespaces every MCP dest by server name, so a second plugin cannot collide', () => {
@@ -244,7 +260,7 @@ describe('svelte', () => {
       'utf8',
     );
 
-    expect(ruleText).toMatch(/shared across every request and user/);
+    expect(ruleText).toMatch(/## Context Providers[\s\S]{0,300}`provide\*`/);
   });
 
   it('carves authorization out of the layout-fetching guidance', () => {
@@ -255,8 +271,6 @@ describe('svelte', () => {
       'utf8',
     );
 
-    expect(ruleText).toMatch(
-      /authorization: layout logic can skip leaf routes/,
-    );
+    expect(ruleText).toMatch(/authorization[\s\S]{0,200}`handle` hook/);
   });
 });

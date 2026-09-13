@@ -50,7 +50,7 @@ describe('ci-settings', () => {
   it('is not installed by default', () => {
     const root = useInstalledRepo('pnpm-monorepo');
 
-    expect(manifestOf(root).modules.includes('ci-settings')).toBe(false);
-    expect(existsSync(join(root, CI_SETTINGS))).toBe(false);
+    expect(manifestOf(root).modules).not.toContain('ci-settings');
+    expect(existsSync(join(root, CI_SETTINGS)), 'not installed').toBe(false);
   });
 });

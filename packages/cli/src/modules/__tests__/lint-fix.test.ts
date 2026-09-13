@@ -35,15 +35,19 @@ describe('lint-fix without a detected fix command', () => {
   });
 
   it('still ships the fix script', () => {
-    expect(existsSync(join(root, '.claude/scripts/lint-format-fix.mjs'))).toBe(
-      true,
-    );
+    expect(
+      existsSync(join(root, '.claude/scripts/lint-format-fix.mjs')),
+      'fix script shipped',
+    ).toBe(true);
   });
 
   it('does not wire the script into the Stop hook, since it would run a nonexistent target', () => {
     const settings = settingsOf(root);
     const stopCmds = hookCommandsFor(settings, 'Stop');
-    expect(stopCmds.some((c) => c.includes('lint-format-fix.mjs'))).toBe(false);
+    expect(
+      stopCmds.some((c) => c.includes('lint-format-fix.mjs')),
+      'not wired into the Stop hook',
+    ).toBe(false);
   });
 
   it('advises in stdout that no target has a detected fix command', () => {
@@ -89,6 +93,7 @@ describe('plan, given a root-scoped fix block whose commands are real root scrip
 
     expect(
       stopHookScripts(actions).some((c) => c.includes('lint-format-fix.mjs')),
+      'Stop hook wired',
     ).toBe(true);
   });
 
@@ -109,7 +114,7 @@ describe('plan, given a root-scoped fix block whose commands are real root scrip
       },
     };
 
-    expect(defaultEnabled(ctx)).toBe(true);
+    expect(defaultEnabled(ctx), 'defaultEnabled is true').toBe(true);
   });
 });
 
@@ -135,8 +140,9 @@ describe('plan, given a root-scoped fix block whose commands are not real root s
 
     expect(
       stopHookScripts(actions).some((c) => c.includes('lint-format-fix.mjs')),
+      'Stop hook not wired',
     ).toBe(false);
-    expect(actions.some((a) => a.kind === 'advise')).toBe(true);
+    expect(actions.filter((a) => a.kind === 'advise')).not.toEqual([]);
   });
 
   it('reports defaultEnabled as false', () => {
@@ -156,7 +162,7 @@ describe('plan, given a root-scoped fix block whose commands are not real root s
       },
     };
 
-    expect(defaultEnabled(ctx)).toBe(false);
+    expect(defaultEnabled(ctx), 'defaultEnabled is false').toBe(false);
   });
 });
 

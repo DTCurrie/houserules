@@ -57,7 +57,10 @@ describe('TargetRepo.write, given a destination that is a symlink', () => {
     repo.write('rules/example.md', 'payload body\nrouting tail\n');
 
     const dest = join(root, 'rules/example.md');
-    expect(lstatSync(dest).isSymbolicLink()).toBe(false);
+    expect(
+      lstatSync(dest).isSymbolicLink(),
+      'link replaced with a real file',
+    ).toBe(false);
     expect(readFileSync(dest, 'utf8')).toBe('payload body\nrouting tail\n');
   });
 
@@ -66,10 +69,11 @@ describe('TargetRepo.write, given a destination that is a symlink', () => {
 
     const wrote = repo.write('rules/example.md', 'payload body\n');
 
-    expect(wrote).toBe(false);
-    expect(lstatSync(join(root, 'rules/example.md')).isSymbolicLink()).toBe(
-      true,
-    );
+    expect(wrote, 'no write when content already matches').toBe(false);
+    expect(
+      lstatSync(join(root, 'rules/example.md')).isSymbolicLink(),
+      'link left in place',
+    ).toBe(true);
   });
 });
 
@@ -132,6 +136,9 @@ describe('TargetRepo.backupOnce', () => {
 
     dry.backupOnce('.claude/settings.json');
 
-    expect(existsSync(join(root, '.claude/backups'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/backups')),
+      'no backup written on a dry run',
+    ).toBe(false);
   });
 });

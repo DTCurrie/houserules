@@ -14,8 +14,10 @@ describe('playwright-mcp', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('testing/playwright-mcp')).toBe(false);
-    expect(existsSync(join(root, '.claude/mcp'))).toBe(false);
+    expect(manifest.modules).not.toContain('testing/playwright-mcp');
+    expect(existsSync(join(root, '.claude/mcp')), '.claude/mcp is absent').toBe(
+      false,
+    );
   });
 
   it('installs both configs under .claude/mcp/ and tracks them in the manifest when enabled', () => {
@@ -24,15 +26,14 @@ describe('playwright-mcp', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/mcp/playwright.stdio.json'))).toBe(
-      true,
-    );
-    expect(existsSync(join(root, '.claude/mcp/playwright.vscode.json'))).toBe(
-      true,
-    );
+    const stdioPath = join(root, '.claude/mcp/playwright.stdio.json');
+    expect(existsSync(stdioPath), `${stdioPath} exists`).toBe(true);
+
+    const vscodePath = join(root, '.claude/mcp/playwright.vscode.json');
+    expect(existsSync(vscodePath), `${vscodePath} exists`).toBe(true);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('testing/playwright-mcp')).toBe(true);
+    expect(manifest.modules).toContain('testing/playwright-mcp');
     expect(
       Object.keys(manifest.files).filter((dest) =>
         dest.startsWith('.claude/mcp/playwright'),

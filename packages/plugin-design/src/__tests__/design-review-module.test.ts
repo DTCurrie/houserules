@@ -20,12 +20,11 @@ describe('design-review', () => {
   it('installs the design-reviewer agent and the design-review skill', () => {
     const root = installed();
 
-    expect(existsSync(join(root, '.claude/agents/design-reviewer.md'))).toBe(
-      true,
-    );
-    expect(
-      existsSync(join(root, '.claude/skills/design-review/SKILL.md')),
-    ).toBe(true);
+    const agentPath = join(root, '.claude/agents/design-reviewer.md');
+    const skillPath = join(root, '.claude/skills/design-review/SKILL.md');
+
+    expect(existsSync(agentPath), `${agentPath} exists`).toBe(true);
+    expect(existsSync(skillPath), `${skillPath} exists`).toBe(true);
   });
 
   it('declares the design-reviewer agent read-only, without Write or Edit', () => {
@@ -57,10 +56,10 @@ describe('design-review', () => {
 
     const manifest = manifestOf(root);
 
-    expect(manifest.modules.includes('design/design-review')).toBe(false);
-    expect(existsSync(join(root, '.claude/agents/design-reviewer.md'))).toBe(
-      false,
-    );
+    const agentPath = join(root, '.claude/agents/design-reviewer.md');
+
+    expect(manifest.modules).not.toContain('design/design-review');
+    expect(existsSync(agentPath), `${agentPath} absent`).toBe(false);
   });
 
   it('installs design-checks.mjs as a lib through the design module', () => {
@@ -68,9 +67,8 @@ describe('design-review', () => {
       modules: 'design/design',
       plugins: PLUGINS,
     });
+    const libPath = join(root, '.claude/scripts/lib/design-checks.mjs');
 
-    expect(
-      existsSync(join(root, '.claude/scripts/lib/design-checks.mjs')),
-    ).toBe(true);
+    expect(existsSync(libPath), `${libPath} exists`).toBe(true);
   });
 });

@@ -33,7 +33,10 @@ describe('buildJsonSchema', () => {
   });
 
   it('closes the root object to unknown keys', () => {
-    expect(buildJsonSchema().additionalProperties).toBe(false);
+    expect(
+      buildJsonSchema().additionalProperties,
+      'root object closed to unknown keys',
+    ).toBe(false);
   });
 });
 
@@ -64,6 +67,7 @@ describe('parseHouseConfig', () => {
         (error as HouseConfigError).problems.some((p) =>
           p.startsWith('version'),
         ),
+        'names version as the problem',
       ).toBe(true);
     }
   });
@@ -80,6 +84,7 @@ describe('parseHouseConfig', () => {
           (error as HouseConfigError).problems.some((p) =>
             p.startsWith('version'),
           ),
+          'names version as the problem',
         ).toBe(true);
       }
     },
@@ -107,6 +112,7 @@ describe('parseHouseConfig', () => {
         (error as HouseConfigError).problems.some((p) =>
           p.startsWith('packageManager'),
         ),
+        'names packageManager as the problem',
       ).toBe(true);
     }
   });
@@ -124,6 +130,7 @@ describe('parseHouseConfig', () => {
         (error as HouseConfigError).problems.some((p) =>
           p.startsWith('lintableExtensions'),
         ),
+        'names lintableExtensions as the problem',
       ).toBe(true);
     }
   });
@@ -138,6 +145,7 @@ describe('parseHouseConfig', () => {
         (error as HouseConfigError).problems.some((p) =>
           p.startsWith('packageManager'),
         ),
+        'names packageManager as the problem',
       ).toBe(true);
     }
   });
@@ -213,6 +221,7 @@ describe('parseHouseConfig', () => {
         (error as HouseConfigError).problems.some((p) =>
           p.startsWith('fix.onSubagentStop'),
         ),
+        'names fix.onSubagentStop as the problem',
       ).toBe(true);
     }
   });
@@ -231,6 +240,7 @@ describe('parseHouseConfig', () => {
         (error as HouseConfigError).problems.some((p) =>
           p.startsWith('targets.0.packageName'),
         ),
+        'names targets.0.packageName as the problem',
       ).toBe(true);
     }
   });

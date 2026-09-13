@@ -49,7 +49,7 @@ describe('the emitted payload script tree', () => {
 
   it.each(topLevelScripts)('%s keeps its shebang', (file) => {
     const source = readFileSync(join(EMITTED_SCRIPTS_DIR, file), 'utf8');
-    expect(source.startsWith('#!/usr/bin/env node')).toBe(true);
+    expect(source, `${file} shebang`).toMatch(/^#!\/usr\/bin\/env node/);
   });
 
   it.each(topLevelScripts)(

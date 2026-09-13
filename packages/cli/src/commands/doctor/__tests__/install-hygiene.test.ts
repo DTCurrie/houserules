@@ -73,8 +73,8 @@ describe('checkInstallHygiene', () => {
     const result = checkInstallHygiene(root, ctx);
 
     expect(
-      result.readouts.some((readout) => readout.includes('without the')),
-    ).toBe(false);
+      result.readouts.filter((readout) => readout.includes('without the')),
+    ).toEqual([]);
   });
 
   it('warns once about a hook command referencing a missing slashed script path', () => {
@@ -129,7 +129,7 @@ describe('checkInstallHygiene', () => {
         msg: '.claude/settings.json contains a value shaped like a ghp_ secret — remove it and rotate the credential',
       },
     ]);
-    expect(result.findings.every((f) => !f.msg.includes(secret))).toBe(true);
+    expect(result.findings.filter((f) => f.msg.includes(secret))).toEqual([]);
   });
 
   it('reports zero findings for a clean installed shape', () => {

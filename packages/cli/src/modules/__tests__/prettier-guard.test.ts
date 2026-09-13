@@ -29,7 +29,7 @@ describe('the .prettierignore block against the enabled module set', () => {
   }
 
   it('plans the block with lint-fix disabled, since a prettier repo with no fix script still needs it', () => {
-    expect(plansTheBlock(['core'])).toBe(true);
+    expect(plansTheBlock(['core']), '.prettierignore block planned').toBe(true);
   });
 
   it('plans the block exactly once when lint-fix is also enabled', () => {
@@ -81,6 +81,7 @@ describe('prettierGuardActions, .prettierignore protection', () => {
 
     expect(
       actions.some((a) => a.kind === 'region' && a.dest === '.prettierignore'),
+      'no .prettierignore action planned',
     ).toBe(false);
   });
 
@@ -147,7 +148,9 @@ describe('prettierGuardActions, eslint flat config advisory', () => {
 
     const actions = prettierGuardActions(ctx, []);
 
-    expect(adviseTexts(actions).some((t) => t.includes('eslint'))).toBe(false);
+    expect(adviseTexts(actions).filter((t) => t.includes('eslint'))).toEqual(
+      [],
+    );
   });
 });
 
@@ -163,7 +166,10 @@ describe('the .prettierignore block against a real prettier run', () => {
 
   it('leaves every protected subtree byte-for-byte unchanged after `prettier --write .`', () => {
     const root = useInstalledRepo('npm-single-prettier');
-    expect(existsSync(join(root, '.prettierignore'))).toBe(true);
+    expect(
+      existsSync(join(root, '.prettierignore')),
+      '.prettierignore installed',
+    ).toBe(true);
     const present = PROTECTED_SUBTREES.filter((dir) =>
       existsSync(join(root, dir)),
     );

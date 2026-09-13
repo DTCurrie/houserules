@@ -195,14 +195,12 @@ describe('fieldsFor decisions', () => {
       name: 'Area',
       dataType: 'TEXT',
     });
-    expect(fieldsFor('decisions').some((f) => f.name === 'Surface')).toBe(
-      false,
-    );
+    expect(fieldsFor('decisions').map((f) => f.name)).not.toContain('Surface');
   });
 
   it('carries no iteration field', () => {
-    expect(fieldsFor('decisions').some((f) => f.dataType === 'ITERATION')).toBe(
-      false,
+    expect(fieldsFor('decisions').map((f) => f.dataType)).not.toContain(
+      'ITERATION',
     );
   });
 });

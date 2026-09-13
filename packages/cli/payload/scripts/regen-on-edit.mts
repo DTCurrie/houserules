@@ -14,8 +14,10 @@
 
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
-import { loadConfigSafe } from '@houserules/payload/config';
+import { loadConfigSafe, type ConfigTarget } from '@houserules/payload/config';
 import {
   globToRe,
   readStdinJson,
@@ -27,21 +29,16 @@ interface RegenPayload {
   tool_input?: { file_path?: string; path?: string };
 }
 
-const input = readStdinJson<RegenPayload>();
-
-const ti = input?.tool_input ?? {};
-const filePath = ti.file_path ?? ti.path ?? '';
-if (!filePath) process.exit(0);
-
-try {
-  const root = repoRoot();
-  const config = loadConfigSafe(root);
-  const abs = resolve(root, filePath);
-  const rel = abs.startsWith(root) ? abs.slice(root.length + 1) : filePath;
-
-  // Collect the distinct generator commands whose sourceGlob the edit matches.
+/**
+ * The distinct generator commands to run for an edit to `rel`, one per target whose
+ * `regen.sourceGlob` matches, in target order, each command listed once.
+ */
+export function regenCommandsFor(
+  rel: string,
+  targets: ConfigTarget[],
+): string[] {
   const commands: string[] = [];
-  for (const t of config.targets ?? []) {
+  for (const t of targets) {
     const regen = t.regen;
     if (!regen?.sourceGlob || !regen?.command) continue;
     if (
@@ -50,32 +47,64 @@ try {
     )
       commands.push(regen.command);
   }
-  if (!commands.length) process.exit(0);
+  return commands;
+}
 
-  const failures: { command: string; output: string }[] = [];
-  for (const command of commands) {
-    const r = spawnSync(command, {
-      cwd: root,
-      shell: true,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    if (r.status !== 0)
-      failures.push({ command, output: (r.stdout || '') + (r.stderr || '') });
-  }
+function runCommand(
+  command: string,
+  cwd: string,
+): { ok: boolean; output: string } {
+  const r = spawnSync(command, {
+    cwd,
+    shell: true,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return { ok: r.status === 0, output: (r.stdout || '') + (r.stderr || '') };
+}
 
-  if (failures.length) {
-    process.stderr.write(
-      'houserules regen: a generator failed after your edit — fix the source, then it will re-run.\n',
-    );
-    for (const f of failures) {
-      process.stderr.write(`\n--- ${f.command} ---\n`);
-      process.stderr.write(`${tail(f.output, 40)}\n`);
+function main(): void {
+  const input = readStdinJson<RegenPayload>();
+
+  const ti = input?.tool_input ?? {};
+  const filePath = ti.file_path ?? ti.path ?? '';
+  if (!filePath) process.exit(0);
+
+  try {
+    const root = repoRoot();
+    const config = loadConfigSafe(root);
+    const abs = resolve(root, filePath);
+    const rel = abs.startsWith(root) ? abs.slice(root.length + 1) : filePath;
+
+    const commands = regenCommandsFor(rel, config.targets ?? []);
+    if (!commands.length) process.exit(0);
+
+    const failures: { command: string; output: string }[] = [];
+    for (const command of commands) {
+      const r = runCommand(command, root);
+      if (!r.ok) failures.push({ command, output: r.output });
     }
-    process.exit(2);
+
+    if (failures.length) {
+      process.stderr.write(
+        'houserules regen: a generator failed after your edit — fix the source, then it will re-run.\n',
+      );
+      for (const f of failures) {
+        process.stderr.write(`\n--- ${f.command} ---\n`);
+        process.stderr.write(`${tail(f.output, 40)}\n`);
+      }
+      process.exit(2);
+    }
+  } catch {
+    process.exit(0);
   }
-} catch {
+
   process.exit(0);
 }
 
-process.exit(0);
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+) {
+  main();
+}

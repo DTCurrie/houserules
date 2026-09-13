@@ -52,9 +52,10 @@ describe('design-tailwind check', () => {
     const result = moduleDef.check?.(ctxAt(root));
 
     expect(result?.findings).toHaveLength(2);
-    expect(result?.findings.every((finding) => finding.level === 'WARN')).toBe(
-      true,
-    );
+    expect(result?.findings.map((finding) => finding.level)).toEqual([
+      'WARN',
+      'WARN',
+    ]);
     expect(result?.readouts).toEqual([]);
   });
 });

@@ -125,9 +125,9 @@ describe('mergeSettings', () => {
 
     it('does not record a change for a script the user already has', () => {
       const { changes } = mergeSettings(editedExisting, KIT_FRAGMENT);
-      expect(changes.some((c) => c.detail.includes('lint-format-fix'))).toBe(
-        false,
-      );
+      expect(
+        changes.filter((c) => c.detail.includes('lint-format-fix')),
+      ).toEqual([]);
     });
   });
 
@@ -192,7 +192,10 @@ describe('mergeSettings', () => {
 
     it('records a change noting the upgrade', () => {
       const { changes } = mergeSettings(unedited, GUARDED_FRAGMENT);
-      expect(changes.some((c) => c.detail.includes('upgraded'))).toBe(true);
+      expect(
+        changes.filter((c) => c.detail.includes('upgraded')),
+        'upgrade change recorded',
+      ).not.toEqual([]);
     });
 
     it('is a no-op when the command is already guarded', () => {
@@ -213,7 +216,9 @@ describe('mergeSettings', () => {
 
     it('does not record a change when leaving a user edit untouched', () => {
       const { changes } = mergeSettings(edited, GUARDED_FRAGMENT);
-      expect(changes.some((c) => c.detail.includes('guard-bash'))).toBe(false);
+      expect(changes.filter((c) => c.detail.includes('guard-bash'))).toEqual(
+        [],
+      );
     });
 
     it('never disturbs an unrelated hook in the same matcher group during an upgrade', () => {

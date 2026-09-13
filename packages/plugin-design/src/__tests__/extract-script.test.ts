@@ -24,18 +24,36 @@ describe('design.mjs extract', () => {
   it('installs every lib the script imports, since a missing one fails at runtime with ERR_MODULE_NOT_FOUND', () => {
     const root = installed();
 
+    const dtcgNormalizePath = join(
+      root,
+      '.claude/scripts/lib/dtcg-normalize.mjs',
+    );
+    const tailwindThemePath = join(
+      root,
+      '.claude/scripts/lib/tailwind-theme.mjs',
+    );
+    const cssCustomPropertiesPath = join(
+      root,
+      '.claude/scripts/lib/css-custom-properties.mjs',
+    );
+    const styleLiteralsPath = join(
+      root,
+      '.claude/scripts/lib/style-literals.mjs',
+    );
+
+    expect(existsSync(dtcgNormalizePath), `${dtcgNormalizePath} exists`).toBe(
+      true,
+    );
+    expect(existsSync(tailwindThemePath), `${tailwindThemePath} exists`).toBe(
+      true,
+    );
     expect(
-      existsSync(join(root, '.claude/scripts/lib/dtcg-normalize.mjs')),
+      existsSync(cssCustomPropertiesPath),
+      `${cssCustomPropertiesPath} exists`,
     ).toBe(true);
-    expect(
-      existsSync(join(root, '.claude/scripts/lib/tailwind-theme.mjs')),
-    ).toBe(true);
-    expect(
-      existsSync(join(root, '.claude/scripts/lib/css-custom-properties.mjs')),
-    ).toBe(true);
-    expect(
-      existsSync(join(root, '.claude/scripts/lib/style-literals.mjs')),
-    ).toBe(true);
+    expect(existsSync(styleLiteralsPath), `${styleLiteralsPath} exists`).toBe(
+      true,
+    );
   });
 
   it('emits DTCG values from a @theme block on stdout', () => {

@@ -42,9 +42,10 @@ describe('checkTailwindAvailable', () => {
     const result = checkTailwindAvailable(ctxAt(root));
 
     expect(result.findings).toHaveLength(2);
-    expect(result.findings.every((finding) => finding.level === 'WARN')).toBe(
-      true,
-    );
+    expect(result.findings.map((finding) => finding.level)).toEqual([
+      'WARN',
+      'WARN',
+    ]);
     expect(result.findings[0]?.msg).toContain('npm install -D tailwindcss@^4');
     expect(result.findings[1]?.msg).toContain(
       'npm install -D @tailwindcss/vite@^4',

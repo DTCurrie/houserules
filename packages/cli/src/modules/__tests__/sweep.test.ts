@@ -8,7 +8,10 @@ import { runCli } from '#test/run';
 describe('sweep', () => {
   it('is off by default', () => {
     const root = useInstalledRepo('pnpm-monorepo');
-    expect(existsSync(join(root, '.claude/skills/sweep/SKILL.md'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/skills/sweep/SKILL.md')),
+      'sweep skill not installed',
+    ).toBe(false);
   });
 
   describe('when enabled', () => {

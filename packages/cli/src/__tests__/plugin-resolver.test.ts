@@ -398,8 +398,8 @@ describe('buildRegistry', () => {
     );
 
     expect(derived?.src).toBe(payloadLibPath('backlog-id.mjs'));
-    expect(derived?.src.endsWith('.mjs')).toBe(true);
-    expect(existsSync(derived!.src)).toBe(true);
+    expect(derived?.src.slice(-4)).toBe('.mjs');
+    expect(existsSync(derived!.src), 'lib source file exists').toBe(true);
   });
 
   it('names the plugin and its sidecar when it imports a lib the CLI payload does not ship', () => {
