@@ -213,15 +213,21 @@ describe('detect', () => {
     });
 
     it('detects TypeScript, monorepo shape, and strict catalog mode', () => {
-      expect(ctx.typescript).toBe(true);
-      expect(ctx.isMonorepo).toBe(true);
-      expect(ctx.pnpmCatalogModeStrict).toBe(true);
+      expect(ctx.typescript, 'detects TypeScript').toBe(true);
+      expect(ctx.isMonorepo, 'detects monorepo shape').toBe(true);
+      expect(ctx.pnpmCatalogModeStrict, 'detects strict catalog mode').toBe(
+        true,
+      );
     });
 
     it('counts pending changesets, excluding README.md', () => {
-      expect(ctx.changesets.configExists).toBe(true);
+      expect(ctx.changesets.configExists, 'changesets config exists').toBe(
+        true,
+      );
       expect(ctx.changesets.pendingCount).toBe(2);
-      expect(ctx.changesets.devDep).toBe(false);
+      expect(ctx.changesets.devDep, 'changesets is not a devDependency').toBe(
+        false,
+      );
     });
 
     it('resolves the changesets invocation as a root script with its base branch', () => {
@@ -231,9 +237,11 @@ describe('detect', () => {
     });
 
     it('reflects existing claude state: settings.local present, settings and CLAUDE.md absent', () => {
-      expect(ctx.claude.settingsLocalExists).toBe(true);
-      expect(ctx.claude.settingsExists).toBe(false);
-      expect(ctx.claude.claudeMdExists).toBe(false);
+      expect(ctx.claude.settingsLocalExists, 'settings.local exists').toBe(
+        true,
+      );
+      expect(ctx.claude.settingsExists, 'settings.json absent').toBe(false);
+      expect(ctx.claude.claudeMdExists, 'CLAUDE.md absent').toBe(false);
     });
   });
 
@@ -247,7 +255,7 @@ describe('detect', () => {
 
     it('resolves npm as the package manager and treats the repo as a single package', () => {
       expect(ctx.packageManager!.name).toBe('npm');
-      expect(ctx.isMonorepo).toBe(false);
+      expect(ctx.isMonorepo, 'treats the repo as a single package').toBe(false);
       expect(ctx.targets.length).toBe(1);
     });
 
@@ -260,13 +268,13 @@ describe('detect', () => {
     });
 
     it('reports no TypeScript and no changesets config', () => {
-      expect(ctx.typescript).toBe(false);
-      expect(ctx.changesets.configExists).toBe(false);
+      expect(ctx.typescript, 'no TypeScript detected').toBe(false);
+      expect(ctx.changesets.configExists, 'no changesets config').toBe(false);
       expect(ctx.changesets.invocation).toBe('absent');
     });
 
     it('detects the pre-existing CLAUDE.md', () => {
-      expect(ctx.claude.claudeMdExists).toBe(true);
+      expect(ctx.claude.claudeMdExists, 'CLAUDE.md exists').toBe(true);
     });
   });
 
@@ -274,7 +282,7 @@ describe('detect', () => {
     const root = useRepo('pnpm-single');
     const ctx = detect(root);
     expect(ctx.packageManager!.name).toBe('pnpm');
-    expect(ctx.isMonorepo).toBe(false);
+    expect(ctx.isMonorepo, 'treats the repo as a single package').toBe(false);
     expect(ctx.targets.length).toBe(1);
     const target = ctx.targets[0];
     if (!target) throw new Error('expected a target');
@@ -298,13 +306,13 @@ describe('detect', () => {
     expect(ctx.packageManager).toBe(null);
     expect(ctx.targets).toEqual([]);
     expect(ctx.changesets.invocation).toBe('absent');
-    expect(ctx.git.isRepo).toBe(true);
+    expect(ctx.git.isRepo, 'detects a git repo').toBe(true);
   });
 
   it('reaches targets end to end through a flow-sequence workspace glob, a ** glob, and a negation', () => {
     const root = useRepo('pnpm-flow-monorepo');
     const ctx = detect(root);
-    expect(ctx.isMonorepo).toBe(true);
+    expect(ctx.isMonorepo, 'detects monorepo shape').toBe(true);
     expect(ctx.packages.map((p) => p.name).sort()).toEqual([
       '@flow/nested',
       '@flow/plain',
@@ -313,38 +321,36 @@ describe('detect', () => {
     const nested = ctx.targets.find((t) => t.packageName === '@flow/nested')!;
     expect(nested.pathPrefix).toBe('libs/group/nested/');
     expect(nested.sourcePath).toBe('libs/group/nested/src');
-    expect(ctx.targets.some((t) => t.packageName === '@flow/legacy')).toBe(
-      false,
-    );
+    expect(ctx.targets.map((t) => t.packageName)).not.toContain('@flow/legacy');
   });
 });
 
 describe('detect, ctx.prettier', () => {
   it('is true when prettier is a devDependency', () => {
     const root = useRepo('npm-single-prettier');
-    expect(detect(root).prettier).toBe(true);
+    expect(detect(root).prettier, 'prettier detected').toBe(true);
   });
 
   it('is true when a prettier config file exists with no dependency', () => {
     const root = useRepo('npm-single');
     writeFileSync(join(root, '.prettierrc.json'), '{}\n');
-    expect(detect(root).prettier).toBe(true);
+    expect(detect(root).prettier, 'prettier detected').toBe(true);
   });
 
   it('is true when a .prettierignore already exists with no dependency', () => {
     const root = useRepo('npm-single');
     writeFileSync(join(root, '.prettierignore'), 'dist/\n');
-    expect(detect(root).prettier).toBe(true);
+    expect(detect(root).prettier, 'prettier detected').toBe(true);
   });
 
   it('is false for a repo with neither a dependency nor a config file', () => {
     const root = useRepo('npm-single');
-    expect(detect(root).prettier).toBe(false);
+    expect(detect(root).prettier, 'prettier not detected').toBe(false);
   });
 
   it('is false for a bare repo with no package.json', () => {
     const root = useRepo('non-js');
-    expect(detect(root).prettier).toBe(false);
+    expect(detect(root).prettier, 'prettier not detected').toBe(false);
   });
 });
 
@@ -364,7 +370,7 @@ describe('trackedScriptFiles and untrackFromIndex', () => {
     const root = useRepo('committed-scripts');
     const tracked = trackedScriptFiles(root);
 
-    expect(untrackFromIndex(root, tracked)).toBe(true);
+    expect(untrackFromIndex(root, tracked), 'untracking succeeded').toBe(true);
 
     expect(trackedScriptFiles(root)).toEqual([]);
     expect(

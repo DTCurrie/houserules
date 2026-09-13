@@ -12,9 +12,9 @@ describe('backlog', () => {
   it('is absent from a default install', () => {
     const root = useInstalledRepo('pnpm-monorepo');
 
-    expect(existsSync(join(root, '.claude/scripts/backlog-log.mjs'))).toBe(
-      false,
-    );
+    const scriptPath = join(root, '.claude/scripts/backlog-log.mjs');
+
+    expect(existsSync(scriptPath), `${scriptPath} absent`).toBe(false);
   });
 
   describe('when enabled', () => {
@@ -28,21 +28,22 @@ describe('backlog', () => {
     });
 
     it('installs the backlog-log script', () => {
-      expect(existsSync(join(root, '.claude/scripts/backlog-log.mjs'))).toBe(
-        true,
-      );
+      const scriptPath = join(root, '.claude/scripts/backlog-log.mjs');
+
+      expect(existsSync(scriptPath), `${scriptPath} exists`).toBe(true);
     });
 
     it('installs the backlog-add skill', () => {
       expect(
         existsSync(join(root, '.claude/skills/backlog-add/SKILL.md')),
+        '.claude/skills/backlog-add/SKILL.md exists',
       ).toBe(true);
     });
 
     it('installs the backlog-reviewer agent', () => {
-      expect(existsSync(join(root, '.claude/agents/backlog-reviewer.md'))).toBe(
-        true,
-      );
+      const agentPath = join(root, '.claude/agents/backlog-reviewer.md');
+
+      expect(existsSync(agentPath), `${agentPath} exists`).toBe(true);
     });
 
     it('grants the backlog-log script permission in settings', () => {
@@ -54,9 +55,9 @@ describe('backlog', () => {
     });
 
     it('does not install its own reviewer-gate script, since core now gates every subagent', () => {
-      expect(existsSync(join(root, '.claude/scripts/reviewer-gate.mjs'))).toBe(
-        false,
-      );
+      const scriptPath = join(root, '.claude/scripts/reviewer-gate.mjs');
+
+      expect(existsSync(scriptPath), `${scriptPath} absent`).toBe(false);
     });
 
     it('points CLAUDE.md at the backlog-add skill', () => {

@@ -30,7 +30,7 @@ describe('scanCandidates', () => {
 
     const result = await scanCandidates(root, filePath);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const candidate = result.value.find(
       (entry) => entry.candidate === 'bg-red-500',
@@ -48,7 +48,7 @@ describe('scanCandidates', () => {
 
     const result = await scanCandidates(root, filePath);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const candidate = result.value.find(
       (entry) => entry.candidate === 'bg-red-500',
@@ -66,7 +66,7 @@ describe('scanCandidates', () => {
 
     const result = await scanCandidates(root, filePath);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const candidate = result.value.find(
       (entry) => entry.candidate === 'bg-red-500',
@@ -79,7 +79,7 @@ describe('scanCandidates', () => {
 
     const result = await scanCandidates(root, join(root, 'does-not-exist.tsx'));
 
-    expect(result.ok).toBe(false);
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('does not exist');
   });
@@ -94,7 +94,7 @@ describe('scanCandidates', () => {
 
     const result = await scanCandidates(root, filePath);
 
-    expect(result.ok).toBe(false);
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('npm install -D @tailwindcss/oxide@4');
   });
@@ -118,7 +118,7 @@ describe('scanCandidates', () => {
 
     const result = await scanCandidates(root, filePath);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const found = result.value.map((entry) => entry.candidate);
     expect(found).toContain('text-red-500');
@@ -135,7 +135,7 @@ describe('scanCandidates', () => {
 
     const result = await scanCandidates(root, filePath);
 
-    expect(result.ok).toBe(false);
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
     if (result.ok) return;
     expect(result.error).toBe(
       `@tailwindcss/oxide is not installed in ${root}. Install it in that repo with \`npm install -D @tailwindcss/oxide@4\`.`,

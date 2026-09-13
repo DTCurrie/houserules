@@ -34,9 +34,9 @@ describe('statusline', () => {
     });
 
     it('installs the statusline script', () => {
-      expect(existsSync(join(root, '.claude/scripts/statusline.mjs'))).toBe(
-        true,
-      );
+      const scriptPath = join(root, '.claude/scripts/statusline.mjs');
+
+      expect(existsSync(scriptPath), `${scriptPath} exists`).toBe(true);
     });
 
     it('passes doctor', () => {

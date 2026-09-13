@@ -60,7 +60,7 @@ describe('design.mjs', () => {
     expect(result.status).toBe(0);
     const lines = result.stdout.trim().split('\n');
     expect(lines).toContain('color.brand.primary');
-    expect(lines.every((line) => line.startsWith('color.'))).toBe(true);
+    expect(lines.filter((line) => !line.startsWith('color.'))).toEqual([]);
   });
 
   it('prints the spacing, fontSize, and radius scales', () => {

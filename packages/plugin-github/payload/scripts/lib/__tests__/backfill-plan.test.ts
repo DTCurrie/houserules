@@ -260,15 +260,16 @@ describe('planBackfill', () => {
       },
     ]);
     expect(secondPlan.ops).toEqual([]);
-    expect(backfillIsNoop(secondPlan)).toBe(true);
+    expect(backfillIsNoop(secondPlan), 'the second plan is a noop').toBe(true);
   });
 });
 
 describe('backfillIsNoop', () => {
   it('is true for an empty ops list', () => {
-    expect(backfillIsNoop({ ops: [], unmatched: [], ambiguous: [] })).toBe(
-      true,
-    );
+    expect(
+      backfillIsNoop({ ops: [], unmatched: [], ambiguous: [] }),
+      'an empty ops list is a noop',
+    ).toBe(true);
   });
 
   it('is false when the plan carries at least one op', () => {
@@ -279,9 +280,10 @@ describe('backfillIsNoop', () => {
       body: 'body',
     };
 
-    expect(backfillIsNoop({ ops: [op], unmatched: [], ambiguous: [] })).toBe(
-      false,
-    );
+    expect(
+      backfillIsNoop({ ops: [op], unmatched: [], ambiguous: [] }),
+      'a plan with an op is a noop',
+    ).toBe(false);
   });
 });
 
@@ -387,7 +389,10 @@ describe('planBackfill over a projection of real board items', () => {
       },
     );
 
-    expect(backfillIsNoop(planFromItems(local, [item]))).toBe(true);
+    expect(
+      backfillIsNoop(planFromItems(local, [item])),
+      'the plan from a fully matching item is a noop',
+    ).toBe(true);
   });
 });
 

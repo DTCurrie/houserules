@@ -40,18 +40,21 @@ describe('chrome-devtools-mcp', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('design/chrome-devtools-mcp')).toBe(false);
-    expect(existsSync(join(root, '.claude/mcp'))).toBe(false);
+    const mcpDir = join(root, '.claude/mcp');
+    expect(manifest.modules).not.toContain('design/chrome-devtools-mcp');
+    expect(existsSync(mcpDir), `${mcpDir} absent`).toBe(false);
   });
 
   it('installs both configs and tracks them in the manifest when enabled', () => {
     const root = installedWith();
+    const stdio = stdioPath(root);
+    const vscode = vscodePath(root);
 
-    expect(existsSync(stdioPath(root))).toBe(true);
-    expect(existsSync(vscodePath(root))).toBe(true);
+    expect(existsSync(stdio), `${stdio} exists`).toBe(true);
+    expect(existsSync(vscode), `${vscode} exists`).toBe(true);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('design/chrome-devtools-mcp')).toBe(true);
+    expect(manifest.modules).toContain('design/chrome-devtools-mcp');
     expect(
       Object.keys(manifest.files).filter((dest) =>
         dest.startsWith('.claude/mcp/chrome-devtools.'),
@@ -77,36 +80,35 @@ describe('chrome-devtools-mcp', () => {
 
   it('installs the mode-switching skill and tracks it in the manifest', () => {
     const root = installedWith();
+    const skillPath = join(
+      root,
+      '.claude/skills/chrome-devtools-mode/SKILL.md',
+    );
 
-    expect(
-      existsSync(join(root, '.claude/skills/chrome-devtools-mode/SKILL.md')),
-    ).toBe(true);
-    expect(
-      Object.keys(manifestOf(root).files).includes(
-        '.claude/skills/chrome-devtools-mode/SKILL.md',
-      ),
-    ).toBe(true);
+    expect(existsSync(skillPath), `${skillPath} exists`).toBe(true);
+    expect(Object.keys(manifestOf(root).files)).toContain(
+      '.claude/skills/chrome-devtools-mode/SKILL.md',
+    );
   });
 
   it('installs the mode-switching skill for the slim variant too', () => {
     const root = installedWith(['slim']);
+    const skillPath = join(
+      root,
+      '.claude/skills/chrome-devtools-mode/SKILL.md',
+    );
 
-    expect(
-      existsSync(join(root, '.claude/skills/chrome-devtools-mode/SKILL.md')),
-    ).toBe(true);
+    expect(existsSync(skillPath), `${skillPath} exists`).toBe(true);
   });
 
   it('installs the mcp-config-check script and tracks it in the manifest', () => {
     const root = installedWith();
+    const scriptPath = join(root, '.claude/scripts/mcp-config-check.mjs');
 
-    expect(existsSync(join(root, '.claude/scripts/mcp-config-check.mjs'))).toBe(
-      true,
+    expect(existsSync(scriptPath), `${scriptPath} exists`).toBe(true);
+    expect(Object.keys(manifestOf(root).files)).toContain(
+      '.claude/scripts/mcp-config-check.mjs',
     );
-    expect(
-      Object.keys(manifestOf(root).files).includes(
-        '.claude/scripts/mcp-config-check.mjs',
-      ),
-    ).toBe(true);
   });
 
   it('installs the full stdio config with the expected command and args', () => {

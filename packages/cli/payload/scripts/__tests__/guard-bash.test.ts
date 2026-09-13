@@ -1,10 +1,18 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  type TranscriptRecord,
+  gitDenyRules,
+  guardRefusalFor,
+  isSidechainTurn,
+  writeGateRefusalFor,
+} from '../guard-bash.mjs';
+import { GUARD_DEFAULTS } from '@houserules/payload/config';
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { runScript } from '#test/run';
 
@@ -26,20 +34,12 @@ function withConfig(root: string, guard: Record<string, unknown>): void {
   );
 }
 
-function sidechainTurn() {
-  return {
-    type: 'assistant',
-    isSidechain: true,
-    message: { role: 'assistant', content: [] },
-  };
+function sidechainTurn(): TranscriptRecord {
+  return { type: 'assistant', isSidechain: true };
 }
 
-function mainTurn() {
-  return {
-    type: 'assistant',
-    isSidechain: false,
-    message: { role: 'assistant', content: [] },
-  };
+function mainTurn(): TranscriptRecord {
+  return { type: 'assistant', isSidechain: false };
 }
 
 function writeTranscript(records: unknown[]): string {
@@ -56,49 +56,166 @@ function writeGatePayload(command: string, transcriptPath?: string): string {
   });
 }
 
-describe('guard-bash', () => {
-  let root: string;
+describe('gitDenyRules', () => {
+  it('emits no rules when every default flag is off and there are no custom rules', () => {
+    const rules = gitDenyRules({
+      gitCommit: false,
+      gitPush: false,
+      gitStash: false,
+      prCreate: false,
+    });
+    expect(rules).toEqual([]);
+  });
 
-  beforeEach(() => {
-    root = useInstalledRepo('pnpm-monorepo');
+  it('emits exactly the four default rules when the defaults are all on', () => {
+    const rules = gitDenyRules(GUARD_DEFAULTS);
+    expect(rules).toHaveLength(4);
+  });
+
+  it('skips a custom rule with an invalid regex pattern instead of throwing', () => {
+    const rules = gitDenyRules({
+      gitCommit: false,
+      gitPush: false,
+      gitStash: false,
+      prCreate: false,
+      custom: [{ pattern: '(unclosed' }],
+    });
+    expect(rules).toEqual([]);
+  });
+
+  it('falls back to a generated message for a custom rule with no message', () => {
+    const rules = gitDenyRules({
+      gitCommit: false,
+      gitPush: false,
+      gitStash: false,
+      prCreate: false,
+      custom: [{ pattern: 'docker system prune' }],
+    });
+    expect(rules[0]?.msg).toBe(
+      'Blocked by houserules.config.json guard rule: docker system prune',
+    );
+  });
+});
+
+describe('guardRefusalFor', () => {
+  it.each([
+    'git commit -m x',
+    'git push origin main',
+    'git -C /x push',
+    'git stash',
+    'gh pr create --fill',
+    'git -C /repo commit -m x',
+    'git -c user.name=x commit -m y',
+    'git --no-pager commit',
+    'git -C /repo stash',
+    'git add -A && git commit -m x',
+    'make build; git commit -m done',
+  ])('refuses "%s" by default', (cmd) => {
+    expect(guardRefusalFor(cmd)).toMatch(/Blocked by houserules guard/);
   });
 
   it.each([
-    { cmd: 'git commit -m x' },
-    { cmd: 'git push origin main' },
-    { cmd: 'git -C /x push' },
-    { cmd: 'git stash' },
-    { cmd: 'gh pr create --fill' },
-    { cmd: 'git -C /repo commit -m x' },
-    { cmd: 'git -c user.name=x commit -m y' },
-    { cmd: 'git --no-pager commit' },
-    { cmd: 'git -C /repo stash' },
-    { cmd: 'git add -A && git commit -m x' },
-    { cmd: 'make build; git commit -m done' },
-  ])('blocks "$cmd" by default', ({ cmd }) => {
-    const r = runScript(root, SCRIPT, { input: payload(cmd) });
-    expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/Blocked by houserules guard/);
-  });
-
-  it.each([
-    { cmd: 'ls -la' },
-    { cmd: 'git status' },
-    { cmd: 'git log --oneline' },
-    { cmd: 'pnpm run build' },
-    { cmd: 'grep -rn "git commit" .' },
-    { cmd: 'echo "remember to git commit when done"' },
-    { cmd: 'node -e \'console.log("git stash")\'' },
-    { cmd: 'rg "git push" src/' },
-    { cmd: 'git log --grep "git commit"' },
+    'ls -la',
+    'git status',
+    'git log --oneline',
+    'pnpm run build',
+    'grep -rn "git commit" .',
+    'echo "remember to git commit when done"',
+    'node -e \'console.log("git stash")\'',
+    'rg "git push" src/',
+    'git log --grep "git commit"',
   ])(
-    'allows "$cmd" by default, since flags and quoted arguments must not be mistaken for the guarded subcommand',
-    ({ cmd }) => {
-      const r = runScript(root, SCRIPT, { input: payload(cmd) });
-      expect(r.status, r.stderr).toBe(0);
+    'returns null for "%s", since flags and quoted arguments must not be mistaken for the guarded subcommand',
+    (cmd) => {
+      expect(guardRefusalFor(cmd)).toBeNull();
     },
   );
+});
 
+describe('writeGateRefusalFor', () => {
+  it.each([
+    'node .claude/scripts/backlog-log.mjs add API area "title"',
+    'node .claude/scripts/backlog-log.mjs remove abc123 API "dup"',
+    'node .claude/scripts/backlog-log.mjs update abc123 API "new title"',
+    'node .claude/scripts/backlog-log.mjs move abc123 CLI',
+    'node .claude/scripts/backlog-log.mjs render',
+    'node .claude/scripts/decision-log.mjs decide "use zod"',
+    'node .claude/scripts/decision-log.mjs supersede abc123 "why"',
+    'node .claude/scripts/decision-log.mjs amend abc123 "why"',
+    'node .claude/scripts/decision-log.mjs move abc123 CLI',
+    'node .claude/scripts/decision-log.mjs rescope abc123 CLI',
+    'node .claude/scripts/decision-log.mjs render',
+    'node .claude/scripts/changeset-write.mjs --pkg foo --summary "x"',
+    'node .claude/scripts/changeset-write.mjs --empty --summary "x"',
+    'tee .claude/ledgers/BACKLOG.md < /dev/null',
+    'tee .claude/ledgers/DECISIONS.md < /dev/null',
+    "sed -i '' 's/x/y/' .claude/ledgers/BACKLOG.md",
+    'echo "manual edit" >> .claude/ledgers/BACKLOG.md',
+    'echo "fake" > .claude/ledgers/backlog.jsonl',
+    'echo "fake" > .claude/ledgers/decisions.jsonl',
+    'cat notes.txt | tee .claude/ledgers/BACKLOG.md',
+    'echo "1.0.0" > .changeset/my-change.md',
+    'rm .changeset/config.json && echo "{}" > .changeset/config.json',
+  ])('returns a refusal for "%s"', (cmd) => {
+    expect(writeGateRefusalFor(cmd)).toMatch(
+      /Blocked by houserules subagent write gate/,
+    );
+  });
+
+  it.each([
+    'node .claude/scripts/backlog-log.mjs list',
+    'node .claude/scripts/backlog-log.mjs show abc123',
+    'node .claude/scripts/decision-log.mjs list',
+    'node .claude/scripts/decision-log.mjs show abc123',
+    'node .claude/scripts/decision-log.mjs ancestry abc123',
+    'node .claude/scripts/decision-log.mjs current CLI',
+    'cat .claude/ledgers/BACKLOG.md',
+    'grep -rn "duplicate" .claude/ledgers/backlog.jsonl',
+    'git status',
+    'git diff --stat -- .claude/ledgers/',
+    'ls -la .claude/ledgers/',
+    'grep -n "tee" .claude/ledgers/BACKLOG.md',
+    'grep -n "sed -i" .claude/ledgers/DECISIONS.md',
+    'echo "remember: never run backlog-log.mjs add"',
+    'node -e \'console.log("would run changeset-write.mjs")\'',
+    'node .claude/scripts/backlog-log.mjs --help',
+    'cat .changeset/config.json',
+    'pnpm test',
+  ])('returns null for "%s", since it does not write', (cmd) => {
+    expect(writeGateRefusalFor(cmd)).toBeNull();
+  });
+});
+
+describe('isSidechainTurn', () => {
+  it('returns true when the trailing assistant turn is a sidechain', () => {
+    expect(
+      isSidechainTurn([mainTurn(), sidechainTurn()]),
+      'trailing sidechain turn detected',
+    ).toBe(true);
+  });
+
+  it('returns false when the trailing assistant turn is the main thread', () => {
+    expect(
+      isSidechainTurn([sidechainTurn(), mainTurn()]),
+      'trailing main-thread turn is not a sidechain',
+    ).toBe(false);
+  });
+
+  it('returns false when there is no assistant turn at all', () => {
+    expect(
+      isSidechainTurn([{ type: 'user' }]),
+      'no assistant turn is not a sidechain',
+    ).toBe(false);
+  });
+
+  it('returns false for an empty transcript', () => {
+    expect(isSidechainTurn([]), 'empty transcript is not a sidechain').toBe(
+      false,
+    );
+  });
+});
+
+describe('guard-bash.mjs', () => {
   it('blocks by default even without a houserules.config.json, since the payload script falls back to hardcoded defaults', () => {
     const bare = useRepo('non-js');
     const r = spawnSync(
@@ -114,6 +231,7 @@ describe('guard-bash', () => {
   });
 
   it('allows a rule that config disables, while leaving the other defaults on', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     withConfig(root, { gitStash: false });
     expect(
       runScript(root, SCRIPT, { input: payload('git stash') }).status,
@@ -124,6 +242,7 @@ describe('guard-bash', () => {
   });
 
   it('blocks a command matching a custom rule and reports its message', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     withConfig(root, {
       custom: [
         { pattern: '\\bdocker\\s+system\\s+prune\\b', message: 'ask first' },
@@ -136,95 +255,36 @@ describe('guard-bash', () => {
     expect(r.stderr).toMatch(/ask first/);
   });
 
-  it('allows Bash to proceed when a custom rule has an invalid regex', () => {
-    withConfig(root, { custom: [{ pattern: '(unclosed' }] });
-    expect(runScript(root, SCRIPT, { input: payload('ls') }).status).toBe(0);
-  });
-
   it('allows Bash to proceed on stdin that is not valid JSON', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     expect(runScript(root, SCRIPT, { input: 'not json at all' }).status).toBe(
       0,
     );
   });
-});
 
-describe('subagent-write-gate', () => {
-  let root: string;
-
-  beforeEach(() => {
-    root = useInstalledRepo('pnpm-monorepo');
+  it('allows Bash to proceed when tool_input has no command', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    expect(runScript(root, SCRIPT, { input: JSON.stringify({}) }).status).toBe(
+      0,
+    );
   });
 
-  it.each([
-    { cmd: 'node .claude/scripts/backlog-log.mjs add API area "title"' },
-    { cmd: 'node .claude/scripts/backlog-log.mjs remove abc123 API "dup"' },
-    {
-      cmd: 'node .claude/scripts/backlog-log.mjs update abc123 API "new title"',
-    },
-    { cmd: 'node .claude/scripts/backlog-log.mjs move abc123 CLI' },
-    { cmd: 'node .claude/scripts/backlog-log.mjs render' },
-    { cmd: 'node .claude/scripts/decision-log.mjs decide "use zod"' },
-    { cmd: 'node .claude/scripts/decision-log.mjs supersede abc123 "why"' },
-    { cmd: 'node .claude/scripts/decision-log.mjs amend abc123 "why"' },
-    { cmd: 'node .claude/scripts/decision-log.mjs move abc123 CLI' },
-    { cmd: 'node .claude/scripts/decision-log.mjs rescope abc123 CLI' },
-    { cmd: 'node .claude/scripts/decision-log.mjs render' },
-    {
-      cmd: 'node .claude/scripts/changeset-write.mjs --pkg foo --summary "x"',
-    },
-    { cmd: 'node .claude/scripts/changeset-write.mjs --empty --summary "x"' },
-    { cmd: 'tee .claude/ledgers/BACKLOG.md < /dev/null' },
-    { cmd: 'tee .claude/ledgers/DECISIONS.md < /dev/null' },
-    { cmd: "sed -i '' 's/x/y/' .claude/ledgers/BACKLOG.md" },
-    { cmd: 'echo "manual edit" >> .claude/ledgers/BACKLOG.md' },
-    { cmd: 'echo "fake" > .claude/ledgers/backlog.jsonl' },
-    { cmd: 'echo "fake" > .claude/ledgers/decisions.jsonl' },
-    { cmd: 'cat notes.txt | tee .claude/ledgers/BACKLOG.md' },
-    { cmd: 'echo "1.0.0" > .changeset/my-change.md' },
-    { cmd: 'rm .changeset/config.json && echo "{}" > .changeset/config.json' },
-  ])('refuses "$cmd" from a subagent turn', ({ cmd }) => {
+  it('refuses a ledger write from a subagent turn, reading the sidechain flag from the transcript path', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     const transcript = writeTranscript([sidechainTurn()]);
 
     const r = runScript(root, SCRIPT, {
-      input: writeGatePayload(cmd, transcript),
+      input: writeGatePayload(
+        'node .claude/scripts/backlog-log.mjs add API area "title"',
+        transcript,
+      ),
     });
 
     expect(r.status).toBe(2);
   });
 
-  it.each([
-    { cmd: 'node .claude/scripts/backlog-log.mjs list' },
-    { cmd: 'node .claude/scripts/backlog-log.mjs show abc123' },
-    { cmd: 'node .claude/scripts/decision-log.mjs list' },
-    { cmd: 'node .claude/scripts/decision-log.mjs show abc123' },
-    { cmd: 'node .claude/scripts/decision-log.mjs ancestry abc123' },
-    { cmd: 'node .claude/scripts/decision-log.mjs current CLI' },
-    { cmd: 'cat .claude/ledgers/BACKLOG.md' },
-    { cmd: 'grep -rn "duplicate" .claude/ledgers/backlog.jsonl' },
-    { cmd: 'git status' },
-    { cmd: 'git diff --stat -- .claude/ledgers/' },
-    { cmd: 'ls -la .claude/ledgers/' },
-    { cmd: 'grep -n "tee" .claude/ledgers/BACKLOG.md' },
-    { cmd: 'grep -n "sed -i" .claude/ledgers/DECISIONS.md' },
-    { cmd: 'echo "remember: never run backlog-log.mjs add"' },
-    { cmd: 'node -e \'console.log("would run changeset-write.mjs")\'' },
-    { cmd: 'node .claude/scripts/backlog-log.mjs --help' },
-    { cmd: 'cat .changeset/config.json' },
-    { cmd: 'pnpm test' },
-  ])(
-    'allows "$cmd" from a subagent turn, since it does not write',
-    ({ cmd }) => {
-      const transcript = writeTranscript([sidechainTurn()]);
-
-      const r = runScript(root, SCRIPT, {
-        input: writeGatePayload(cmd, transcript),
-      });
-
-      expect(r.status, r.stderr).toBe(0);
-    },
-  );
-
   it('allows a ledger write outside any subagent turn, since the main thread is not gated', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     const transcript = writeTranscript([mainTurn()]);
 
     const r = runScript(root, SCRIPT, {
@@ -238,6 +298,7 @@ describe('subagent-write-gate', () => {
   });
 
   it('allows a ledger write when there is no transcript at all', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     const r = runScript(root, SCRIPT, {
       input: writeGatePayload(
         'node .claude/scripts/changeset-write.mjs --empty --summary "x"',
@@ -247,19 +308,8 @@ describe('subagent-write-gate', () => {
     expect(r.status, r.stderr).toBe(0);
   });
 
-  it('allows Bash to proceed when tool_input has no command', () => {
-    expect(runScript(root, SCRIPT, { input: JSON.stringify({}) }).status).toBe(
-      0,
-    );
-  });
-
-  it('allows Bash to proceed on stdin that is not valid JSON', () => {
-    expect(runScript(root, SCRIPT, { input: 'not json at all' }).status).toBe(
-      0,
-    );
-  });
-
   it('allows Bash to proceed when transcript_path does not exist', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     const r = runScript(root, SCRIPT, {
       input: writeGatePayload(
         'node .claude/scripts/backlog-log.mjs add API area "title"',
@@ -271,6 +321,7 @@ describe('subagent-write-gate', () => {
   });
 
   it('allows Bash to proceed when the transcript file is not valid JSONL', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     const dir = mkdtempSync(join(tmpdir(), 'subagent-write-gate-'));
     const path = join(dir, 'transcript.jsonl');
     writeFileSync(path, 'not json\nnot json either\n');
@@ -284,16 +335,9 @@ describe('subagent-write-gate', () => {
 
     expect(r.status, r.stderr).toBe(0);
   });
-});
 
-describe('subagent-write-gate --diagnose', () => {
-  let root: string;
-
-  beforeEach(() => {
-    root = useInstalledRepo('pnpm-monorepo');
-  });
-
-  it('exits 0 and reports a sidechain when the trailing assistant turn is one', () => {
+  it('exits 0 and reports a sidechain when the trailing assistant turn is one, for --diagnose', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     const transcript = writeTranscript([sidechainTurn()]);
 
     const r = runScript(root, SCRIPT, { args: ['--diagnose', transcript] });
@@ -302,7 +346,8 @@ describe('subagent-write-gate --diagnose', () => {
     expect(JSON.parse(r.stdout)).toMatchObject({ sidechainDetected: true });
   });
 
-  it('exits 1 and reports no sidechain, distinguishing a silent no-op from an enforced allow', () => {
+  it('exits 1 and reports no sidechain for --diagnose, distinguishing a silent no-op from an enforced allow', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     const transcript = writeTranscript([mainTurn()]);
 
     const r = runScript(root, SCRIPT, { args: ['--diagnose', transcript] });
@@ -311,7 +356,8 @@ describe('subagent-write-gate --diagnose', () => {
     expect(JSON.parse(r.stdout)).toMatchObject({ sidechainDetected: false });
   });
 
-  it('exits 1 with an error when no transcript path is given', () => {
+  it('exits 1 with an error when --diagnose is given no transcript path', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
     const r = runScript(root, SCRIPT, { args: ['--diagnose'] });
 
     expect(r.status).toBe(1);

@@ -72,13 +72,13 @@ describe('grantsBash', () => {
   it('treats an absent tools line as granting Bash, since the agent inherits every tool', () => {
     const text = ['---', 'name: open-agent', '---', '', 'body'].join('\n');
 
-    expect(grantsBash(text)).toBe(true);
+    expect(grantsBash(text), 'grants Bash').toBe(true);
   });
 
   it('treats a wildcard as granting Bash', () => {
     const text = ['---', 'tools: *', '---', '', 'body'].join('\n');
 
-    expect(grantsBash(text)).toBe(true);
+    expect(grantsBash(text), 'grants Bash').toBe(true);
   });
 
   it('is false for a tools list that omits Bash', () => {
@@ -86,7 +86,7 @@ describe('grantsBash', () => {
       '\n',
     );
 
-    expect(grantsBash(text)).toBe(false);
+    expect(grantsBash(text), 'does not grant Bash').toBe(false);
   });
 });
 

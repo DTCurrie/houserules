@@ -100,7 +100,10 @@ describe('projects plugin', () => {
   it('defaults to disabled', () => {
     const [module] = plugin(buildApi());
 
-    expect(module?.defaultEnabled(CTX)).toBe(false);
+    expect(
+      module?.defaultEnabled(CTX),
+      'the projects module defaults enabled',
+    ).toBe(false);
   });
 
   it('plans the sync script, its ten libs, the hook, both skills, the adopt checker, and both settings fragments', () => {

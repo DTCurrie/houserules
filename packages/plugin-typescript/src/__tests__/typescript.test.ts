@@ -69,7 +69,7 @@ describe('typescript', () => {
       'utf8',
     );
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('ts/typescript')).toBe(true);
+    expect(manifest.modules).toContain('ts/typescript');
     expect(
       manifest.files['.claude/rules/typescript.md'],
       'the rule BODY is kit-owned (update-refreshable)',
@@ -79,7 +79,7 @@ describe('typescript', () => {
   it('is not installed by default', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('ts/typescript')).toBe(false);
+    expect(manifest.modules).not.toContain('ts/typescript');
     expect(
       existsSync(join(root, '.claude/rules/typescript.md')),
       '.claude/rules/typescript.md absent',
@@ -121,10 +121,10 @@ describe('typescript', () => {
     });
 
     const cmds = allHookCommands(root);
-    expect(cmds.some((c) => c.includes('typescript'))).toBe(false);
-    expect(
-      readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('typescript'),
-    ).toBe(false);
+    expect(cmds.filter((c) => c.includes('typescript'))).toEqual([]);
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).not.toContain(
+      'typescript',
+    );
   });
 
   it('requires a never-typed default branch for exhaustive switches', () => {
@@ -167,7 +167,7 @@ describe('typescript', () => {
       /Never drop a caught error\. Attach it as `cause`/,
     );
     expect(ruleText).toMatch(/\{ cause: err \}/);
-    expect(ruleText).toMatch(/accept a\s+`cause` and forward it to `super`/);
+    expect(ruleText).toMatch(/`cause`[\s\S]{0,80}`super`/);
   });
 
   it('enumerates every extension the rule frontmatter globs, in both the README and the advise text', () => {

@@ -25,10 +25,14 @@ function baseAnswers(overrides: Partial<Answers> = {}): Answers {
 describe('orchestrate', () => {
   it('is off by default', () => {
     const off = useInstalledRepo('pnpm-monorepo');
-    expect(existsSync(join(off, '.claude/skills/orchestrate/SKILL.md'))).toBe(
-      false,
-    );
-    expect(existsSync(join(off, '.claude/agents/task-worker.md'))).toBe(false);
+    expect(
+      existsSync(join(off, '.claude/skills/orchestrate/SKILL.md')),
+      'orchestrate skill not installed',
+    ).toBe(false);
+    expect(
+      existsSync(join(off, '.claude/agents/task-worker.md')),
+      'task-worker agent not installed',
+    ).toBe(false);
   });
 
   describe('enabled together with the plans module', () => {
@@ -73,7 +77,7 @@ describe('orchestrate', () => {
 
     it('records the module in the manifest', () => {
       const manifest = manifestOf(root);
-      expect(manifest.modules.includes('orchestrate')).toBe(true);
+      expect(manifest.modules).toContain('orchestrate');
     });
 
     it('adds the /orchestrate carve-out against implementation subagents to CLAUDE.md', () => {
@@ -96,11 +100,15 @@ describe('orchestrate', () => {
     it('still installs', () => {
       expect(
         existsSync(join(root, '.claude/skills/orchestrate/SKILL.md')),
+        'orchestrate skill installed',
       ).toBe(true);
     });
 
     it('does not create a plans workspace', () => {
-      expect(existsSync(join(root, '.claude/plans/.gitignore'))).toBe(false);
+      expect(
+        existsSync(join(root, '.claude/plans/.gitignore')),
+        'no plans workspace created',
+      ).toBe(false);
     });
 
     it('points to the plans module in its advisory output', () => {
@@ -129,7 +137,8 @@ describe('renderTaskWorkerVariant', () => {
   });
 
   it('keeps the body byte-identical to the source body', () => {
-    expect(renderTaskWorkerVariant('low').endsWith(SOURCE_BODY)).toBe(true);
+    const rendered = renderTaskWorkerVariant('low');
+    expect(rendered.slice(-SOURCE_BODY.length)).toBe(SOURCE_BODY);
   });
 });
 
@@ -142,7 +151,7 @@ describe('orchestrate plan(), effort variant selection', () => {
       baseAnswers({ moduleOptions: { orchestrate: [] } }),
     );
 
-    expect(actions.some((a) => a.kind === 'write')).toBe(false);
+    expect(actions.filter((a) => a.kind === 'write')).toEqual([]);
   });
 
   it('emits a write action per selected effort', () => {

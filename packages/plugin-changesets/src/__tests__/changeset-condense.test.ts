@@ -26,10 +26,12 @@ describe('changeset-condense', () => {
   it('installs the skill and tracks it under the changesets module', () => {
     const root = installed();
 
-    expect(existsSync(join(root, SKILL_PATH))).toBe(true);
+    expect(existsSync(join(root, SKILL_PATH)), `${SKILL_PATH} exists`).toBe(
+      true,
+    );
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('cs/changesets')).toBe(true);
+    expect(manifest.modules).toContain('cs/changesets');
     expect(manifest.files[SKILL_PATH]).toBe(
       sha256(readFileSync(join(root, SKILL_PATH))),
     );
@@ -83,16 +85,14 @@ describe('changeset-condense', () => {
           group.hooks.map((hook: any) => hook.command),
         ),
     );
-    expect(commands.some((c: string) => c.includes('changeset-condense'))).toBe(
-      false,
-    );
     expect(
-      readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes(
-        'changeset-condense',
-      ),
+      commands.some((c: string) => c.includes('changeset-condense')),
+      `hook commands ${JSON.stringify(commands)} exclude changeset-condense`,
     ).toBe(false);
-    expect(existsSync(join(root, '.claude/rules/changeset-condense.md'))).toBe(
-      false,
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).not.toContain(
+      'changeset-condense',
     );
+    const rulePath = join(root, '.claude/rules/changeset-condense.md');
+    expect(existsSync(rulePath), `${rulePath} absent`).toBe(false);
   });
 });

@@ -12,6 +12,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  buildReviewContent,
+  defaultOutPath,
+  extractSliceTable,
+  findSliceRow,
+  parseFilesChanged,
+  parseRange,
+} from '../review-package.mjs';
 import { useRepo } from '#test/repo';
 import { runIn } from '#test/run';
 
@@ -49,6 +57,176 @@ function repoWithTwoFeatureCommits(): {
 
   return { root, baseTag: 'before-features', headBranch: 'topic/features' };
 }
+
+describe('parseRange', () => {
+  it('splits a range into its base and head refs', () => {
+    expect(parseRange('main..topic/features')).toEqual({
+      base: 'main',
+      head: 'topic/features',
+    });
+  });
+
+  it('returns null with no ".." separator', () => {
+    expect(parseRange('main'), 'no separator, no range').toBe(null);
+  });
+
+  it('returns null when the head side is empty', () => {
+    expect(parseRange('main..'), 'empty head, no range').toBe(null);
+  });
+
+  it('returns null when the base side is empty', () => {
+    expect(parseRange('..HEAD'), 'empty base, no range').toBe(null);
+  });
+});
+
+describe('defaultOutPath', () => {
+  it('joins the root, .claude/plans/, and the ref names with "/" replaced by "-"', () => {
+    expect(defaultOutPath('/repo', 'before-features', 'topic/features')).toBe(
+      '/repo/.claude/plans/review-package-before-features-topic-features.md',
+    );
+  });
+});
+
+describe('parseFilesChanged', () => {
+  it('reads the file count out of a "N files changed" stat summary', () => {
+    expect(parseFilesChanged(' 2 files changed, 4 insertions(+)')).toBe(2);
+  });
+
+  it('reads a singular "1 file changed" summary', () => {
+    expect(parseFilesChanged(' 1 file changed, 1 insertion(+)')).toBe(1);
+  });
+
+  it('returns 0 for a stat with no "files changed" line', () => {
+    expect(parseFilesChanged(''), 'no match, 0 files changed').toBe(0);
+  });
+});
+
+describe('buildReviewContent', () => {
+  it('renders the base/head/sha line and the three fenced sections', () => {
+    const content = buildReviewContent({
+      base: 'main',
+      head: 'topic',
+      baseSha: 'abc123',
+      headSha: 'def456',
+      log: 'def456 add feature',
+      stat: '1 file changed',
+      diff: '+export const x = 1;',
+      generated: '2026-09-13',
+    });
+
+    expect(content).toBe(
+      [
+        '# Review package: main..topic',
+        '',
+        'Base `main` resolved to `abc123`. Head `topic` resolved to `def456`. Generated 2026-09-13.',
+        '',
+        '## Commits',
+        '',
+        '```',
+        'def456 add feature',
+        '```',
+        '',
+        '## Stat',
+        '',
+        '```',
+        '1 file changed',
+        '```',
+        '',
+        '## Diff',
+        '',
+        '```',
+        '+export const x = 1;',
+        '```',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('widens the fence past a triple backtick already inside the diff', () => {
+    const content = buildReviewContent({
+      base: 'main',
+      head: 'topic',
+      baseSha: 'abc',
+      headSha: 'def',
+      log: '',
+      stat: '',
+      diff: '```ts\nconst x = 1;\n```',
+      generated: '2026-09-13',
+    });
+
+    expect(content).toContain('````\n```ts\nconst x = 1;\n```\n````');
+  });
+});
+
+describe('extractSliceTable', () => {
+  const PHASE_LINES = [
+    '# Phase 5',
+    '',
+    '## Slices',
+    '',
+    '| id  | owns              | depends | wave | status |',
+    '| --- | ----------------- | ------- | ---- | ------ |',
+    '| 5a  | `payload/a.mts`   | —       | 1    | TODO   |',
+    '| 5b  | `payload/b.mts`   | —       | 1    | TODO   |',
+    '',
+    '## Notes',
+    '',
+    'Not a slice table row.',
+    '',
+  ];
+
+  it('extracts the header, divider, and rows between "## Slices" and the next heading', () => {
+    expect(extractSliceTable(PHASE_LINES)).toEqual({
+      kind: 'ok',
+      header: '| id  | owns              | depends | wave | status |',
+      divider: '| --- | ----------------- | ------- | ---- | ------ |',
+      rows: [
+        '| 5a  | `payload/a.mts`   | —       | 1    | TODO   |',
+        '| 5b  | `payload/b.mts`   | —       | 1    | TODO   |',
+      ],
+    });
+  });
+
+  it('returns "no-section" when the file has no "## Slices" heading', () => {
+    expect(extractSliceTable(['# Phase 6', '', 'No slices here.'])).toEqual({
+      kind: 'no-section',
+    });
+  });
+
+  it('returns "no-table" when fewer than a header and a divider row are present', () => {
+    expect(extractSliceTable(['## Slices', '', '| id | owns |'])).toEqual({
+      kind: 'no-table',
+    });
+  });
+
+  it('returns "ok" with an empty rows list when only the header and divider are present', () => {
+    expect(
+      extractSliceTable(['## Slices', '', '| id | owns |', '| -- | ---- |']),
+    ).toEqual({
+      kind: 'ok',
+      header: '| id | owns |',
+      divider: '| -- | ---- |',
+      rows: [],
+    });
+  });
+});
+
+describe('findSliceRow', () => {
+  const rows = [
+    '| 5a  | `payload/a.mts`   | —       | 1    | TODO   |',
+    '| 5b  | `payload/b.mts`   | —       | 1    | TODO   |',
+  ];
+
+  it('finds the row whose id column matches', () => {
+    expect(findSliceRow(rows, '5b')).toBe(
+      '| 5b  | `payload/b.mts`   | —       | 1    | TODO   |',
+    );
+  });
+
+  it('returns undefined when no row matches the id', () => {
+    expect(findSliceRow(rows, '9z')).toBe(undefined);
+  });
+});
 
 describe('review-package.mjs <base>..<head>', () => {
   it('writes a file with commits, stat, and diff sections, printing only the path and a summary to stdout', () => {
@@ -97,7 +275,7 @@ describe('review-package.mjs <base>..<head>', () => {
 
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout.trim().split('\n')[0]).toBe(outPath);
-    expect(existsSync(outPath)).toBe(true);
+    expect(existsSync(outPath), 'file written to the --out path').toBe(true);
   });
 
   it('exits 1 with a one-line stderr message outside a git directory', () => {
@@ -163,8 +341,14 @@ describe('review-package.mjs --briefs <phase-file> [<slice-id>]', () => {
     const lines = r.stdout.trim().split('\n');
     expect(lines).toHaveLength(4);
     expect(lines[0]).toContain('| id');
-    expect(lines.some((l) => l.includes('5a'))).toBe(true);
-    expect(lines.some((l) => l.includes('5b'))).toBe(true);
+    expect(
+      lines.some((l) => l.includes('5a')),
+      'row 5a printed',
+    ).toBe(true);
+    expect(
+      lines.some((l) => l.includes('5b')),
+      'row 5b printed',
+    ).toBe(true);
   });
 
   it('prints only the header row and the matching slice row when given a slice id', () => {

@@ -30,7 +30,7 @@ describe('code-cleanliness', () => {
     expect(ruleText).not.toMatch(/Target under 20 to 30 lines/);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('code-cleanliness')).toBe(true);
+    expect(manifest.modules).toContain('code-cleanliness');
     const { frontmatter, body } = splitFrontmatter(ruleText);
     expect(
       manifest.files['.claude/rules/code-cleanliness.md'],
@@ -41,18 +41,19 @@ describe('code-cleanliness', () => {
     });
 
     const cmds = allHookCommands(root);
-    expect(cmds.some((c) => c.includes('code-cleanliness'))).toBe(false);
     expect(
-      readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes(
-        'code-cleanliness',
-      ),
+      cmds.some((c) => c.includes('code-cleanliness')),
+      'no hook wired',
     ).toBe(false);
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).not.toContain(
+      'code-cleanliness',
+    );
   });
 
   it('is not installed by default', () => {
     const root = useInstalledRepo('pnpm-monorepo');
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('code-cleanliness')).toBe(false);
+    expect(manifest.modules).not.toContain('code-cleanliness');
     const moduleFiles = [
       '.claude/rules/code-cleanliness.md',
       '.claude/reference/design-principles.md',
@@ -73,13 +74,18 @@ describe('code-cleanliness', () => {
     });
 
     it('installs the rule, a pull-only reference doc, and the tidy skill', () => {
-      expect(existsSync(join(root, '.claude/rules/code-cleanliness.md'))).toBe(
-        true,
-      );
+      expect(
+        existsSync(join(root, '.claude/rules/code-cleanliness.md')),
+        'rule installed',
+      ).toBe(true);
       expect(
         existsSync(join(root, '.claude/reference/design-principles.md')),
+        'reference doc installed',
       ).toBe(true);
-      expect(existsSync(join(root, '.claude/skills/tidy/SKILL.md'))).toBe(true);
+      expect(
+        existsSync(join(root, '.claude/skills/tidy/SKILL.md')),
+        'tidy skill installed',
+      ).toBe(true);
     });
 
     it('keeps the reference doc pull-only, with no paths: frontmatter, outside .claude/rules/', () => {
@@ -88,9 +94,10 @@ describe('code-cleanliness', () => {
         'utf8',
       );
       expect(referenceText).not.toMatch(/^paths:/m);
-      expect(existsSync(join(root, '.claude/rules/design-principles.md'))).toBe(
-        false,
-      );
+      expect(
+        existsSync(join(root, '.claude/rules/design-principles.md')),
+        'not duplicated under .claude/rules/',
+      ).toBe(false);
       expect(referenceText).toMatch(
         /Duplication is far cheaper than the wrong abstraction/,
       );
