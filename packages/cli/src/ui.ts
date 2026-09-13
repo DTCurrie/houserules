@@ -123,12 +123,14 @@ function cancel(text: string): void {
   else console.error(text);
 }
 
+// Prompts resolve to `Value | symbol`, but `isCancel` narrows only to the exported
+// `CANCEL_SYMBOL`, so the guard cannot remove the wider `symbol` from the union.
 function bail<TValue>(value: TValue | symbol): TValue {
   if (p.isCancel(value)) {
     cancel('Canceled — nothing written.');
     process.exit(1);
   }
-  return value;
+  return value as TValue;
 }
 
 // A single unbreakable token (an absolute repo path) sets the whole box width, so
