@@ -1,5 +1,11 @@
 # @houserules/plugin-testing
 
+## 0.3.0
+
+### Minor Changes
+
+- f2085cb: Testing rule: layers named by what a test doubles, a simulation guide, configurable test directory.
+
 ## 0.2.2
 
 ### Patch Changes
