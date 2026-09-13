@@ -231,8 +231,8 @@ describe('evaluateGate', () => {
       }),
     );
 
-    expect(verdict.allowed).toBe(false);
     if (verdict.allowed) throw new Error('unreachable');
+    expect(verdict.reason).toBe('insufficient-permission');
     expect(verdict.message).toMatch(/issues tab/);
     expect(verdict.message).toMatch(/\/backlog-adopt/);
   });

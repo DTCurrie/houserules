@@ -281,12 +281,16 @@ describe('extractTailwindThemeCandidates', () => {
 
 describe('hasTailwindV3Config', () => {
   it('reports true for a tailwind.config.ts path', () => {
-    expect(hasTailwindV3Config(['/repo/tailwind.config.ts'])).toBe(true);
+    expect(
+      hasTailwindV3Config(['/repo/tailwind.config.ts']),
+      'tailwind.config.ts is a v3 config',
+    ).toBe(true);
   });
 
   it('reports false when no path is a v3 config', () => {
     expect(
       hasTailwindV3Config(['/repo/src/app.css', '/repo/package.json']),
+      'no v3 config path present',
     ).toBe(false);
   });
 });

@@ -164,9 +164,10 @@ describe('doctor', () => {
         exitCode: number;
       };
       expect(asJson.exitCode).toBe(2);
-      expect(asJson.configProblems.some((p) => p.includes('baseBranchh'))).toBe(
-        true,
-      );
+      expect(
+        asJson.configProblems.some((p) => p.includes('baseBranchh')),
+        `configProblems ${JSON.stringify(asJson.configProblems)} names baseBranchh`,
+      ).toBe(true);
     });
   });
 });

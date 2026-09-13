@@ -4,7 +4,7 @@
 
 An agent asked to fix a bug will often write a test that passes before the fix and after it,
 which proves nothing. Left alone, it also drifts toward asserting `toBeDefined()`, chasing a
-coverage number, or filing a unit test as end-to-end because the distinction was never stated.
+coverage number, or filing a test by the directory it sits in rather than by what it doubles.
 
 This plugin ships a testing discipline rule that does not assume a framework. It covers
 whether a test is worth writing, where it lives, what it should assert, and how it is named,
@@ -27,17 +27,20 @@ when `init` asks.
 - **`testing`** installs `.claude/rules/testing.md`, a path-scoped rule matched to
   `*.test.ts`, `*.test.tsx`, `*.test.mts`, `*.test.js`, `*.test.mjs`, and the `.spec.*`
   equivalents. It covers whether a test earns its place (it has to fail when the behavior it
-  covers breaks), where tests colocate (`__tests__/`, split by subject), what to test and at
-  what level, Arrange/Act/Assert structure, and naming that states the observable behavior
-  rather than the implementation.
+  covers breaks), where tests colocate (one test directory beside the subject, `__tests__/`
+  by default), what to test and at what level, Arrange/Act/Assert structure, and naming that
+  states the observable behavior rather than the implementation. `init` can also record the
+  repo's test-directory name (`__test__` or `tests`) as a module option, so the layout
+  checker (`test-layout.mjs --test-dir <name>`) judges against it instead of the default.
 
-  `init` also prompts for language guides to install alongside it. Four exist today:
-  **TypeScript** (`testing-typescript`) and **JavaScript** (`testing-javascript`), each
-  installed as its own path-scoped rule with the concrete suffix list, runnable examples, and
-  build-exclusion advice the base rule leaves to them; **Svelte** (`testing-svelte`), runner
-  setup for testing Svelte 5 components and `.svelte.ts` reactive modules; and **3D and WebGL**
-  (`testing-3d`), domain guidance for tests that cover Three.js scenes and other WebGL code.
-  TypeScript is selected by default.
+  `init` also prompts for language guides to install alongside it. Five exist today.
+  **TypeScript** (`testing-typescript`) and **JavaScript** (`testing-javascript`) are each
+  installed as their own path-scoped rule with the concrete suffix list, runnable examples,
+  and build-exclusion advice the base rule leaves to them. **Svelte** (`testing-svelte`)
+  covers runner setup for testing Svelte 5 components and `.svelte.ts` reactive modules.
+  **3D and WebGL** (`testing-3d`) is domain guidance for tests that cover Three.js scenes and
+  other WebGL code. **Simulation** (`testing-simulation`) is domain guidance for tick loops,
+  seeded randomness, and floating arithmetic. TypeScript is selected by default.
 
   Because the rule is path-scoped, Claude Code loads it only when a matching test file is in
   the working set, so it costs nothing on the always-loaded surface.

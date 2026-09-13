@@ -26,10 +26,12 @@ describe('pr-description', () => {
   it('installs the skill and tracks it in the manifest', () => {
     const root = installed();
 
-    expect(existsSync(join(root, SKILL_PATH))).toBe(true);
+    expect(existsSync(join(root, SKILL_PATH)), `${SKILL_PATH} exists`).toBe(
+      true,
+    );
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('prose/pr-description')).toBe(true);
+    expect(manifest.modules).toContain('prose/pr-description');
     expect(manifest.files[SKILL_PATH]).toBe(
       sha256(readFileSync(join(root, SKILL_PATH))),
     );
@@ -69,20 +71,26 @@ describe('pr-description', () => {
     const root = installed();
 
     const commands = allHookCommands(root);
-    expect(commands.some((c) => c.includes('pr-description'))).toBe(false);
     expect(
-      readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('pr-description'),
+      commands.some((c) => c.includes('pr-description')),
+      'no hook command references pr-description',
     ).toBe(false);
-    expect(existsSync(join(root, '.claude/rules/pr-description.md'))).toBe(
-      false,
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).not.toContain(
+      'pr-description',
     );
+    expect(
+      existsSync(join(root, '.claude/rules/pr-description.md')),
+      '.claude/rules/pr-description.md is absent',
+    ).toBe(false);
   });
 
   it('is not installed by default', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('prose/pr-description')).toBe(false);
-    expect(existsSync(join(root, SKILL_PATH))).toBe(false);
+    expect(manifest.modules).not.toContain('prose/pr-description');
+    expect(existsSync(join(root, SKILL_PATH)), `${SKILL_PATH} is absent`).toBe(
+      false,
+    );
   });
 });

@@ -54,13 +54,16 @@ describe('design-tailwind install', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(tokensPathOf(root))).toBe(false);
+    const tokensPath = tokensPathOf(root);
+
+    expect(existsSync(tokensPath), `${tokensPath} absent`).toBe(false);
   });
 
   it('still seeds a token file when design-tailwind is not selected', () => {
     const root = installDesignOnly();
+    const tokensPath = tokensPathOf(root);
 
-    expect(existsSync(tokensPathOf(root))).toBe(true);
+    expect(existsSync(tokensPath), `${tokensPath} exists`).toBe(true);
   });
 
   it('records the three Tailwind libs in the manifest so update refreshes them', () => {
@@ -107,7 +110,9 @@ describe('update after adding design-tailwind to an install with a token file', 
 
     runCli(['update', root]);
 
-    expect(existsSync(tokensPathOf(root))).toBe(true);
+    const tokensPath = tokensPathOf(root);
+
+    expect(existsSync(tokensPath), `${tokensPath} exists`).toBe(true);
     expect(
       manifestOf(root).files['.claude/design/tokens.json'],
     ).toBeUndefined();

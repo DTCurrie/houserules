@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { readGuardRefusalFor } from '../guard-read.mjs';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 import {
@@ -10,6 +11,80 @@ import {
   settingsOf,
 } from '#test/installed-tree';
 import { readToolInput } from '#test/hook-input';
+
+const CONFIG = {
+  enabled: true,
+  maxBytes: 500000,
+  denyGlobs: ['pnpm-lock.yaml'],
+};
+
+describe('readGuardRefusalFor', () => {
+  it('returns null for a bounded read (limit set) of an otherwise-denied file', () => {
+    expect(
+      readGuardRefusalFor('pnpm-lock.yaml', undefined, 40, '/repo', 10, CONFIG),
+    ).toBeNull();
+  });
+
+  it('returns null for a bounded read (offset set) of an otherwise-denied file', () => {
+    expect(
+      readGuardRefusalFor('pnpm-lock.yaml', 10, undefined, '/repo', 10, CONFIG),
+    ).toBeNull();
+  });
+
+  it('returns null when the guard is disabled', () => {
+    expect(
+      readGuardRefusalFor('pnpm-lock.yaml', undefined, undefined, '/repo', 10, {
+        ...CONFIG,
+        enabled: false,
+      }),
+    ).toBeNull();
+  });
+
+  it('returns null with no file path at all', () => {
+    expect(
+      readGuardRefusalFor('', undefined, undefined, '/repo', 10, CONFIG),
+    ).toBeNull();
+  });
+
+  it('refuses an unbounded read matching a deny glob, naming the pattern', () => {
+    const refusal = readGuardRefusalFor(
+      '/repo/pnpm-lock.yaml',
+      undefined,
+      undefined,
+      '/repo',
+      10,
+      CONFIG,
+    );
+    expect(refusal).toContain(
+      'matches a generated/denylisted pattern (pnpm-lock.yaml)',
+    );
+  });
+
+  it('refuses an unbounded read once the file exceeds maxBytes, naming the sizes', () => {
+    const refusal = readGuardRefusalFor(
+      '/repo/src/main.ts',
+      undefined,
+      undefined,
+      '/repo',
+      6000,
+      { enabled: true, maxBytes: 5 },
+    );
+    expect(refusal).toContain('is large (6 KB > 0 KB)');
+  });
+
+  it('returns null for an unbounded read of a normal small file that matches no glob', () => {
+    expect(
+      readGuardRefusalFor(
+        '/repo/src/main.ts',
+        undefined,
+        undefined,
+        '/repo',
+        10,
+        CONFIG,
+      ),
+    ).toBeNull();
+  });
+});
 
 describe('guard-read.mjs', () => {
   const GUARD = '.claude/scripts/guard-read.mjs';
@@ -20,12 +95,16 @@ describe('guard-read.mjs', () => {
   });
 
   it('installs the guard script and wires it into a PreToolUse(Read) hook', () => {
-    expect(existsSync(join(root, GUARD))).toBe(true);
+    expect(
+      existsSync(join(root, GUARD)),
+      `${GUARD} exists after installing the read-guard module`,
+    ).toBe(true);
     const settings = settingsOf(root);
     expect(
       hookCommandsFor(settings, 'PreToolUse').some((c) =>
         c.includes('guard-read.mjs'),
       ),
+      'a PreToolUse hook command references guard-read.mjs',
     ).toBe(true);
   });
 

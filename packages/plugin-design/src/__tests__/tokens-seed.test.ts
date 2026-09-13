@@ -27,16 +27,24 @@ describe('renderTokenSeed', () => {
 
 describe('isUntouchedSeed', () => {
   it('is true for the exact rendered seed', () => {
-    expect(isUntouchedSeed(renderTokenSeed())).toBe(true);
+    expect(
+      isUntouchedSeed(renderTokenSeed()),
+      'the rendered seed is untouched',
+    ).toBe(true);
   });
 
   it('is true when only trailing whitespace differs', () => {
-    expect(isUntouchedSeed(`${renderTokenSeed()}\n\n  `)).toBe(true);
+    expect(
+      isUntouchedSeed(`${renderTokenSeed()}\n\n  `),
+      'trailing whitespace is untouched',
+    ).toBe(true);
   });
 
   it('is false once a value is edited', () => {
     const edited = renderTokenSeed().replace('0.231', '0.5');
 
-    expect(isUntouchedSeed(edited)).toBe(false);
+    expect(isUntouchedSeed(edited), 'an edited seed counts as edited').toBe(
+      false,
+    );
   });
 });

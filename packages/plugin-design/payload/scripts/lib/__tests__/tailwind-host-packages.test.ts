@@ -17,10 +17,10 @@ describe('resolveHostPackage', () => {
 
     const result = resolveHostPackage(root, TAILWIND_PACKAGE);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.version).toBe('4.3.3');
-    expect(result.value.entryModuleUrl.endsWith('dist/lib.mjs')).toBe(true);
+    expect(result.value.entryModuleUrl).toMatch(/dist\/lib\.mjs$/);
   });
 
   it('reports the install command when tailwindcss is not installed', () => {
@@ -28,7 +28,9 @@ describe('resolveHostPackage', () => {
 
     const result = resolveHostPackage(root, TAILWIND_PACKAGE);
 
-    expect(result.ok).toBe(false);
+    expect(result.ok, result.ok ? JSON.stringify(result.value) : '').toBe(
+      false,
+    );
     if (result.ok) return;
     expect(result.error).toContain('npm install -D tailwindcss@4');
   });
@@ -39,8 +41,8 @@ describe('resolveHostPackage', () => {
     const oxide = resolveHostPackage(root, OXIDE_PACKAGE);
     const tailwind = resolveHostPackage(root, TAILWIND_PACKAGE);
 
-    expect(oxide.ok).toBe(false);
-    expect(tailwind.ok).toBe(true);
+    expect(oxide.ok, oxide.ok ? JSON.stringify(oxide.value) : '').toBe(false);
+    expect(tailwind.ok, tailwind.ok ? '' : tailwind.error).toBe(true);
   });
 
   it('resolves a transitive oxide through the pnpm virtual store when only tailwindcss is linked at the top level', () => {

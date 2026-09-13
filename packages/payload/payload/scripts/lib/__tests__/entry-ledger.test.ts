@@ -629,7 +629,10 @@ describe('ledgerPath', () => {
 
     expect(result).toBe(join(root, '.claude/ledgers/decision-log.jsonl'));
     expect(readFileSync(result, 'utf8')).toBe(legacyBody);
-    expect(existsSync(join(root, '.claude/decision-log.log'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/decision-log.log')),
+      '.claude/decision-log.log was removed after migration',
+    ).toBe(false);
   });
 
   it('migrates a flat .jsonl left by the previous layout', () => {
@@ -640,7 +643,10 @@ describe('ledgerPath', () => {
 
     expect(result).toBe(join(root, '.claude/ledgers/decision-log.jsonl'));
     expect(readFileSync(result, 'utf8')).toBe('{"id":"A"}\n');
-    expect(existsSync(join(root, '.claude/decision-log.jsonl'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/decision-log.jsonl')),
+      '.claude/decision-log.jsonl was removed after migration',
+    ).toBe(false);
   });
 
   it('prefers the newest layout and leaves older files untouched', () => {
@@ -652,8 +658,14 @@ describe('ledgerPath', () => {
     const result = ledgerPath(root, 'decision-log');
 
     expect(readFileSync(result, 'utf8')).toBe('{"id":"current"}\n');
-    expect(existsSync(join(root, '.claude/decision-log.jsonl'))).toBe(true);
-    expect(existsSync(join(root, '.claude/decision-log.log'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/decision-log.jsonl')),
+      '.claude/decision-log.jsonl is left untouched',
+    ).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/decision-log.log')),
+      '.claude/decision-log.log is left untouched',
+    ).toBe(true);
   });
 });
 
@@ -663,6 +675,7 @@ describe('rebuildWouldDropEntries', () => {
 
     expect(
       rebuildWouldDropEntries(join(root, 'DECISIONS.md'), entriesOf(1)),
+      'a missing file reports no dropped entries',
     ).toBe(false);
   });
 
@@ -674,14 +687,20 @@ describe('rebuildWouldDropEntries', () => {
       '# Decisions\n\nno entries yet\n',
     );
 
-    expect(rebuildWouldDropEntries(file, entriesOf(1))).toBe(false);
+    expect(
+      rebuildWouldDropEntries(file, entriesOf(1)),
+      'a file with no entries reports no dropped entries',
+    ).toBe(false);
   });
 
   it('returns true when a four-entry file is replaced by one-entry content', () => {
     const root = tempRoot();
     const file = writeAt(root, 'DECISIONS.md', entriesOf(4));
 
-    expect(rebuildWouldDropEntries(file, entriesOf(1))).toBe(true);
+    expect(
+      rebuildWouldDropEntries(file, entriesOf(1)),
+      'replacing 4 entries with 1 reports dropped entries',
+    ).toBe(true);
   });
 
   it('returns false when the only missing entry is one the ledger recorded as removed', () => {
@@ -690,6 +709,7 @@ describe('rebuildWouldDropEntries', () => {
 
     expect(
       rebuildWouldDropEntries(file, entriesOf(2), new Set(['SIM-aaaaa2'])),
+      'a ledger-recorded removal reports no dropped entries',
     ).toBe(false);
   });
 
@@ -699,6 +719,7 @@ describe('rebuildWouldDropEntries', () => {
 
     expect(
       rebuildWouldDropEntries(file, entriesOf(2), new Set(['SIM-aaaaa9'])),
+      'an unrecorded removal reports dropped entries',
     ).toBe(true);
   });
 
@@ -707,21 +728,30 @@ describe('rebuildWouldDropEntries', () => {
     const file = writeAt(root, 'BACKLOG.md', entriesOf(2));
     const swapped = `${entriesOf(1)}## [SIM-bbbbb0] Other\n\nbody\n\n---\n\n`;
 
-    expect(rebuildWouldDropEntries(file, swapped)).toBe(true);
+    expect(
+      rebuildWouldDropEntries(file, swapped),
+      'swapping one entry for another reports dropped entries',
+    ).toBe(true);
   });
 
   it('returns false when the replacement has the same entry count', () => {
     const root = tempRoot();
     const file = writeAt(root, 'DECISIONS.md', entriesOf(3));
 
-    expect(rebuildWouldDropEntries(file, entriesOf(3))).toBe(false);
+    expect(
+      rebuildWouldDropEntries(file, entriesOf(3)),
+      'an unchanged entry count reports no dropped entries',
+    ).toBe(false);
   });
 
   it('returns false when the replacement has more entries', () => {
     const root = tempRoot();
     const file = writeAt(root, 'DECISIONS.md', entriesOf(2));
 
-    expect(rebuildWouldDropEntries(file, entriesOf(3))).toBe(false);
+    expect(
+      rebuildWouldDropEntries(file, entriesOf(3)),
+      'more entries than before reports no dropped entries',
+    ).toBe(false);
   });
 });
 
@@ -746,14 +776,20 @@ describe('indexIsAuthoritative', () => {
       serializeIndex(emptyIndex('backlog', '2026-08-03T00:00:00.000Z')),
     );
 
-    expect(indexIsAuthoritative(root, 'backlog')).toBe(false);
+    expect(
+      indexIsAuthoritative(root, 'backlog'),
+      'no enable token means the index is not authoritative',
+    ).toBe(false);
   });
 
   it('returns false when the enable token is present but no index has been pulled', () => {
     const root = tempRoot();
     writeAt(root, PROJECTS_ENABLE_TOKEN, '{}');
 
-    expect(indexIsAuthoritative(root, 'backlog')).toBe(false);
+    expect(
+      indexIsAuthoritative(root, 'backlog'),
+      'no pulled index means the index is not authoritative',
+    ).toBe(false);
   });
 
   it('returns true when the enable token is present and a valid index has been pulled', () => {
@@ -765,6 +801,9 @@ describe('indexIsAuthoritative', () => {
       serializeIndex(emptyIndex('backlog', '2026-08-03T00:00:00.000Z')),
     );
 
-    expect(indexIsAuthoritative(root, 'backlog')).toBe(true);
+    expect(
+      indexIsAuthoritative(root, 'backlog'),
+      'an enable token plus a pulled index makes the index authoritative',
+    ).toBe(true);
   });
 });

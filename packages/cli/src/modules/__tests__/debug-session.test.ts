@@ -38,9 +38,10 @@ describe('debug-session', () => {
 
     it('wires the backstop hook into SessionStart', () => {
       const cmds = hookCommandsFor(settingsOf(root), 'SessionStart');
-      expect(cmds.some((c) => c.includes('debug-session-check.mjs'))).toBe(
-        true,
-      );
+      expect(
+        cmds.some((c) => c.includes('debug-session-check.mjs')),
+        'debug-session-check.mjs wired into SessionStart',
+      ).toBe(true);
     });
 
     it('passes doctor validation', () => {
@@ -70,7 +71,7 @@ describe('debug-session', () => {
       expect(hook.stdout).toMatch(/login-500\.jsonl/);
       expect(hook.stdout).toMatch(/instrumentation/);
       expect(hook.stdout).toMatch(/game\.ts/);
-      expect(hook.stdout.includes('SKILL.md')).toBe(false);
+      expect(hook.stdout).not.toContain('SKILL.md');
     });
   });
 
@@ -83,7 +84,7 @@ describe('debug-session', () => {
 
     it('is not enabled', () => {
       const manifest = manifestOf(root);
-      expect(manifest.modules.includes('debug-session')).toBe(false);
+      expect(manifest.modules).not.toContain('debug-session');
     });
 
     it('still stages the always-shipped reviewer agent template', () => {
@@ -91,6 +92,7 @@ describe('debug-session', () => {
         existsSync(
           join(root, '.claude/templates/agents/reviewer.agent.md.template'),
         ),
+        'reviewer agent template staged',
       ).toBe(true);
     });
 
@@ -99,14 +101,20 @@ describe('debug-session', () => {
         existsSync(
           join(root, '.claude/templates/agents/debugger.agent.md.template'),
         ),
+        'debugger template not staged',
       ).toBe(false);
       expect(
         existsSync(join(root, '.claude/scripts/debug-session-check.mjs')),
+        'debug-session-check.mjs not staged',
       ).toBe(false);
       expect(
         existsSync(join(root, '.claude/skills/debug-session/SKILL.md')),
+        'debug-session skill not staged',
       ).toBe(false);
-      expect(existsSync(join(root, '.claude/debug/.gitignore'))).toBe(false);
+      expect(
+        existsSync(join(root, '.claude/debug/.gitignore')),
+        'debug log directory not created',
+      ).toBe(false);
     });
   });
 });

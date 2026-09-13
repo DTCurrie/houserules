@@ -17,8 +17,9 @@ Vitest and TypeScript, but the principles they illustrate apply to any test runn
 
 ## Rule — follow without deliberation
 
-- **Pick one suffix per repo, `.test.ts` or `.spec.ts`, and never mix them.** Two conventions
-  mean every glob in the repo has to list both, and one of them eventually gets missed.
+- **Pick one suffix per package, `.test.ts` or `.spec.ts`, and never mix them within one.**
+  Two conventions mean every glob in the package has to list both, and one of them
+  eventually gets missed.
 - **Exclude tests from the build.** A test under a compiled source root is emitted into the
   published output and imports the test runner, which is a dev dependency. Add the exclude to
   the build config, then check the output directory for a `__tests__` after building. Checked
@@ -35,7 +36,7 @@ Vitest and TypeScript, but the principles they illustrate apply to any test runn
 
 ## Checked mechanically
 
-`test-layout.mjs` catches a repo mixing `.test.` and `.spec.` suffixes (shared with
+`test-layout.mjs` catches a package mixing `.test.` and `.spec.` suffixes (shared with
 `testing-javascript.md`) and a test file leaked into the build output. `test-config.mjs`
 catches a file using `expectTypeOf` with no vitest config enabling `typecheck`. Whether a type
 test is worth writing at all stays a human read.

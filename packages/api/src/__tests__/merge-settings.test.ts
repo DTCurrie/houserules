@@ -29,34 +29,55 @@ function fragmentFor(
 
 describe('isKitStockCommand', () => {
   it('is true for the current guarded form hookCommand emits for that basename', () => {
-    expect(isKitStockCommand(hookCommand(SCRIPT), SCRIPT)).toBe(true);
+    expect(
+      isKitStockCommand(hookCommand(SCRIPT), SCRIPT),
+      `${hookCommand(SCRIPT)} is recognized as stock for ${SCRIPT}`,
+    ).toBe(true);
   });
 
   it('is true for a known historical stock format', () => {
-    expect(isKitStockCommand(HISTORICAL_COMMAND, SCRIPT)).toBe(true);
+    expect(
+      isKitStockCommand(HISTORICAL_COMMAND, SCRIPT),
+      `${HISTORICAL_COMMAND} is recognized as stock for ${SCRIPT}`,
+    ).toBe(true);
   });
 
   it('is true for the pre-sweep houserules wrapper with the stdout echo fallback', () => {
     const preSweep = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || echo "[houserules] ${SCRIPT} missing. Run: npx houserules update"`;
-    expect(isKitStockCommand(preSweep, SCRIPT)).toBe(true);
+    expect(
+      isKitStockCommand(preSweep, SCRIPT),
+      `${preSweep} is recognized as stock for ${SCRIPT}`,
+    ).toBe(true);
   });
 
   it('is true for the pre-rename agent-kit wrapper', () => {
     const agentKit = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || echo "[kit] ${SCRIPT} missing — run: npx agent-kit update"`;
-    expect(isKitStockCommand(agentKit, SCRIPT)).toBe(true);
+    expect(
+      isKitStockCommand(agentKit, SCRIPT),
+      `${agentKit} is recognized as stock for ${SCRIPT}`,
+    ).toBe(true);
   });
 
   it('is false for a different basename entirely', () => {
-    expect(isKitStockCommand(HISTORICAL_COMMAND, 'other-hook.mjs')).toBe(false);
+    expect(
+      isKitStockCommand(HISTORICAL_COMMAND, 'other-hook.mjs'),
+      `${HISTORICAL_COMMAND} is not recognized as stock for other-hook.mjs`,
+    ).toBe(false);
   });
 
   it('is false for a user-edited variant with extra flags', () => {
-    expect(isKitStockCommand(USER_EDITED_COMMAND, SCRIPT)).toBe(false);
+    expect(
+      isKitStockCommand(USER_EDITED_COMMAND, SCRIPT),
+      `${USER_EDITED_COMMAND} is not recognized as stock for ${SCRIPT}`,
+    ).toBe(false);
   });
 
   it('is false for a command with a custom fallback message', () => {
     const custom = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || echo "custom fallback"`;
-    expect(isKitStockCommand(custom, SCRIPT)).toBe(false);
+    expect(
+      isKitStockCommand(custom, SCRIPT),
+      `${custom} is not recognized as stock for ${SCRIPT}`,
+    ).toBe(false);
   });
 });
 
@@ -79,7 +100,10 @@ describe('mergeSettings hook upgrade', () => {
     const hooks = merged.hooks!.PreToolUse![0]!.hooks;
     expect(hooks).toHaveLength(1);
     expect(hooks[0]!.command).toBe(hookCommand(SCRIPT));
-    expect(changes.some((c) => c.detail.includes('upgraded'))).toBe(true);
+    expect(
+      changes.some((c) => c.detail.includes('upgraded')),
+      'a reported change mentions the upgrade',
+    ).toBe(true);
   });
 
   it('preserves a user-edited command with the same basename byte-identical', () => {
