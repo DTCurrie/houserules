@@ -56,7 +56,7 @@ describe('loadDesignSystem', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.theme.size).toBeGreaterThan(400);
   });
@@ -66,7 +66,7 @@ describe('loadDesignSystem', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.theme.get(['--color-brand-500'])).toBe(
       'oklch(0.55 0.2 265)',
@@ -78,7 +78,7 @@ describe('loadDesignSystem', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const [css] = result.value.candidatesToCss(['p-3']);
     expect(css).toContain('calc(var(--spacing) * 3)');
@@ -89,7 +89,7 @@ describe('loadDesignSystem', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.candidatesToCss(['not-a-real-class'])).toEqual([null]);
   });
@@ -100,7 +100,7 @@ describe('loadDesignSystem', () => {
 
     const result = await loadDesignSystem(root, join(root, 'app.css'));
 
-    expect(result.ok).toBe(false);
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
     if (result.ok) return;
     expect(result.error).toBe(
       `tailwindcss is not installed in ${root}. Install it in that repo with \`npm install -D tailwindcss@4\`.`,
@@ -168,7 +168,7 @@ describe('loadDesignSystem', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(false);
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('@acme/missing');
     expect(result.error).toContain('not installed');
@@ -180,22 +180,24 @@ describe('isRepoDefinedThemeKey', () => {
     const root = useTailwindRepo();
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
-    expect(isRepoDefinedThemeKey(result.value.theme, '--color-brand-500')).toBe(
-      true,
-    );
+    expect(
+      isRepoDefinedThemeKey(result.value.theme, '--color-brand-500'),
+      '--color-brand-500 is repo-defined',
+    ).toBe(true);
   });
 
   it("is false for a key that only exists in Tailwind's default palette", async () => {
     const root = useTailwindRepo();
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
-    expect(isRepoDefinedThemeKey(result.value.theme, '--color-red-500')).toBe(
-      false,
-    );
+    expect(
+      isRepoDefinedThemeKey(result.value.theme, '--color-red-500'),
+      "--color-red-500 is Tailwind's default palette, not repo-defined",
+    ).toBe(false);
   });
 });
 
@@ -211,7 +213,7 @@ describe('findThemeEntryCss', () => {
 
     const result = findThemeEntryCss([plain, entry]);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.path).toBe(entry);
     expect(result.value.alternates).toEqual([]);
@@ -224,7 +226,7 @@ describe('findThemeEntryCss', () => {
 
     const result = findThemeEntryCss([first, second]);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.path).toBe(first);
     expect(result.value.alternates).toEqual([second]);
@@ -236,7 +238,7 @@ describe('findThemeEntryCss', () => {
 
     const result = findThemeEntryCss([plain]);
 
-    expect(result.ok).toBe(false);
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('1 file(s)');
   });
@@ -250,7 +252,7 @@ describe('findThemeEntryCss', () => {
 
       const result = findThemeEntryCss([entry]);
 
-      expect(result.ok).toBe(false);
+      expect(result.ok, result.ok ? '' : result.error).toBe(false);
       if (result.ok) return;
       expect(result.error).toContain('could not be read');
       expect(result.error).not.toContain('No CSS file imports');

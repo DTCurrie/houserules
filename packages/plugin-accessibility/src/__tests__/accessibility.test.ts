@@ -59,7 +59,7 @@ describe('accessibility', () => {
     );
     const manifest = manifestOf(root);
 
-    expect(manifest.modules.includes('a11y/accessibility')).toBe(true);
+    expect(manifest.modules).toContain('a11y/accessibility');
     expect(manifest.files['.claude/rules/accessibility.md']).toEqual(
       expect.objectContaining({ body: sha256(ruleBody(ruleText)) }),
     );
@@ -100,12 +100,13 @@ describe('accessibility', () => {
         ),
     );
 
-    expect(commands.some((c: string) => c.includes('accessibility'))).toBe(
-      false,
-    );
     expect(
-      readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('accessibility'),
+      commands.some((c: string) => c.includes('accessibility')),
+      'no command references accessibility',
     ).toBe(false);
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).not.toContain(
+      'accessibility',
+    );
   });
 
   it('is not installed by default', () => {
@@ -113,7 +114,7 @@ describe('accessibility', () => {
 
     const manifest = manifestOf(root);
 
-    expect(manifest.modules.includes('a11y/accessibility')).toBe(false);
+    expect(manifest.modules).not.toContain('a11y/accessibility');
     expect(
       existsSync(join(root, '.claude/rules/accessibility.md')),
       '.claude/rules/accessibility.md absent',

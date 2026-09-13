@@ -142,7 +142,7 @@ describe('resolveEntries', () => {
   it('leaves an unknown id out of the result', () => {
     const resolved = resolveEntries(['BACKLOG-nope'], [], filledIndex([]));
 
-    expect(resolved.has('BACKLOG-nope')).toBe(false);
+    expect(resolved.get('BACKLOG-nope')).toBeUndefined();
   });
 
   it('resolves only queued ids when the index is null', () => {
@@ -155,7 +155,7 @@ describe('resolveEntries', () => {
     );
 
     expect(resolved.get('BACKLOG-present')?.title).toBe('Present');
-    expect(resolved.has('BACKLOG-absent')).toBe(false);
+    expect(resolved.get('BACKLOG-absent')).toBeUndefined();
   });
 });
 
@@ -211,12 +211,13 @@ describe('ledger-inject.mjs', () => {
     it('installs the injector and wires it into a UserPromptSubmit hook', () => {
       const root = useInstalledRepo('pnpm-monorepo');
 
-      expect(existsSync(join(root, INJECT))).toBe(true);
+      expect(existsSync(join(root, INJECT)), 'injector installed').toBe(true);
       const settings = settingsOf(root);
       expect(
         hookCommandsFor(settings, 'UserPromptSubmit').some((c) =>
           c.includes('ledger-inject.mjs'),
         ),
+        'wired into UserPromptSubmit',
       ).toBe(true);
     });
 

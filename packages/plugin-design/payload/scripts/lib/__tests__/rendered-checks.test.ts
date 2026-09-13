@@ -238,7 +238,7 @@ describe.skipIf(!discoverChrome())(
       );
 
       const navigated = await session!.navigate(pathToFileURL(fixture).href);
-      expect(navigated.ok).toBe(true);
+      expect(navigated.ok, navigated.ok ? '' : navigated.error).toBe(true);
       const result = await checkRenderedPage(session!, {});
 
       const contrastFinding = result.findings.find(
@@ -263,7 +263,7 @@ describe.skipIf(!discoverChrome())(
 `);
 
       const navigated = await session!.navigate(pathToFileURL(fixture).href);
-      expect(navigated.ok).toBe(true);
+      expect(navigated.ok, navigated.ok ? '' : navigated.error).toBe(true);
       const result = await checkRenderedPage(session!, {});
 
       expect(result.findings).toEqual([]);

@@ -43,7 +43,7 @@ describe('prose-voice', () => {
     expect(ruleText).toMatch(/No semicolons/);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('prose/prose-voice')).toBe(true);
+    expect(manifest.modules).toContain('prose/prose-voice');
     const { frontmatter, body } = splitFrontmatter(ruleText);
     expect(
       manifest.files['.claude/rules/prose-voice.md'],
@@ -51,10 +51,13 @@ describe('prose-voice', () => {
     ).toEqual({ body: sha256(body), frontmatter: sha256(frontmatter) });
 
     const cmds = allHookCommands(root);
-    expect(cmds.some((c) => c.includes('prose-voice'))).toBe(false);
     expect(
-      readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('prose-voice'),
+      cmds.some((c) => c.includes('prose-voice')),
+      'no hook command references prose-voice',
     ).toBe(false);
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).not.toContain(
+      'prose-voice',
+    );
   });
 
   it('covers every source extension code-comments defers to it for', () => {
@@ -80,7 +83,7 @@ describe('prose-voice', () => {
   it('is not installed by default', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('prose/prose-voice')).toBe(false);
+    expect(manifest.modules).not.toContain('prose/prose-voice');
     expect(
       existsSync(join(root, '.claude/rules/prose-voice.md')),
       '.claude/rules/prose-voice.md absent',

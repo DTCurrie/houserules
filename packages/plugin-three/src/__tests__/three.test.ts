@@ -51,7 +51,7 @@ describe('three', () => {
     ]);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('three/three')).toBe(true);
+    expect(manifest.modules).toContain('three/three');
     expect(
       manifest.files['.claude/rules/three.md'],
       'the rule BODY is kit-owned (update-refreshable)',
@@ -73,9 +73,10 @@ describe('three', () => {
     const ruleText = readFileSync(join(root, '.claude/rules/three.md'), 'utf8');
 
     expect(ruleText).toContain('../reference/three-debugging.md');
-    expect(existsSync(join(root, '.claude/reference/three-debugging.md'))).toBe(
-      true,
-    );
+    expect(
+      existsSync(join(root, '.claude/reference/three-debugging.md')),
+      'three-debugging.md installed',
+    ).toBe(true);
   });
 
   it('imports LineSegments2 from the three/addons/ alias', () => {
@@ -92,22 +93,30 @@ describe('three', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('three/three')).toBe(false);
-    expect(existsSync(join(root, '.claude/rules/three.md'))).toBe(false);
+    expect(manifest.modules).not.toContain('three/three');
+    expect(
+      existsSync(join(root, '.claude/rules/three.md')),
+      'three.md absent',
+    ).toBe(false);
   });
 
   it('installs only the guides that were chosen', () => {
     const root = installedWith(['threlte']);
 
-    expect(existsSync(guidePath(root, 'threlte'))).toBe(true);
-    expect(existsSync(guidePath(root, 'r3f'))).toBe(false);
+    expect(
+      existsSync(guidePath(root, 'threlte')),
+      'threlte guide installed',
+    ).toBe(true);
+    expect(existsSync(guidePath(root, 'r3f')), 'r3f guide absent').toBe(false);
   });
 
   it('installs no guide when none was chosen', () => {
     const root = installedWith([]);
 
-    expect(existsSync(guidePath(root, 'threlte'))).toBe(false);
-    expect(existsSync(guidePath(root, 'r3f'))).toBe(false);
+    expect(existsSync(guidePath(root, 'threlte')), 'threlte guide absent').toBe(
+      false,
+    );
+    expect(existsSync(guidePath(root, 'r3f')), 'r3f guide absent').toBe(false);
   });
 
   it('ships upstream docs without any binding section when no guide was chosen', () => {
@@ -125,9 +134,11 @@ describe('three', () => {
       existsSync(
         join(root, '.claude/reference/three-upstream-docs-threlte.md'),
       ),
+      'three-upstream-docs-threlte.md absent',
     ).toBe(false);
     expect(
       existsSync(join(root, '.claude/reference/three-upstream-docs-r3f.md')),
+      'three-upstream-docs-r3f.md absent',
     ).toBe(false);
   });
 
@@ -147,9 +158,11 @@ describe('three', () => {
       existsSync(
         join(root, '.claude/reference/three-upstream-docs-threlte.md'),
       ),
+      'three-upstream-docs-threlte.md installed',
     ).toBe(true);
     expect(
       existsSync(join(root, '.claude/reference/three-upstream-docs-r3f.md')),
+      'three-upstream-docs-r3f.md absent',
     ).toBe(false);
   });
 
@@ -167,11 +180,13 @@ describe('three', () => {
     expect(docs).not.toContain('Threlte');
     expect(
       existsSync(join(root, '.claude/reference/three-upstream-docs-r3f.md')),
+      'three-upstream-docs-r3f.md installed',
     ).toBe(true);
     expect(
       existsSync(
         join(root, '.claude/reference/three-upstream-docs-threlte.md'),
       ),
+      'three-upstream-docs-threlte.md absent',
     ).toBe(false);
   });
 

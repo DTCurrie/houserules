@@ -1093,8 +1093,10 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     const effect = single(effects);
 
     const written = effect.content!.toString();
-    expect(written.startsWith('# Title\n')).toBe(true);
-    expect(written.endsWith('\nUser prose below.\n')).toBe(true);
+    expect(written.slice(0, '# Title\n'.length)).toBe('# Title\n');
+    expect(written.slice(-'\nUser prose below.\n'.length)).toBe(
+      '\nUser prose below.\n',
+    );
   });
 });
 
@@ -1208,7 +1210,7 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
 
     const { plannedDests } = computeEffects(root, [seedAction()]);
 
-    expect(plannedDests.has(CONFIG_DEST)).toBe(true);
+    expect(plannedDests).toContain(CONFIG_DEST);
   });
 });
 

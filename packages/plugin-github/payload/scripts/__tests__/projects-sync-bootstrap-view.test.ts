@@ -340,8 +340,9 @@ describe('projects-sync bootstrap, default view configuration', () => {
       expect(project.view.name).toBe('View 1');
       expect(project.view.visibleFieldIds).toEqual([]);
     }
-    expect(existsSync(join(root, 'gh-graphql-calls.log'))).toBe(true);
-    const calls = readFileSync(join(root, 'gh-graphql-calls.log'), 'utf8');
+    const logPath = join(root, 'gh-graphql-calls.log');
+    expect(existsSync(logPath), `${logPath} exists`).toBe(true);
+    const calls = readFileSync(logPath, 'utf8');
     expect(calls).not.toContain('updateProjectV2View');
     expect(calls).not.toContain('views(first: 1)');
   });

@@ -161,7 +161,7 @@ describe('design.mjs scaffold', () => {
     writeFileSync(cssPath, `${TWO_SHADE_ENTRY_CSS}\n${scaffolded.stdout}`);
     const result = await loadDesignSystem(root, cssPath);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.theme.get(['--color-brand-raised'])).toBe(
       'var(--color-brand-600)',
@@ -180,7 +180,7 @@ describe('design.mjs scaffold', () => {
     writeFileSync(cssPath, `${entryCss}\n${scaffolded.stdout}`);
     const result = await loadDesignSystem(root, cssPath);
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const [css] = result.value.candidatesToCss(['bg-brand']);
     expect(css).toContain('var(--color-brand-500)');

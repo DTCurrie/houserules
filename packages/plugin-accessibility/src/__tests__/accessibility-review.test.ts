@@ -27,7 +27,7 @@ describe('accessibility-review', () => {
     const skill = readFileSync(join(root, SKILL), 'utf8');
     const manifest = manifestOf(root);
 
-    expect(manifest.modules.includes('a11y/accessibility-review')).toBe(true);
+    expect(manifest.modules).toContain('a11y/accessibility-review');
     expect(manifest.files[AGENT]).toBe(sha256(agent));
     expect(manifest.files[SKILL]).toBe(sha256(skill));
   });
@@ -61,7 +61,7 @@ describe('accessibility-review', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, AGENT))).toBe(false);
-    expect(existsSync(join(root, SKILL))).toBe(false);
+    expect(existsSync(join(root, AGENT)), `${AGENT} is absent`).toBe(false);
+    expect(existsSync(join(root, SKILL)), `${SKILL} is absent`).toBe(false);
   });
 });

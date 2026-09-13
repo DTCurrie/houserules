@@ -169,8 +169,12 @@ describe('backlog-log.mjs add', () => {
   it('resolves the bare basename to the ledger directory, not the repo root', () => {
     run(root, ['add', 'TEST', 'BACKLOG.md', 'T', 'B', '--chat=none']);
 
-    expect(existsSync(join(root, 'BACKLOG.md'))).toBe(false);
-    expect(existsSync(join(root, ROOT_SURFACE))).toBe(true);
+    expect(existsSync(join(root, 'BACKLOG.md')), 'BACKLOG.md is absent').toBe(
+      false,
+    );
+    expect(existsSync(join(root, ROOT_SURFACE)), `${ROOT_SURFACE} exists`).toBe(
+      true,
+    );
   });
 
   it('names the target by its label in the header of a per-area surface', () => {
@@ -316,7 +320,9 @@ describe('backlog-log.mjs add', () => {
   it('omits the issue key entirely when --issue is not given', () => {
     run(root, ['add', 'TEST', 'BACKLOG.md', 'T', 'B', '--chat=none']);
 
-    expect('issue' in recordAt(root, 0)).toBe(false);
+    expect('issue' in recordAt(root, 0), 'the record has no issue key').toBe(
+      false,
+    );
   });
 
   it('does not change the rendered surface when the record carries an issue number', () => {
@@ -511,7 +517,10 @@ describe('backlog-log.mjs remove', () => {
 
     // The root area is not a configured target, so it leaves no header-only stub behind. That
     // stub was unclearable: every later render rebuilt it from the ledger.
-    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, ROOT_SURFACE)),
+      `${ROOT_SURFACE} is absent`,
+    ).toBe(false);
   });
 
   it('leaves the sibling entry intact', () => {
@@ -770,7 +779,10 @@ describe('backlog-log.mjs move', () => {
 
     run(root, ['render']);
 
-    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, ROOT_SURFACE)),
+      `${ROOT_SURFACE} is absent`,
+    ).toBe(false);
   });
 
   it('removes the entry from the source surface', () => {
@@ -778,7 +790,10 @@ describe('backlog-log.mjs move', () => {
 
     // That was the root area's last entry, and the root area is not a configured target, so the
     // surface goes rather than lingering as a header-only stub.
-    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, ROOT_SURFACE)),
+      `${ROOT_SURFACE} is absent`,
+    ).toBe(false);
   });
 
   it('exits 1 when the id has no ledger record', () => {
@@ -794,7 +809,10 @@ describe('backlog-log.mjs move', () => {
     const r = run(root, ['move', 'TEST-aaaaaa', 'studio', '--chat=none']);
 
     expect(r.status, r.stderr).toBe(0);
-    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, ROOT_SURFACE)),
+      `${ROOT_SURFACE} is absent`,
+    ).toBe(false);
   });
 
   it('exits 1 when the id was already removed', () => {
@@ -827,7 +845,10 @@ describe('backlog-log.mjs move', () => {
     expect(readFile(root, '.claude/ledgers/studio.BACKLOG.md')).toContain(
       '## [TEST-aaaaaa] New title',
     );
-    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, ROOT_SURFACE)),
+      `${ROOT_SURFACE} is absent`,
+    ).toBe(false);
   });
 });
 
@@ -1216,7 +1237,9 @@ describe('backlog-log.mjs given an area named as a path rather than a bare word'
       '--chat=none',
     ]);
 
-    expect(existsSync(join(root, AREA_PATH))).toBe(false);
+    expect(existsSync(join(root, AREA_PATH)), `${AREA_PATH} is absent`).toBe(
+      false,
+    );
   });
 
   it('records the removal against the canonical area, not the path', () => {
@@ -1256,7 +1279,10 @@ describe('backlog-log.mjs given an area named as a path rather than a bare word'
       '--chat=none',
     ]);
 
-    expect(existsSync(join(root, 'docs/deferred.md'))).toBe(true);
+    expect(
+      existsSync(join(root, 'docs/deferred.md')),
+      'docs/deferred.md exists',
+    ).toBe(true);
   });
 });
 
@@ -1292,7 +1318,7 @@ describe('backlog-log.mjs given an area named by its own surface filename', () =
       '--chat=none',
     ]);
 
-    expect(existsSync(join(root, DOUBLED))).toBe(false);
+    expect(existsSync(join(root, DOUBLED)), `${DOUBLED} is absent`).toBe(false);
   });
 
   it('renders a record already stamped with a doubled name onto the area surface', () => {
@@ -1438,7 +1464,10 @@ describe('backlog-log.mjs reading the local index merged with the queue', () => 
 
     run(root, ['render']);
 
-    expect(existsSync(join(root, ROOT_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, ROOT_SURFACE)),
+      `${ROOT_SURFACE} is absent`,
+    ).toBe(false);
   });
 
   it('renders queue entries alone when no index file exists yet', () => {
@@ -1481,9 +1510,8 @@ describe('backlog-log.mjs add given an area houserules.config.json does not conf
   it('writes no surface for the rejected area', () => {
     run(root, ['add', 'TEST', 'cli', 'T', 'B', '--chat=none']);
 
-    expect(existsSync(join(root, '.claude/ledgers/cli.BACKLOG.md'))).toBe(
-      false,
-    );
+    const surfacePath = join(root, '.claude/ledgers/cli.BACKLOG.md');
+    expect(existsSync(surfacePath), `${surfacePath} absent`).toBe(false);
   });
 
   it('accepts an area a target configures', () => {
@@ -1583,9 +1611,8 @@ describe('backlog-log.mjs move given an area houserules.config.json does not con
 
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('Unknown area "cli"');
-    expect(existsSync(join(root, '.claude/ledgers/cli.BACKLOG.md'))).toBe(
-      false,
-    );
+    const surfacePath = join(root, '.claude/ledgers/cli.BACKLOG.md');
+    expect(existsSync(surfacePath), `${surfacePath} absent`).toBe(false);
   });
 
   it('leaves the entry on its source surface when the destination is rejected', () => {
@@ -1614,9 +1641,8 @@ describe('backlog-log.mjs render given an area houserules.config.json does not c
 
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('Unknown area "cli"');
-    expect(existsSync(join(root, '.claude/ledgers/cli.BACKLOG.md'))).toBe(
-      false,
-    );
+    const surfacePath = join(root, '.claude/ledgers/cli.BACKLOG.md');
+    expect(existsSync(surfacePath), `${surfacePath} absent`).toBe(false);
   });
 
   it('rejects a typo naming neither a configured target nor an existing surface', () => {
@@ -1686,8 +1712,7 @@ describe('a backlog entry the board reports as Done', () => {
 
     run(root, ['render']);
 
-    expect(existsSync(join(root, '.claude/ledgers/studio.BACKLOG.md'))).toBe(
-      false,
-    );
+    const surfacePath = join(root, '.claude/ledgers/studio.BACKLOG.md');
+    expect(existsSync(surfacePath), `${surfacePath} absent`).toBe(false);
   });
 });

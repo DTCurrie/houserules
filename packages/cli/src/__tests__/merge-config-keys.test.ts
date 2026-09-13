@@ -88,7 +88,7 @@ describe('mergeManagedKeys', () => {
 
     const merged = mergedObject(withOptions, canonicalWith({}));
 
-    expect('moduleOptions' in merged).toBe(false);
+    expect(merged).not.toHaveProperty('moduleOptions');
   });
 
   it('returns null when the file on disk is not valid JSON', () => {
@@ -118,6 +118,6 @@ describe('mergeManagedKeys', () => {
       ['moduleOptions'],
     );
 
-    expect(text?.endsWith('}\n')).toBe(true);
+    expect(text?.slice(-2)).toBe('}\n');
   });
 });

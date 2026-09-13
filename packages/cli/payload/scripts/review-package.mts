@@ -14,7 +14,9 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { git, repoRoot } from '@houserules/payload/proc';
 
@@ -36,6 +38,107 @@ function fenced(text: string): string {
   return [fence, text, fence].join('\n');
 }
 
+/** Splits `<base>..<head>` into its two refs, or `null` when either side is empty. */
+export function parseRange(
+  rangeArg: string,
+): { base: string; head: string } | null {
+  const sep = rangeArg.indexOf('..');
+  const base = sep >= 0 ? rangeArg.slice(0, sep) : '';
+  const head = sep >= 0 ? rangeArg.slice(sep + 2) : '';
+  if (!base || !head) return null;
+  return { base, head };
+}
+
+/** Where a package prints when `--out` is not given: under `.claude/plans/`, ref names slashed. */
+export function defaultOutPath(
+  root: string,
+  base: string,
+  head: string,
+): string {
+  return join(
+    root,
+    '.claude/plans',
+    `review-package-${base.replace(/\//g, '-')}-${head.replace(/\//g, '-')}.md`,
+  );
+}
+
+/** The `files changed` count out of a `git diff --stat` summary line, or 0 when absent. */
+export function parseFilesChanged(stat: string): number {
+  const match = stat.match(/(\d+) files? changed/);
+  return match ? Number(match[1]) : 0;
+}
+
+/** The markdown body a review package writes, from its already-resolved pieces. */
+export function buildReviewContent(input: {
+  base: string;
+  head: string;
+  baseSha: string;
+  headSha: string;
+  log: string;
+  stat: string;
+  diff: string;
+  generated: string;
+}): string {
+  return `${[
+    `# Review package: ${input.base}..${input.head}`,
+    '',
+    `Base \`${input.base}\` resolved to \`${input.baseSha}\`. Head \`${input.head}\` resolved to \`${input.headSha}\`. Generated ${input.generated}.`,
+    '',
+    '## Commits',
+    '',
+    fenced(input.log),
+    '',
+    '## Stat',
+    '',
+    fenced(input.stat),
+    '',
+    '## Diff',
+    '',
+    fenced(input.diff),
+  ].join('\n')}\n`;
+}
+
+/** The outcome of pulling a `## Slices` table out of a phase file's lines. */
+export type SliceTableResult =
+  | { kind: 'no-section' }
+  | { kind: 'no-table' }
+  | { kind: 'ok'; header: string; divider: string; rows: string[] };
+
+/**
+ * The `## Slices` table: everything from just after that heading to the next `## ` heading
+ * or EOF, filtered to table rows. `no-section` when the heading is absent, `no-table` when
+ * fewer than a header and a divider row remain.
+ */
+export function extractSliceTable(lines: string[]): SliceTableResult {
+  const headingIndex = lines.findIndex((l) => l.trim() === '## Slices');
+  if (headingIndex < 0) return { kind: 'no-section' };
+  let end = lines.length;
+  for (let i = headingIndex + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i] as string)) {
+      end = i;
+      break;
+    }
+  }
+  const tableLines = lines
+    .slice(headingIndex + 1, end)
+    .filter((l) => l.trim().startsWith('|'));
+  if (tableLines.length < 2) return { kind: 'no-table' };
+  return {
+    kind: 'ok',
+    header: tableLines[0] as string,
+    divider: tableLines[1] as string,
+    rows: tableLines.slice(2),
+  };
+}
+
+/** The row whose `id` column (the table's first cell) matches `sliceId`, if any. */
+export function findSliceRow(
+  rows: string[],
+  sliceId: string,
+): string | undefined {
+  return rows.find((r) => r.split('|')[1]?.trim() === sliceId);
+}
+
 function resolveSha(root: string, ref: string): string {
   const sha = git(root, ['rev-parse', '--verify', '--quiet', ref]);
   if (!sha) fail(`unknown ref "${ref}"`);
@@ -43,11 +146,9 @@ function resolveSha(root: string, ref: string): string {
 }
 
 function runPackage(rangeArg: string, outArg: string | undefined): void {
-  const sep = rangeArg.indexOf('..');
-  const base = sep >= 0 ? rangeArg.slice(0, sep) : '';
-  const head = sep >= 0 ? rangeArg.slice(sep + 2) : '';
-  if (!base || !head)
-    fail(`range must look like <base>..<head>, got "${rangeArg}"`);
+  const range = parseRange(rangeArg);
+  if (!range) fail(`range must look like <base>..<head>, got "${rangeArg}"`);
+  const { base, head } = range;
 
   let root: string;
   try {
@@ -73,35 +174,21 @@ function runPackage(rangeArg: string, outArg: string | undefined): void {
   const diff = (
     git(root, ['diff', '-U10', `${baseSha}..${headSha}`]) ?? ''
   ).trimEnd();
-  const filesChangedMatch = stat.match(/(\d+) files? changed/);
-  const filesChanged = filesChangedMatch ? Number(filesChangedMatch[1]) : 0;
+  const filesChanged = parseFilesChanged(stat);
 
   const generated = new Date().toISOString().slice(0, 10);
-  const content = `${[
-    `# Review package: ${base}..${head}`,
-    '',
-    `Base \`${base}\` resolved to \`${baseSha}\`. Head \`${head}\` resolved to \`${headSha}\`. Generated ${generated}.`,
-    '',
-    '## Commits',
-    '',
-    fenced(log),
-    '',
-    '## Stat',
-    '',
-    fenced(stat),
-    '',
-    '## Diff',
-    '',
-    fenced(diff),
-  ].join('\n')}\n`;
+  const content = buildReviewContent({
+    base,
+    head,
+    baseSha,
+    headSha,
+    log,
+    stat,
+    diff,
+    generated,
+  });
 
-  const out =
-    outArg ??
-    join(
-      root,
-      '.claude/plans',
-      `review-package-${base.replace(/\//g, '-')}-${head.replace(/\//g, '-')}.md`,
-    );
+  const out = outArg ?? defaultOutPath(root, base, head);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, content);
 
@@ -110,40 +197,25 @@ function runPackage(rangeArg: string, outArg: string | undefined): void {
   );
 }
 
-/** The `## Slices` section's lines, from just after the heading to the next `## ` heading or EOF. */
-function slicesSection(lines: string[], phaseFile: string): string[] {
-  const headingIndex = lines.findIndex((l) => l.trim() === '## Slices');
-  if (headingIndex < 0) fail(`"${phaseFile}" has no "## Slices" section`);
-  let end = lines.length;
-  for (let i = headingIndex + 1; i < lines.length; i++) {
-    if (/^##\s/.test(lines[i] as string)) {
-      end = i;
-      break;
-    }
-  }
-  return lines.slice(headingIndex + 1, end);
-}
-
 function runBriefs(phaseFile: string, sliceId: string | undefined): void {
   if (!existsSync(phaseFile)) fail(`no such file "${phaseFile}"`);
   const lines = readFileSync(phaseFile, 'utf8').split('\n');
-  const tableLines = slicesSection(lines, phaseFile).filter((l) =>
-    l.trim().startsWith('|'),
-  );
-  if (tableLines.length < 2)
+  const table = extractSliceTable(lines);
+  if (table.kind === 'no-section')
+    fail(`"${phaseFile}" has no "## Slices" section`);
+  if (table.kind === 'no-table')
     fail(`"${phaseFile}" has no slice table under "## Slices"`);
-  const header = tableLines[0] as string;
-  const divider = tableLines[1] as string;
-  const rows = tableLines.slice(2);
 
   if (!sliceId) {
-    process.stdout.write(`${[header, divider, ...rows].join('\n')}\n`);
+    process.stdout.write(
+      `${[table.header, table.divider, ...table.rows].join('\n')}\n`,
+    );
     return;
   }
 
-  const row = rows.find((r) => r.split('|')[1]?.trim() === sliceId);
+  const row = findSliceRow(table.rows, sliceId);
   if (!row) fail(`slice "${sliceId}" not found in "${phaseFile}"`);
-  process.stdout.write(`${[header, divider, row].join('\n')}\n`);
+  process.stdout.write(`${[table.header, table.divider, row].join('\n')}\n`);
 }
 
 function main(): void {
@@ -165,8 +237,13 @@ function main(): void {
   runPackage(rangeArg, outArg);
 }
 
-try {
-  main();
-} catch (err) {
-  fail(err instanceof Error ? err.message : String(err));
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+) {
+  try {
+    main();
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err));
+  }
 }

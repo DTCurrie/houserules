@@ -143,7 +143,7 @@ describe('classifyEffect', () => {
       KIT_LAST_WROTE,
     );
     expect(result.status).toBe('yours');
-    expect(result.yours).toBe(true);
+    expect(result.yours, 'marked as your edit').toBe(true);
   });
 
   it('reports a locally-edited non-region file houserules HAS changed since as "conflict"', () => {
@@ -161,7 +161,7 @@ describe('classifyEffect', () => {
       () => 'edited on disk',
       KIT_LAST_WROTE,
     );
-    expect(result.yours).toBe(true);
+    expect(result.yours, 'marked as your edit').toBe(true);
   });
 
   it('falls back to "yours" for a local edit with no recorded hash to compare against', () => {
@@ -189,7 +189,7 @@ describe('classifyEffect', () => {
       KIT_LAST_WROTE,
     );
     expect(result.status).toBe('stale');
-    expect(result.yours).toBe(false);
+    expect(result.yours, 'not marked as your edit').toBe(false);
   });
 
   it('diffs against an empty string when readHost returns null for a non-region file', () => {
@@ -232,7 +232,7 @@ describe('classifyEffect', () => {
       KIT_LAST_WROTE,
     );
     expect(result.status).toBe('yours');
-    expect(result.yours).toBe(true);
+    expect(result.yours, 'marked as your edit').toBe(true);
     expect(result.diff).toMatch(/edited body/);
     expect(result.diff).not.toMatch(/prefix/);
   });
@@ -265,7 +265,7 @@ describe('classifyEffect', () => {
       KIT_LAST_WROTE,
     );
     expect(result.status).toBe('stale');
-    expect(result.yours).toBe(false);
+    expect(result.yours, 'not marked as your edit').toBe(false);
     expect(result.diff).toMatch(/old body/);
     expect(result.diff).not.toMatch(/suffix/);
   });
@@ -299,7 +299,7 @@ describe('classifyEffect', () => {
       KIT_LAST_WROTE,
     );
     expect(result.status).toBe('yours');
-    expect(result.yours).toBe(true);
+    expect(result.yours, 'marked as your edit').toBe(true);
     expect(result.diff).toMatch(/my edited body/);
     expect(result.diff).not.toMatch(/paths:/);
   });
@@ -324,7 +324,7 @@ describe('classifyEffect', () => {
       KIT_LAST_WROTE,
     );
     expect(result.status).toBe('stale');
-    expect(result.yours).toBe(false);
+    expect(result.yours, 'not marked as your edit').toBe(false);
     expect(result.diff).toMatch(/old body/);
     expect(result.diff).toMatch(/new body/);
     expect(result.diff).not.toMatch(/paths:/);
@@ -373,7 +373,7 @@ describe('classifyEffect, the "defaultMoved" annotation on a body action', () =>
       recordedDefault,
     );
     expect(result.status).toBe('ok');
-    expect(result.defaultMoved).toBe(true);
+    expect(result.defaultMoved, 'default moved').toBe(true);
   });
 });
 
@@ -426,7 +426,7 @@ describe('isClean', () => {
         { path: 'b', status: 'ok' },
       ],
     };
-    expect(isClean(report)).toBe(true);
+    expect(isClean(report), 'report is clean').toBe(true);
   });
 
   it('is false when any file has drifted', () => {
@@ -436,7 +436,7 @@ describe('isClean', () => {
         { path: 'b', status: 'stale' },
       ],
     };
-    expect(isClean(report)).toBe(false);
+    expect(isClean(report), 'report is not clean').toBe(false);
   });
 });
 
@@ -506,7 +506,7 @@ describe('doctor on a clean install', () => {
     const root = useInstalledRepo('npm-single');
     const report = runDoctorJson(root);
     expect(report.counts.drifted, JSON.stringify(report.drift)).toBe(0);
-    expect(report.ok).toBe(true);
+    expect(report.ok, 'doctor report is ok').toBe(true);
   });
 });
 
@@ -526,7 +526,7 @@ describe('a file edited locally (`yours`)', () => {
       '.claude/scripts/guard-bash.mjs',
     );
     expect(entry?.status).toBe('yours');
-    expect(entry?.yours).toBe(true);
+    expect(entry?.yours, 'marked as your edit').toBe(true);
   });
 
   it('does not hold the exit code red, since a deliberate edit is not a blocking problem', () => {
@@ -564,7 +564,7 @@ describe('a file edited locally that houserules has since changed (`conflict`)',
       runDoctorJson(root),
       '.claude/scripts/guard-bash.mjs',
     );
-    expect(entry?.yours).toBe(true);
+    expect(entry?.yours, 'marked as your edit').toBe(true);
   });
 
   it('raises a warning, since a newer houserules version leaves you a merge to make', () => {
@@ -610,7 +610,7 @@ describe('a file houserules would rewrite but was not edited (`stale`)', () => {
       '.claude/scripts/guard-bash.mjs',
     );
     expect(entry?.status).toBe('stale');
-    expect(entry?.yours).toBe(false);
+    expect(entry?.yours, 'not marked as your edit').toBe(false);
   });
 
   it('blocks the exit code', () => {
@@ -673,12 +673,12 @@ describe('an orphaned kit-owned file no enabled module produces', () => {
 
   it('is not removed by --fix alone', () => {
     runCli(['doctor', root, '--fix']);
-    expect(existsSync(stray)).toBe(true);
+    expect(existsSync(stray), 'stray file still present').toBe(true);
   });
 
   it('is removed by --fix --prune', () => {
     expect(runCli(['doctor', root, '--fix', '--prune']).status).toBe(0);
-    expect(existsSync(stray)).toBe(false);
+    expect(existsSync(stray), 'stray file removed').toBe(false);
   });
 });
 
@@ -691,6 +691,8 @@ describe('a shared host file', () => {
 
     runCli(['doctor', root, '--fix', '--prune']);
 
-    expect(existsSync(join(root, 'CLAUDE.md'))).toBe(true);
+    expect(existsSync(join(root, 'CLAUDE.md')), 'CLAUDE.md not deleted').toBe(
+      true,
+    );
   });
 });

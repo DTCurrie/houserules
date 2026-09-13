@@ -16,9 +16,9 @@ describe('testing plugin, simulation guide option', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/rules/testing-simulation.md'))).toBe(
-      true,
-    );
+    const rulePath = join(root, '.claude/rules/testing-simulation.md');
+
+    expect(existsSync(rulePath), `${rulePath} exists`).toBe(true);
   });
 
   it('does not install testing-simulation.md when the typescript guide is selected instead', () => {
@@ -28,9 +28,9 @@ describe('testing plugin, simulation guide option', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/rules/testing-simulation.md'))).toBe(
-      false,
-    );
+    const rulePath = join(root, '.claude/rules/testing-simulation.md');
+
+    expect(existsSync(rulePath), `${rulePath} absent`).toBe(false);
   });
 
   // The `dir:tests` choice carries no rule file of its own (guideRules has no entry for
@@ -44,11 +44,22 @@ describe('testing plugin, simulation guide option', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/rules/testing.md'))).toBe(true);
-    expect(existsSync(join(root, '.claude/rules/testing-typescript.md'))).toBe(
+    expect(
+      existsSync(join(root, '.claude/rules/testing.md')),
+      '.claude/rules/testing.md exists',
+    ).toBe(true);
+    const typescriptRulePath = join(
+      root,
+      '.claude/rules/testing-typescript.md',
+    );
+    expect(existsSync(typescriptRulePath), `${typescriptRulePath} exists`).toBe(
       true,
     );
-    expect(existsSync(join(root, '.claude/rules/testing-simulation.md'))).toBe(
+    const simulationRulePath = join(
+      root,
+      '.claude/rules/testing-simulation.md',
+    );
+    expect(existsSync(simulationRulePath), `${simulationRulePath} absent`).toBe(
       false,
     );
   });

@@ -11,8 +11,9 @@
  * Config (houserules.config.json, readGuard, all defaulted): { enabled, maxBytes, denyGlobs }.
  */
 
-import { statSync } from 'node:fs';
+import { realpathSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
   READ_GUARD_DEFAULTS,
@@ -29,53 +30,98 @@ interface ReadPayload {
   };
 }
 
-const input = readStdinJson<ReadPayload>();
+export interface ReadGuardConfig {
+  enabled?: boolean;
+  maxBytes: number;
+  denyGlobs?: string[];
+}
 
-const ti = input?.tool_input ?? {};
-const filePath = ti.file_path ?? ti.path ?? '';
-// A bounded read (offset/limit set) is exactly what we WANT — let it through.
-if (!filePath || ti.offset != null || ti.limit != null) process.exit(0);
-
-try {
-  // Resolve a repo-relative path for glob matching (git root, else cwd). Resolved before
-  // the config load so the root is passed in rather than spawned for a second time.
-  const root = repoRoot();
-  const cfg = {
-    ...READ_GUARD_DEFAULTS,
-    ...(loadConfigSafe(root).readGuard ?? {}),
-  };
-  if (cfg.enabled === false) process.exit(0);
+/**
+ * The stderr message refusing an unbounded read of `filePath`, or null when the read is
+ * bounded, the guard is disabled, or the file matches neither a deny glob nor `maxBytes`.
+ */
+export function readGuardRefusalFor(
+  filePath: string,
+  offset: number | undefined,
+  limit: number | undefined,
+  root: string,
+  size: number,
+  config: ReadGuardConfig,
+): string | null {
+  if (!filePath || offset != null || limit != null) return null;
+  if (config.enabled === false) return null;
 
   const abs = resolve(root, filePath);
   const rel = abs.startsWith(root) ? abs.slice(root.length + 1) : filePath;
   const base = rel.split('/').pop() ?? rel;
 
-  const matchedGlob = (cfg.denyGlobs ?? []).find((g) => {
+  const matchedGlob = (config.denyGlobs ?? []).find((g) => {
     const re = globToRe(g);
     return re.test(rel) || re.test(base);
   });
 
-  let size = 0;
-  try {
-    size = statSync(abs).size;
-  } catch {
-    /* unreadable/nonexistent — let Read report it, don't block */
-  }
-  const tooBig = cfg.maxBytes && size > cfg.maxBytes;
+  const tooBig = config.maxBytes && size > config.maxBytes;
 
-  if (matchedGlob || tooBig) {
-    const why = matchedGlob
-      ? `matches a generated/denylisted pattern (${matchedGlob})`
-      : `is large (${Math.round(size / 1024)} KB > ${Math.round(cfg.maxBytes / 1024)} KB)`;
-    process.stderr.write(
-      `houserules read guard: ${rel} ${why}. Don't read it whole — ` +
-        `grep for what you need (\`grep -n '<pattern>' ${rel}\`) then Read with offset+limit, ` +
-        `or re-run this Read with an explicit limit if you truly need a window.\n`,
-    );
-    process.exit(2);
-  }
-} catch {
-  process.exit(0); // Any guard error → allow the read.
+  if (!matchedGlob && !tooBig) return null;
+
+  const why = matchedGlob
+    ? `matches a generated/denylisted pattern (${matchedGlob})`
+    : `is large (${Math.round(size / 1024)} KB > ${Math.round(config.maxBytes / 1024)} KB)`;
+  return (
+    `houserules read guard: ${rel} ${why}. Don't read it whole — ` +
+    `grep for what you need (\`grep -n '<pattern>' ${rel}\`) then Read with offset+limit, ` +
+    `or re-run this Read with an explicit limit if you truly need a window.\n`
+  );
 }
 
-process.exit(0);
+function main(): void {
+  const input = readStdinJson<ReadPayload>();
+
+  const ti = input?.tool_input ?? {};
+  const filePath = ti.file_path ?? ti.path ?? '';
+  // A bounded read (offset/limit set) is exactly what we WANT — let it through.
+  if (!filePath || ti.offset != null || ti.limit != null) process.exit(0);
+
+  try {
+    // Resolve a repo-relative path for glob matching (git root, else cwd). Resolved before
+    // the config load so the root is passed in rather than spawned for a second time.
+    const root = repoRoot();
+    const cfg = {
+      ...READ_GUARD_DEFAULTS,
+      ...(loadConfigSafe(root).readGuard ?? {}),
+    };
+    if (cfg.enabled === false) process.exit(0);
+
+    const abs = resolve(root, filePath);
+    let size = 0;
+    try {
+      size = statSync(abs).size;
+    } catch {
+      /* unreadable/nonexistent — let Read report it, don't block */
+    }
+
+    const refusal = readGuardRefusalFor(
+      filePath,
+      ti.offset,
+      ti.limit,
+      root,
+      size,
+      cfg,
+    );
+    if (refusal) {
+      process.stderr.write(refusal);
+      process.exit(2);
+    }
+  } catch {
+    process.exit(0); // Any guard error → allow the read.
+  }
+
+  process.exit(0);
+}
+
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+) {
+  main();
+}

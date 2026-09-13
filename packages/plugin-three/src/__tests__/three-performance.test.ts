@@ -25,13 +25,19 @@ describe('three renderer performance reference', () => {
   it('is not installed by default', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
 
-    expect(existsSync(referencePath(root))).toBe(false);
+    expect(
+      existsSync(referencePath(root)),
+      'performance reference absent with no module enabled',
+    ).toBe(false);
   });
 
   it('is not installed when the module is enabled with no options chosen', () => {
     const root = installedWith([]);
 
-    expect(existsSync(referencePath(root))).toBe(false);
+    expect(
+      existsSync(referencePath(root)),
+      'performance reference absent with no options chosen',
+    ).toBe(false);
   });
 
   it('is installed when the performance option is chosen', () => {
@@ -44,27 +50,37 @@ describe('three renderer performance reference', () => {
   it('is not installed when only the threlte guide is chosen', () => {
     const root = installedWith(['threlte']);
 
-    expect(existsSync(referencePath(root))).toBe(false);
+    expect(
+      existsSync(referencePath(root)),
+      'performance reference absent with only threlte chosen',
+    ).toBe(false);
   });
 
   it('is not installed when only the r3f guide is chosen', () => {
     const root = installedWith(['r3f']);
 
-    expect(existsSync(referencePath(root))).toBe(false);
+    expect(
+      existsSync(referencePath(root)),
+      'performance reference absent with only r3f chosen',
+    ).toBe(false);
   });
 
   it('does not install the threlte guide when only performance is chosen', () => {
     const root = installedWith(['performance']);
 
-    expect(existsSync(join(root, '.claude/rules/three-threlte.md'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(root, '.claude/rules/three-threlte.md')),
+      'three-threlte.md absent with only performance chosen',
+    ).toBe(false);
   });
 
   it('does not install the r3f guide when only performance is chosen', () => {
     const root = installedWith(['performance']);
 
-    expect(existsSync(join(root, '.claude/rules/three-r3f.md'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/rules/three-r3f.md')),
+      'three-r3f.md absent with only performance chosen',
+    ).toBe(false);
   });
 
   it('carries no frontmatter, since it is pull-only', () => {
@@ -89,7 +105,7 @@ describe('three renderer performance reference', () => {
 
     const content = readFileSync(referencePath(root), 'utf8');
 
-    expect(content).toContain('has not reached a Baseline classification');
+    expect(content).toMatch(/## WebGPU, with a fallback[\s\S]{0,200}Baseline/);
     expect(content).not.toMatch(/percent.{0,10}global support/);
   });
 
@@ -117,8 +133,8 @@ describe('three renderer performance reference', () => {
 
     const content = readFileSync(referencePath(root), 'utf8');
 
-    expect(content).toContain(
-      'roughly 100 draw calls per frame as a prompt to\ninvestigate rather than a hard threshold',
+    expect(content).toMatch(
+      /## Fewer, larger draw calls[\s\S]{0,1500}100 draw calls/,
     );
   });
 
@@ -136,8 +152,8 @@ describe('three renderer performance reference', () => {
 
     const content = readFileSync(referencePath(root), 'utf8');
 
-    expect(content).toContain(
-      'Recompute that bounding sphere after modifying a mesh',
+    expect(content).toMatch(
+      /## Frustum culling depends on a correct bounding volume[\s\S]{0,300}[Rr]ecompute/,
     );
   });
 });

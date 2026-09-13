@@ -16,7 +16,10 @@ describe('testing plugin, 3d guide option', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/rules/testing-3d.md'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/rules/testing-3d.md')),
+      '.claude/rules/testing-3d.md exists',
+    ).toBe(true);
   });
 
   it('does not install testing-3d.md when the typescript guide is selected instead', () => {
@@ -26,6 +29,9 @@ describe('testing plugin, 3d guide option', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/rules/testing-3d.md'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/rules/testing-3d.md')),
+      '.claude/rules/testing-3d.md is absent',
+    ).toBe(false);
   });
 });

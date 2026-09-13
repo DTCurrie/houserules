@@ -339,8 +339,8 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
     });
 
     expect(r.status, r.stderr).toBe(0);
-    expect(existsSync(join(root, second))).toBe(false);
-    expect(existsSync(join(root, third))).toBe(false);
+    expect(existsSync(join(root, second)), `${second} is absent`).toBe(false);
+    expect(existsSync(join(root, third)), `${third} is absent`).toBe(false);
     const text = readFileSync(join(root, first), 'utf8');
     expect(text, text).toMatch(/['"]@fix\/cityville['"]: patch/);
     expect(text, text).toMatch(/['"]@fix\/studio['"]: minor/);
@@ -359,7 +359,7 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
     });
 
     expect(r.status, r.stderr).toBe(0);
-    expect(existsSync(join(root, second))).toBe(false);
+    expect(existsSync(join(root, second)), `${second} is absent`).toBe(false);
     expect(readFileSync(join(root, first), 'utf8')).toMatch(
       /['"]@fix\/studio['"]: patch/,
     );

@@ -45,11 +45,15 @@ describe('design.mjs render', () => {
   it('installs the cdp-session and rendered-checks libs the render command needs', () => {
     const root = installed();
 
-    expect(existsSync(join(root, '.claude/scripts/lib/cdp-session.mjs'))).toBe(
+    const cdpSessionPath = join(root, '.claude/scripts/lib/cdp-session.mjs');
+    const renderedChecksPath = join(
+      root,
+      '.claude/scripts/lib/rendered-checks.mjs',
+    );
+
+    expect(existsSync(cdpSessionPath), `${cdpSessionPath} exists`).toBe(true);
+    expect(existsSync(renderedChecksPath), `${renderedChecksPath} exists`).toBe(
       true,
     );
-    expect(
-      existsSync(join(root, '.claude/scripts/lib/rendered-checks.mjs')),
-    ).toBe(true);
   });
 });

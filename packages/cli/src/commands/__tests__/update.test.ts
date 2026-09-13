@@ -253,7 +253,10 @@ describe('update on reference templates committed before they were gitignored', 
   });
 
   it('leaves the working-tree template file on disk', () => {
-    expect(existsSync(join(root, reviewerTpl))).toBe(true);
+    expect(
+      existsSync(join(root, reviewerTpl)),
+      'template file left on disk',
+    ).toBe(true);
   });
 
   it('keeps templates/.gitignore tracked', () => {
@@ -319,7 +322,10 @@ describe('init on a fresh pnpm monorepo', () => {
   it('gitignores .claude/scripts so compiled scripts are never committed', () => {
     const root = useRepo('pnpm-monorepo');
     expect(runCli(['init', '--yes', root]).status).toBe(0);
-    expect(existsSync(join(root, '.claude/scripts/.gitignore'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/scripts/.gitignore')),
+      '.gitignore created',
+    ).toBe(true);
     expect(
       runIn(root, 'git', ['ls-files', '.claude/scripts/guard-bash.mjs']).trim(),
     ).toBe('');
@@ -347,7 +353,9 @@ describe('update on houserules scripts committed before they were gitignored', (
   });
 
   it('leaves the working-tree script file on disk', () => {
-    expect(existsSync(join(root, guardScript))).toBe(true);
+    expect(existsSync(join(root, guardScript)), 'script left on disk').toBe(
+      true,
+    );
   });
 
   it('keeps .claude/scripts/.gitignore tracked', () => {
@@ -383,7 +391,10 @@ describe('update with scripts.commit: true (opted in to committing scripts)', ()
   });
 
   it('does not recreate .claude/scripts/.gitignore', () => {
-    expect(existsSync(join(root, '.claude/scripts/.gitignore'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/scripts/.gitignore')),
+      '.gitignore not recreated',
+    ).toBe(false);
   });
 
   it('leaves the already-tracked scripts tracked rather than untracking them', () => {
@@ -473,8 +484,10 @@ describe('update on a CLAUDE.md edited outside the markers', () => {
     expect(runCli(['update', root]).status).toBe(0);
 
     const after = readClaudeMd(root);
-    expect(after.startsWith(editedPrefix)).toBe(true);
-    expect(after.endsWith(editedSuffix)).toBe(true);
+    expect(after.startsWith(editedPrefix), 'starts with edited prefix').toBe(
+      true,
+    );
+    expect(after.endsWith(editedSuffix), 'ends with edited suffix').toBe(true);
     expect(after).toContain(REGION_START);
     expect(after).toContain(REGION_END);
   });
@@ -622,8 +635,12 @@ describe('update reconciling a stale but still-recognizable hook entry no curren
       (settings.hooks?.PreToolUse ?? []).some(
         (group) => group.matcher === 'StaleMatcher',
       ),
+      'stale matcher group dropped',
     ).toBe(false);
-    expect(existsSync(join(root, '.claude/scripts/guard-bash.mjs'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/scripts/guard-bash.mjs')),
+      'guard-bash.mjs still on disk',
+    ).toBe(true);
   });
 
   it('no longer records the dropped tuple in the written manifest signature', () => {
@@ -645,6 +662,7 @@ describe('update reconciling a stale but still-recognizable hook entry no curren
       manifest.settings?.hooks.some(
         (h) => h.matcher === 'StaleMatcher' && h.script === 'guard-bash.mjs',
       ),
+      'stale tuple dropped from the manifest',
     ).toBe(false);
   });
 
@@ -674,7 +692,10 @@ describe('update reconciling a stale but still-recognizable hook entry no curren
     expect(runCli(['update', root]).status).toBe(0);
 
     const after = hookCommandsFor(settingsOf(root), 'PreToolUse');
-    expect(after.some((c) => c.includes('my-own-hook.js'))).toBe(true);
+    expect(
+      after.some((c) => c.includes('my-own-hook.js')),
+      'user-added hook preserved',
+    ).toBe(true);
   });
 
   it('preserves a user-edited variant of the stale entry rather than dropping it', () => {
@@ -725,7 +746,7 @@ describe('doctor and update on a retired, unmodified, wired hook script', () => 
     const r = runCli(['update', '--dry-run', root]);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/compact-tool-output\.mjs/);
-    expect(existsSync(join(root, retired))).toBe(true);
+    expect(existsSync(join(root, retired)), 'file not deleted').toBe(true);
   });
 
   describe('after a real update', () => {
@@ -740,23 +761,32 @@ describe('doctor and update on a retired, unmodified, wired hook script', () => 
     });
 
     it('deletes the retired file', () => {
-      expect(existsSync(join(root, retired))).toBe(false);
+      expect(existsSync(join(root, retired)), 'retired file deleted').toBe(
+        false,
+      );
     });
 
     it('unwires the retired houserules hook from settings.json', () => {
       const cmds = hookCommandsFor(settingsOf(root), 'PostToolUse');
-      expect(cmds.some((c) => c.includes('compact-tool-output'))).toBe(false);
+      expect(
+        cmds.some((c) => c.includes('compact-tool-output')),
+        'retired hook unwired',
+      ).toBe(false);
     });
 
     it('preserves the user hook in settings.json', () => {
       const cmds = hookCommandsFor(settingsOf(root), 'PostToolUse');
-      expect(cmds.some((c) => c.includes('user-hook.js'))).toBe(true);
+      expect(
+        cmds.some((c) => c.includes('user-hook.js')),
+        'user hook preserved',
+      ).toBe(true);
     });
 
     it('drops the retired file from the manifest', () => {
-      expect(retired in readJson<HouseManifestShape>(manifestPath).files).toBe(
-        false,
-      );
+      expect(
+        retired in readJson<HouseManifestShape>(manifestPath).files,
+        'file dropped from the manifest',
+      ).toBe(false);
     });
 
     it('leaves doctor clean again', () => {
@@ -781,7 +811,7 @@ describe('update on a retired hook script with local edits', () => {
   it('keeps the file, since its hash no longer matches the manifest', () => {
     const r = runCli(['update', root]);
     expect(r.status, r.stderr).toBe(0);
-    expect(existsSync(join(root, retired))).toBe(true);
+    expect(existsSync(join(root, retired)), 'file kept').toBe(true);
   });
 
   it('mentions the local edit in its output', () => {
@@ -792,7 +822,7 @@ describe('update on a retired hook script with local edits', () => {
   it('removes the file when --force is passed', () => {
     const r = runCli(['update', '--force', root]);
     expect(r.status, r.stderr).toBe(0);
-    expect(existsSync(join(root, retired))).toBe(false);
+    expect(existsSync(join(root, retired)), 'file removed').toBe(false);
   });
 });
 
@@ -823,6 +853,7 @@ describe('update when the install predates a new default module', () => {
       readJson<HouseManifestShape>(manifestPath).modules.includes(
         'session-context',
       ),
+      'module not auto-enabled',
     ).toBe(false);
   });
 });
@@ -857,7 +888,9 @@ describe('update on an install whose manifest names a retired module', () => {
   });
 
   it('leaves the retired module’s files on disk', () => {
-    expect(existsSync(retiredScript)).toBe(true);
+    expect(existsSync(retiredScript), 'retired module files left on disk').toBe(
+      true,
+    );
   });
 });
 
@@ -1013,7 +1046,10 @@ describe('update against an install whose option selection was never recorded', 
   it('leaves the file the unrecorded selection installed', () => {
     runCli(['update', root]);
 
-    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/fixture-lang-beta.md')),
+      'fixture-lang-beta.md kept',
+    ).toBe(true);
   });
 
   it('names the module and a runnable command that settles it', () => {
@@ -1039,7 +1075,10 @@ describe('update against an install whose option selection was never recorded', 
 
     expect(runCli(['update', root]).status).toBe(0);
 
-    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/fixture-lang-beta.md')),
+      'fixture-lang-beta.md kept',
+    ).toBe(true);
   });
 });
 
@@ -1145,9 +1184,10 @@ describe('init, given a plugin module whose payload-dist file is missing', () =>
   });
 
   it('writes no manifest, so no module is recorded as installed without its files', () => {
-    expect(existsSync(join(root, '.claude/houserules.manifest.json'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(root, '.claude/houserules.manifest.json')),
+      'no manifest written',
+    ).toBe(false);
   });
 });
 
@@ -1164,7 +1204,10 @@ describe('update on a consumer-less install with a ledger .gitignore from before
 
     expect(runCli(['update', root]).status).toBe(0);
 
-    expect(existsSync(join(root, '.claude/ledgers'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/ledgers')),
+      'empty .claude/ledgers not left behind',
+    ).toBe(false);
     expect(
       readJson<HouseManifestShape>(manifestPath).files[
         '.claude/ledgers/.gitignore'
@@ -1180,7 +1223,10 @@ describe('update on an install with a pre-relocation settings.json.bak', () => {
 
     expect(runCli(['update', root]).status).toBe(0);
 
-    expect(existsSync(join(root, '.claude/settings.json.bak'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/settings.json.bak')),
+      'stray backup moved',
+    ).toBe(false);
     expect(
       readFileSync(join(root, '.claude/backups/settings.json.bak'), 'utf8'),
     ).toBe('pristine-bytes\n');
@@ -1214,8 +1260,9 @@ describe('update on an install with a pre-relocation settings.json.bak', () => {
     expect(readFileSync(join(root, '.claude/settings.json.bak'), 'utf8')).toBe(
       'pristine-bytes\n',
     );
-    expect(existsSync(join(root, '.claude/backups/settings.json.bak'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(root, '.claude/backups/settings.json.bak')),
+      'no new backup written on dry-run',
+    ).toBe(false);
   });
 });

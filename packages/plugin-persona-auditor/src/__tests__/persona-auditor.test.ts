@@ -16,7 +16,10 @@ describe('persona-auditor', () => {
 
   it('does not stage the persona-auditor template by default', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
-    expect(existsSync(join(root, personaAuditorTemplate))).toBe(false);
+    expect(
+      existsSync(join(root, personaAuditorTemplate)),
+      'persona-auditor.agent.md.template absent',
+    ).toBe(false);
   });
 
   describe('when enabled', () => {
@@ -48,9 +51,7 @@ describe('persona-auditor', () => {
 
     it('records the module in the manifest', () => {
       const manifest = manifestOf(root);
-      expect(manifest.modules.includes('persona-auditor/persona-auditor')).toBe(
-        true,
-      );
+      expect(manifest.modules).toContain('persona-auditor/persona-auditor');
     });
 
     it('passes doctor', () => {
