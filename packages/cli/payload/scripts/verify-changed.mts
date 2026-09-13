@@ -21,11 +21,14 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 import {
   loadConfigSafe,
   repoRoot,
   resolveTargetCommands,
+  type ConfigTarget,
   type RunnerBlock,
 } from '@houserules/payload/config';
 import {
@@ -34,10 +37,7 @@ import {
 } from '@houserules/payload/workspaces';
 import { git, tail } from '@houserules/payload/proc';
 
-const argv = new Set(process.argv.slice(2));
-const MODE = argv.has('--run') ? 'run' : argv.has('--json') ? 'json' : 'plan';
-
-interface ScopeEntry {
+export interface ScopeEntry {
   package: string;
   reason: 'changed' | 'dependent' | 'full-scope';
   single?: boolean;
@@ -73,7 +73,7 @@ function changedPaths(root: string, base: string): string[] {
 
 // Seed with the changed package names, then pull in every package that transitively
 // lists an in-scope one as a dependency.
-function withDependents(
+export function withDependents(
   seed: Set<string>,
   packages: WorkspacePackage[],
 ): Set<string> {
@@ -104,14 +104,120 @@ function withDependents(
   return inScope;
 }
 
+/**
+ * The verify scope for `changed` paths: for a single-package repo (`packages` empty), the
+ * whole repo as one entry when any non-dotfile changed; for a monorepo, every changed
+ * package (longest `pathPrefix` wins on overlap) plus its transitive dependents.
+ */
+export function resolveScope(
+  changed: string[],
+  packages: WorkspacePackage[],
+  targets: ConfigTarget[],
+): ScopeEntry[] {
+  if (!packages.length) {
+    const nonDotfiles = changed.filter((p) => !p.startsWith('.'));
+    const rootTarget = targets.find(
+      (t) => t.pathPrefix === '' || t.pathPrefix === undefined,
+    );
+    const name = rootTarget?.packageName ?? '.';
+    return nonDotfiles.length
+      ? [{ package: name, reason: 'changed', single: true }]
+      : [];
+  }
+
+  const byPath = targets
+    .filter((t) => t.pathPrefix && t.packageName && t.packageName !== '.')
+    .map((t) => ({
+      prefix: t.pathPrefix as string,
+      name: t.packageName as string,
+    }))
+    // Longest prefix first so a nested target wins over its ancestor.
+    .sort((a, b) => b.prefix.length - a.prefix.length);
+  const changedNames = new Set<string>();
+  for (const p of changed) {
+    const hit = byPath.find((t) => p.startsWith(t.prefix));
+    if (hit) changedNames.add(hit.name);
+  }
+  const all = withDependents(changedNames, packages);
+  return [...all].map((name) => ({
+    package: name,
+    reason: changedNames.has(name)
+      ? ('changed' as const)
+      : ('dependent' as const),
+  }));
+}
+
+/** The degraded fallback scope: every workspace package, unconditionally in scope. */
+export function fullScopeEntries(packages: WorkspacePackage[]): ScopeEntry[] {
+  return packages.map((p) => ({
+    package: p.name,
+    reason: 'full-scope' as const,
+  }));
+}
+
+/** `name`'s verify commands: its target's `verifyCommands` override, else the repo default. */
+export function resolveVerifyCommands(
+  name: string,
+  targets: ConfigTarget[],
+  commands: string[] | undefined,
+): string[] {
+  return resolveTargetCommands(
+    targets.find((t) => t.packageName === name)?.verifyCommands,
+    commands,
+  );
+}
+
+// Monorepo: <runner> <filterFlag> <pkg> <script>. Single-package: <runner> <runScriptPrefix...> <script>.
+export function verifyArgv(
+  name: string,
+  script: string,
+  filterFlag: string,
+  runPrefix: string[],
+): string[] {
+  return filterFlag ? [filterFlag, name, script] : [...runPrefix, script];
+}
+
+/** The `--run`-less plan output: a summary line, one command line per step, a closing note. */
+export function planLines(
+  scope: ScopeEntry[],
+  runner: string,
+  filterFlag: string,
+  runPrefix: string[],
+  base: string,
+  degraded: boolean,
+): string[] {
+  const changedCount = scope.filter((s) => s.reason === 'changed').length;
+  const dependentCount = scope.filter((s) => s.reason === 'dependent').length;
+  const summary = degraded
+    ? `${scope.length} package(s), FULL SCOPE (git/config unavailable)`
+    : `${scope.length} package(s) in scope (${changedCount} changed` +
+      (dependentCount ? ` + ${dependentCount} dependent` : '') +
+      `) vs base \`${base}\``;
+  const lines = [`verify-changed: ${summary}`];
+  for (const s of scope)
+    for (const script of s.commands ?? [])
+      lines.push(
+        `  ${s.package}  [${s.reason}]  ${runner} ${verifyArgv(s.package, script, filterFlag, runPrefix).join(' ')}`,
+      );
+  lines.push(
+    'Run each command; report one compact line per package: "<pkg>: PASS" or "<pkg>: FAIL (<step>)".',
+  );
+  return lines;
+}
+
 function main() {
+  const argv = new Set(process.argv.slice(2));
+  const mode = argv.has('--run') ? 'run' : argv.has('--json') ? 'json' : 'plan';
+
   const config = loadConfigSafe();
   const verify: RunnerBlock = config.verify ?? {};
-  const RUNNER = verify.runner ?? config.packageManager ?? 'pnpm';
-  const FILTER_FLAG = verify.filterFlag ?? '--filter';
-  const RUN_PREFIX = verify.runScriptPrefix ?? [];
-  const COMMANDS = verify.commands;
-  const BASE = verify.baseBranch ?? config.changesets?.baseBranch ?? 'main';
+  const runner = verify.runner ?? config.packageManager ?? 'pnpm';
+  const filterFlag = verify.filterFlag ?? '--filter';
+  const runPrefix = verify.runScriptPrefix ?? [];
+  const commands = verify.commands;
+  const baseBranch =
+    verify.baseBranch ?? config.changesets?.baseBranch ?? 'main';
+  const targets = config.targets ?? [];
 
   let root: string;
   try {
@@ -121,72 +227,27 @@ function main() {
   }
 
   const packages = listWorkspacePackages(root);
-  const commandsFor = (name: string) =>
-    resolveTargetCommands(
-      (config.targets ?? []).find((t) => t.packageName === name)
-        ?.verifyCommands,
-      COMMANDS,
-    );
-  // Monorepo: <runner> <filterFlag> <pkg> <script>. Single: <runner> <prefix...> <script>.
-  const argvFor = (name: string, script: string) =>
-    FILTER_FLAG ? [FILTER_FLAG, name, script] : [...RUN_PREFIX, script];
 
   // Resolve scope. Any failure here degrades to full scope (never blocks).
   let scope: ScopeEntry[] = [];
   let degraded = false;
   try {
-    if (!packages.length) {
-      // Single-package repo: the whole repo is one unit; verify it if anything
-      // (non-dotfile) changed. No dependency graph to walk.
-      const changed = changedPaths(root, BASE).filter(
-        (p) => !p.startsWith('.'),
-      );
-      const rootTarget = (config.targets ?? []).find(
-        (t) => t.pathPrefix === '' || t.pathPrefix === undefined,
-      );
-      const name = rootTarget?.packageName ?? '.';
-      if (changed.length)
-        scope = [{ package: name, reason: 'changed', single: true }];
-    } else {
-      const byPath = (config.targets ?? [])
-        .filter((t) => t.pathPrefix && t.packageName && t.packageName !== '.')
-        .map((t) => ({
-          prefix: t.pathPrefix as string,
-          name: t.packageName as string,
-        }))
-        // Longest prefix first so a nested target wins over its ancestor.
-        .sort((a, b) => b.prefix.length - a.prefix.length);
-      const changedNames = new Set<string>();
-      for (const p of changedPaths(root, BASE)) {
-        const hit = byPath.find((t) => p.startsWith(t.prefix));
-        if (hit) changedNames.add(hit.name);
-      }
-      const all = withDependents(changedNames, packages);
-      scope = [...all].map((name) => ({
-        package: name,
-        reason: changedNames.has(name)
-          ? ('changed' as const)
-          : ('dependent' as const),
-      }));
-    }
+    scope = resolveScope(changedPaths(root, baseBranch), packages, targets);
   } catch {
     degraded = true;
   }
-  if (degraded) {
-    scope = packages.map((p) => ({
-      package: p.name,
-      reason: 'full-scope' as const,
-    }));
-  }
+  if (degraded) scope = fullScopeEntries(packages);
 
   for (const s of scope) {
-    s.commands = commandsFor(s.package);
-    s.argv = s.commands.map((script) => argvFor(s.package, script));
+    s.commands = resolveVerifyCommands(s.package, targets, commands);
+    s.argv = s.commands.map((script) =>
+      verifyArgv(s.package, script, filterFlag, runPrefix),
+    );
   }
 
-  if (MODE === 'json') {
+  if (mode === 'json') {
     process.stdout.write(
-      `${JSON.stringify({ base: BASE, degraded, runner: RUNNER, scope }, null, 2)}\n`,
+      `${JSON.stringify({ base: baseBranch, degraded, runner: runner, scope }, null, 2)}\n`,
     );
     process.exit(0);
   }
@@ -198,28 +259,14 @@ function main() {
     process.exit(0);
   }
 
-  if (MODE === 'plan') {
-    const changed = scope.filter((s) => s.reason === 'changed').length;
-    const dependents = scope.filter((s) => s.reason === 'dependent').length;
-    const summary = degraded
-      ? `${scope.length} package(s), FULL SCOPE (git/config unavailable)`
-      : `${scope.length} package(s) in scope (${changed} changed` +
-        (dependents ? ` + ${dependents} dependent` : '') +
-        `) vs base \`${BASE}\``;
-    const lines = [`verify-changed: ${summary}`];
-    for (const s of scope)
-      for (const script of s.commands ?? [])
-        lines.push(
-          `  ${s.package}  [${s.reason}]  ${RUNNER} ${argvFor(s.package, script).join(' ')}`,
-        );
-    lines.push(
-      'Run each command; report one compact line per package: "<pkg>: PASS" or "<pkg>: FAIL (<step>)".',
+  if (mode === 'plan') {
+    process.stdout.write(
+      `${planLines(scope, runner, filterFlag, runPrefix, baseBranch, degraded).join('\n')}\n`,
     );
-    process.stdout.write(`${lines.join('\n')}\n`);
     process.exit(0);
   }
 
-  if (MODE === 'run' && COMMANDS === undefined) {
+  if (mode === 'run' && commands === undefined) {
     process.stdout.write(
       'verify-changed: no "verify" block configured — add one to .claude/houserules.config.json (commands: [...]).\n',
     );
@@ -227,17 +274,42 @@ function main() {
   }
 
   // --run: execute and emit the compact verdict.
-  let anyFail = false;
-  const residues: { pkg: string; step: string; output: string }[] = [];
+  const residues = runScope(scope, root, runner, filterFlag, runPrefix);
+  for (const r of residues) {
+    process.stderr.write(`\n--- ${r.pkg} :: ${r.step} ---\n`);
+    process.stderr.write(`${tail(r.output, 40)}\n`);
+  }
+  process.exit(residues.length > 0 ? 2 : 0);
+}
+
+interface Residue {
+  pkg: string;
+  step: string;
+  output: string;
+}
+
+/** Runs each scope entry's commands in order, prints one PASS/FAIL line per package, and returns the failures. */
+function runScope(
+  scope: ScopeEntry[],
+  root: string,
+  runner: string,
+  filterFlag: string,
+  runPrefix: string[],
+): Residue[] {
+  const residues: Residue[] = [];
   for (const s of scope) {
     let failedStep: string | null = null;
     let output = '';
     for (const script of s.commands ?? []) {
-      const r = spawnSync(RUNNER, argvFor(s.package, script), {
-        cwd: root,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
+      const r = spawnSync(
+        runner,
+        verifyArgv(s.package, script, filterFlag, runPrefix),
+        {
+          cwd: root,
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
       if (r.status !== 0) {
         failedStep = script;
         output = (r.stdout || '') + (r.stderr || '');
@@ -245,23 +317,23 @@ function main() {
       }
     }
     if (failedStep) {
-      anyFail = true;
       process.stdout.write(`${s.package}: FAIL (${failedStep})\n`);
       residues.push({ pkg: s.package, step: failedStep, output });
     } else {
       process.stdout.write(`${s.package}: PASS\n`);
     }
   }
-  for (const r of residues) {
-    process.stderr.write(`\n--- ${r.pkg} :: ${r.step} ---\n`);
-    process.stderr.write(`${tail(r.output, 40)}\n`);
-  }
-  process.exit(anyFail ? 2 : 0);
+  return residues;
 }
 
-try {
-  main();
-} catch {
-  // A verify helper must never take down a session with its own error.
-  process.exit(0);
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+) {
+  try {
+    main();
+  } catch {
+    // A verify helper must never take down a session with its own error.
+    process.exit(0);
+  }
 }

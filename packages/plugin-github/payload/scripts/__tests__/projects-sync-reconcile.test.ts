@@ -157,9 +157,8 @@ describe('projects-sync reconcile', () => {
       id: string;
       action: string;
     }>;
-    expect(records.some((r) => r.id === ORPHAN_ID && r.action === 'add')).toBe(
-      true,
-    );
+    const orphanRecord = records.find((r) => r.id === ORPHAN_ID);
+    expect(orphanRecord?.action).toBe('add');
 
     const statusResult = runScript(root, SCRIPT, { args: ['reconcile'] });
     expect(statusResult.status).toBe(0);

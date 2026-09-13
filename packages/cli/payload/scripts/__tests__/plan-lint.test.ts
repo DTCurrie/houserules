@@ -126,9 +126,18 @@ x
       incomplete,
     );
     const rules = report.findings.map((f) => f.msg);
-    expect(rules.some((m) => m.includes('Impact by file'))).toBe(true);
-    expect(rules.some((m) => m.includes('Completeness self-audit'))).toBe(true);
-    expect(rules.some((m) => m.includes('staleness disclaimer'))).toBe(true);
+    expect(
+      rules.some((m) => m.includes('Impact by file')),
+      'flags missing Impact by file',
+    ).toBe(true);
+    expect(
+      rules.some((m) => m.includes('Completeness self-audit')),
+      'flags missing Completeness self-audit',
+    ).toBe(true);
+    expect(
+      rules.some((m) => m.includes('staleness disclaimer')),
+      'flags missing staleness disclaimer',
+    ).toBe(true);
   });
 });
 

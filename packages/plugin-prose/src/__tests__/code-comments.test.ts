@@ -35,7 +35,7 @@ describe('code-comments', () => {
     expect(ruleText).toMatch(/Hard cap: 200 characters/);
 
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('prose/code-comments')).toBe(true);
+    expect(manifest.modules).toContain('prose/code-comments');
     const { frontmatter, body } = splitFrontmatter(ruleText);
     expect(
       manifest.files['.claude/rules/code-comments.md'],
@@ -43,16 +43,19 @@ describe('code-comments', () => {
     ).toEqual({ body: sha256(body), frontmatter: sha256(frontmatter) });
 
     const cmds = allHookCommands(root);
-    expect(cmds.some((c) => c.includes('code-comments'))).toBe(false);
     expect(
-      readFileSync(join(root, 'CLAUDE.md'), 'utf8').includes('code-comments'),
+      cmds.some((c) => c.includes('code-comments')),
+      'no hook command references code-comments',
     ).toBe(false);
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).not.toContain(
+      'code-comments',
+    );
   });
 
   it('is not installed by default', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('prose/code-comments')).toBe(false);
+    expect(manifest.modules).not.toContain('prose/code-comments');
     expect(
       existsSync(join(root, '.claude/rules/code-comments.md')),
       '.claude/rules/code-comments.md absent',

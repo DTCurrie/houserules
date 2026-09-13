@@ -881,14 +881,17 @@ describe('decision-log.mjs move', () => {
 
     // The root area is not a configured target, so emptying it deletes the surface rather than
     // leaving a header-only stub that no later command could clear.
-    expect(existsSync(join(root, SURFACE))).toBe(false);
+    expect(existsSync(join(root, SURFACE)), `${SURFACE} is absent`).toBe(false);
   });
 
   it('keeps an emptied surface that belongs to a configured target', () => {
     run(root, ['move', id, 'studio']);
     run(root, ['move', id, 'cityville']);
 
-    expect(existsSync(join(root, STUDIO_SURFACE))).toBe(true);
+    expect(
+      existsSync(join(root, STUDIO_SURFACE)),
+      `${STUDIO_SURFACE} exists`,
+    ).toBe(true);
     expect(readFile(root, STUDIO_SURFACE)).not.toContain(id);
   });
 
@@ -1081,7 +1084,7 @@ describe('decision-log.mjs rescope, given a decision recorded on an area surface
       '--chat=none',
     ]);
 
-    expect(existsSync(join(root, SURFACE))).toBe(false);
+    expect(existsSync(join(root, SURFACE)), `${SURFACE} is absent`).toBe(false);
   });
 });
 
@@ -1416,7 +1419,7 @@ describe('decision-log.mjs ancestry', () => {
     const r = run(root, ['ancestry', secondId]);
 
     const lines = r.stdout.trim().split('\n');
-    expect(lineAt(lines, 1).startsWith('  ')).toBe(true);
+    expect(lineAt(lines, 1)).toMatch(/^ {2}/);
   });
 
   it('prints no body for any node in the walk', () => {
@@ -1564,7 +1567,7 @@ describe('decision-log.mjs tree', () => {
     const r = run(root, ['tree', parentId]);
 
     const lines = r.stdout.trim().split('\n');
-    expect(lineAt(lines, 1).startsWith('  ')).toBe(true);
+    expect(lineAt(lines, 1)).toMatch(/^ {2}/);
   });
 
   it('prints only the given id when it has no children', () => {
@@ -1753,7 +1756,9 @@ describe('decision-log.mjs given an area named as a path rather than a bare word
       '--chat=none',
     ]);
 
-    expect(existsSync(join(root, AREA_PATH))).toBe(false);
+    expect(existsSync(join(root, AREA_PATH)), `${AREA_PATH} is absent`).toBe(
+      false,
+    );
   });
 
   it('keeps the earlier decision on the surface it rewrites', () => {
@@ -1794,7 +1799,10 @@ describe('decision-log.mjs given an area named as a path rather than a bare word
       '--chat=none',
     ]);
 
-    expect(existsSync(join(root, 'docs/calls.md'))).toBe(true);
+    expect(
+      existsSync(join(root, 'docs/calls.md')),
+      'docs/calls.md exists',
+    ).toBe(true);
   });
 });
 
@@ -1831,7 +1839,7 @@ describe('decision-log.mjs given an area named by its own surface filename', () 
       '--chat=none',
     ]);
 
-    expect(existsSync(join(root, DOUBLED))).toBe(false);
+    expect(existsSync(join(root, DOUBLED)), `${DOUBLED} is absent`).toBe(false);
   });
 
   it('records the decision against the area, not the doubled name', () => {
@@ -1894,7 +1902,7 @@ describe('decision-log.mjs given a ledger already carrying doubled surface names
   it('renders no surface carrying the basename twice', () => {
     run(root, ['render']);
 
-    expect(existsSync(join(root, DOUBLED))).toBe(false);
+    expect(existsSync(join(root, DOUBLED)), `${DOUBLED} is absent`).toBe(false);
   });
 
   it('lists the recovered record under the area surface', () => {
@@ -2092,7 +2100,10 @@ describe('decision-log.mjs, given an area no target configures', () => {
 
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('Unknown area "nope"');
-    expect(existsSync(join(root, UNKNOWN_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, UNKNOWN_SURFACE)),
+      `${UNKNOWN_SURFACE} is absent`,
+    ).toBe(false);
   });
 
   it('rejects supersede with an unknown area', () => {
@@ -2148,7 +2159,10 @@ describe('decision-log.mjs, given an area no target configures', () => {
 
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('Unknown area "nope"');
-    expect(existsSync(join(root, UNKNOWN_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, UNKNOWN_SURFACE)),
+      `${UNKNOWN_SURFACE} is absent`,
+    ).toBe(false);
     expect(readFile(root, SURFACE)).toContain(id);
   });
 
@@ -2164,11 +2178,17 @@ describe('decision-log.mjs, given an area no target configures', () => {
 
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('Unknown area "nope"');
-    expect(existsSync(join(root, UNKNOWN_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, UNKNOWN_SURFACE)),
+      `${UNKNOWN_SURFACE} is absent`,
+    ).toBe(false);
   });
 
   it('rejects a bare word naming an area with no surface on disk and no target', () => {
-    expect(existsSync(join(root, UNKNOWN_SURFACE))).toBe(false);
+    expect(
+      existsSync(join(root, UNKNOWN_SURFACE)),
+      `${UNKNOWN_SURFACE} is absent`,
+    ).toBe(false);
 
     const r = run(root, ['render', 'nope']);
 

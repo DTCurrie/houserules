@@ -23,34 +23,38 @@ function installedWith(guides?: string[]): string {
 describe('design game references', () => {
   it('installs neither game reference when no options were chosen', () => {
     const root = installedWith();
+    const hudPath = referencePath(root, 'design-game-hud.md');
+    const visualPath = referencePath(root, 'design-game-visual.md');
 
-    expect(existsSync(referencePath(root, 'design-game-hud.md'))).toBe(false);
-    expect(existsSync(referencePath(root, 'design-game-visual.md'))).toBe(
-      false,
-    );
+    expect(existsSync(hudPath), `${hudPath} absent`).toBe(false);
+    expect(existsSync(visualPath), `${visualPath} absent`).toBe(false);
   });
 
   it('installs only the hud reference when hud alone is chosen', () => {
     const root = installedWith(['hud']);
+    const hudPath = referencePath(root, 'design-game-hud.md');
+    const visualPath = referencePath(root, 'design-game-visual.md');
 
-    expect(existsSync(referencePath(root, 'design-game-hud.md'))).toBe(true);
-    expect(existsSync(referencePath(root, 'design-game-visual.md'))).toBe(
-      false,
-    );
+    expect(existsSync(hudPath), `${hudPath} exists`).toBe(true);
+    expect(existsSync(visualPath), `${visualPath} absent`).toBe(false);
   });
 
   it('installs only the visual reference when visual alone is chosen', () => {
     const root = installedWith(['visual']);
+    const hudPath = referencePath(root, 'design-game-hud.md');
+    const visualPath = referencePath(root, 'design-game-visual.md');
 
-    expect(existsSync(referencePath(root, 'design-game-visual.md'))).toBe(true);
-    expect(existsSync(referencePath(root, 'design-game-hud.md'))).toBe(false);
+    expect(existsSync(visualPath), `${visualPath} exists`).toBe(true);
+    expect(existsSync(hudPath), `${hudPath} absent`).toBe(false);
   });
 
   it('installs both references when both are chosen', () => {
     const root = installedWith(['hud', 'visual']);
+    const hudPath = referencePath(root, 'design-game-hud.md');
+    const visualPath = referencePath(root, 'design-game-visual.md');
 
-    expect(existsSync(referencePath(root, 'design-game-hud.md'))).toBe(true);
-    expect(existsSync(referencePath(root, 'design-game-visual.md'))).toBe(true);
+    expect(existsSync(hudPath), `${hudPath} exists`).toBe(true);
+    expect(existsSync(visualPath), `${visualPath} exists`).toBe(true);
   });
 
   it('installs no advise action and no other file when no option was chosen', () => {
@@ -58,8 +62,9 @@ describe('design game references', () => {
       modules: 'design/design-game',
       plugins: PLUGINS,
     });
+    const referenceDir = join(root, '.claude/reference');
 
-    expect(existsSync(join(root, '.claude/reference'))).toBe(false);
+    expect(existsSync(referenceDir), `${referenceDir} absent`).toBe(false);
   });
 
   it('installs design-game-hud.md with no frontmatter, since it is pull-only', () => {
@@ -116,6 +121,8 @@ describe('design game references', () => {
       moduleOptions: { 'design/design-game': ['hud'] },
     });
 
-    expect(existsSync(referencePath(root, 'design-game-hud.md'))).toBe(false);
+    const hudPath = referencePath(root, 'design-game-hud.md');
+
+    expect(existsSync(hudPath), `${hudPath} absent`).toBe(false);
   });
 });

@@ -132,8 +132,8 @@ describe('fieldValuesFor, given a decision op', () => {
     };
 
     expect(
-      fieldValuesFor(op).some((value) => value.field === 'Supersedes'),
-    ).toBe(false);
+      fieldValuesFor(op).find((value) => value.field === 'Supersedes'),
+    ).toBeUndefined();
   });
 
   it('joins a two-id supersedes list with a comma and space', () => {
@@ -163,8 +163,8 @@ describe('fieldValuesFor, given a decision op', () => {
       under: null,
     };
 
-    expect(fieldValuesFor(op).some((value) => value.field === 'Chat')).toBe(
-      false,
+    expect(fieldValuesFor(op).map((value) => value.field)).not.toContain(
+      'Chat',
     );
   });
 
@@ -194,8 +194,8 @@ describe('fieldValuesFor, given a decision op', () => {
       under: null,
     };
 
-    expect(fieldValuesFor(op).some((value) => value.field === 'Scope')).toBe(
-      false,
+    expect(fieldValuesFor(op).map((value) => value.field)).not.toContain(
+      'Scope',
     );
   });
 
@@ -224,8 +224,8 @@ describe('fieldValuesFor, given a decision op', () => {
       under: null,
     };
 
-    expect(fieldValuesFor(op).some((value) => value.field === 'Scope')).toBe(
-      false,
+    expect(fieldValuesFor(op).map((value) => value.field)).not.toContain(
+      'Scope',
     );
   });
 
@@ -254,8 +254,8 @@ describe('fieldValuesFor, given a decision op', () => {
       under: null,
     };
 
-    expect(fieldValuesFor(op).some((value) => value.field === 'Under')).toBe(
-      false,
+    expect(fieldValuesFor(op).map((value) => value.field)).not.toContain(
+      'Under',
     );
   });
 
@@ -284,8 +284,8 @@ describe('fieldValuesFor, given a decision op', () => {
       under: null,
     };
 
-    expect(fieldValuesFor(op).some((value) => value.field === 'Under')).toBe(
-      false,
+    expect(fieldValuesFor(op).map((value) => value.field)).not.toContain(
+      'Under',
     );
   });
 

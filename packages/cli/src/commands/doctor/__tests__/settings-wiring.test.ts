@@ -245,6 +245,7 @@ describe('KIT_HOOK_SCRIPT_RE', () => {
     (scriptName) => {
       expect(
         KIT_HOOK_SCRIPT_RE.test(`node .claude/scripts/${scriptName}`),
+        `matches ${scriptName}`,
       ).toBe(true);
     },
   );

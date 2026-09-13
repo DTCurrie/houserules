@@ -16,9 +16,9 @@ describe('testing plugin, svelte guide option', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/rules/testing-svelte.md'))).toBe(
-      true,
-    );
+    const rulePath = join(root, '.claude/rules/testing-svelte.md');
+
+    expect(existsSync(rulePath), `${rulePath} exists`).toBe(true);
   });
 
   it('does not install testing-svelte.md when the typescript guide is selected instead', () => {
@@ -28,8 +28,8 @@ describe('testing plugin, svelte guide option', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/rules/testing-svelte.md'))).toBe(
-      false,
-    );
+    const rulePath = join(root, '.claude/rules/testing-svelte.md');
+
+    expect(existsSync(rulePath), `${rulePath} absent`).toBe(false);
   });
 });

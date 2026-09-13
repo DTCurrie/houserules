@@ -170,3 +170,119 @@ describe('test-layout.mjs given no findings', () => {
     expect(r.stdout).toContain('Not checked by this checker:');
   });
 });
+
+describe('test-layout.mjs --test-dir', () => {
+  it('passes a tower-push sim test colocated under __test__ when configured', () => {
+    const root = stage();
+
+    const r = run(root, [
+      '--test-dir',
+      '__test__',
+      'games/tower-push/src/lib/sim/__test__/mana.test.ts',
+    ]);
+
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain('testing/test-colocation');
+  });
+
+  it('flags the same tower-push sim test under the default __tests__ directory', () => {
+    const root = stage();
+
+    const r = run(root, ['games/tower-push/src/lib/sim/__test__/mana.test.ts']);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('testing/test-colocation');
+  });
+
+  it('passes a simulation math test colocated under tests when configured', () => {
+    const root = stage();
+
+    const r = run(root, [
+      '--test-dir',
+      'tests',
+      'packages/simulation/src/lib/tests/math.test.ts',
+    ]);
+
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain('testing/test-colocation');
+  });
+
+  it('flags a fixture file placed under a tests directory when configured', () => {
+    const root = stage();
+
+    const r = run(root, [
+      '--test-dir',
+      'tests',
+      'packages/simulation/src/lib/tests/fixtures.ts',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('testing/test-dir-contents');
+  });
+
+  it('flags a Svelte harness sitting inside the default __tests__ directory', () => {
+    const root = stage();
+
+    const r = run(root, [
+      'src/lib/vendor/koota-svelte/__tests__/components/WorldTest.svelte',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('testing/test-dir-contents');
+  });
+});
+
+describe('test-layout.mjs test-suffix-consistency, per package', () => {
+  it('passes two packages that each pick one suffix', () => {
+    const root = stage();
+    writeFile(
+      root,
+      'packages/simulation/package.json',
+      '{"name":"simulation"}\n',
+    );
+    writeFile(
+      root,
+      'packages/dice-roller/package.json',
+      '{"name":"dice-roller"}\n',
+    );
+
+    const r = run(root, [
+      'packages/simulation/src/__tests__/math.test.ts',
+      'packages/simulation/src/__tests__/cascades.test.ts',
+      'packages/dice-roller/src/__tests__/roll.spec.ts',
+      'packages/dice-roller/src/__tests__/tables.spec.ts',
+    ]);
+
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain(
+      'testing-typescript/test-suffix-consistency',
+    );
+  });
+
+  it('flags one package mixing suffixes while the other package stays consistent', () => {
+    const root = stage();
+    writeFile(
+      root,
+      'packages/simulation/package.json',
+      '{"name":"simulation"}\n',
+    );
+    writeFile(
+      root,
+      'packages/dice-roller/package.json',
+      '{"name":"dice-roller"}\n',
+    );
+
+    const r = run(root, [
+      'packages/simulation/src/__tests__/math.test.ts',
+      'packages/simulation/src/__tests__/cascades.test.ts',
+      'packages/simulation/src/__tests__/odd.spec.ts',
+      'packages/dice-roller/src/__tests__/roll.spec.ts',
+      'packages/dice-roller/src/__tests__/tables.spec.ts',
+    ]);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('testing-typescript/test-suffix-consistency');
+    expect(r.stdout).toContain('packages/simulation');
+    expect(r.stdout).toContain('2 .test. file(s), 1 .spec. file(s)');
+  });
+});

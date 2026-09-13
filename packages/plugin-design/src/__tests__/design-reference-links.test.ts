@@ -75,9 +75,12 @@ describe('design rule reference links', () => {
       plugins: PLUGINS,
     });
 
-    expect(
-      existsSync(join(root, '.claude/reference/design-tailwind-theming.md')),
-    ).toBe(false);
+    const referencePath = join(
+      root,
+      '.claude/reference/design-tailwind-theming.md',
+    );
+
+    expect(existsSync(referencePath), `${referencePath} absent`).toBe(false);
   });
 
   it('installs no design-game reference when design-game is chosen without design', () => {
@@ -87,8 +90,8 @@ describe('design rule reference links', () => {
       moduleOptions: { 'design/design-game': ['hud'] },
     });
 
-    expect(existsSync(join(root, '.claude/reference/design-game-hud.md'))).toBe(
-      false,
-    );
+    const referencePath = join(root, '.claude/reference/design-game-hud.md');
+
+    expect(existsSync(referencePath), `${referencePath} absent`).toBe(false);
   });
 });

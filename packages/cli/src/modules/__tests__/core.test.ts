@@ -8,9 +8,7 @@ describe('core plan, the merged Bash gate', () => {
   it('ships no separate subagent-write-gate.mjs script or hook, its checks live in guard-bash.mjs', () => {
     const actions = plan(makeCtx(), makeAnswers());
 
-    expect(JSON.stringify(actions).includes('subagent-write-gate.mjs')).toBe(
-      false,
-    );
+    expect(JSON.stringify(actions)).not.toContain('subagent-write-gate.mjs');
   });
 
   it('wires guard-bash.mjs as the single PreToolUse(Bash) hook', () => {
@@ -114,12 +112,12 @@ describe('core plan, the ledger directory .gitignore', () => {
     const actions = plan(ctx, makeAnswers());
 
     expect(
-      actions.some(
+      actions.filter(
         (a) =>
           a.kind === 'write' &&
           a.reason ===
             'the ledger directory is a local push queue. GitHub Projects is the durable record',
       ),
-    ).toBe(false);
+    ).toEqual([]);
   });
 });

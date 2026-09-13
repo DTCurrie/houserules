@@ -22,6 +22,7 @@ describe('ledger', () => {
   it('installs the ledger script', () => {
     expect(
       existsSync(join(root, '.claude/scripts/package-changelog.mjs')),
+      '.claude/scripts/package-changelog.mjs exists',
     ).toBe(true);
   });
 
@@ -30,6 +31,7 @@ describe('ledger', () => {
       existsSync(
         join(root, '.claude/templates/agents/archivist.agent.md.template'),
       ),
+      '.claude/templates/agents/archivist.agent.md.template exists',
     ).toBe(true);
   });
 
@@ -38,7 +40,7 @@ describe('ledger', () => {
       ledger: { enabled: boolean };
       targets: { name: string; changelogPath: string; logPath: string }[];
     }>(houseConfigPath(root));
-    expect(config.ledger.enabled).toBe(true);
+    expect(config.ledger.enabled, 'config.ledger.enabled is true').toBe(true);
     const cityville = config.targets.find((t) => t.name === 'cityville');
     expect(cityville?.changelogPath).toBe('.claude/changelogs/cityville.md');
     expect(cityville?.logPath).toBe('.claude/changelogs/cityville.log');
@@ -55,12 +57,10 @@ describe('ledger', () => {
       args: ['record', 'cityville', 'HEAD', '--changes', '- did a thing'],
     });
     expect(rec.status, rec.stderr).toBe(0);
-    expect(existsSync(join(root, '.claude/changelogs/cityville.md'))).toBe(
-      true,
-    );
-    expect(existsSync(join(root, '.claude/changelogs/cityville.log'))).toBe(
-      true,
-    );
+    const changelogPath = join(root, '.claude/changelogs/cityville.md');
+    expect(existsSync(changelogPath), `${changelogPath} exists`).toBe(true);
+    const logPath = join(root, '.claude/changelogs/cityville.log');
+    expect(existsSync(logPath), `${logPath} exists`).toBe(true);
   });
 
   it('skips a commit that does not touch the target, exiting 0 with a diagnostic', () => {
@@ -79,9 +79,8 @@ describe('ledger', () => {
     expect(rec.stderr).toMatch(
       /does not touch games\/cityville\/src\/\. Nothing recorded\./,
     );
-    expect(existsSync(join(root, '.claude/changelogs/cityville.md'))).toBe(
-      false,
-    );
+    const changelogPath = join(root, '.claude/changelogs/cityville.md');
+    expect(existsSync(changelogPath), `${changelogPath} absent`).toBe(false);
   });
 
   it('skips a duplicate record for a commit already in the changelog', () => {
@@ -117,9 +116,8 @@ describe('ledger', () => {
 
     expect(rec.status).toBe(1);
     expect(rec.stderr).toMatch(/Missing required --changes/);
-    expect(existsSync(join(root, '.claude/changelogs/cityville.md'))).toBe(
-      false,
-    );
+    const changelogPath = join(root, '.claude/changelogs/cityville.md');
+    expect(existsSync(changelogPath), `${changelogPath} absent`).toBe(false);
   });
 
   it('exits 1 with no matching entries when show finds no log file yet', () => {
