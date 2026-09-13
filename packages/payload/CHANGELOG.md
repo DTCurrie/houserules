@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.3.0
+
+### Minor Changes
+
+- f5607f0: Bash guard blocks git checkout, restore, reset --hard, clean, and switch -f by default.
+
 ## 0.2.3
 
 ### Patch Changes

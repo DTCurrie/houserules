@@ -1,5 +1,20 @@
 # @houserules/cli
 
+## 0.6.0
+
+### Minor Changes
+
+- f5607f0: Bash guard blocks git checkout, restore, reset --hard, clean, and switch -f by default.
+
+### Patch Changes
+
+- 4b0520d: Report telemetry now covers subagent transcripts, hook crashes, and per-machine scope of unused skills.
+- 88280e6: Bump @clack/prompts to 1.8.0 and adapt the cancel guard to its narrower isCancel typing.
+- 3f1240c: Payload hook scripts export their decision functions, tested directly.
+- Updated dependencies [f5607f0]
+  - @houserules/api@0.4.0
+  - @houserules/payload@0.3.0
+
 ## 0.5.0
 
 ### Minor Changes

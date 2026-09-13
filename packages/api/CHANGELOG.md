@@ -1,5 +1,16 @@
 # @houserules/api
 
+## 0.4.0
+
+### Minor Changes
+
+- f5607f0: Bash guard blocks git checkout, restore, reset --hard, clean, and switch -f by default.
+
+### Patch Changes
+
+- Updated dependencies [f5607f0]
+  - @houserules/payload@0.3.0
+
 ## 0.3.3
 
 ### Patch Changes
