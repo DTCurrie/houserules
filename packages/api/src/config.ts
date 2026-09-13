@@ -153,6 +153,7 @@ const HouseConfigSchema = z.strictObject({
       gitCommit: z.boolean().optional(),
       gitPush: z.boolean().optional(),
       gitStash: z.boolean().optional(),
+      gitDiscard: z.boolean().optional(),
       prCreate: z.boolean().optional(),
       custom: z
         .array(z.strictObject({ pattern: z.string(), message: z.string() }))

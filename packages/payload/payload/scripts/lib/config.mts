@@ -51,6 +51,7 @@ export interface HouseConfig {
     gitCommit?: boolean;
     gitPush?: boolean;
     gitStash?: boolean;
+    gitDiscard?: boolean;
     prCreate?: boolean;
     custom?: { pattern: string; message: string }[];
   };
@@ -141,6 +142,7 @@ export const GUARD_DEFAULTS = {
   gitCommit: true,
   gitPush: true,
   gitStash: true,
+  gitDiscard: true,
   prCreate: true,
   custom: [],
 };
