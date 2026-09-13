@@ -1,16 +1,24 @@
 #!/usr/bin/env node
 /**
  * PreToolUse(Bash) guard. Blocks the git commands the user always runs themselves, plus
- * `git stash`, which dumps the whole untracked-file list into context, and refuses ledger
+ * `git stash`, which dumps the whole untracked-file list into context, plus the discard
+ * family (`checkout`, `restore`, `reset --hard`, `clean`, `switch -f`), and refuses ledger
  * and changeset writes from any subagent turn.
+ *
+ * The discard family is blocked because a revert to HEAD throws away every uncommitted
+ * change in the file, not only the edit being undone, and an orchestrated tree can carry
+ * many waves of uncommitted work. `checkout` is blocked in every form, since the discarding
+ * forms (`-- <path>`, `.`, `<ref> <path>`) cannot be told from a branch switch without a
+ * shell parser, and `git switch` covers the switch.
  *
  * Exit 2 with stderr blocks the tool call and feeds the reason back to Claude. Exit 0
  * allows. Wire it as a PreToolUse hook with matcher "Bash".
  *
  * Config (.claude/houserules.config.json, all default on):
- *   "guard": { "gitCommit": true, "gitPush": true, "gitStash": true, "prCreate": true,
+ *   "guard": { "gitCommit": true, "gitPush": true, "gitStash": true, "gitDiscard": true,
+ *              "prCreate": true,
  *              "custom": [{ "pattern": "\\bdocker\\s+system\\s+prune\\b", "message": "..." }] }
- * A missing or unreadable config falls back to the four defaults.
+ * A missing or unreadable config falls back to the five defaults.
  *
  * Subagent write gate: `tool_input` carries only the Bash command, so whether the caller is
  * a subagent comes from `transcript_path`. A subagent's own transcript never carries the
@@ -56,11 +64,15 @@ const CMD_START = String.raw`(?:^|[\n;&|])\s*`;
 // Tolerate flag/option arguments before a git subcommand: `git -C /path commit`,
 // `git -c k=v stash`, `git --no-pager push`.
 const GIT_FLAGS = String.raw`(?:-[A-Za-z]\s+\S+\s+|--?\S+\s+)*`;
+// The subcommands that discard uncommitted work. `reset` and `switch` only do so under the
+// named flag, matched within the one command and bounded so `-f` never matches `feature-flag`.
+const GIT_DISCARD = String.raw`(?:checkout\b|restore\b|clean\b|reset\b[^\n;&|]*\s--(?:hard|merge)(?![\w-])|switch\b[^\n;&|]*\s(?:-f|--force|--discard-changes)(?![\w-]))`;
 
 export function gitDenyRules(guard: {
   gitCommit: boolean;
   gitPush: boolean;
   gitStash: boolean;
+  gitDiscard: boolean;
   prCreate: boolean;
   custom?: { pattern: string; message?: string }[];
 }): { re: RegExp; msg: string }[] {
@@ -88,6 +100,12 @@ export function gitDenyRules(guard: {
         'git stash dumps the full untracked-file list into context. Use `git diff --name-only`, `git show HEAD:<path>`, or inspect the one file you changed.',
       ),
     );
+  }
+  if (guard.gitDiscard) {
+    deny.push({
+      re: new RegExp(`${CMD_START}git\\s+${GIT_FLAGS}${GIT_DISCARD}`),
+      msg: 'git checkout/restore/reset --hard/clean/switch -f discard uncommitted work, and a file reverted to HEAD loses every uncommitted edit in it, not only yours. Undo your own edit by applying its inverse with Edit. Switch branches with `git switch`. List untracked files with `git status --short`.',
+    });
   }
   if (guard.prCreate) {
     deny.push({

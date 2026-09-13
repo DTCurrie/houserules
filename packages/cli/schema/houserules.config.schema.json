@@ -99,6 +99,7 @@
         "gitCommit": { "type": "boolean" },
         "gitPush": { "type": "boolean" },
         "gitStash": { "type": "boolean" },
+        "gitDiscard": { "type": "boolean" },
         "prCreate": { "type": "boolean" },
         "custom": {
           "type": "array",

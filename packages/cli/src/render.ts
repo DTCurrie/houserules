@@ -117,6 +117,7 @@ export function renderHouseConfig(ctx: Ctx, answers: Answers): string {
       gitCommit: boolean;
       gitPush: boolean;
       gitStash: boolean;
+      gitDiscard: boolean;
       prCreate: boolean;
       custom: unknown[];
     };
@@ -151,6 +152,7 @@ export function renderHouseConfig(ctx: Ctx, answers: Answers): string {
       gitCommit: true,
       gitPush: true,
       gitStash: true,
+      gitDiscard: true,
       prCreate: true,
       custom: [],
     },
@@ -373,6 +375,8 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
     '- `grep -n` to locate, then `Read` with `offset`/`limit`. Never read big files whole.',
     '  Grep output is location data, not content: never judge text against a grep listing of it.',
     '- Never `git stash` to baseline-check. Use `git diff --name-only` / `git show HEAD:<path>`.',
+    '- Never `git checkout -- <path>` / `git restore` to undo an edit. They revert the whole file',
+    '  to HEAD, discarding every uncommitted change in it. Undo with the inverse Edit.',
     '- Pipe long command output through `grep`, and batch related greps into one call.',
     '',
   ];

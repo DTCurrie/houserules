@@ -46,7 +46,16 @@ is a finding: report it under `Blocked` and stop.
 
 **Treat a gitignored directory as MORE dangerous than a tracked one, not less.** The instinct runs
 the other way, because gitignored usually means generated. It also means git cannot get it back. A
-tracked file you clobber is one `git restore` away. An untracked one is gone.
+tracked file you clobber still has its last commit. An untracked one is gone.
+
+**Undo your own edit with the inverse edit, never with git.** `git checkout -- <path>`,
+`git restore <path>`, `git reset --hard`, and `git stash` revert to HEAD, and the tree you work in is
+not at HEAD. It carries every uncommitted edit from your siblings and from earlier waves, and one
+revert discards all of them in that file, not only yours. A worker that reverted one file this way,
+to back out a throwaway edit it had made to watch a test fail, lost ten waves of refactor in it and
+rebuilt the file from a `cat -n` capture in its own transcript. The Bash guard refuses these
+commands. To back out an edit, apply its reverse with `Edit`. To prove a test can fail, run it
+before you implement, or make the breaking edit and reverse it the same way.
 
 **Do not run the repo's install, bootstrap, or sync commands.** Anything that regenerates a tool
 directory, writes to a remote, or rewrites config belongs to the orchestrator, who runs it once when
