@@ -38,8 +38,10 @@ describe('planBootstrap', () => {
     const steps = planBootstrap(REPO_NAME, []);
 
     expect(steps).toHaveLength(2);
-    expect(steps.every((step) => step.action === 'create')).toBe(true);
-    expect(planIsNoop(steps)).toBe(false);
+    expect(steps.map((step) => step.action)).toEqual(['create', 'create']);
+    expect(planIsNoop(steps), 'a plan of only creates is not a noop').toBe(
+      false,
+    );
   });
 
   it('adopts both projects with nothing missing when all fields are already present', () => {
@@ -51,13 +53,13 @@ describe('planBootstrap', () => {
     const steps = planBootstrap(REPO_NAME, existing);
 
     expect(steps).toHaveLength(2);
-    expect(steps.every((step) => step.action === 'adopt')).toBe(true);
+    expect(steps.map((step) => step.action)).toEqual(['adopt', 'adopt']);
     expect(
-      steps.every(
-        (step) => step.action === 'adopt' && step.missingFields.length === 0,
+      steps.flatMap((step) =>
+        step.action === 'adopt' ? step.missingFields : [],
       ),
-    ).toBe(true);
-    expect(planIsNoop(steps)).toBe(true);
+    ).toEqual([]);
+    expect(planIsNoop(steps), 'a plan of complete adopts is a noop').toBe(true);
   });
 
   it('carries the matched project number and id into an adopt step', () => {
@@ -93,7 +95,9 @@ describe('planBootstrap', () => {
         ? backlogStep.missingFields.map((field) => field.name)
         : [],
     ).toEqual(['Priority']);
-    expect(planIsNoop(steps)).toBe(false);
+    expect(planIsNoop(steps), 'a plan with a missing field is a noop').toBe(
+      false,
+    );
   });
 
   it('adopts a project carrying an extra field without proposing its removal', () => {
@@ -112,7 +116,9 @@ describe('planBootstrap', () => {
     expect(
       backlogStep?.action === 'adopt' ? backlogStep.missingFields : [],
     ).toEqual([]);
-    expect(planIsNoop(steps)).toBe(true);
+    expect(planIsNoop(steps), 'a plan with an extra field is a noop').toBe(
+      true,
+    );
   });
 
   it('plans two boards regardless of how many targets the repo declares', () => {
@@ -140,13 +146,15 @@ describe('planBootstrap', () => {
 
 describe('planIsNoop', () => {
   it('is true for an empty plan', () => {
-    expect(planIsNoop([])).toBe(true);
+    expect(planIsNoop([]), 'an empty plan is a noop').toBe(true);
   });
 
   it('is false when any step is a create', () => {
     const steps = planBootstrap(REPO_NAME, []);
 
-    expect(planIsNoop(steps)).toBe(false);
+    expect(planIsNoop(steps), 'a plan with a create step is a noop').toBe(
+      false,
+    );
   });
 });
 

@@ -26,10 +26,14 @@ import type { Registry, RegisteredModule } from '../../plugin-registry.js';
 
 function installedWithReadGuard(): string {
   const root = useInstalledRepo('npm-single', { modules: 'read-guard' });
-  expect(existsSync(join(root, '.claude/scripts/guard-read.mjs'))).toBe(true);
-  expect(allHookCommands(root).some((c) => c.includes('guard-read.mjs'))).toBe(
-    true,
-  );
+  expect(
+    existsSync(join(root, '.claude/scripts/guard-read.mjs')),
+    'guard-read.mjs installed',
+  ).toBe(true);
+  expect(
+    allHookCommands(root).some((c) => c.includes('guard-read.mjs')),
+    'guard-read hook wired',
+  ).toBe(true);
   return root;
 }
 
@@ -180,18 +184,22 @@ describe('modules command on an initialized pnpm monorepo', () => {
 
   it('does not install an off-by-default module before it is requested', () => {
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('read-guard')).toBe(false);
-    expect(existsSync(join(root, '.claude/scripts/guard-read.mjs'))).toBe(
-      false,
-    );
+    expect(manifest.modules).not.toContain('read-guard');
+    expect(
+      existsSync(join(root, '.claude/scripts/guard-read.mjs')),
+      'guard-read.mjs not installed',
+    ).toBe(false);
   });
 
   it('installs the module and records it in the manifest when requested', () => {
     const r = runCli(['modules', '--yes', '--modules=read-guard', root]);
     expect(r.status, r.stderr).toBe(0);
-    expect(existsSync(join(root, '.claude/scripts/guard-read.mjs'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/scripts/guard-read.mjs')),
+      'guard-read.mjs installed',
+    ).toBe(true);
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('read-guard')).toBe(true);
+    expect(manifest.modules).toContain('read-guard');
   });
 
   it('leaves doctor green after enabling a module', () => {
@@ -312,11 +320,13 @@ describe('modules --disable', () => {
     const r = runCli(['modules', root, '--yes', '--disable', 'read-guard']);
     expect(r.status, r.stderr).toBe(0);
 
-    expect(existsSync(join(root, '.claude/scripts/guard-read.mjs'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(root, '.claude/scripts/guard-read.mjs')),
+      'guard-read.mjs removed',
+    ).toBe(false);
     expect(
       allHookCommands(root).some((c) => c.includes('guard-read.mjs')),
+      'guard-read hook unwired',
     ).toBe(false);
   });
 
@@ -353,6 +363,7 @@ describe('modules --disable', () => {
     it('keeps another houserules module’s hook wired', () => {
       expect(
         allHookCommands(root).some((c) => c.includes('guard-bash.mjs')),
+        'guard-bash hook still wired',
       ).toBe(true);
     });
 
@@ -371,9 +382,13 @@ describe('modules --disable', () => {
       runCli(['modules', root, '--yes', '--modules', 'read-guard']).status,
     ).toBe(0);
 
-    expect(existsSync(join(root, '.claude/scripts/guard-read.mjs'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/scripts/guard-read.mjs')),
+      'guard-read.mjs installed again',
+    ).toBe(true);
     expect(
       allHookCommands(root).some((c) => c.includes('guard-read.mjs')),
+      'guard-read hook wired again',
     ).toBe(true);
     expect(
       JSON.parse(readFileSync(join(root, '.claude/settings.json'), 'utf8')),
@@ -388,7 +403,10 @@ describe('modules --disable', () => {
 
   it('leaves core’s files in place when disabling core is refused', () => {
     runCli(['modules', root, '--yes', '--disable', 'core']);
-    expect(existsSync(join(root, '.claude/scripts/guard-bash.mjs'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/scripts/guard-bash.mjs')),
+      'guard-bash.mjs left in place',
+    ).toBe(true);
   });
 
   it('refuses an unknown module id rather than silently ignoring it', () => {
@@ -409,7 +427,7 @@ describe('modules --disable', () => {
       expect(
         runCli(['modules', root, '--yes', '--disable', 'read-guard']).status,
       ).toBe(0);
-      expect(existsSync(script)).toBe(true);
+      expect(existsSync(script), 'edited script kept').toBe(true);
       expect(readFileSync(script, 'utf8')).toMatch(/my edit/);
     });
 
@@ -418,7 +436,7 @@ describe('modules --disable', () => {
         runCli(['modules', root, '--yes', '--disable', 'read-guard']).status,
       ).toBe(0);
       expect(runCli(['update', root, '--force']).status).toBe(0);
-      expect(existsSync(script)).toBe(false);
+      expect(existsSync(script), 'file swept').toBe(false);
     });
 
     it('is removed immediately when --force is passed to the disable itself', () => {
@@ -426,7 +444,7 @@ describe('modules --disable', () => {
         runCli(['modules', root, '--yes', '--force', '--disable', 'read-guard'])
           .status,
       ).toBe(0);
-      expect(existsSync(script)).toBe(false);
+      expect(existsSync(script), 'file removed immediately').toBe(false);
     });
   });
 
@@ -436,7 +454,10 @@ describe('modules --disable', () => {
       runCli(['modules', root, '--yes', '--dry-run', '--disable', 'read-guard'])
         .status,
     ).toBe(0);
-    expect(existsSync(join(root, '.claude/scripts/guard-read.mjs'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/scripts/guard-read.mjs')),
+      'guard-read.mjs untouched',
+    ).toBe(true);
     expect(readFileSync(join(root, '.claude/settings.json'), 'utf8')).toBe(
       before,
     );
@@ -482,7 +503,10 @@ describe('modules --yes --module-option, adding a module that declares options',
   it('honors the flag rather than silently installing the module defaults', () => {
     addWithOptions('alpha,beta');
 
-    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/fixture-lang-beta.md')),
+      'fixture-lang-beta.md installed',
+    ).toBe(true);
   });
 
   it('persists the selection so a later update re-resolves to it', () => {
@@ -496,7 +520,10 @@ describe('modules --yes --module-option, adding a module that declares options',
   it('installs only the selected values, not every declared choice', () => {
     addWithOptions('beta');
 
-    expect(existsSync(join(root, '.claude/fixture-lang-alpha.md'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/fixture-lang-alpha.md')),
+      'fixture-lang-alpha.md not installed',
+    ).toBe(false);
   });
 
   it('exits 1 naming the expected form when the flag has no "="', () => {
@@ -518,7 +545,10 @@ describe('modules --yes --module-option, adding a module that declares options',
 
     expect(runCli(['update', root]).status).toBe(0);
 
-    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/fixture-lang-beta.md')),
+      'fixture-lang-beta.md kept',
+    ).toBe(true);
   });
 });
 
@@ -604,13 +634,19 @@ describe('modules --reconfigure on an installed module that declares options', (
   it('installs the file the newly selected value produces', () => {
     reconfigureTo('beta');
 
-    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/fixture-lang-beta.md')),
+      'fixture-lang-beta.md installed',
+    ).toBe(true);
   });
 
   it('retires the file whose value is no longer selected', () => {
     reconfigureTo('beta');
 
-    expect(existsSync(join(root, '.claude/fixture-lang-alpha.md'))).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/fixture-lang-alpha.md')),
+      'fixture-lang-alpha.md retired',
+    ).toBe(false);
   });
 
   it('records the new selection so update re-resolves to it', () => {
@@ -635,7 +671,10 @@ describe('modules --reconfigure on an installed module that declares options', (
 
     reconfigureTo('beta');
 
-    expect(existsSync(join(root, '.claude/fixture-lang-alpha.md'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/fixture-lang-alpha.md')),
+      'locally edited file kept',
+    ).toBe(true);
   });
 
   it('writes nothing in --dry-run', () => {

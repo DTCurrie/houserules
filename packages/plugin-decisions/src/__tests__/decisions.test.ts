@@ -12,9 +12,9 @@ describe('decisions', () => {
   it('is absent from a default install', () => {
     const root = useInstalledRepo('pnpm-monorepo');
 
-    expect(existsSync(join(root, '.claude/scripts/decision-log.mjs'))).toBe(
-      false,
-    );
+    const scriptPath = join(root, '.claude/scripts/decision-log.mjs');
+
+    expect(existsSync(scriptPath), `${scriptPath} absent`).toBe(false);
   });
 
   describe('when enabled', () => {
@@ -28,20 +28,21 @@ describe('decisions', () => {
     });
 
     it('installs the decision-log script', () => {
-      expect(existsSync(join(root, '.claude/scripts/decision-log.mjs'))).toBe(
-        true,
-      );
+      const scriptPath = join(root, '.claude/scripts/decision-log.mjs');
+
+      expect(existsSync(scriptPath), `${scriptPath} exists`).toBe(true);
     });
 
     it('installs the decide skill', () => {
-      expect(existsSync(join(root, '.claude/skills/decide/SKILL.md'))).toBe(
-        true,
-      );
+      const skillPath = join(root, '.claude/skills/decide/SKILL.md');
+
+      expect(existsSync(skillPath), `${skillPath} exists`).toBe(true);
     });
 
     it('installs the decision-reviewer agent', () => {
       expect(
         existsSync(join(root, '.claude/agents/decision-reviewer.md')),
+        '.claude/agents/decision-reviewer.md exists',
       ).toBe(true);
     });
 

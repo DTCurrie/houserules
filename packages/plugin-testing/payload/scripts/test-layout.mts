@@ -10,8 +10,8 @@
  * asserts production behaviour and never asserts a repo convention, so a convention check
  * written as a test would be a lint rule in a test costume. It is a checker.
  */
-import { readdirSync, realpathSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -27,10 +27,10 @@ const SPEC_SUFFIX = /\.spec\.[cm]?[jt]sx?$/;
 
 const DECLINED = [
   "what a test asserts, which is the rule's subject and not a path question",
-  'whether a file sitting outside __tests__ is genuinely about the unit beside it, so ' +
-    'checkColocation only requires the __tests__ directory itself, never a matching sibling ' +
-    'subject file: a real corpus check found 40% of test files name a tree or a concept ' +
-    'rather than one file, which the rule text itself calls a judgment call',
+  'whether a file sitting outside the configured test directory is genuinely about the ' +
+    'unit beside it, so checkColocation only requires that directory itself, never a ' +
+    'matching sibling subject file: a real corpus check found 40% of test files name a ' +
+    'tree or a concept rather than one file, which the rule text itself calls a judgment call',
   'files not passed on argv, since the placement and naming checks never walk the tree ' +
     'themselves; only a directory argument is walked, for the build-output check',
 ];
@@ -50,31 +50,32 @@ export function checkPath(file: string): Report {
   return report;
 }
 
-/** A test file must sit inside a `__tests__` directory, not loose beside its subject. */
-export function checkColocation(file: string): Report {
+/** A test file must sit inside the configured test directory, not loose beside its subject. */
+export function checkColocation(file: string, testDir = '__tests__'): Report {
   const report = emptyReport();
   if (!TEST_SUFFIX.test(file) && !SPEC_SUFFIX.test(file)) return report;
   const segments = file.split('/');
-  if (segments.at(-2) !== '__tests__') {
+  if (segments.at(-2) !== testDir) {
     report.findings.push({
       rule: 'testing/test-colocation',
       level: 'error',
       file,
       line: null,
-      msg: 'Test file does not sit inside a __tests__ directory beside the code it covers.',
+      msg: `Test file does not sit inside a ${testDir} directory beside the code it covers.`,
     });
   }
   return report;
 }
 
 /**
- * A `__tests__` directory holds tests, not fixtures or setup. `__snapshots__` is excluded,
- * since Vitest writes that subdirectory itself rather than an author placing a fixture there.
+ * The configured test directory holds tests, not fixtures or setup. `__snapshots__` is
+ * excluded, since Vitest writes that subdirectory itself rather than an author placing a
+ * fixture there.
  */
-export function checkDirContents(file: string): Report {
+export function checkDirContents(file: string, testDir = '__tests__'): Report {
   const report = emptyReport();
   const segments = file.split('/');
-  if (!segments.includes('__tests__')) return report;
+  if (!segments.includes(testDir)) return report;
   if (segments.includes('__snapshots__')) return report;
   if (TEST_SUFFIX.test(file) || SPEC_SUFFIX.test(file)) return report;
   report.findings.push({
@@ -82,17 +83,39 @@ export function checkDirContents(file: string): Report {
     level: 'error',
     file,
     line: null,
-    msg: 'Non-test file inside a __tests__ directory. Shared fixtures and setup belong in a plainly named test/ directory, not __tests__/.',
+    msg: `Non-test file inside a ${testDir} directory. Shared fixtures and setup belong in a plainly named test/ directory, not ${testDir}/.`,
   });
   return report;
 }
 
-/** One repo picks `.test.` or `.spec.`, never both. Checked over the whole file set at once. */
+/** Walks up from `file` to the nearest ancestor directory holding a `package.json`. */
+function nearestPackageDir(file: string): string {
+  let dir = dirname(file);
+  for (;;) {
+    if (existsSync(join(dir, 'package.json'))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return '.';
+    dir = parent;
+  }
+}
+
+/** One suffix per package, `.test.` or `.spec.`, never both. Grouped by nearest `package.json`. */
 export function checkSuffixConsistency(files: string[]): Report {
   const report = emptyReport();
-  const testFiles = files.filter((f) => TEST_SUFFIX.test(f));
-  const specFiles = files.filter((f) => SPEC_SUFFIX.test(f));
-  if (testFiles.length > 0 && specFiles.length > 0) {
+  const groups = new Map<
+    string,
+    { testFiles: string[]; specFiles: string[] }
+  >();
+  for (const file of files) {
+    if (!TEST_SUFFIX.test(file) && !SPEC_SUFFIX.test(file)) continue;
+    const dir = nearestPackageDir(file);
+    const group = groups.get(dir) ?? { testFiles: [], specFiles: [] };
+    if (TEST_SUFFIX.test(file)) group.testFiles.push(file);
+    else group.specFiles.push(file);
+    groups.set(dir, group);
+  }
+  for (const [dir, { testFiles, specFiles }] of groups) {
+    if (testFiles.length === 0 || specFiles.length === 0) continue;
     const minority =
       testFiles.length <= specFiles.length ? testFiles : specFiles;
     report.findings.push({
@@ -100,7 +123,7 @@ export function checkSuffixConsistency(files: string[]): Report {
       level: 'error',
       file: minority[0]!,
       line: null,
-      msg: `Repo mixes .test. and .spec. suffixes: ${testFiles.length} .test. file(s), ${specFiles.length} .spec. file(s). Pick one suffix and rename the minority.`,
+      msg: `Package ${dir} mixes .test. and .spec. suffixes: ${testFiles.length} .test. file(s), ${specFiles.length} .spec. file(s). Pick one suffix per package and rename the minority.`,
     });
   }
   return report;
@@ -147,8 +170,19 @@ export function checkBuildOutput(dir: string): Report {
 function main(): void {
   const report = emptyReport();
   report.declined.push(...DECLINED);
+  let testDir = '__tests__';
   const files: string[] = [];
-  for (const arg of process.argv.slice(2)) {
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (arg === '--test-dir') {
+      testDir = argv[++i] ?? testDir;
+      continue;
+    }
+    if (arg.startsWith('--test-dir=')) {
+      testDir = arg.slice('--test-dir='.length);
+      continue;
+    }
     let isDirectory: boolean;
     try {
       isDirectory = statSync(arg).isDirectory();
@@ -163,8 +197,8 @@ function main(): void {
   }
   for (const file of files) {
     report.findings.push(...checkPath(file).findings);
-    report.findings.push(...checkColocation(file).findings);
-    report.findings.push(...checkDirContents(file).findings);
+    report.findings.push(...checkColocation(file, testDir).findings);
+    report.findings.push(...checkDirContents(file, testDir).findings);
   }
   report.findings.push(...checkSuffixConsistency(files).findings);
   process.stdout.write(`${renderReport(report)}\n`);

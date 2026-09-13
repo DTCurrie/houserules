@@ -7,8 +7,9 @@
  * `test-layout.mts`: this reports rather than tests, since a convention check written as a
  * test would be a lint rule in a test costume.
  */
-import { readFileSync, realpathSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   emptyReport,
@@ -19,7 +20,16 @@ import {
 
 const VITEST_CONFIG_NAME =
   /(^|\/)(vitest\.config|vite\.config|vitest\.workspace)\.[cm]?[jt]s$/;
-const REQUIRED_SVELTE_PROJECTS = ['client', 'ssr', 'server'];
+const REQUIRED_SVELTE_PROJECTS = ['client', 'server'];
+const SSR_PROJECT = 'ssr';
+const SSR_DISABLED = /export const ssr\s*=\s*false/;
+// A SvelteKit app registers `sveltekit()` from `@sveltejs/kit/vite` and never imports
+// `vite-plugin-svelte` itself, so a plugin-only match would skip every Kit config.
+const SVELTE_PROJECT = /vite-plugin-svelte|@sveltejs\/kit|svelte(kit)?\s*\(/;
+
+const SVELTE_CHECK_SKIPPED =
+  'the Svelte vitest project structure, since the Svelte guide (testing-svelte.md) is not ' +
+  'installed and --svelte was not passed';
 
 export interface FileInput {
   path: string;
@@ -90,21 +100,34 @@ export function checkTypecheckEnabled(files: FileInput[]): Report {
   return report;
 }
 
-/** A Svelte vitest config splits into `client`, `ssr`, and `server` projects. */
-export function checkVitestProjectStructure(file: FileInput): Report {
+/**
+ * A Svelte vitest config splits into `client` and `server` projects, plus `ssr` when the
+ * app renders on the server. `ssrRequired` defaults to true since most Svelte apps do.
+ */
+export function checkVitestProjectStructure(
+  file: FileInput,
+  { ssrRequired = true }: { ssrRequired?: boolean } = {},
+): Report {
   const report = emptyReport();
   if (!isVitestConfig(file.path)) return report;
-  if (!/vite-plugin-svelte|svelte\s*\(/.test(file.text)) return report;
-  const missing = REQUIRED_SVELTE_PROJECTS.filter(
+  if (!SVELTE_PROJECT.test(file.text)) return report;
+  const [client, server] = REQUIRED_SVELTE_PROJECTS;
+  const requiredProjects = ssrRequired
+    ? [client, SSR_PROJECT, server]
+    : REQUIRED_SVELTE_PROJECTS;
+  const missing = requiredProjects.filter(
     (name) => !new RegExp(`name:\\s*['"]${name}['"]`).test(file.text),
   );
   if (missing.length > 0) {
+    const ssrReason = ssrRequired
+      ? 'ssr is required because no passed file disables server rendering with export const ssr = false.'
+      : 'ssr was not required because a passed file sets export const ssr = false.';
     report.findings.push({
       rule: 'testing-svelte/vitest-project-structure',
       level: 'error',
       file: file.path,
       line: null,
-      msg: `Vitest config for a Svelte project is missing the ${missing.join(', ')} project(s). Split into client, ssr, and server projects.`,
+      msg: `Vitest config for a Svelte project is missing the ${missing.join(', ')} project(s). ${ssrReason}`,
     });
   }
   return report;
@@ -120,14 +143,35 @@ function readInputs(paths: string[]): FileInput[] {
   });
 }
 
+/**
+ * The Svelte project check installs alongside the Svelte guide, so it only runs when that
+ * guide is present. This script ships at `.claude/scripts/test-config.mjs`, the guide at
+ * `.claude/rules/testing-svelte.md`, one directory over.
+ */
+function svelteGuideInstalled(): boolean {
+  const scriptDir = dirname(fileURLToPath(import.meta.url));
+  return existsSync(join(scriptDir, '../rules/testing-svelte.md'));
+}
+
 function main(): void {
-  const files = readInputs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const svelteFlag = argv.includes('--svelte');
+  const paths = argv.filter((arg) => arg !== '--svelte');
+  const files = readInputs(paths);
+  const checkSvelte = svelteFlag || svelteGuideInstalled();
+
   const report = emptyReport();
   report.declined.push(...DECLINED);
+  if (!checkSvelte) report.declined.push(SVELTE_CHECK_SKIPPED);
   report.findings.push(...checkRequireAssertions(files).findings);
   report.findings.push(...checkTypecheckEnabled(files).findings);
-  for (const file of files) {
-    report.findings.push(...checkVitestProjectStructure(file).findings);
+  if (checkSvelte) {
+    const ssrRequired = !files.some((f) => SSR_DISABLED.test(f.text));
+    for (const file of files) {
+      report.findings.push(
+        ...checkVitestProjectStructure(file, { ssrRequired }).findings,
+      );
+    }
   }
   process.stdout.write(`${renderReport(report)}\n`);
   process.exit(exitCodeFor(report));

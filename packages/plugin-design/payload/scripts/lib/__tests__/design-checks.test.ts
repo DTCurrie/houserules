@@ -57,6 +57,7 @@ describe('checkDesign, untokenized colors', () => {
       findings.some((finding) =>
         finding.message.includes('color.brand.primary'),
       ),
+      'a finding names color.brand.primary',
     ).toBe(true);
   });
 
@@ -121,9 +122,10 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, {});
 
-    expect(findings.some((finding) => finding.message.includes('1.98:1'))).toBe(
-      true,
-    );
+    expect(
+      findings.some((finding) => finding.message.includes('1.98:1')),
+      `findings ${JSON.stringify(findings.map((finding) => finding.message))} include 1.98:1`,
+    ).toBe(true);
   });
 
   it('computes 1.51:1 for #c9ced4 on #f9fafb', () => {
@@ -136,9 +138,10 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, {});
 
-    expect(findings.some((finding) => finding.message.includes('1.51:1'))).toBe(
-      true,
-    );
+    expect(
+      findings.some((finding) => finding.message.includes('1.51:1')),
+      'a finding names 1.51:1',
+    ).toBe(true);
   });
 
   it('reports no finding for #ffffff on #2563eb at 5.17:1', () => {
@@ -153,6 +156,7 @@ describe('checkDesign, declared-pair contrast', () => {
 
     expect(
       findings.some((finding) => finding.message.includes('the 4.5:1 minimum')),
+      'no finding names the 4.5:1 minimum',
     ).toBe(false);
   });
 
@@ -168,6 +172,7 @@ describe('checkDesign, declared-pair contrast', () => {
 
     expect(
       findings.some((finding) => finding.message.includes('the 4.5:1 minimum')),
+      'no finding names the 4.5:1 minimum',
     ).toBe(false);
   });
 
@@ -181,9 +186,10 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, {});
 
-    expect(findings.some((finding) => finding.message.includes('3.83:1'))).toBe(
-      true,
-    );
+    expect(
+      findings.some((finding) => finding.message.includes('3.83:1')),
+      `findings ${JSON.stringify(findings.map((finding) => finding.message))} include 3.83:1`,
+    ).toBe(true);
   });
 
   it('computes 2.87:1 for a percentage-lightness oklch foreground on a hex background, matching the rendered tier', () => {
@@ -196,9 +202,10 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, {});
 
-    expect(findings.some((finding) => finding.message.includes('2.87:1'))).toBe(
-      true,
-    );
+    expect(
+      findings.some((finding) => finding.message.includes('2.87:1')),
+      `findings ${JSON.stringify(findings.map((finding) => finding.message))} include 2.87:1`,
+    ).toBe(true);
   });
 
   it('computes 1.02:1 for a hex foreground on an oklch background, the reverse direction', () => {
@@ -211,9 +218,10 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, {});
 
-    expect(findings.some((finding) => finding.message.includes('1.02:1'))).toBe(
-      true,
-    );
+    expect(
+      findings.some((finding) => finding.message.includes('1.02:1')),
+      `findings ${JSON.stringify(findings.map((finding) => finding.message))} include 1.02:1`,
+    ).toBe(true);
   });
 
   it('reports an explicit skip, naming the color space, for a token in a space it cannot convert', () => {
@@ -254,9 +262,10 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, {});
 
-    expect(findings.some((finding) => finding.message.includes('4.24:1'))).toBe(
-      true,
-    );
+    expect(
+      findings.some((finding) => finding.message.includes('4.24:1')),
+      `findings ${JSON.stringify(findings.map((finding) => finding.message))} include 4.24:1`,
+    ).toBe(true);
   });
 
   it('computes 4.24:1 for a var() token resolving to #18a838, matching the same rendered pair', () => {
@@ -276,9 +285,10 @@ describe('checkDesign, declared-pair contrast', () => {
 
     const { findings } = checkDesign(css, root);
 
-    expect(findings.some((finding) => finding.message.includes('4.24:1'))).toBe(
-      true,
-    );
+    expect(
+      findings.some((finding) => finding.message.includes('4.24:1')),
+      `findings ${JSON.stringify(findings.map((finding) => finding.message))} include 4.24:1`,
+    ).toBe(true);
   });
 });
 
@@ -394,6 +404,7 @@ describe('checkDesign, on-scale dimension literals', () => {
 
     expect(
       findings.some((finding) => finding.message.includes('is exactly')),
+      'no finding names an exact token match',
     ).toBe(false);
   });
 });

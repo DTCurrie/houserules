@@ -25,8 +25,11 @@ describe('design-tailwind theming install', () => {
   it('installs the template and reference at the expected paths', () => {
     const root = installed();
 
-    expect(existsSync(join(root, TEMPLATE_PATH))).toBe(true);
-    expect(existsSync(join(root, REFERENCE_PATH))).toBe(true);
+    const templatePath = join(root, TEMPLATE_PATH);
+    const referencePath = join(root, REFERENCE_PATH);
+
+    expect(existsSync(templatePath), `${templatePath} exists`).toBe(true);
+    expect(existsSync(referencePath), `${referencePath} exists`).toBe(true);
   });
 
   it("names the reference in the design rule's routing table", () => {
@@ -61,7 +64,7 @@ describe('tailwind-theme.css.template', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
   });
 
   it('resolves a utility from its semantic layer', async () => {
@@ -74,7 +77,7 @@ describe('tailwind-theme.css.template', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const [css] = result.value.candidatesToCss(['bg-surface']);
     expect(css).toContain('background-color: var(--surface)');
@@ -90,7 +93,7 @@ describe('tailwind-theme.css.template', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.candidatesToCss(['bg-red-500'])).toEqual([null]);
     expect(result.value.candidatesToCss(['bg-brand-500'])[0]).toContain(
@@ -110,7 +113,7 @@ describe('multi-theme example from the reference doc', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const [plain] = result.value.candidatesToCss(['bg-accent']);
     expect(plain).toContain('background-color: var(--color-accent)');
@@ -126,7 +129,7 @@ describe('multi-theme example from the reference doc', () => {
 
     const result = await loadDesignSystem(root, join(root, 'src/app.css'));
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const [inline] = result.value.candidatesToCss(['bg-accent']);
     expect(inline).toContain('background-color: var(--brand-accent)');

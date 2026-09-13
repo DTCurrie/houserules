@@ -51,11 +51,11 @@ describe('serializeIndex and parseIndex', () => {
   });
 
   it('serializes with a trailing newline', () => {
-    expect(
-      serializeIndex(
-        emptyIndex('backlog', '2026-08-03T00:00:00.000Z'),
-      ).endsWith('\n'),
-    ).toBe(true);
+    const serialized = serializeIndex(
+      emptyIndex('backlog', '2026-08-03T00:00:00.000Z'),
+    );
+
+    expect(serialized.at(-1)).toBe('\n');
   });
 });
 

@@ -24,15 +24,15 @@ describe('hookFragment', () => {
     const hook = fragment.hooks!.PreToolUse![0]!.hooks[0]!;
     expect(hook.if).toBe('${CLAUDE_TOOL_NAME} == "Bash"');
     expect(hook.timeout).toBe(30);
-    expect(hook.async).toBe(true);
+    expect(hook.async, 'hook.async is set to true').toBe(true);
   });
 
   it('omits if, timeout, and async when unset', () => {
     const fragment = hookFragment('PreToolUse', 'Bash', 'guard-bash.mjs');
     const hook = fragment.hooks!.PreToolUse![0]!.hooks[0]!;
-    expect('if' in hook).toBe(false);
-    expect('timeout' in hook).toBe(false);
-    expect('async' in hook).toBe(false);
+    expect('if' in hook, 'hook has no if key').toBe(false);
+    expect('timeout' in hook, 'hook has no timeout key').toBe(false);
+    expect('async' in hook, 'hook has no async key').toBe(false);
   });
 
   it('round-trips if, timeout, and async through mergeSettings', () => {
@@ -47,6 +47,6 @@ describe('hookFragment', () => {
     const hook = merged.hooks!.PreToolUse![0]!.hooks[0]!;
     expect(hook.if).toBe('always');
     expect(hook.timeout).toBe(12);
-    expect(hook.async).toBe(false);
+    expect(hook.async, 'hook.async is set to false').toBe(false);
   });
 });

@@ -38,7 +38,7 @@ describe('verify-changed install', () => {
     const manifest = readJson<{ modules: string[] }>(
       join(root, '.claude/houserules.manifest.json'),
     );
-    expect(manifest.modules.includes('verify-changed')).toBe(true);
+    expect(manifest.modules).toContain('verify-changed');
   });
 
   it('wires the script permission into settings.json', () => {
