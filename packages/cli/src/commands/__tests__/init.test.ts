@@ -104,6 +104,7 @@ describe('init --yes on a pnpm monorepo', () => {
       existsSync(
         join(root, '.claude/templates/agents/archivist.agent.md.template'),
       ),
+      'archivist template not staged',
     ).toBe(false);
   });
 
@@ -144,8 +145,10 @@ describe('init --yes on a pnpm monorepo', () => {
       };
     }>(houseConfigPath(root));
     expect(config.version).toBe(2);
-    expect(config.changesets.enabled).toBe(false);
-    expect(config.changesets.stopCheck).toBe(false);
+    expect(config.changesets.enabled, 'changesets disabled').toBe(false);
+    expect(config.changesets.stopCheck, 'changesets stopCheck disabled').toBe(
+      false,
+    );
     expect(config.changesets.baseBranch).toBe('main');
   });
 
@@ -174,7 +177,9 @@ describe('init --yes on a pnpm monorepo', () => {
   });
 
   it('does not create a backup when settings.json did not pre-exist', () => {
-    expect(existsSync(join(root, '.claude/backups'))).toBe(false);
+    expect(existsSync(join(root, '.claude/backups')), 'no backup created').toBe(
+      false,
+    );
   });
 
   it('leaves settings.local.json untouched', () => {
@@ -185,9 +190,11 @@ describe('init --yes on a pnpm monorepo', () => {
 
   it('seeds CLAUDE.md with facts from the repo and no unfilled <PROJECT_NAME>-style template placeholder', () => {
     const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
-    expect(claudeMd.includes('@fix/studio')).toBe(true);
-    expect(claudeMd.includes('@fix/cityville')).toBe(true);
-    expect(/<[A-Z][A-Z_]{3,}>/.test(claudeMd)).toBe(false);
+    expect(claudeMd).toContain('@fix/studio');
+    expect(claudeMd).toContain('@fix/cityville');
+    expect(/<[A-Z][A-Z_]{3,}>/.test(claudeMd), 'no unfilled placeholder').toBe(
+      false,
+    );
   });
 
   it('leaves .changeset byte-identical', () => {
@@ -244,6 +251,7 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
   it('retires the hand-merge staging file', () => {
     expect(
       existsSync(join(root, '.claude/templates/CLAUDE.additions.md')),
+      'hand-merge staging file retired',
     ).toBe(false);
   });
 
@@ -257,6 +265,7 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
       hookCommandsFor(settings, 'PreToolUse').some((command) =>
         command.includes('guard-bash.mjs'),
       ),
+      'guard-bash hook wired',
     ).toBe(true);
   });
 
@@ -308,8 +317,8 @@ describe('init --yes --modules=-debug-session on a non-js repo', () => {
 
   it('enables core and session-context by default', () => {
     const manifest = manifestOf(root);
-    expect(manifest.modules.includes('core')).toBe(true);
-    expect(manifest.modules.includes('session-context')).toBe(true);
+    expect(manifest.modules).toContain('core');
+    expect(manifest.modules).toContain('session-context');
   });
 
   it('removes debug-session when subtracted via --modules=-debug-session', () => {
@@ -320,6 +329,7 @@ describe('init --yes --modules=-debug-session on a non-js repo', () => {
     ).toBe(false);
     expect(
       existsSync(join(root, '.claude/scripts/debug-session-check.mjs')),
+      'debug-session-check.mjs removed',
     ).toBe(false);
   });
 
@@ -328,9 +338,10 @@ describe('init --yes --modules=-debug-session on a non-js repo', () => {
     expect(manifest.modules.includes('lint-fix'), 'no fix scripts → off').toBe(
       false,
     );
-    expect(existsSync(join(root, '.claude/scripts/lint-format-fix.mjs'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(root, '.claude/scripts/lint-format-fix.mjs')),
+      'lint-format-fix.mjs not installed',
+    ).toBe(false);
   });
 });
 
@@ -354,8 +365,8 @@ describe('init on an existing CLAUDE.md', () => {
     expect(runCli(['init', '--yes', root]).status).toBe(0);
 
     const after = readClaudeMd(root);
-    expect(after.startsWith(heading)).toBe(true);
-    expect(after.endsWith(prose)).toBe(true);
+    expect(after.startsWith(heading), 'starts with the heading').toBe(true);
+    expect(after.endsWith(prose), 'ends with the prose').toBe(true);
     expect(after).toContain(REGION_START);
     expect(after).toContain(REGION_END);
     expect(after.indexOf(REGION_START)).toBeLessThan(after.indexOf(REGION_END));
@@ -366,10 +377,12 @@ describe('init on an existing CLAUDE.md', () => {
 describe('init on a repo with no CLAUDE.md', () => {
   it('seeds one with the managed markers', () => {
     const root = useRepo('non-js');
-    expect(existsSync(claudeMdPath(root))).toBe(false);
+    expect(existsSync(claudeMdPath(root)), 'CLAUDE.md not yet created').toBe(
+      false,
+    );
     expect(runCli(['init', '--yes', root]).status).toBe(0);
 
-    expect(existsSync(claudeMdPath(root))).toBe(true);
+    expect(existsSync(claudeMdPath(root)), 'CLAUDE.md created').toBe(true);
     const content = readClaudeMd(root);
     expect(content).toContain(REGION_START);
     expect(content).toContain(REGION_END);
@@ -429,7 +442,7 @@ describe('the settings.json backup', () => {
     expect(runCli(['init', '--yes', root]).status).toBe(0);
 
     const backup = join(root, '.claude/backups/settings.json.bak');
-    expect(existsSync(backup)).toBe(true);
+    expect(existsSync(backup), 'backup file created').toBe(true);
     expect(
       readFileSync(backup, 'utf8'),
       'the backup must be the pristine pre-kit file',
@@ -474,7 +487,10 @@ describe('init below the git toplevel', () => {
   });
 
   it('writes nothing to the subdirectory', () => {
-    expect(existsSync(join(sub, '.claude'))).toBe(false);
+    expect(
+      existsSync(join(sub, '.claude')),
+      '.claude not created in the subdirectory',
+    ).toBe(false);
   });
 });
 
@@ -482,15 +498,18 @@ describe('orchestrate module, task-worker effort variants', () => {
   it('lands the default low and xhigh variants, and not high', () => {
     const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
 
-    expect(existsSync(join(root, '.claude/agents/task-worker-low.md'))).toBe(
-      true,
-    );
-    expect(existsSync(join(root, '.claude/agents/task-worker-xhigh.md'))).toBe(
-      true,
-    );
-    expect(existsSync(join(root, '.claude/agents/task-worker-high.md'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(root, '.claude/agents/task-worker-low.md')),
+      'task-worker-low installed',
+    ).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/agents/task-worker-xhigh.md')),
+      'task-worker-xhigh installed',
+    ).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/agents/task-worker-high.md')),
+      'task-worker-high not installed',
+    ).toBe(false);
   });
 
   it('lands only the effort named via --module-option, when narrowed', () => {
@@ -506,15 +525,18 @@ describe('orchestrate module, task-worker effort variants', () => {
     ]);
 
     expect(result.status, result.stderr).toBe(0);
-    expect(existsSync(join(root, '.claude/agents/task-worker-high.md'))).toBe(
-      true,
-    );
-    expect(existsSync(join(root, '.claude/agents/task-worker-low.md'))).toBe(
-      false,
-    );
-    expect(existsSync(join(root, '.claude/agents/task-worker-xhigh.md'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(root, '.claude/agents/task-worker-high.md')),
+      'task-worker-high installed',
+    ).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/agents/task-worker-low.md')),
+      'task-worker-low not installed',
+    ).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/agents/task-worker-xhigh.md')),
+      'task-worker-xhigh not installed',
+    ).toBe(false);
   });
 });
 
@@ -551,9 +573,7 @@ describe('init settings signature recorded in the manifest', () => {
     const settings = manifest.settings as {
       hooks: Array<{ script?: string }>;
     };
-    expect(settings.hooks.some((h) => h.script === 'guard-bash.mjs')).toBe(
-      true,
-    );
+    expect(settings.hooks.map((h) => h.script)).toContain('guard-bash.mjs');
   });
 
   it('signs the core module permission it always contributes', () => {
@@ -630,7 +650,10 @@ describe('init --module-option against a houserules.config.json that already exi
 
     expect(runCli(['update', root]).status).toBe(0);
 
-    expect(existsSync(join(root, '.claude/fixture-lang-beta.md'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/fixture-lang-beta.md')),
+      'fixture-lang-beta.md kept',
+    ).toBe(true);
   });
 });
 
@@ -644,9 +667,11 @@ describe('research module', () => {
       root,
       '.claude/agents/refactor-planner.md',
     );
-    expect(existsSync(spikePath)).toBe(true);
-    expect(existsSync(synthPath)).toBe(true);
-    expect(existsSync(refactorPlannerPath)).toBe(true);
+    expect(existsSync(spikePath), 'research-spike installed').toBe(true);
+    expect(existsSync(synthPath), 'research-synth installed').toBe(true);
+    expect(existsSync(refactorPlannerPath), 'refactor-planner installed').toBe(
+      true,
+    );
 
     const spikeText = readFileSync(spikePath, 'utf8');
     expect(spikeText).not.toMatch(/isaac/i);
@@ -665,14 +690,17 @@ describe('research module', () => {
   it('lands none of the agents by default', () => {
     const root = useInstalledRepo('pnpm-monorepo');
 
-    expect(existsSync(join(root, '.claude/agents/research-spike.md'))).toBe(
-      false,
-    );
-    expect(existsSync(join(root, '.claude/agents/research-synth.md'))).toBe(
-      false,
-    );
-    expect(existsSync(join(root, '.claude/agents/refactor-planner.md'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(root, '.claude/agents/research-spike.md')),
+      'research-spike not installed by default',
+    ).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/agents/research-synth.md')),
+      'research-synth not installed by default',
+    ).toBe(false);
+    expect(
+      existsSync(join(root, '.claude/agents/refactor-planner.md')),
+      'refactor-planner not installed by default',
+    ).toBe(false);
   });
 });

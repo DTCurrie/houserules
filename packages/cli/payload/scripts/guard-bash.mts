@@ -34,7 +34,8 @@
  * apart.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 import { GUARD_DEFAULTS, loadConfigSafe } from '@houserules/payload/config';
 import { readStdinJson } from '@houserules/payload/proc';
@@ -44,7 +45,7 @@ interface BashPayload {
   transcript_path?: string;
 }
 
-interface TranscriptRecord {
+export interface TranscriptRecord {
   type?: string;
   isSidechain?: boolean;
 }
@@ -56,7 +57,7 @@ const CMD_START = String.raw`(?:^|[\n;&|])\s*`;
 // `git -c k=v stash`, `git --no-pager push`.
 const GIT_FLAGS = String.raw`(?:-[A-Za-z]\s+\S+\s+|--?\S+\s+)*`;
 
-function gitDenyRules(guard: {
+export function gitDenyRules(guard: {
   gitCommit: boolean;
   gitPush: boolean;
   gitStash: boolean;
@@ -113,7 +114,7 @@ function gitDenyRules(guard: {
  * The stderr message refusing `cmd` under the git/gh guard config, or null when nothing
  * matches.
  */
-function guardRefusalFor(cmd: string): string | null {
+export function guardRefusalFor(cmd: string): string | null {
   const guard = { ...GUARD_DEFAULTS, ...(loadConfigSafe().guard ?? {}) };
   for (const rule of gitDenyRules(guard)) {
     if (rule.re.test(cmd)) {
@@ -167,7 +168,7 @@ const REDIRECT_RE = new RegExp(
  * while the overwhelming majority of Bash calls are not mutating, so answering "is there
  * anything to refuse" first takes that cost off almost every invocation.
  */
-function writeGateRefusalFor(cmd: string): string | null {
+export function writeGateRefusalFor(cmd: string): string | null {
   const mutatingMatch =
     cmd.match(BACKLOG_MUTATING_RE) ?? cmd.match(DECISION_MUTATING_RE);
   if (mutatingMatch) {
@@ -210,25 +211,32 @@ function readTranscriptLines(path: string): TranscriptRecord[] {
 }
 
 /**
- * Whether the trailing assistant turn in the transcript is a subagent sidechain. Fails
- * open (false) on any transcript that can't be read or has no assistant turn at all.
+ * Whether the trailing assistant turn among `records` is a subagent sidechain. False when
+ * there is no assistant turn at all.
  */
-function isSidechainTurn(transcriptPath: string | undefined): boolean {
-  if (!transcriptPath) return false;
-
-  let records: TranscriptRecord[];
-  try {
-    records = readTranscriptLines(transcriptPath);
-  } catch {
-    return false;
-  }
-
+export function isSidechainTurn(records: TranscriptRecord[]): boolean {
   const lastTurn = [...records].reverse().find((r) => r.type === 'assistant');
   return lastTurn?.isSidechain === true;
 }
 
+/**
+ * Reads `transcriptPath` and applies {@link isSidechainTurn}. Fails open (false) on any
+ * transcript that can't be read.
+ */
+function sidechainTurnFromTranscript(
+  transcriptPath: string | undefined,
+): boolean {
+  if (!transcriptPath) return false;
+
+  try {
+    return isSidechainTurn(readTranscriptLines(transcriptPath));
+  } catch {
+    return false;
+  }
+}
+
 function runDiagnose(transcriptPath: string): never {
-  const sidechainDetected = isSidechainTurn(transcriptPath);
+  const sidechainDetected = sidechainTurnFromTranscript(transcriptPath);
   process.stdout.write(
     `${JSON.stringify({ transcriptPath, sidechainDetected }, null, 2)}\n`,
   );
@@ -257,7 +265,7 @@ function main(): void {
   }
 
   const writeGateRefusal = writeGateRefusalFor(cmd);
-  if (writeGateRefusal && isSidechainTurn(input?.transcript_path)) {
+  if (writeGateRefusal && sidechainTurnFromTranscript(input?.transcript_path)) {
     process.stderr.write(writeGateRefusal);
     process.exit(2);
   }
@@ -265,4 +273,9 @@ function main(): void {
   process.exit(0);
 }
 
-main();
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+) {
+  main();
+}

@@ -271,9 +271,10 @@ describe('assemblePayload', () => {
 
     assemblePayload(payloadRoot, packageRoot);
 
-    expect(existsSync(join(packageRoot, 'payload-dist/rules/stale.md'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(packageRoot, 'payload-dist/rules/stale.md')),
+      'stale destination removed',
+    ).toBe(false);
   });
 
   it('excludes a __tests__ directory at any depth under a copied directory', () => {
@@ -292,6 +293,7 @@ describe('assemblePayload', () => {
       existsSync(
         join(packageRoot, 'payload-dist/rules/__tests__/example.test.md'),
       ),
+      '__tests__ excluded',
     ).toBe(false);
   });
 
@@ -311,6 +313,7 @@ describe('assemblePayload', () => {
       existsSync(
         join(packageRoot, 'payload-dist/rules/__test__/example.test.md'),
       ),
+      '__test__ excluded',
     ).toBe(false);
   });
 
@@ -329,9 +332,10 @@ describe('assemblePayload', () => {
     expect(readAt(packageRoot, 'payload-dist/scripts/hook.mjs')).toBe(
       'export const emitted = true;\n',
     );
-    expect(existsSync(join(packageRoot, 'payload-dist/scripts/hook.mts'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(packageRoot, 'payload-dist/scripts/hook.mts')),
+      'source .mts not copied',
+    ).toBe(false);
   });
 
   it('throws when payload/scripts has sources but payload-dist/scripts is missing', () => {

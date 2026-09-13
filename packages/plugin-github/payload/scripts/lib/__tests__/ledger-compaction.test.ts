@@ -250,11 +250,15 @@ describe('the push queue built from compacted records', () => {
         onBoard(['A']),
         onBoard(['D']),
       ),
+      'the queue survives compaction',
     ).toBe(true);
   });
 
   it('is unchanged when an entry has never been pushed', () => {
-    expect(queueSurvivesCompaction([backlogAdd('A')], [])).toBe(true);
+    expect(
+      queueSurvivesCompaction([backlogAdd('A')], []),
+      'the queue survives compaction',
+    ).toBe(true);
   });
 
   it('is unchanged when a synced entry is awaiting its close', () => {
@@ -264,19 +268,28 @@ describe('the push queue built from compacted records', () => {
       { ts: '2026-01-06T00:00:00Z', id: 'A', action: 'remove', reason: 'done' },
     ];
 
-    expect(queueSurvivesCompaction(backlog, [], onBoard(['A']), [])).toBe(true);
+    expect(
+      queueSurvivesCompaction(backlog, [], onBoard(['A']), []),
+      'the queue survives compaction',
+    ).toBe(true);
   });
 
   it('is unchanged when an entry was removed before it ever synced', () => {
     const backlog = [backlogAdd('A'), removed('A', 'moot')];
 
-    expect(queueSurvivesCompaction(backlog, [])).toBe(true);
+    expect(
+      queueSurvivesCompaction(backlog, []),
+      'the queue survives compaction',
+    ).toBe(true);
   });
 
   it('is unchanged when an on-board entry has an unpushed edit and no add record left', () => {
     const backlog = [updatedTitle('A', 'Fix it properly')];
 
-    expect(queueSurvivesCompaction(backlog, [], onBoard(['A']), [])).toBe(true);
+    expect(
+      queueSurvivesCompaction(backlog, [], onBoard(['A']), []),
+      'the queue survives compaction',
+    ).toBe(true);
   });
 });
 
@@ -287,6 +300,7 @@ describe('compacting an already compacted ledger', () => {
 
     expect(
       compactionIsNoop(once, compactBacklog(once, new Set(), onBoard(['A']))),
+      'a second compaction is a noop',
     ).toBe(true);
   });
 });
@@ -295,7 +309,7 @@ describe('serializeLedger', () => {
   it('writes one newline-terminated JSON object per record', () => {
     const text = serializeLedger([backlogAdd('A')]);
 
-    expect(text.endsWith('\n')).toBe(true);
+    expect(text.slice(-1)).toBe('\n');
     expect(JSON.parse(text.trimEnd())).toEqual(backlogAdd('A'));
   });
 });

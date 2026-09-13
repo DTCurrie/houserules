@@ -16,9 +16,9 @@ describe('testing plugin, typescript guide option', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/rules/testing-typescript.md'))).toBe(
-      true,
-    );
+    const rulePath = join(root, '.claude/rules/testing-typescript.md');
+
+    expect(existsSync(rulePath), `${rulePath} exists`).toBe(true);
   });
 
   it('does not install testing-typescript.md when the javascript guide is selected instead', () => {
@@ -28,8 +28,8 @@ describe('testing plugin, typescript guide option', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(join(root, '.claude/rules/testing-typescript.md'))).toBe(
-      false,
-    );
+    const rulePath = join(root, '.claude/rules/testing-typescript.md');
+
+    expect(existsSync(rulePath), `${rulePath} absent`).toBe(false);
   });
 });

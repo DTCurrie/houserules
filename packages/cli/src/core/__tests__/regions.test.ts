@@ -23,8 +23,8 @@ describe('upsertRegion', () => {
     const existing = `${before}${SPEC.start}\nold body\n${SPEC.end}${after}`;
     const { content, status } = upsertRegion(existing, 'new body', SPEC);
     expect(status).toBe('replaced');
-    expect(content.startsWith(before)).toBe(true);
-    expect(content.endsWith(after)).toBe(true);
+    expect(content.slice(0, before.length)).toBe(before);
+    expect(content.slice(-after.length)).toBe(after);
     expect(content).toBe(
       `${before}${SPEC.start}\nnew body\n${SPEC.end}${after}`,
     );
@@ -46,7 +46,7 @@ describe('upsertRegion', () => {
     const existing = 'Just some prose.\nMore prose.\n';
     const { content, status } = upsertRegion(existing, 'body', SPEC);
     expect(status).toBe('inserted');
-    expect(content.startsWith(existing)).toBe(true);
+    expect(content.slice(0, existing.length)).toBe(existing);
     expect(content).toContain(SPEC.start);
     expect(content).toContain(SPEC.end);
   });
@@ -56,7 +56,7 @@ describe('upsertRegion', () => {
     const existing = 'No heading here, just prose.\n';
     const { content, status } = upsertRegion(existing, 'body', spec);
     expect(status).toBe('inserted');
-    expect(content.startsWith(existing)).toBe(true);
+    expect(content.slice(0, existing.length)).toBe(existing);
     expect(content).toContain(spec.start);
   });
 

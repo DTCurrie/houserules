@@ -31,16 +31,26 @@ describe('accessibility framework guides', () => {
   it('installs only the guides that were chosen', () => {
     const root = installedWith(['react', 'svelte']);
 
-    expect(existsSync(guidePath(root, 'react'))).toBe(true);
-    expect(existsSync(guidePath(root, 'svelte'))).toBe(true);
-    expect(existsSync(guidePath(root, 'vue'))).toBe(false);
-    expect(existsSync(guidePath(root, 'html'))).toBe(false);
+    expect(existsSync(guidePath(root, 'react')), 'react guide installed').toBe(
+      true,
+    );
+    expect(
+      existsSync(guidePath(root, 'svelte')),
+      'svelte guide installed',
+    ).toBe(true);
+    expect(existsSync(guidePath(root, 'vue')), 'vue guide absent').toBe(false);
+    expect(existsSync(guidePath(root, 'html')), 'html guide absent').toBe(
+      false,
+    );
   });
 
   it('always installs the base rule a guide defers to', () => {
     const root = installedWith(['vue']);
 
-    expect(existsSync(join(root, '.claude/rules/accessibility.md'))).toBe(true);
+    expect(
+      existsSync(join(root, '.claude/rules/accessibility.md')),
+      'accessibility.md installed',
+    ).toBe(true);
   });
 
   it.each([
@@ -92,7 +102,11 @@ describe('accessibility framework guides', () => {
       plugins: PLUGINS,
     });
 
-    expect(existsSync(guidePath(root, 'html'))).toBe(true);
-    expect(existsSync(guidePath(root, 'react'))).toBe(false);
+    expect(existsSync(guidePath(root, 'html')), 'html guide installed').toBe(
+      true,
+    );
+    expect(existsSync(guidePath(root, 'react')), 'react guide absent').toBe(
+      false,
+    );
   });
 });

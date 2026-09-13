@@ -55,7 +55,7 @@ describe('checkTailwindClasses', () => {
       tokens,
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const colorFinding = result.value.findings.find((finding) =>
       finding.message.includes('#3b82f6'),
@@ -86,7 +86,7 @@ describe('checkTailwindClasses', () => {
       tokens,
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.findings).toEqual([]);
   });
@@ -105,7 +105,7 @@ describe('checkTailwindClasses', () => {
       tokens,
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.findings).toEqual([
       {
@@ -130,7 +130,7 @@ describe('checkTailwindClasses', () => {
       tokens,
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const contrastFinding = result.value.findings.find((finding) =>
       finding.message.includes('1.00:1'),
@@ -153,7 +153,7 @@ describe('checkTailwindClasses', () => {
       tokens,
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.findings).toEqual([]);
   });
@@ -181,7 +181,7 @@ describe('checkTailwindClasses', () => {
       tokens,
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
     const paddingFinding = result.value.findings.find((finding) =>
       finding.message.includes('13px'),
@@ -199,7 +199,7 @@ describe('checkTailwindClasses', () => {
       tokens,
     );
 
-    expect(result.ok).toBe(false);
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('does not exist');
   });

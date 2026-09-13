@@ -33,7 +33,10 @@ describe('three upstream docs reference', () => {
   it('is not installed when the three module is not enabled', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
 
-    expect(existsSync(join(root, REFERENCE_PATH))).toBe(false);
+    expect(
+      existsSync(join(root, REFERENCE_PATH)),
+      `${REFERENCE_PATH} absent`,
+    ).toBe(false);
   });
 
   it('carries no frontmatter, since it is pull-only', () => {

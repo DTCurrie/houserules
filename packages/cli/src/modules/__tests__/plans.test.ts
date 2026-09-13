@@ -16,7 +16,7 @@ describe('plans', () => {
 
     it('ships the /blast-radius worked-example skill', () => {
       const skillPath = join(root, '.claude/skills/blast-radius/SKILL.md');
-      expect(existsSync(skillPath)).toBe(true);
+      expect(existsSync(skillPath), 'blast-radius skill installed').toBe(true);
       const text = readFileSync(skillPath, 'utf8');
       expect(text).toMatch(/\.claude\/plans\/blast-radius-/);
       expect(text).toMatch(/disclaimer|Snapshot at commit/i);
@@ -35,9 +35,10 @@ describe('plans', () => {
     it('installs the /plan-project skill without wiring a hook', () => {
       expect(
         existsSync(join(root, '.claude/skills/plan-project/SKILL.md')),
+        'plan-project skill installed',
       ).toBe(true);
       const manifest = manifestOf(root);
-      expect(manifest.modules.includes('plans')).toBe(true);
+      expect(manifest.modules).toContain('plans');
     });
 
     it('templates a phase doc with a Reference section for the spec its work must conform to', () => {
@@ -64,7 +65,10 @@ describe('plans', () => {
     });
 
     it('does not add a nested plans/CLAUDE.md, since that would never auto-load', () => {
-      expect(existsSync(join(root, '.claude/plans/CLAUDE.md'))).toBe(false);
+      expect(
+        existsSync(join(root, '.claude/plans/CLAUDE.md')),
+        'no nested plans/CLAUDE.md',
+      ).toBe(false);
     });
 
     it('passes doctor validation', () => {
@@ -81,23 +85,28 @@ describe('plans', () => {
 
     it('is not enabled', () => {
       const manifest = manifestOf(root);
-      expect(manifest.modules.includes('plans')).toBe(false);
+      expect(manifest.modules).not.toContain('plans');
     });
 
     it('installs no skill, agent, or workspace', () => {
       expect(
         existsSync(join(root, '.claude/skills/plan-project/SKILL.md')),
+        'plan-project skill not installed',
       ).toBe(false);
       expect(
         existsSync(join(root, '.claude/agents/blast-radius-mapper.md')),
+        'blast-radius-mapper agent not installed',
       ).toBe(false);
-      expect(existsSync(join(root, '.claude/plans/.gitignore'))).toBe(false);
+      expect(
+        existsSync(join(root, '.claude/plans/.gitignore')),
+        'plans workspace not created',
+      ).toBe(false);
     });
 
     it('adds no CLAUDE.md pointer', () => {
       const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
-      expect(claudeMd.includes('/plan-project')).toBe(false);
-      expect(claudeMd.includes('.claude/plans/')).toBe(false);
+      expect(claudeMd).not.toContain('/plan-project');
+      expect(claudeMd).not.toContain('.claude/plans/');
     });
   });
 });

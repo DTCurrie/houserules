@@ -54,11 +54,16 @@ describe('design', () => {
   it('installs the reference doc, the script, and the token seed', () => {
     const root = installed();
 
-    expect(
-      existsSync(join(root, '.claude/reference/design-visual-principles.md')),
-    ).toBe(true);
-    expect(existsSync(join(root, '.claude/scripts/design.mjs'))).toBe(true);
-    expect(existsSync(join(root, '.claude/design/tokens.json'))).toBe(true);
+    const referencePath = join(
+      root,
+      '.claude/reference/design-visual-principles.md',
+    );
+    const scriptPath = join(root, '.claude/scripts/design.mjs');
+    const tokensPath = join(root, '.claude/design/tokens.json');
+
+    expect(existsSync(referencePath), `${referencePath} exists`).toBe(true);
+    expect(existsSync(scriptPath), `${scriptPath} exists`).toBe(true);
+    expect(existsSync(tokensPath), `${tokensPath} exists`).toBe(true);
   });
 
   it('grants permission to run the script unprompted', () => {
@@ -76,7 +81,7 @@ describe('design', () => {
 
     const manifest = manifestOf(root);
 
-    expect(manifest.modules.includes('design/design')).toBe(true);
+    expect(manifest.modules).toContain('design/design');
     const { frontmatter, body } = splitFrontmatter(
       readFileSync(join(root, '.claude/rules/design.md'), 'utf8'),
     );
@@ -104,7 +109,9 @@ describe('design', () => {
 
     const manifest = manifestOf(root);
 
-    expect(manifest.modules.includes('design/design')).toBe(false);
-    expect(existsSync(join(root, '.claude/rules/design.md'))).toBe(false);
+    const rulePath = join(root, '.claude/rules/design.md');
+
+    expect(manifest.modules).not.toContain('design/design');
+    expect(existsSync(rulePath), `${rulePath} absent`).toBe(false);
   });
 });

@@ -19,13 +19,15 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 import {
   DEFAULT_FILTER_FLAG,
   loadConfigSafe,
   resolveTargetCommands,
   runsAtRepoRoot,
-  type RunnerBlock,
+  type HouseConfig,
 } from '@houserules/payload/config';
 import { readStdinJson, repoRoot, tail } from '@houserules/payload/proc';
 
@@ -34,97 +36,104 @@ interface HookInput {
   hook_event_name?: string;
 }
 
-// Resolved before the config load so the root is passed in rather than spawned twice.
-// `repoRoot()` falls back to the cwd instead of throwing, so this is safe at module scope.
-const root = repoRoot();
+/** Everything {@link planFixSteps} needs, resolved once from a loaded `HouseConfig`. */
+export interface FixSettings {
+  lintableExtRe: RegExp;
+  generatedFileRe: RegExp;
+  runner: string;
+  filterFlag: string;
+  runsAtRoot: boolean;
+  runPrefix: string[];
+  commandExtensions: Record<string, string[]>;
+  onSubagentStop: boolean;
+  packageByPath: { prefix: string; name: string; commands: string[] }[];
+}
 
-// A Stop hook must never crash on a missing/broken config — it would fire on
-// every stop. No config or no targets → nothing to do.
-const config = loadConfigSafe(root);
+/**
+ * Resolves the repo-specific settings a `houserules.config.json`'s `fix` block and
+ * `targets` describe, defaulting every field so a missing or partial config still runs.
+ */
+export function resolveFixSettings(config: HouseConfig): FixSettings {
+  const exts = (
+    config.lintableExtensions ?? [
+      'ts',
+      'tsx',
+      'js',
+      'jsx',
+      'mjs',
+      'cjs',
+      'svelte',
+      'md',
+      'json',
+      'css',
+      'html',
+    ]
+  ).map((e) => e.replace(/^\./, ''));
+  const lintableExtRe = new RegExp(`\\.(?:${exts.join('|')})$`);
+  const generatedFileRe = new RegExp(
+    config.generatedFilePattern ?? '/(?:CHANGELOG|BACKLOG)\\.md$',
+  );
 
-const exts = (
-  config.lintableExtensions ?? [
-    'ts',
-    'tsx',
-    'js',
-    'jsx',
-    'mjs',
-    'cjs',
-    'svelte',
-    'md',
-    'json',
-    'css',
-    'html',
-  ]
-).map((e) => e.replace(/^\./, ''));
-const LINTABLE_EXT = new RegExp(`\\.(?:${exts.join('|')})$`);
-const GENERATED_FILE_RE = new RegExp(
-  config.generatedFilePattern ?? '/(?:CHANGELOG|BACKLOG)\\.md$',
-);
+  const fix = config.fix ?? {};
+  const runner = fix.runner ?? config.packageManager ?? 'pnpm';
+  const filterFlag = fix.filterFlag ?? DEFAULT_FILTER_FLAG; // '' / null for a single-package repo
+  const runsAtRoot = runsAtRepoRoot(fix);
+  const runPrefix = fix.runScriptPrefix ?? []; // e.g. ['run'] for npm/yarn
+  const commands = fix.commands ?? ['lint:fix', 'format:fix'];
+  // An optional gate, off by default, running a command only when a changed file carries
+  // one of its extensions. It saves Stop-hook latency, not tokens.
+  const commandExtensions = fix.commandExtensions ?? {}; // { "lint:fix": ["ts","tsx",...] }
 
-const fix: RunnerBlock = config.fix ?? {};
-const RUNNER = fix.runner ?? config.packageManager ?? 'pnpm';
-const FILTER_FLAG = fix.filterFlag ?? DEFAULT_FILTER_FLAG; // '' / null for a single-package repo
-const RUNS_AT_ROOT = runsAtRepoRoot(fix);
-const RUN_PREFIX = fix.runScriptPrefix ?? []; // e.g. ['run'] for npm/yarn
-const COMMANDS = fix.commands ?? ['lint:fix', 'format:fix'];
-// An optional gate, off by default, running a command only when a changed file carries
-// one of its extensions. It saves Stop-hook latency, not tokens.
-const COMMAND_EXTENSIONS = fix.commandExtensions ?? {}; // { "lint:fix": ["ts","tsx",...] }
-const gatePasses = (script: string, exts: Set<string>): boolean => {
-  const allowed = COMMAND_EXTENSIONS[script];
+  // targets[].fixCommands overrides the global fix.commands per package, because real
+  // repos diverge. A wireit root exposes `fix` while its packages expose `lint:fix`. An
+  // explicit null is the escape hatch: that target resolves to no commands, so a change
+  // confined to it runs nothing.
+  const packageByPath = config.targets
+    .filter((t) => t.packageName !== undefined && t.pathPrefix !== undefined)
+    .map((t) => ({
+      prefix: t.pathPrefix as string,
+      name: t.packageName as string,
+      commands: resolveTargetCommands(t.fixCommands, commands),
+    }));
+
+  return {
+    lintableExtRe,
+    generatedFileRe,
+    runner,
+    filterFlag,
+    runsAtRoot,
+    runPrefix,
+    commandExtensions,
+    onSubagentStop: fix.onSubagentStop === true,
+    packageByPath,
+  };
+}
+
+/** Whether `script` should run given the extensions actually changed, under its own gate. */
+export function gatePasses(
+  script: string,
+  changedExts: Set<string>,
+  commandExtensions: Record<string, string[]>,
+): boolean {
+  const allowed = commandExtensions[script];
   if (!allowed?.length) return true; // ungated → always run
   return allowed.some((e) =>
-    exts.has(String(e).replace(/^\./, '').toLowerCase()),
+    changedExts.has(String(e).replace(/^\./, '').toLowerCase()),
   );
-};
-
-// targets[].fixCommands overrides the global fix.commands per package, because real
-// repos diverge. A wireit root exposes `fix` while its packages expose `lint:fix`. An
-// explicit null is the escape hatch: that target resolves to no commands, so a change
-// confined to it runs nothing.
-const PACKAGE_BY_PATH = config.targets
-  .filter((t) => t.packageName !== undefined && t.pathPrefix !== undefined)
-  .map((t) => ({
-    prefix: t.pathPrefix as string,
-    name: t.packageName as string,
-    commands: resolveTargetCommands(t.fixCommands, COMMANDS),
-  }));
-
-// Monorepo: <runner> <filterFlag> <pkg> <script>. Single-package: <runner> <runScriptPrefix...> <script>.
-function fixArgs(pkg: string, script: string): string[] {
-  if (FILTER_FLAG) return [FILTER_FLAG, pkg, script];
-  return [...RUN_PREFIX, script];
 }
 
-// Comfortably under the 600s Stop default, applied per spawnSync call so a hung git
-// or fix command fails fast rather than consuming the whole event budget. SIGKILL
-// because a hung formatter/linter may not respond to the default SIGTERM.
-const GIT_TIMEOUT_MS = 15_000;
-const FIX_TIMEOUT_MS = 120_000;
-
-function changedPaths(cwd: string): string[] {
-  const r = spawnSync('git', ['status', '--porcelain'], {
-    encoding: 'utf-8',
-    cwd,
-    timeout: GIT_TIMEOUT_MS,
-    killSignal: 'SIGKILL',
-  });
-  if (r.status !== 0 || !r.stdout) return [];
-  return r.stdout
-    .split('\n')
-    .map((line) => line.slice(3).trim())
-    .filter(Boolean);
-}
-
-function affectedPackages(
+/** Maps `paths` to the package each belongs to, skipping non-lintable and generated files. */
+export function affectedPackages(
   paths: string[],
+  settings: FixSettings,
 ): [name: string, commands: string[], exts: Set<string>][] {
   const pkgs = new Map<string, { commands: string[]; exts: Set<string> }>();
   for (const p of paths) {
-    if (!LINTABLE_EXT.test(p)) continue;
-    if (GENERATED_FILE_RE.test('/' + p)) continue;
-    const match = PACKAGE_BY_PATH.find((pkg) => p.startsWith(pkg.prefix));
+    if (!settings.lintableExtRe.test(p)) continue;
+    if (settings.generatedFileRe.test('/' + p)) continue;
+    const match = settings.packageByPath.find((pkg) =>
+      p.startsWith(pkg.prefix),
+    );
     if (!match) continue;
     const entry = pkgs.get(match.name) ?? {
       commands: match.commands,
@@ -148,10 +157,11 @@ const ROOT_STEP_LABEL = '(root)';
  * script, carrying the union of the changed extensions so a gated command still runs when
  * any affected package matched it.
  */
-function plannedSteps(
+export function plannedSteps(
   pkgs: [name: string, commands: string[], exts: Set<string>][],
+  runsAtRoot: boolean,
 ): [pkg: string, script: string, exts: Set<string>][] {
-  if (!RUNS_AT_ROOT)
+  if (!runsAtRoot)
     return pkgs.flatMap(([pkg, commands, exts]) =>
       commands.map((script): [string, string, Set<string>] => [
         pkg,
@@ -173,18 +183,72 @@ function plannedSteps(
   ]);
 }
 
+/**
+ * The fully resolved list of `[pkg, script]` steps to run for `paths`, given `settings`:
+ * lintable and non-generated files mapped to their package's commands, root-level commands
+ * collapsed, and each step's extension gate applied.
+ */
+export function planFixSteps(
+  paths: string[],
+  settings: FixSettings,
+): [pkg: string, script: string][] {
+  const pkgs = affectedPackages(paths, settings);
+  const steps = plannedSteps(pkgs, settings.runsAtRoot);
+  return steps
+    .filter(([, script, exts]) =>
+      gatePasses(script, exts, settings.commandExtensions),
+    )
+    .map(([pkg, script]) => [pkg, script]);
+}
+
+// Monorepo: <runner> <filterFlag> <pkg> <script>. Single-package: <runner> <runScriptPrefix...> <script>.
+export function fixArgs(
+  pkg: string,
+  script: string,
+  filterFlag: string,
+  runPrefix: string[],
+): string[] {
+  if (filterFlag) return [filterFlag, pkg, script];
+  return [...runPrefix, script];
+}
+
+// Comfortably under the 600s Stop default, applied per spawnSync call so a hung git
+// or fix command fails fast rather than consuming the whole event budget. SIGKILL
+// because a hung formatter/linter may not respond to the default SIGTERM.
+const GIT_TIMEOUT_MS = 15_000;
+const FIX_TIMEOUT_MS = 120_000;
+
+function changedPaths(cwd: string): string[] {
+  const r = spawnSync('git', ['status', '--porcelain'], {
+    encoding: 'utf-8',
+    cwd,
+    timeout: GIT_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
+  });
+  if (r.status !== 0 || !r.stdout) return [];
+  return r.stdout
+    .split('\n')
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean);
+}
+
 function runStep(
   pkg: string,
   script: string,
   cwd: string,
+  settings: FixSettings,
 ): { ok: boolean; output: string } {
-  const r = spawnSync(RUNNER, fixArgs(pkg, script), {
-    encoding: 'utf-8',
-    cwd,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: FIX_TIMEOUT_MS,
-    killSignal: 'SIGKILL',
-  });
+  const r = spawnSync(
+    settings.runner,
+    fixArgs(pkg, script, settings.filterFlag, settings.runPrefix),
+    {
+      encoding: 'utf-8',
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: FIX_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+    },
+  );
   const timedOut = r.signal !== null && r.status === null;
   return {
     ok: r.status === 0,
@@ -195,24 +259,31 @@ function runStep(
   };
 }
 
-function main() {
+function main(): void {
+  // Resolved before the config load so the root is passed in rather than spawned twice.
+  // `repoRoot()` falls back to the cwd instead of throwing, so this is safe here.
+  const root = repoRoot();
+  // A Stop hook must never crash on a missing/broken config — it would fire on
+  // every stop. No config or no targets → nothing to do.
+  const config = loadConfigSafe(root);
+  const settings = resolveFixSettings(config);
+
   const input = readStdinJson<HookInput>();
   if (input.stop_hook_active) process.exit(0);
   // Per-subagent fixing races itself the moment work is fanned out in parallel, and
   // buys nothing the parent's Stop doesn't: exit before spending the spawn.
-  if (input.hook_event_name === 'SubagentStop' && fix.onSubagentStop !== true)
+  if (input.hook_event_name === 'SubagentStop' && !settings.onSubagentStop)
     process.exit(0);
 
   const cwd = root;
   const paths = changedPaths(cwd);
-  const pkgs = affectedPackages(paths);
-  if (pkgs.length === 0) process.exit(0);
+  const steps = planFixSteps(paths, settings);
+  if (steps.length === 0) process.exit(0);
 
   const errors: { pkg: string; step: string; output: string }[] = [];
 
-  for (const [pkg, script, exts] of plannedSteps(pkgs)) {
-    if (!gatePasses(script, exts)) continue; // no matching extension changed
-    const r = runStep(pkg, script, cwd);
+  for (const [pkg, script] of steps) {
+    const r = runStep(pkg, script, cwd, settings);
     if (!r.ok) errors.push({ pkg, step: script, output: r.output });
   }
 
@@ -232,4 +303,9 @@ function main() {
   process.exit(0);
 }
 
-main();
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+) {
+  main();
+}

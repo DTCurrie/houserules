@@ -434,7 +434,7 @@ describe('doctor on a houserules.config.json the schema rejects', () => {
       c.packageManager = '';
     });
 
-    expect(runDoctorJson(root).configBlocked).toBe(true);
+    expect(runDoctorJson(root).configBlocked, 'config blocked').toBe(true);
   });
 
   it('skips the drift computation instead of reporting an empty drift list as clean', () => {
@@ -446,7 +446,7 @@ describe('doctor on a houserules.config.json the schema rejects', () => {
     const report = runDoctorJson(root);
 
     expect(report.drift).toEqual([]);
-    expect(report.configBlocked).toBe(true);
+    expect(report.configBlocked, 'config blocked').toBe(true);
   });
 
   it('skips the resident-context readout, since that check reads the config too', () => {
@@ -466,9 +466,10 @@ describe('doctor on a houserules.config.json the schema rejects', () => {
     const status = runCli(['doctor', root, '--fix']).status;
 
     expect(status).toBe(EXIT.badConfig);
-    expect(existsSync(join(root, '.claude/scripts/guard-bash.mjs'))).toBe(
-      false,
-    );
+    expect(
+      existsSync(join(root, '.claude/scripts/guard-bash.mjs')),
+      'no write under a rejected config',
+    ).toBe(false);
   });
 });
 
@@ -667,7 +668,7 @@ describe('doctor --fix', () => {
     expect(runDoctorJson(root).exitCode).toBe(1);
 
     expect(runCli(['doctor', root, '--fix']).status).toBe(0);
-    expect(existsSync(guard)).toBe(true);
+    expect(existsSync(guard), 'missing file recreated').toBe(true);
   });
 });
 
