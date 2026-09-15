@@ -7,7 +7,7 @@
  * rule, because no amount of path inspection reaches them.
  *
  * This deliberately reports rather than tests. `testing.md`'s own position is that a test
- * asserts production behaviour and never asserts a repo convention, so a convention check
+ * asserts production behavior and never asserts a repo convention, so a convention check
  * written as a test would be a lint rule in a test costume. It is a checker.
  */
 import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs';

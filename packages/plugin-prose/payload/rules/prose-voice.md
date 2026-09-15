@@ -53,12 +53,17 @@ editing on the user's behalf in their voice.
   beats "does not handle certain edge cases well".
 - **Never reword exact content.** Code, commands, file paths, URLs, identifiers, error
   messages, and version numbers are copied byte for byte.
+- **American English.** `color`, `gray`, `center`, `behavior`, `analyze`, `labeled`,
+  `license`, `-ize`. British spellings already in the tree are debt, not a convention to
+  match. A third party's identifier is exact content and keeps its spelling.
 
 ## Checked mechanically
 
-`prose-lint.mjs` enforces the semicolon clause and counts em dashes per paragraph. Run it
-over a file before you call it done. It never rules on whether a surviving em dash earns its
-keep, or on filler, asides, or concreteness. Those stay a human read.
+`prose-lint.mjs` enforces the semicolon clause, counts em dashes per paragraph, and flags
+British spellings from a fixed word list, each with its American form. Run it over a file
+before you call it done. It never rules on whether a surviving em dash earns its keep, on
+filler, asides, or concreteness, or on a spelling the list does not name. Those stay a
+human read.
 
 ## Prose that instructs an agent
 

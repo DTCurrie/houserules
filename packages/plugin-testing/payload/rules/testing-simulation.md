@@ -40,7 +40,7 @@ arithmetic. See `testing.md` for the runner-agnostic rules this guide assumes.
   stated in the `describe` or `it` name and the failure message naming which side broke. When
   the input is a value domain rather than a set of seeds, write the relation once as a
   property test instead of a table.
-- **Characterization is allowed, labelled, and bounded.** Output with no independent spec,
+- **Characterization is allowed, labeled, and bounded.** Output with no independent spec,
   such as a measured constant, a generated table, or an approved simulation trace, may be
   pinned against a committed expected value. The test name states that it characterizes, the
   source of the expected value is named in the test name or the `expect` message, and the

@@ -34,8 +34,8 @@ so select them when `init` asks.
 
 - **`prose-voice`** installs `.claude/rules/prose-voice.md`, a path-scoped rule for the prose
   the agent authors: changesets, plans, docs, PR bodies, and the sentences inside code
-  comments. Plain sentences, no semicolons, em dashes rewritten away, filler cut, exact
-  content byte-preserved. Scoped to markdown plus the same source extensions as
+  comments. Plain sentences, no semicolons, em dashes rewritten away, filler cut, American
+  English, exact content byte-preserved. Scoped to markdown plus the same source extensions as
   `code-comments`, since that rule and `testing.md` both defer sentence-level voice to this
   one, and to dot-directories listed explicitly because `**` does not reliably descend into
   them.
