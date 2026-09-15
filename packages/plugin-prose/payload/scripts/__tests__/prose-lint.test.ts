@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 
+import { findBritishSpellings } from '../prose-lint.mjs';
+
 const LINT = '.claude/scripts/prose-lint.mjs';
 const PLUGIN_DIR = fileURLToPath(new URL('../../..', import.meta.url));
 
@@ -113,6 +115,109 @@ describe('prose-lint.mjs em-dash density', () => {
 
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).not.toContain('em-dash-density');
+  });
+});
+
+describe('prose-lint.mjs american-english', () => {
+  it('flags a British spelling, naming the file, line, and American form', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'doc.md',
+      'First line is fine.\nThe colour of the label.\n',
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain(`${rel}:2`);
+    expect(r.stdout).toContain('[prose-voice/american-english]');
+    expect(r.stdout).toContain('British spelling "colour". Write "color".');
+  });
+
+  it('does not flag a British spelling inside an inline code span', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'doc.md',
+      'Pass `colour` to the option, since that is its name.\n',
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status, r.stdout).toBe(0);
+  });
+
+  it('does not flag a British spelling inside a URL', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'doc.md',
+      'See https://example.com/docs/colour-theory for the palette.\n',
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status, r.stdout).toBe(0);
+  });
+});
+
+describe('findBritishSpellings', () => {
+  it.each([
+    ['behaviour', 'behavior'],
+    ['Behavioural', 'Behavioral'],
+    ['colourful', 'colorful'],
+    ['organisation', 'organization'],
+    ['Organisational', 'Organizational'],
+    ['recognised', 'recognized'],
+    ['serialiser', 'serializer'],
+    ['visualised', 'visualized'],
+    ['disorganised', 'disorganized'],
+    ['analysed', 'analyzed'],
+    ['kilometres', 'kilometers'],
+    ['centre', 'center'],
+    ['labelled', 'labeled'],
+    ['modelling', 'modeling'],
+    ['counsellor', 'counselor'],
+    ['licence', 'license'],
+    ['Grey', 'Gray'],
+    ['artefacts', 'artifacts'],
+    ['whilst', 'while'],
+    ['catalogued', 'cataloged'],
+  ])('maps %s to %s', (british, american) => {
+    expect(findBritishSpellings(`One ${british} here.`)).toEqual([
+      { word: british, american },
+    ]);
+  });
+
+  it.each([
+    'advertise',
+    'compromise',
+    'exercise',
+    'promise',
+    'enterprise',
+    'analyses',
+    'characteristic',
+    'organism',
+    'glamour',
+    'contour',
+    'cancellation',
+    'totally',
+    'programmer',
+    'utilities',
+  ])('leaves the American word %s alone', (word) => {
+    expect(findBritishSpellings(`One ${word} here.`)).toEqual([]);
+  });
+
+  it('reports every hit on a line in order', () => {
+    expect(
+      findBritishSpellings('A grey colour, analysed and labelled.'),
+    ).toEqual([
+      { word: 'grey', american: 'gray' },
+      { word: 'colour', american: 'color' },
+      { word: 'analysed', american: 'analyzed' },
+      { word: 'labelled', american: 'labeled' },
+    ]);
   });
 });
 

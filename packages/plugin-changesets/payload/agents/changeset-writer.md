@@ -1,6 +1,6 @@
 ---
 name: changeset-writer
-description: Analyses a just-completed change and recommends the changeset for it. Inspects the diff, picks semver bump levels per touched package, and drafts the summary. Invoke after a meaningful change is complete, before the user commits, then let the caller record the recommendation via changeset-write.mjs.
+description: Analyzes a just-completed change and recommends the changeset for it. Inspects the diff, picks semver bump levels per touched package, and drafts the summary. Invoke after a meaningful change is complete, before the user commits, then let the caller record the recommendation via changeset-write.mjs.
 tools: Read, Glob, Grep, Bash
 model: haiku
 effort: low

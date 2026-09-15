@@ -41,7 +41,7 @@ export interface Finding {
 /**
  * A checker's whole result, including what it did not look at.
  *
- * `declined` generalises the scope note `design.mts` prints on every run. A checker that
+ * `declined` generalizes the scope note `design.mts` prints on every run. A checker that
  * hides its own boundary is how a standard gets silently dropped: a reader sees a clean
  * report and concludes the rule is satisfied, when the checker never examined the half
  * that was broken. Every checker states what it skipped, every run, whether or not it

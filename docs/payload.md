@@ -46,9 +46,9 @@ from `packages/cli` and every plugin. Read this before touching any file under a
 
 - Prose houserules ships (payload skills, agents, rules, templates, and the CLAUDE.md region
   `src/render.ts` generates) follows `packages/plugin-prose/payload/rules/prose-voice.md`:
-  plain sentences, no semicolons, no em dash where a period or comma works. Frontmatter
-  `description:` fields are the skill-routing signal, so keep every trigger term when
-  rewording one.
+  plain sentences, no semicolons, no em dash where a period or comma works, American
+  English. Frontmatter `description:` fields are the skill-routing signal, so keep every
+  trigger term when rewording one.
 
 ## Plugin containment
 

@@ -260,6 +260,8 @@ const FIXTURES = {
         '',
         'This paragraph has an em dash — and another — right here.',
         '',
+        'The colour here is grey.',
+        '',
       ].join('\n'),
     );
     return { args: [join(dir, 'doc.md')] };

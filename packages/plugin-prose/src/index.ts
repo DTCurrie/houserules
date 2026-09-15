@@ -44,7 +44,7 @@ function codeCommentsModule(api: PluginApi): ModuleDef {
 
 /**
  * The writing-voice rule for prose the agent authors: plain sentences, no semicolons, em
- * dashes rewritten away, filler cut, and exact content byte-preserved.
+ * dashes rewritten away, filler cut, American English, and exact content byte-preserved.
  *
  * Scoped to markdown AND to the same source extensions as code-comments, because a code
  * comment is prose this rule governs. Source globs are not optional decoration: both
@@ -62,7 +62,7 @@ function proseVoiceModule(api: PluginApi): ModuleDef {
     title: 'Writing voice rule (.claude/rules/prose-voice.md)',
     group: 'optional',
     hint(): string {
-      return 'path-scoped rule: plain sentences, no semicolons, em dashes rewritten away, filler cut';
+      return 'path-scoped rule: plain sentences, no semicolons, em dashes rewritten away, filler cut, American English';
     },
     defaultEnabled(): boolean {
       return false;
@@ -77,11 +77,11 @@ function proseVoiceModule(api: PluginApi): ModuleDef {
         api.payload.script(
           id,
           'prose-lint.mjs',
-          'checks the mechanical clauses of prose-voice.md: no semicolons, em-dash density',
+          'checks the mechanical clauses of prose-voice.md: no semicolons, em-dash density, British spellings',
         ),
         {
           kind: 'advise',
-          text: 'Writing voice rule installed at .claude/rules/prose-voice.md. It applies to prose the agent authors: changesets, plans, docs, PR bodies, and the sentences inside code comments. The `paths:` list covers markdown plus the same source extensions as code-comments, since those rules defer sentence-level voice to this one. The `paths:` frontmatter is also what keeps it off the always-loaded surface, so keep it. A rule file WITHOUT `paths:` loads on every turn. Dot-directories are listed separately because `**` does not reliably descend into them. Run `node .claude/scripts/prose-lint.mjs <file>...` to catch the two mechanical clauses, no semicolons and em-dash density, before calling a piece of prose done.',
+          text: 'Writing voice rule installed at .claude/rules/prose-voice.md. It applies to prose the agent authors: changesets, plans, docs, PR bodies, and the sentences inside code comments. The `paths:` list covers markdown plus the same source extensions as code-comments, since those rules defer sentence-level voice to this one. The `paths:` frontmatter is also what keeps it off the always-loaded surface, so keep it. A rule file WITHOUT `paths:` loads on every turn. Dot-directories are listed separately because `**` does not reliably descend into them. Run `node .claude/scripts/prose-lint.mjs <file>...` to catch the three mechanical clauses, no semicolons, em-dash density, and British spellings, before calling a piece of prose done.',
           module: id,
         },
         {
