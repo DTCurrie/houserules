@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.3.1
+
+### Patch Changes
+
+- 5a0f02c: Prose voice requires American English and prose-lint flags British spellings.
+
 ## 0.3.0
 
 ### Minor Changes

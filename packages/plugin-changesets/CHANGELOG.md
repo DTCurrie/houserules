@@ -1,5 +1,11 @@
 # @houserules/plugin-changesets
 
+## 0.2.4
+
+### Patch Changes
+
+- 5a0f02c: Prose voice requires American English and prose-lint flags British spellings.
+
 ## 0.2.3
 
 ### Patch Changes
