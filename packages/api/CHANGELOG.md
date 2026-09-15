@@ -1,5 +1,12 @@
 # @houserules/api
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [5a0f02c]
+  - @houserules/payload@0.3.1
+
 ## 0.4.0
 
 ### Minor Changes
