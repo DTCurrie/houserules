@@ -209,8 +209,8 @@ catalogs:
       specifier: ^0.18.5
       version: 0.18.5
     '@types/node':
-      specifier: 26.5.0
-      version: 26.5.0
+      specifier: 26.5.1
+      version: 26.5.1
     prettier:
       specifier: ^3.9.6
       version: 3.9.6
@@ -282,7 +282,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -291,7 +291,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -331,7 +331,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       '@types/semver':
         specifier: ^7.8.0
         version: 7.8.0
@@ -349,7 +349,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -370,7 +370,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -382,7 +382,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -406,7 +406,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -415,7 +415,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -439,7 +439,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -448,7 +448,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -472,7 +472,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -481,7 +481,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -505,7 +505,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -514,7 +514,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -541,7 +541,7 @@ importers:
         version: 4.3.3
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -553,7 +553,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -577,7 +577,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -586,7 +586,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -607,7 +607,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -616,7 +616,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -640,7 +640,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -649,7 +649,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -673,7 +673,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -682,7 +682,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -706,7 +706,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -715,7 +715,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -736,7 +736,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -745,7 +745,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -766,7 +766,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -775,7 +775,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -790,7 +790,7 @@ importers:
         version: link:../cli
       '@types/node':
         specifier: 'catalog:'
-        version: 26.5.0
+        version: 26.5.1
       publint:
         specifier: 'catalog:'
         version: 0.3.24
@@ -799,7 +799,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 'catalog:'
-        version: 5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       wireit:
         specifier: 'catalog:'
         version: 0.14.13
@@ -888,16 +888,8 @@ packages:
     resolution: {integrity: sha512-q/ThtP9gcnEP6xlv7LrY26C2mHqdGBti/MmOVngt/M/oIGYkssmQGxPK9WzBNt2juVcH/vml2WQ+ra8LXYOTaA==}
     engines: {node: ^22.11 || ^24 || >=26}
 
-  '@clack/core@1.4.3':
-    resolution: {integrity: sha512-/kr3UWNtdJfxZtPgDqUOmG2pvwlmcLGheex5yiZKdwbzZJxhV+HMNR9QNmyY5cGwTNV6LrR7Jtp+KjhUAP1qBQ==}
-    engines: {node: '>= 20.12.0'}
-
   '@clack/core@1.5.0':
     resolution: {integrity: sha512-zNikCcd8BbcEvzzG1sbXFrRHFk5kHPrpwZwksPvf9qyQO1Teb7JaXaOAxXZei9nZLDW0gaZawiuTCji88bTBhw==}
-    engines: {node: '>= 20.12.0'}
-
-  '@clack/prompts@1.7.0':
-    resolution: {integrity: sha512-y7/yvZ2TPAnR9+jnc00klvNNLkJiXFFrQA/hlLCcxA9a2A4zQIOimyFQ9XfwYKiGD1fb5GY8vbKIIgO8d5Tb2A==}
     engines: {node: '>= 20.12.0'}
 
   '@clack/prompts@1.8.0':
@@ -1483,8 +1475,8 @@ packages:
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
-  '@types/node@26.5.0':
-    resolution: {integrity: sha512-dVSGpriSoCgz8WnDNTuSSuSv1PC/ALXihO4ulRZt7Md8k9mlbdin3lGOcDE8SnWOgf513ByWlXd7BK4azmyg/A==}
+  '@types/node@26.5.1':
+    resolution: {integrity: sha512-CzNm2FezW4VR/LjG6yUdiEgLE/rAQ9Slj5gCu/C2VrdcW7I0ahNZ8DRbHT7zOZ6r3ONgd/bsQIeSaoDGrd1C6g==}
 
   '@types/semver@7.8.0':
     resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
@@ -2635,20 +2627,8 @@ snapshots:
       '@changesets/types': 7.0.0
       human-id: 4.2.1
 
-  '@clack/core@1.4.3':
-    dependencies:
-      fast-wrap-ansi: 0.2.2
-      sisteransi: 1.0.5
-
   '@clack/core@1.5.0':
     dependencies:
-      fast-wrap-ansi: 0.2.2
-      sisteransi: 1.0.5
-
-  '@clack/prompts@1.7.0':
-    dependencies:
-      '@clack/core': 1.4.3
-      fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
@@ -3053,7 +3033,7 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
-  '@types/node@26.5.0':
+  '@types/node@26.5.1':
     dependencies:
       undici-types: 8.9.0
 
@@ -3150,14 +3130,14 @@ snapshots:
       '@typescript-eslint/types': 8.70.0
       eslint-visitor-keys: 5.0.1
 
-  '@vitest/mocker@5.0.0(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))':
+  '@vitest/mocker@5.0.0(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.0
       estree-walker: 3.0.3
       magic-string: 1.3.1
     optionalDependencies:
-      vite: 8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0)
 
   '@vitest/spy@5.0.0': {}
 
@@ -3923,7 +3903,7 @@ snapshots:
 
   validate-npm-package-name@5.0.1: {}
 
-  vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0):
+  vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -3931,15 +3911,15 @@ snapshots:
       rolldown: 1.1.5
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.5.0
+      '@types/node': 26.5.1
       fsevents: 2.3.3
       jiti: 2.7.0
       yaml: 2.9.0
 
-  vitest@5.0.0(@types/node@26.5.0)(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0)):
+  vitest@5.0.0(@types/node@26.5.1)(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.0(vite@8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0))
+      '@vitest/mocker': 5.0.0(vite@8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0))
       chai: 6.2.2
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -3950,10 +3930,10 @@ snapshots:
       tinybench: 6.1.4
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
-      vite: 8.1.5(@types/node@26.5.0)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.1.5(@types/node@26.5.1)(jiti@2.7.0)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 26.5.0
+      '@types/node': 26.5.1
     transitivePeerDependencies:
       - msw
 
