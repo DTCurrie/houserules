@@ -299,8 +299,8 @@ importers:
   packages/cli:
     dependencies:
       '@clack/prompts':
-        specifier: ^1.8.0
-        version: 1.8.0
+        specifier: ^1.8.1
+        version: 1.8.1
       '@houserules/api':
         specifier: workspace:*
         version: link:../api
