@@ -1,15 +1,31 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
+import {
+  addPackage,
+  DEFAULT_ENTRY_CSS,
+  useBareRepo,
+  useTailwindRepo,
+} from '#test/tailwind-fixture';
+import { DESIGN_SCRIPT } from '#test/staged-scripts';
 
-const DESIGN_SCRIPT = fileURLToPath(
-  new URL('../../payload-dist/scripts/design.mjs', import.meta.url),
-);
+function writeConfigJson(
+  root: string,
+  overrides: Record<string, unknown>,
+): void {
+  mkdirSync(join(root, '.claude'), { recursive: true });
+  writeFileSync(
+    join(root, '.claude/houserules.config.json'),
+    JSON.stringify(
+      { version: 2, packageManager: 'pnpm', targets: [], ...overrides },
+      null,
+      2,
+    ),
+  );
+}
 
 function cleanEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
@@ -104,5 +120,143 @@ describe('design.mjs Tailwind mode', () => {
     expect(result.stderr).toContain('@import "tailwindcss"');
     expect(result.stderr).toContain('--theme <path>');
     expect(result.stderr).not.toContain('houserules init');
+  });
+
+  it('falls through a stylesheet that fails to compile and answers from a later one that does', () => {
+    const root = useTailwindRepo({ cssPath: 'packages/ui/src/app.css' });
+    mkdirSync(join(root, 'apps/docs/src'), { recursive: true });
+    writeFileSync(
+      join(root, 'apps/docs/src/tailwind.css'),
+      '@import "tailwindcss";\n@import "starlight-theme/tailwind.css";\n',
+    );
+    addPackage(root, 'starlight-theme', {}, { 'index.css': '' });
+
+    const result = design(root, 'token', 'color.brand-500');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('value: oklch(0.55, 0.2, 265)');
+    expect(result.stderr).toContain(join(root, 'apps/docs/src/tailwind.css'));
+    expect(result.stderr).toContain(join(root, 'packages/ui/src/app.css'));
+    expect(result.stderr).toContain(
+      'no stylesheet was found there for "tailwind.css"',
+    );
+  });
+
+  it('exits non-zero naming --theme when every candidate stylesheet fails to compile', () => {
+    const root = useTailwindRepo({ cssPath: 'packages/ui/src/app.css' });
+    mkdirSync(join(root, 'apps/docs/src'), { recursive: true });
+    writeFileSync(
+      join(root, 'apps/docs/src/tailwind.css'),
+      '@import "tailwindcss";\n@import "starlight-theme/tailwind.css";\n',
+    );
+    addPackage(root, 'starlight-theme', {}, { 'index.css': '' });
+    writeFileSync(
+      join(root, 'packages/ui/src/app.css'),
+      '@import "tailwindcss";\n@import "@acme/tokens/dark";\n',
+    );
+    addPackage(
+      root,
+      '@acme/tokens',
+      { exports: { '.': './tokens.css', './dark': './tokens-dark.css' } },
+      { 'tokens.css': '' },
+    );
+
+    const result = design(root, 'token', 'color.brand-500');
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(join(root, 'apps/docs/src/tailwind.css'));
+    expect(result.stderr).toContain(join(root, 'packages/ui/src/app.css'));
+    expect(result.stderr).toContain('for "dark"');
+    expect(result.stderr).toContain('--theme');
+  });
+
+  it('does not fall back when --theme names a stylesheet that fails to compile', () => {
+    const root = useTailwindRepo({ cssPath: 'packages/ui/src/app.css' });
+    mkdirSync(join(root, 'apps/docs/src'), { recursive: true });
+    writeFileSync(
+      join(root, 'apps/docs/src/tailwind.css'),
+      '@import "tailwindcss";\n@import "starlight-theme/tailwind.css";\n',
+    );
+    addPackage(root, 'starlight-theme', {}, { 'index.css': '' });
+
+    const result = design(
+      root,
+      '--theme',
+      'apps/docs/src/tailwind.css',
+      'token',
+      'color.brand-500',
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('could not be compiled');
+    expect(result.stderr).not.toContain(join(root, 'packages/ui/src/app.css'));
+  });
+
+  it('answers from design.themeEntry in the config over the walk-order first', () => {
+    const root = useTailwindRepo({ cssPath: 'apps/site/src/app.css' });
+    mkdirSync(join(root, 'packages/ui/src'), { recursive: true });
+    writeFileSync(
+      join(root, 'packages/ui/src/app.css'),
+      '@import "tailwindcss";\n\n@theme {\n  --color-brand-500: oklch(0.7 0.1 120);\n}\n',
+    );
+    writeConfigJson(root, {
+      design: { themeEntry: 'packages/ui/src/app.css' },
+    });
+
+    const result = design(root, 'token', 'color.brand-500');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('value: oklch(0.7, 0.1, 120)');
+    expect(result.stderr).toContain('design.themeEntry');
+  });
+
+  it('exits non-zero naming design.themeEntry and the path when the configured entry does not exist', () => {
+    const root = useTailwindRepo({ cssPath: 'apps/site/src/app.css' });
+    writeConfigJson(root, {
+      design: { themeEntry: 'packages/missing/app.css' },
+    });
+
+    const result = design(root, 'token', 'color.brand-500');
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('design.themeEntry');
+    expect(result.stderr).toContain('packages/missing/app.css');
+    expect(result.stderr).not.toContain('apps/site/src/app.css');
+  });
+
+  it('lets --theme outrank design.themeEntry in the config', () => {
+    const root = useTailwindRepo({ cssPath: 'apps/site/src/app.css' });
+    mkdirSync(join(root, 'packages/ui/src'), { recursive: true });
+    writeFileSync(
+      join(root, 'packages/ui/src/app.css'),
+      '@import "tailwindcss";\n\n@theme {\n  --color-brand-500: oklch(0.7 0.1 120);\n}\n',
+    );
+    writeConfigJson(root, {
+      design: { themeEntry: 'packages/ui/src/app.css' },
+    });
+
+    const result = design(
+      root,
+      '--theme',
+      'apps/site/src/app.css',
+      'token',
+      'color.brand-500',
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('value: oklch(0.55, 0.2, 265)');
+  });
+
+  it('names every skipped stylesheet when several compile but one is chosen', () => {
+    const root = useTailwindRepo({ cssPath: 'packages/ui/src/app.css' });
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src/other.css'), DEFAULT_ENTRY_CSS);
+
+    const result = design(root, 'token', 'color.brand-500');
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain(
+      'ignoring 1 other file(s) that also import Tailwind',
+    );
   });
 });

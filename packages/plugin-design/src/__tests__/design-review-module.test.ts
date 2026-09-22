@@ -62,6 +62,22 @@ describe('design-review', () => {
     expect(existsSync(agentPath), `${agentPath} absent`).toBe(false);
   });
 
+  it('names design.themeEntry in the installed skill and agent text', () => {
+    const root = installed();
+
+    const skillText = readFileSync(
+      join(root, '.claude/skills/design-review/SKILL.md'),
+      'utf8',
+    );
+    const agentText = readFileSync(
+      join(root, '.claude/agents/design-reviewer.md'),
+      'utf8',
+    );
+
+    expect(skillText).toMatch(/design\.themeEntry/);
+    expect(agentText).toMatch(/design\.themeEntry/);
+  });
+
   it('installs design-checks.mjs as a lib through the design module', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'design/design',

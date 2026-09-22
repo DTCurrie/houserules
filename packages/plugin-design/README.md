@@ -128,7 +128,13 @@ node .claude/scripts/design.mjs token color.brand.primary --theme src/app.css
 `theme` prints the resolved theme, with every entry tagged as the repo's own or one of
 Tailwind's defaults. `scaffold` prints a starter semantic layer to stdout and writes
 nothing. `--theme <path>` points every query command, including `token`, `list`, `scales`,
-and `check`, at the stylesheet Tailwind compiles, for a repo with more than one. See
+and `check`, at the stylesheet Tailwind compiles, for a repo with more than one.
+
+With several stylesheets importing Tailwind and no flag, each is tried in walk order and
+the first that compiles answers, with the skipped ones named on stderr. To fix the choice
+for good, set `"design": { "themeEntry": "<path>" }` in `.claude/houserules.config.json`,
+relative to the repo root, and every query reads it without the flag. A configured entry
+or `--theme` path that fails to compile fails the run with no fallback. See
 [`.claude/reference/design-tailwind-theming.md`](https://github.com/DTCurrie/houserules/blob/main/packages/plugin-design/payload/reference/design-tailwind-theming.md)
 for how to extend the theme and build one that switches at runtime.
 

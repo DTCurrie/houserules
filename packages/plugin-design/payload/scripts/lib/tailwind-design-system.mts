@@ -236,29 +236,25 @@ function resolveStylesheet(
   return entry;
 }
 
+interface ImportedTailwindModule {
+  packageInfo: {
+    directory: string;
+    entryModuleUrl: string;
+    version: string;
+  };
+  module: UnstableModule;
+}
+
 /**
- * Loads the host repo's own resolved Tailwind design system: the compiled theme plus a
- * candidate-to-CSS checker, both backed by the repo's real `@theme` block and utilities.
- *
- * Every failure path, a missing package, an unreadable stylesheet, a compile error, or an
- * unexpected Tailwind shape, returns `{ ok: false, error }` naming the fix. Nothing here throws.
+ * Resolves `tailwindcss` in `root` and imports its entry module once. Shared by
+ * {@link loadDesignSystem} and {@link loadFirstCompilingDesignSystem}, which each compile a
+ * different set of entry stylesheets against the same imported module.
  */
-export async function loadDesignSystem(
+async function resolveAndImportTailwind(
   root: string,
-  entryCssPath: string,
-): Promise<TailwindResult<LoadedDesignSystem>> {
+): Promise<TailwindResult<ImportedTailwindModule>> {
   const resolved = resolveHostPackage(root, TAILWIND_PACKAGE);
   if (!resolved.ok) return resolved;
-
-  let cssText: string;
-  try {
-    cssText = readFileSync(entryCssPath, 'utf8');
-  } catch (error) {
-    return {
-      ok: false,
-      error: `${entryCssPath} could not be read: ${(error as Error).message}`,
-    };
-  }
 
   let importedModule: unknown;
   try {
@@ -280,11 +276,36 @@ export async function loadDesignSystem(
     };
   }
 
-  const tailwindDirectory = resolved.value.directory;
+  return {
+    ok: true,
+    value: { packageInfo: resolved.value, module: importedModule },
+  };
+}
+
+/**
+ * Compiles `entryCssPath` against an already-imported Tailwind module. The shared body of
+ * {@link loadDesignSystem} once it has its module in hand, and the per-candidate step
+ * {@link loadFirstCompilingDesignSystem} loops over.
+ */
+async function compileWithTailwind(
+  entryCssPath: string,
+  tailwind: ImportedTailwindModule,
+): Promise<TailwindResult<LoadedDesignSystem>> {
+  let cssText: string;
+  try {
+    cssText = readFileSync(entryCssPath, 'utf8');
+  } catch (error) {
+    return {
+      ok: false,
+      error: `${entryCssPath} could not be read: ${(error as Error).message}`,
+    };
+  }
+
+  const { directory: tailwindDirectory, version } = tailwind.packageInfo;
 
   let loaded: unknown;
   try {
-    loaded = await importedModule.__unstable__loadDesignSystem(cssText, {
+    loaded = await tailwind.module.__unstable__loadDesignSystem(cssText, {
       base: dirname(entryCssPath),
       loadStylesheet: async (id, base) => {
         const path = resolveStylesheet(id, base, tailwindDirectory);
@@ -298,11 +319,11 @@ export async function loadDesignSystem(
   } catch (error) {
     return {
       ok: false,
-      error: `${entryCssPath} could not be compiled by Tailwind ${resolved.value.version}: ${(error as Error).message}`,
+      error: `${entryCssPath} could not be compiled by Tailwind ${version}: ${(error as Error).message}`,
     };
   }
 
-  const shapeError = validateDesignSystemShape(loaded, resolved.value.version);
+  const shapeError = validateDesignSystemShape(loaded, version);
   if (shapeError !== undefined) return { ok: false, error: shapeError };
 
   const system = loaded as {
@@ -314,7 +335,7 @@ export async function loadDesignSystem(
     ok: true,
     value: {
       entryCssPath,
-      tailwindVersion: resolved.value.version,
+      tailwindVersion: version,
       theme: system.theme,
       // Called through `system` rather than handed over detached, so it keeps its receiver if a
       // Tailwind release ever moves it from an instance property onto the prototype.
@@ -323,10 +344,83 @@ export async function loadDesignSystem(
   };
 }
 
+/**
+ * Loads the host repo's own resolved Tailwind design system: the compiled theme plus a
+ * candidate-to-CSS checker, both backed by the repo's real `@theme` block and utilities.
+ *
+ * Every failure path, a missing package, an unreadable stylesheet, a compile error, or an
+ * unexpected Tailwind shape, returns `{ ok: false, error }` naming the fix. Nothing here throws.
+ */
+export async function loadDesignSystem(
+  root: string,
+  entryCssPath: string,
+): Promise<TailwindResult<LoadedDesignSystem>> {
+  const tailwind = await resolveAndImportTailwind(root);
+  if (!tailwind.ok) return tailwind;
+
+  return compileWithTailwind(entryCssPath, tailwind.value);
+}
+
 /** True when `key` was declared by the repo's own `@theme` block, not Tailwind's default palette. */
 export function isRepoDefinedThemeKey(
   theme: TailwindTheme,
   key: string,
 ): boolean {
   return (theme.getOptions(key) & THEME_OPTION_DEFAULT) === 0;
+}
+
+/** One candidate entry that did not compile, with the message {@link loadDesignSystem} returned for it. */
+export interface SkippedCandidate {
+  path: string;
+  error: string;
+}
+
+export interface FirstCompilingDesignSystem {
+  system: LoadedDesignSystem;
+  /** The candidates tried before `system.entryCssPath`, each with why it failed, in the order tried. */
+  skipped: SkippedCandidate[];
+}
+
+/**
+ * Compiles `candidatePaths` in order through {@link loadDesignSystem} and returns the first
+ * that loads, with every earlier failure recorded as `skipped`. Walks no directories: the
+ * caller passes the full candidate list, per the composition-root split.
+ *
+ * The host `tailwindcss` package is resolved once, before the loop, so a missing install is
+ * reported once with its install hint rather than once per candidate. When every candidate
+ * fails, the `error` lists each path with its own message, one per line, so a caller can
+ * name them all instead of the first.
+ */
+export async function loadFirstCompilingDesignSystem(
+  root: string,
+  candidatePaths: string[],
+): Promise<TailwindResult<FirstCompilingDesignSystem>> {
+  if (candidatePaths.length === 0) {
+    return {
+      ok: false,
+      error: 'No candidate stylesheet was given to try.',
+    };
+  }
+
+  const tailwind = await resolveAndImportTailwind(root);
+  if (!tailwind.ok) return tailwind;
+
+  const skipped: SkippedCandidate[] = [];
+  for (const path of candidatePaths) {
+    const result = await compileWithTailwind(path, tailwind.value);
+    if (result.ok)
+      return { ok: true, value: { system: result.value, skipped } };
+    skipped.push({ path, error: result.error });
+  }
+
+  const lines = skipped.map(
+    (candidate) => `  ${candidate.path}: ${candidate.error}`,
+  );
+  return {
+    ok: false,
+    error: [
+      `${skipped.length} candidate stylesheet(s) were tried against Tailwind ${tailwind.value.packageInfo.version} and none compiled:`,
+      ...lines,
+    ].join('\n'),
+  };
 }

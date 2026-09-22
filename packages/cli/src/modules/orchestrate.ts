@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type {
   Action,
   Answers,
+  CheckResult,
   ModuleGroup,
   ModuleOptions,
 } from '@houserules/api';
@@ -25,7 +26,7 @@ export const title = 'Phase execution via scoped workers (/orchestrate)';
 export const group: ModuleGroup = 'optional';
 
 export function hint(): string {
-  return 'drive a planned phase with per-slice sonnet workers — you review reports, not diffs (needs plans)';
+  return 'drive a planned phase with per-slice sonnet workers — you review reports, not diffs (needs plans; variants include a research worker)';
 }
 
 export function defaultEnabled(): boolean {
@@ -33,7 +34,8 @@ export function defaultEnabled(): boolean {
 }
 
 const EFFORTS = ['low', 'high', 'xhigh'] as const;
-type Effort = (typeof EFFORTS)[number];
+const VARIANTS = [...EFFORTS, 'research'] as const;
+type Variant = (typeof VARIANTS)[number];
 
 export const options: ModuleOptions = {
   prompt:
@@ -42,30 +44,71 @@ export const options: ModuleOptions = {
     { value: 'low', label: 'Low' },
     { value: 'high', label: 'High' },
     { value: 'xhigh', label: 'Extra high' },
+    { value: 'research', label: 'Research (adds WebFetch and WebSearch)' },
   ],
-  defaults: ['low', 'xhigh'],
+  defaults: ['low', 'xhigh', 'research'],
 };
 
 /**
- * Renders one effort variant of `task-worker.md` from its single payload source. Swaps ONLY
- * `name:`, `effort:`, and `description:` in the frontmatter, so `tools:` and `model:` pass
- * through unchanged and the body stays byte-identical. Keeping one source file means a body
- * edit never needs to land in three places.
+ * Appends any `extraTools` not already on the `tools:` line, in the order given. A name
+ * already present, such as `WebFetch` on the research variant, is not repeated. A no-op
+ * when `extraTools` is empty, so the byte-identical no-key path never runs this branch.
  */
-export function renderTaskWorkerVariant(effort: Effort): string {
+function appendExtraTools(rendered: string, extraTools: string[]): string {
+  if (extraTools.length === 0) return rendered;
+  return rendered.replace(/^tools: .*$/m, (line) => {
+    const existing = line.slice('tools: '.length).split(', ');
+    const missing = extraTools.filter((tool) => !existing.includes(tool));
+    return missing.length === 0 ? line : `${line}, ${missing.join(', ')}`;
+  });
+}
+
+/**
+ * Renders `task-worker.md` from its single payload source, with `extraTools` appended to
+ * `tools:`. The name, description, effort, and model stay the source's own, so this is the
+ * base agent rather than any effort or research variant.
+ */
+export function renderTaskWorkerBase(extraTools: string[] = []): string {
+  const source = readFileSync(payloadPath('agents', 'task-worker.md'), 'utf8');
+  return appendExtraTools(source, extraTools);
+}
+
+/**
+ * Renders one variant of `task-worker.md` from its single payload source. Every variant
+ * swaps `name:` and `description:`. An effort variant also swaps `effort:`, leaving `tools:`
+ * and `model:` unchanged. The `research` variant instead appends `WebFetch, WebSearch` to
+ * `tools:`, leaving `effort:` and `model:` unchanged. `extraTools` is then appended to
+ * `tools:` the same way as the base. The body always stays byte-identical, so keeping one
+ * source file means a body edit never needs to land in more than one place.
+ */
+export function renderTaskWorkerVariant(
+  variant: Variant,
+  extraTools: string[] = [],
+): string {
   const source = readFileSync(payloadPath('agents', 'task-worker.md'), 'utf8');
   // Search from past the opening delimiter so the file's first line is not the match.
   const frontmatterEnd = source.indexOf('\n---', '---\n'.length);
   const frontmatter = source.slice(0, frontmatterEnd);
   const body = source.slice(frontmatterEnd);
 
-  const rendered = frontmatter
-    .replace(/^name: .*$/m, `name: task-worker-${effort}`)
-    .replace(/^effort: .*$/m, `effort: ${effort}`)
-    .replace(
-      /^description: .*$/m,
-      `description: Same contract as task-worker at ${effort} effort. Dispatched by /orchestrate with an objective, owned paths, and an acceptance command.`,
-    );
+  const description =
+    variant === 'research'
+      ? 'Same contract as task-worker, plus WebFetch and WebSearch for a slice that must read a page or source not on disk. Dispatched by /orchestrate with an objective, owned paths, and an acceptance command.'
+      : `Same contract as task-worker at ${variant} effort. Dispatched by /orchestrate with an objective, owned paths, and an acceptance command.`;
+
+  let rendered = frontmatter
+    .replace(/^name: .*$/m, `name: task-worker-${variant}`)
+    .replace(/^description: .*$/m, `description: ${description}`);
+
+  rendered =
+    variant === 'research'
+      ? rendered.replace(
+          /^tools: .*$/m,
+          (line) => `${line}, WebFetch, WebSearch`,
+        )
+      : rendered.replace(/^effort: .*$/m, `effort: ${variant}`);
+
+  rendered = appendExtraTools(rendered, extraTools);
 
   return `${rendered}${body}`;
 }
@@ -83,9 +126,26 @@ export function renderTaskWorkerVariant(effort: Effort): string {
  */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const withPlans = answers.moduleIds.includes('plans');
-  const chosenEfforts = (answers.moduleOptions[id] ?? []).filter(
-    (value): value is Effort => (EFFORTS as readonly string[]).includes(value),
+  const chosenVariants = (answers.moduleOptions[id] ?? []).filter(
+    (value): value is Variant =>
+      (VARIANTS as readonly string[]).includes(value),
   );
+  const extraTools = ctx.claude?.houseConfig?.orchestrate?.workerTools ?? [];
+  const baseAgent: Action =
+    extraTools.length === 0
+      ? agent(
+          id,
+          'task-worker',
+          'the sonnet implementer /orchestrate dispatches: one slice, owned paths only, fixed report format',
+        )
+      : {
+          kind: 'write',
+          dest: '.claude/agents/task-worker.md',
+          content: renderTaskWorkerBase(extraTools),
+          module: id,
+          reason:
+            'the sonnet implementer /orchestrate dispatches, with orchestrate.workerTools appended to its tools: line',
+        };
   return [
     skill(
       id,
@@ -99,29 +159,60 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       module: id,
       reason: 'deep-dive reference the orchestrate SKILL.md defers to',
     })),
-    agent(
-      id,
-      'task-worker',
-      'the sonnet implementer /orchestrate dispatches: one slice, owned paths only, fixed report format',
-    ),
+    baseAgent,
     script(
       id,
       'plan-lint.mjs',
       'validate a .claude/plans/ workspace: slice status vocabulary, ROADMAP/sub-plan sync, fix.onSubagentStop, blast-radius artifact shape',
     ),
-    ...chosenEfforts.map((effort): Action => ({
+    ...chosenVariants.map((variant): Action => ({
       kind: 'write',
-      dest: `.claude/agents/task-worker-${effort}.md`,
-      content: renderTaskWorkerVariant(effort),
+      dest: `.claude/agents/task-worker-${variant}.md`,
+      content: renderTaskWorkerVariant(variant, extraTools),
       module: id,
-      reason: `task-worker effort variant: ${effort}`,
+      reason: `task-worker variant: ${variant}`,
     })),
     {
       kind: 'advise',
       text: withPlans
-        ? 'Executing a plan: run /orchestrate [<plan-slug>] [<phase>|all] to drive a .claude/plans/<slug>/ phase — it slices by file ownership, dispatches one sonnet task-worker per slice, and reviews reports instead of diffs. It stops for you between phases unless you pass --auto.'
+        ? 'Executing a plan: run /orchestrate [<plan-slug>] [<phase>|all] to drive a .claude/plans/<slug>/ phase — it slices by file ownership, dispatches one sonnet task-worker per slice (task-worker-research for a slice that must fetch), and reviews reports instead of diffs. It stops for you between phases unless you pass --auto.'
         : 'Executing a plan: /orchestrate drives a .claude/plans/<slug>/ phase, but the `plans` module is off, so nothing scaffolds those workspaces. Enable it (npx houserules modules --modules=plans) or /orchestrate will just send you to /plan-project.',
       module: id,
     },
   ];
+}
+
+/**
+ * Warns when `orchestrate.workerTools` names a tool that an installed `task-worker*.md`
+ * agent's `tools:` line does not carry, so a wave dispatches with a rule-required tool
+ * silently missing. Nothing to check when the key is absent or empty. Never throws: an
+ * unreadable agent file is skipped rather than failing the whole health check.
+ */
+export function check(ctx: Ctx): CheckResult {
+  const extraTools = ctx.claude?.houseConfig?.orchestrate?.workerTools ?? [];
+  if (extraTools.length === 0) return { findings: [], readouts: [] };
+
+  const findings = ctx.claude.agents
+    .filter((file) => /^task-worker.*\.md$/.test(file))
+    .flatMap((file) => {
+      let text: string;
+      try {
+        text = readFileSync(join(ctx.root, '.claude', 'agents', file), 'utf8');
+      } catch {
+        return [];
+      }
+
+      const toolsLine = text.match(/^tools: .*$/m)?.[0] ?? '';
+      const missing = extraTools.filter((tool) => !toolsLine.includes(tool));
+      if (missing.length === 0) return [];
+
+      return [
+        {
+          level: 'WARN' as const,
+          msg: `agent ${file} is missing ${missing.join(', ')} from its tools: line — run npx houserules update to refresh it`,
+        },
+      ];
+    });
+
+  return { findings, readouts: [] };
 }

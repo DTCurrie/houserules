@@ -8,6 +8,7 @@ import {
   TOKENS_PATH,
 } from './seed-check.js';
 import { checkTailwindAvailable } from './tailwind-check.js';
+import { checkThemeEntry } from './theme-entry-check.js';
 import { renderTokenSeed } from './tokens-seed.js';
 
 import type {
@@ -294,13 +295,18 @@ function designTailwindModule(api: PluginApi): ModuleDef {
           : []),
         {
           kind: 'advise',
-          text: `Tailwind theme wired as the design system. No ${TOKENS_PATH} is seeded, and design.mjs answers token, list, and scales queries from this repo's own @theme block merged with Tailwind's defaults. It reads whichever stylesheet imports Tailwind, or the one you name with --theme <path>. \`check\` also scans each file's class names with \`@tailwindcss/oxide\` and judges them against the same theme, alongside any \`<style>\` block declarations, naming an arbitrary value's nearest theme step and reporting a contrast finding for a \`bg-*\`/\`text-*\` pairing on one element. That half needs \`@tailwindcss/oxide\` installed separately from \`tailwindcss\`, and \`check\` says so rather than reporting a clean file when it is missing. houserules never writes into the Tailwind compile path, so your entry stylesheet and build config are untouched. A starter \`@theme\` installs at .claude/templates/tailwind-theme.css.template, a reference to copy from, not a file houserules ever writes into your CSS. ${referenceLine} It needs the design module for the script itself. If this repo already had ${TOKENS_PATH} from an earlier install, nothing reads it now and houserules will not delete it, since a seed is yours. Remove it yourself, and \`houserules doctor\` will remind you while it is still there.`,
+          text: `Tailwind theme wired as the design system. No ${TOKENS_PATH} is seeded, and design.mjs answers token, list, and scales queries from this repo's own @theme block merged with Tailwind's defaults. It reads whichever stylesheet imports Tailwind, or the one you name with --theme <path>, or the one you name with design.themeEntry in .claude/houserules.config.json for a repo where more than one stylesheet imports Tailwind. \`check\` also scans each file's class names with \`@tailwindcss/oxide\` and judges them against the same theme, alongside any \`<style>\` block declarations, naming an arbitrary value's nearest theme step and reporting a contrast finding for a \`bg-*\`/\`text-*\` pairing on one element. That half needs \`@tailwindcss/oxide\` installed separately from \`tailwindcss\`, and \`check\` says so rather than reporting a clean file when it is missing. houserules never writes into the Tailwind compile path, so your entry stylesheet and build config are untouched. A starter \`@theme\` installs at .claude/templates/tailwind-theme.css.template, a reference to copy from, not a file houserules ever writes into your CSS. ${referenceLine} It needs the design module for the script itself. If this repo already had ${TOKENS_PATH} from an earlier install, nothing reads it now and houserules will not delete it, since a seed is yours. Remove it yourself, and \`houserules doctor\` will remind you while it is still there.`,
           module: id,
         },
       ];
     },
     check(ctx: Ctx): CheckResult {
-      return checkTailwindAvailable(ctx);
+      const packages = checkTailwindAvailable(ctx);
+      const themeEntry = checkThemeEntry(ctx);
+      return {
+        findings: [...packages.findings, ...themeEntry.findings],
+        readouts: [...packages.readouts, ...themeEntry.readouts],
+      };
     },
   };
 }

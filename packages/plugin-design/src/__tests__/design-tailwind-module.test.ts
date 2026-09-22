@@ -24,6 +24,14 @@ function ctxAt(root: string): Ctx {
   return { root, rootPkg: null } as Ctx;
 }
 
+function ctxWithThemeEntry(root: string, themeEntry: string): Ctx {
+  return {
+    root,
+    rootPkg: null,
+    claude: { houseConfig: { design: { themeEntry } } },
+  } as Ctx;
+}
+
 function moduleById(id: string): ModuleDef {
   const api = apiWithNoPayloadBuilders();
   const found = designPlugin(api).find((moduleDef) => moduleDef.id === id);
@@ -57,5 +65,19 @@ describe('design-tailwind check', () => {
       'WARN',
     ]);
     expect(result?.readouts).toEqual([]);
+  });
+
+  it('appends a theme-entry readout after the package readouts when design.themeEntry is configured', () => {
+    const moduleDef = moduleById('design-tailwind');
+    const root = useTailwindRepo({ withOxide: true });
+
+    const result = moduleDef.check?.(ctxWithThemeEntry(root, 'src/app.css'));
+
+    expect(result?.findings).toEqual([]);
+    expect(result?.readouts).toHaveLength(3);
+    expect(result?.readouts[0]).toBe('design: tailwindcss@4.3.3 found');
+    expect(result?.readouts[1]).toBe('design: @tailwindcss/oxide@4.3.3 found');
+    expect(result?.readouts[2]).toContain('design.themeEntry');
+    expect(result?.readouts[2]).toContain('src/app.css');
   });
 });

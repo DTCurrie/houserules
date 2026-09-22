@@ -15,7 +15,10 @@ the judgment those checks cannot make.
 1. **Run the checker first.** `node .claude/scripts/design.mjs check <changed files>` finds
    hardcoded literals, off-scale spacing and type, contrast failures, and undersized hit
    targets, each with an exact number. This is every finding the script can compute. Do not
-   estimate a ratio or a scale match by eye when the script can name it.
+   estimate a ratio or a scale match by eye when the script can name it. When the checker
+   exits non-zero listing more than one stylesheet that imports Tailwind, report it and name
+   `design.themeEntry` in `.claude/houserules.config.json` as the fix. You are read-only:
+   report the finding, do not edit the config yourself.
 2. **Look up only the tokens the script named.** For each token the script points at, run
    `node .claude/scripts/design.mjs token <name>` to confirm its value. Never read the whole
    token file at `.claude/design/tokens.json`.

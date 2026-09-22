@@ -60,6 +60,8 @@ export interface HouseConfig {
   ledgers?: { dir?: string };
   readGuard?: { enabled?: boolean; maxBytes?: number; denyGlobs?: string[] };
   claudeMd?: { managed?: boolean };
+  /** Read by the design plugin's `design.mjs`: the stylesheet Tailwind compiles, repo-root-relative. */
+  design?: { themeEntry?: string };
   targets: ConfigTarget[];
   [key: string]: unknown;
 }

@@ -166,6 +166,18 @@ takes `task-worker-xhigh`. Everything else stays on the `task-worker` default. A
 only if `.claude/agents/task-worker-<effort>.md` is installed. If it is absent, fall back to
 `task-worker`.
 
+A slice whose steps must fetch a page or search the web takes `task-worker-research`, which
+carries `WebFetch` and `WebSearch` on top of the standing task-worker tools. If
+`.claude/agents/task-worker-research.md` is absent, dispatch `general-purpose` with
+`model: sonnet` and paste `agents/task-worker.md` inline ahead of the brief, the same fallback
+as a missing `task-worker`.
+
+Before dispatching, check whether a rule scoped to the wave's paths requires an MCP tool. If it
+does, confirm `orchestrate.workerTools` in `.claude/houserules.config.json` names it by its full
+callable name, `mcp__<server>__<tool>`, and that the installed `task-worker.md` `tools:` line
+carries it, which `npx houserules update` refreshes after the key is added. Otherwise run that
+tool yourself over each worker's files at wave close, before the fixer.
+
 `task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice,
 and **never restates or overrides a standing rule**. The one most often violated is the fixer
 prohibition (below).

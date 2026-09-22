@@ -97,6 +97,11 @@ the wide one, which is the two-run proxy banned above. Do not add a typecheck
 your brief left out. The orchestrator omits it when the wave's slices share one project, where it
 would only report a sibling's half-written file.
 
+**A rule in your owned paths that requires a tool you do not have is not satisfied by a hand
+check.** An MCP tool such as a framework's autofixer is the usual case. Do everything else, say
+under `Deviations` which tool was required and absent, and report `DONE_WITH_CONCERNS`. The
+orchestrator either configures it for workers or runs it over your files.
+
 **A failure originating outside your owned paths is not your slice.** Do not fix it, because reaching
 outside your paths is the exact clobber the ownership rule prevents. Do not report `BLOCKED` on it
 either. Note it under `Out of scope`, one line, and report `DONE` if your own work is done. The
