@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.3.2
+
+### Patch Changes
+
+- d963842: design.mjs tries every Tailwind entry, names skipped ones, and honors design.themeEntry.
+
 ## 0.3.1
 
 ### Patch Changes

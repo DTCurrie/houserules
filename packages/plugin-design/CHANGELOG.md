@@ -1,5 +1,11 @@
 # @houserules/plugin-design
 
+## 0.3.0
+
+### Minor Changes
+
+- d963842: design.mjs tries every Tailwind entry, names skipped ones, and honors design.themeEntry.
+
 ## 0.2.3
 
 ### Patch Changes

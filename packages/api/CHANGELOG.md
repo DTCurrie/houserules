@@ -1,5 +1,17 @@
 # @houserules/api
 
+## 0.5.0
+
+### Minor Changes
+
+- d963842: design.mjs tries every Tailwind entry, names skipped ones, and honors design.themeEntry.
+- d963842: orchestrate.workerTools appends MCP tool names to every task-worker's tools line.
+
+### Patch Changes
+
+- Updated dependencies [d963842]
+  - @houserules/payload@0.3.2
+
 ## 0.4.1
 
 ### Patch Changes
