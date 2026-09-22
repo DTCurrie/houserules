@@ -93,7 +93,7 @@
   "dependencies": {
     "@houserules/payload": "workspace:*",
     "type-fest": "catalog:",
-    "zod": "^4.5.4"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@houserules/test": "workspace:*",
