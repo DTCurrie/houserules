@@ -1,5 +1,11 @@
 # @houserules/plugin-svelte
 
+## 0.1.3
+
+### Patch Changes
+
+- d963842: orchestrate.workerTools appends MCP tool names to every task-worker's tools line.
+
 ## 0.1.2
 
 ### Patch Changes
