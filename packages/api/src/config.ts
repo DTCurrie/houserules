@@ -187,6 +187,34 @@ const HouseConfigSchema = z.strictObject({
       "Read at runtime by the projects plugin's scripts. Top level rather than inside its `plugins[].config` entry, because a payload script does not know the alias its own plugin was declared under, so it cannot find that entry.",
     ),
 
+  design: z
+    .strictObject({
+      themeEntry: z
+        .string()
+        .optional()
+        .describe(
+          'Repo-root-relative path to the stylesheet Tailwind compiles, for a repo where more than one imports it. Read at runtime by design.mjs, which otherwise tries every stylesheet that imports Tailwind in walk order. A configured entry that fails to compile is an error naming this key, with no fallback.',
+        ),
+    })
+    .optional()
+    .describe(
+      "Read at runtime by the design plugin's scripts. Top level rather than inside its `plugins[].config` entry, for the same reason as `projects`: a payload script cannot find the entry its own plugin was declared under.",
+    ),
+
+  orchestrate: z
+    .strictObject({
+      workerTools: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Extra tools appended to the `tools:` line of task-worker and every installed variant, by full callable name, such as "mcp__svelte__svelte-autofixer" for an MCP tool a repo rule requires. Applied by `houserules update`.',
+        ),
+    })
+    .optional()
+    .describe(
+      'Read at plan time by the orchestrate module. Top level like `projects`, since the module is built in and has no `plugins[].config` entry.',
+    ),
+
   ledgers: z
     .strictObject({
       dir: z

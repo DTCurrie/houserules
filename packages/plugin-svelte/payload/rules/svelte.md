@@ -19,6 +19,9 @@ of recalling API details:
 
 - `svelte-autofixer`: **required** on any Svelte code you write, before handing it over.
   Re-run until it reports no issues.
+- An agent whose tool set lacks it, such as an `/orchestrate` worker, says so in its report
+  instead of skipping the step, and a repo grants it to workers through
+  `orchestrate.workerTools` in `.claude/houserules.config.json`.
 - `list-sections`, then `get-documentation`: when a Svelte or SvelteKit API is uncertain.
   Fetch only the sections whose `use_cases` match the task.
 

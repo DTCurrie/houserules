@@ -1,15 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
-
-const DESIGN_SCRIPT = fileURLToPath(
-  new URL('../../payload-dist/scripts/design.mjs', import.meta.url),
-);
+import { DESIGN_SCRIPT } from '#test/staged-scripts';
 
 function cleanEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };

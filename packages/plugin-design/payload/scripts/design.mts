@@ -13,15 +13,25 @@
  *   design.mjs render <target>    render a URL or local HTML file in Chrome and report findings
  *
  * Reads tokens for every subcommand that needs them, `check`, `render`, `token`, `list`,
- * `scales`, from one of two sources. With `--tokens <path>`, or with neither flag and no
- * Tailwind theme found, from the DTCG token set at `.claude/design/tokens.json`, resolved
- * relative to the current working directory, or at `--tokens`'s path (also resolved relative
- * to cwd). With `--theme <path>`, or with neither flag when the `design-tailwind` module's
- * libs are installed and an entry stylesheet is found among the repo's CSS files, from the
- * repo's own resolved Tailwind theme, projected into the same DTCG shape. Once Tailwind mode
- * is selected, by either path, it never falls back to the token file: a missing `tailwindcss`
- * or a compile failure exits non-zero naming the fix. Every run prints one stderr line naming
- * which source answered.
+ * `scales`, from the first of four sources that applies, in this order:
+ *   1. `--tokens <path>`: the DTCG token set at that path, resolved relative to the current
+ *      working directory.
+ *   2. `--theme <path>`: the repo's own resolved Tailwind theme, compiled from that path.
+ *   3. `design.themeEntry` in `.claude/houserules.config.json`: the same Tailwind resolution,
+ *      compiled from the path it names, resolved relative to the current working directory.
+ *   4. Discovery: when the `design-tailwind` module's libs are installed and an entry
+ *      stylesheet is found among the repo's CSS files, the repo's own resolved Tailwind theme.
+ *      With no flag, no config key, and no Tailwind theme found, the DTCG token set at
+ *      `.claude/design/tokens.json`, resolved relative to the current working directory.
+ * Every Tailwind source, `--theme`, `design.themeEntry`, or discovery, projects into the same
+ * DTCG shape. Once Tailwind mode is selected, by any of the three paths, it never falls back to
+ * the token file: a missing `tailwindcss` exits non-zero naming the fix. When several
+ * stylesheets import Tailwind and neither `--theme` nor `design.themeEntry` was given, each is
+ * tried in walk order and the first that compiles answers, with every skipped stylesheet named
+ * on stderr beside its compile error. When every candidate fails to compile, the command exits
+ * non-zero listing each one and naming `--theme <path>` as the next step. `--theme <path>` and
+ * `design.themeEntry` never fall back: an explicit path that fails to compile fails the run.
+ * Every run prints one stderr line naming which source answered.
  *
  * `token` follows DTCG `{group.token}` alias references and prints the final `$type` and
  * value, plus a hex conversion for colors. `$type` is inherited from the nearest ancestor
@@ -92,6 +102,7 @@ import { launchSession } from './lib/cdp-session.mjs';
 import { checkRenderedPage } from './lib/rendered-checks.mjs';
 import type { RenderedFinding } from './lib/rendered-checks.mjs';
 import type { LoadedDesignSystem } from './lib/tailwind-design-system.mjs';
+import { loadConfigSafe } from '@houserules/payload/config';
 
 const TOKENS_PATH = '.claude/design/tokens.json';
 // Sha256 of the seed's trimmed serialized form, kept in sync with `renderTokenSeed()` in
@@ -298,11 +309,29 @@ function tokenSourceFromTailwind(
 }
 
 /**
+ * Projects a loaded Tailwind design system into a DTCG document and announces it on stderr.
+ * Shared by the `--theme` path and the walk-and-fall-through path, so the `Tokens from` line
+ * is printed from one place.
+ */
+async function projectDesignSystem(
+  loaded: LoadedDesignSystem,
+): Promise<TailwindTokenLoad> {
+  const { projectThemeToDtcg } =
+    await import('./lib/tailwind-theme-to-dtcg.mjs');
+  const { document, counts } = projectThemeToDtcg(loaded.theme);
+  console.error(
+    `Tokens from ${loaded.entryCssPath}, ${counts.repo} from this repo's @theme block and ${counts.tailwind} from Tailwind's defaults.`,
+  );
+  return { tokens: document, designSystem: loaded };
+}
+
+/**
  * Compiles the repo's Tailwind theme at `entryCssPath` and projects it into a DTCG document.
  *
  * Never falls back to the token file: once Tailwind mode is chosen, a missing `tailwindcss`
  * or a compile failure is reported and the command exits non-zero, per decision 4 in
- * `.claude/plans/design-tailwind/PLAN.md`.
+ * `.claude/plans/design-tailwind/PLAN.md`. `--theme <path>` is an explicit path, so no other
+ * candidate is tried when it fails.
  */
 async function loadTailwindTokens(
   entryCssPath: string,
@@ -313,13 +342,49 @@ async function loadTailwindTokens(
     console.error(loaded.error);
     return undefined;
   }
-  const { projectThemeToDtcg } =
-    await import('./lib/tailwind-theme-to-dtcg.mjs');
-  const { document, counts } = projectThemeToDtcg(loaded.value.theme);
-  console.error(
-    `Tokens from ${entryCssPath}, ${counts.repo} from this repo's @theme block and ${counts.tailwind} from Tailwind's defaults.`,
+  return projectDesignSystem(loaded.value);
+}
+
+/**
+ * Tries `candidatePaths` in walk order through {@link loadFirstCompilingDesignSystem} and
+ * projects the first that compiles. Announces the outcome on stderr: which candidates were
+ * skipped and why, or, on total failure, every candidate's error plus `--theme <path>` as the
+ * next step.
+ */
+async function loadFirstCompilingTailwindTokens(
+  candidatePaths: string[],
+): Promise<TailwindTokenLoad | undefined> {
+  const { loadFirstCompilingDesignSystem } =
+    await import('./lib/tailwind-design-system.mjs');
+  const loaded = await loadFirstCompilingDesignSystem(
+    process.cwd(),
+    candidatePaths,
   );
-  return { tokens: document, designSystem: loaded.value };
+  if (!loaded.ok) {
+    console.error(loaded.error);
+    console.error(
+      'Point at the stylesheet your build compiles with `--theme <path>`, or set design.themeEntry in .claude/houserules.config.json.',
+    );
+    return undefined;
+  }
+
+  const { system, skipped } = loaded.value;
+  if (skipped.length > 0) {
+    console.error(
+      `${system.entryCssPath} imports Tailwind and compiled. Skipped ${skipped.length} stylesheet(s) that also import Tailwind but did not compile:`,
+    );
+    for (const candidate of skipped) {
+      console.error(`  ${candidate.path}: ${candidate.error}`);
+    }
+  } else {
+    const otherCandidateCount = candidatePaths.length - 1;
+    if (otherCandidateCount > 0) {
+      console.error(
+        `${system.entryCssPath} imports Tailwind. Using it, and ignoring ${otherCandidateCount} other file(s) that also import Tailwind.`,
+      );
+    }
+  }
+  return projectDesignSystem(system);
 }
 
 /**
@@ -336,6 +401,17 @@ async function resolveTokens(
   if (themeOverride !== undefined) {
     return tokenSourceFromTailwind(
       await loadTailwindTokens(resolve(process.cwd(), themeOverride)),
+    );
+  }
+
+  const configThemeEntry = loadConfigSafe(process.cwd()).design?.themeEntry;
+  if (configThemeEntry) {
+    const resolvedThemeEntry = resolve(process.cwd(), configThemeEntry);
+    console.error(
+      `design.themeEntry in .claude/houserules.config.json names ${resolvedThemeEntry}.`,
+    );
+    return tokenSourceFromTailwind(
+      await loadTailwindTokens(resolvedThemeEntry),
     );
   }
 
@@ -360,13 +436,12 @@ async function resolveTokens(
     return undefined;
   }
 
-  if (found.value.alternates.length > 0) {
-    console.error(
-      `${found.value.path} imports Tailwind. Using it, and ignoring ${found.value.alternates.length} other file(s) that also import Tailwind.`,
-    );
-  }
-
-  return tokenSourceFromTailwind(await loadTailwindTokens(found.value.path));
+  return tokenSourceFromTailwind(
+    await loadFirstCompilingTailwindTokens([
+      found.value.path,
+      ...found.value.alternates,
+    ]),
+  );
 }
 
 function locate(

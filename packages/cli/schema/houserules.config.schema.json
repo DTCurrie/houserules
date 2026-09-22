@@ -146,6 +146,29 @@
       },
       "additionalProperties": false
     },
+    "design": {
+      "description": "Read at runtime by the design plugin's scripts. Top level rather than inside its `plugins[].config` entry, for the same reason as `projects`: a payload script cannot find the entry its own plugin was declared under.",
+      "type": "object",
+      "properties": {
+        "themeEntry": {
+          "description": "Repo-root-relative path to the stylesheet Tailwind compiles, for a repo where more than one imports it. Read at runtime by design.mjs, which otherwise tries every stylesheet that imports Tailwind in walk order. A configured entry that fails to compile is an error naming this key, with no fallback.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "orchestrate": {
+      "description": "Read at plan time by the orchestrate module. Top level like `projects`, since the module is built in and has no `plugins[].config` entry.",
+      "type": "object",
+      "properties": {
+        "workerTools": {
+          "description": "Extra tools appended to the `tools:` line of task-worker and every installed variant, by full callable name, such as \"mcp__svelte__svelte-autofixer\" for an MCP tool a repo rule requires. Applied by `houserules update`.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
     "ledgers": {
       "type": "object",
       "properties": {

@@ -11,6 +11,12 @@ export default defineConfig({
         find: '#test/tailwind-fixture',
         replacement: `${fileURLToPath(new URL('./test/tailwind-fixture.ts', import.meta.url))}`,
       },
+      // Stages payload-dist plus @houserules/payload's shared libs the way install lays
+      // them out, so a spawned script resolves `./lib/config.mjs`. Same ordering rule.
+      {
+        find: '#test/staged-scripts',
+        replacement: `${fileURLToPath(new URL('./test/staged-scripts.ts', import.meta.url))}`,
+      },
       {
         find: /^#test\/(.*)$/,
         replacement: '@houserules/test/$1',

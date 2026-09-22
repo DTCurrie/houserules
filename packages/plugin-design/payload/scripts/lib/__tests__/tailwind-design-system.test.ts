@@ -14,9 +14,11 @@ import {
   findThemeEntryCss,
   isRepoDefinedThemeKey,
   loadDesignSystem,
+  loadFirstCompilingDesignSystem,
 } from '../tailwind-design-system.mts';
 import {
   addPackage,
+  DEFAULT_ENTRY_CSS,
   useBareRepo,
   useTailwindRepo,
 } from '#test/tailwind-fixture';
@@ -172,6 +174,98 @@ describe('loadDesignSystem', () => {
     if (result.ok) return;
     expect(result.error).toContain('@acme/missing');
     expect(result.error).toContain('not installed');
+  });
+});
+
+describe('loadFirstCompilingDesignSystem', () => {
+  it('skips a candidate whose imported package ships no stylesheet, then loads the next', async () => {
+    const root = useTailwindRepo();
+    const first = writeCssFile(
+      root,
+      'first.css',
+      '@import "tailwindcss";\n@import "starlight-theme/tailwind.css";\n',
+    );
+    addPackage(root, 'starlight-theme', {}, { 'index.css': '' });
+    const second = writeCssFile(root, 'second.css', DEFAULT_ENTRY_CSS);
+
+    const result = await loadFirstCompilingDesignSystem(root, [first, second]);
+
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.system.entryCssPath).toBe(second);
+    expect(result.value.skipped).toHaveLength(1);
+    expect(result.value.skipped[0]?.path).toBe(first);
+    expect(result.value.skipped[0]?.error).toContain(
+      'no stylesheet was found there for "tailwind.css"',
+    );
+  });
+
+  it('names every candidate and its own failure when none compile', async () => {
+    const root = useTailwindRepo();
+    const first = writeCssFile(
+      root,
+      'first.css',
+      '@import "tailwindcss";\n@import "starlight-theme/tailwind.css";\n',
+    );
+    addPackage(root, 'starlight-theme', {}, { 'index.css': '' });
+    const second = writeCssFile(
+      root,
+      'second.css',
+      '@import "tailwindcss";\n@import "@acme/tokens/dark";\n',
+    );
+    addPackage(
+      root,
+      '@acme/tokens',
+      { exports: { '.': './tokens.css', './dark': './tokens-dark.css' } },
+      { 'tokens.css': '' },
+    );
+
+    const result = await loadFirstCompilingDesignSystem(root, [first, second]);
+
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain(first);
+    expect(result.error).toContain(second);
+    expect(result.error).toContain(
+      'no stylesheet was found there for "tailwind.css"',
+    );
+    expect(result.error).toContain('no stylesheet was found there for "dark"');
+  });
+
+  it('reports no skipped candidates when the first one compiles', async () => {
+    const root = useTailwindRepo();
+
+    const result = await loadFirstCompilingDesignSystem(root, [
+      join(root, 'src/app.css'),
+    ]);
+
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.skipped).toEqual([]);
+  });
+
+  it('fails when given no candidate paths', async () => {
+    const root = useTailwindRepo();
+
+    const result = await loadFirstCompilingDesignSystem(root, []);
+
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain('No candidate');
+  });
+
+  it('reports the missing tailwindcss install once, before any candidate is tried', async () => {
+    const root = useBareRepo();
+    const first = join(root, 'a.css');
+    const second = join(root, 'b.css');
+
+    const result = await loadFirstCompilingDesignSystem(root, [first, second]);
+
+    expect(result.ok, result.ok ? '' : result.error).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain('tailwindcss');
+    expect(result.error).not.toContain(first);
+    expect(result.error).not.toContain(second);
   });
 });
 

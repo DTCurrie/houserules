@@ -5,6 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { DESIGN_SCRIPT } from '#test/staged-scripts';
+
 const SCRIPTS = fileURLToPath(
   new URL('../../payload-dist/scripts', import.meta.url),
 );
@@ -26,7 +28,7 @@ function envWithoutVitestNodePath() {
 }
 
 function runDesignWithNoArguments() {
-  return spawnSync(process.execPath, [join(SCRIPTS, 'design.mjs')], {
+  return spawnSync(process.execPath, [DESIGN_SCRIPT], {
     cwd: dependencyFreeDir,
     encoding: 'utf8',
     env: envWithoutVitestNodePath(),

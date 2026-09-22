@@ -1,16 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { loadDesignSystem } from '../lib/tailwind-design-system.mts';
 import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
-
-const DESIGN_SCRIPT = fileURLToPath(
-  new URL('../../../payload-dist/scripts/design.mjs', import.meta.url),
-);
+import { DESIGN_SCRIPT } from '#test/staged-scripts';
 
 const TWO_SHADE_ENTRY_CSS = `@import "tailwindcss";
 

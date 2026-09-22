@@ -14,6 +14,7 @@
     // src/ that ships may reference it.
     "paths": {
       "#test/tailwind-fixture": ["./test/tailwind-fixture.ts"],
+      "#test/staged-scripts": ["./test/staged-scripts.ts"],
       "#test/*": ["./node_modules/@houserules/test/dist/*.d.ts"]
     }
   },

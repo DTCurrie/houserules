@@ -1,11 +1,24 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 import { useInstalledRepo } from '#test/repo';
 import { runCli } from '#test/run';
 import { manifestOf } from '#test/installed-tree';
-import { options, plan, renderTaskWorkerVariant } from '../orchestrate.js';
+import {
+  check,
+  options,
+  plan,
+  renderTaskWorkerBase,
+  renderTaskWorkerVariant,
+} from '../orchestrate.js';
 import type { Answers, Ctx } from '@houserules/api';
 import { payloadPath } from '../../paths.js';
 
@@ -88,6 +101,26 @@ describe('orchestrate', () => {
     it('passes doctor', () => {
       expect(runCli(['doctor', root]).status).toBe(0);
     });
+
+    it('installs the research variant with WebFetch and WebSearch on its tools line', () => {
+      const researchAgentText = readFileSync(
+        join(root, '.claude/agents/task-worker-research.md'),
+        'utf8',
+      );
+      expect(researchAgentText).toMatch(/^tools: .*WebFetch, WebSearch$/m);
+    });
+
+    it('mentions task-worker-research in the installed SKILL.md', () => {
+      expect(skillText).toMatch(/task-worker-research/);
+    });
+
+    it('documents orchestrate.workerTools in the installed SKILL.md', () => {
+      expect(skillText).toMatch(/orchestrate\.workerTools/);
+    });
+
+    it('tells the worker to report a missing required tool under Deviations', () => {
+      expect(agentText).toMatch(/tool you do not have/);
+    });
   });
 
   describe('enabled without the plans module', () => {
@@ -140,6 +173,52 @@ describe('renderTaskWorkerVariant', () => {
     const rendered = renderTaskWorkerVariant('low');
     expect(rendered.slice(-SOURCE_BODY.length)).toBe(SOURCE_BODY);
   });
+
+  it('appends WebFetch and WebSearch to tools and leaves effort untouched for research', () => {
+    const rendered = renderTaskWorkerVariant('research');
+
+    expect(rendered).toMatch(/^name: task-worker-research$/m);
+    expect(rendered).toMatch(
+      /^tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, WebSearch$/m,
+    );
+    expect(rendered).toMatch(/^effort: medium$/m);
+    expect(rendered).toMatch(/^model: sonnet$/m);
+    expect(rendered).toMatch(
+      /^description: Same contract as task-worker.*WebFetch.*WebSearch.*$/m,
+    );
+  });
+
+  it('keeps the body byte-identical to the source body for research', () => {
+    const rendered = renderTaskWorkerVariant('research');
+    expect(rendered.slice(-SOURCE_BODY.length)).toBe(SOURCE_BODY);
+  });
+
+  it('appends extra tools to the research variant, skipping a name already present', () => {
+    const rendered = renderTaskWorkerVariant('research', [
+      'mcp__svelte__svelte-autofixer',
+      'WebFetch',
+    ]);
+
+    expect(rendered).toMatch(
+      /^tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, WebSearch, mcp__svelte__svelte-autofixer$/m,
+    );
+  });
+});
+
+describe('renderTaskWorkerBase', () => {
+  it('appends extra tools to the base agent, leaving name and effort as the source', () => {
+    const rendered = renderTaskWorkerBase([
+      'mcp__svelte__svelte-autofixer',
+      'WebFetch',
+    ]);
+
+    expect(rendered).toMatch(
+      /^tools: Read, Edit, Write, Grep, Glob, Bash, mcp__svelte__svelte-autofixer, WebFetch$/m,
+    );
+    expect(rendered).toMatch(/^name: task-worker$/m);
+    expect(rendered).toMatch(/^effort: medium$/m);
+    expect(rendered.slice(-SOURCE_BODY.length)).toBe(SOURCE_BODY);
+  });
 });
 
 describe('orchestrate plan(), effort variant selection', () => {
@@ -166,7 +245,7 @@ describe('orchestrate plan(), effort variant selection', () => {
     ]);
   });
 
-  it('produces low and xhigh when resolved to the module’s declared defaults', () => {
+  it('produces low, xhigh, and research when resolved to the module’s declared defaults', () => {
     const actions = plan(
       ctx,
       baseAnswers({ moduleOptions: { orchestrate: options.defaults } }),
@@ -176,6 +255,138 @@ describe('orchestrate plan(), effort variant selection', () => {
     expect(writes.map((a) => a.dest)).toEqual([
       '.claude/agents/task-worker-low.md',
       '.claude/agents/task-worker-xhigh.md',
+      '.claude/agents/task-worker-research.md',
     ]);
+  });
+
+  it('emits exactly one write action for the research variant', () => {
+    const actions = plan(
+      ctx,
+      baseAnswers({ moduleOptions: { orchestrate: ['research'] } }),
+    );
+
+    const writes = actions.filter((a) => a.kind === 'write');
+    expect(writes.map((a) => a.dest)).toEqual([
+      '.claude/agents/task-worker-research.md',
+    ]);
+  });
+
+  it('emits the base agent as a copy and no variant carries extra tools when the key is unset', () => {
+    const actions = plan(
+      ctx,
+      baseAnswers({ moduleOptions: { orchestrate: ['low'] } }),
+    );
+
+    expect(
+      actions.some(
+        (a) => a.kind === 'copy' && a.dest === '.claude/agents/task-worker.md',
+      ),
+    ).toBe(true);
+    expect(
+      actions.some(
+        (a) => a.kind === 'write' && a.dest === '.claude/agents/task-worker.md',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('orchestrate plan(), orchestrate.workerTools', () => {
+  it('writes the base agent with extra tools and no longer copies it', () => {
+    const ctxWithTools = {
+      claude: {
+        houseConfig: {
+          orchestrate: { workerTools: ['mcp__svelte__svelte-autofixer'] },
+        },
+      },
+    } as Ctx;
+
+    const actions = plan(
+      ctxWithTools,
+      baseAnswers({ moduleOptions: { orchestrate: ['low'] } }),
+    );
+
+    const baseWrite = actions.find(
+      (a) => a.kind === 'write' && a.dest === '.claude/agents/task-worker.md',
+    );
+    expect(baseWrite?.kind).toBe('write');
+    expect((baseWrite as { content: string }).content).toMatch(
+      /^tools: .*mcp__svelte__svelte-autofixer$/m,
+    );
+    expect(
+      actions.some(
+        (a) => a.kind === 'copy' && a.dest === '.claude/agents/task-worker.md',
+      ),
+    ).toBe(false);
+
+    const lowWrite = actions.find(
+      (a) =>
+        a.kind === 'write' && a.dest === '.claude/agents/task-worker-low.md',
+    );
+    expect((lowWrite as { content: string }).content).toMatch(
+      /^tools: .*mcp__svelte__svelte-autofixer$/m,
+    );
+  });
+});
+
+describe('check', () => {
+  function tempRootWithAgent(toolsLine: string): string {
+    const root = mkdtempSync(join(tmpdir(), 'orchestrate-check-'));
+    mkdirSync(join(root, '.claude', 'agents'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude', 'agents', 'task-worker.md'),
+      `---\nname: task-worker\n${toolsLine}\nmodel: sonnet\n---\nbody\n`,
+    );
+    return root;
+  }
+
+  it('warns naming the missing tool and pointing at houserules update when a configured tool is absent', () => {
+    const root = tempRootWithAgent('tools: Read, Edit, Write');
+    const ctx = {
+      root,
+      claude: {
+        agents: ['task-worker.md'],
+        houseConfig: {
+          orchestrate: { workerTools: ['mcp__svelte__svelte-autofixer'] },
+        },
+      },
+    } as Ctx;
+
+    const result = check(ctx);
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]?.msg).toMatch(/mcp__svelte__svelte-autofixer/);
+    expect(result.findings[0]?.msg).toMatch(/houserules update/);
+  });
+
+  it('gives no findings when the configured tool is already on the tools line', () => {
+    const root = tempRootWithAgent(
+      'tools: Read, Edit, Write, mcp__svelte__svelte-autofixer',
+    );
+    const ctx = {
+      root,
+      claude: {
+        agents: ['task-worker.md'],
+        houseConfig: {
+          orchestrate: { workerTools: ['mcp__svelte__svelte-autofixer'] },
+        },
+      },
+    } as Ctx;
+
+    const result = check(ctx);
+
+    expect(result.findings).toEqual([]);
+  });
+
+  it('gives no findings and no readouts when no key is configured', () => {
+    const root = tempRootWithAgent('tools: Read, Edit, Write');
+    const ctx = {
+      root,
+      claude: { agents: ['task-worker.md'], houseConfig: {} },
+    } as Ctx;
+
+    const result = check(ctx);
+
+    expect(result.findings).toEqual([]);
+    expect(result.readouts).toEqual([]);
   });
 });

@@ -11,6 +11,88 @@ import {
   sha256,
 } from '#test/installed-tree';
 import { runCli } from '#test/run';
+import plugin from '../index.js';
+import type { Action, Answers, Ctx, PluginApi } from '@houserules/api';
+
+function buildApi(): PluginApi {
+  return {
+    payload: {
+      script: (module, name, reason) => ({
+        kind: 'copy',
+        src: `/payload/scripts/${name}`,
+        dest: `.claude/scripts/${name}`,
+        mode: 0o755,
+        module,
+        reason,
+      }),
+      lib: (module, name) => ({
+        kind: 'copy',
+        src: `/payload/scripts/lib/${name}`,
+        dest: `.claude/scripts/lib/${name}`,
+        module,
+        reason: 'shared script library',
+      }),
+      skill: (module, name, reason) => ({
+        kind: 'copy',
+        src: `/payload/skills/${name}/SKILL.md`,
+        dest: `.claude/skills/${name}/SKILL.md`,
+        module,
+        reason,
+      }),
+      agent: (module, name, reason) => ({
+        kind: 'copy',
+        src: `/payload/agents/${name}.md`,
+        dest: `.claude/agents/${name}.md`,
+        module,
+        reason,
+      }),
+      rule: (module, name, reason) => ({
+        kind: 'body',
+        src: `/payload/rules/${name}.md`,
+        dest: `.claude/rules/${name}.md`,
+        module,
+        reason,
+      }),
+      reference: (module, name, reason) => ({
+        kind: 'copy',
+        src: `/payload/reference/${name}.md`,
+        dest: `.claude/reference/${name}.md`,
+        module,
+        reason,
+      }),
+      template: (module, rel, reason = 'reference template') => ({
+        kind: 'copy',
+        src: `/payload/templates/${rel}`,
+        dest: `.claude/templates/${rel}`,
+        module,
+        reason,
+      }),
+      mcp: (module, server, transport, reason) => ({
+        kind: 'copy',
+        src: `/payload/mcp/${server}.${transport}.json`,
+        dest: `.claude/mcp/${server}.${transport}.json`,
+        module,
+        reason,
+      }),
+      file: ({ module, srcRel, dest, reason, mode }) => {
+        const action = {
+          kind: 'copy' as const,
+          src: `/payload/${srcRel}`,
+          dest,
+          module,
+          reason,
+        };
+        return mode === undefined ? action : { ...action, mode };
+      },
+    },
+    packageName: '@houserules/plugin-svelte',
+    alias: 'svelte',
+    config: undefined,
+  };
+}
+
+const CTX = {} as Ctx;
+const ANSWERS = {} as Answers;
 
 const PLUGIN_SVELTE = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_SVELTE, alias: 'svelte' }];
@@ -207,6 +289,33 @@ describe('svelte', () => {
         'svelte.vscode.json',
       ]);
     });
+  });
+
+  it('names the worker tool path in the installed rule body', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'svelte/svelte,svelte/svelte-mcp',
+      plugins: PLUGINS,
+    });
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/svelte.md'),
+      'utf8',
+    );
+
+    expect(ruleText).toMatch(/orchestrate\.workerTools/);
+  });
+
+  it('names the full MCP tool names and the worker tool path in the svelte-mcp advise text', () => {
+    const modules = plugin(buildApi());
+    const svelteMcpModule = modules.find((m) => m.id === 'svelte-mcp');
+    const actions = svelteMcpModule?.plan(CTX, ANSWERS) ?? [];
+    const adviseAction = actions.find(
+      (action): action is Extract<Action, { kind: 'advise' }> =>
+        action.kind === 'advise',
+    );
+
+    expect(adviseAction?.text).toMatch(/mcp__svelte__svelte-autofixer/);
+    expect(adviseAction?.text).toMatch(/orchestrate\.workerTools/);
   });
 
   it('tracks each MCP config in the manifest, so update refreshes it', () => {
