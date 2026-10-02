@@ -7,7 +7,7 @@ packages:
 # ranges (`@houserules/*` peers) stay inline, since changesets manages those.
 catalog:
   '@arethetypeswrong/cli': ^0.18.5
-  '@types/node': 26.6.2
+  '@types/node': 26.6.3
   prettier: ^3.9.8
   publint: ^0.3.24
   type-fest: ^5.10.0
