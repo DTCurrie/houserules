@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** Stored head of a Bash command. Similarity and denial rendering compare heads only. */
@@ -71,6 +71,29 @@ export interface FileUsage {
   skippedLines: number;
 }
 
+/**
+ * The always-loaded context a session started with, read from the attachments Claude Code
+ * writes at session start: the `prompt_snapshot` system prompt, the `instructions` files
+ * (CLAUDE.md and auto memory), the `skill_listing`, the initial `agent_listing_delta`, and the
+ * `output_style_instructions` prompt. Sizes only, never text or paths, so an export built from
+ * this carries nothing to redact. `nested_memory` loads accumulate over the whole session,
+ * since a nested CLAUDE.md enters context on demand rather than at start.
+ */
+export interface ResidentCapture {
+  sessionId: string;
+  ts?: number;
+  systemPromptBytes?: number;
+  /** One entry per file in the first `instructions` attachment, e.g. `Project`, `AutoMem`. */
+  instructionFiles: { type: string; bytes: number }[];
+  skillListingBytes?: number;
+  skillCount?: number;
+  agentListingBytes?: number;
+  agentCount?: number;
+  outputStyleBytes?: number;
+  nestedMemoryLoads: number;
+  nestedMemoryBytes: number;
+}
+
 export interface Corpus {
   slugs: string[];
   files: FileUsage[];
@@ -78,8 +101,26 @@ export interface Corpus {
   missingDirs: string[];
   lines: number;
   skippedLines: number;
+  /** Session files left out because they predate {@link CorpusOptions.since}. */
+  skippedBySince: number;
   sessions: Map<string, SessionEvents>;
   seenCommandUuids: Set<string>;
+  /** Keyed by session id. Start-of-session fields take the first attachment seen. */
+  residentCaptures: Map<string, ResidentCapture>;
+  /** Every `version` stamp seen on a record, so a report can say which CLI wrote it. */
+  claudeVersions: Set<string>;
+  /** Earliest and latest timestamped record across the corpus, epoch ms. */
+  firstTs?: number;
+  lastTs?: number;
+}
+
+/** Options for {@link readCorpus}. */
+export interface CorpusOptions {
+  /**
+   * Epoch ms. A session file whose first timestamped record predates it is skipped, along
+   * with its subagent transcripts. A file with no timestamps falls back to its mtime.
+   */
+  since?: number;
 }
 
 interface Usage {
@@ -107,12 +148,21 @@ interface TranscriptMessage {
 }
 
 interface HookAttachment {
+  type?: string;
   hookName?: string;
   exitCode?: number;
   stderr?: string;
-  content?: string;
+  content?: unknown;
   durationMs?: number;
   toolUseID?: string;
+  /** Session-start attachments: `prompt_snapshot`, `instructions`, `skill_listing`, and so on. */
+  systemPrompt?: unknown;
+  files?: unknown;
+  skillCount?: unknown;
+  addedLines?: unknown;
+  addedTypes?: unknown;
+  isInitial?: unknown;
+  style?: unknown;
 }
 
 /**
@@ -124,6 +174,7 @@ interface TranscriptRecord {
   uuid?: string;
   sessionId?: string;
   timestamp?: string;
+  version?: string;
   isSidechain?: boolean;
   isMeta?: boolean;
   attachment?: HookAttachment;
@@ -138,8 +189,11 @@ export function emptyCorpus(slugs: string[]): Corpus {
     missingDirs: [],
     lines: 0,
     skippedLines: 0,
+    skippedBySince: 0,
     sessions: new Map(),
     seenCommandUuids: new Set(),
+    residentCaptures: new Map(),
+    claudeVersions: new Set(),
   };
 }
 
@@ -148,7 +202,11 @@ export function emptyCorpus(slugs: string[]): Corpus {
  * directory is recorded, an unreadable file is recorded and skipped, a bad line is counted
  * and skipped. Nothing here throws on transcript content.
  */
-export function readCorpus(projectsBase: string, slugs: string[]): Corpus {
+export function readCorpus(
+  projectsBase: string,
+  slugs: string[],
+  options: CorpusOptions = {},
+): Corpus {
   const corpus = emptyCorpus(slugs);
   for (const slug of slugs) {
     const dir = join(projectsBase, slug);
@@ -163,6 +221,13 @@ export function readCorpus(projectsBase: string, slugs: string[]): Corpus {
       let text: string;
       try {
         text = readFileSync(join(dir, file), 'utf8');
+        if (
+          options.since !== undefined &&
+          startedAt(text, join(dir, file)) < options.since
+        ) {
+          corpus.skippedBySince += 1;
+          continue;
+        }
       } catch (error) {
         corpus.unreadableFiles.push({
           file,
@@ -197,6 +262,25 @@ export function readCorpus(projectsBase: string, slugs: string[]): Corpus {
     }
   }
   return corpus;
+}
+
+function firstTimestamp(text: string): number | undefined {
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let record: TranscriptRecord;
+    try {
+      record = JSON.parse(line) as TranscriptRecord;
+    } catch {
+      continue;
+    }
+    const ts = Date.parse(record.timestamp ?? '');
+    if (ts) return ts;
+  }
+  return undefined;
+}
+
+function startedAt(text: string, path: string): number {
+  return firstTimestamp(text) ?? statSync(path).mtimeMs;
 }
 
 function createFileUsage(file: string): FileUsage {
@@ -242,6 +326,7 @@ export function ingestTranscript(
       usage.skippedLines += 1;
       continue;
     }
+    trackRecordStamps(record, corpus);
     aggregateUsage(record, usage);
     extractEvents(record, fallbackSession, corpus);
   }
@@ -321,14 +406,19 @@ function extractEvents(
   fallbackSession: string,
   corpus: Corpus,
 ): void {
-  const session = sessionOf(corpus, record.sessionId ?? fallbackSession);
+  const sessionId = record.sessionId ?? fallbackSession;
+  const session = sessionOf(corpus, sessionId);
   const attachment = record.attachment;
+  if (attachment?.type && RESIDENT_ATTACHMENT_TYPES.has(attachment.type)) {
+    recordResidentCapture(record, attachment, sessionId, corpus);
+    return;
+  }
   if (record.type === 'attachment' && attachment?.hookName) {
     session.hookFires.push({
       hookName: attachment.hookName,
       exitCode: attachment.exitCode,
       stderr: attachment.stderr ?? '',
-      content: attachment.content ?? '',
+      content: typeof attachment.content === 'string' ? attachment.content : '',
       durationMs: attachment.durationMs,
       toolUseID: attachment.toolUseID,
       afterToolUseCount: session.toolUses.length,
@@ -382,6 +472,107 @@ function extractEvents(
       ts: Date.parse(record.timestamp ?? '') || undefined,
       isSidechain: record.isSidechain === true,
     });
+  }
+}
+
+function trackRecordStamps(record: TranscriptRecord, corpus: Corpus): void {
+  if (typeof record.version === 'string')
+    corpus.claudeVersions.add(record.version);
+  const ts = Date.parse(record.timestamp ?? '');
+  if (!ts) return;
+  if (corpus.firstTs === undefined || ts < corpus.firstTs) corpus.firstTs = ts;
+  if (corpus.lastTs === undefined || ts > corpus.lastTs) corpus.lastTs = ts;
+}
+
+const RESIDENT_ATTACHMENT_TYPES = new Set([
+  'prompt_snapshot',
+  'instructions',
+  'skill_listing',
+  'agent_listing_delta',
+  'output_style_instructions',
+  'nested_memory',
+]);
+
+function utf8Bytes(value: unknown): number {
+  return typeof value === 'string' ? Buffer.byteLength(value, 'utf8') : 0;
+}
+
+function joinedBytes(value: unknown): number {
+  if (!Array.isArray(value)) return 0;
+  return value.reduce<number>((sum, part) => sum + utf8Bytes(part), 0);
+}
+
+function captureOf(corpus: Corpus, sessionId: string): ResidentCapture {
+  let capture = corpus.residentCaptures.get(sessionId);
+  if (!capture) {
+    capture = {
+      sessionId,
+      instructionFiles: [],
+      nestedMemoryLoads: 0,
+      nestedMemoryBytes: 0,
+    };
+    corpus.residentCaptures.set(sessionId, capture);
+  }
+  return capture;
+}
+
+// Start-of-session attachments keep the first value seen, so a resumed session that replays
+// them does not double count. Nested memory accumulates, since every load costs context.
+function recordResidentCapture(
+  record: TranscriptRecord,
+  attachment: HookAttachment,
+  sessionId: string,
+  corpus: Corpus,
+): void {
+  const capture = captureOf(corpus, sessionId);
+  capture.ts ??= Date.parse(record.timestamp ?? '') || undefined;
+  switch (attachment.type) {
+    case 'prompt_snapshot':
+      capture.systemPromptBytes ??= joinedBytes(attachment.systemPrompt);
+      return;
+    case 'instructions':
+      if (
+        capture.instructionFiles.length === 0 &&
+        Array.isArray(attachment.files)
+      )
+        capture.instructionFiles = attachment.files.map((file) => {
+          const entry = (file ?? {}) as { type?: unknown; content?: unknown };
+          return {
+            type: typeof entry.type === 'string' ? entry.type : 'unknown',
+            bytes: utf8Bytes(entry.content),
+          };
+        });
+      return;
+    case 'skill_listing':
+      capture.skillListingBytes ??= utf8Bytes(attachment.content);
+      capture.skillCount ??=
+        typeof attachment.skillCount === 'number'
+          ? attachment.skillCount
+          : undefined;
+      return;
+    case 'agent_listing_delta':
+      if (attachment.isInitial !== true) return;
+      capture.agentListingBytes ??= joinedBytes(attachment.addedLines);
+      capture.agentCount ??= Array.isArray(attachment.addedTypes)
+        ? attachment.addedTypes.length
+        : undefined;
+      return;
+    case 'output_style_instructions': {
+      const style = (attachment.style ?? {}) as { prompt?: unknown };
+      capture.outputStyleBytes ??= utf8Bytes(style.prompt);
+      return;
+    }
+    case 'nested_memory': {
+      const content = (attachment.content ?? {}) as
+        { content?: unknown } | string;
+      capture.nestedMemoryLoads += 1;
+      capture.nestedMemoryBytes += utf8Bytes(
+        typeof content === 'string' ? content : content.content,
+      );
+      return;
+    }
+    default:
+      return;
   }
 }
 
