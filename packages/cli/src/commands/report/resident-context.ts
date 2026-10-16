@@ -11,7 +11,7 @@ const NOT_RECORDED_NOTE = 'not recorded (no session-start attachments)';
 const formatCount = (value: number) => value.toLocaleString('en-US');
 
 /** One session's always-loaded context, read from the attachments Claude Code writes at session start. */
-export interface ResidentContextRow {
+interface ResidentContextRow {
   session: string;
   /** False when the transcript carries none of the session-start attachments. */
   recorded: boolean;
