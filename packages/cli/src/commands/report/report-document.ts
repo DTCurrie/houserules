@@ -29,7 +29,7 @@ const LEDGERS: [skill: string, ledgerFile: string][] = [
  * Where a report came from. Carries no path and no hostname by construction, so an export
  * built from a work machine can be read anywhere.
  */
-export interface ReportMeta {
+interface ReportMeta {
   /** The name the user gave the machine or corpus, e.g. "home" or "work". */
   label: string;
   cliVersion: string;
@@ -45,7 +45,7 @@ export interface ReportMeta {
 }
 
 /** {@link FileUsage} with its model set as an array, so it survives JSON. */
-export interface SerializedFileUsage extends Omit<FileUsage, 'models'> {
+interface SerializedFileUsage extends Omit<FileUsage, 'models'> {
   models: string[];
 }
 
@@ -76,9 +76,7 @@ export interface BuildOptions {
   now?: Date;
 }
 
-export function serializeTokenUsage(
-  report: TokenUsageReport,
-): SerializedTokenUsage {
+function serializeTokenUsage(report: TokenUsageReport): SerializedTokenUsage {
   return {
     ...report,
     files: report.files.map((file) => ({
