@@ -29,6 +29,10 @@ interface CommandOptions {
   nextSteps?: boolean;
   json?: boolean;
   slug?: string[];
+  since?: string;
+  export?: string;
+  import?: string[];
+  label?: string;
 }
 
 /** Null until a subcommand runs, which tells "no command given" apart from "exited 0". */
@@ -60,6 +64,10 @@ function flagsFrom(options: CommandOptions, command: Command): Flags {
     nextSteps: options.nextSteps ?? false,
     json: options.json ?? false,
     slug: options.slug,
+    since: options.since,
+    export: options.export,
+    import: options.import,
+    label: options.label,
     kitVersion: KIT_VERSION,
   };
 }
@@ -217,6 +225,21 @@ program
   .option(
     '--slug <dir>',
     'merge another ~/.claude/projects transcript dir into the corpus (repeatable)',
+    (value: string, previous: string[]) => [...previous, value],
+    [] as string[],
+  )
+  .option(
+    '--since <YYYY-MM-DD>',
+    'only sessions that started on or after this day',
+  )
+  .option('--export <file>', 'write a redacted report document to this file')
+  .option(
+    '--label <name>',
+    'name for this corpus in an export (default: local)',
+  )
+  .option(
+    '--import <file>',
+    'render an exported report instead of reading transcripts, two or more compare (repeatable)',
     (value: string, previous: string[]) => [...previous, value],
     [] as string[],
   )

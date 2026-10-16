@@ -29,7 +29,7 @@ const pct = (num: number, den: number) =>
 
 // Cost-weighted input-equivalent: fresh input at 1×, cache writes at 1.25×, cache
 // reads at 0.1×. So a session that offloaded work into the cache reads as cheaper.
-function weightedInput(a: {
+export function weightedInput(a: {
   input: number;
   cacheRead: number;
   cacheWrite: number;

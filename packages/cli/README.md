@@ -145,7 +145,19 @@ npx houserules modules   # list installed vs available modules, and enable more 
                          # remaining module still needs
 npx houserules report    # transcript telemetry for this repo's sessions (read-only)
                          # --json for a machine-readable report
+                         # --since YYYY-MM-DD drops sessions that started before that day
+                         # --export <file> --label <name> writes a redacted copy to carry elsewhere
+                         # --import <file> (repeatable) renders exports instead of local transcripts,
+                         # one column per label when more than one
 ```
+
+To compare machines, run `npx houserules report --since <day> --export report.json --label work`
+on the other machine and copy the file over. The export holds counts, session ids, skill and hook
+names, model ids, and dates. Blocked and denied commands are reduced to their first word (or
+first two for `git` and `gh`), crash signatures to a script basename, and no path or hostname is
+written. Then `npx houserules report --import report.json --import home.json` renders both side
+by side. A `resident context` section reads each session's first recorded system prompt, which
+Claude Code writes from 2.1.300 on, so older transcripts show as `not recorded`.
 
 Every command takes the target repo as a positional `[dir]` or via `--cwd <dir>`, plus a
 global `--dry-run`. Flags are scoped per subcommand, so a flag that doesn't apply is an
