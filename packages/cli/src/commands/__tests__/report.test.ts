@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -36,6 +36,7 @@ describe('report', () => {
       [
         JSON.stringify({
           type: 'assistant',
+          timestamp: '2026-05-01T00:00:00.000Z',
           message: {
             model: 'claude-opus-4-8',
             usage: {
@@ -166,5 +167,99 @@ describe('report', () => {
     expect(r.stdout).toMatch(/2 session\(s\):/);
     expect(r.stdout).toMatch(/sess-999/);
     expect(r.stdout).toMatch(/turns 2/);
+  });
+
+  it('prints the whole document under --json and nothing else', () => {
+    const r = runCli(['report', root, '--json'], { env });
+
+    expect(r.status, r.stderr).toBe(0);
+    const document = JSON.parse(r.stdout) as Record<string, unknown>;
+    expect(Object.keys(document).sort()).toEqual([
+      'friction',
+      'guard',
+      'hooks',
+      'meta',
+      'outcomes',
+      'residentContext',
+      'skills',
+      'tokens',
+    ]);
+    expect(document.meta).toMatchObject({ sessions: 1, label: 'local' });
+  });
+
+  it('skips sessions before --since and keeps later ones', () => {
+    const skipped = runCli(['report', root, '--since', '2026-06-01'], { env });
+    expect(skipped.status, skipped.stderr).toBe(0);
+    expect(skipped.stdout).toMatch(
+      /\(1 session\(s\) before 2026-06-01 skipped\)/,
+    );
+    expect(skipped.stdout).not.toMatch(/sess-abc/);
+
+    const kept = runCli(['report', root, '--since', '2026-04-01'], { env });
+    expect(kept.status, kept.stderr).toBe(0);
+    expect(kept.stdout).toMatch(/1 session\(s\):/);
+    expect(kept.stdout).not.toMatch(/skipped\)/);
+  });
+
+  it('exits 1 on a malformed --since', () => {
+    const r = runCli(['report', root, '--since', 'nope'], { env });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/nope/);
+  });
+
+  describe('export and import', () => {
+    let outDir: string;
+
+    beforeEach(() => {
+      outDir = mkdtempSync(join(tmpdir(), 'kit-out-'));
+      onTestFinished(() => rmSync(outDir, { recursive: true, force: true }));
+    });
+
+    it('writes a labeled export and re-renders it byte-equal below the header', () => {
+      const file = join(outDir, 'out', 'work.json');
+      const exported = runCli(
+        ['report', root, '--export', file, '--label', 'work'],
+        { env },
+      );
+      expect(exported.status, exported.stderr).toBe(0);
+      expect(exported.stdout).toContain(
+        `wrote ${file} (1 session(s), label work)`,
+      );
+      const meta = (
+        JSON.parse(readFileSync(file, 'utf8')) as {
+          meta: { label: string; since?: string };
+        }
+      ).meta;
+      expect(meta.label).toBe('work');
+      expect(meta.since).toBeUndefined();
+
+      const live = runCli(['report', root], { env });
+      const imported = runCli(['report', '--import', file], { env });
+      expect(imported.status, imported.stderr).toBe(0);
+      expect(imported.stdout.split('\n').slice(2)).toEqual(
+        live.stdout.split('\n').slice(2),
+      );
+    });
+
+    it('compares two imports side by side in argument order', () => {
+      const work = join(outDir, 'work.json');
+      const home = join(outDir, 'home.json');
+      runCli(['report', root, '--export', work, '--label', 'work'], { env });
+      runCli(['report', root, '--export', home, '--label', 'home'], { env });
+
+      const r = runCli(['report', '--import', work, '--import', home], { env });
+
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toMatch(/metric.*work.*home/);
+    });
+
+    it('rejects live-only flags beside --import', () => {
+      const r = runCli(
+        ['report', '--import', join(outDir, 'x.json'), '--since', '2026-01-01'],
+        { env },
+      );
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/do not apply to an import/);
+    });
   });
 });
