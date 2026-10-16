@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.8.0
+
+### Minor Changes
+
+- f3f5ecc: report gains --json, --since, redacted --export, multi-machine --import, and a resident-context section
+
 ## 0.7.0
 
 ### Minor Changes
