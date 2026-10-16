@@ -215,8 +215,8 @@ catalogs:
       specifier: ^3.9.8
       version: 3.9.8
     publint:
-      specifier: ^0.3.24
-      version: 0.3.24
+      specifier: ^0.3.25
+      version: 0.3.25
     type-fest:
       specifier: ^5.10.0
       version: 5.10.0
@@ -285,7 +285,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -340,7 +340,7 @@ importers:
         version: 3.9.8
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       type-fest:
         specifier: 'catalog:'
         version: 5.10.0
@@ -373,7 +373,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       type-fest:
         specifier: 'catalog:'
         version: 5.10.0
@@ -409,7 +409,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -442,7 +442,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -475,7 +475,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -508,7 +508,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -544,7 +544,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -580,7 +580,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -610,7 +610,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -643,7 +643,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -676,7 +676,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -709,7 +709,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -739,7 +739,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -769,7 +769,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -793,7 +793,7 @@ importers:
         version: 26.6.3
       publint:
         specifier: 'catalog:'
-        version: 0.3.24
+        version: 0.3.25
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -2153,8 +2153,8 @@ packages:
   proper-lockfile@4.1.2:
     resolution: {integrity: sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA==}
 
-  publint@0.3.24:
-    resolution: {integrity: sha512-9zS56KrKBoqi5Qt8h92uMP8TTM9AYZSgnmCo4u2priMqkOZvQnTsziZ2p5LJ2ywbYkAjoCDp2jda9u4cgFefIw==}
+  publint@0.3.25:
+    resolution: {integrity: sha512-WMMbn/d7JqRlfXQL/JUI4n5skC8cJ5WVr8/wT5mmiYWkUdENkZr1I5rgs2+dQPVRgoJd+JRYtB46MTsuDylw9g==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -3722,7 +3722,7 @@ snapshots:
       retry: 0.12.0
       signal-exit: 3.0.7
 
-  publint@0.3.24:
+  publint@0.3.25:
     dependencies:
       '@publint/pack': 0.1.7
       package-manager-detector: 1.8.0
