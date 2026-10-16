@@ -79,7 +79,7 @@ export interface FileUsage {
  * this carries nothing to redact. `nested_memory` loads accumulate over the whole session,
  * since a nested CLAUDE.md enters context on demand rather than at start.
  */
-export interface ResidentCapture {
+interface ResidentCapture {
   sessionId: string;
   ts?: number;
   systemPromptBytes?: number;
