@@ -25,6 +25,14 @@ export interface Flags {
    * `~/.claude/projects/` to merge into the corpus, e.g. a pre-rename history dir.
    */
   slug?: string[];
+  /** `report` only: drop sessions that started before this YYYY-MM-DD day. */
+  since?: string;
+  /** `report` only: write the redacted report document to this file. */
+  export?: string;
+  /** `report` only: repeated export files to render instead of reading transcripts. */
+  import?: string[];
+  /** `report` only: the name to stamp on the document, default `local`. */
+  label?: string;
   kitVersion: string;
 }
 
