@@ -37,7 +37,7 @@ function parseSince(since: string): number {
 }
 
 /** Renders every section of a document, one blank line between sections. */
-export function renderDocument(document: ReportDocument): string[] {
+function renderDocument(document: ReportDocument): string[] {
   const sections = [
     renderTokenUsage(deserializeTokenUsage(document.tokens)),
     renderHookHealth(document.hooks),
