@@ -11,6 +11,6 @@ catalog:
   prettier: ^3.9.8
   publint: ^0.3.24
   type-fest: ^5.10.0
-  typescript: ^6.0.3
+  typescript: ^7.0.2
   vitest: ^5.0.1
   wireit: ^0.14.13
