@@ -9,7 +9,9 @@
  * labeled superseded, with one ancestry line per prior record it descends from.
  *
  * Every failure path exits 0 and prints nothing, because an injector must never block a
- * prompt.
+ * prompt. A prompt the harness wrote, such as a subagent's hand-back or a background task's
+ * completion notice, injects nothing either, since nobody asked and a report citing ids would
+ * otherwise paste their bodies into the parent's context.
  */
 
 import { randomBytes } from 'node:crypto';
@@ -35,6 +37,17 @@ import {
 interface PromptPayload {
   prompt?: string;
   prompt_text?: string;
+}
+
+/**
+ * Whether the harness wrote the prompt rather than the user. Claude Code 2.1.302 fires
+ * UserPromptSubmit for a subagent's hand-back and a message from another session, both opening
+ * with `<agent-message from="…">`, and for a background task's completion notice, opening with
+ * `<task-notification>`. Each tag sits at column zero of line one, where the harness indents an
+ * agent's own lines, and no hook input field names the prompt's source, so the tag is the signal.
+ */
+export function isHarnessPrompt(prompt: string): boolean {
+  return /^<(?:agent-message|task-notification)\b/.test(prompt);
 }
 
 /**
@@ -256,7 +269,7 @@ function main(): void {
     // Claude Code has used both `prompt` and `prompt_text` for this event across
     // versions. Accept either so the injector doesn't silently no-op on one build.
     const prompt = String(input?.prompt ?? input?.prompt_text ?? '');
-    if (!prompt) {
+    if (!prompt || isHarnessPrompt(prompt)) {
       process.exit(0);
       return;
     }

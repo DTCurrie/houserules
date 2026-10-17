@@ -10,6 +10,7 @@ import { promptInput } from '#test/hook-input';
 
 import {
   capInjectedText,
+  isHarnessPrompt,
   MAX_INJECTED_CHARS,
   resolveEntries,
 } from '../ledger-inject.mjs';
@@ -156,6 +157,36 @@ describe('resolveEntries', () => {
 
     expect(resolved.get('BACKLOG-present')?.title).toBe('Present');
     expect(resolved.get('BACKLOG-absent')).toBeUndefined();
+  });
+});
+
+describe('isHarnessPrompt', () => {
+  it.each([
+    {
+      shape: 'a subagent hand-back',
+      prompt:
+        '<agent-message from="a68f30315b83678cd">\n[Subagent hand-back] The text below is the final report of a subagent.\n  PROBE REPORT: names TEST-abcdef.',
+      expected: true,
+    },
+    {
+      shape: 'a background task notice',
+      prompt:
+        '<task-notification>\n<task-id>b7aekvfa9</task-id>\n<summary>done, see TEST-abcdef</summary>\n</task-notification>',
+      expected: true,
+    },
+    {
+      shape: 'a typed prompt that quotes the tag mid-text',
+      prompt:
+        'why does <agent-message from="x"> show up in my transcript, TEST-abcdef?',
+      expected: false,
+    },
+    {
+      shape: 'a typed prompt',
+      prompt: 'please pick up TEST-abcdef next',
+      expected: false,
+    },
+  ])('is $expected for $shape', ({ prompt, expected }) => {
+    expect(isHarnessPrompt(prompt)).toBe(expected);
   });
 });
 
@@ -317,6 +348,29 @@ describe('ledger-inject.mjs', () => {
 
       expect(r.status).toBe(0);
       expect(r.stdout.trim()).toBe('');
+    });
+
+    it.each([
+      {
+        shape: 'a subagent hand-back',
+        prompt:
+          '<agent-message from="a68f30315b83678cd">\n[Subagent hand-back] The report follows:\n  SLICE 1a: DONE, see TEST-abcdef.',
+      },
+      {
+        shape: 'a background task notice',
+        prompt:
+          '<task-notification>\n<summary>verify done, TEST-abcdef still open</summary>\n</task-notification>',
+      },
+    ])('injects nothing when $shape cites a logged ID', ({ prompt }) => {
+      const root = useInstalledRepo('pnpm-monorepo');
+      addBacklogEntry(root, 'TEST-abcdef', 'Cache the token', 'memoize it');
+
+      const r = runScript(root, INJECT, promptInput(prompt));
+
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout.trim(), 'a harness-written prompt injects nothing').toBe(
+        '',
+      );
     });
   });
 

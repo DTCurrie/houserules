@@ -89,6 +89,12 @@ describe('orchestrate', () => {
       expect(skillText).toMatch(/--auto/);
     });
 
+    it('writes the single-file acceptance form with -- so wireit forwards the path instead of dropping it', () => {
+      expect(skillText).toMatch(
+        /`pnpm --filter <pkg> test -- <path\/to\/file\.test\.ts>`/,
+      );
+    });
+
     it('gives the brief a reference line, so a slice judged against a spec is handed that spec', () => {
       expect(skillText).toMatch(/> Reference:/);
     });

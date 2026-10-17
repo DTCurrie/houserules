@@ -83,7 +83,7 @@ Two pre-slicing moments, each skipped silently when its skill is not installed:
 
 - **`owns`:** the exact paths/globs that worker may write. Nothing outside them.
 - **a falsifiable done:** a command at its narrowest form, e.g. `vitest run <file>`, reachable as
-  `pnpm --filter <pkg> test <path/to/file.test.ts>`.
+  `pnpm --filter <pkg> test -- <path/to/file.test.ts>`.
 - **a brief that fits on one screen.** If it needs more than ~8 steps or touches more than ~6 files,
   split it.
 - **both bounds on a numeric or set-valued criterion, and a named source for one over observed
