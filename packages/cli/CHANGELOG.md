@@ -1,5 +1,61 @@
 # @houserules/cli
 
+## 0.9.0
+
+### Minor Changes
+
+- 940ec16: plan-project records decisions not code and names the execution mode; plan-lint warns on code-heavy phase files.
+- 3be211a: plan-project runs a read-only plan-reviewer agent once at handoff
+- 940ec16: workerTools takes mcp__<server> patterns and doctor warns when a rule names an uncovered MCP tool.
+- 940ec16: doctor warns on SKILL.md bodies over the 20 KB re-injection cap, orchestrate skill now fits.
+- 940ec16: doctor reports the measured resident prompt from the newest local transcript snapshot beside its estimate.
+- 940ec16: Guard hooks carry onFailure: block, so a crashed guard fails closed on Claude Code 2.1.295+.
+- decb5e4: verify.timeoutMs caps each verify command, and verify-changed runs in the background instead of a subagent.
+- 940ec16: New optional tool-output-trim module: a PostToolUse hook caps Bash and Read results over 16 KiB to head plus tail.
+- 3be211a: tidy runs its audit in a subagent and applies findings in the main context
+- 8f3623d: Dispatching skills treat a stalled subagent as unreviewed, and subagents background long commands.
+- 3be211a: doctor warns on a plugin peer range the CLI does not satisfy instead of exiting
+- 940ec16: report breaks nested rule and CLAUDE.md loads down by file and by main chain versus subagents.
+- 940ec16: doctor checks the running Claude Code version against the floor each installed module needs.
+- 3be211a: sweep asks before dispatching more than 8 shards
+- cdc66de: Managed block honors an existing AGENTS.md; instructionsFile config forces either file.
+- 3be211a: brief-driven reviewer and writer agents skip CLAUDE.md with omitClaudeMd
+- 3be211a: plan template carries a Review Focus section that plan-lint checks
+- 940ec16: Retired the task-worker low and xhigh variants; /orchestrate passes effort per slice through the Agent tool.
+
+### Patch Changes
+
+- f00d21d: lint-format-fix yields to running background tasks and caps its fix steps at 90 seconds.
+- f00d21d: report prints its session date window and warns when retention trimmed it.
+- 3be211a: doctor lists only payload-shipping siblings as plugins available beside the CLI
+- f00d21d: report friction ignores read-only git status and diff checks.
+- f00d21d: Stop hooks skip a turn whose tool uses were all read-only.
+- 940ec16: ledger-inject frames injected ledger text as data, with control characters stripped and a per-run end marker.
+- f00d21d: doctor's resident budget skips hidden skills and reads the active output style from settings.
+- f00d21d: verify-changed prints SKIPPED for a package with no verify commands.
+- f00d21d: Hook wrappers choose their missing-script fallback by event instead of one shared exit 1.
+- f00d21d: report breaks resident-context medians out by session entrypoint.
+- f00d21d: doctor warns on a local hook override only when its command differs from the managed one.
+- 3be211a: ci-settings states the deny list stands alone under --bare
+- f00d21d: The managed CLAUDE.md region renders tables prettier leaves unchanged.
+- f00d21d: doctor no longer flags every installed hook as unguarded.
+- 940ec16: Shorter tidy and verify-changed descriptions, user-run skills left out of the listing, Prose style allows one line around tool work.
+- f00d21d: Shipped agents bound their Bash use and name the hand-back tool.
+- 5f2ee8b: Report exports no longer keep paths from leading variable assignments or path-shaped executables.
+- 3be211a: report ledger outcomes read the synced index when the local ledger is pruned
+- 3be211a: claudeProjectDir resolves a project directory past 200 characters by prefix match
+- f00d21d: guard-bash gates subagent writes on the hook input's agent_id.
+- Updated dependencies [940ec16]
+- Updated dependencies [f00d21d]
+- Updated dependencies [940ec16]
+- Updated dependencies [decb5e4]
+- Updated dependencies [f00d21d]
+- Updated dependencies [3be211a]
+- Updated dependencies [cdc66de]
+- Updated dependencies [f00d21d]
+  - @houserules/api@0.6.0
+  - @houserules/payload@0.4.0
+
 ## 0.8.0
 
 ### Minor Changes

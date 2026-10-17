@@ -1,5 +1,11 @@
 # @houserules/plugin-testing
 
+## 0.3.2
+
+### Patch Changes
+
+- f00d21d: Testing rules fix the header-comment exception wording and drop a stale CLAUDE.md reference.
+
 ## 0.3.1
 
 ### Patch Changes
