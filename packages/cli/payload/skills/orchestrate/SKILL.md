@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Execute a planned phase from .claude/plans/ with scoped task-worker subagents. Use to drive a planned phase to done.
-argument-hint: '[<plan-slug>] [<phase> | all] [--auto]'
+argument-hint: '[<plan-slug>] [<phase> | <n,m> | all] [--auto] [--flat]'
 allowed-tools: Read, Edit, Write, Grep, Glob, Bash, Agent, SendMessage
 ---
 
@@ -24,23 +24,24 @@ grep -l . .claude/plans/*/ROADMAP.md | xargs grep -H '^\*\*Status:\*\*'
 
 - **No plan workspace?** Stop and run `/plan-project "<what to build>"` first (the `plans` module).
   Orchestration without a persisted phase boundary has nothing to slice and nowhere to record status.
-- **Trivial work?** If you'd finish the phase in one pass, **do it yourself**. Briefs, dispatch, and
-  review cost more than the work below roughly two slices.
+- **Trivial work?** If you'd finish the phase in one pass, **do it yourself**. Below roughly two
+  slices, briefs, dispatch, and review cost more than the work.
 
 ### Arguments
 
-`/orchestrate [<plan-slug>] [<phase> | all] [--auto] [--flat] [--ignore-gates <key,key>]`, both
-leading parts optional. A bare token that is a number or `all` is the **phase**. Anything else is
+`/orchestrate [<plan-slug>] [<phase> | <n,m> | all] [--auto] [--flat] [--ignore-gates <key,key>]`,
+both leading parts optional. A bare token that is a number, a comma list, or `all` is the **phase**. Anything else is
 the **plan slug**. Each phase runs one layer down by default (§4). `--flat` runs it here.
 
-| Invocation                     | Means                                                   |
-| ------------------------------ | ------------------------------------------------------- |
-| `/orchestrate`                 | resolved plan (below), its live phase                   |
-| `/orchestrate auth-rework`     | that plan, its live phase                               |
-| `/orchestrate 3`               | resolved plan, phase 3                                  |
-| `/orchestrate auth-rework all` | that plan, every remaining phase, check-in between each |
-| `… all --auto`                 | same, without the inter-phase check-in                  |
-| `… --flat`                     | run §1 to §8 here, which suits a phase under two slices |
+| Invocation                     | Means                                                                         |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| `/orchestrate`                 | resolved plan (below), its live phase                                         |
+| `/orchestrate auth-rework`     | that plan, its live phase                                                     |
+| `/orchestrate 3`               | resolved plan, phase 3                                                        |
+| `/orchestrate auth-rework 2,3` | phases 2 and 3 at once, refused up front if domains overlap or one is missing |
+| `/orchestrate auth-rework all` | every remaining phase, check-in between each, concurrent where `After` allows |
+| `… all --auto`                 | same, without the inter-phase check-in                                        |
+| `… --flat`                     | run §1 to §8 here, which suits a phase under two slices                       |
 
 **Live phase** is the one marked `IN PROGRESS` in that plan's `ROADMAP.md`. If none is marked, take
 the first `TODO`.
@@ -142,9 +143,8 @@ the resume grep in §9.
 
 ## 4. Dispatch a wave — one message, one worker per slice
 
-By default, §1 through §8 run one layer down, one `phase-orchestrator` spawn per phase, and you
-relay its reports. `references/nested.md` carries the brief, the relay, and the `all` loop, which
-doubles as the context-size gate. Under `--flat` you run them here, for a phase under two slices.
+By default, §1 through §8 run one layer down, one `phase-orchestrator` spawn per phase.
+`references/nested.md` carries the brief, the relay, and the `all` loop (also the context-size gate).
 
 Send every slice in the wave as parallel `Agent` calls **in a single message**, each with
 `subagent_type: task-worker` and `model: sonnet`. (No `task-worker` installed? `references/slicing.md`
@@ -152,16 +152,13 @@ carries the fallback.)
 
 Mark the slices `DISPATCHED` before you send.
 
-Pass the Agent tool's `effort` parameter per slice. A mechanical or wide slice takes `effort: low`.
-A judgment-heavy slice takes `high` or `xhigh`. Everything else omits it.
+Pass the Agent tool's `effort` parameter per slice, as `references/slicing.md` says.
 
 A slice whose steps must fetch a page or search the web takes `task-worker-research`. If that agent is
 absent, use the same fallback.
 
-Before dispatching, check whether a rule scoped to the wave's paths requires an MCP tool the
-worker's `tools:` line lacks. The fix is adding `mcp__<server>__<tool>` or `mcp__<server>` to
-`orchestrate.workerTools` in `.claude/houserules.config.json`, then `npx houserules update`.
-`references/slicing.md` has the interim recipe.
+Before dispatching, check whether a rule scoped to the wave's paths needs an MCP tool the worker's
+`tools:` line lacks. `orchestrate.workerTools` is the fix, and `references/slicing.md` has the recipe.
 
 `task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice,
 and **never restates or overrides a standing rule**. The one most often violated is the fixer
@@ -193,12 +190,11 @@ wave goes out and once when it closes**, and nowhere else. Same three columns, e
 ```
 
 Every slice in the phase appears in every printing, including the waves that haven't opened yet,
-because a table showing only the live wave hides how much is left.
+because a live-wave-only table hides how much is left.
 
 Collapse the on-disk vocabulary into four display states: `DONE` prints `✅ done`, `DISPATCHED`
 `IN REVIEW` `REVISING` print `🔄 running`, `TODO` prints `⬜ pending`, and `BLOCKED` prints
-`⛔ blocked`. No prose duplicating the table. One line under it for anything the columns can't
-carry, then move on.
+`⛔ blocked`. No prose duplicating the table. One line under it for anything the columns can't carry.
 
 **Formatting is orchestrator work, not worker work.** The fixer runs once at the barrier (§7), never
 in a worker. A lint or format finding inside a `DISPATCHED` slice's owned path is not residue, and
@@ -219,8 +215,8 @@ git status --short | grep '^ D\|^D '   # deletions: every one must be intentiona
 ls .claude/plans/<slug>/               # plan state still there
 ```
 
-Seconds to run. A deletion outside `owns` is a defect regardless of what the report says about it,
-and if plan state is gone, stop the wave and recover before anything else.
+A deletion outside `owns` is a defect whatever the report says, and if plan state is gone, stop the
+wave and recover first.
 
 Each worker returns a report: files touched, the acceptance command and its output tail, decisions
 and deviations, and anything blocked or out of scope. Its first line is one of
@@ -304,7 +300,8 @@ header and the `ROADMAP.md` line to `DONE (<date>)` in one pass, with a `## Log`
 `/plan-project`'s status-in-place discipline, and orchestration doesn't get to skip it.
 
 Run `node .claude/scripts/plan-lint.mjs` if installed, to confirm the update actually landed on
-both files.
+both files. Under nested mode the ROADMAP flip and that run belong to the dispatcher (see
+`references/nested.md`), and under `--flat` this layer writes both files as before.
 
 **A phase that touched UI surfaces gets its reviews now.** When the diff reached UI code, or the
 sub-plan carries a `ui` signal, run `/accessibility-review` and `/design-review`, each skipped
@@ -342,12 +339,11 @@ grep -n 'DISPATCHED\|IN REVIEW\|REVISING\|BLOCKED' .claude/plans/<slug>/phase-*.
 ```
 
 Those slices' workers are gone and their edits are not. Check `git diff --name-only`, reconcile the
-table, and redispatch what's unfinished. Never assume a `DISPATCHED` slice did nothing. A worker that
-stalled is the same case as a dead session: edits on disk, no report.
+table, and redispatch what's unfinished. Never assume a `DISPATCHED` slice did nothing: a stalled
+worker is the same case, edits on disk and no report.
 
 ## Notes
 
-- **No worker accumulates another slice's history**, which is the anti-rot argument for this shape.
 - **Worktree isolation** is for waves that cannot be made disjoint. Default to not using it, and read
   `references/slicing.md` first.
 - **Design decisions belong in `/plan-project`**, where the user is in the loop.

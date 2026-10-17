@@ -203,6 +203,33 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@arethetypeswrong/cli':
+      specifier: ^0.18.5
+      version: 0.18.5
+    '@types/node':
+      specifier: 26.6.3
+      version: 26.6.3
+    prettier:
+      specifier: ^3.9.10
+      version: 3.9.10
+    publint:
+      specifier: ^0.3.25
+      version: 0.3.25
+    type-fest:
+      specifier: ^5.10.0
+      version: 5.10.0
+    typescript:
+      specifier: ^6.0.3
+      version: 6.0.3
+    vitest:
+      specifier: ^5.0.4
+      version: 5.0.4
+    wireit:
+      specifier: ^0.14.13
+      version: 0.14.13
+
 importers:
 
   .:
@@ -790,12 +817,6 @@ importers:
         specifier: 'catalog:'
         version: 0.14.13
 
-  tmp:
-    devDependencies:
-      '@houserules/cli':
-        specifier: ^0.9.1
-        version: 0.9.1
-
 packages:
 
   '@andrewbranch/untar.js@1.0.4':
@@ -945,19 +966,6 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
-
-  '@houserules/api@0.6.0':
-    resolution: {integrity: sha512-YkOejT2zsdedV98/ZAj887LXIjjXWHxDSUoKKIQmgvwH57o6qfOM3OmGOnWvwzL0xUvGGvI28Vnj3Fkcrf7c+w==}
-    engines: {node: '>=22'}
-
-  '@houserules/cli@0.9.1':
-    resolution: {integrity: sha512-i0dF73dYDUmO5w3plctzcN8TIRa3/osMqBa1e/SVPj2/J6cgK+HV2ZL+ty1MprvCmxYEQFWb2nEgc+d8tG6TxA==}
-    engines: {node: '>=22'}
-    hasBin: true
-
-  '@houserules/payload@0.4.0':
-    resolution: {integrity: sha512-DU3ITIiQvhpigIvwXeA1TqDclWfb7HJ1rL1CpxJZ1KTJDYRZp93tBkI+Pwe04G0K1hB3nl2/AA2Ey/Qe1j0CkQ==}
-    engines: {node: '>=22'}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1606,10 +1614,6 @@ packages:
 
   brace-expansion@5.0.12:
     resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
-    engines: {node: 20 || >=22}
-
-  brace-expansion@5.0.9:
-    resolution: {integrity: sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==}
     engines: {node: 20 || >=22}
 
   braces@3.0.3:
@@ -2702,25 +2706,6 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@houserules/api@0.6.0':
-    dependencies:
-      '@houserules/payload': 0.4.0
-      type-fest: 5.10.0
-      zod: 4.6.7
-
-  '@houserules/cli@0.9.1':
-    dependencies:
-      '@clack/prompts': 1.8.1
-      '@houserules/api': 0.6.0
-      '@houserules/payload': 0.4.0
-      commander: 15.0.0
-      dequal: 2.0.3
-      diff: 9.0.0
-      picocolors: 1.1.1
-      semver: 7.8.5
-
-  '@houserules/payload@0.4.0': {}
-
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -3196,10 +3181,6 @@ snapshots:
   binary-extensions@2.3.0: {}
 
   brace-expansion@5.0.12:
-    dependencies:
-      balanced-match: 4.0.4
-
-  brace-expansion@5.0.9:
     dependencies:
       balanced-match: 4.0.4
 
@@ -3961,7 +3942,7 @@ snapshots:
 
   wireit@0.14.13:
     dependencies:
-      brace-expansion: 5.0.9
+      brace-expansion: 5.0.12
       chokidar: 3.6.0
       fast-glob: 3.3.3
       jsonc-parser: 3.3.1

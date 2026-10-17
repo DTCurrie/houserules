@@ -210,8 +210,41 @@ describe('orchestrate', () => {
       expect(nestedText).toContain(gate);
     });
 
-    it('merges several orchestrators into one table with the Plan column first', () => {
-      expect(nestedText).toMatch(/^\| Plan +\| Slice +\| Owns +\| State +\|$/m);
+    it('merges several orchestrators into one table with the Phase column first', () => {
+      expect(nestedText).toMatch(
+        /^\| Phase +\| Slice +\| Owns +\| State +\|$/m,
+      );
+      expect(nestedText).not.toMatch(/^\| Plan +\| Slice/m);
+    });
+
+    it('spawns the ready set by After and no longer bars sharing a plan workspace', () => {
+      expect(nestedText).toContain('ready set');
+      expect(nestedText).toContain('After');
+      expect(nestedText).not.toContain('never share a plan workspace');
+    });
+
+    it('keeps ROADMAP.md with the main conversation and each sub-plan with its orchestrator', () => {
+      const start = nestedText.indexOf('## Several orchestrators');
+      const rest = nestedText.slice(start + 1);
+      const next = rest.search(/^## /m);
+      const section = next === -1 ? rest : rest.slice(0, next);
+
+      expect(start, 'section present').not.toBe(-1);
+      expect(section).toMatch(/`ROADMAP\.md` is the main conversation's/);
+      expect(section).toMatch(/Each sub-plan is its\s+orchestrator's/);
+    });
+
+    it('names the 2,3 comma form and refuses a bad set before any spawn', () => {
+      expect(nestedText).toContain('2,3');
+      expect(nestedText).toMatch(/refuses it before any spawn/);
+    });
+
+    it('lists the comma form of phases in the invocation table', () => {
+      expect(skillText).toMatch(/^\| `\/orchestrate [^`]*2,3` \|/m);
+    });
+
+    it('forbids the phase-orchestrator from writing ROADMAP.md', () => {
+      expect(orchestratorText).toMatch(/Never\s+write\s+`ROADMAP\.md`/);
     });
 
     it('resumes only the orchestrator that asked for a ruling, tagged with its plan', () => {

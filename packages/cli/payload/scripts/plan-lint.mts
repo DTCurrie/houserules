@@ -46,6 +46,7 @@ const DECLINED = [
   'worker-report shape, since a report is an agent message, not a persisted artifact this checker has anything to read',
   'wave-owns glob overlap between slices, deferred with the candidate itself: judging whether two textually distinct globs are safe to run in parallel needs real glob-intersection, not literal string matching',
   'whether a test pinned by a `## Review Focus` item exists in the tree, which is a phase-close check in `orchestrate`, not a property of the plan file',
+  "whether two disjoint `**Domain:**` roots stay disjoint at run time, which is the orchestrator's `owns` check over the files a slice actually touches",
 ];
 
 interface SliceTable {
@@ -108,6 +109,83 @@ export function checkSliceStatuses(file: string, markdown: string): Report {
 }
 
 /**
+ * The ROADMAP phase line, shared by `checkRoadmapSync` and `parseRoadmapPhases` so the two
+ * read one grammar. Groups: phase number, status cell, sub-plan file, and the optional
+ * trailing `After` text. The group takes whatever follows `After:` so a malformed value is
+ * seen, not silently read as the chain; `parseRoadmapPhases` decides whether it is `none` or a
+ * comma-separated list of phase numbers.
+ */
+const ROADMAP_PHASE_LINE =
+  /\*\*Phase (\d+)[^*]*\*\*\s*·\s*Status:\s*([A-Z][A-Za-z ]*(?:\([^)]*\))?)\s*·\s*\[sub-plan\]\(([^)]+)\)(?:\s*·\s*After:([^·\n]*))?/;
+
+/** A phase's `After` marker: the chain default, no dependency, or an explicit list of phase numbers. */
+type PhaseAfter = 'chain' | 'none' | number[];
+
+interface RoadmapPhase {
+  number: number;
+  status: string;
+  subplan: string;
+  after: PhaseAfter;
+  /** Set only when the `After` segment is neither `none` nor a list of integers. `after` is then `chain`. */
+  malformedAfter?: string;
+}
+
+/** Sorts an `After` cell into `none`, a list of phase numbers, or a malformed segment. */
+function classifyAfterCell(
+  afterCell: string | undefined,
+): Pick<RoadmapPhase, 'after' | 'malformedAfter'> {
+  if (afterCell === undefined) return { after: 'chain' };
+  const cell = afterCell.trim();
+  if (cell === 'none') return { after: 'none' };
+  if (/^\d+(?:\s*,\s*\d+)*$/.test(cell)) {
+    return { after: cell.split(',').map((part) => Number(part.trim())) };
+  }
+  return { after: 'chain', malformedAfter: cell };
+}
+
+/**
+ * Reads every phase line of a ROADMAP. `status` is the raw cell with its parenthetical, and
+ * `after` is `chain` when the line carries no `After` segment, and `malformedAfter` holds the
+ * text of an `After` segment that is neither `none` nor a comma-separated list of integers.
+ */
+export function parseRoadmapPhases(markdown: string): RoadmapPhase[] {
+  const lineRe = new RegExp(ROADMAP_PHASE_LINE.source, 'g');
+  const phases: RoadmapPhase[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = lineRe.exec(markdown))) {
+    phases.push({
+      number: Number(match[1]),
+      status: (match[2] ?? '').trim(),
+      subplan: (match[3] ?? '').trim(),
+      ...classifyAfterCell(match[4]),
+    });
+  }
+  return phases;
+}
+
+/**
+ * Reads the roots of a sub-plan's `**Domain:**` line, or `null` when the header has none.
+ * Each root is a backticked path. A trailing `(new)` and trailing slashes are dropped, and a
+ * glob character is kept so `checkPhaseSchedule` can name it. A line with no backticked root
+ * returns an empty array, which `checkPhaseSchedule` reports.
+ */
+export function parseDomain(markdown: string): string[] | null {
+  const line = markdown.match(/^\*\*Domain:\*\*(.*)$/m);
+  if (!line) return null;
+  const roots: string[] = [];
+  const spanRe = /`([^`]+)`/g;
+  let match: RegExpExecArray | null;
+  while ((match = spanRe.exec(line[1] ?? ''))) {
+    const root = (match[1] ?? '')
+      .trim()
+      .replace(/\s*\(new\)$/, '')
+      .replace(/\/+$/, '');
+    if (root) roots.push(root);
+  }
+  return roots;
+}
+
+/**
  * Checks that every ROADMAP phase line names the same status, ignoring any trailing
  * parenthetical, as the `**Status:**` header of the sub-plan it links to. A ROADMAP marked
  * `DONE` while its sub-plan header still reads `TODO` is the exact drift `/orchestrate`'s
@@ -123,16 +201,15 @@ export function checkRoadmapSync(
   subplanStatuses: Record<string, string | null>,
 ): Report {
   const report = emptyReport();
-  const lineRe =
-    /\*\*Phase \d+[^*]*\*\*\s*·\s*Status:\s*([A-Z][A-Za-z ]*(?:\([^)]*\))?)\s*·\s*\[sub-plan\]\(([^)]+)\)/g;
+  const lineRe = new RegExp(ROADMAP_PHASE_LINE.source, 'g');
   const baseOf = (status: string): string => {
     const m = status.match(/^(TODO|IN PROGRESS|DONE|BLOCKED)\b/);
     return m?.[1] ?? status.trim();
   };
   let match: RegExpExecArray | null;
   while ((match = lineRe.exec(roadmapMarkdown))) {
-    const roadmapStatus = (match[1] ?? '').trim();
-    const subplanFile = (match[2] ?? '').trim();
+    const roadmapStatus = (match[2] ?? '').trim();
+    const subplanFile = (match[3] ?? '').trim();
     const subStatus = subplanStatuses[subplanFile];
     if (subStatus === undefined) continue;
     if (subStatus === null) {
@@ -155,6 +232,184 @@ export function checkRoadmapSync(
       });
     }
   }
+  return report;
+}
+
+const GLOB_CHARS = /[*?{}[\]]/;
+
+/** Phase numbers that can reach `start` by following `dependenciesByPhase`, never `start` itself unless it sits on a cycle. */
+function ancestorsOf(
+  start: number,
+  dependenciesByPhase: Map<number, number[]>,
+): Set<number> {
+  const seen = new Set<number>();
+  const stack = [...(dependenciesByPhase.get(start) ?? [])];
+  while (stack.length > 0) {
+    const next = stack.pop();
+    if (next === undefined || seen.has(next)) continue;
+    seen.add(next);
+    stack.push(...(dependenciesByPhase.get(next) ?? []));
+  }
+  return seen;
+}
+
+/** True when two roots are equal or one is a whole-segment prefix of the other. */
+function rootsOverlap(firstRoot: string, secondRoot: string): boolean {
+  return (
+    firstRoot === secondRoot ||
+    firstRoot.startsWith(`${secondRoot}/`) ||
+    secondRoot.startsWith(`${firstRoot}/`)
+  );
+}
+
+/** Reports a `**Domain:**` line with no backticked root, and any root with a glob character. */
+function reportInvalidDomainRoots(
+  phase: RoadmapPhase,
+  roots: string[] | null,
+  fail: (msg: string) => void,
+): void {
+  if (roots?.length === 0) {
+    fail(
+      `phase ${phase.number} (${phase.subplan}) has a **Domain:** line with no backticked root, name each root in backticks or drop the line`,
+    );
+  }
+  for (const root of roots ?? []) {
+    if (!GLOB_CHARS.test(root)) continue;
+    fail(
+      `phase ${phase.number} Domain root \`${root}\` contains a glob character, name a directory or file path`,
+    );
+  }
+}
+
+/**
+ * Checks that the `After` markers on a ROADMAP and the `**Domain:**` roots of its sub-plans
+ * describe a schedule that can run. It errors on an `After` naming an unknown phase or its own
+ * phase, on a cycle, on a glob character in a root, and on any two phases that neither
+ * depends on the other through `After` when either has no domain or their roots overlap.
+ * A phase in a cycle or with a bad `After` is left out of the concurrency pairs, since its
+ * ordering is already reported. A workspace with no markers is a total order, so it has no
+ * concurrent pair and reports nothing.
+ *
+ * `subplanDomains` maps each sub-plan filename to its parsed roots, or `null` when the file
+ * is missing or has no `**Domain:**` line. An empty array is a `**Domain:**` line with no
+ * backticked root, which is an error.
+ */
+export function checkPhaseSchedule(
+  roadmapFile: string,
+  roadmapMarkdown: string,
+  subplanDomains: Record<string, string[] | null>,
+): Report {
+  const report = emptyReport();
+  const phases = parseRoadmapPhases(roadmapMarkdown);
+  const known = new Set(phases.map((phase) => phase.number));
+  const fail = (msg: string): void => {
+    report.findings.push({
+      rule: 'plan-lint/phase-schedule',
+      level: 'error',
+      file: roadmapFile,
+      line: null,
+      msg,
+    });
+  };
+
+  const dependenciesByPhase = new Map<number, number[]>();
+  const broken = new Set<number>();
+  phases.forEach((phase, index) => {
+    const previous = phases[index - 1]?.number;
+    const declared =
+      phase.after === 'chain'
+        ? previous === undefined
+          ? []
+          : [previous]
+        : phase.after === 'none'
+          ? []
+          : phase.after;
+    const valid: number[] = [];
+    if (phase.malformedAfter !== undefined) {
+      broken.add(phase.number);
+      fail(
+        `phase ${phase.number} has a malformed After segment \`${phase.malformedAfter}\`, use none or a comma-separated list of phase numbers`,
+      );
+    }
+    for (const target of declared) {
+      if (target === phase.number) {
+        broken.add(phase.number);
+        fail(`phase ${phase.number} names itself in After`);
+      } else if (!known.has(target)) {
+        broken.add(phase.number);
+        fail(
+          `phase ${phase.number} names phase ${target} in After, which is not in the ROADMAP`,
+        );
+      } else valid.push(target);
+    }
+    dependenciesByPhase.set(phase.number, valid);
+  });
+
+  const ancestors = new Map<number, Set<number>>();
+  for (const phase of phases) {
+    ancestors.set(phase.number, ancestorsOf(phase.number, dependenciesByPhase));
+  }
+  const inCycle = (number: number): boolean =>
+    ancestors.get(number)?.has(number) ?? false;
+
+  const reported = new Set<number>();
+  for (const phase of phases) {
+    if (!inCycle(phase.number) || reported.has(phase.number)) continue;
+    const members = phases
+      .map((other) => other.number)
+      .filter(
+        (number) =>
+          number === phase.number ||
+          (ancestors.get(phase.number)?.has(number) &&
+            ancestors.get(number)?.has(phase.number)),
+      );
+    members.forEach((number) => reported.add(number));
+    fail(`phases ${members.join(', ')} form a cycle through After`);
+  }
+
+  const rootsOf = (phase: RoadmapPhase): string[] | null => {
+    const roots = subplanDomains[phase.subplan];
+    return roots === undefined || roots === null
+      ? null
+      : roots.map((root) => root.replace(/\/+$/, ''));
+  };
+
+  for (const phase of phases) {
+    reportInvalidDomainRoots(phase, rootsOf(phase), fail);
+  }
+
+  phases.forEach((first, index) => {
+    for (const second of phases.slice(index + 1)) {
+      if (inCycle(first.number) || inCycle(second.number)) continue;
+      if (broken.has(first.number) || broken.has(second.number)) continue;
+      if (ancestors.get(first.number)?.has(second.number)) continue;
+      if (ancestors.get(second.number)?.has(first.number)) continue;
+      const firstRoots = rootsOf(first);
+      const secondRoots = rootsOf(second);
+      const lacking = [
+        ...(firstRoots === null ? [first.number] : []),
+        ...(secondRoots === null ? [second.number] : []),
+      ];
+      if (firstRoots === null || secondRoots === null) {
+        const missing =
+          lacking.length === 1
+            ? `phase ${lacking[0]} has no **Domain:** line`
+            : 'neither has a **Domain:** line';
+        fail(
+          `phases ${first.number} and ${second.number} can run concurrently, but ${missing}`,
+        );
+        continue;
+      }
+      for (const firstRoot of firstRoots) {
+        for (const secondRoot of secondRoots) {
+          if (!rootsOverlap(firstRoot, secondRoot)) continue;
+          fail(
+            `phases ${first.number} and ${second.number} can run concurrently, but their Domain roots overlap: \`${firstRoot}\` (phase ${first.number}) and \`${secondRoot}\` (phase ${second.number})`,
+          );
+        }
+      }
+    }
+  });
   return report;
 }
 
@@ -461,6 +716,7 @@ function main(): void {
 
     const phaseFiles = entries.filter((name) => /^phase-.*\.md$/.test(name));
     const subplanStatuses: Record<string, string | null> = {};
+    const subplanDomains: Record<string, string[] | null> = {};
     for (const name of phaseFiles) {
       const phasePath = join(workspaceDir, name);
       const markdown = readFileSync(phasePath, 'utf8');
@@ -475,12 +731,17 @@ function main(): void {
         );
       }
       subplanStatuses[name] = phaseStatus;
+      subplanDomains[name] = parseDomain(markdown);
     }
 
     if (roadmapMarkdown !== null) {
       const relFile = relative(root, roadmapPath);
       report.findings.push(
         ...checkRoadmapSync(relFile, roadmapMarkdown, subplanStatuses).findings,
+      );
+      report.findings.push(
+        ...checkPhaseSchedule(relFile, roadmapMarkdown, subplanDomains)
+          .findings,
       );
     }
   }

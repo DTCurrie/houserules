@@ -54,8 +54,8 @@ the columns cannot carry. Then act on the first line of the report:
 
 - `WAVE_CLOSED`: send `continue` with `SendMessage`.
 - `DONE`: run `/decide` and `/pr-description` at this layer, from `Decide candidates`, with
-  `/pr-description` after the last phase only. Under `all`, spawn the next phase's orchestrator
-  with a fresh brief. Check-in mode stops for the user first. The fresh spawn doubles as the
+  `/pr-description` after the last phase only. Under `all`, spawn the recomputed ready set
+  (see Several orchestrators), one fresh brief each, in one message. Check-in mode stops for the user first. The fresh spawn doubles as the
   context-size gate, because the new orchestrator starts with an empty context.
 - `NEEDS_RULING`: the round trip below.
 - `PARTIAL`: spawn a fresh orchestrator with the same brief. It resumes from the plan workspace.
@@ -85,8 +85,25 @@ domains by the shared-resource rule in `slicing.md`, so no path root is in two d
 everything two domains might both write, and keep it out of every domain: lockfiles, root config,
 generated indexes, and the ledgers belong to the main conversation. `Siblings:` carries the other
 orchestrators' domains, so a worker that finds a defect there reports it under `Out of scope` and
-leaves it. Two orchestrators never share a plan workspace. Each plan's `ROADMAP.md` belongs to the
-orchestrator driving it.
+leaves it. A domain is a set of source paths. The plan workspace is never part of one.
+
+**The ready set.** Under `all`, the dispatcher parses the `ROADMAP.md` phase lines and takes every
+`TODO` phase whose `After` phases are all `DONE`. Absent `After` means the previous line, and
+`none` means no wait. It spawns the whole ready set in one message. A phase with no `**Domain:**`
+line waits until it is the only phase in flight. After each `DONE` report the dispatcher recomputes
+the ready set. `Domain:` is copied from the phase header, and `Siblings:` from the other spawns'
+`Domain` headers. `Siblings:` keeps its meaning, the domains of the other live orchestrators, in
+this plan or another. It needs no plan slug, because domains are paths. A comma list, `2,3`, is an
+explicit set. The dispatcher refuses it before any spawn when a domain is missing or two overlap,
+and names the overlap.
+
+**Ownership.** `ROADMAP.md` is the main conversation's: the `IN PROGRESS` flip before each spawn,
+the `DONE` flip on each report, the `## Log` line, the `**Updated:**` bump, and the `plan-lint.mjs`
+run after each. The pre-spawn pass sets the sub-plan header `IN PROGRESS` too, so the checker is
+clean before the orchestrator exists. Reports arrive one at a time, so those runs are serial.
+Each sub-plan is its orchestrator's from the spawn on, header included, whatever `Domain:` says.
+Under `--flat` the single layer writes
+both files as `/plan-project` §5 says.
 
 **The cross-domain seam.** Before dispatching either orchestrator, write what both domains depend
 on and pass the paths on the `Seam:` line. That is shared types, route contracts, and config keys,
@@ -106,14 +123,15 @@ a test is rerun once alone before it is judged. After every orchestrator has ret
 main conversation runs the repo-wide fixer and `/verify-changed` once. That run is the only
 whole-tree proof.
 
-**The merged table.** Each time any orchestrator returns, print one table with a `Plan` column
-first, then every orchestrator's latest rows verbatim:
+**The merged table.** Each time any orchestrator returns, print one table with a `Phase` column
+first, carrying `<slug>/<N>` as in the report's first line, then every orchestrator's latest rows
+verbatim:
 
 ```markdown
-| Plan   | Slice            | Owns                  | State      |
-| ------ | ---------------- | --------------------- | ---------- |
-| api    | 1a route schema  | `packages/api/src/**` | ✅ done    |
-| client | 1a fetch wrapper | `packages/web/src/**` | 🔄 running |
+| Phase    | Slice            | Owns                  | State      |
+| -------- | ---------------- | --------------------- | ---------- |
+| api/1    | 1a route schema  | `packages/api/src/**` | ✅ done    |
+| client/1 | 1a fetch wrapper | `packages/web/src/**` | 🔄 running |
 ```
 
 An orchestrator that has not returned since the last printing keeps the rows it last returned.
@@ -123,6 +141,7 @@ that asked, by its own id. The others keep running, and a `WAVE_CLOSED` from one
 `continue` without waiting on the ruling.
 
 **Ledgers and lint.** `/backlog-add` stays nested. The ledger takes one appended line per entry,
-and its `.md` surface is a render the next call rebuilds. `Decide candidates` travel up. Each
-orchestrator runs `plan-lint.mjs` after it updates its own workspace. The checker scans every
+and its `.md` surface is a render the next call rebuilds. `Decide candidates` travel up. An
+orchestrator runs `plan-lint.mjs` after its own sub-plan writes, and the dispatcher runs it after
+each `ROADMAP.md` write. The checker scans every
 workspace and takes no path, so a finding in a sibling's workspace goes under `Out of scope`.

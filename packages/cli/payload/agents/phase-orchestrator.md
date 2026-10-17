@@ -64,9 +64,13 @@ scripts then, because both reach into siblings' files. The repo-wide pass belong
 conversation. `plan-lint.mjs` scans every workspace, so a finding in a sibling's goes under
 `Out of scope`.
 
-The plan workspace on disk is the state. Update the slice table and the ROADMAP here exactly as the
-skill says. A fresh spawn with the same brief resumes from disk, so keep the table true at every
-transition.
+The plan workspace on disk is the state, and the sub-plan is yours from the spawn on, header
+included. The dispatcher set its header `IN PROGRESS` with the ROADMAP line before spawning you.
+Set it `DONE` (with the date) as your last write before the report, after your final
+`plan-lint.mjs` run, because the dispatcher flips the ROADMAP line from your report
+and runs the checker then. Never write `ROADMAP.md`: the main conversation owns it. Under `--flat`
+the single layer writes both files as `/plan-project` §5 says. A fresh spawn with the same brief
+resumes from disk, so keep the table true at every transition.
 
 ## Report format
 
@@ -108,7 +112,7 @@ Resume
 
 Pick the first-line status by what the main conversation has to do next. `WAVE_CLOSED` means a wave
 closed and the phase is open, so print the table and send `continue`. `DONE` means the phase is
-closed and the ROADMAP says so. `NEEDS_RULING` means only the user can answer, and `Ruling needed`
+closed and the sub-plan header says so. `NEEDS_RULING` means only the user can answer, and `Ruling needed`
 holds the question. `BLOCKED` means you cannot run the phase at all, such as `Agent` withheld or a
 `Plan:` with no workspace on disk. `PARTIAL` means you stopped at the context-size gate after the
 current wave closed, and `Resume` names what a fresh spawn picks up.

@@ -7,10 +7,13 @@ import {
   checkFencedCodeShare,
   checkFixOnSubagentStop,
   checkNoPlanWorkspace,
+  checkPhaseSchedule,
   checkPlanPaths,
   checkReviewFocus,
   checkRoadmapSync,
   checkSliceStatuses,
+  parseDomain,
+  parseRoadmapPhases,
 } from '../plan-lint.mjs';
 
 import { repoRootSafe } from '@houserules/payload/config';
@@ -359,6 +362,293 @@ describe('checkPlanPaths', () => {
   });
 });
 
+const phaseLine = (number: number, after?: string) =>
+  `- [ ] **Phase ${number}: part ${number}** · Status: TODO · [sub-plan](phase-${number}.md)${after === undefined ? '' : ` · After: ${after}`}`;
+
+const roadmapOf = (...lines: string[]) => `## Phases\n\n${lines.join('\n')}\n`;
+
+describe('parseRoadmapPhases', () => {
+  it('reads number, raw status, sub-plan and the chain default', () => {
+    const phases = parseRoadmapPhases(
+      `- [x] **Phase 7 — Foo** · Status: DONE (2026-08-18) · [sub-plan](phase-7-foo.md)\n`,
+    );
+    expect(phases).toEqual([
+      {
+        number: 7,
+        status: 'DONE (2026-08-18)',
+        subplan: 'phase-7-foo.md',
+        after: 'chain',
+      },
+    ]);
+  });
+
+  it('reads none and number lists with and without spaces', () => {
+    const phases = parseRoadmapPhases(
+      roadmapOf(
+        phaseLine(1, 'none'),
+        phaseLine(2, '1,3'),
+        phaseLine(3, '1 ,  2'),
+        phaseLine(4, '2'),
+      ),
+    );
+    expect(phases.map((phase) => phase.after)).toEqual([
+      'none',
+      [1, 3],
+      [1, 2],
+      [2],
+    ]);
+  });
+
+  it('reads a status that is IN PROGRESS', () => {
+    const phases = parseRoadmapPhases(
+      '- [ ] **Phase 2: x** · Status: IN PROGRESS · [sub-plan](phase-2.md) · After: none\n',
+    );
+    expect(phases[0]?.status).toBe('IN PROGRESS');
+    expect(phases[0]?.after).toBe('none');
+  });
+
+  it('returns nothing for a document without phase lines', () => {
+    expect(parseRoadmapPhases('# ROADMAP\n\nNo phases yet.\n')).toEqual([]);
+  });
+});
+
+describe('parseDomain', () => {
+  it('reads comma-separated roots and strips trailing slashes', () => {
+    const markdown =
+      '**Signals:** none\n**Domain:** `packages/api/`, `packages/shared/src/api-types.ts`,`lib/x//`\n';
+    expect(parseDomain(markdown)).toEqual([
+      'packages/api',
+      'packages/shared/src/api-types.ts',
+      'lib/x',
+    ]);
+  });
+
+  it('drops a trailing (new) after a root', () => {
+    expect(parseDomain('**Domain:** `lib/a` (new), `lib/b/` (new)\n')).toEqual([
+      'lib/a',
+      'lib/b',
+    ]);
+  });
+
+  it('returns null when the header has no Domain line', () => {
+    expect(parseDomain('**Status:** TODO\n**Signals:** none\n')).toBeNull();
+  });
+
+  it('keeps a glob character in a root', () => {
+    expect(parseDomain('**Domain:** `packages/*/src`\n')).toEqual([
+      'packages/*/src',
+    ]);
+  });
+});
+
+describe('checkPhaseSchedule', () => {
+  const run = (markdown: string, domains: Record<string, string[] | null>) =>
+    checkPhaseSchedule('ROADMAP.md', markdown, domains).findings;
+
+  it('reports nothing for an unmarked three-phase chain', () => {
+    const findings = run(roadmapOf(phaseLine(1), phaseLine(2), phaseLine(3)), {
+      'phase-1.md': null,
+      'phase-2.md': null,
+      'phase-3.md': null,
+    });
+    expect(findings).toEqual([]);
+  });
+
+  it('accepts After none on the first line', () => {
+    const findings = run(roadmapOf(phaseLine(1, 'none'), phaseLine(2)), {});
+    expect(findings).toEqual([]);
+  });
+
+  it('accepts two independent phases with disjoint roots', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+      {
+        'phase-1.md': null,
+        'phase-2.md': ['packages/api/'],
+        'phase-3.md': ['packages/web', 'docs'],
+      },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('does not let none on a middle line reset the chain below it', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, 'none'), phaseLine(3)),
+      {
+        'phase-1.md': ['z'],
+        'phase-2.md': ['a'],
+        'phase-3.md': ['a/deep'],
+      },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('flags an After naming a phase not in the ROADMAP', () => {
+    const findings = run(roadmapOf(phaseLine(1), phaseLine(2, '9')), {});
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.rule).toBe('plan-lint/phase-schedule');
+    expect(findings[0]?.level).toBe('error');
+    expect(findings[0]?.msg).toContain('phase 2');
+    expect(findings[0]?.msg).toContain('phase 9');
+  });
+
+  it('flags a word After segment as malformed instead of reading the chain', () => {
+    const findings = run(roadmapOf(phaseLine(1), phaseLine(2, 'two')), {
+      'phase-1.md': ['a'],
+      'phase-2.md': ['a'],
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.rule).toBe('plan-lint/phase-schedule');
+    expect(findings[0]?.level).toBe('error');
+    expect(findings[0]?.msg).toContain('phase 2');
+    expect(findings[0]?.msg).toContain('malformed After');
+  });
+
+  it('flags a Domain line with no backticked root, naming the phase', () => {
+    const findings = run(roadmapOf(phaseLine(1), phaseLine(2)), {
+      'phase-1.md': ['lib/a'],
+      'phase-2.md': [],
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.rule).toBe('plan-lint/phase-schedule');
+    expect(findings[0]?.level).toBe('error');
+    expect(findings[0]?.msg).toContain('phase 2');
+    expect(findings[0]?.msg).toContain('phase-2.md');
+    expect(findings[0]?.msg).toContain('no backticked root');
+  });
+
+  it('flags an After naming its own phase', () => {
+    const findings = run(roadmapOf(phaseLine(1), phaseLine(2, '2')), {});
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.msg).toContain('phase 2 names itself');
+  });
+
+  it('flags After 1,3 on phase 2 when phase 3 chains after 2 as one cycle', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1,3'), phaseLine(3)),
+      {},
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.msg).toContain('phases 2, 3 form a cycle');
+  });
+
+  it('terminates and reports a longer cycle once', () => {
+    const findings = run(
+      roadmapOf(
+        phaseLine(1, '3'),
+        phaseLine(2, '1'),
+        phaseLine(3, '2'),
+        phaseLine(4, 'none'),
+      ),
+      {},
+    );
+    expect(
+      findings.filter((finding) => finding.msg.includes('cycle')),
+    ).toHaveLength(1);
+    expect(findings[0]?.msg).toContain('phases 1, 2, 3');
+  });
+
+  it('flags a glob character in a root and names the root', () => {
+    const findings = run(roadmapOf(phaseLine(1)), {
+      'phase-1.md': ['packages/{a,b}/src'],
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.msg).toContain('phase 1');
+    expect(findings[0]?.msg).toContain('packages/{a,b}/src');
+  });
+
+  it.each(['*', '?', '{', '}', '[', ']'])(
+    'flags the glob character %s',
+    (char) => {
+      const findings = run(roadmapOf(phaseLine(1)), {
+        'phase-1.md': [`lib/a${char}b`],
+      });
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.msg).toContain(`lib/a${char}b`);
+    },
+  );
+
+  it('names the phase that lacks a domain beside a concurrent phase with one', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+      {
+        'phase-1.md': ['a'],
+        'phase-2.md': ['b'],
+        'phase-3.md': null,
+      },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.msg).toContain('phase 3 has no **Domain:**');
+  });
+
+  it('names both phases when neither has a domain', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+      { 'phase-1.md': ['a'] },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.msg).toContain('phases 2 and 3');
+    expect(findings[0]?.msg).toContain('neither has a **Domain:**');
+  });
+
+  it('treats a sub-plan missing from the map as lacking a domain', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+      { 'phase-2.md': ['b'] },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.msg).toContain('phase 3 has no **Domain:**');
+  });
+
+  it('names both phases and the root when concurrent roots are equal', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+      {
+        'phase-1.md': ['z'],
+        'phase-2.md': ['lib/core', 'docs/'],
+        'phase-3.md': ['src', 'lib/core/'],
+      },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.msg).toContain('phases 2 and 3');
+    expect(findings[0]?.msg).toContain('`lib/core`');
+  });
+
+  it('flags packages/api/ against packages/api/src as overlapping', () => {
+    const findings = run(
+      roadmapOf(
+        phaseLine(1, 'none'),
+        phaseLine(2, 'none'),
+        phaseLine(3, '1,2'),
+      ),
+      {
+        'phase-1.md': ['packages/api/'],
+        'phase-2.md': ['packages/api/src'],
+        'phase-3.md': null,
+      },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.msg).toContain('phases 1 and 2');
+    expect(findings[0]?.msg).toContain('packages/api/src');
+  });
+
+  it('treats lib/api and lib/api-client as disjoint', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1, 'none'), phaseLine(2, 'none')),
+      { 'phase-1.md': ['lib/api'], 'phase-2.md': ['lib/api-client/'] },
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it('does not compare phases ordered through a transitive After', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '2')),
+      { 'phase-1.md': ['a'], 'phase-2.md': ['a'], 'phase-3.md': ['a'] },
+    );
+    expect(findings).toEqual([]);
+  });
+});
+
 describe('plan-lint.mjs (installed)', () => {
   const SCRIPT = '.claude/scripts/plan-lint.mjs';
 
@@ -479,5 +769,99 @@ Owns \`packages/cli/src/does-not-exist.ts\`.
     );
     const result = runScript(root, SCRIPT);
     expect(result.stdout).not.toContain('plan-path/missing-file');
+  });
+
+  describe('phase schedule', () => {
+    const stage = (domain2: string, domain3: string, after: string) => {
+      const root = useInstalledRepo('pnpm-monorepo', {
+        modules: 'orchestrate',
+      });
+      const planDir = join(root, '.claude/plans/demo');
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(
+        join(planDir, 'ROADMAP.md'),
+        `# ROADMAP: demo
+
+**Status:** IN PROGRESS
+
+## Phases
+
+- [ ] **Phase 1: base** · Status: TODO · [sub-plan](phase-1-base.md)
+- [ ] **Phase 2: left** · Status: TODO · [sub-plan](phase-2-left.md)${after}
+- [ ] **Phase 3: right** · Status: TODO · [sub-plan](phase-3-right.md)${after}
+`,
+      );
+      const phase = (name: string, domain: string) =>
+        writeFileSync(
+          join(planDir, name),
+          `# Phase\n\n**Status:** TODO\n**Signals:** none\n${domain}\n`,
+        );
+      phase('phase-1-base.md', '');
+      phase('phase-2-left.md', domain2);
+      phase('phase-3-right.md', domain3);
+      return runScript(root, SCRIPT);
+    };
+
+    it('exits 1 naming both phases and the shared root when concurrent roots overlap', () => {
+      const result = stage(
+        '**Domain:** `lib/api/`',
+        '**Domain:** `lib/other`, `lib/api/src` (new)',
+        ' · After: 1',
+      );
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain('plan-lint/phase-schedule');
+      expect(result.stdout).toContain('phases 2 and 3');
+      expect(result.stdout).toContain('lib/api');
+    });
+
+    it('exits 1 on a mixed-list After segment, not reading it as the chain', () => {
+      const result = stage(
+        '**Domain:** `lib/a`',
+        '**Domain:** `lib/b`',
+        ' · After: 2,x',
+      );
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain('plan-lint/phase-schedule');
+      expect(result.stdout).toContain('malformed After');
+      expect(result.stdout).toContain('`2,x`');
+    });
+
+    it('exits 1 on a Domain line whose root is not in backticks', () => {
+      const result = stage(
+        '**Domain:** packages/api/',
+        '**Domain:** `lib/b`',
+        ' · After: 1',
+      );
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain('plan-lint/phase-schedule');
+      expect(result.stdout).toContain('phase 2');
+      expect(result.stdout).toContain('no backticked root');
+    });
+
+    it('exits 1 on an empty Domain line', () => {
+      const result = stage('**Domain:**', '**Domain:** `lib/b`', ' · After: 1');
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain('no backticked root');
+    });
+
+    it('exits 0 when the concurrent roots are disjoint', () => {
+      const result = stage(
+        '**Domain:** `lib/api`',
+        '**Domain:** `lib/api-client`',
+        ' · After: 1',
+      );
+      expect(result.status, result.stdout).toBe(0);
+      expect(result.stdout).not.toContain('plan-lint/phase-schedule');
+    });
+
+    it('exits 0 with no markers, whatever the domains say', () => {
+      const result = stage(
+        '**Domain:** `lib/api`',
+        '**Domain:** `lib/api`',
+        '',
+      );
+      expect(result.status, result.stdout).toBe(0);
+      expect(result.stdout).not.toContain('plan-lint/phase-schedule');
+    });
   });
 });

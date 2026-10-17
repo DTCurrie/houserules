@@ -69,6 +69,33 @@ describe('plans', () => {
       );
     });
 
+    it('templates the Domain line and the After segment', () => {
+      const text = readFileSync(
+        join(root, '.claude/skills/plan-project/SKILL.md'),
+        'utf8',
+      );
+      expect(text).toContain('**Domain:**');
+      expect(text).toMatch(/\[sub-plan\]\(phase-3-<slug>\.md\) · After: none/);
+    });
+
+    it('tells the planner to mark independent phases After: none', () => {
+      const text = readFileSync(
+        join(root, '.claude/skills/plan-project/SKILL.md'),
+        'utf8',
+      );
+      expect(text).toMatch(
+        /Read independence off the finished cut[\s\S]*After: none/,
+      );
+    });
+
+    it('has the plan-reviewer check Domain roots', () => {
+      const agentText = readFileSync(
+        join(root, '.claude/agents/plan-reviewer.md'),
+        'utf8',
+      );
+      expect(agentText).toContain('**Domain:**');
+    });
+
     it('self-gitignores its plan workspace while keeping the .gitignore itself tracked', () => {
       const ignore = readFileSync(
         join(root, '.claude/plans/.gitignore'),
