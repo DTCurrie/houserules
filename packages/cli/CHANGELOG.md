@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.10.0
+
+### Minor Changes
+
+- 4a79414: Independent phases marked with After and Domain run concurrently under /orchestrate, checked by plan-lint.
+
 ## 0.9.2
 
 ### Patch Changes
