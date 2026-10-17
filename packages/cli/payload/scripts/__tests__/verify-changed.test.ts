@@ -48,11 +48,24 @@ function repoWithStudioDependingOnCityville(): string {
   return root;
 }
 
-function useStubVerifyRunner(root: string, { fail = false } = {}): void {
-  stubRunner(root, { fail, failMessage: 'type error TS2322' });
+function useStubVerifyRunner(
+  root: string,
+  {
+    fail = false,
+    hangMs,
+    timeoutMs,
+  }: { fail?: boolean; hangMs?: number; timeoutMs?: number } = {},
+): void {
+  const stub = stubRunner(root, { fail, failMessage: 'type error TS2322' });
+  if (hangMs !== undefined)
+    writeFileSync(
+      stub,
+      `#!/bin/sh\necho "$@" >> runner-calls.txt\necho started-before-cap >&2\nexec node -e "setTimeout(() => {}, ${hangMs})"\n`,
+    );
   editHouseConfig(root, (config) => {
-    const verify = config.verify as { runner?: string };
+    const verify = config.verify as { runner?: string; timeoutMs?: number };
     verify.runner = './stub-runner.sh';
+    if (timeoutMs !== undefined) verify.timeoutMs = timeoutMs;
   });
 }
 
@@ -344,6 +357,26 @@ describe('verify-changed.mjs --run', () => {
     expect(r.status).toBe(2);
     expect(r.stdout).toMatch(/@fix\/cityville: FAIL \(verify\)/);
     expect(r.stderr).toMatch(/TS2322/);
+  });
+
+  it('reports a step that outlives verify.timeoutMs as timed out, keeps its output, and exits 2', () => {
+    useStubVerifyRunner(root, { hangMs: 5000, timeoutMs: 500 });
+    const r = runScript(root, SCRIPT, { args: ['--run'] });
+    expect(r.status).toBe(2);
+    expect(r.stdout).toMatch(
+      /@fix\/cityville: FAIL \(verify, timed out after 0\.5s\)/,
+    );
+    expect(r.stderr).toMatch(/started-before-cap/);
+    expect(readFileSync(join(root, 'runner-calls.txt'), 'utf8')).toMatch(
+      /--filter @fix\/cityville verify/,
+    );
+  });
+
+  it('leaves a slow step uncapped when verify.timeoutMs is unset', () => {
+    useStubVerifyRunner(root, { hangMs: 300 });
+    const r = runScript(root, SCRIPT, { args: ['--run'] });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/@fix\/cityville: PASS/);
   });
 
   it('exits 0 with "nothing to verify" when there are no changes', () => {

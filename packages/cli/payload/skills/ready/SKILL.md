@@ -11,9 +11,10 @@ and reading only their compact results.
 ## 1. Verify (delegate — do not run the full suite here)
 
 If `/verify-changed` is installed (`.claude/skills/verify-changed/`), invoke it and take its
-per-package PASS/FAIL verdict as the verification result. If it is not installed, spawn **one**
-subagent to run the repo's verify or test command and return only PASS/FAIL plus any failing residue.
-Do not stream the full suite into this context.
+per-package PASS/FAIL verdict as the verification result. If it is not installed, run the repo's
+verify or test command with `run_in_background: true`, wait for the completion notification, and read
+only the tail of the output file it names for PASS/FAIL plus any failing residue. Do not read the full
+suite transcript into this context. It stays in that output file.
 
 ## 2. Review (delegate if reviewers exist)
 

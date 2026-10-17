@@ -6,7 +6,8 @@
  *
  * Degrades to full scope and exit 0 on any git or config failure, because a verify helper
  * must never block a session on its own error. A real verify failure under --run still
- * exits 2.
+ * exits 2. With verify.timeoutMs set, a step that outlives it is killed and reported as
+ * "<pkg>: FAIL (<step>, timed out after <n>s)" (n = timeoutMs / 1000, e.g. 0.5 or 30).
  *
  * Modes:
  *   (default)  print the resolved scope + the exact command per package — a plan the
@@ -278,7 +279,14 @@ function main() {
   }
 
   // --run: execute and emit the compact verdict.
-  const residues = runScope(scope, root, runner, filterFlag, runPrefix);
+  const residues = runScope(
+    scope,
+    root,
+    runner,
+    filterFlag,
+    runPrefix,
+    verify.timeoutMs,
+  );
   for (const r of residues) {
     process.stderr.write(`\n--- ${r.pkg} :: ${r.step} ---\n`);
     process.stderr.write(`${tail(r.output, 40)}\n`);
@@ -299,7 +307,10 @@ function runScope(
   runner: string,
   filterFlag: string,
   runPrefix: string[],
+  timeoutMs?: number,
 ): Residue[] {
+  const cap =
+    typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : undefined;
   const residues: Residue[] = [];
   for (const s of scope) {
     if (!s.commands?.length) {
@@ -307,6 +318,7 @@ function runScope(
       continue;
     }
     let failedStep: string | null = null;
+    let timedOut = false;
     let output = '';
     for (const script of s.commands ?? []) {
       const r = spawnSync(
@@ -316,16 +328,23 @@ function runScope(
           cwd: root,
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: cap,
         },
       );
       if (r.status !== 0) {
         failedStep = script;
+        timedOut =
+          cap !== undefined &&
+          ((r.error as NodeJS.ErrnoException | undefined)?.code ===
+            'ETIMEDOUT' ||
+            r.signal !== null);
         output = (r.stdout || '') + (r.stderr || '');
         break;
       }
     }
     if (failedStep) {
-      process.stdout.write(`${s.package}: FAIL (${failedStep})\n`);
+      const why = timedOut ? `, timed out after ${cap! / 1000}s` : '';
+      process.stdout.write(`${s.package}: FAIL (${failedStep}${why})\n`);
       residues.push({ pkg: s.package, step: failedStep, output });
     } else {
       process.stdout.write(`${s.package}: PASS\n`);

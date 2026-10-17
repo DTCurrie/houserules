@@ -145,6 +145,14 @@ const HouseConfigSchema = z.strictObject({
         .describe(
           'Branch the changed-file diff is taken against. Defaults to changesets.baseBranch, then "main".',
         ),
+      timeoutMs: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe(
+          'Wall-clock cap in milliseconds, applied to each verify command separately. Unset means no cap. A command over the cap is reported as "FAIL (<step>, timed out after <n>s)".',
+        ),
     })
     .optional()
     .describe('Only present when the verify-changed module is enabled.'),

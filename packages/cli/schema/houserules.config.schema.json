@@ -83,6 +83,12 @@
         "baseBranch": {
           "description": "Branch the changed-file diff is taken against. Defaults to changesets.baseBranch, then \"main\".",
           "type": "string"
+        },
+        "timeoutMs": {
+          "description": "Wall-clock cap in milliseconds, applied to each verify command separately. Unset means no cap. A command over the cap is reported as \"FAIL (<step>, timed out after <n>s)\".",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": ["runner", "filterFlag", "runScriptPrefix", "commands"],

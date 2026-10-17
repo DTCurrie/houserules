@@ -20,7 +20,7 @@ export function defaultEnabled() {
 /**
  * Diff-scoped verification. The helper resolves the changed packages plus their
  * transitive dependents and runs each package's verify commands, returning a compact
- * pass-or-fail-per-package verdict. The skill runs the helper inside a subagent, so a
+ * pass-or-fail-per-package verdict. The skill runs the helper in the background from the calling context, so a
  * multi-minute full-suite transcript never reaches the main context. Only the verdict
  * does.
  *
@@ -37,7 +37,7 @@ export function plan(): Action[] {
     skill(
       id,
       'verify-changed',
-      'off-context diff-scoped verification (spawns one subagent, returns only the verdict)',
+      'off-context diff-scoped verification (runs in the background from the calling context, returns only the verdict)',
     ),
     {
       kind: 'merge-settings',

@@ -72,4 +72,37 @@ describe('parseHouseConfig', () => {
       );
     }
   });
+
+  describe('verify.timeoutMs', () => {
+    const runner = {
+      runner: 'pnpm',
+      filterFlag: '--filter',
+      runScriptPrefix: ['run'],
+      commands: ['check'],
+    };
+
+    it('accepts a positive integer', () => {
+      const config = {
+        ...minimalConfig,
+        verify: { ...runner, timeoutMs: 600000 },
+      };
+      expect(parseHouseConfig(JSON.stringify(config))).toEqual(config);
+    });
+
+    it.each([0, -1, 1.5])('rejects %s', (timeoutMs) => {
+      const raw = JSON.stringify({
+        ...minimalConfig,
+        verify: { ...runner, timeoutMs },
+      });
+      expect(() => parseHouseConfig(raw)).toThrow(HouseConfigError);
+    });
+
+    it('rejects timeoutMs on the fix block', () => {
+      const raw = JSON.stringify({
+        ...minimalConfig,
+        fix: { ...runner, timeoutMs: 1000 },
+      });
+      expect(() => parseHouseConfig(raw)).toThrow(HouseConfigError);
+    });
+  });
 });

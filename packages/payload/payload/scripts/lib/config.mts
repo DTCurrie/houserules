@@ -13,6 +13,8 @@ export interface RunnerBlock {
   commandExtensions?: Record<string, string[]>;
   /** `verify` only: branch the changed-file diff is taken against. */
   baseBranch?: string;
+  /** `verify` only: per-command wall-clock cap in milliseconds. Unset means no cap. */
+  timeoutMs?: number;
 }
 
 export interface ConfigTarget {
