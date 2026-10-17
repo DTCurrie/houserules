@@ -108,6 +108,35 @@ export const useTheme = (): ThemeContext => getContext(key);
 - Return **getters**, not plain properties, to preserve reactivity.
 - Name `provide*` to inject, `use*` or `create*` to consume.
 
+## Lifecycle
+
+- **Never call `onDestroy` in a `.svelte` component.** Subscribe inside `$effect` and return
+  the unsubscribe as the teardown. Setup and teardown then live in one rune, so neither moves
+  without the other.
+- **`onDestroy` fires only when the component unmounts.** A subscription whose inputs changed
+  keeps running against the old ones. A function returned from `$effect` also runs before each
+  re-run, so the subscription follows its inputs.
+- **Exception:** `onDestroy` in a `.svelte.ts` composable is allowed when it releases
+  something the composable registered against a context that outlives it.
+- Convert a legacy `onDestroy` call when you are already editing that component, not as a
+  sweep.
+
+```svelte
+<script lang="ts">
+import { bus } from './bus';
+import { onDestroy } from 'svelte';
+
+const { topic }: { topic: string } = $props();
+
+// WRONG: the subscription never follows `topic`.
+const unsubscribe = bus.subscribe(topic, handle);
+onDestroy(unsubscribe);
+
+// RIGHT: teardown runs before each re-run and on destroy.
+$effect(() => bus.subscribe(topic, handle));
+</script>
+```
+
 ## Styling
 
 Array and object syntax for conditional classes, which is Svelte's own idiom rather than a
@@ -153,7 +182,10 @@ export default [
 
 `.claude/scripts/svelte-lint.mjs`, where installed, flags a bare `<slot>` element and, when
 this repo's ESLint config imports `eslint-plugin-svelte`, an `svelte/valid-compile` or
-`svelte/no-unused-svelte-ignore` rule that is not enabled. Run it with
+`svelte/no-unused-svelte-ignore` rule that is not enabled. It also flags `onDestroy(` in a
+file ending in `.svelte`, outside HTML comments, as `svelte/no-on-destroy-in-component`. A
+`.svelte.ts` composable is allowed by path alone, and `onDestroy` inside a string or a `//`
+comment within `<script>` is not caught. Run it with
 `node .claude/scripts/svelte-lint.mjs <files>`. It has never run against a real corpus, only
 paired fixtures, so treat a finding as a starting point and report a false positive rather than
 working around it.

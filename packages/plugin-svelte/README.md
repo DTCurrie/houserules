@@ -25,7 +25,7 @@ select them when `init` asks.
 
 - **`svelte`** installs `.claude/rules/svelte.md`, a path-scoped rule for Svelte 5 authoring:
   runes throughout (`$state`, `$derived`, `$effect`, `$props`, `$bindable`), component
-  structure, context providers, and styling conventions. Never `export let`, never a `$:`
+  structure, context providers, lifecycle, and styling conventions. Never `export let`, never a `$:`
   reactive statement, never `on:click`.
 
   Scoped to `**/*.svelte`, `**/*.svelte.ts`, and `**/*.svelte.js` through its `paths:`

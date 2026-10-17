@@ -66,6 +66,65 @@ describe('svelte-lint.mjs no-slot', () => {
   });
 });
 
+describe('svelte-lint.mjs svelte/no-on-destroy-in-component', () => {
+  it('flags a top-level onDestroy call in a .svelte component at its line', () => {
+    const root = stage();
+    writeFile(
+      root,
+      'src/Card.svelte',
+      "<script>\n  import { onDestroy } from 'svelte';\n  onDestroy(() => bus.off(handler));\n</script>\n<div></div>\n",
+    );
+
+    const r = run(root, ['src/Card.svelte']);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('svelte/no-on-destroy-in-component');
+    expect(r.stdout).toContain('src/Card.svelte:3');
+  });
+
+  it('allows onDestroy in a .svelte.ts composable', () => {
+    const root = stage();
+    writeFile(
+      root,
+      'src/use-hotkey.svelte.ts',
+      "import { onDestroy } from 'svelte';\n\nexport function useHotkey(bus: Bus) {\n  function attach() {\n    onDestroy(() => bus.off(handler));\n  }\n  attach();\n}\n",
+    );
+
+    const r = run(root, ['src/use-hotkey.svelte.ts']);
+
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain('svelte/no-on-destroy-in-component');
+  });
+
+  it('passes a component that returns its teardown from $effect', () => {
+    const root = stage();
+    writeFile(
+      root,
+      'src/Card.svelte',
+      '<script>\n  $effect(() => {\n    const off = bus.on(handler);\n    return off;\n  });\n</script>\n<div></div>\n',
+    );
+
+    const r = run(root, ['src/Card.svelte']);
+
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain('svelte/no-on-destroy-in-component');
+  });
+
+  it('ignores onDestroy( inside an HTML comment', () => {
+    const root = stage();
+    writeFile(
+      root,
+      'src/Card.svelte',
+      '<!-- old code called onDestroy(() => off()) here -->\n<div></div>\n',
+    );
+
+    const r = run(root, ['src/Card.svelte']);
+
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain('svelte/no-on-destroy-in-component');
+  });
+});
+
 describe('svelte-lint.mjs sveltekit/server-export-name', () => {
   it('flags a +server.ts export not in the allowed HTTP-verb set', () => {
     const root = stage();

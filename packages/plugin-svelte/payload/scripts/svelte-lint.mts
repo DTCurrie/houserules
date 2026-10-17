@@ -12,6 +12,9 @@
  * general string context at the top level, so this checks only that the match is not inside
  * an HTML comment, and declares the rest of the gap rather than pretending to close it.
  *
+ * `onDestroy(` in a `.svelte` component is flagged by path, since the same call is the
+ * accepted teardown in a `.svelte.ts` composable. Teardown belongs in `$effect`'s return.
+ *
  * `+server.ts` and `hooks.*.ts` clauses are checked by file shape, matched on the file's own
  * path rather than its extension or content alone, since SvelteKit gives those two names a
  * meaning no ordinary `.ts` file has.
@@ -31,6 +34,8 @@ import {
 } from '@houserules/payload/findings';
 
 const SLOT_ELEMENT = /<slot[\s/>]/;
+const ON_DESTROY_CALL = /\bonDestroy\s*\(/;
+const SVELTE_COMPONENT_FILE = /\.svelte$/;
 const SERVER_ROUTE_FILE = /(^|\/)\+server\.ts$/;
 const HOOKS_FILE = /(^|\/)(hooks\.server|hooks\.client)\.ts$/;
 const ESLINT_CONFIG_NAME = /(^|\/)eslint\.config\.[cm]?js$/;
@@ -69,6 +74,9 @@ const DECLINED = [
   'whether a +server.ts export named GET/POST/etc actually returns a Response, which ' +
     'needs type information this checker does not have',
   'whether handleError actually reports to a tracking service, only that it is exported',
+  '`onDestroy(` inside a string literal or a `//` comment within a `<script>` block',
+  'whether a `.svelte.ts` composable that calls onDestroy releases a context registration, ' +
+    'since it is allowed by path alone',
 ];
 
 export interface FileInput {
@@ -85,17 +93,28 @@ function withoutHtmlComments(markup: string): string {
 /** Findings for one component, keyed to the clause rather than to this checker. */
 export function checkComponent(file: string, markup: string): Report {
   const report = emptyReport();
+  const isComponent = SVELTE_COMPONENT_FILE.test(file);
   withoutHtmlComments(markup)
     .split('\n')
     .forEach((line, index) => {
-      if (!SLOT_ELEMENT.test(line)) return;
-      report.findings.push({
-        rule: 'svelte/no-slot',
-        level: 'error',
-        file,
-        line: index + 1,
-        msg: 'Svelte 5 is runes-only here. Replace <slot> with a snippet.',
-      });
+      if (SLOT_ELEMENT.test(line)) {
+        report.findings.push({
+          rule: 'svelte/no-slot',
+          level: 'error',
+          file,
+          line: index + 1,
+          msg: 'Svelte 5 is runes-only here. Replace <slot> with a snippet.',
+        });
+      }
+      if (isComponent && ON_DESTROY_CALL.test(line)) {
+        report.findings.push({
+          rule: 'svelte/no-on-destroy-in-component',
+          level: 'error',
+          file,
+          line: index + 1,
+          msg: 'Return the teardown from $effect instead of calling onDestroy in a component. onDestroy is allowed only in a .svelte.ts composable.',
+        });
+      }
     });
   return report;
 }
