@@ -40,6 +40,7 @@ parts optional. A bare token that is a number or `all` is the **phase**. Anythin
 | `/orchestrate 3`               | resolved plan, phase 3                                  |
 | `/orchestrate auth-rework all` | that plan, every remaining phase, check-in between each |
 | `… all --auto`                 | same, without the inter-phase check-in                  |
+| `… --nested`                   | one sonnet `phase-orchestrator` per phase, you relay    |
 
 **Live phase** is the one marked `IN PROGRESS` in that plan's `ROADMAP.md`. If none is marked, take
 the first `TODO`.
@@ -141,18 +142,21 @@ the resume grep in §9.
 
 ## 4. Dispatch a wave — one message, one worker per slice
 
+Under `--nested`, §1 through §8 run one layer down, one `phase-orchestrator` spawn per phase, and
+you relay its reports. `references/nested.md` carries the brief, the relay, and the `all` loop,
+which doubles as the context-size gate.
+
 Send every slice in the wave as parallel `Agent` calls **in a single message**, each with
-`subagent_type: task-worker` and `model: sonnet`. (No `task-worker` agent installed? Use
-`general-purpose` with `model: sonnet` and paste `agents/task-worker.md` inline, ahead of the brief.)
+`subagent_type: task-worker` and `model: sonnet`. (No `task-worker` installed? `references/slicing.md`
+carries the fallback.)
 
 Mark the slices `DISPATCHED` before you send.
 
 Pass the Agent tool's `effort` parameter per slice. A mechanical or wide slice takes `effort: low`.
-A judgment-heavy slice takes `high` or `xhigh`. Everything else omits it. Below Claude Code 2.1.292
-the parameter is absent, so every worker runs at the `task-worker` default.
+A judgment-heavy slice takes `high` or `xhigh`. Everything else omits it.
 
 A slice whose steps must fetch a page or search the web takes `task-worker-research`. If that agent is
-absent, use the `general-purpose` fallback above.
+absent, use the same fallback.
 
 Before dispatching, check whether a rule scoped to the wave's paths requires an MCP tool the
 worker's `tools:` line lacks. The fix is adding `mcp__<server>__<tool>` or `mcp__<server>` to

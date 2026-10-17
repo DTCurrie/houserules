@@ -57,6 +57,19 @@ interface SessionEvents {
   interrupts: number;
 }
 
+/** Token counts for one slice of a session, split by transcript origin or by model. */
+export interface UsageSlice {
+  turns: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+export function emptyUsageSlice(): UsageSlice {
+  return { turns: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+}
+
 /** Token telemetry for one transcript file, the shape the token section renders. */
 export interface FileUsage {
   file: string;
@@ -69,6 +82,13 @@ export interface FileUsage {
   models: Set<string>;
   sidechainTurns: number;
   skippedLines: number;
+  /** Earliest and latest timestamped record in this session, folded subagents included, epoch ms. */
+  firstTs?: number;
+  lastTs?: number;
+  /** The same counts split by origin: the main conversation against its folded subagents. */
+  byOrigin: { main: UsageSlice; subagent: UsageSlice };
+  /** The same counts keyed by model id, so a nested run shows its sonnet share. */
+  byModel: Map<string, UsageSlice>;
 }
 
 /**
@@ -307,6 +327,8 @@ function createFileUsage(file: string): FileUsage {
     models: new Set(),
     sidechainTurns: 0,
     skippedLines: 0,
+    byOrigin: { main: emptyUsageSlice(), subagent: emptyUsageSlice() },
+    byModel: new Map(),
   };
 }
 
@@ -327,6 +349,9 @@ export function ingestTranscript(
   // A subagent transcript (folded into `into`) belongs to its parent session, so a record
   // there with no sessionId falls back to the parent's id, never the agent file name.
   const fallbackSession = (into?.file ?? file).replace(/\.jsonl$/, '');
+  // The main call also passes its own row as `into`, so only a different file is a subagent.
+  const isSubagent = into !== undefined && into.file !== file;
+  const origin = isSubagent ? 'subagent' : 'main';
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     corpus.lines += 1;
@@ -338,10 +363,8 @@ export function ingestTranscript(
       usage.skippedLines += 1;
       continue;
     }
-    trackRecordStamps(record, corpus);
-    aggregateUsage(record, usage);
-    // The main call also passes `into`, so a subagent is the call whose file differs from it.
-    const isSubagent = into !== undefined && file !== into.file;
+    trackRecordStamps(record, corpus, usage);
+    aggregateUsage(record, usage, origin);
     extractEvents(record, fallbackSession, corpus, isSubagent);
   }
 }
@@ -379,7 +402,11 @@ export function skillFires(corpus: Corpus, skillName?: string): SkillFire[] {
 
 // Token aggregation matches the original report command exactly, keying on type OR role,
 // so promoting the metrics families leaves the token section's numbers unchanged.
-function aggregateUsage(record: TranscriptRecord, usage: FileUsage): void {
+function aggregateUsage(
+  record: TranscriptRecord,
+  usage: FileUsage,
+  origin: 'main' | 'subagent',
+): void {
   const msg = record.message ?? {};
   if (record.type === 'assistant' || msg.role === 'assistant') {
     usage.turns += 1;
@@ -390,6 +417,22 @@ function aggregateUsage(record: TranscriptRecord, usage: FileUsage): void {
     usage.output += u.output_tokens ?? 0;
     usage.cacheRead += u.cache_read_input_tokens ?? 0;
     usage.cacheWrite += u.cache_creation_input_tokens ?? 0;
+    const slices = [usage.byOrigin[origin]];
+    if (msg.model) {
+      let modelSlice = usage.byModel.get(msg.model);
+      if (!modelSlice) {
+        modelSlice = emptyUsageSlice();
+        usage.byModel.set(msg.model, modelSlice);
+      }
+      slices.push(modelSlice);
+    }
+    for (const slice of slices) {
+      slice.turns += 1;
+      slice.input += u.input_tokens ?? 0;
+      slice.output += u.output_tokens ?? 0;
+      slice.cacheRead += u.cache_read_input_tokens ?? 0;
+      slice.cacheWrite += u.cache_creation_input_tokens ?? 0;
+    }
   } else if (record.type === 'user' || msg.role === 'user') {
     const content = msg.content;
     if (Array.isArray(content))
@@ -490,13 +533,19 @@ function extractEvents(
   }
 }
 
-function trackRecordStamps(record: TranscriptRecord, corpus: Corpus): void {
+function trackRecordStamps(
+  record: TranscriptRecord,
+  corpus: Corpus,
+  usage: FileUsage,
+): void {
   if (typeof record.version === 'string')
     corpus.claudeVersions.add(record.version);
   const ts = Date.parse(record.timestamp ?? '');
   if (!ts) return;
   if (corpus.firstTs === undefined || ts < corpus.firstTs) corpus.firstTs = ts;
   if (corpus.lastTs === undefined || ts > corpus.lastTs) corpus.lastTs = ts;
+  if (usage.firstTs === undefined || ts < usage.firstTs) usage.firstTs = ts;
+  if (usage.lastTs === undefined || ts > usage.lastTs) usage.lastTs = ts;
 }
 
 const RESIDENT_ATTACHMENT_TYPES = new Set([

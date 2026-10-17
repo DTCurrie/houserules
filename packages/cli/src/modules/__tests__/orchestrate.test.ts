@@ -46,12 +46,18 @@ describe('orchestrate', () => {
       existsSync(join(off, '.claude/agents/task-worker.md')),
       'task-worker agent not installed',
     ).toBe(false);
+    expect(
+      existsSync(join(off, '.claude/agents/phase-orchestrator.md')),
+      'phase-orchestrator agent not installed',
+    ).toBe(false);
   });
 
   describe('enabled together with the plans module', () => {
     let root: string;
     let skillText: string;
     let agentText: string;
+    let orchestratorText: string;
+    let nestedText: string;
 
     beforeEach(() => {
       root = useInstalledRepo('pnpm-monorepo', {
@@ -63,6 +69,14 @@ describe('orchestrate', () => {
       );
       agentText = readFileSync(
         join(root, '.claude/agents/task-worker.md'),
+        'utf8',
+      );
+      orchestratorText = readFileSync(
+        join(root, '.claude/agents/phase-orchestrator.md'),
+        'utf8',
+      );
+      nestedText = readFileSync(
+        join(root, '.claude/skills/orchestrate/references/nested.md'),
         'utf8',
       );
     });
@@ -91,6 +105,99 @@ describe('orchestrate', () => {
     it('records the module in the manifest', () => {
       const manifest = manifestOf(root);
       expect(manifest.modules).toContain('orchestrate');
+    });
+
+    it('installs a sonnet phase-orchestrator that preloads the orchestrate skill', () => {
+      expect(orchestratorText).toMatch(/^model: sonnet$/m);
+      expect(orchestratorText).toMatch(/^skills: orchestrate$/m);
+    });
+
+    it.each(['Agent', 'SendMessage', 'Skill'])(
+      'gives the phase-orchestrator the %s tool',
+      (tool) => {
+        const toolsLine = orchestratorText.match(/^tools: .*$/m)?.[0] ?? '';
+
+        expect(toolsLine.slice('tools: '.length).split(', ')).toContain(tool);
+      },
+    );
+
+    it('installs the nested reference beside the other orchestrate references', () => {
+      expect(
+        existsSync(
+          join(root, '.claude/skills/orchestrate/references/nested.md'),
+        ),
+        'nested.md installed',
+      ).toBe(true);
+    });
+
+    it('lists --nested in the invocation table as one phase-orchestrator per phase', () => {
+      expect(skillText).toMatch(/^\| `… --nested` .*phase-orchestrator/m);
+    });
+
+    it('points --nested at references/nested.md for the brief and the relay', () => {
+      expect(skillText).toMatch(
+        /--nested`[^\n]*\n[^\n]*references\/nested\.md/,
+      );
+    });
+
+    it('orders the phase-orchestrator report headings from status table to resume', () => {
+      const headings = [
+        'Status table',
+        'Landed',
+        'Verify',
+        'Ruling needed',
+        'Rulings made',
+        'Backlogged',
+        'Decide candidates',
+        'Resume',
+      ];
+
+      const reportStart = orchestratorText.indexOf('## Report format');
+
+      expect(reportStart, 'report format section present').not.toBe(-1);
+
+      const positions = headings.map((heading) =>
+        orchestratorText.indexOf(heading, reportStart),
+      );
+
+      expect(positions, 'every heading present').not.toContain(-1);
+      expect(positions).toEqual(
+        [...positions].sort((earlier, later) => earlier - later),
+      );
+      expect(new Set(positions).size).toBe(headings.length);
+    });
+
+    it.each([
+      'Plan:',
+      'Phase:',
+      'Mode:',
+      'Gates:',
+      'Domain:',
+      'Siblings:',
+      'Seam:',
+      'Ruling:',
+    ])('defines the %s brief label in nested.md', (label) => {
+      expect(nestedText).toContain(label);
+    });
+
+    it.each([
+      'plan-tie',
+      'check-in',
+      'blocked-slice',
+      'needs-context',
+      'context-size',
+      'depth-limit',
+    ])('names the %s gate in nested.md', (gate) => {
+      expect(nestedText).toContain(gate);
+    });
+
+    it('records the phase-orchestrator and nested reference in the manifest', () => {
+      const dests = Object.keys(manifestOf(root).files);
+
+      expect(dests).toContain('.claude/agents/phase-orchestrator.md');
+      expect(dests).toContain(
+        '.claude/skills/orchestrate/references/nested.md',
+      );
     });
 
     it('adds the /orchestrate carve-out against implementation subagents to CLAUDE.md', () => {
@@ -284,6 +391,39 @@ describe('orchestrate plan(), variant selection', () => {
       actions.some(
         (a) => a.kind === 'write' && a.dest === '.claude/agents/task-worker.md',
       ),
+    ).toBe(false);
+  });
+});
+
+describe('orchestrate plan(), phase-orchestrator', () => {
+  const withTools = {
+    claude: {
+      houseConfig: {
+        orchestrate: { workerTools: ['mcp__svelte__svelte-autofixer'] },
+      },
+    },
+  } as Ctx;
+
+  it.each([
+    { name: 'without orchestrate.workerTools', ctx: {} as Ctx },
+    { name: 'with orchestrate.workerTools', ctx: withTools },
+  ])('copies the agent unchanged $name', ({ ctx }) => {
+    const actions = plan(ctx, baseAnswers());
+
+    expect(
+      actions.some(
+        (action) =>
+          action.kind === 'copy' &&
+          action.dest === '.claude/agents/phase-orchestrator.md',
+      ),
+    ).toBe(true);
+    expect(
+      actions.some(
+        (action) =>
+          action.kind === 'write' &&
+          action.dest === '.claude/agents/phase-orchestrator.md',
+      ),
+      'not written with extra tools',
     ).toBe(false);
   });
 });

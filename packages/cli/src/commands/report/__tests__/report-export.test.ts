@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { HouseError } from '../../../house-error.js';
 import {
   buildReportDocument,
+  deserializeTokenUsage,
   type ReportDocument,
 } from '../report-document.js';
 import {
@@ -14,7 +15,11 @@ import {
   redactDocument,
   writeExportFile,
 } from '../report-export.js';
-import { emptyCorpus, ingestTranscript } from '../transcript-events.js';
+import {
+  emptyCorpus,
+  ingestTranscript,
+  type FileUsage,
+} from '../transcript-events.js';
 
 const SECRET_PATH = '/Users/someone/work/secret.ts';
 const SECRET_DIR =
@@ -219,5 +224,77 @@ describe('writeExportFile and readImportFiles', () => {
 
     expect(() => readImportFiles([path])).toThrow(HouseError);
     expect(() => readImportFiles([path])).toThrow(path);
+  });
+});
+
+describe('token usage serialization', () => {
+  it('carries timestamps, origin split, and per-model slices through JSON', () => {
+    const corpus = emptyCorpus(['slug']);
+    const file: FileUsage = {
+      file: 'sess-1.jsonl',
+      turns: 3,
+      input: 30,
+      output: 6,
+      cacheRead: 0,
+      cacheWrite: 0,
+      toolResults: 0,
+      models: new Set(['sonnet', 'opus']),
+      sidechainTurns: 1,
+      skippedLines: 0,
+      firstTs: 1_760_000_000_000,
+      lastTs: 1_760_000_900_000,
+      byOrigin: {
+        main: { turns: 2, input: 20, output: 4, cacheRead: 1, cacheWrite: 2 },
+        subagent: {
+          turns: 1,
+          input: 10,
+          output: 2,
+          cacheRead: 3,
+          cacheWrite: 4,
+        },
+      },
+      byModel: new Map([
+        [
+          'sonnet',
+          { turns: 1, input: 10, output: 2, cacheRead: 3, cacheWrite: 4 },
+        ],
+        [
+          'opus',
+          { turns: 2, input: 20, output: 4, cacheRead: 1, cacheWrite: 2 },
+        ],
+      ]),
+    };
+    corpus.files.push(file);
+    const root = mkdtempSync(join(tmpdir(), 'report-export-root-'));
+    const document = buildReportDocument(corpus, root, {
+      label: 'work',
+      cliVersion: '0.7.0',
+    });
+
+    const parsed = JSON.parse(JSON.stringify(document)) as ReportDocument;
+    const [restored] = deserializeTokenUsage(parsed.tokens).files;
+
+    expect(restored?.firstTs).toBe(1_760_000_000_000);
+    expect(restored?.lastTs).toBe(1_760_000_900_000);
+    expect(restored?.byOrigin).toEqual({
+      main: { turns: 2, input: 20, output: 4, cacheRead: 1, cacheWrite: 2 },
+      subagent: { turns: 1, input: 10, output: 2, cacheRead: 3, cacheWrite: 4 },
+    });
+    expect(restored?.byModel).toEqual(
+      new Map([
+        [
+          'opus',
+          { turns: 2, input: 20, output: 4, cacheRead: 1, cacheWrite: 2 },
+        ],
+        [
+          'sonnet',
+          { turns: 1, input: 10, output: 2, cacheRead: 3, cacheWrite: 4 },
+        ],
+      ]),
+    );
+    expect(Object.keys(parsed.tokens.files[0]?.byModel ?? {})).toEqual([
+      'opus',
+      'sonnet',
+    ]);
   });
 });

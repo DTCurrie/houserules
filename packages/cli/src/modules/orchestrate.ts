@@ -19,6 +19,7 @@ const ORCHESTRATE_REFERENCES = [
   'review-patterns.md',
   'fixer-and-residue.md',
   'closing.md',
+  'nested.md',
 ] as const;
 
 export const id = 'orchestrate';
@@ -97,11 +98,11 @@ export function renderTaskWorkerVariant(
 }
 
 /**
- * The execution layer for planned phases: the skill plus the task-worker agent it
- * dispatches. The orchestrator slices a phase by file ownership, writes the shared seam
- * itself, fans out one worker per slice in waves, and reviews the returned report rather
- * than the diff. Cost is O(slices x report), and no worker accumulates another slice's
- * context.
+ * The execution layer for planned phases: the skill, the task-worker agent it dispatches,
+ * and the phase-orchestrator agent that `--nested` runs one layer down. The orchestrator
+ * slices a phase by file ownership, writes the shared seam itself, fans out one worker per
+ * slice in waves, and reviews the returned report rather than the diff. Cost is
+ * O(slices x report), and no worker accumulates another slice's context.
  *
  * Script-free, because the value is the slice, seam, wave, and review discipline rather
  * than tooling. It pairs with `plans` but degrades gracefully, sending a user with no
@@ -143,6 +144,11 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       reason: 'deep-dive reference the orchestrate SKILL.md defers to',
     })),
     baseAgent,
+    agent(
+      id,
+      'phase-orchestrator',
+      'the sonnet orchestrator /orchestrate --nested dispatches: one phase, its own task-workers, fixed report format',
+    ),
     script(
       id,
       'plan-lint.mjs',

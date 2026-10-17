@@ -267,3 +267,143 @@ describe('ingestTranscript entrypoint', () => {
     expect(corpus.residentCaptures.get('sess-sdk')?.entrypoint).toBe('sdk-cli');
   });
 });
+
+describe('ingestTranscript per-session usage', () => {
+  function turn(
+    timestamp: string,
+    model: string | undefined,
+    usage: [number, number, number, number],
+  ): string {
+    return line({
+      type: 'assistant',
+      sessionId: 'sess-1',
+      timestamp,
+      message: {
+        role: 'assistant',
+        model,
+        usage: {
+          input_tokens: usage[0],
+          output_tokens: usage[1],
+          cache_read_input_tokens: usage[2],
+          cache_creation_input_tokens: usage[3],
+        },
+      },
+    });
+  }
+
+  function ingestPair() {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-1.jsonl',
+      [
+        turn('2026-10-01T10:00:00Z', 'model-a', [10, 20, 100, 5]),
+        turn('2026-10-01T10:01:00Z', 'model-a', [1, 2, 3, 4]),
+      ].join('\n'),
+    );
+    const row = corpus.files[0]!;
+    ingestTranscript(
+      corpus,
+      'agent-1.jsonl',
+      [
+        turn('2026-10-01T10:05:00Z', 'model-b', [7, 8, 9, 10]),
+        turn('2026-10-01T10:04:00Z', undefined, [2, 3, 0, 1]),
+      ].join('\n'),
+      row,
+    );
+    return row;
+  }
+
+  it('splits tokens by origin, by model, and spans the folded timestamps', () => {
+    const row = ingestPair();
+
+    expect(row.byOrigin.main).toEqual({
+      turns: 2,
+      input: 11,
+      output: 22,
+      cacheRead: 103,
+      cacheWrite: 9,
+    });
+    expect(row.byOrigin.subagent).toEqual({
+      turns: 2,
+      input: 9,
+      output: 11,
+      cacheRead: 9,
+      cacheWrite: 11,
+    });
+    expect(row.byModel.get('model-a')).toEqual({
+      turns: 2,
+      input: 11,
+      output: 22,
+      cacheRead: 103,
+      cacheWrite: 9,
+    });
+    // The model-less subagent turn counts toward its origin but opens no model slice.
+    expect(row.byModel.get('model-b')).toEqual({
+      turns: 1,
+      input: 7,
+      output: 8,
+      cacheRead: 9,
+      cacheWrite: 10,
+    });
+    expect(row.byModel.size).toBe(2);
+    expect(row.firstTs).toBe(Date.parse('2026-10-01T10:00:00Z'));
+    expect(row.lastTs).toBe(Date.parse('2026-10-01T10:05:00Z'));
+  });
+
+  it('keeps the row totals equal to the sum of both origins', () => {
+    const row = ingestPair();
+
+    expect(row.turns).toBe(4);
+    expect(row.input).toBe(20);
+    expect(row.output).toBe(33);
+    expect(row.cacheRead).toBe(112);
+    expect(row.cacheWrite).toBe(20);
+  });
+});
+
+describe('readCorpus per-session usage origin', () => {
+  it('files the main transcript under main and the subagent transcript under subagent', () => {
+    const base = mkdtempSync(join(tmpdir(), 'corpus-origin-'));
+    mkdirSync(join(base, 'slug', 'sess-1', 'subagents'), { recursive: true });
+    const turn = (input: number, output: number, model: string) =>
+      line({
+        type: 'assistant',
+        sessionId: 'sess-1',
+        timestamp: '2026-10-01T10:00:00Z',
+        message: {
+          role: 'assistant',
+          model,
+          usage: {
+            input_tokens: input,
+            output_tokens: output,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+          },
+        },
+      });
+    writeFileSync(join(base, 'slug', 'sess-1.jsonl'), turn(5, 6, 'model-a'));
+    writeFileSync(
+      join(base, 'slug', 'sess-1', 'subagents', 'agent-x.jsonl'),
+      turn(30, 40, 'model-b'),
+    );
+
+    const corpus = readCorpus(base, ['slug']);
+    const row = corpus.files[0]!;
+
+    expect(row.byOrigin.main).toEqual({
+      turns: 1,
+      input: 5,
+      output: 6,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
+    expect(row.byOrigin.subagent).toEqual({
+      turns: 1,
+      input: 30,
+      output: 40,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
+  });
+});

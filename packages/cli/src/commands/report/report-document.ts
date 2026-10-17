@@ -18,7 +18,7 @@ import {
   type LedgerOutcome,
 } from './skill-outcomes.js';
 import { computeTokenUsage, type TokenUsageReport } from './token-usage.js';
-import type { Corpus, FileUsage } from './transcript-events.js';
+import type { Corpus, FileUsage, UsageSlice } from './transcript-events.js';
 
 const LEDGERS: [skill: string, ledgerFile: string][] = [
   ['backlog-add', 'backlog.jsonl'],
@@ -44,9 +44,10 @@ interface ReportMeta {
   generatedAt: string;
 }
 
-/** {@link FileUsage} with its model set as an array, so it survives JSON. */
-interface SerializedFileUsage extends Omit<FileUsage, 'models'> {
+/** {@link FileUsage} with its model set as an array and its per-model map as a record, so it survives JSON. */
+interface SerializedFileUsage extends Omit<FileUsage, 'models' | 'byModel'> {
   models: string[];
+  byModel: Record<string, UsageSlice>;
 }
 
 export interface SerializedTokenUsage extends Omit<TokenUsageReport, 'files'> {
@@ -82,6 +83,11 @@ function serializeTokenUsage(report: TokenUsageReport): SerializedTokenUsage {
     files: report.files.map((file) => ({
       ...file,
       models: [...file.models].sort(),
+      byModel: Object.fromEntries(
+        [...file.byModel].sort(([leftModel], [rightModel]) =>
+          leftModel < rightModel ? -1 : leftModel > rightModel ? 1 : 0,
+        ),
+      ),
     })),
   };
 }
@@ -94,6 +100,7 @@ export function deserializeTokenUsage(
     files: tokens.files.map((file) => ({
       ...file,
       models: new Set(file.models),
+      byModel: new Map(Object.entries(file.byModel)),
     })),
   };
 }

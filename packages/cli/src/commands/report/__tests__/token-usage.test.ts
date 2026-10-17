@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { emptyCorpus, ingestTranscript } from '../transcript-events.js';
-import { computeTokenUsage, renderTokenUsage } from '../token-usage.js';
+import {
+  emptyCorpus,
+  emptyUsageSlice,
+  ingestTranscript,
+  type FileUsage,
+} from '../transcript-events.js';
+import {
+  computeTokenUsage,
+  renderTokenUsage,
+  type TokenUsageReport,
+} from '../token-usage.js';
 
 function line(record: unknown): string {
   return JSON.stringify(record);
@@ -301,7 +310,7 @@ describe('renderTokenUsage', () => {
 
     const rendered = renderTokenUsage(computeTokenUsage(corpus));
 
-    expect(rendered.slice(3)).toEqual([
+    expect(rendered.slice(rendered.indexOf('-- totals --') - 1)).toEqual([
       '',
       '-- totals --',
       '  turns 1 | fresh input 200 | output 40',
@@ -344,6 +353,130 @@ describe('renderTokenUsage', () => {
 
     expect(rendered[rendered.length - 1]).toBe(
       '(cache_read is cost-weighted, never summed flat with fresh input; native /usage covers the live view.)',
+    );
+  });
+});
+
+describe('renderTokenUsage per-session breakdown', () => {
+  const HOUR_MS = 3_600_000;
+  const MINUTE_MS = 60_000;
+  const START = 1_700_000_000_000;
+
+  function fileUsage(overrides: Partial<FileUsage>): FileUsage {
+    return {
+      file: 'sess-abcdef12.jsonl',
+      turns: 1,
+      input: 1,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      toolResults: 0,
+      models: new Set(),
+      sidechainTurns: 0,
+      skippedLines: 0,
+      byOrigin: { main: emptyUsageSlice(), subagent: emptyUsageSlice() },
+      byModel: new Map(),
+      ...overrides,
+    };
+  }
+
+  function render(file: FileUsage): string[] {
+    const report: TokenUsageReport = {
+      files: [file],
+      totals: {
+        turns: 1,
+        input: 1,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        toolResults: 0,
+        models: [],
+        sidechainTurns: 0,
+        skippedLines: 0,
+      },
+      unreadableFileCount: 0,
+    };
+    return renderTokenUsage(report);
+  }
+
+  const ROW =
+    '  sess-abc  turns 1  in 1  out 0  cache_read 0  cache_write 0  tools 0  weighted-in 1';
+
+  it('appends the wall-clock tail in hours and minutes', () => {
+    const rendered = render(
+      fileUsage({
+        firstTs: START,
+        lastTs: START + 2 * HOUR_MS + 14 * MINUTE_MS,
+      }),
+    );
+
+    expect(rendered[2]).toBe(`${ROW}  wall 2h 14m`);
+  });
+
+  it('formats a sub-hour span in minutes and a sub-minute span as <1m', () => {
+    const minutes = render(
+      fileUsage({ firstTs: START, lastTs: START + 45 * MINUTE_MS }),
+    );
+    const seconds = render(
+      fileUsage({ firstTs: START, lastTs: START + 30_000 }),
+    );
+
+    expect(minutes[2]).toBe(`${ROW}  wall 45m`);
+    expect(seconds[2]).toBe(`${ROW}  wall <1m`);
+  });
+
+  it('omits the wall-clock tail when lastTs is missing', () => {
+    const rendered = render(fileUsage({ firstTs: START }));
+
+    expect(rendered[2]).toBe(ROW);
+  });
+
+  it('prints the origin line with weighted input and output per side', () => {
+    const rendered = render(
+      fileUsage({
+        byOrigin: {
+          main: {
+            turns: 2,
+            input: 100,
+            output: 7,
+            cacheRead: 0,
+            cacheWrite: 80,
+          },
+          subagent: {
+            turns: 1,
+            input: 10,
+            output: 3,
+            cacheRead: 1000,
+            cacheWrite: 0,
+          },
+        },
+      }),
+    );
+
+    expect(rendered[3]).toBe(
+      '            main weighted-in 200 out 7 | subagents weighted-in 110 out 3',
+    );
+    expect(rendered[4]).toBe('');
+  });
+
+  it('prints the by-model line in insertion order', () => {
+    const rendered = render(
+      fileUsage({
+        byModel: new Map([
+          [
+            'claude-opus',
+            { turns: 1, input: 50, output: 5, cacheRead: 0, cacheWrite: 0 },
+          ],
+          [
+            'claude-sonnet',
+            { turns: 1, input: 20, output: 2, cacheRead: 100, cacheWrite: 0 },
+          ],
+        ]),
+      }),
+    );
+
+    expect(rendered[4]).toBe(
+      '            claude-opus: weighted-in 50 out 5 | claude-sonnet: weighted-in 30 out 2',
     );
   });
 });

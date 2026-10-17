@@ -1,4 +1,4 @@
-import type { Corpus, FileUsage } from './transcript-events.js';
+import type { Corpus, FileUsage, UsageSlice } from './transcript-events.js';
 
 interface TokenTotals {
   turns: number;
@@ -41,6 +41,19 @@ export function weightedInput(a: {
   );
 }
 
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_HOUR = 60;
+
+function formatWallClock(durationMs: number): string {
+  const minutes = Math.floor(durationMs / MS_PER_MINUTE);
+  if (minutes < 1) return '<1m';
+  if (minutes < MINUTES_PER_HOUR) return `${minutes}m`;
+  return `${Math.floor(minutes / MINUTES_PER_HOUR)}h ${minutes % MINUTES_PER_HOUR}m`;
+}
+
+const sliceCounts = (slice: UsageSlice) =>
+  `weighted-in ${n(weightedInput(slice))} out ${n(slice.output)}`;
+
 export function computeTokenUsage(corpus: Corpus): TokenUsageReport {
   const totals: TokenTotals = {
     turns: 0,
@@ -81,22 +94,47 @@ export function renderTokenUsage(report: TokenUsageReport): string[] {
   const lines: string[] = [];
   lines.push(`${report.files.length} session(s):`);
   lines.push('');
-  for (const file of report.files) {
-    const id = file.file.replace(/\.jsonl$/, '').slice(0, 8);
-    lines.push(
-      `  ${id}  turns ${file.turns}  in ${n(file.input)}  out ${n(file.output)}  ` +
-        `cache_read ${n(file.cacheRead)}  cache_write ${n(file.cacheWrite)}  ` +
-        `tools ${file.toolResults}  weighted-in ${n(weightedInput(file))}` +
-        (file.skippedLines
-          ? `  (${file.skippedLines} line(s) could not be parsed and were skipped)`
-          : ''),
-    );
-  }
+  for (const file of report.files) lines.push(...renderFileUsage(file));
 
-  const { totals } = report;
-  const cacheableIn = totals.input + totals.cacheRead + totals.cacheWrite;
   lines.push('');
   lines.push('-- totals --');
+  return lines.concat(renderTotals(report));
+}
+
+/** One session's row, its wall-clock tail, its origin line, and its by-model line. */
+function renderFileUsage(file: FileUsage): string[] {
+  const lines: string[] = [];
+  const id = file.file.replace(/\.jsonl$/, '').slice(0, 8);
+  lines.push(
+    `  ${id}  turns ${file.turns}  in ${n(file.input)}  out ${n(file.output)}  ` +
+      `cache_read ${n(file.cacheRead)}  cache_write ${n(file.cacheWrite)}  ` +
+      `tools ${file.toolResults}  weighted-in ${n(weightedInput(file))}` +
+      (file.skippedLines
+        ? `  (${file.skippedLines} line(s) could not be parsed and were skipped)`
+        : '') +
+      (file.firstTs !== undefined && file.lastTs !== undefined
+        ? `  wall ${formatWallClock(file.lastTs - file.firstTs)}`
+        : ''),
+  );
+  const indent = ' '.repeat(id.length + 4);
+  lines.push(
+    `${indent}main ${sliceCounts(file.byOrigin.main)} | subagents ${sliceCounts(file.byOrigin.subagent)}`,
+  );
+  if (file.byModel.size) {
+    lines.push(
+      indent +
+        [...file.byModel]
+          .map(([model, slice]) => `${model}: ${sliceCounts(slice)}`)
+          .join(' | '),
+    );
+  }
+  return lines;
+}
+
+function renderTotals(report: TokenUsageReport): string[] {
+  const lines: string[] = [];
+  const { totals } = report;
+  const cacheableIn = totals.input + totals.cacheRead + totals.cacheWrite;
   lines.push(
     `  turns ${n(totals.turns)} | fresh input ${n(totals.input)} | output ${n(totals.output)}`,
   );
