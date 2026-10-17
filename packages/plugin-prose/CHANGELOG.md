@@ -1,5 +1,12 @@
 # @houserules/plugin-prose
 
+## 0.2.1
+
+### Patch Changes
+
+- 085af85: prose-lint reads a JavaScript or TypeScript file through its comments instead of flagging the code.
+- 940ec16: Shorter tidy and verify-changed descriptions, user-run skills left out of the listing, Prose style allows one line around tool work.
+
 ## 0.2.0
 
 ### Minor Changes

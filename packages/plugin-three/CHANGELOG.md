@@ -1,5 +1,11 @@
 # @houserules/plugin-three
 
+## 0.2.2
+
+### Patch Changes
+
+- f00d21d: R3F and Threlte rules route to their upstream-docs references.
+
 ## 0.2.1
 
 ### Patch Changes

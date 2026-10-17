@@ -1,5 +1,15 @@
 # @houserules/plugin-changesets
 
+## 0.3.0
+
+### Minor Changes
+
+- 3be211a: brief-driven reviewer and writer agents skip CLAUDE.md with omitClaudeMd
+
+### Patch Changes
+
+- f00d21d: Stop hooks skip a turn whose tool uses were all read-only.
+
 ## 0.2.4
 
 ### Patch Changes

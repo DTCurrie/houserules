@@ -1,5 +1,18 @@
 # @houserules/payload
 
+## 0.4.0
+
+### Minor Changes
+
+- f00d21d: Stop hooks skip a turn whose tool uses were all read-only.
+
+### Patch Changes
+
+- decb5e4: verify.timeoutMs caps each verify command, and verify-changed runs in the background instead of a subagent.
+- 3be211a: claudeProjectDir resolves a project directory past 200 characters by prefix match
+- cdc66de: Managed block honors an existing AGENTS.md; instructionsFile config forces either file.
+- f00d21d: Ledger scripts read CLAUDE_CODE_SESSION_ID and encode the project directory like Claude Code.
+
 ## 0.3.2
 
 ### Patch Changes
