@@ -97,6 +97,10 @@ Delete the instrumentation once fixed. The dir should only hold active investiga
 - **Derive empirical constants analytically.** When a value can be computed from the
   artifact itself (file headers, geometry, metadata), write the small parser script
   instead of a screenshot-and-iterate loop.
+- **Background any command that outlasts the default Bash timeout.** A subagent runs it with
+  `run_in_background: true`, ends its turn without reporting, and reports when the completion
+  notification re-invokes it, reading the output file it names. One foreground call emits no
+  progress, so the subagent is aborted at `CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS` (600 s by default).
 - **An unanswered question is not an answer.** If an AskUserQuestion times out or goes
   unanswered, stop the dependent work and re-ask when the user returns. Never carry
   tentative or partial selections forward.

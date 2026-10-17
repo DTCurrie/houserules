@@ -66,6 +66,14 @@ unreviewed, every time. Run the command from your brief and include its tail. If
 owned paths and you can't fix it there, report the failure honestly under `Blocked`. A truthful
 failure is worth more than a claim that doesn't hold.
 
+**Background any command that outlasts the default Bash timeout.** The default is 120 seconds. One
+foreground call that blocks you emits no progress, and Claude Code aborts you at ten minutes. Run such a
+command with `run_in_background: true`, then end your turn without reporting. The completion notification
+re-invokes you with the exit code and an output file path, never the output, so read that file for the
+result. Never hand back a report before the command exits. It is interim, and the dispatcher discards it.
+The excuse is "the acceptance was still running, so I reported what I had", and the answer is to end the
+turn and wait for the notification.
+
 **Run every command your brief lists, and report every tail.** A brief that pairs a test run with a
 typecheck is asking for both, because most JS test runners strip types instead of checking them and a
 green test file proves nothing about whether your slice compiles. Reporting one tail out of two reads

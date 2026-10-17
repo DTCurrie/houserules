@@ -240,6 +240,12 @@ than reslicing. Mark the slice `IN REVIEW` and judge it against the brief:
 Read `references/review-patterns.md` when a report reads green and you are deciding whether to
 believe it. It carries the worked failure for each check above.
 
+A worker that stalled has no report, and a report containing the word "stalled" is the same case. Its
+slice is not approved. Run `git diff --name-only` against its `owns`, because its partial edits are on
+disk. Mark the slice `REVISING` or dispatch a fresh worker with what landed in the brief. A
+notification saying the worker awaits its own background work is interim, so wait for its final
+report. `references/review-patterns.md` has the recipe.
+
 Verdict, one per slice:
 
 | Verdict     | When                                                                     | Next                                                       |
@@ -299,30 +305,26 @@ both files.
 **A phase that touched UI surfaces gets its reviews now.** When the diff reached UI code, or the
 sub-plan carries a `ui` signal, run `/accessibility-review` and `/design-review`, each skipped
 silently when not installed. A fix-worthy finding becomes one revise pass over the owning slice's
-paths, and the rest route per §5's out-of-scope rule.
+paths, and the rest route per §5's out-of-scope rule. A stalled review re-dispatches once, then
+you run its deterministic checker in-context and report the judgment tier as not run.
 
-**The last phase also hands over the PR description** with `/pr-description`, if installed. The user
-still creates the PR.
+**The last phase also hands over the PR description** with `/pr-description`, if installed.
 
 **Before reporting, promote durable decisions.** Skip this if `.claude/scripts/decision-log.mjs` is
 absent. Re-read the phase's `## Notes & decisions` and every report's deviations, and run `/decide`
 on anything that clears its bar.
 
-**An autonomous run collects its rulings.** Under `--auto`, list every mid-run judgment call that
-departed from the plan in the phase-close report, with one line for what it costs if wrong. Record
-the durable ones with `/decide`.
-
-`references/closing.md` carries the bar a decision or a ruling has to clear, the supersede case, and
-what the snapshot in §7 is protecting.
+**An autonomous run collects its rulings.** Under `--auto`, list each mid-run departure from the
+plan with its cost if wrong. `references/closing.md` carries the bar for `/decide`, what a ruling is,
+the stalled-review fallback, and what the §7 snapshot protects.
 
 Then report to the user: slices run, what landed, the verify verdict, anything backlogged. **Stop
 here** unless the invocation was `all --auto`, in which case continue to the next phase's §1.
 
-**The context-size gate** runs at this boundary, after the close checklist and never mid-wave. When
-context has grown past roughly half the window, check-in mode adds one line suggesting `/clear`, then
-`/orchestrate <slug> <next-phase>`. Under `all --auto`, stop instead of opening the next phase and
-print the resume commands, unless `--ignore-gates context-size` is set. `references/closing.md` says
-why `/clear` beats `/compact` here.
+**The context-size gate** runs at this boundary, never mid-wave. Past roughly half the window,
+check-in mode suggests `/clear`, then `/orchestrate <slug> <next-phase>`. Under `all --auto`, stop
+and print the resume commands unless `--ignore-gates context-size` is set. `references/closing.md`
+says why `/clear` beats `/compact`.
 
 At the end of the last phase, flip the ROADMAP header to `**Status:** DONE` and hand over the
 per-phase acceptance checklist. `/ready` gives you that roll-up if it's installed.
@@ -336,7 +338,8 @@ grep -n 'DISPATCHED\|IN REVIEW\|REVISING\|BLOCKED' .claude/plans/<slug>/phase-*.
 ```
 
 Those slices' workers are gone and their edits are not. Check `git diff --name-only`, reconcile the
-table, and redispatch what's unfinished. Never assume a `DISPATCHED` slice did nothing.
+table, and redispatch what's unfinished. Never assume a `DISPATCHED` slice did nothing. A worker that
+stalled is the same case as a dead session: edits on disk, no report.
 
 ## Notes
 

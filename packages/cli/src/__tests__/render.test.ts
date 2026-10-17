@@ -471,6 +471,16 @@ describe('renderClaudeMd', () => {
     );
   });
 
+  it('tells a subagent to background a command that outlasts the default Bash timeout', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+    expect(body).toContain(
+      '`run_in_background: true`, ends its turn without reporting',
+    );
+    expect(body).toContain(
+      '`CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS` (600 s by default)',
+    );
+  });
+
   it('embeds the same additions body between the markers', () => {
     const ctx = makeCtx();
     const answers = makeAnswers({ moduleIds: ['core', 'changesets'] });

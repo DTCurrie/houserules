@@ -49,3 +49,14 @@ whose owner accepts unbounded context growth.
 Run `grep -n 'DISPATCHED\|IN REVIEW\|REVISING\|BLOCKED' .claude/plans/<slug>/phase-*.md`. The
 slices it lists have no workers left, but their edits landed in the tree, so compare the table against
 `git diff --name-only` before redispatching.
+
+## A stalled close-of-phase review
+
+`/accessibility-review`, `/design-review`, and the decision reviewer are subagents, so they can stall
+like a worker (a report containing the word "stalled"). Re-dispatch the review once. If it stalls
+again, run the deterministic checker in-context and report the judgment tier as not run, so the user
+knows that half of the review never happened.
+
+## The PR description
+
+`/pr-description` hands the text over. The user still creates the PR.
