@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * Checks shipped markdown against the mechanical clauses of `prose-voice.md`.
+ * Checks shipped markdown, and the comments of a JavaScript or TypeScript file, against the
+ * mechanical clauses of `prose-voice.md`. A source file's code is not prose, so it is blanked
+ * before the checks run and only its comments are read.
  *
  * Only the clauses a script can decide alone land here. "No semicolons" is one, because a
  * semicolon in prose either is or is not there. The "never more than one em dash per
@@ -496,10 +498,70 @@ function checkSemicolons(file: string, prose: string): Finding[] {
   return findings;
 }
 
+const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/;
+
+/** Whether `file` is JavaScript or TypeScript, whose prose lives only in its comments. */
+export function isSourceFile(file: string): boolean {
+  return SOURCE_FILE.test(file);
+}
+
+/**
+ * One token of JavaScript or TypeScript at a time, in this order: a block comment, a line
+ * comment, a single- or double-quoted string, a template literal, a regex literal, or any one
+ * other character. A regex literal counts only after a token that cannot end an expression,
+ * so `a / b` is a division and `x = /'/` is not an open string. A string closes on its own
+ * line, so an unmatched quote costs one character and never swallows a comment below it.
+ */
+const TOKEN = new RegExp(
+  [
+    String.raw`(?<block>/\*[\s\S]*?\*/)`,
+    String.raw`(?<line>//[^\n]*)`,
+    String.raw`'(?:\\[\s\S]|[^'\\\n])*'`,
+    String.raw`"(?:\\[\s\S]|[^"\\\n])*"`,
+    '`(?:\\\\[\\s\\S]|[^`\\\\])*`',
+    String.raw`(?<=(?:^|[(,=:[!&|?{};+\-*%<>~^])[ \t]*)/(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\n[])+/[a-z]*`,
+    String.raw`[\s\S]`,
+  ].join('|'),
+  'gm',
+);
+
+/** The ` * ` gutter of a block comment line, and the lone `*` of `/**` on its first line. */
+const BLOCK_GUTTER = /^[ \t]*\*(?!\/)[ \t]?/gm;
+
+function blockCommentBody(text: string): string {
+  return text.slice(2, -2).replace(BLOCK_GUTTER, '');
+}
+
+function lineCommentBody(text: string): string {
+  return text.slice(2).replace(/^ /, '');
+}
+
+function newlinesIn(text: string): string {
+  return '\n'.repeat(text.split('\n').length - 1);
+}
+
+/**
+ * The comments of a source file, line for line, with every code character dropped so a
+ * finding's line number is the file's. Inside a block comment the ` * ` gutter is dropped, so
+ * a bare ` *` line comes out blank, which is what ends a paragraph for the em-dash count.
+ */
+export function commentsOf(source: string): string {
+  let out = '';
+  for (const match of source.matchAll(TOKEN)) {
+    const { block, line } = match.groups ?? {};
+    if (block !== undefined) out += blockCommentBody(block);
+    else if (line !== undefined) out += lineCommentBody(line);
+    else out += newlinesIn(match[0]);
+  }
+  return out;
+}
+
 /** Findings for one file, keyed to the clause rather than to this checker. */
 export function checkProse(file: string, markdown: string): Report {
   const report = emptyReport();
-  const prose = stripToProse(markdown);
+  const prose = stripToProse(
+    isSourceFile(file) ? commentsOf(markdown) : markdown,
+  );
   report.findings.push(...checkSemicolons(file, prose));
   report.findings.push(...checkEmDashes(file, prose));
   report.findings.push(...checkSpelling(file, prose));

@@ -61,7 +61,8 @@ editing on the user's behalf in their voice.
 
 `prose-lint.mjs` enforces the semicolon clause, counts em dashes per paragraph, and flags
 British spellings from a fixed word list, each with its American form. Run it over a file
-before you call it done. It never rules on whether a surviving em dash earns its keep, on
+before you call it done. Over a JavaScript or TypeScript file it reads only the comments,
+since the code is not prose. It never rules on whether a surviving em dash earns its keep, on
 filler, asides, or concreteness, or on a spelling the list does not name. Those stay a
 human read.
 

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
 
-import { findBritishSpellings } from '../prose-lint.mjs';
+import { commentsOf, findBritishSpellings } from '../prose-lint.mjs';
 
 const LINT = '.claude/scripts/prose-lint.mjs';
 const PLUGIN_DIR = fileURLToPath(new URL('../../..', import.meta.url));
@@ -159,6 +159,130 @@ describe('prose-lint.mjs american-english', () => {
     const r = lint(root, rel);
 
     expect(r.status, r.stdout).toBe(0);
+  });
+});
+
+describe('prose-lint.mjs over a source file', () => {
+  it('reads only the comments, so statements, interface bodies, and imports carry no findings', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/tool.mts',
+      [
+        '#!/usr/bin/env node',
+        '/**',
+        ' * Reads the config once and never again.',
+        ' */',
+        "import { readFileSync } from 'node:fs';",
+        '',
+        'interface Options {',
+        '  verbose: boolean;',
+        '  root: string;',
+        '}',
+        'const URL_RE = /https?:\\/\\/\\S+/g;',
+        "const banner = 'see https://example.test/a;b'; // the URL keeps its semicolon",
+        'export function run(options: Options): void {',
+        '  const x = options.root; const y = options.verbose;',
+        '}',
+        '',
+      ].join('\n'),
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).toContain('No findings.');
+  });
+
+  it('flags a semicolon inside a line comment and inside a block comment, naming each line', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/tool.mts',
+      [
+        '/**',
+        ' * Reads the config; caches it.',
+        ' */',
+        'const cache = new Map();',
+        'const limit = 4; // a limit; not a typo',
+        '',
+      ].join('\n'),
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain(`${rel}:2`);
+    expect(r.stdout).toContain(`${rel}:5`);
+    expect(r.stdout).not.toContain(`${rel}:4`);
+  });
+
+  it('ends an em-dash paragraph at a bare star line inside a block comment', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/tool.mts',
+      [
+        '/**',
+        ' * One aside — here.',
+        ' *',
+        ' * Another aside — there.',
+        ' */',
+        'export const x = 1;',
+        '',
+      ].join('\n'),
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).not.toContain('[prose-voice/em-dash-density]');
+  });
+
+  it('flags a British spelling in a comment and not in an identifier', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/tool.mts',
+      [
+        '// Picks the colour of the badge.',
+        'export const colourOf = (badge: string): string => badge;',
+        '',
+      ].join('\n'),
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain(`${rel}:1`);
+    expect(r.stdout).not.toContain(`${rel}:2`);
+  });
+});
+
+describe('commentsOf', () => {
+  it('keeps the line count of the source so findings map back to it', () => {
+    const source =
+      'const a = 1; // one\n/* two\n   three */ const b = 2;\nconst c = `x;\ny`;\n';
+
+    expect(commentsOf(source).split('\n').length).toBe(
+      source.split('\n').length,
+    );
+  });
+
+  it('does not open a comment on an escaped slash pair inside a regex literal', () => {
+    expect(commentsOf('const re = /https?:\\/\\/\\S+/g; // tail\n')).toBe(
+      'tail\n',
+    );
+  });
+
+  it('does not open a comment on a double slash inside a string', () => {
+    expect(commentsOf("const url = 'https://x.test'; // tail\n")).toBe(
+      'tail\n',
+    );
+  });
+
+  it('skips a quote inside a regex literal instead of opening a string', () => {
+    expect(commentsOf("const q = /'/g; // tail\n")).toBe('tail\n');
   });
 });
 
