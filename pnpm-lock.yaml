@@ -363,7 +363,7 @@ importers:
         specifier: workspace:*
         version: link:../../../payload
 
-  packages/houserules:
+  packages/create-houserules:
     dependencies:
       '@houserules/cli':
         specifier: workspace:^

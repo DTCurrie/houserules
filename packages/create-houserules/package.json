@@ -1,13 +1,13 @@
 {
-  "name": "houserules",
-  "version": "0.1.0",
-  "description": "Bare-name shim for @houserules/cli, so `npx houserules` resolves.",
+  "name": "create-houserules",
+  "version": "0.0.0",
+  "description": "Initializer for @houserules/cli: `npm create houserules` adds the cli to the repo and runs init.",
   "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "houserules": "bin/houserules.mjs"
+    "create-houserules": "bin/create-houserules.mjs"
   },
   "files": [
     "bin"
@@ -32,9 +32,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/DTCurrie/houserules.git",
-    "directory": "packages/houserules"
+    "directory": "packages/create-houserules"
   },
-  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/houserules#readme",
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/create-houserules#readme",
   "bugs": "https://github.com/DTCurrie/houserules/issues",
   "dependencies": {
     "@houserules/cli": "workspace:^"
@@ -47,6 +47,7 @@
   "author": "Devin T. Currie (https://github.com/DTCurrie)",
   "keywords": [
     "houserules",
-    "claude-code"
+    "claude-code",
+    "create"
   ]
 }

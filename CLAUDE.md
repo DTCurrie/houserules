@@ -89,8 +89,10 @@ A pnpm workspace of seventeen packages. Per-package conventions live in each pac
 CLAUDE.md (`cli`, `api`, `payload`, `test`), loaded when you touch that package.
 
 - `packages/cli` is `@houserules/cli`, the installer. It ships the binary **`houserules`**.
-- `packages/houserules` is `houserules`, the thin package `npx houserules` resolves. One bin,
-  one dependency on the cli. No source, no tests.
+- `packages/create-houserules` is `create-houserules`, the initializer `npm create houserules`
+  resolves. One bin that installs the cli into the repo and runs `init`, one dependency on the
+  cli. No source, no tests. The bare name `houserules` is unpublishable, npm holds it too close
+  to `house-rules`.
 - `packages/api` is `@houserules/api`, the plugin contract package: action types, module
   definitions, and the `houserules.config.json` schema plugin authors build against.
 - `packages/payload` is `@houserules/payload`, the ten shared payload libs, imported by

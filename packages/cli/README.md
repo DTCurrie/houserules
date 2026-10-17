@@ -48,13 +48,16 @@ reading that produced them. Four levers:
 ## Install
 
 ```
-pnpm add -D @houserules/cli
-pnpm exec houserules init
+pnpm create houserules
 ```
 
-The package is `@houserules/cli` and the binary it installs is `houserules`, the same split
-`@changesets/cli` uses for `changeset`. Every later command is just `houserules <cmd>`, since
-the local binary is on the path once the package is a dependency.
+That adds `@houserules/cli` to the repo's devDependencies with the package manager that ran
+it and runs `houserules init`. `npm create houserules` and `yarn create houserules` do the
+same. The package is `@houserules/cli` and the binary it installs is `houserules`, the same
+split `@changesets/cli` uses for `changeset`. Every later command is `pnpm houserules <cmd>`,
+or `npx houserules <cmd>`, since the local binary is on the path once the package is a
+dependency. Installing the cli yourself with `pnpm add -D @houserules/cli` and running
+`pnpm houserules init` lands in the same place.
 
 Preview without writing with `--dry-run`. Skip the prompts with `--yes`. From a local
 checkout, run `node /path/to/houserules/packages/cli/dist/cli.js init`.
@@ -271,7 +274,7 @@ published inside `@houserules/cli` at `schema/houserules.config.schema.json`. `i
 reference into the file it writes, so editors give you completion and inline errors. A repo
 that depends on `@houserules/cli` gets the local
 `../node_modules/@houserules/cli/schema/houserules.config.schema.json`. One that only ever runs
-`npx houserules` has no local copy, so it gets the published URL instead. `doctor` reports
+`npx @houserules/cli` without installing it has no local copy, so it gets the published URL instead. `doctor` reports
 any problem per field (`changesets.baseBranchh is not a known changesets setting`) and exits 2.
 
 ## Ledgers: what is committed and what is generated

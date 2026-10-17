@@ -23,13 +23,14 @@ of modules, previews every write, and then applies them.
 ## Install
 
 ```
-pnpm add -D @houserules/cli
-pnpm exec houserules init
+pnpm create houserules
 ```
 
-The package is `@houserules/cli` and the binary is `houserules`, the same split
-`@changesets/cli` uses for `changeset`. Add `--dry-run` to preview without writing, or
-`--yes` to skip the prompts.
+That adds `@houserules/cli` to the repo's devDependencies and runs `houserules init`. `npm create`
+and `yarn create` work the same way. Every later command is `pnpm houserules <cmd>`, or
+`npx houserules <cmd>`, since the binary is local. Add `--dry-run` to preview without writing,
+or `--yes` to skip the prompts. Installing the cli yourself with `pnpm add -D @houserules/cli`
+and running `pnpm houserules init` lands in the same place.
 
 **[Read the full documentation in `packages/cli`](packages/cli/README.md)**, which covers what
 `init` writes, the sixteen built-in modules, drift and updates, and how to write a plugin.
