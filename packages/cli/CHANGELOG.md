@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.9.2
+
+### Patch Changes
+
+- 9347cf7: Install docs lead with `pnpm create @houserules`.
+
 ## 0.9.1
 
 ### Patch Changes
