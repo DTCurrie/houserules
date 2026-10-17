@@ -1,5 +1,11 @@
 # @houserules/plugin-github
 
+## 0.2.4
+
+### Patch Changes
+
+- 940ec16: Shorter tidy and verify-changed descriptions, user-run skills left out of the listing, Prose style allows one line around tool work.
+
 ## 0.2.3
 
 ### Patch Changes

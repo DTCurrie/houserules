@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-backlog",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "houserules plugin: an append-only backlog ledger, with the add skill and reviewer agent around it.",
   "type": "module",
   "publishConfig": {

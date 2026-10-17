@@ -1,5 +1,15 @@
 # @houserules/plugin-svelte
 
+## 0.2.0
+
+### Minor Changes
+
+- 64d8ab7: svelte.md gains a Lifecycle section and svelte-lint flags onDestroy inside a .svelte component.
+
+### Patch Changes
+
+- f00d21d: Svelte context rule states why Symbol keys are required.
+
 ## 0.1.3
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @houserules/plugin-backlog
 
+## 0.2.0
+
+### Minor Changes
+
+- 3be211a: brief-driven reviewer and writer agents skip CLAUDE.md with omitClaudeMd
+
+### Patch Changes
+
+- f00d21d: Ledger scripts read CLAUDE_CODE_SESSION_ID and encode the project directory like Claude Code.
+
 ## 0.1.5
 
 ### Patch Changes
