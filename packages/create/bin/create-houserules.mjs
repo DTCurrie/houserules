@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * The initializer behind `npm create houserules`, `pnpm create houserules`, and
- * `yarn create houserules`, run inside the repo to set up. It adds `@houserules/cli` to the
+ * The initializer behind `npm create @houserules`, `pnpm create @houserules`, and
+ * `yarn create @houserules`, run inside the repo to set up. It adds `@houserules/cli` to the
  * repo's devDependencies with the package manager that invoked it, at the cli version this
  * package was published with, then runs `houserules init` from the repo's own copy. Every
  * argument is handed to `init`, so `--yes` and `--dry-run` work, and the install happens
@@ -12,6 +12,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+
+import pinnedCli from '@houserules/cli/package.json' with { type: 'json' };
 
 const CLI = '@houserules/cli';
 
@@ -47,25 +49,24 @@ function run(command, args, cwd) {
 const root = process.cwd();
 if (!existsSync(join(root, 'package.json'))) {
   console.error(
-    `create-houserules: no package.json in ${root}. Run \`npm init -y\` first, then run this again.`,
+    `@houserules/create: no package.json in ${root}. Run \`npm init -y\` first, then run this again.`,
   );
   process.exit(1);
 }
 
-const { version } = createRequire(import.meta.url)(`${CLI}/package.json`);
 const manager = packageManager(root);
 const install = run(
   manager,
-  [...INSTALL_ARGS[manager], `${CLI}@^${version}`],
+  [...INSTALL_ARGS[manager], `${CLI}@^${pinnedCli.version}`],
   root,
 );
 if (install.status !== 0) process.exit(install.status ?? 1);
 
 const repoRequire = createRequire(join(root, 'package.json'));
-const cliManifest = repoRequire.resolve(`${CLI}/package.json`);
+const installedManifest = repoRequire.resolve(`${CLI}/package.json`);
 const cliBin = join(
-  dirname(cliManifest),
-  repoRequire(cliManifest).bin.houserules,
+  dirname(installedManifest),
+  repoRequire(installedManifest).bin.houserules,
 );
 const init = run(
   process.execPath,

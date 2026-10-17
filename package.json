@@ -60,7 +60,7 @@
       "dependencies": [
         "./packages/api:build",
         "./packages/cli:build",
-        "./packages/create-houserules:build",
+        "./packages/create:build",
         "./packages/payload:build",
         "./packages/plugin-accessibility:build",
         "./packages/plugin-backlog:build",

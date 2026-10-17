@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- 9764727: `npm create houserules` installs the cli and runs init, replacing the unpublishable `houserules` shim.
+- 9764727: `npm create @houserules` installs the cli and runs init, replacing the unpublishable `houserules` shim.
 
 ## 0.9.0
 

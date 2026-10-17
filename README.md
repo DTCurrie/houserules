@@ -23,7 +23,7 @@ of modules, previews every write, and then applies them.
 ## Install
 
 ```
-pnpm create houserules
+pnpm create @houserules
 ```
 
 That adds `@houserules/cli` to the repo's devDependencies and runs `houserules init`. `npm create`

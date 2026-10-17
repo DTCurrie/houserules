@@ -1,7 +1,7 @@
 {
-  "name": "create-houserules",
+  "name": "@houserules/create",
   "version": "0.1.0",
-  "description": "Initializer for @houserules/cli: `npm create houserules` adds the cli to the repo and runs init.",
+  "description": "Initializer for @houserules/cli: `npm create @houserules` adds the cli to the repo and runs init.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -32,9 +32,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/DTCurrie/houserules.git",
-    "directory": "packages/create-houserules"
+    "directory": "packages/create"
   },
-  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/create-houserules#readme",
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/create#readme",
   "bugs": "https://github.com/DTCurrie/houserules/issues",
   "dependencies": {
     "@houserules/cli": "workspace:^"

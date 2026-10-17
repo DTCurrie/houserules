@@ -48,11 +48,11 @@ reading that produced them. Four levers:
 ## Install
 
 ```
-pnpm create houserules
+pnpm create @houserules
 ```
 
 That adds `@houserules/cli` to the repo's devDependencies with the package manager that ran
-it and runs `houserules init`. `npm create houserules` and `yarn create houserules` do the
+it and runs `houserules init`. `npm create @houserules` and `yarn create @houserules` do the
 same. The package is `@houserules/cli` and the binary it installs is `houserules`, the same
 split `@changesets/cli` uses for `changeset`. Every later command is `pnpm houserules <cmd>`,
 or `npx houserules <cmd>`, since the local binary is on the path once the package is a
