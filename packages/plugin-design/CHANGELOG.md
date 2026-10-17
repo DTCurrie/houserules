@@ -1,5 +1,17 @@
 # @houserules/plugin-design
 
+## 0.4.0
+
+### Minor Changes
+
+- 3be211a: design-reviewer flags generated-interface defaults listed in the visual principles reference
+- 3be211a: brief-driven reviewer and writer agents skip CLAUDE.md with omitClaudeMd
+
+### Patch Changes
+
+- 8f3623d: Dispatching skills treat a stalled subagent as unreviewed, and subagents background long commands.
+- 940ec16: Shorter tidy and verify-changed descriptions, user-run skills left out of the listing, Prose style allows one line around tool work.
+
 ## 0.3.0
 
 ### Minor Changes

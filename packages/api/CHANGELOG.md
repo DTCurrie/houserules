@@ -1,5 +1,24 @@
 # @houserules/api
 
+## 0.6.0
+
+### Minor Changes
+
+- 940ec16: Guard hooks carry onFailure: block, so a crashed guard fails closed on Claude Code 2.1.295+.
+- decb5e4: verify.timeoutMs caps each verify command, and verify-changed runs in the background instead of a subagent.
+- f00d21d: Hook wrappers choose their missing-script fallback by event instead of one shared exit 1.
+- cdc66de: Managed block honors an existing AGENTS.md; instructionsFile config forces either file.
+
+### Patch Changes
+
+- 940ec16: workerTools takes mcp__<server> patterns and doctor warns when a rule names an uncovered MCP tool.
+- Updated dependencies [f00d21d]
+- Updated dependencies [decb5e4]
+- Updated dependencies [3be211a]
+- Updated dependencies [cdc66de]
+- Updated dependencies [f00d21d]
+  - @houserules/payload@0.4.0
+
 ## 0.5.0
 
 ### Minor Changes

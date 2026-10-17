@@ -1,5 +1,16 @@
 # @houserules/plugin-accessibility
 
+## 0.2.0
+
+### Minor Changes
+
+- 3be211a: brief-driven reviewer and writer agents skip CLAUDE.md with omitClaudeMd
+
+### Patch Changes
+
+- 8f3623d: Dispatching skills treat a stalled subagent as unreviewed, and subagents background long commands.
+- 3be211a: Vue guide corrects how v-show and v-if interact with focus
+
 ## 0.1.4
 
 ### Patch Changes
