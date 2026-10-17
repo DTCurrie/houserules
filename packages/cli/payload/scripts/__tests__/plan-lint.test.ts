@@ -8,6 +8,7 @@ import {
   checkFixOnSubagentStop,
   checkNoPlanWorkspace,
   checkPlanPaths,
+  checkReviewFocus,
   checkRoadmapSync,
   checkSliceStatuses,
 } from '../plan-lint.mjs';
@@ -192,6 +193,103 @@ describe('checkFencedCodeShare', () => {
     const report = checkFencedCodeShare('phase-1.md', markdown);
 
     expect(report.findings).toHaveLength(1);
+  });
+});
+
+describe('checkReviewFocus', () => {
+  const phase = (items: string[]) =>
+    [
+      '# Phase 1: Demo',
+      '',
+      '## Steps',
+      '',
+      '- [ ] a step',
+      '',
+      '## Review Focus',
+      '',
+      ...items,
+      '',
+      '## Notes & decisions',
+      '',
+      '- unrelated bullet',
+    ].join('\n');
+  const pinned = (count: number) =>
+    Array.from(
+      { length: count },
+      (_, i) =>
+        `- input ${i} is rejected, pinned by \`src/__tests__/case-${i}.test.ts\``,
+    );
+
+  it('passes a section with three items that each name a test path', () => {
+    const report = checkReviewFocus('phase-1.md', phase(pinned(3)));
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('passes a section at exactly five items', () => {
+    const report = checkReviewFocus('phase-1.md', phase(pinned(5)));
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('warns once with the count on a section of six items', () => {
+    const report = checkReviewFocus('phase-1.md', phase(pinned(6)));
+
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]?.rule).toBe('plan-lint/review-focus-count');
+    expect(report.findings[0]?.level).toBe('warn');
+    expect(report.findings[0]?.msg).toContain('6 items');
+  });
+
+  it('warns once, naming the line, on an item with no backticked path', () => {
+    const items = [
+      ...pinned(2),
+      '- an empty config is tolerated',
+      ...pinned(1),
+    ];
+
+    const report = checkReviewFocus('phase-1.md', phase(items));
+
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]?.rule).toBe('plan-lint/review-focus-pin');
+    expect(report.findings[0]?.line).toBe(11);
+    expect(report.findings[0]?.msg).toContain('line 11');
+  });
+
+  it('accepts a bare test filename in backticks as the pin', () => {
+    const report = checkReviewFocus(
+      'phase-1.md',
+      phase(['- a stale lock is cleared, pinned by `lock.test.ts`']),
+    );
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('reads a path on a wrapped continuation line as part of the item', () => {
+    const report = checkReviewFocus(
+      'phase-1.md',
+      phase([
+        '- a stale lock is cleared, pinned by',
+        '  `src/__tests__/lock.test.ts`',
+      ]),
+    );
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('passes a phase with no Review Focus section', () => {
+    const report = checkReviewFocus(
+      'phase-1.md',
+      '# Phase 1: Demo\n\n## Steps\n\n- [ ] a step with no pin\n',
+    );
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('passes an empty Review Focus section', () => {
+    const report = checkReviewFocus('phase-1.md', phase([]));
+
+    expect(report.findings).toEqual([]);
   });
 });
 

@@ -45,6 +45,7 @@ const DECLINED = [
   'the three git-status commands `orchestrate` bundles before reading a report (§5), which are process state, not a property of a file on disk',
   'worker-report shape, since a report is an agent message, not a persisted artifact this checker has anything to read',
   'wave-owns glob overlap between slices, deferred with the candidate itself: judging whether two textually distinct globs are safe to run in parallel needs real glob-intersection, not literal string matching',
+  'whether a test pinned by a `## Review Focus` item exists in the tree, which is a phase-close check in `orchestrate`, not a property of the plan file',
 ];
 
 interface SliceTable {
@@ -265,6 +266,80 @@ export function checkFencedCodeShare(file: string, markdown: string): Report {
   return report;
 }
 
+/** Most items a phase's `## Review Focus` section may hold. */
+const REVIEW_FOCUS_ITEM_CAP = 5;
+const TEST_PATH_SUFFIXES = ['.ts', '.mts', '.mjs'];
+
+function namesBacktickedPath(text: string): boolean {
+  const spanRe = /`([^`]+)`/g;
+  let match: RegExpExecArray | null;
+  while ((match = spanRe.exec(text))) {
+    const span = match[1] ?? '';
+    if (span.includes('/')) return true;
+    if (TEST_PATH_SUFFIXES.some((suffix) => span.endsWith(suffix))) return true;
+  }
+  return false;
+}
+
+interface ReviewFocusItem {
+  line: number;
+  text: string;
+}
+
+/** The top-level bullets under `## Review Focus`, each carrying its wrapped continuation lines. */
+function collectReviewFocusItems(
+  lines: string[],
+  start: number,
+): ReviewFocusItem[] {
+  const items: ReviewFocusItem[] = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    if (/^##\s/.test(line)) break;
+    if (/^[-*]\s/.test(line)) {
+      items.push({ line: index + 1, text: line });
+    } else if (items.length > 0 && /^\s+\S/.test(line)) {
+      const last = items[items.length - 1];
+      if (last) last.text = `${last.text}\n${line}`;
+    }
+  }
+  return items;
+}
+
+/**
+ * Checks a phase's `## Review Focus` section: at most five top-level bullets, and each one names
+ * the test that pins it as a backticked path. A phase with no section, or an empty one, passes.
+ * Whether the named test exists is judged at phase close, not here.
+ */
+export function checkReviewFocus(file: string, markdown: string): Report {
+  const report = emptyReport();
+  const lines = markdown.split('\n');
+  const start = lines.findIndex((line) => /^##\s+Review Focus\s*$/.test(line));
+  if (start === -1) return report;
+
+  const items = collectReviewFocusItems(lines, start);
+
+  if (items.length > REVIEW_FOCUS_ITEM_CAP) {
+    report.findings.push({
+      rule: 'plan-lint/review-focus-count',
+      level: 'warn',
+      file,
+      line: start + 1,
+      msg: `## Review Focus has ${items.length} items, over the cap of ${REVIEW_FOCUS_ITEM_CAP}. Keep the ones no step's tests exercise`,
+    });
+  }
+  for (const item of items) {
+    if (namesBacktickedPath(item.text)) continue;
+    report.findings.push({
+      rule: 'plan-lint/review-focus-pin',
+      level: 'warn',
+      file,
+      line: item.line,
+      msg: `## Review Focus item on line ${item.line} names no backticked test path. Pin it to the test file in the step that owns the code`,
+    });
+  }
+  return report;
+}
+
 const PATH_CHECK_PREFIXES = ['packages/', '.claude/', 'scripts/'];
 const PATH_EXEMPT_CHARS = /[*?<>{}|$]/;
 /** A trailing `:36`, `:193-198`, or `:19,43` line annotation on a `path:line` reference. */
@@ -392,6 +467,7 @@ function main(): void {
       const relFile = relative(root, phasePath);
       report.findings.push(...checkSliceStatuses(relFile, markdown).findings);
       report.findings.push(...checkFencedCodeShare(relFile, markdown).findings);
+      report.findings.push(...checkReviewFocus(relFile, markdown).findings);
       const phaseStatus = parseStatusHeader(markdown);
       if (!workspaceArchived && !isDoneStatus(phaseStatus)) {
         report.findings.push(

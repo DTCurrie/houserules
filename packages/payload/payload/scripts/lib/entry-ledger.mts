@@ -69,22 +69,39 @@ function readLastJsonRecord(file: string): TranscriptRecord | null {
  * The longest project directory name Claude Code writes before it truncates, per
  * https://code.claude.com/docs/en/sessions.md. Past this length Claude Code keeps the first
  * 200 characters and appends a hash of the full path. The page does not name the hash, so
- * {@link claudeProjectDir} returns only the 200-character prefix for such a path.
+ * {@link claudeProjectDir} finds the real directory by listing the projects directory for the
+ * single entry that starts with the 200-character prefix.
  */
 const PROJECT_DIR_NAME_MAX_LENGTH = 200;
 
 /**
  * The directory name Claude Code gives a project under `~/.claude/projects/`: the absolute
  * working-directory path with every character outside `A-Z`, `a-z`, and `0-9` replaced by
- * `-`, per https://code.claude.com/docs/en/sessions.md. A name past
- * {@link PROJECT_DIR_NAME_MAX_LENGTH} is cut to that length. Every reader of a project's
- * transcripts, in the payload and in the CLI, derives the name here, so the encoding can
- * never disagree between them.
+ * `-`, per https://code.claude.com/docs/en/sessions.md. A name that reaches
+ * {@link PROJECT_DIR_NAME_MAX_LENGTH} is cut to that length and followed by a hash the page
+ * does not name, so the real directory is the one entry in `projectsDir` that starts with the
+ * prefix. Every reader of a project's transcripts, in the payload and in the CLI, derives the
+ * name here, so the encoding can never disagree between them.
+ *
+ * @param projectsDir The directory to list for a capped name. Read only for such a name.
+ * @returns The bare prefix when no entry or several entries match, or the directory cannot be
+ * read.
  */
-export function claudeProjectDir(absolutePath: string): string {
-  return absolutePath
-    .replace(/[^A-Za-z0-9]/g, '-')
-    .slice(0, PROJECT_DIR_NAME_MAX_LENGTH);
+export function claudeProjectDir(
+  absolutePath: string,
+  projectsDir: string = resolve(homedir(), '.claude/projects'),
+): string {
+  const encoded = absolutePath.replace(/[^A-Za-z0-9]/g, '-');
+  if (encoded.length < PROJECT_DIR_NAME_MAX_LENGTH) return encoded;
+  const prefix = encoded.slice(0, PROJECT_DIR_NAME_MAX_LENGTH);
+  try {
+    const matches = readdirSync(projectsDir).filter((name) =>
+      name.startsWith(prefix),
+    );
+    return matches.length === 1 ? (matches[0] ?? prefix) : prefix;
+  } catch {
+    return prefix;
+  }
 }
 
 /**

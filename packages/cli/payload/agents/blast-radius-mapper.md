@@ -4,6 +4,7 @@ description: Maps ONE search angle of a change's blast radius and returns a comp
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium
+omitClaudeMd: true
 ---
 
 You map **one search angle** of a change's blast radius and report back to a surveyor who will merge

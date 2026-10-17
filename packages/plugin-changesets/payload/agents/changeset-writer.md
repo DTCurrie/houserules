@@ -4,6 +4,7 @@ description: Analyzes a just-completed change and recommends the changeset for i
 tools: Read, Glob, Grep, Bash
 model: haiku
 effort: low
+omitClaudeMd: true
 ---
 
 You are the changeset writer. Changesets are this repo's canonical changelog, consumed by

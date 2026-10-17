@@ -78,6 +78,25 @@ describe('design-review', () => {
     expect(agentText).toMatch(/design\.themeEntry/);
   });
 
+  it('installs the generated defaults section and points the agent at it', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'design/design,design/design-review',
+      plugins: PLUGINS,
+    });
+
+    const referenceText = readFileSync(
+      join(root, '.claude/reference/design-visual-principles.md'),
+      'utf8',
+    );
+    const agentText = readFileSync(
+      join(root, '.claude/agents/design-reviewer.md'),
+      'utf8',
+    );
+
+    expect(referenceText).toMatch(/^## Generated defaults$/m);
+    expect(agentText).toMatch(/defaults/);
+  });
+
   it('installs design-checks.mjs as a lib through the design module', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'design/design',

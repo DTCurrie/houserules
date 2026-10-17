@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { makeCtx } from '#test/ctx-builder';
 import { useInstalledRepo } from '#test/repo';
+import { plan } from '../ci-settings.js';
 import { manifestOf, settingsOf, sha256 } from '#test/installed-tree';
 
 const CI_SETTINGS = '.claude/settings.ci.json';
@@ -45,6 +47,14 @@ describe('ci-settings', () => {
       deny,
       'denying .changeset/** in settings.json would break the /changeset skill',
     ).toEqual([]);
+  });
+
+  it('says under --bare that no hook runs, so the deny list stands alone', () => {
+    const advice = plan(makeCtx()).find((action) => action.kind === 'advise');
+
+    expect(advice?.kind === 'advise' ? advice.text : '').toMatch(
+      /--bare[^.]*hook/,
+    );
   });
 
   it('is not installed by default', () => {

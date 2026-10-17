@@ -11,10 +11,10 @@ what Vue's templating and reactivity change about the accessibility tree.
 ## Rule — follow without deliberation
 
 - **`v-if` removes the element, `v-show` hides it and keeps it.** `v-if` drops the node from
-  the DOM, so a screen reader stops seeing it and focus that was on it falls back to
-  `<body>`. `v-show` sets `display: none`, which also hides the node from assistive
-  technology but leaves it mounted. Picking the wrong one produces a control that is
-  invisible but still focusable, or focus that disappears mid-interaction.
+  the DOM. `v-show` sets `display: none` and leaves the node mounted with its state. Either
+  way the hidden subtree leaves the tab order and the accessibility tree. Focus that was
+  inside it falls to `<body>` with no announcement, and nothing moves it back. Returning
+  focus to the control that opened it is your job.
 - **Move focus yourself after a Vue Router navigation.** A route change does not move focus
   or announce anything on its own, so the screen reader stays silent unless the new view's
   heading or main region is focused deliberately.
@@ -41,22 +41,37 @@ what Vue's templating and reactivity change about the accessibility tree.
 
 ## Examples
 
-**Bad — `v-show` hides a dialog but leaves it in the tab order:**
+**Bad — closing the dialog drops focus to `<body>`:**
 
 ```vue
 <template>
+  <button @click="open = true">Open</button>
   <div v-show="open" role="dialog" aria-modal="true">
     <button @click="open = false">Close</button>
   </div>
 </template>
 ```
 
-**Good — `v-if` removes it from the tree and from the tab order when closed:**
+**Good — focus returns to the opening button after `nextTick`:**
 
 ```vue
+<script setup>
+import { nextTick, ref, useTemplateRef } from 'vue';
+
+const open = ref(false);
+const trigger = useTemplateRef('trigger');
+
+async function close() {
+  open.value = false;
+  await nextTick();
+  trigger.value.focus();
+}
+</script>
+
 <template>
-  <div v-if="open" role="dialog" aria-modal="true">
-    <button @click="open = false">Close</button>
+  <button ref="trigger" @click="open = true">Open</button>
+  <div v-show="open" role="dialog" aria-modal="true">
+    <button @click="close">Close</button>
   </div>
 </template>
 ```

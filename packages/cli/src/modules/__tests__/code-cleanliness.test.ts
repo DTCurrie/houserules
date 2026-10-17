@@ -117,6 +117,18 @@ describe('code-cleanliness', () => {
       expect(skillText).toMatch(/This is rule-driven, not judgment-driven/);
     });
 
+    it('runs the audit in a subagent whose return value is the findings list', () => {
+      const skillText = readFileSync(
+        join(root, '.claude/skills/tidy/SKILL.md'),
+        'utf8',
+      );
+      const { frontmatter } = splitFrontmatter(skillText);
+      expect(frontmatter, 'the skill dispatches the audit').toMatch(
+        /allowed-tools:.*\bAgent\b/,
+      );
+      expect(skillText).toMatch(/TIDY FINDINGS/);
+    });
+
     it('tracks the rule, reference doc, and skill as kit-owned in the manifest', () => {
       const manifest = manifestOf(root);
       const rule = splitFrontmatter(

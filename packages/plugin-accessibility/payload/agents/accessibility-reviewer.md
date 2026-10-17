@@ -4,6 +4,7 @@ name: 'accessibility-reviewer'
 tools: Read, Grep, Glob, Bash
 model: haiku
 effort: low
+omitClaudeMd: true
 ---
 
 You are the accessibility reviewer, a read-only WCAG 2.2 check on changed markup. Nobody

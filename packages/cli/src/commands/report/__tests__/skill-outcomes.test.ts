@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { emptyIndex, serializeIndex } from '@houserules/payload/ledger-index';
+import type { LedgerEntry } from '@houserules/payload/ledger-index';
 import { useRepo } from '#test/repo';
 import { runIn } from '#test/run';
 
@@ -214,6 +216,39 @@ describe('computeChangesetOutcome', () => {
   });
 });
 
+function indexEntry(
+  id: string,
+  date: string,
+  chat: string | null,
+): LedgerEntry {
+  return {
+    id,
+    itemId: '',
+    issue: null,
+    title: id,
+    body: '',
+    surface: 'cli',
+    date,
+    chat,
+    status: null,
+    scope: [],
+    under: null,
+    supersedes: [],
+    supersededBy: null,
+  };
+}
+
+function writeIndex(root: string, entries: LedgerEntry[]): void {
+  writeFile(
+    root,
+    '.claude/ledgers/backlog.index.json',
+    serializeIndex({
+      ...emptyIndex('backlog', '2026-01-01T00:00:00.000Z'),
+      entries,
+    }),
+  );
+}
+
 describe('computeLedgerOutcome', () => {
   it('matches an add entry to a fire from the same session', () => {
     const root = tempRoot();
@@ -269,6 +304,51 @@ describe('computeLedgerOutcome', () => {
     });
   });
 
+  it('matches an index entry when the jsonl is empty', () => {
+    const root = tempRoot();
+    writeFile(root, '.claude/ledgers/backlog.jsonl', '');
+    writeIndex(root, [indexEntry('A-1', '2026-01-01', 'sess-9')]);
+    const corpus = corpusFromLines([
+      skillFireLine('sess-9', '2026-03-01T00:00:00.000Z', 'backlog-add'),
+    ]);
+
+    expect(
+      computeLedgerOutcome(corpus, root, 'backlog.jsonl', 'backlog-add'),
+    ).toEqual({ skill: 'backlog-add', fires: 1, matched: 1, totalAdds: 1 });
+  });
+
+  it('does not match an index entry from another session outside the window', () => {
+    const root = tempRoot();
+    writeIndex(root, [indexEntry('A-1', '2026-01-01', 'sess-9')]);
+    const corpus = corpusFromLines([
+      skillFireLine('sess-other', '2026-03-01T00:00:00.000Z', 'backlog-add'),
+    ]);
+
+    expect(
+      computeLedgerOutcome(corpus, root, 'backlog.jsonl', 'backlog-add'),
+    ).toEqual({ skill: 'backlog-add', fires: 1, matched: 0, totalAdds: 1 });
+  });
+
+  it('counts an id held by both the jsonl and the index once', () => {
+    const root = tempRoot();
+    writeFile(
+      root,
+      '.claude/ledgers/backlog.jsonl',
+      `${JSON.stringify({ action: 'add', id: 'A-1', chat: 'sess-9' })}\n`,
+    );
+    writeIndex(root, [
+      indexEntry('A-1', '2026-01-01', 'sess-9'),
+      indexEntry('A-2', '2026-01-02', 'sess-10'),
+    ]);
+    const corpus = corpusFromLines([
+      skillFireLine('sess-9', '2026-03-01T00:00:00.000Z', 'backlog-add'),
+    ]);
+
+    expect(
+      computeLedgerOutcome(corpus, root, 'backlog.jsonl', 'backlog-add'),
+    ).toEqual({ skill: 'backlog-add', fires: 1, matched: 1, totalAdds: 2 });
+  });
+
   it('reports zeros when the ledger file is missing', () => {
     const root = tempRoot();
     const corpus = corpusFromLines([]);
@@ -304,7 +384,7 @@ describe('renderSkillOutcomes', () => {
       '    /changeset:   fired 3, matched 1 via the outcome record and 1 via the 72h git window (2 record entries, 4 files added across history)',
       '    /backlog-add: fired 2, matched a ledger add for 1 (5 adds in the local ledger)',
       '    /decide:      fired 1, matched a ledger add for 0 (0 adds in the local ledger)',
-      '    (ledger rates undercount where sync to GitHub Projects has pruned the local .jsonl)',
+      '    (ledger counts read the local .jsonl plus the synced index, so they undercount only entries neither holds)',
     ]);
   });
 });

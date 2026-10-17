@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
@@ -56,6 +56,13 @@ function asCandidate(
 ): PluginCandidate | null {
   const pkg = readPackageJson(dir);
   if (!pkg?.keywords?.includes(PLUGIN_KEYWORD)) return null;
+  // A plugin ships a payload. The contract package @houserules/api carries the keyword but has no payload, so init rejects it.
+  if (
+    !existsSync(join(dir, 'payload-dist')) &&
+    !existsSync(join(dir, 'payload'))
+  ) {
+    return null;
+  }
   return { packageName: pkg.name ?? fallbackName, dir: canonical(dir) };
 }
 

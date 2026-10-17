@@ -310,6 +310,45 @@ describe('buildRegistry', () => {
     );
   });
 
+  it('throws on a peer range one minor below the running 0.x CLI', () => {
+    const dir = join(FIXTURE_ROOT, 'peer-previous-minor');
+    const config = buildConfig([{ name: dir, alias: 'prevminor' }]);
+
+    expect(() => buildRegistry(makeRoot(), config, [])).toThrow(
+      PluginResolutionError,
+    );
+  });
+
+  it('reports a peer range mismatch to onPeerMismatch and still registers the plugin', () => {
+    const dir = join(FIXTURE_ROOT, 'peer-previous-minor');
+    const config = buildConfig([{ name: dir, alias: 'prevminor' }]);
+    const reports: Array<{ pluginName: string; message: string }> = [];
+
+    const registry = buildRegistry(makeRoot(), config, [], {
+      onPeerMismatch: (pluginName, message) =>
+        reports.push({ pluginName, message }),
+    });
+
+    expect(reports).toEqual([
+      {
+        pluginName: dir,
+        message: expect.stringContaining('requires @houserules/cli "^0.7.0"'),
+      },
+    ]);
+    expect(registry.modules.map((registered) => registered.id)).toEqual([
+      'prevminor/previous-minor',
+    ]);
+  });
+
+  it('still throws on an unparseable peer range when onPeerMismatch is given', () => {
+    const dir = join(FIXTURE_ROOT, 'peer-badrange');
+    const config = buildConfig([{ name: dir, alias: 'peerbadrange' }]);
+
+    expect(() =>
+      buildRegistry(makeRoot(), config, [], { onPeerMismatch: () => {} }),
+    ).toThrow(PluginResolutionError);
+  });
+
   it('accepts a workspace: peer range, which pnpm rewrites to a real version at publish', () => {
     const dir = join(FIXTURE_ROOT, 'peer-workspace');
     const config = buildConfig([{ name: dir, alias: 'peerworkspace' }]);

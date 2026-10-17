@@ -56,10 +56,24 @@ export class PluginResolutionError extends Error {
  * `builtIns` is passed in rather than imported, so the resolver stays free of the module list
  * it populates and a test can build a registry from a fixture set.
  */
+/** Receives a plugin name and the peer-range message `buildRegistry` would otherwise throw. */
+export type PeerMismatchHandler = (pluginName: string, message: string) => void;
+
+/** Options for {@link BuildRegistry}. */
+export interface BuildRegistryOptions {
+  /**
+   * When present, a plugin whose `@houserules/cli` peer range the running CLI does not satisfy
+   * is reported here and still registers, instead of throwing. `doctor` passes it so a stale
+   * plugin degrades to a WARN and every other check still runs.
+   */
+  onPeerMismatch?: PeerMismatchHandler;
+}
+
 export type BuildRegistry = (
   root: string,
   config: HouseConfig | null,
   builtIns: ModuleDef[],
+  options?: BuildRegistryOptions,
 ) => Registry;
 
 /**

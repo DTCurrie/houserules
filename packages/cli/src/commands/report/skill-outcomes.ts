@@ -2,6 +2,9 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { loadIndex } from '@houserules/payload/ledger-index';
+import type { LedgerKind } from '@houserules/payload/ledger-index';
+
 import type { Corpus } from './transcript-events.js';
 import { skillFires } from './transcript-events.js';
 
@@ -134,6 +137,63 @@ export function computeChangesetOutcome(
   };
 }
 
+const LEDGER_KIND_BY_FILE: Record<string, LedgerKind> = {
+  'backlog.jsonl': 'backlog',
+  'decisions.jsonl': 'decisions',
+};
+
+function readJsonlAdds(path: string): Map<string, RecordedEntry> {
+  const adds = new Map<string, RecordedEntry>();
+  if (!existsSync(path)) return adds;
+  let anonymous = 0;
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line) as {
+        action?: string;
+        id?: string;
+        ts?: string;
+        chat?: string;
+      };
+      if (entry.action !== 'add') continue;
+      const key =
+        typeof entry.id === 'string' ? entry.id : `anonymous-${anonymous++}`;
+      adds.set(key, {
+        ts: Date.parse(entry.ts ?? '') || undefined,
+        chat: entry.chat,
+        used: false,
+      });
+    } catch {
+      // A ledger line that does not parse is someone else's defect to report, not this
+      // function's to throw on.
+    }
+  }
+  return adds;
+}
+
+/**
+ * The `add` entries from the local `.jsonl` plus the synced index, one per `id`. The `.jsonl`
+ * entry wins when both hold the same id.
+ */
+function readLedgerEntries(
+  ledgerDirectory: string,
+  ledgerFile: string,
+): RecordedEntry[] {
+  const entries = readJsonlAdds(join(ledgerDirectory, ledgerFile));
+  const kind = LEDGER_KIND_BY_FILE[ledgerFile];
+  const index = kind ? loadIndex(ledgerDirectory, kind) : null;
+  for (const indexed of index?.entries ?? []) {
+    if (entries.has(indexed.id)) continue;
+    // An index entry carries a date and no time, so its window match is day-granular.
+    entries.set(indexed.id, {
+      ts: Date.parse(`${indexed.date}T00:00:00.000Z`) || undefined,
+      chat: indexed.chat ?? undefined,
+      used: false,
+    });
+  }
+  return [...entries.values()];
+}
+
 /**
  * A ledger-writing skill fire landed if the ledger holds an `add` entry from the same
  * session (`chat` field, exact) or within the match window (older entries, heuristic). Each
@@ -145,29 +205,8 @@ export function computeLedgerOutcome(
   ledgerFile: string,
   skill: string,
 ): LedgerOutcome {
-  const ledgerPath = join(root, '.claude', 'ledgers', ledgerFile);
-  const entries: RecordedEntry[] = [];
-  if (existsSync(ledgerPath)) {
-    for (const line of readFileSync(ledgerPath, 'utf8').split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line) as {
-          action?: string;
-          ts?: string;
-          chat?: string;
-        };
-        if (entry.action === 'add')
-          entries.push({
-            ts: Date.parse(entry.ts ?? '') || undefined,
-            chat: entry.chat,
-            used: false,
-          });
-      } catch {
-        // A ledger line that does not parse is someone else's defect to report, not this
-        // function's to throw on.
-      }
-    }
-  }
+  const ledgerDirectory = join(root, '.claude', 'ledgers');
+  const entries = readLedgerEntries(ledgerDirectory, ledgerFile);
   const fires = skillFires(corpus, skill);
   let matched = 0;
   for (const fire of fires) {
@@ -198,7 +237,7 @@ export function renderSkillOutcomes(
     );
   }
   lines.push(
-    '    (ledger rates undercount where sync to GitHub Projects has pruned the local .jsonl)',
+    '    (ledger counts read the local .jsonl plus the synced index, so they undercount only entries neither holds)',
   );
   return lines;
 }

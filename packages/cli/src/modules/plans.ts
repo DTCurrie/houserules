@@ -41,6 +41,11 @@ export function plan(): Action[] {
       'blast-radius-mapper',
       'the sonnet explorer /blast-radius dispatches: one search angle, read-only, fixed report format',
     ),
+    agent(
+      id,
+      'plan-reviewer',
+      'the sonnet reader /plan-project dispatches once at handoff: lists what a builder would still have to ask, read-only',
+    ),
     // Living project state, not commit artifacts, and it churns every phase. A
     // directory-local .gitignore keeps it out of commits without touching the repo's own.
     // Sharing a plan means force-adding it.

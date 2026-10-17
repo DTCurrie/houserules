@@ -19,6 +19,7 @@ import {
   namespacedId,
   PluginResolutionError,
   type BuildRegistry,
+  type PeerMismatchHandler,
   type PluginSource,
   type RegisteredModule,
 } from './plugin-registry.js';
@@ -231,11 +232,15 @@ function invokePlugin(
  * CLI. That is the whole class of bug this function exists to catch.
  *
  * An unparseable range is a malformed manifest, not a pass. It fails with the range quoted.
+ *
+ * A range the CLI does not satisfy fails too, unless `onMismatch` is given. Then it is reported
+ * through the callback and the plugin still loads.
  */
 function checkPeerRange(
   pluginName: string,
   range: string,
   cliVersion: string,
+  onMismatch?: PeerMismatchHandler,
 ): void {
   // pnpm rewrites a `workspace:` range to a real version at publish time, so one can only be
   // seen in a source tree where the plugin and the CLI are the same checkout. There is nothing
@@ -251,10 +256,12 @@ function checkPeerRange(
   // plain ^1.0.0. A plugin author cannot do anything about the CLI's own prerelease, so the
   // range is judged against the release line instead.
   if (!satisfies(cliVersion, range, { includePrerelease: true })) {
-    fail(
-      pluginName,
-      `requires @houserules/cli "${range}" but the running CLI is ${cliVersion}. Update the plugin, or pin a compatible @houserules/cli version.`,
-    );
+    const message = `requires @houserules/cli "${range}" but the running CLI is ${cliVersion}. Update the plugin, or pin a compatible @houserules/cli version.`;
+    if (onMismatch) {
+      onMismatch(pluginName, message);
+      return;
+    }
+    fail(pluginName, message);
   }
 }
 
@@ -296,13 +303,14 @@ function resolvePluginModules(
   entry: { name: string; alias: string; config?: unknown },
   ids: Set<string>,
   cliVersion: string,
+  onPeerMismatch?: PeerMismatchHandler,
 ): { source: PluginSource; modules: RegisteredModule[] } {
   const dir = resolvePluginDir(root, entry.name);
   const pkg = readPluginPackageJson(dir, entry.name);
 
   const peerRange = pkg.peerDependencies?.['@houserules/cli'];
   if (peerRange !== undefined)
-    checkPeerRange(entry.name, peerRange, cliVersion);
+    checkPeerRange(entry.name, peerRange, cliVersion, onPeerMismatch);
 
   const source: PluginSource = {
     name: entry.name,
@@ -342,8 +350,20 @@ function resolvePluginModules(
   return { source, modules };
 }
 
-/** {@inheritDoc BuildRegistry} */
-export const buildRegistry: BuildRegistry = (root, config, builtIns) => {
+/**
+ * {@inheritDoc BuildRegistry}
+ *
+ * `options.onPeerMismatch` exists for `doctor` alone. Doctor is the command that diagnoses a
+ * stale install, so a hard failure on a peer range left the repo unobservable. Every command
+ * that writes passes no options and keeps the throw, because a 0.x minor stays breaking for
+ * them.
+ */
+export const buildRegistry: BuildRegistry = (
+  root,
+  config,
+  builtIns,
+  options = {},
+) => {
   const modules: RegisteredModule[] = builtIns.map((def) => ({
     id: def.id,
     def,
@@ -368,6 +388,7 @@ export const buildRegistry: BuildRegistry = (root, config, builtIns) => {
       entry,
       ids,
       cliVersion,
+      options.onPeerMismatch,
     );
     plugins.push(source);
     modules.push(...pluginModules);

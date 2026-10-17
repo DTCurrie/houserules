@@ -32,6 +32,16 @@ describe('plans', () => {
       expect(agentText).toMatch(/^tools: Read, Grep, Glob, Bash$/m);
     });
 
+    it('ships a sonnet plan-reviewer agent with no edit tools', () => {
+      const agentText = readFileSync(
+        join(root, '.claude/agents/plan-reviewer.md'),
+        'utf8',
+      );
+      expect(agentText).toMatch(/model: sonnet/);
+      expect(agentText).toMatch(/^tools: .*$/m);
+      expect(agentText).not.toMatch(/^tools:.*\b(Write|Edit)\b/m);
+    });
+
     it('installs the /plan-project skill without wiring a hook', () => {
       expect(
         existsSync(join(root, '.claude/skills/plan-project/SKILL.md')),
@@ -47,6 +57,16 @@ describe('plans', () => {
         'utf8',
       );
       expect(text).toMatch(/## Reference\n\n<[^>]*"none"[^>]*>/);
+    });
+
+    it('templates a phase doc with a Review Focus section between Steps and Notes', () => {
+      const text = readFileSync(
+        join(root, '.claude/skills/plan-project/SKILL.md'),
+        'utf8',
+      );
+      expect(text).toMatch(
+        /## Steps\n[\s\S]*\n## Review Focus\n[\s\S]*\n## Notes & decisions\n/,
+      );
     });
 
     it('self-gitignores its plan workspace while keeping the .gitignore itself tracked', () => {
@@ -96,6 +116,10 @@ describe('plans', () => {
       expect(
         existsSync(join(root, '.claude/agents/blast-radius-mapper.md')),
         'blast-radius-mapper agent not installed',
+      ).toBe(false);
+      expect(
+        existsSync(join(root, '.claude/agents/plan-reviewer.md')),
+        'plan-reviewer agent not installed',
       ).toBe(false);
       expect(
         existsSync(join(root, '.claude/plans/.gitignore')),

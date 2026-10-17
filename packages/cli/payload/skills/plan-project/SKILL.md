@@ -164,11 +164,22 @@ Self-check before handing off: if fenced code is more than a tenth of a phase fi
 plan is implementing. Move the code into a "decisions" bullet as prose, or drop it. `plan-lint`
 warns above that share.
 
+## Review Focus
+
+<Optional: up to five inputs or failure modes the spec implies but no step's tests exercise.>
+
+- <the input or failure mode: what must hold, pinned by `path/to/__tests__/owning-step.test.ts`>
+
 ## Notes & decisions
 
 <Captured as you implement: what you chose, what you ruled out, surprises. This is the durable
 memory that survives the transcript.>
 ```
+
+`## Review Focus` lists the inputs and failure modes the spec implies but no step's tests exercise,
+so a reviewer knows where to look. Five items is the cap. Each item names the test file that pins it
+in backticks, in the step that owns the code. `plan-lint` warns past five items and on an item that
+names no test path. Omit the section when every case the spec implies already has a test.
 
 The optional `**Signals:**` line is read by `/orchestrate` where that skill is installed: `wide`
 turns on its pre-slicing `/blast-radius` map and `ui` its close-of-phase accessibility and design
@@ -188,6 +199,13 @@ subagent to start. Every phase in the ROADMAP stays `TODO`.
 This is a hard stop, not a suggestion. The point of writing the plan down is that the user gets to
 read it and change it before any code moves, and a skill that slides from planning into implementing
 takes that away. A phase that looks small enough to just do is still the user's call.
+
+Before the report, dispatch one `plan-reviewer` on the workspace path with
+`subagent_type: "plan-reviewer"` and wait for its list. It reads the finished plan as the person who
+would build it and returns what that person would still have to ask. Carry each question into the
+handoff under the assumptions line, or say the list was empty. It costs one sonnet run and catches
+a mis-specified slice before a worker spends a run on it. Do not edit the plan to answer a question.
+The user decides.
 
 Report, then wait:
 

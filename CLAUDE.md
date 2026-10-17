@@ -107,6 +107,13 @@ Read before the occasion, not after:
 - Wiring a package's `build`/`check`/`test` scripts, tsconfigs, or wireit blocks:
   `docs/package-checks.md`.
 
+## Edits
+
+- **Edit, do not rewrite.** A change to part of a file is an `Edit` of that part. Reach for
+  `Write` only for a new file or when more than half of an existing one changes. A whole-file
+  rewrite to make a small change discards the user's unsaved edits and buries the real diff
+  in a reformat.
+
 ## Commands
 
 Every `build`, `check`, and `test` script runs through wireit, which owns the dependency

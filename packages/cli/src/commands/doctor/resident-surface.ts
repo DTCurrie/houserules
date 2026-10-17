@@ -522,7 +522,8 @@ function measureLatestResident(
     options.claudeConfigDir ??
     process.env.CLAUDE_CONFIG_DIR ??
     join(homedir(), '.claude');
-  const corpus = readCorpus(join(base, 'projects'), [claudeProjectDir(top)]);
+  const projectsDir = join(base, 'projects');
+  const corpus = readCorpus(projectsDir, [claudeProjectDir(top, projectsDir)]);
   const { rows } = computeResidentContext(corpus, top);
   let newest: MeasuredResident | null = null;
   let newestCapturedAt = -Infinity;

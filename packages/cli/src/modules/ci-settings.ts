@@ -58,7 +58,9 @@ function denyList(ctx: Ctx): string[] {
  * never sees them.
  *
  * This complements `guard-bash.mjs` rather than duplicating it. That hook blocks Bash commands,
- * so it stops `git commit` but not an Edit to a workflow file. This stops the edit.
+ * so it stops `git commit` but not an Edit to a workflow file. This stops the edit. Under
+ * `--bare`, the recommended mode for scripted calls, no project hook runs. There this deny list is
+ * the only protection and the Bash guard does not apply.
  */
 export function plan(ctx: Ctx): Action[] {
   return [
@@ -71,7 +73,7 @@ export function plan(ctx: Ctx): Action[] {
     },
     {
       kind: 'advise',
-      text: `CI deny list installed at .claude/settings.ci.json. It is NOT active on its own: pass it explicitly, as \`claude --settings .claude/settings.ci.json -p "<prompt>"\`, in the CI job that runs Claude unattended. It is deliberately separate from settings.json, because denying .changeset/** in an interactive session would break the /changeset skill. It denies edits to .github/**, ${lockfileFor(ctx)}, dist/**, and .changeset/**. Add your own generated or protected paths to the deny list, and note that the file is kit-owned, so \`update\` refreshes it and your edits are reported instead.`,
+      text: `CI deny list installed at .claude/settings.ci.json. It is NOT active on its own: pass it explicitly, as \`claude --settings .claude/settings.ci.json -p "<prompt>"\`, in the CI job that runs Claude unattended. It is deliberately separate from settings.json, because denying .changeset/** in an interactive session would break the /changeset skill. It denies edits to .github/**, ${lockfileFor(ctx)}, dist/**, and .changeset/**. Under \`--bare\`, the recommended mode for scripted calls, no project hook runs, so this deny list is the only protection and the Bash guard hook does not apply. Add your own generated or protected paths to the deny list, and note that the file is kit-owned, so \`update\` refreshes it and your edits are reported instead.`,
       module: id,
     },
   ];

@@ -34,6 +34,11 @@ describe('sweep', () => {
       expect(skillText).toMatch(/haiku|effort: low/);
     });
 
+    it('asks with AskUserQuestion before dispatching more than 8 shards', () => {
+      expect(skillText, 'gate tool missing').toMatch(/AskUserQuestion/);
+      expect(skillText, 'threshold missing').toMatch(/more than 8 shards/);
+    });
+
     it('passes doctor', () => {
       expect(runCli(['doctor', root]).status).toBe(0);
     });

@@ -33,6 +33,7 @@ function hostRootDependingOnFakePlugin(): { root: string; pluginDir: string } {
   );
   const pluginDir = join(root, 'node_modules', '@fake', 'plugin');
   mkdirSync(join(pluginDir, 'dist'), { recursive: true });
+  mkdirSync(join(pluginDir, 'payload-dist'), { recursive: true });
   writeFileSync(
     join(pluginDir, 'package.json'),
     JSON.stringify({
@@ -91,6 +92,14 @@ describe('checkPluginRegistration', () => {
     );
 
     expect(readouts.join('\n')).not.toContain('plugin-accessibility');
+  });
+
+  it('lists plugin packages but never the contract package, which ships no payload', () => {
+    const { readouts } = checkPluginRegistration('/repo', ctxWith([]));
+    const line = readouts.join('\n');
+
+    expect(line).not.toContain('@houserules/api');
+    expect(line).toContain('@houserules/plugin-');
   });
 
   it('says nothing at all on a repo with no houserules installed', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { makeCtx } from '#test/ctx-builder';
 import { useRepo } from '#test/repo';
@@ -8,6 +9,11 @@ import type { HouseConfig } from '@houserules/api';
 import type { HouseManifest } from '@houserules/api/internal';
 import type { Ctx } from '../../../detect.js';
 import { checkConfigValidity } from '../config-validity.js';
+
+const PLUGIN_FIXTURES = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../../test/plugin-fixture',
+);
 
 const STUDIO_TARGET = {
   name: 'studio',
@@ -431,6 +437,31 @@ describe('checkConfigValidity, plugin resolution', () => {
     expect(messages(root, ctx)).toEqual([
       expect.stringContaining('@acme/does-not-exist'),
     ]);
+  });
+});
+
+describe('checkConfigValidity, plugin peer range', () => {
+  it('degrades a peer range mismatch to one WARN and keeps the plugin registered', () => {
+    const root = useRepo('pnpm-monorepo');
+    const pluginDir = join(PLUGIN_FIXTURES, 'peer-previous-minor');
+    const ctx = stageConfig(root, {
+      version: 2,
+      targets: [STUDIO_TARGET, CITYVILLE_TARGET],
+      plugins: [{ name: pluginDir, alias: 'prevminor' }],
+    });
+
+    const result = checkConfigValidity(root, ctx);
+
+    expect(result.findings).toEqual([
+      {
+        level: 'WARN',
+        msg: expect.stringContaining(`plugin "${pluginDir}": requires`),
+      },
+    ]);
+    expect(result.configProblems).toEqual([]);
+    expect(result.registry?.get('prevminor/previous-minor')?.id).toBe(
+      'prevminor/previous-minor',
+    );
   });
 });
 

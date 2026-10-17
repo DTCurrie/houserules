@@ -17,6 +17,12 @@ only thing standing between a destructive slice and starting over.
 caught real drift of exactly this shape: a ROADMAP line marked `DONE` while its sub-plan header still
 read an earlier status.
 
+## Review Focus at phase close
+
+Before flipping the phase to DONE, read the sub-plan's `## Review Focus` section and confirm each
+pinned test exists in the tree. A missing one is an unmet acceptance, so the phase stays open until
+the test lands or the item is removed with a recorded reason.
+
 ## Promoting decisions and rulings
 
 Run `/decide` on anything that clears its bar: not obvious from the code, a competent person could

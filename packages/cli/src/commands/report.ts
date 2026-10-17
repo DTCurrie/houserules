@@ -137,7 +137,10 @@ export async function report(dir: string, flags: Flags): Promise<number> {
   const ctx = detect(root);
   const top = ctx.git.top ?? root;
   const base = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
-  const slugs = [claudeProjectDir(top), ...(flags.slug ?? [])];
+  const slugs = [
+    claudeProjectDir(top, join(base, 'projects')),
+    ...(flags.slug ?? []),
+  ];
   const corpus = readCorpus(join(base, 'projects'), slugs, { since });
   const say = (line: string) => {
     if (!flags.json) console.log(line);

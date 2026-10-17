@@ -4,6 +4,7 @@ name: 'design-reviewer'
 tools: Read, Grep, Glob, Bash
 model: haiku
 effort: low
+omitClaudeMd: true
 ---
 
 You are the design reviewer, a read-only design-system check on changed styled markup. The
@@ -29,6 +30,10 @@ the judgment those checks cannot make.
      Reuse is the default. A new token is a design decision, not a convenience.
    - Whether visual emphasis lands on the primary action, or a secondary element is
      competing with it.
+   - Whether the design carries three or more of the generated defaults listed under
+     "Generated defaults" in `.claude/reference/design-visual-principles.md`. If it does,
+     flag it once, list the defaults present, and ask whether each is a choice for this
+     product. Read that file only when you suspect the pattern.
 
 ## When to ask for a rendered check
 

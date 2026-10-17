@@ -622,8 +622,52 @@ describe('claudeProjectDir', () => {
     expect(claudeProjectDir(path)).toBe(expected);
   });
 
-  it('cuts a name past 200 characters to 200', () => {
-    expect(claudeProjectDir('/' + 'a'.repeat(300))).toBe('-' + 'a'.repeat(199));
+  it('returns the 200-character prefix when the projects directory is empty', () => {
+    const projectsDir = tempRoot();
+
+    expect(claudeProjectDir('/' + 'a'.repeat(300), projectsDir)).toBe(
+      '-' + 'a'.repeat(199),
+    );
+  });
+
+  it('returns the full directory name that starts with the prefix', () => {
+    const projectsDir = tempRoot();
+    const prefix = '-' + 'a'.repeat(199);
+    mkdirSync(join(projectsDir, `${prefix}-x7k2p9`));
+    mkdirSync(join(projectsDir, '-Users-other'));
+
+    expect(claudeProjectDir('/' + 'a'.repeat(300), projectsDir)).toBe(
+      `${prefix}-x7k2p9`,
+    );
+  });
+
+  it('returns the prefix when two entries start with it', () => {
+    const projectsDir = tempRoot();
+    const prefix = '-' + 'a'.repeat(199);
+    mkdirSync(join(projectsDir, `${prefix}-one`));
+    mkdirSync(join(projectsDir, `${prefix}-two`));
+
+    expect(claudeProjectDir('/' + 'a'.repeat(300), projectsDir)).toBe(prefix);
+  });
+
+  it('returns the prefix when the projects directory does not exist', () => {
+    const missing = join(tempRoot(), 'missing');
+
+    expect(claudeProjectDir('/' + 'a'.repeat(300), missing)).toBe(
+      '-' + 'a'.repeat(199),
+    );
+  });
+
+  it('returns a short name without reading the projects directory', () => {
+    const projectsDir = tempRoot();
+    mkdirSync(join(projectsDir, '-Users-x-repo-x7k2p9'));
+
+    expect(claudeProjectDir('/Users/x/repo', projectsDir)).toBe(
+      '-Users-x-repo',
+    );
+    expect(
+      claudeProjectDir('/Users/x/repo', join(projectsDir, 'missing')),
+    ).toBe('-Users-x-repo');
   });
 });
 

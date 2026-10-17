@@ -13,7 +13,11 @@ import { validateHouseConfig } from '@houserules/api/internal';
 import type { CheckResult, Finding, HouseConfig } from '@houserules/api';
 import type { Ctx } from '../../detect.js';
 import { MODULES } from '../../plan.js';
-import { PluginResolutionError, type Registry } from '../../plugin-registry.js';
+import {
+  PluginResolutionError,
+  type BuildRegistryOptions,
+  type Registry,
+} from '../../plugin-registry.js';
 import { buildRegistry } from '../../plugin-resolver.js';
 
 export interface ConfigValidity extends CheckResult {
@@ -204,9 +208,20 @@ export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
   // check would read a tree it cannot attribute, and `--fix` would plan writes from
   // it. Recorded as a config problem, not just a finding, so `doctor()`'s existing
   // `configProblems.length` gate stops the run before drift reconciliation can write.
+  // A peer range the CLI does not satisfy is the exception and only warns. Doctor is the
+  // command that diagnoses a stale install, so a hard fail here left the repo unobservable.
+  // A 0.x minor stays breaking for the commands that write, which keep the throw.
+  const degradeToWarn: BuildRegistryOptions = {
+    onPeerMismatch: (pluginName, message) => {
+      findings.push({
+        level: 'WARN',
+        msg: `plugin "${pluginName}": ${message}`,
+      });
+    },
+  };
   let registry: Registry;
   try {
-    registry = buildRegistry(root, config, MODULES);
+    registry = buildRegistry(root, config, MODULES, degradeToWarn);
   } catch (error) {
     if (!(error instanceof PluginResolutionError)) throw error;
     const msg = `plugin "${error.pluginName}": ${error.message}`;

@@ -4,6 +4,7 @@ name: 'backlog-reviewer'
 tools: Read, Grep, Glob, Bash
 model: haiku
 effort: low
+omitClaudeMd: true
 ---
 
 You are the backlog reviewer, a read-only gut-check on a freshly added backlog entry. You run
