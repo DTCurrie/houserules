@@ -1,6 +1,6 @@
 {
   "name": "create-houserules",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Initializer for @houserules/cli: `npm create houserules` adds the cli to the repo and runs init.",
   "type": "module",
   "publishConfig": {
