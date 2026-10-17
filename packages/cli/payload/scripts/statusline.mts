@@ -27,9 +27,9 @@ try {
     /* no status payload — still print the git-derived bits */
   }
 
-  // A statusLine command re-runs on every render, so the root is resolved once and then
-  // handed to every reader below. `loadConfigSafe()` would otherwise spawn its own
-  // `git rev-parse --show-toplevel` on top of this one.
+  // The harness debounces status-line updates at 300 ms and runs the script once after changes
+  // stop, so the root is resolved once per run and handed to every reader below.
+  // `loadConfigSafe()` would otherwise spawn its own `git rev-parse --show-toplevel` on top of this one.
   const root = repoRootSafe() || status.workspace?.project_dir || process.cwd();
 
   const segments: string[] = [];

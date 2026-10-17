@@ -90,7 +90,7 @@ not touch the file at all.
 | Module             | Default                   | What you get                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core`             | always                    | shared libs, config-driven Bash guard (blocks `git commit/push/stash`, `git checkout/restore/reset --hard/clean`, `gh pr create`), `houserules.config.json`, read-only git permissions, CLAUDE.md seed (filled from detection) or staged additions                                                                                                                                                                                                    |
-| `lint-fix`         | on when fix scripts found | Stop hook: auto-fix changed packages, surface only unfixable residue (SubagentStop is wired but no-ops unless `fix.onSubagentStop`, since parallel subagents would each fix every package at once)                                                                                                                                                                                                                                                    |
+| `lint-fix`         | on when fix scripts found | Stop hook: auto-fix changed packages, surface only unfixable residue. It exits without running after a read-only turn or while background tasks are running. SubagentStop is wired only when `fix.onSubagentStop` is true, since parallel subagents would each fix every package at once                                                                                                                                                              |
 | `session-context`  | on                        | SessionStart hook: 3-line branch/changes/targets header                                                                                                                                                                                                                                                                                                                                                                                               |
 | `rename`           | on when TypeScript        | semantic TS rename via the LanguageService                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `reviewers`        | off                       | per-target read-only reviewer agent **drafts** (marked DRAFT until you fill the authoritative source)                                                                                                                                                                                                                                                                                                                                                 |
@@ -298,8 +298,9 @@ release time by `changeset version`. The module wires the agent side of that:
   something no user ever saw.
 - **`changeset-check.mjs`** (Stop hook) nudges once when package source changed with no
   changeset alongside it. It is branch-aware, so a changeset already committed on the branch
-  counts. The kill-switch is `changesets.stopCheck: false` in `houserules.config.json`, and it exits
-  silently on any git hiccup.
+  counts. The kill-switch is `changesets.stopCheck: false` in `houserules.config.json`, it exits
+  silently on any git hiccup, and it exits 0 without running after a turn that used no
+  file-writing tool.
 - **Respects an existing setup.** If `.changeset/config.json` exists it is never touched. If
   absent, a default is seeded, only with your consent. houserules never installs
   `@changesets/cli` for you and prints the right command instead (pnpm-catalog-aware).
@@ -326,9 +327,8 @@ is worth having and is not the same thing. `output-prose` and `prose-voice` are 
   Activate with `/config` → Output style → **Prose**, or
   set `"outputStyle": "Prose"` in `.claude/settings.local.json`. The value is the exact style
   `name` frontmatter field, **not** the `output-prose` filename, since this style's frontmatter
-  sets a `name:` that differs from its slug. An output style is read once at session start, so a
-  change takes effect after `/clear` or in the next session. It also applies to the main thread
-  only, since a subagent runs its own system prompt (a fork is the one exception, since it
+  sets a `name:` that differs from its slug. A switched output style takes effect from the next
+  message. It also applies to the main thread only, since a subagent runs its own system prompt (a fork is the one exception, since it
   inherits the parent's).
 - **`prose-voice`** (opt-in): a path-scoped rule that holds agent-authored prose to plain
   sentences, no semicolons, and no em dash where a period works. It shapes changesets, plans,

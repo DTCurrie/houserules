@@ -61,14 +61,21 @@ describe('lint-fix without a detected fix command', () => {
   });
 });
 
-function stopHookScripts(actions: ReturnType<typeof plan>): string[] {
+function hookScripts(
+  actions: ReturnType<typeof plan>,
+  event: 'Stop' | 'SubagentStop',
+): string[] {
   return actions
     .filter(
       (a): a is Extract<typeof a, { kind: 'merge-settings' }> =>
         a.kind === 'merge-settings',
     )
-    .flatMap((a) => a.fragment.hooks?.Stop ?? [])
+    .flatMap((a) => a.fragment.hooks?.[event] ?? [])
     .flatMap((g) => g.hooks.map((h) => h.command));
+}
+
+function stopHookScripts(actions: ReturnType<typeof plan>): string[] {
+  return hookScripts(actions, 'Stop');
 }
 
 describe('plan, given a root-scoped fix block whose commands are real root scripts', () => {
@@ -115,6 +122,49 @@ describe('plan, given a root-scoped fix block whose commands are real root scrip
     };
 
     expect(defaultEnabled(ctx), 'defaultEnabled is true').toBe(true);
+  });
+});
+
+describe('plan, wiring SubagentStop', () => {
+  function planWith(onSubagentStop?: boolean) {
+    const ctx = makeCtx({
+      rootPkg: { name: 'my-repo', scripts: { 'lint:fix': 'eslint --fix .' } },
+      targets: [],
+    });
+    ctx.claude.houseConfig = {
+      version: 2,
+      packageManager: 'npm',
+      targets: [],
+      fix: {
+        runner: 'npm',
+        filterFlag: '',
+        runScriptPrefix: ['run'],
+        commands: ['lint:fix'],
+        ...(onSubagentStop === undefined ? {} : { onSubagentStop }),
+      },
+    };
+    return plan(ctx, makeAnswers({ targets: [] }));
+  }
+
+  it('wires Stop and not SubagentStop when fix.onSubagentStop is unset', () => {
+    const actions = planWith();
+
+    expect(hookScripts(actions, 'Stop')).toHaveLength(1);
+    expect(hookScripts(actions, 'SubagentStop')).toEqual([]);
+  });
+
+  it('wires Stop and not SubagentStop when fix.onSubagentStop is false', () => {
+    const actions = planWith(false);
+
+    expect(hookScripts(actions, 'Stop')).toHaveLength(1);
+    expect(hookScripts(actions, 'SubagentStop')).toEqual([]);
+  });
+
+  it('wires both events when fix.onSubagentStop is true', () => {
+    const actions = planWith(true);
+
+    expect(hookScripts(actions, 'Stop')).toHaveLength(1);
+    expect(hookScripts(actions, 'SubagentStop')).toHaveLength(1);
   });
 });
 

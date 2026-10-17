@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   existsSync,
   mkdirSync,
@@ -32,6 +32,7 @@ import {
   surfaceRelFile,
   surfaceScope,
   resolveChat,
+  claudeProjectDir,
   takeChatFlag,
 } from '../entry-ledger.mjs';
 import { emptyIndex, indexBasename, serializeIndex } from '../ledger-index.mjs';
@@ -58,6 +59,7 @@ function onlyEntry(text: string) {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   while (roots.length) rmSync(roots.pop()!, { recursive: true, force: true });
 });
 
@@ -590,6 +592,38 @@ describe('resolveChat', () => {
 
   it('takes an explicit id over anything detected', () => {
     expect(resolveChat('session-7', tempRoot())).toBe('session-7');
+  });
+});
+
+describe('resolveChat session detection', () => {
+  it('returns CLAUDE_CODE_SESSION_ID without reading transcripts', () => {
+    vi.stubEnv('CLAUDE_SESSION_ID', '');
+    vi.stubEnv('CLAUDE_CODE_SESSION_ID', 'harness-1');
+    vi.stubEnv('HOME', join(tempRoot(), 'missing-home'));
+
+    expect(resolveChat(null, tempRoot())).toBe('harness-1');
+  });
+
+  it('prefers CLAUDE_SESSION_ID when both are set', () => {
+    vi.stubEnv('CLAUDE_SESSION_ID', 'manual-2');
+    vi.stubEnv('CLAUDE_CODE_SESSION_ID', 'harness-1');
+
+    expect(resolveChat(null, tempRoot())).toBe('manual-2');
+  });
+});
+
+describe('claudeProjectDir', () => {
+  it.each([
+    ['/Users/x/repo', '-Users-x-repo'],
+    ['/Users/x/Projects/my.repo', '-Users-x-Projects-my-repo'],
+    ['/Users/x/my_repo', '-Users-x-my-repo'],
+    ['/Users/x/my repo', '-Users-x-my-repo'],
+  ])('encodes %s as %s', (path, expected) => {
+    expect(claudeProjectDir(path)).toBe(expected);
+  });
+
+  it('cuts a name past 200 characters to 200', () => {
+    expect(claudeProjectDir('/' + 'a'.repeat(300))).toBe('-' + 'a'.repeat(199));
   });
 });
 

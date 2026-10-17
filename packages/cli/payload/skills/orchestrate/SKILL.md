@@ -122,7 +122,7 @@ change there **request it in their report**. They don't reach for it.
 
 Contract-first is what makes parallel slices safe. Before dispatching a wave, **you** write the shared
 surface it depends on: interfaces, type signatures, function stubs, config keys, the migration, the
-route table. Commit it to disk before fanning out, so workers implement **against a fixed seam**. If
+route table. Write it to disk before fanning out, so workers implement **against a fixed seam**. If
 a wave's slices would have to negotiate an interface between themselves, the seam isn't written yet.
 Write it, then dispatch.
 

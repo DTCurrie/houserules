@@ -5,7 +5,12 @@
  * sees only the residue instead of running lint by hand and reading the full output.
  *
  * Exits 0 when stop_hook_active is set (which avoids loops), when the working tree is
- * clean, and when only generated files changed. SubagentStop is a no-op unless
+ * clean, and when only generated files changed. It also exits 0 before spawning anything
+ * when the Stop payload's background_tasks is non-empty, since the tree is still moving.
+ * It exits 0 the same way when the transcript shows the ended turn used only read-only
+ * tools, and an unreadable transcript falls through to the normal run. A fix step that
+ * overruns the whole-hook budget ends the hook with exit 0 and one stderr line naming the
+ * step and the budget, instead of the harness killing the hook mid-report. SubagentStop is a no-op unless
  * fix.onSubagentStop is set: with parallel subagents each finishing worker would
  * otherwise fix every changed package concurrently, rewriting files its siblings still
  * hold open. The parent turn's Stop runs the same fix once, after the fan-out settles.
@@ -30,10 +35,13 @@ import {
   type HouseConfig,
 } from '@houserules/payload/config';
 import { readStdinJson, repoRoot, tail } from '@houserules/payload/proc';
+import { turnTouchedFiles } from '@houserules/payload/transcript-turn';
 
 interface HookInput {
   stop_hook_active?: boolean;
   hook_event_name?: string;
+  transcript_path?: string;
+  background_tasks?: unknown[];
 }
 
 /** Everything {@link planFixSteps} needs, resolved once from a loaded `HouseConfig`. */
@@ -212,11 +220,16 @@ export function fixArgs(
   return [...runPrefix, script];
 }
 
-// Comfortably under the 600s Stop default, applied per spawnSync call so a hung git
-// or fix command fails fast rather than consuming the whole event budget. SIGKILL
-// because a hung formatter/linter may not respond to the default SIGTERM.
+// Applied per spawnSync call so a hung git or fix command fails fast. SIGKILL because a
+// hung formatter/linter may not respond to the default SIGTERM.
 const GIT_TIMEOUT_MS = 15_000;
-const FIX_TIMEOUT_MS = 120_000;
+
+/**
+ * Total milliseconds the script may spend in fix spawns. The lint-fix module wires the hook
+ * with a 120s timeout, and a spawn that runs to that limit is killed by the harness before
+ * it can report. This plus the git spawn stays under it, so the script ends the hook itself.
+ */
+export const FIX_BUDGET_MS = 90_000;
 
 function changedPaths(cwd: string): string[] {
   const r = spawnSync('git', ['status', '--porcelain'], {
@@ -237,7 +250,8 @@ function runStep(
   script: string,
   cwd: string,
   settings: FixSettings,
-): { ok: boolean; output: string } {
+  timeoutMs: number,
+): { ok: boolean; timedOut: boolean; output: string } {
   const r = spawnSync(
     settings.runner,
     fixArgs(pkg, script, settings.filterFlag, settings.runPrefix),
@@ -245,18 +259,59 @@ function runStep(
       encoding: 'utf-8',
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: FIX_TIMEOUT_MS,
+      timeout: timeoutMs,
       killSignal: 'SIGKILL',
     },
   );
-  const timedOut = r.signal !== null && r.status === null;
   return {
     ok: r.status === 0,
-    output:
-      (timedOut ? `Timed out after ${FIX_TIMEOUT_MS}ms.\n` : '') +
-      (r.stdout || '') +
-      (r.stderr || ''),
+    timedOut: r.signal !== null && r.status === null,
+    output: (r.stdout || '') + (r.stderr || ''),
   };
+}
+
+/** The step that ran out the fix budget. */
+export interface BudgetOverrun {
+  pkg: string;
+  step: string;
+}
+
+/** What {@link runFixSteps} observed: residue from finished steps, and the overrun if one ended the run. */
+export interface FixRun {
+  errors: { pkg: string; step: string; output: string }[];
+  overrun: BudgetOverrun | null;
+}
+
+/** The single stderr line written when `overrun` ended the run. */
+export function overrunNotice(
+  overrun: BudgetOverrun,
+  budgetMs: number,
+): string {
+  return `lint-format-fix: ${overrun.pkg} :: ${overrun.step} did not finish within the ${budgetMs}ms fix budget, skipping the remaining steps.\n`;
+}
+
+/**
+ * Runs `steps` in order, each with whatever remains of `budgetMs` as its timeout. A step
+ * that times out, or that starts with nothing left, ends the run and is reported as the
+ * overrun. Failures from steps that did finish stay in `errors`.
+ */
+export function runFixSteps(
+  steps: [pkg: string, script: string][],
+  cwd: string,
+  settings: FixSettings,
+  budgetMs: number,
+  now: () => number = Date.now,
+): FixRun {
+  const startedAt = now();
+  const errors: FixRun['errors'] = [];
+  for (const [pkg, script] of steps) {
+    const remaining = budgetMs - (now() - startedAt);
+    if (remaining <= 0) return { errors, overrun: { pkg, step: script } };
+    const r = runStep(pkg, script, cwd, settings, remaining);
+    if (r.timedOut) return { errors, overrun: { pkg, step: script } };
+    if (!r.ok) errors.push({ pkg, step: script, output: r.output });
+  }
+  return { errors, overrun: null };
 }
 
 function main(): void {
@@ -274,18 +329,20 @@ function main(): void {
   // buys nothing the parent's Stop doesn't: exit before spending the spawn.
   if (input.hook_event_name === 'SubagentStop' && !settings.onSubagentStop)
     process.exit(0);
+  if (
+    Array.isArray(input.background_tasks) &&
+    input.background_tasks.length > 0
+  )
+    process.exit(0);
+  if (turnTouchedFiles(input.transcript_path) === false) process.exit(0);
 
   const cwd = root;
   const paths = changedPaths(cwd);
   const steps = planFixSteps(paths, settings);
   if (steps.length === 0) process.exit(0);
 
-  const errors: { pkg: string; step: string; output: string }[] = [];
-
-  for (const [pkg, script] of steps) {
-    const r = runStep(pkg, script, cwd, settings);
-    if (!r.ok) errors.push({ pkg, step: script, output: r.output });
-  }
+  const { errors, overrun } = runFixSteps(steps, cwd, settings, FIX_BUDGET_MS);
+  if (overrun) process.stderr.write(overrunNotice(overrun, FIX_BUDGET_MS));
 
   if (errors.length > 0) {
     process.stderr.write(

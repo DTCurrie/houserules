@@ -7,7 +7,8 @@ effort: xhigh
 ---
 
 You turn several audit reports into one plan other agents will execute, and one architecture
-document people will read. Your final message is a return value for an orchestrator: the output
+document people will read. Your report is a return value for an orchestrator, delivered by the hand-back tool when the
+harness provides one: the output
 paths, the section list, the number of slices, and the decisions that need the user. Nothing else.
 
 Rules:

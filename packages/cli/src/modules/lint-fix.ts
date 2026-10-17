@@ -42,10 +42,9 @@ export function defaultEnabled(ctx: Ctx): boolean {
  * A Stop and SubagentStop hook that auto-fixes lint and format on changed packages and
  * surfaces only the unfixable residue.
  *
- * Both events stay wired, but the script no-ops on SubagentStop unless
- * `fix.onSubagentStop` is true, because parallel subagents would each fix every changed
- * package concurrently. Wiring it anyway keeps that knob a config edit rather than a
- * re-run of `update`.
+ * Stop is always wired. SubagentStop is wired only when `fix.onSubagentStop` is true,
+ * because parallel subagents would each fix every changed package concurrently. Turning
+ * the option on later takes a re-run of `update` to wire the event.
  */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const actions: Action[] = [
@@ -64,7 +63,10 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     targets.some((t) => t.fixCommands?.length) ||
     rootFixCommands(ctx).length > 0;
   if (anyFix) {
-    for (const event of ['Stop', 'SubagentStop'])
+    const events = ctx.claude.houseConfig?.fix?.onSubagentStop
+      ? ['Stop', 'SubagentStop']
+      : ['Stop'];
+    for (const event of events)
       actions.push({
         kind: 'merge-settings',
         module: id,

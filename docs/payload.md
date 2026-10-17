@@ -9,9 +9,10 @@ from `packages/cli` and every plugin. Read this before touching any file under a
 - **Payload code crosses packages by PACKAGE NAME, and the build rewrites it.** Recorded in
   the decision ledger. Any payload file, script or lib, reaches a shared lib as
   `import { nowIso } from '@houserules/payload/entry-ledger'`, for values and types alike.
-  There is one form, not two. The nine shared libs live in the standalone
+  There is one form, not two. The ten shared libs live in the standalone
   `@houserules/payload` package: `backlog-id`, `entry-ledger`, `config`, `ledger-index`,
-  `proc`, `workspaces`, `comment-scan`, `findings`, and `markdown-segment`. Anything else
+  `proc`, `workspaces`, `comment-scan`, `findings`, `markdown-segment`, and
+  `transcript-turn`. Anything else
   under `./lib/` is the package's own and stays a relative import.
   - **`houserules-payload` is what makes it safe**, a bin the CLI publishes that each plugin
     runs after its `tsc`. It rewrites those specifiers in the emitted `.mjs` to the relative

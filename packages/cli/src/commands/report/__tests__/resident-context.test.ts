@@ -149,7 +149,7 @@ describe('renderResidentContext', () => {
     expect(text).toContain('recorded 2 of 3 session(s)');
     expect(text).toContain('not recorded (no session-start attachments)');
     expect(text).toContain('2 (10)');
-    expect(text).toContain('medians: total 28 bytes, ~tokens 8');
+    expect(text).toContain('medians (all sessions): total 28 bytes, ~tokens 8');
     expect(text).toContain('Nested CLAUDE.md files load on demand');
   });
 
@@ -163,5 +163,66 @@ describe('renderResidentContext', () => {
       'no session recorded its session-start attachments',
     );
     expect(lines.join('\n')).not.toContain('medians');
+  });
+});
+
+describe('entrypoint medians', () => {
+  function entrypointCorpus() {
+    const corpus = emptyCorpus(['slug']);
+    const sessions: [string, string, string][] = [
+      ['sess-cli00000', 'cli', 'x'.repeat(100)],
+      ['sess-sdk00000', 'sdk-cli', 'x'.repeat(300)],
+    ];
+    for (const [id, entrypoint, prompt] of sessions) {
+      ingestTranscript(
+        corpus,
+        `${id}.jsonl`,
+        JSON.stringify({
+          type: 'user',
+          sessionId: id,
+          entrypoint,
+          timestamp: '2026-10-01T10:00:00.000Z',
+          attachment: { type: 'prompt_snapshot', systemPrompt: [prompt] },
+        }),
+      );
+    }
+    return corpus;
+  }
+
+  it('reports one median per entrypoint and prints the column', () => {
+    const report = computeResidentContext(entrypointCorpus());
+
+    expect(report.medianByEntrypoint).toEqual([
+      {
+        entrypoint: 'cli',
+        sessions: 1,
+        medianResidentBytes: 100,
+        medianEstimatedTokens: 25,
+      },
+      {
+        entrypoint: 'sdk-cli',
+        sessions: 1,
+        medianResidentBytes: 300,
+        medianEstimatedTokens: 75,
+      },
+    ]);
+    expect(report.medianResidentBytes).toBe(200);
+    const text = renderResidentContext(report).join('\n');
+    expect(text).toContain('entrypoint');
+    expect(text).toContain('medians (cli, 1 session(s)): total 100 bytes');
+    expect(text).toContain('medians (sdk-cli, 1 session(s)): total 300 bytes');
+  });
+
+  it('renders rows from an older export and groups them as unknown', () => {
+    const current = computeResidentContext(entrypointCorpus());
+    const older = {
+      ...current,
+      rows: current.rows.map(({ entrypoint: _drop, ...rest }) => rest),
+      medianByEntrypoint: undefined,
+    };
+
+    const text = renderResidentContext(older).join('\n');
+
+    expect(text).toContain('medians (unknown, 2 session(s)): total 200 bytes');
   });
 });

@@ -1,6 +1,8 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { claudeProjectDir } from '@houserules/payload/entry-ledger';
+
 import { detect } from '../detect.js';
 import type { Flags } from '../cli-contract.js';
 import { HouseError } from '../house-error.js';
@@ -25,6 +27,10 @@ import { renderSkillOutcomes } from './report/skill-outcomes.js';
 import { renderTokenUsage } from './report/token-usage.js';
 import { readCorpus } from './report/transcript-events.js';
 
+const MS_PER_DAY = 86_400_000;
+const RETENTION_DEFAULT_DAYS = 30;
+const RETENTION_MARGIN_DAYS = 2;
+
 const SINCE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseSince(since: string): number {
@@ -34,6 +40,34 @@ function parseSince(since: string): number {
       `--since expects a date as YYYY-MM-DD, got "${since}".`,
     );
   return parsed;
+}
+
+function isoDay(ts: number): string {
+  return new Date(ts).toISOString().slice(0, 10);
+}
+
+/**
+ * Warnings about a corpus that may be truncated. Claude Code deletes transcripts after
+ * `cleanupPeriodDays`, default 30, so a first transcript 28 to 30 days old suggests the
+ * oldest sessions are already gone.
+ */
+function windowWarnings(
+  firstTs: number,
+  since: number | undefined,
+  sinceFlag: string | undefined,
+  now: number,
+): string[] {
+  const oldest = isoDay(firstTs);
+  const retention = `Claude Code deletes transcripts after cleanupPeriodDays, default ${RETENTION_DEFAULT_DAYS}`;
+  if (since !== undefined && since < firstTs)
+    return [
+      `(warning: --since ${sinceFlag} predates the oldest transcript, ${oldest}. ${retention})`,
+    ];
+  const ageDays = (now - firstTs) / MS_PER_DAY;
+  const windowStart = RETENTION_DEFAULT_DAYS - RETENTION_MARGIN_DAYS;
+  if (ageDays >= windowStart && ageDays <= RETENTION_DEFAULT_DAYS)
+    return [`(warning: the oldest transcript is ${oldest}. ${retention})`];
+  return [];
 }
 
 /** Renders every section of a document, one blank line between sections. */
@@ -103,7 +137,7 @@ export async function report(dir: string, flags: Flags): Promise<number> {
   const ctx = detect(root);
   const top = ctx.git.top ?? root;
   const base = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
-  const slugs = [top.replaceAll('/', '-'), ...(flags.slug ?? [])];
+  const slugs = [claudeProjectDir(top), ...(flags.slug ?? [])];
   const corpus = readCorpus(join(base, 'projects'), slugs, { since });
   const say = (line: string) => {
     if (!flags.json) console.log(line);
@@ -120,6 +154,18 @@ export async function report(dir: string, flags: Flags): Promise<number> {
       console.log(`No .jsonl transcripts in ${present.join(', ')}.`);
     else console.log(`No transcripts found (looked in ${dirs.join(', ')}).`);
     return 0;
+  }
+  if (corpus.firstTs !== undefined && corpus.lastTs !== undefined) {
+    say(
+      `sessions: ${corpus.files.length}, from ${isoDay(corpus.firstTs)} to ${isoDay(corpus.lastTs)}`,
+    );
+    for (const line of windowWarnings(
+      corpus.firstTs,
+      since,
+      flags.since,
+      Date.now(),
+    ))
+      say(line);
   }
   for (const missing of corpus.missingDirs)
     say(`(no transcripts at ${missing})`);

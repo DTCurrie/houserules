@@ -1,6 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { appendFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  appendFileSync,
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -29,10 +36,12 @@ function runShellCommand(
   root: string,
   command: string,
   input: string,
+  extraEnv: Record<string, string> = {},
 ): { status: number | null; stdout: string; stderr: string } {
   const env: Record<string, string | undefined> = {
     ...process.env,
     CLAUDE_PROJECT_DIR: root,
+    ...extraEnv,
   };
   delete env.NODE_PATH;
   return spawnSync('sh', ['-c', command], {
@@ -73,7 +82,7 @@ describe('changeset-check.mjs, Stop hook wiring', () => {
     expect(r.status, r.stderr).toBe(0);
   });
 
-  it('a plain "node" wrapper, unlike the installed "exec node" one, swallows the exit-2 signal into the missing-script fallback', () => {
+  it('dropping "exec" from the installed Stop command lets the nudge print but turns exit 2 into exit 0', () => {
     appendFileSync(
       join(root, 'games/cityville/src/game.ts'),
       'export const more = 2;\n',
@@ -82,12 +91,106 @@ describe('changeset-check.mjs, Stop hook wiring', () => {
     const withoutExec = installedCommand.replace('exec node ', 'node ');
     expect(withoutExec).not.toBe(installedCommand);
 
-    const r = runShellCommand(root, withoutExec, '{}');
+    const otherRoot = installChangesets();
+    appendFileSync(
+      join(otherRoot, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
 
-    expect(
-      r.status,
-      `dropping exec should fall through to the "|| { ... exit 1 }" branch: ${r.stderr}`,
-    ).toBe(1);
-    expect(r.stderr).toMatch(/changeset-check\.mjs missing/);
+    const installed = runShellCommand(root, installedCommand, '{}');
+    const dropped = runShellCommand(otherRoot, withoutExec, '{}');
+
+    expect(installed.status, installed.stderr).toBe(2);
+    expect(dropped.status, dropped.stderr).toBe(0);
+    expect(dropped.stderr).toMatch(/--pkg @fix\/cityville/);
+  });
+});
+
+function transcriptWith(root: string, toolNames: string[]): string {
+  const path = join(root, 'transcript.jsonl');
+  const records = [
+    { type: 'user', message: { role: 'user', content: 'do the thing' } },
+    {
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: toolNames.map((name, i) => ({
+          type: 'tool_use',
+          id: `toolu_${i}`,
+          name,
+          input: {},
+        })),
+      },
+    },
+  ];
+  writeFileSync(path, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  return path;
+}
+
+function gitSpy(root: string): { env: Record<string, string>; log: string } {
+  const dir = join(root, '.git-spy');
+  const log = join(dir, 'calls.log');
+  mkdirSync(dir, { recursive: true });
+  const shim = join(dir, 'git');
+  writeFileSync(
+    shim,
+    `#!/bin/sh\necho "$@" >> "${log}"\nPATH="$REAL_PATH" exec git "$@"\n`,
+  );
+  chmodSync(shim, 0o755);
+  return {
+    env: {
+      PATH: `${dir}${delimiter}${process.env.PATH ?? tmpdir()}`,
+      REAL_PATH: process.env.PATH ?? '',
+    },
+    log,
+  };
+}
+
+describe('changeset-check.mjs, turn tool uses', () => {
+  let root: string;
+  let command: string;
+
+  beforeEach(() => {
+    root = installChangesets();
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+    command = stopHookCommandFor(root, 'changeset-check.mjs');
+  });
+
+  it('exits 0 silently, spawning no git, when the turn used only Read', () => {
+    const spy = gitSpy(root);
+    const payload = JSON.stringify({
+      transcript_path: transcriptWith(root, ['Read']),
+    });
+
+    const r = runShellCommand(root, command, payload, spy.env);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toBe('');
+    expect(existsSync(spy.log)).toBe(false);
+  });
+
+  it('nudges, spawning git, when the turn used Edit', () => {
+    const spy = gitSpy(root);
+    const payload = JSON.stringify({
+      transcript_path: transcriptWith(root, ['Read', 'Edit']),
+    });
+
+    const r = runShellCommand(root, command, payload, spy.env);
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/--pkg @fix\/cityville/);
+    expect(existsSync(spy.log)).toBe(true);
+  });
+
+  it('nudges, spawning git, when the payload has no transcript_path', () => {
+    const spy = gitSpy(root);
+
+    const r = runShellCommand(root, command, '{}', spy.env);
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(existsSync(spy.log)).toBe(true);
   });
 });

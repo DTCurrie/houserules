@@ -81,13 +81,17 @@ export function checkSettingsWiring(root: string, ctx: Ctx): CheckResult {
       const local = JSON.parse(
         readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'),
       );
-      const dupes = allHookCommands(local).filter((c) =>
-        KIT_HOOK_SCRIPT_RE.test(c),
-      );
-      if (dupes.length)
+      const kitCommands = allHookCommands(ctx.claude.settings);
+      const drifted = allHookCommands(local).filter((localCommand) => {
+        const scriptName = KIT_HOOK_SCRIPT_RE.exec(localCommand)?.[0];
+        if (!scriptName) return false;
+        const managed = kitCommands.filter((c) => c.includes(scriptName));
+        return managed.length > 0 && !managed.includes(localCommand);
+      });
+      if (drifted.length)
         findings.push({
           level: 'WARN',
-          msg: 'settings.local.json also wires houserules hook scripts — they will run twice',
+          msg: 'settings.local.json wires a houserules hook script with a command that differs from the managed one, so it runs beside it and drifts from updates',
         });
     } catch {
       /* local file is the user's business */

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { emptyCorpus, ingestTranscript } from '../transcript-events.js';
-import { computeFriction, renderFriction } from '../friction.js';
+import {
+  computeFriction,
+  isReadOnlyGitCheck,
+  renderFriction,
+} from '../friction.js';
 import type { FrictionReport } from '../friction.js';
 
 function corpusFrom(text: string, file = 'session.jsonl') {
@@ -332,6 +336,54 @@ describe('computeFriction', () => {
     const report = computeFriction(corpus);
 
     expect(report.compactedSessions).toEqual(['fallback']);
+  });
+});
+
+function bashCorpus(command: string, times: number) {
+  const content = Array.from({ length: times }, (_, index) => ({
+    type: 'tool_use',
+    id: `tu-${index}`,
+    name: 'Bash',
+    input: { command },
+  }));
+  return corpusFrom(
+    JSON.stringify({
+      type: 'assistant',
+      sessionId: 'repeat-session',
+      message: { role: 'assistant', content },
+    }),
+  );
+}
+
+const ORCHESTRATE_CHECK =
+  "cd /Users/devin/Projects/houserules && git status --short | grep '^ T\\|^T '";
+
+describe('isReadOnlyGitCheck', () => {
+  it.each([
+    { command: ORCHESTRATE_CHECK, expected: true },
+    { command: 'git status --short', expected: true },
+    { command: 'git diff --name-only | head', expected: true },
+    { command: 'git diff', expected: false },
+    { command: 'git add -A', expected: false },
+    { command: 'pnpm test', expected: false },
+  ])('returns $expected for "$command"', ({ command, expected }) => {
+    expect(isReadOnlyGitCheck(command)).toBe(expected);
+  });
+});
+
+describe('computeFriction retries over read-only git checks', () => {
+  it('records no run when the orchestrate tree check repeats five times', () => {
+    const report = computeFriction(bashCorpus(ORCHESTRATE_CHECK, 5));
+
+    expect(report.retryRuns).toEqual([]);
+  });
+
+  it('still records one run of five for a repeated real command', () => {
+    const report = computeFriction(bashCorpus('pnpm test', 5));
+
+    expect(report.retryRuns).toEqual([
+      { session: 'repeat-s', length: 5, command: 'pnpm test' },
+    ]);
   });
 });
 

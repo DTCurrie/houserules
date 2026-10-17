@@ -318,6 +318,38 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   return `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}`;
 }
 
+const EVASION_ROWS: string[][] = [
+  ['Excuse', 'Reality'],
+  [
+    '"The edits are in, so it is done"',
+    'Done is the checks passing, with output you read.',
+  ],
+  [
+    '"I know this fact from memory"',
+    'State it only after running the command that could falsify it.',
+  ],
+  [
+    '"It passed earlier"',
+    "A stale or cached pass is not this change's pass. Re-run on current bytes.",
+  ],
+  [
+    '"The subagent reported success"',
+    'The tree is the evidence. Check it before believing the report.',
+  ],
+];
+
+/** A markdown table whose columns are padded to their widest cell, the shape prettier leaves. */
+function alignedTable(rows: string[][]): string[] {
+  const [header = [], ...body] = rows;
+  const widths = header.map((_, col) =>
+    Math.max(...rows.map((row) => (row[col] ?? '').length)),
+  );
+  const line = (cells: string[]) =>
+    `| ${cells.map((cell, col) => cell.padEnd(widths[col] ?? 0)).join(' | ')} |`;
+  const separator = `| ${widths.map((width) => '-'.repeat(width)).join(' | ')} |`;
+  return [line(header), separator, ...body.map(line)];
+}
+
 /** The managed-region body spliced into a CLAUDE.md the user already has. */
 export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   const body = [
@@ -357,12 +389,7 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
     '- **"Done" means every check passed, not that the edits were made.** Report a check that failed',
     '  or never ran, with its output. Never claim success over one you did not see pass.',
     '  The recorded evasions, and what each one actually means:',
-    '  | Excuse | Reality |',
-    '  | --- | --- |',
-    '  | "The edits are in, so it is done" | Done is the checks passing, with output you read. |',
-    '  | "I know this fact from memory" | State it only after running the command that could falsify it. |',
-    '  | "It passed earlier" | A stale or cached pass is not this change\'s pass. Re-run on current bytes. |',
-    '  | "The subagent reported success" | The tree is the evidence. Check it before believing the report. |',
+    ...alignedTable(EVASION_ROWS).map((row) => `  ${row}`),
     '- In a live loop where the user is blocked on each turn, a cheap reversible action is itself',
     '  the check: run it and let its result falsify, instead of multi-call pre-verification (doc',
     '  fetches, code surveys). Cap pre-action checks at the single cheapest one.',

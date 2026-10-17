@@ -98,7 +98,9 @@ function absorbCallEntry(
 ) {
   return {
     type: 'assistant',
-    message: { content: [{ type: 'tool_use', input: { command } }] },
+    message: {
+      content: [{ type: 'tool_use', name: 'Bash', input: { command } }],
+    },
   };
 }
 
@@ -107,7 +109,9 @@ function majorCallEntry(
 ) {
   return {
     type: 'assistant',
-    message: { content: [{ type: 'tool_use', input: { command } }] },
+    message: {
+      content: [{ type: 'tool_use', name: 'Bash', input: { command } }],
+    },
   };
 }
 
@@ -460,5 +464,72 @@ describe('changeset-gate.mjs', () => {
     });
 
     expect(r.status, r.stderr).toBe(0);
+  });
+});
+
+describe('changeset-gate.mjs, turn tool uses', () => {
+  function driftedRepo(): string {
+    const root = installChangesets();
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const two = 2;\n',
+    );
+    writeFileSync(
+      join(root, '.changeset/kit-drift.md'),
+      '---\n"@fix/cityville": patch\n---\n\nMore.\n',
+    );
+    return root;
+  }
+
+  function payloadWithTools(root: string, toolNames: string[]): string {
+    const path = join(root, 'transcript.jsonl');
+    const records = [
+      { type: 'user', message: { role: 'user', content: 'do the thing' } },
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: toolNames.map((name, i) => ({
+            type: 'tool_use',
+            id: `toolu_${i}`,
+            name,
+            input: {},
+          })),
+        },
+      },
+    ];
+    writeFileSync(path, records.map((r) => JSON.stringify(r)).join('\n'));
+    return JSON.stringify({ transcript_path: path });
+  }
+
+  it('exits 0 silently on a drifted repo when the turn used only Read', () => {
+    const root = driftedRepo();
+
+    const r = runScript(root, SCRIPT, {
+      input: payloadWithTools(root, ['Read']),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toBe('');
+  });
+
+  it('still flags the drift when the turn used Edit', () => {
+    const root = driftedRepo();
+
+    const r = runScript(root, SCRIPT, {
+      input: payloadWithTools(root, ['Edit']),
+    });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/h5-package-drift/);
+  });
+
+  it('still flags the drift when the payload has no transcript_path', () => {
+    const root = driftedRepo();
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/h5-package-drift/);
   });
 });

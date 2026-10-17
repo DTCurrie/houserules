@@ -22,8 +22,9 @@
  * .claude/ledgers/tower-push.BACKLOG.md.
  *
  * Chat provenance stamps the active session and is the one Claude-Code-specific part. It
- * degrades to a chat:null warning in any other harness. Pass --chat=none or set
- * CLAUDE_SESSION_ID to silence that.
+ * degrades to a chat:null warning in any other harness. Claude Code sets
+ * CLAUDE_CODE_SESSION_ID in Bash subprocesses on its own. Pass --chat=none or set
+ * CLAUDE_SESSION_ID to override it or to silence the warning in any other harness.
  *
  * --issue <n> on add records the GitHub issue an entry was adopted from. A push then attaches
  * the existing issue to the board instead of creating a duplicate.

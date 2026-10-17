@@ -67,9 +67,10 @@ export function serializeIndex(index: LedgerIndex): string {
  * The index in `raw`, or null when it cannot be trusted.
  *
  * **Never throws, for any input.** `ledger-inject.mjs` reads this on every prompt as a
- * `UserPromptSubmit` hook, and a hook that throws costs the user their turn. A truncated write, a
- * hand-edit, or an index from a future version all return null, and null means "no cache", which
- * every caller already has to handle for a fresh clone.
+ * `UserPromptSubmit` hook. A hook that throws loses its injected context for that prompt, since the
+ * prompt still reaches Claude without it, and a reader of stderr sees a crash where a cache miss was
+ * meant. A truncated write, a hand-edit, or an index from a future version all return null, and null
+ * means "no cache", which every caller already has to handle for a fresh clone.
  */
 export function parseIndex(raw: string, kind: LedgerKind): LedgerIndex | null {
   let parsed: unknown;
@@ -95,7 +96,9 @@ export function parseIndex(raw: string, kind: LedgerKind): LedgerIndex | null {
  * **Never throws, for any state of the disk.** Null covers every failure the same way: no file, an
  * unreadable file, a truncated write, a hand-edit, a version from the future. Callers already have
  * to handle null for a fresh clone that has never pulled, so there is no second path to get wrong.
- * `ledger-inject.mjs` calls this on every prompt, and a hook that throws costs the user their turn.
+ * `ledger-inject.mjs` calls this on every prompt. A hook that throws loses its injected context for
+ * that prompt, since the prompt still reaches Claude without it, and stderr shows a crash where a
+ * cache miss was meant.
  *
  * This index is the other half of the queue-and-index split: the `.jsonl` ledgers hold what has
  * not reached a board yet, and this index is a projection of the boards so `scope`, `show`, and

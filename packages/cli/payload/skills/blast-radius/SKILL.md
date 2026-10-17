@@ -16,7 +16,7 @@ file instead of re-fanning the whole survey.
 Identify the exact thing changing: the exported symbol(s), file(s), route, config key, or schema.
 Get the concrete names to search for. A blast-radius map is only as good as the seeds you fan out on.
 
-## 2. Fan out read-only mappers — once, in one message
+## 2. Fan out read-only mappers: once, in one message
 
 Dispatch one `blast-radius-mapper` agent per search angle, in parallel, so no single agent holds the
 whole picture and you don't serialize the survey. The agent definition pins the sonnet model, the
@@ -39,7 +39,7 @@ the commit with `git rev-parse --short HEAD`. It **must** open with a staleness 
 these sections:
 
 ```markdown
-# Blast radius — <surface> — <YYYY-MM-DD>
+# Blast radius: <surface>: <YYYY-MM-DD>
 
 > ⚠️ Snapshot at commit `<sha>` on <date>. Cited lines drift as code changes. Re-verify each before
 > relying on it, and treat this as a map, not ground truth. Regenerate with `/blast-radius <surface>`.
@@ -50,7 +50,7 @@ these sections:
 
 ## Impact by file
 
-- `path:line` — <symbol/consumer> — <how it uses the surface> — **risk:** <what breaks if changed>
+- `path:line`: <symbol/consumer>: <how it uses the surface>: **risk:** <what breaks if changed>
 - ...
 
 ## Cross-package / boundary impact
@@ -59,7 +59,7 @@ these sections:
 
 ## Completeness self-audit
 
-- **Coverage:** HIGH | MED | LOW — <which angles were exhausted, which were sampled>
+- **Coverage:** HIGH | MED | LOW: <which angles were exhausted, which were sampled>
 - **Gaps:** <search angles not run, dynamic/reflective usages a static search can miss, generated code>
 ```
 

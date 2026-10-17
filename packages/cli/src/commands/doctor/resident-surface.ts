@@ -5,6 +5,7 @@ import {
   statSync,
   type Dirent,
 } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
@@ -307,6 +308,21 @@ function isDirectoryFollowingSymlinks(entry: Dirent, abs: string): boolean {
   }
 }
 
+/**
+ * Claude Code truncates each skill's combined `description` and `when_to_use` text at this
+ * many characters in the skill listing, per the skills reference.
+ */
+const SKILL_LISTING_CHAR_CAP = 1536;
+
+function frontmatterField(text: string, field: string): string | null {
+  const fm = frontmatterBlock(text);
+  if (fm === null) return null;
+  const match = new RegExp(`^${field}:[ \\t]*(.*)$`, 'm').exec(fm);
+  const captured = match?.[1];
+  if (captured === undefined) return null;
+  return captured.trim().replace(/^['"]|['"]$/g, '');
+}
+
 function findSkillFiles(dir: string): string[] {
   let entries: Dirent[];
   try {
@@ -331,8 +347,10 @@ function findSkillFiles(dir: string): string[] {
 }
 
 /**
- * Claude Code puts every `description:` in the system prompt on every turn, the same
- * resident tier as CLAUDE.md. Bodies load only on invocation and are not counted.
+ * Claude Code puts every skill and agent `description:` in the system prompt on every
+ * turn, the same resident tier as CLAUDE.md. Bodies load only on invocation and are not
+ * counted. A skill also contributes its `when_to_use` text, capped with the description at
+ * 1,536 characters, and a skill with `disable-model-invocation: true` is left out.
  */
 export function measureSkillAgentDescriptions(
   root: string,
@@ -347,9 +365,11 @@ export function measureSkillAgentDescriptions(
     } catch {
       continue;
     }
+    if (frontmatterField(text, 'disable-model-invocation') === 'true') continue;
     const desc = frontmatterDescription(text);
     if (desc) {
-      chars += desc.length;
+      const whenToUse = frontmatterField(text, 'when_to_use') ?? '';
+      chars += Math.min(desc.length + whenToUse.length, SKILL_LISTING_CHAR_CAP);
       skills += 1;
     }
   }
@@ -389,8 +409,9 @@ function readOutputStyleSettings(path: string): OutputStyleSettings | null {
 }
 
 /**
- * The active style is settings.local.json's `outputStyle`, falling back to settings.json's.
- * Mirrors the same precedence `output-prose`'s own check reads it with.
+ * The active style is settings.local.json's `outputStyle`, falling back to the project's
+ * settings.json and then the user-level settings.json, which lives under `CLAUDE_CONFIG_DIR`
+ * when that is set and `~/.claude` otherwise. A project file always wins over the user one.
  */
 function activeOutputStyleName(root: string): string | null {
   const local = readOutputStyleSettings(
@@ -398,7 +419,14 @@ function activeOutputStyleName(root: string): string | null {
   );
   if (typeof local?.outputStyle === 'string') return local.outputStyle;
   const main = readOutputStyleSettings(join(root, '.claude', 'settings.json'));
-  return typeof main?.outputStyle === 'string' ? main.outputStyle : null;
+  if (typeof main?.outputStyle === 'string') return main.outputStyle;
+  const user = readOutputStyleSettings(
+    join(
+      process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'),
+      'settings.json',
+    ),
+  );
+  return typeof user?.outputStyle === 'string' ? user.outputStyle : null;
 }
 
 /**

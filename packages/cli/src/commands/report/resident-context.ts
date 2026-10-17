@@ -11,8 +11,10 @@ const NOT_RECORDED_NOTE = 'not recorded (no session-start attachments)';
 const formatCount = (value: number) => value.toLocaleString('en-US');
 
 /** One session's always-loaded context, read from the attachments Claude Code writes at session start. */
-interface ResidentContextRow {
+export interface ResidentContextRow {
   session: string;
+  /** How the session was launched. Absent in an export written before it was recorded. */
+  entrypoint?: string;
   /** False when the transcript carries none of the session-start attachments. */
   recorded: boolean;
   systemPromptBytes: number;
@@ -28,12 +30,23 @@ interface ResidentContextRow {
   nestedMemoryBytes: number;
 }
 
+const UNKNOWN_ENTRYPOINT = 'unknown';
+
+export interface EntrypointMedian {
+  entrypoint: string;
+  sessions: number;
+  medianResidentBytes: number;
+  medianEstimatedTokens: number;
+}
+
 export interface ResidentContextReport {
   rows: ResidentContextRow[];
   recorded: number;
   totalSessions: number;
   medianResidentBytes: number;
   medianEstimatedTokens: number;
+  /** Absent in an export written before medians were split by entrypoint. */
+  medianByEntrypoint?: EntrypointMedian[];
 }
 
 function median(values: number[]): number {
@@ -43,6 +56,26 @@ function median(values: number[]): number {
   const upper = sorted[middle] ?? 0;
   if (sorted.length % 2 === 1) return upper;
   return Math.round(((sorted[middle - 1] ?? 0) + upper) / 2);
+}
+
+/** Groups recorded rows by entrypoint, sorted by name, with rows lacking one under `unknown`. */
+export function entrypointMedians(
+  rows: ResidentContextRow[],
+): EntrypointMedian[] {
+  const groups = new Map<string, ResidentContextRow[]>();
+  for (const row of rows) {
+    if (!row.recorded) continue;
+    const key = row.entrypoint ?? UNKNOWN_ENTRYPOINT;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([entrypoint, members]) => ({
+      entrypoint,
+      sessions: members.length,
+      medianResidentBytes: median(members.map((row) => row.residentBytes)),
+      medianEstimatedTokens: median(members.map((row) => row.estimatedTokens)),
+    }));
 }
 
 /** Medians cover recorded sessions only, since an unrecorded one has nothing to measure. */
@@ -60,6 +93,7 @@ export function computeResidentContext(corpus: Corpus): ResidentContextReport {
     if (!recorded) {
       return {
         session,
+        entrypoint: capture?.entrypoint,
         recorded: false,
         systemPromptBytes: 0,
         instructionBytes: 0,
@@ -88,6 +122,7 @@ export function computeResidentContext(corpus: Corpus): ResidentContextReport {
       outputStyleBytes;
     return {
       session,
+      entrypoint: capture.entrypoint,
       recorded: true,
       systemPromptBytes,
       instructionBytes,
@@ -109,7 +144,19 @@ export function computeResidentContext(corpus: Corpus): ResidentContextReport {
     medianEstimatedTokens: median(
       recordedRows.map((row) => row.estimatedTokens),
     ),
+    medianByEntrypoint: entrypointMedians(recordedRows),
   };
+}
+
+function medianLines(report: ResidentContextReport): string[] {
+  const groups = report.medianByEntrypoint ?? entrypointMedians(report.rows);
+  return [
+    `medians (all sessions): total ${formatCount(report.medianResidentBytes)} bytes, ~tokens ${formatCount(report.medianEstimatedTokens)}`,
+    ...groups.map(
+      (group) =>
+        `medians (${group.entrypoint}, ${formatCount(group.sessions)} session(s)): total ${formatCount(group.medianResidentBytes)} bytes, ~tokens ${formatCount(group.medianEstimatedTokens)}`,
+    ),
+  ];
 }
 
 export function renderResidentContext(report: ResidentContextReport): string[] {
@@ -125,9 +172,10 @@ export function renderResidentContext(report: ResidentContextReport): string[] {
   const tableRows = report.rows.map((row) => {
     const id = row.session.slice(0, SESSION_ID_PREVIEW_LENGTH);
     if (!row.recorded)
-      return [id, NOT_RECORDED_NOTE, '', '', '', '', '', '', ''];
+      return [id, '', NOT_RECORDED_NOTE, '', '', '', '', '', '', ''];
     return [
       id,
+      row.entrypoint ?? UNKNOWN_ENTRYPOINT,
       formatCount(row.systemPromptBytes),
       formatCount(row.instructionBytes),
       formatCount(row.skillListingBytes),
@@ -143,6 +191,7 @@ export function renderResidentContext(report: ResidentContextReport): string[] {
     ...renderTable(
       [
         'session',
+        'entrypoint',
         'system',
         'instructions',
         'skills',
@@ -155,7 +204,7 @@ export function renderResidentContext(report: ResidentContextReport): string[] {
       tableRows,
     ),
     '',
-    `medians: total ${formatCount(report.medianResidentBytes)} bytes, ~tokens ${formatCount(report.medianEstimatedTokens)}`,
+    ...medianLines(report),
     '',
     '  (bytes of what Claude Code attaches at session start: the system prompt, CLAUDE.md and auto memory,',
     '   the skill and agent listings, and the output style. Nested CLAUDE.md files load on demand and are counted separately.)',

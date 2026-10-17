@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { useRepo } from '#test/repo';
 import {
@@ -219,5 +220,31 @@ describe('checkAgentToolScope', () => {
     const root = useRepo('pnpm-monorepo');
 
     expect(checkAgentToolScope(root)).toEqual({ findings: [], readouts: [] });
+  });
+
+  it('finds no unbounded Bash in any shipped agent body', () => {
+    const packages = fileURLToPath(new URL('../../../../../', import.meta.url));
+    const root = useRepo('pnpm-monorepo');
+    const dest = join(root, '.claude', 'agents');
+    mkdirSync(dest, { recursive: true });
+    for (const pkg of readdirSync(packages)) {
+      const dir = join(packages, pkg, 'payload', 'agents');
+      let files: string[];
+      try {
+        files = readdirSync(dir).filter((file) => file.endsWith('.md'));
+      } catch {
+        continue;
+      }
+      for (const file of files) {
+        copyFileSync(join(dir, file), join(dest, `${pkg}--${file}`));
+      }
+    }
+
+    const result = checkAgentToolScope(root);
+
+    expect(result.readouts[0]).not.toBe(
+      'agent tool scope: 0 agent(s) inspected',
+    );
+    expect(result.findings.map((finding) => finding.msg)).toEqual([]);
   });
 });

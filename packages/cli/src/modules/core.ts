@@ -52,6 +52,7 @@ function libActions(): Action[] {
     'workspaces.mjs',
     'proc.mjs',
     'findings.mjs',
+    'transcript-turn.mjs',
   ]) {
     actions.push(lib(id, name));
   }

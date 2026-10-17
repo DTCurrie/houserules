@@ -20,26 +20,23 @@
  *              "custom": [{ "pattern": "\\bdocker\\s+system\\s+prune\\b", "message": "..." }] }
  * A missing or unreadable config falls back to the five defaults.
  *
- * Subagent write gate: `tool_input` carries only the Bash command, so whether the caller is
- * a subagent comes from `transcript_path`. A subagent's own transcript never carries the
- * `subagent_type` its parent session used to launch it (only the parent's transcript has
- * that), so this gate cannot scope to one particular agent. It gates every subagent instead,
- * on the trailing turn's `isSidechain` flag, which both transcripts do carry.
+ * Subagent write gate: the hook payload carries `agent_id` whenever the hook fires inside
+ * a subagent, and omits it on the main thread. The gate reads that field and nothing else.
+ * The transcript is not consulted on the hook path, because it is written asynchronously
+ * and lags the in-memory turn, so a subagent's first writes would look like main-thread
+ * ones. The gate covers every subagent rather than one particular agent type.
  *
  * Scope: subagents authoring changesets one-per-incremental-change instead of one-per-
  * feature has produced changeset pollution, so both the backlog/decision ledgers and
- * `.changeset/` are refused from any sidechain. Reads stay allowed everywhere.
+ * `.changeset/` are refused from any subagent. Reads stay allowed everywhere.
  *
- * When identity can't be established (no transcript, unreadable, not a sidechain), the
- * gate allows, because a false refusal blocks legitimate work far worse than a missed
- * write.
+ * When identity can't be established (no `agent_id`), the gate allows, because a false
+ * refusal blocks legitimate work far worse than a missed write.
  *
  * `--diagnose <transcript-path>` is a separate, manually-run mode (never invoked by the
- * hook itself) that reports whether the trailing turn resolves to a sidechain at all,
- * printing JSON and exiting 0 when it does, 1 when it does not. A gate that always fails
- * open because it can no longer find an assistant turn looks identical, from the hook's
- * silence, to a gate that correctly saw nothing to refuse. This is how you tell the two
- * apart.
+ * hook itself) kept for inspecting an old session. It reports whether the transcript's
+ * trailing turn is a sidechain, printing JSON and exiting 0 when it is, 1 when it is not.
+ * It says nothing about what the hook decided at the time.
  */
 
 import { readFileSync, realpathSync } from 'node:fs';
@@ -51,6 +48,8 @@ import { readStdinJson } from '@houserules/payload/proc';
 interface BashPayload {
   tool_input?: { command?: string };
   transcript_path?: string;
+  agent_id?: string;
+  agent_type?: string;
 }
 
 export interface TranscriptRecord {
@@ -181,10 +180,8 @@ const REDIRECT_RE = new RegExp(
  * The stderr message refusing `cmd` under the subagent write gate, or null when the
  * command cannot write a ledger or a changeset.
  *
- * Every check here is a regex over one string, so it runs before the transcript is opened.
- * The transcript read is the expensive half of this gate and it grows with session length,
- * while the overwhelming majority of Bash calls are not mutating, so answering "is there
- * anything to refuse" first takes that cost off almost every invocation.
+ * Every check here is a regex over one string, so the overwhelming majority of Bash calls
+ * (which are not mutating) are answered before the payload's identity is looked at.
  */
 export function writeGateRefusalFor(cmd: string): string | null {
   const mutatingMatch =
@@ -253,6 +250,10 @@ function sidechainTurnFromTranscript(
   }
 }
 
+/**
+ * Manual `--diagnose` mode: reads a transcript file and reports whether its trailing turn
+ * is a sidechain. Kept for inspecting an old session. The hook never calls it.
+ */
 function runDiagnose(transcriptPath: string): never {
   const sidechainDetected = sidechainTurnFromTranscript(transcriptPath);
   process.stdout.write(
@@ -283,7 +284,11 @@ function main(): void {
   }
 
   const writeGateRefusal = writeGateRefusalFor(cmd);
-  if (writeGateRefusal && sidechainTurnFromTranscript(input?.transcript_path)) {
+  if (
+    writeGateRefusal &&
+    typeof input?.agent_id === 'string' &&
+    input.agent_id !== ''
+  ) {
     process.stderr.write(writeGateRefusal);
     process.exit(2);
   }

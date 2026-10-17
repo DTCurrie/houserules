@@ -173,9 +173,12 @@ describe('checkSettingsWiring', () => {
     );
   });
 
-  it('warns when settings.local.json wires a houserules hook script that would then run twice', () => {
+  it('warns when settings.local.json wires a houserules hook script with a command that differs from the managed one', () => {
     const root = useRepo('pnpm-single');
-    writeSettingsLocal(root, wiring('node .claude/scripts/guard-bash.mjs'));
+    writeSettingsLocal(
+      root,
+      wiring('node /custom/path/guard-bash.mjs --verbose'),
+    );
     const ctx = installedCtx({
       modules: ['core'],
       claude: {
@@ -186,9 +189,24 @@ describe('checkSettingsWiring', () => {
 
     expect(checkSettingsWiring(root, ctx).findings).toContainEqual(
       expect.objectContaining({
-        msg: 'settings.local.json also wires houserules hook scripts — they will run twice',
+        level: 'WARN',
+        msg: 'settings.local.json wires a houserules hook script with a command that differs from the managed one, so it runs beside it and drifts from updates',
       }),
     );
+  });
+
+  it('reports nothing when settings.local.json repeats the managed command exactly', () => {
+    const root = useRepo('pnpm-single');
+    writeSettingsLocal(root, wiring('node .claude/scripts/guard-bash.mjs'));
+    const ctx = installedCtx({
+      modules: ['core'],
+      claude: {
+        settingsLocalExists: true,
+        settings: coreWiring(),
+      },
+    });
+
+    expect(checkSettingsWiring(root, ctx).findings).toEqual([]);
   });
 
   it('ignores a settings.local.json that wires a script houserules does not own', () => {
@@ -205,9 +223,9 @@ describe('checkSettingsWiring', () => {
     expect(checkSettingsWiring(root, ctx).findings).toEqual([]);
   });
 
-  it('warns when settings.local.json duplicates the read-guard hook script', () => {
+  it('warns when settings.local.json carries a differing read-guard command', () => {
     const root = useRepo('pnpm-single');
-    writeSettingsLocal(root, wiring('node .claude/scripts/guard-read.mjs'));
+    writeSettingsLocal(root, wiring('node ./guard-read.mjs'));
     const ctx = installedCtx({
       modules: ['read-guard'],
       claude: {
@@ -218,7 +236,7 @@ describe('checkSettingsWiring', () => {
 
     expect(checkSettingsWiring(root, ctx).findings).toContainEqual(
       expect.objectContaining({
-        msg: 'settings.local.json also wires houserules hook scripts — they will run twice',
+        msg: 'settings.local.json wires a houserules hook script with a command that differs from the managed one, so it runs beside it and drifts from updates',
       }),
     );
   });

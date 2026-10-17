@@ -37,8 +37,14 @@ export type { CheckResult, Finding, Level } from './finding.js';
 export type { RegionSpec } from './regions.js';
 export type { McpTransport, PayloadBuilders } from './copy-actions.js';
 
-export { hookCommand, hookFragment, scriptPermission } from './hook-wiring.js';
-export type { HookFragmentOptions } from './hook-wiring.js';
+export {
+  fallbackForEvent,
+  hookCommand,
+  hookFragment,
+  isGuardedHookCommand,
+  scriptPermission,
+} from './hook-wiring.js';
+export type { HookFallback, HookFragmentOptions } from './hook-wiring.js';
 
 /**
  * `HouseConfig`/`HouseConfigTarget` are contract, not internal, even though houserules' own

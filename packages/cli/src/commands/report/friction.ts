@@ -4,6 +4,9 @@ import { renderTable } from './render-table.js';
 // Two adjacent Bash commands at or above this bigram-dice similarity count as a retry.
 const RETRY_SIMILARITY = 0.9;
 
+const READ_ONLY_GIT_CHECK =
+  /^(?:cd\s+\S+\s*&&\s*)?git\s+(?:status\b|diff\s+--name-only\b)/;
+
 const BULK_TOP_N = 10;
 const RETRY_TOP_N = 5;
 
@@ -54,7 +57,15 @@ function similarity(a: string, b: string): number {
   return total ? (2 * shared) / total : 1;
 }
 
-/** Signals for where the session felt friction rather than flowed: compacts, bulk, retries, denials. */
+/** True for a read-only `git status` or `git diff --name-only` command, with an optional `cd <path> &&` prefix and any pipe after it. */
+export function isReadOnlyGitCheck(command: string): boolean {
+  return READ_ONLY_GIT_CHECK.test(command.trim());
+}
+
+/**
+ * Signals for where the session felt friction rather than flowed: compacts, bulk, retries, denials.
+ * Read-only git status shapes never count as retries, because a skill prescribes them before every review, so repeating them is the procedure and not friction.
+ */
 export function computeFriction(corpus: Corpus): FrictionReport {
   const compactedSessions: string[] = [];
   const bulkByTool = new Map<string, ToolBulk>();
@@ -95,6 +106,7 @@ export function computeFriction(corpus: Corpus): FrictionReport {
       const current = bashCommands[i];
       const isNear =
         current !== undefined &&
+        !isReadOnlyGitCheck(previous) &&
         similarity(previous, current) >= RETRY_SIMILARITY;
       if (isNear) {
         runLength += 1;

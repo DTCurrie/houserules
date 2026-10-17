@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { makeCtx } from '#test/ctx-builder';
-import { useRepo } from '#test/repo';
+import { useInstalledRepo, useRepo } from '#test/repo';
 import type { Ctx } from '../../../detect.js';
-import type { Settings } from '@houserules/api';
+import { hookCommand, type Settings } from '@houserules/api';
+import { allHookCommands } from '../settings-wiring.js';
 import { checkInstallHygiene } from '../install-hygiene.js';
 
 function wiring(...commands: string[]): Settings {
@@ -63,15 +64,40 @@ describe('checkInstallHygiene', () => {
   it('does not flag a hook command guarded by the existence check', () => {
     const root = useRepo('pnpm-single');
     writeScript(root, '.claude/scripts/guard-bash.mjs');
+    const ctx = settingsCtx(root, wiring(hookCommand('guard-bash.mjs')));
+
+    const result = checkInstallHygiene(root, ctx);
+
+    expect(
+      result.readouts.filter((readout) => readout.includes('without the')),
+    ).toEqual([]);
+  });
+
+  it('names the written wrapper form in the readout for an unguarded command', () => {
+    const root = useRepo('pnpm-single');
+    writeScript(root, '.claude/scripts/guard-bash.mjs');
     const ctx = settingsCtx(
       root,
-      wiring(
-        '[[ -f .claude/scripts/guard-bash.mjs ]] && exec node .claude/scripts/guard-bash.mjs',
-      ),
+      wiring('node .claude/scripts/guard-bash.mjs'),
     );
 
     const result = checkInstallHygiene(root, ctx);
 
+    expect(result.readouts).toContainEqual(
+      expect.stringContaining('[ -f ... ] && exec node'),
+    );
+  });
+
+  it('yields no existence-guard readout for the hooks an install wrote', () => {
+    const root = useInstalledRepo('pnpm-single');
+    const settings = JSON.parse(
+      readFileSync(join(root, '.claude', 'settings.json'), 'utf8'),
+    ) as Settings;
+    const ctx = settingsCtx(root, settings);
+
+    const result = checkInstallHygiene(root, ctx);
+
+    expect(allHookCommands(settings).length).toBeGreaterThan(0);
     expect(
       result.readouts.filter((readout) => readout.includes('without the')),
     ).toEqual([]);
@@ -136,12 +162,7 @@ describe('checkInstallHygiene', () => {
     const root = useRepo('pnpm-single');
     writeScript(root, '.claude/scripts/guard-bash.mjs');
     writeConfigFile(root, 'settings.json', JSON.stringify({ hooks: {} }));
-    const ctx = settingsCtx(
-      root,
-      wiring(
-        '[[ -f .claude/scripts/guard-bash.mjs ]] && exec node .claude/scripts/guard-bash.mjs',
-      ),
-    );
+    const ctx = settingsCtx(root, wiring(hookCommand('guard-bash.mjs')));
 
     const result = checkInstallHygiene(root, ctx);
 

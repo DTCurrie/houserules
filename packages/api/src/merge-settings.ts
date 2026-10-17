@@ -1,4 +1,4 @@
-import { hookCommand } from './hook-wiring.js';
+import { hookCommand, type HookFallback } from './hook-wiring.js';
 
 export interface HookEntry {
   type: 'command';
@@ -96,12 +96,16 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function stockShapePattern(): RegExp {
-  const template = normalizeCommand(hookCommand(SHAPE_PLACEHOLDER));
-  const withCapture = escapeRegExp(template)
-    .split(SHAPE_PLACEHOLDER)
-    .join('([\\w-]+\\.mjs)');
-  return new RegExp(`^${withCapture}$`);
+const HOOK_FALLBACKS: HookFallback[] = ['guard', 'hint', 'silent'];
+
+function stockShapePatterns(): RegExp[] {
+  return HOOK_FALLBACKS.map((fallback) => {
+    const template = normalizeCommand(hookCommand(SHAPE_PLACEHOLDER, fallback));
+    const withCapture = escapeRegExp(template)
+      .split(SHAPE_PLACEHOLDER)
+      .join('([\\w-]+\\.mjs)');
+    return new RegExp(`^${withCapture}$`);
+  });
 }
 
 /**
@@ -116,15 +120,15 @@ export function isKitStockCommand(
   scriptBasename: string,
 ): boolean {
   const normalized = normalizeCommand(command);
-  if (normalized === normalizeCommand(hookCommand(scriptBasename))) return true;
   if (
     KIT_STOCK_FORMATS.some(
       (f) => normalizeCommand(f(scriptBasename)) === normalized,
     )
   )
     return true;
-  const match = stockShapePattern().exec(normalized);
-  return match?.[1] === scriptBasename;
+  return stockShapePatterns().some(
+    (pattern) => pattern.exec(normalized)?.[1] === scriptBasename,
+  );
 }
 
 type HookMatch =

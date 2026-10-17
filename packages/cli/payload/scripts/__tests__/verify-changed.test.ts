@@ -369,4 +369,37 @@ describe('verify-changed.mjs --run', () => {
     expect(r.stdout).toMatch(/no "verify" block configured/);
     expect(r.stdout).toMatch(/\.claude\/houserules\.config\.json/);
   });
+
+  describe('a target with verifyCommands: null', () => {
+    beforeEach(() => {
+      useStubVerifyRunner(root);
+      editHouseConfig(root, (config) => {
+        const targets = (config.targets ?? []) as {
+          packageName?: string;
+          verifyCommands?: string[] | null;
+        }[];
+        targets.find(
+          (t) => t.packageName === '@fix/cityville',
+        )!.verifyCommands = null;
+      });
+    });
+
+    it('prints SKIPPED instead of PASS under --run and exits 0', () => {
+      const r = runScript(root, SCRIPT, { args: ['--run'] });
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toMatch(
+        /@fix\/cityville: SKIPPED \(no verify commands\)/,
+      );
+      expect(r.stdout).not.toMatch(/@fix\/cityville: PASS/);
+      expect(r.stdout).toMatch(/@fix\/studio: PASS/);
+    });
+
+    it('carries the SKIPPED wording in the plan output', () => {
+      const r = runScript(root, SCRIPT);
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toMatch(
+        /@fix\/cityville\s+\[changed\]\s+SKIPPED \(no verify commands\)/,
+      );
+    });
+  });
 });

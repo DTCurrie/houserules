@@ -112,7 +112,7 @@ because parallel writers race a package-wide lint Stop-hook.
 
 ## 5. File-based memory (Claude Code feature, conventions only)
 
-Persistent cross-session memory lives at `~/.claude/projects/<encoded-cwd>/memory/`. It is
+Persistent cross-session memory lives at `~/.claude/projects/<encoded-cwd>/memory/`, where `<encoded-cwd>` is the working directory with every non-alphanumeric character replaced by `-`. It is
 machine-local, per-developer, and not in git. Nothing to copy, so adopt the discipline:
 
 1. **One fact per file.** Granularity is what makes lazy-load cheap.
@@ -259,8 +259,9 @@ Each of these is a standing habit, not a script:
 - **`/clear` between unrelated tasks.** Stale context is paid on every following turn.
 - **Disable unused MCP servers** (`/mcp`). CLI tools (`gh`, `aws`) are cheaper than MCP equivalents,
   and tool definitions cost context even when deferred.
-  - **The tool count is the number to look at before enabling one**, because every definition is
-    paid on every turn. `chrome-devtools-mcp` is 50, or 3 with `--slim`. `@playwright/mcp` is 24,
+  - **The tool count is the number to look at before enabling one**, because every tool name and
+    the server's instructions load on every turn, and each full schema loads when the tool is
+    fetched. `chrome-devtools-mcp` is 50, or 3 with `--slim`. `@playwright/mcp` is 24,
     and its other capabilities are opt-in through `--caps`. Both together is 74.
   - **Chrome versus Playwright splits on performance tooling versus cross-browser reach.** Chrome
     DevTools has traces, Lighthouse, and heap snapshots, which nothing else does. Playwright runs
@@ -280,9 +281,9 @@ Each of these is a standing habit, not a script:
   replies, at a readability cost. It does that well. **It does not reduce token spend.** The words
   in a reply are a small part of what a session costs, next to the system prompt, the files read,
   and the conversation replayed on every turn, and the style's own text is added to every request.
-  caveman's README says the same of theirs. Two structural limits compound it: an output style is
-  read once at session start, and it reaches the main thread only, since a subagent runs its own
-  system prompt. Route work through subagents and the style never touches it.
+  caveman's README says the same of theirs. Two structural limits compound it: an output style
+  applies from the next message after a switch, and it reaches the main thread only, since a
+  subagent runs its own system prompt. Route work through subagents and the style never touches it.
 - **A style that deletes can delete the answer.** An earlier version of this style dropped a fact
   the user had explicitly asked for on an agentic task, while writing correct code and passing
   tests. The unstyled model got it right and the styled one did not. Compression scales with tool

@@ -28,7 +28,8 @@
  * to the same file. Any other path is honored literally.
  *
  * Chat provenance stamps the active session and degrades to a chat:null warning outside
- * Claude Code. Pass --chat=none or set CLAUDE_SESSION_ID to override.
+ * Claude Code. Claude Code sets CLAUDE_CODE_SESSION_ID in Bash subprocesses on its own.
+ * Pass --chat=none or set CLAUDE_SESSION_ID to override it in any other harness.
  */
 
 import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';

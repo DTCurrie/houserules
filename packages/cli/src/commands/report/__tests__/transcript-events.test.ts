@@ -241,3 +241,20 @@ describe('ingestTranscript record stamps', () => {
     expect(corpus.lastTs).toBe(Date.parse('2026-09-09T00:00:00.000Z'));
   });
 });
+
+describe('ingestTranscript entrypoint', () => {
+  it('records the entrypoint carried by the session-start records', () => {
+    const corpus = emptyCorpus(['slug']);
+    const line = JSON.stringify({
+      type: 'user',
+      sessionId: 'sess-sdk',
+      timestamp: '2026-10-01T10:00:00.000Z',
+      entrypoint: 'sdk-cli',
+      attachment: { type: 'prompt_snapshot', systemPrompt: ['abc'] },
+    });
+
+    ingestTranscript(corpus, 'sess-sdk.jsonl', line);
+
+    expect(corpus.residentCaptures.get('sess-sdk')?.entrypoint).toBe('sdk-cli');
+  });
+});

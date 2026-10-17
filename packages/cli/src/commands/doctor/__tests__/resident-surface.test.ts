@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { useRepo } from '#test/repo';
@@ -293,6 +294,107 @@ describe('measureSkillAgentDescriptions', () => {
     expect(measureSkillAgentDescriptions(root)).toMatchObject({
       skills: 2,
       chars: 80,
+    });
+  });
+});
+
+describe('measureSkillAgentDescriptions listing rules', () => {
+  it('leaves out a skill with disable-model-invocation true', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/skills/hidden/SKILL.md',
+      '---\ndescription: abcdef\ndisable-model-invocation: true\n---\n',
+    );
+    write(
+      root,
+      '.claude/skills/shown/SKILL.md',
+      '---\ndescription: abc\n---\n',
+    );
+
+    expect(measureSkillAgentDescriptions(root)).toMatchObject({
+      skills: 1,
+      chars: 3,
+    });
+  });
+
+  it('adds when_to_use text to the description count', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/skills/a/SKILL.md',
+      `---\ndescription: ${'a'.repeat(100)}\nwhen_to_use: ${'b'.repeat(50)}\n---\n`,
+    );
+
+    expect(measureSkillAgentDescriptions(root)).toMatchObject({
+      skills: 1,
+      chars: 150,
+    });
+  });
+
+  it('caps one skill at 1536 characters', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/skills/a/SKILL.md',
+      `---\ndescription: ${'a'.repeat(1200)}\nwhen_to_use: ${'b'.repeat(800)}\n---\n`,
+    );
+
+    expect(measureSkillAgentDescriptions(root)?.chars).toBe(1536);
+  });
+});
+
+describe('measureActiveOutputStyle user settings', () => {
+  const original = process.env.CLAUDE_CONFIG_DIR;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = original;
+  });
+
+  function stageUserSettings(outputStyle: string): void {
+    const dir = mkdtempSync(join(tmpdir(), 'claude-config-'));
+    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ outputStyle }));
+    process.env.CLAUDE_CONFIG_DIR = dir;
+  }
+
+  it('honors a user-level outputStyle when no project file sets one', () => {
+    const root = useRepo('pnpm-single');
+    stageUserSettings('UserStyle');
+    write(
+      root,
+      '.claude/output-styles/user.md',
+      `---\nname: UserStyle\n---\n${'u'.repeat(40)}`,
+    );
+
+    expect(measureActiveOutputStyle(root)).toMatchObject({
+      name: 'UserStyle',
+      chars: 40,
+    });
+  });
+
+  it('ignores the user-level outputStyle when the project settings.json sets another', () => {
+    const root = useRepo('pnpm-single');
+    stageUserSettings('UserStyle');
+    write(
+      root,
+      '.claude/settings.json',
+      JSON.stringify({ outputStyle: 'Prose' }),
+    );
+    write(
+      root,
+      '.claude/output-styles/user.md',
+      `---\nname: UserStyle\n---\n${'u'.repeat(40)}`,
+    );
+    write(
+      root,
+      '.claude/output-styles/prose.md',
+      `---\nname: Prose\n---\n${'p'.repeat(20)}`,
+    );
+
+    expect(measureActiveOutputStyle(root)).toMatchObject({
+      name: 'Prose',
+      chars: 20,
     });
   });
 });

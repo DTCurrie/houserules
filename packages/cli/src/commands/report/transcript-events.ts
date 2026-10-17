@@ -82,6 +82,8 @@ export interface FileUsage {
 interface ResidentCapture {
   sessionId: string;
   ts?: number;
+  /** How the session was launched, e.g. `cli` for interactive and `sdk-cli` for headless. */
+  entrypoint?: string;
   systemPromptBytes?: number;
   /** One entry per file in the first `instructions` attachment, e.g. `Project`, `AutoMem`. */
   instructionFiles: { type: string; bytes: number }[];
@@ -174,6 +176,7 @@ interface TranscriptRecord {
   uuid?: string;
   sessionId?: string;
   timestamp?: string;
+  entrypoint?: string;
   version?: string;
   isSidechain?: boolean;
   isMeta?: boolean;
@@ -526,6 +529,7 @@ function recordResidentCapture(
 ): void {
   const capture = captureOf(corpus, sessionId);
   capture.ts ??= Date.parse(record.timestamp ?? '') || undefined;
+  capture.entrypoint ??= record.entrypoint;
   switch (attachment.type) {
     case 'prompt_snapshot':
       capture.systemPromptBytes ??= joinedBytes(attachment.systemPrompt);

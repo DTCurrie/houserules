@@ -58,6 +58,20 @@ describe('isKitStockCommand', () => {
     ).toBe(true);
   });
 
+  it.each(['guard', 'hint', 'silent'] as const)(
+    'is true for the %s fallback form',
+    (fallback) => {
+      expect(isKitStockCommand(hookCommand(SCRIPT, fallback), SCRIPT)).toBe(
+        true,
+      );
+    },
+  );
+
+  it('is false for a silent form with a user-edited fallback', () => {
+    const custom = hookCommand(SCRIPT, 'silent').replace('exit 0', 'exit 3');
+    expect(isKitStockCommand(custom, SCRIPT)).toBe(false);
+  });
+
   it('is false for a different basename entirely', () => {
     expect(
       isKitStockCommand(HISTORICAL_COMMAND, 'other-hook.mjs'),

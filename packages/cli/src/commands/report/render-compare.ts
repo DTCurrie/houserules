@@ -1,3 +1,4 @@
+import { entrypointMedians } from './resident-context.js';
 import type { ReportDocument } from './report-document.js';
 import { renderTable } from './render-table.js';
 import { weightedInput } from './token-usage.js';
@@ -144,6 +145,15 @@ function frictionRows(documents: ReportDocument[]): Row[] {
   ];
 }
 
+function entrypointBytes(doc: ReportDocument): Map<string, number> {
+  const groups =
+    doc.residentContext.medianByEntrypoint ??
+    entrypointMedians(doc.residentContext.rows);
+  return new Map(
+    groups.map((group) => [group.entrypoint, group.medianResidentBytes]),
+  );
+}
+
 function residentRows(documents: ReportDocument[]): Row[] {
   return [
     row('recorded sessions', documents, (doc) => doc.residentContext.recorded),
@@ -156,6 +166,11 @@ function residentRows(documents: ReportDocument[]): Row[] {
       'median ~tokens',
       documents,
       (doc) => doc.residentContext.medianEstimatedTokens,
+    ),
+    ...unionRows(
+      documents,
+      (doc) => entrypointBytes(doc),
+      (name) => `median resident bytes (${name})`,
     ),
   ];
 }

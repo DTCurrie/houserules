@@ -49,10 +49,14 @@ function writeTranscript(records: unknown[]): string {
   return path;
 }
 
-function writeGatePayload(command: string, transcriptPath?: string): string {
+function writeGatePayload(
+  command: string,
+  opts: { agentId?: string; transcriptPath?: string } = {},
+): string {
   return JSON.stringify({
     tool_input: { command },
-    transcript_path: transcriptPath,
+    transcript_path: opts.transcriptPath,
+    agent_id: opts.agentId,
   });
 }
 
@@ -320,68 +324,76 @@ describe('guard-bash.mjs', () => {
     );
   });
 
-  it('refuses a ledger write from a subagent turn, reading the sidechain flag from the transcript path', () => {
+  const LEDGER_WRITE =
+    'node .claude/scripts/backlog-log.mjs add API area "title"';
+
+  it('refuses a ledger write when the payload carries agent_id', () => {
     const root = useInstalledRepo('pnpm-monorepo');
-    const transcript = writeTranscript([sidechainTurn()]);
+
+    const r = runScript(root, SCRIPT, {
+      input: writeGatePayload(LEDGER_WRITE, { agentId: 'agent-abc123' }),
+    });
+
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/subagent/i);
+  });
+
+  it('refuses a changeset write when the payload carries agent_id', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
 
     const r = runScript(root, SCRIPT, {
       input: writeGatePayload(
-        'node .claude/scripts/backlog-log.mjs add API area "title"',
-        transcript,
+        'node .claude/scripts/changeset-write.mjs --empty --summary "x"',
+        {
+          agentId: 'agent-abc123',
+          transcriptPath: writeTranscript([mainTurn()]),
+        },
       ),
     });
 
     expect(r.status).toBe(2);
   });
 
-  it('allows a ledger write outside any subagent turn, since the main thread is not gated', () => {
+  it('allows a ledger write when the payload has no agent_id', () => {
     const root = useInstalledRepo('pnpm-monorepo');
-    const transcript = writeTranscript([mainTurn()]);
 
     const r = runScript(root, SCRIPT, {
-      input: writeGatePayload(
-        'node .claude/scripts/backlog-log.mjs add API area "title"',
-        transcript,
-      ),
+      input: writeGatePayload(LEDGER_WRITE),
     });
 
     expect(r.status, r.stderr).toBe(0);
   });
 
-  it('allows a ledger write when there is no transcript at all', () => {
+  it('allows a ledger write when agent_id is an empty string', () => {
     const root = useInstalledRepo('pnpm-monorepo');
+
     const r = runScript(root, SCRIPT, {
-      input: writeGatePayload(
-        'node .claude/scripts/changeset-write.mjs --empty --summary "x"',
-      ),
+      input: writeGatePayload(LEDGER_WRITE, { agentId: '' }),
     });
 
     expect(r.status, r.stderr).toBe(0);
   });
 
-  it('allows Bash to proceed when transcript_path does not exist', () => {
+  it('refuses with agent_id even when transcript_path does not exist', () => {
     const root = useInstalledRepo('pnpm-monorepo');
+
     const r = runScript(root, SCRIPT, {
-      input: writeGatePayload(
-        'node .claude/scripts/backlog-log.mjs add API area "title"',
-        '/nonexistent/transcript.jsonl',
-      ),
+      input: writeGatePayload(LEDGER_WRITE, {
+        agentId: 'agent-abc123',
+        transcriptPath: '/nonexistent/transcript.jsonl',
+      }),
     });
 
-    expect(r.status, r.stderr).toBe(0);
+    expect(r.status).toBe(2);
   });
 
-  it('allows Bash to proceed when the transcript file is not valid JSONL', () => {
+  it('allows without agent_id even when the transcript trailing turn is a sidechain', () => {
     const root = useInstalledRepo('pnpm-monorepo');
-    const dir = mkdtempSync(join(tmpdir(), 'subagent-write-gate-'));
-    const path = join(dir, 'transcript.jsonl');
-    writeFileSync(path, 'not json\nnot json either\n');
 
     const r = runScript(root, SCRIPT, {
-      input: writeGatePayload(
-        'node .claude/scripts/backlog-log.mjs add API area "title"',
-        path,
-      ),
+      input: writeGatePayload(LEDGER_WRITE, {
+        transcriptPath: writeTranscript([sidechainTurn()]),
+      }),
     });
 
     expect(r.status, r.stderr).toBe(0);

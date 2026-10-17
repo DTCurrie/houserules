@@ -71,9 +71,9 @@ value)` to read reactive state without taking a dependency.
 ## Context Providers
 
 Reactive shared state lives in `.svelte.ts` files using `getContext` and `setContext`.
-**ALWAYS** use `Symbol` keys. Never declare `$state` at module scope here: on the server it
-is one instance shared across every request and user, so create it inside `provide*`
-instead.
+Use `Symbol` keys, so two contexts can never collide. Never declare `$state` at module scope
+here: on the server it is one instance shared across every request and user, so create it
+inside `provide*` instead.
 
 ```typescript
 // theme-context.svelte.ts

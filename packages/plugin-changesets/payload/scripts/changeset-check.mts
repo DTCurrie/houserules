@@ -4,7 +4,8 @@
  *
  * Exit 2 with stderr asks Claude to write the changeset, or to record --empty saying why
  * not. Exit 0 stays silent, and every failure path exits 0, because a nudge hook must
- * never break a session.
+ * never break a session. A turn whose transcript shows only read-only tool uses exits 0
+ * before any git call, and a missing or unreadable transcript runs the check as usual.
  *
  * Config (houserules.config.json): changesets.enabled must be true, changesets.stopCheck
  * (default true) is the kill-switch, changesets.baseBranch (default "main") is the
@@ -24,6 +25,7 @@ import { join } from 'node:path';
 import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { git, readStdinJson } from '@houserules/payload/proc';
+import { turnTouchedFiles } from '@houserules/payload/transcript-turn';
 
 const STATE_DIR = '.claude/state';
 const STATE_FILE = 'changeset-check.json';
@@ -74,10 +76,12 @@ function writeLastSignature(root: string, signature: string): void {
 
 interface HookInput {
   stop_hook_active?: boolean;
+  transcript_path?: string;
 }
 
 const input = readStdinJson<HookInput>();
 if (input.stop_hook_active) process.exit(0);
+if (turnTouchedFiles(input.transcript_path) === false) process.exit(0);
 
 const isChangesetMd = (p: string): boolean =>
   p.startsWith('.changeset/') && p.endsWith('.md') && !/\/readme\.md$/i.test(p);

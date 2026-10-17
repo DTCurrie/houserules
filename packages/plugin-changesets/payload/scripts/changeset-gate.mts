@@ -16,7 +16,9 @@
  * absent, since ordering has nothing to check without a transcript.
  *
  * Exit 2 with the report on stderr when a gate is violated. Every failure path exits 0,
- * because a nudge hook must never break a session.
+ * because a nudge hook must never break a session. A turn whose transcript shows only
+ * read-only tool uses exits 0 before any git call, and a missing or unreadable transcript
+ * runs every gate as usual.
  */
 
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
@@ -25,6 +27,7 @@ import { pathToFileURL } from 'node:url';
 
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { git, readStdinJson, repoRoot } from '@houserules/payload/proc';
+import { turnTouchedFiles } from '@houserules/payload/transcript-turn';
 import {
   emptyReport,
   hasErrors,
@@ -379,6 +382,7 @@ function main(): void {
     transcript_path?: string;
   }>();
   if (input.stop_hook_active) process.exit(0);
+  if (turnTouchedFiles(input.transcript_path) === false) process.exit(0);
 
   try {
     const root = repoRoot();

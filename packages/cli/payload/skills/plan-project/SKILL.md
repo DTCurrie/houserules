@@ -94,7 +94,7 @@ the workspace is self-contained. A phase that records its spec in `## Reference`
 **`PLAN.md`** is the stable overview: goal plus approach, and it rarely changes once set.
 
 ```markdown
-# PLAN — <slug>
+# PLAN: <slug>
 
 **Created:** <date> · **Status:** see [ROADMAP.md](ROADMAP.md)
 
@@ -108,8 +108,8 @@ the workspace is self-contained. A phase that records its spec in `## Reference`
 
 ## Phases
 
-1. **<name>** — <one line> → [phase-1-<slug>.md](phase-1-<slug>.md)
-2. **<name>** — <one line> → [phase-2-<slug>.md](phase-2-<slug>.md)
+1. **<name>**: <one line> → [phase-1-<slug>.md](phase-1-<slug>.md)
+2. **<name>**: <one line> → [phase-2-<slug>.md](phase-2-<slug>.md)
 
 ## Key files & interfaces
 
@@ -119,21 +119,21 @@ the workspace is self-contained. A phase that records its spec in `## Reference`
 **`ROADMAP.md`** is the **living** status doc, the one file resume reads first.
 
 ```markdown
-# ROADMAP — <slug>
+# ROADMAP: <slug>
 
 **Status:** IN PROGRESS · **Started:** <date> · **Updated:** <date>
 
-> Resuming? Read this file's status lines below — do not re-derive scope from the transcript.
+> Resuming? Read this file's status lines below. Do not re-derive scope from the transcript.
 
 ## Phases
 
-- [x] **Phase 1 — <name>** · Status: DONE (<date>) · [sub-plan](phase-1-<slug>.md)
-- [~] **Phase 2 — <name>** · Status: IN PROGRESS · [sub-plan](phase-2-<slug>.md)
-- [ ] **Phase 3 — <name>** · Status: TODO · [sub-plan](phase-3-<slug>.md)
+- [x] **Phase 1: <name>** · Status: DONE (<date>) · [sub-plan](phase-1-<slug>.md)
+- [~] **Phase 2: <name>** · Status: IN PROGRESS · [sub-plan](phase-2-<slug>.md)
+- [ ] **Phase 3: <name>** · Status: TODO · [sub-plan](phase-3-<slug>.md)
 
 ## Log
 
-- <date> — <one line on what changed / what's next>
+- <date>: <one line on what changed / what's next>
 ```
 
 Status vocabulary is fixed so it's greppable: **`TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`**.
@@ -142,7 +142,7 @@ Checkboxes mirror it: `[ ]` todo, `[~]` in progress, `[x]` done.
 **`phase-N-<slug>.md`** is one file per phase, the working record for that slice.
 
 ```markdown
-# Phase N — <name>
+# Phase N: <name>
 
 **Status:** TODO · **Part of:** [PLAN.md](PLAN.md) · **Roadmap:** [ROADMAP.md](ROADMAP.md)
 **Signals:** <optional: `wide` for a big footprint, `ui` for user-facing surfaces, else omit the line>

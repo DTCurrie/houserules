@@ -457,6 +457,20 @@ describe('renderClaudeMd', () => {
     );
   });
 
+  it('emits the evasion table with prettier column alignment', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+    expect(body).toContain(
+      [
+        '  | Excuse                            | Reality                                                                    |',
+        '  | --------------------------------- | -------------------------------------------------------------------------- |',
+        '  | "The edits are in, so it is done" | Done is the checks passing, with output you read.                          |',
+        '  | "I know this fact from memory"    | State it only after running the command that could falsify it.             |',
+        '  | "It passed earlier"               | A stale or cached pass is not this change\'s pass. Re-run on current bytes. |',
+        '  | "The subagent reported success"   | The tree is the evidence. Check it before believing the report.            |',
+      ].join('\n'),
+    );
+  });
+
   it('embeds the same additions body between the markers', () => {
     const ctx = makeCtx();
     const answers = makeAnswers({ moduleIds: ['core', 'changesets'] });

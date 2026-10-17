@@ -31,10 +31,12 @@ a monorepo, or when `.changeset/` already exists.
   folds one or more pending changesets into an amended one.
 
   It also installs `changeset-check.mjs`, a Stop hook that nudges when package source changed
-  with no changeset recorded for it. **The hook exits 2 on purpose** when it fires: a non-zero
-  exit is how a Stop hook tells Claude Code to keep going rather than end the turn, so the
-  agent sees the nudge and can act on it in the same turn instead of losing the context. Every
-  other path, including any internal failure, exits 0, so the hook can never break a session.
+  with no changeset recorded for it. **The hook exits 2 on purpose** when it fires: exit 2 is the
+  blocking code that tells Claude Code to keep going rather than end the turn, so the agent
+  sees the nudge and can act on it in the same turn instead of losing the context. Exit 1 is
+  only a non-blocking error. Every other path, including any internal failure, exits 0, so the
+  hook can never break a session. It also exits 0 without running when the turn that just
+  ended used no file-writing tool.
   It seeds `.changeset/config.json` when the repo has none, and writes the `/changeset` skill
   plus the `changeset-condense` skill and the `changeset-writer` agent (haiku).
 

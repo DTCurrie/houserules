@@ -17,7 +17,8 @@
  *
  * Config (houserules.config.json, verify block — mirrors fix): verify.runner / filterFlag /
  * runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
- * "main"); per-target verifyCommands overrides commands for that package.
+ * "main"); per-target verifyCommands overrides commands for that package. A target
+ * resolving to no verify commands is reported as skipped, never as passing.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -194,11 +195,14 @@ export function planLines(
       (dependentCount ? ` + ${dependentCount} dependent` : '') +
       `) vs base \`${base}\``;
   const lines = [`verify-changed: ${summary}`];
-  for (const s of scope)
+  for (const s of scope) {
+    if (!s.commands?.length)
+      lines.push(`  ${s.package}  [${s.reason}]  SKIPPED (no verify commands)`);
     for (const script of s.commands ?? [])
       lines.push(
         `  ${s.package}  [${s.reason}]  ${runner} ${verifyArgv(s.package, script, filterFlag, runPrefix).join(' ')}`,
       );
+  }
   lines.push(
     'Run each command; report one compact line per package: "<pkg>: PASS" or "<pkg>: FAIL (<step>)".',
   );
@@ -298,6 +302,10 @@ function runScope(
 ): Residue[] {
   const residues: Residue[] = [];
   for (const s of scope) {
+    if (!s.commands?.length) {
+      process.stdout.write(`${s.package}: SKIPPED (no verify commands)\n`);
+      continue;
+    }
     let failedStep: string | null = null;
     let output = '';
     for (const script of s.commands ?? []) {

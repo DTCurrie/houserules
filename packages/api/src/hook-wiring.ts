@@ -17,14 +17,41 @@ import type {
  * swallowing the code. changeset-check.mjs exits 2 on purpose to nudge Claude, so that
  * form would have silently disabled the changeset nudge.
  *
- * The fallback goes to stderr with a non-zero exit. On context-bearing events, stdout at
- * exit 0 is injected into the model's context, so a plain echo turned the notice into fake
- * hook output. Exit 1 surfaces it as the harness's non-blocking error instead.
+ * The fallback depends on the event, because the harness treats each event's output
+ * differently. See {@link HookFallback} and {@link fallbackForEvent}.
  */
-export function hookCommand(scriptName: string): string {
+export function hookCommand(
+  scriptName: string,
+  fallback: HookFallback = 'guard',
+): string {
   const path = `"$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
-  // Fallback: stderr + exit 1, not a stdout echo. See the TSDoc above for why.
-  return `[ -f ${path} ] && exec node ${path} || { echo "[houserules] ${scriptName} missing. Run: npx houserules update" >&2; exit 1; }`;
+  const notice = `[houserules] ${scriptName} missing. Run: npx houserules update`;
+  const head = `[ -f ${path} ] && exec node ${path}`;
+  if (fallback === 'silent') return `${head} || exit 0`;
+  if (fallback === 'hint') return `${head} || { echo "${notice}"; exit 0; }`;
+  return `${head} || { echo "${notice}" >&2; exit 1; }`;
+}
+
+/**
+ * What a hook command does when its script is absent. `guard` prints the notice to stderr
+ * and exits 1, which the harness shows as a non-blocking error. `hint` prints the notice to
+ * stdout and exits 0, so a SessionStart hook hands Claude the notice as context, since the
+ * stderr notice of a fresh clone is never read. `silent` prints nothing and exits 0.
+ */
+export type HookFallback = 'guard' | 'hint' | 'silent';
+
+/** The fallback each event gets: PreToolUse guards, SessionStart hints, the rest stay silent. */
+export function fallbackForEvent(event: string): HookFallback {
+  if (event === 'PreToolUse') return 'guard';
+  if (event === 'SessionStart') return 'hint';
+  return 'silent';
+}
+
+const GUARDED_HOOK_COMMAND_RE = /^\[ -f \S+ \] && exec node \S+ \|\| /;
+
+/** True for every wrapper form `hookCommand` can emit, whatever its fallback. */
+export function isGuardedHookCommand(command: string): boolean {
+  return GUARDED_HOOK_COMMAND_RE.test(command.trim());
 }
 
 /**
@@ -45,7 +72,10 @@ export function hookFragment(
   statusMessage?: string,
   options?: HookFragmentOptions,
 ): SettingsFragment {
-  const hook: HookEntry = { type: 'command', command: hookCommand(scriptName) };
+  const hook: HookEntry = {
+    type: 'command',
+    command: hookCommand(scriptName, fallbackForEvent(event)),
+  };
   if (statusMessage) hook.statusMessage = statusMessage;
   if (options?.if !== undefined) hook.if = options.if;
   if (options?.timeout !== undefined) hook.timeout = options.timeout;

@@ -66,19 +66,46 @@ function readLastJsonRecord(file: string): TranscriptRecord | null {
 }
 
 /**
- * The active Claude Code session, from `CLAUDE_SESSION_ID` or the freshest transcript tail.
+ * The longest project directory name Claude Code writes before it truncates, per
+ * https://code.claude.com/docs/en/sessions.md. Past this length Claude Code keeps the first
+ * 200 characters and appends a hash of the full path. The page does not name the hash, so
+ * {@link claudeProjectDir} returns only the 200-character prefix for such a path.
+ */
+const PROJECT_DIR_NAME_MAX_LENGTH = 200;
+
+/**
+ * The directory name Claude Code gives a project under `~/.claude/projects/`: the absolute
+ * working-directory path with every character outside `A-Z`, `a-z`, and `0-9` replaced by
+ * `-`, per https://code.claude.com/docs/en/sessions.md. A name past
+ * {@link PROJECT_DIR_NAME_MAX_LENGTH} is cut to that length. Every reader of a project's
+ * transcripts, in the payload and in the CLI, derives the name here, so the encoding can
+ * never disagree between them.
+ */
+export function claudeProjectDir(absolutePath: string): string {
+  return absolutePath
+    .replace(/[^A-Za-z0-9]/g, '-')
+    .slice(0, PROJECT_DIR_NAME_MAX_LENGTH);
+}
+
+/**
+ * The active Claude Code session. Reads `CLAUDE_SESSION_ID` first as the manual override,
+ * then `CLAUDE_CODE_SESSION_ID`, which Claude Code sets in Bash and hook subprocesses, and
+ * only then the freshest transcript tail.
  * Transcripts live at `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, where encoded-cwd
- * is the absolute repo path with `/` replaced by `-`. mtime alone is not reliable when several
+ * is {@link claudeProjectDir} of the repo root. mtime alone is not reliable when several
  * sessions share one project at once, so this compares the last record's timestamp.
  *
  * @returns null in any harness that is not Claude Code, which callers report as `chat: null`.
  */
 function detectChatId(repoRoot: string): string | null {
   if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
+  if (process.env.CLAUDE_CODE_SESSION_ID) {
+    return process.env.CLAUDE_CODE_SESSION_ID;
+  }
   const dir = resolve(
     homedir(),
     '.claude/projects',
-    repoRoot.replaceAll('/', '-'),
+    claudeProjectDir(repoRoot),
   );
   if (!existsSync(dir)) return null;
   let entries;

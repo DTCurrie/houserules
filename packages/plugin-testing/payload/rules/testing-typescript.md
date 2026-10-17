@@ -29,10 +29,9 @@ Vitest and TypeScript, but the principles they illustrate apply to any test runn
   rely on. Ordinary application code does not need one, since a runtime test already covers the
   values that flow through it. Use Vitest's built-in `expectTypeOf`, or `tsd`.
 - **Enable Vitest's `typecheck` for a type test to run at all.** Vitest strips types by default
-  rather than checking them, the same trap `CLAUDE.md` warns about for the whole repo. Without
-  `typecheck: { enabled: true }` in the Vitest config, a file full of `expectTypeOf` assertions
-  reports green while checking nothing. Checked mechanically, and only against Vitest's own
-  `expectTypeOf`, not `tsd`.
+  rather than checking them. Without `typecheck: { enabled: true }` in the Vitest config, a file
+  full of `expectTypeOf` assertions reports green while checking nothing. Checked mechanically,
+  and only against Vitest's own `expectTypeOf`, not `tsd`.
 
 ## Checked mechanically
 

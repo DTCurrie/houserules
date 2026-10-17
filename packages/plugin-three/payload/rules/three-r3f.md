@@ -8,6 +8,8 @@ paths:
 
 Assumes `three.md`. This is the React binding residue only, not a restatement of the base rule.
 
+Fetch React Three Fiber's upstream doc URLs from `../reference/three-upstream-docs-r3f.md` rather than recalling a signature.
+
 ## Handing an object to the scene graph
 
 Use `<primitive object={obj} />` to hand a pre-built object from the pure Three.js layer to the

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
+import { isGuardedHookCommand } from '@houserules/api';
 import type { CheckResult, Finding } from '@houserules/api';
 
 import { allHookCommands } from './settings-wiring.js';
@@ -14,10 +15,6 @@ const CONFIG_SURFACE_FILES = [
   'settings.json',
   'settings.local.json',
 ];
-
-function isGuarded(command: string): boolean {
-  return command.includes('[[ -f') && command.includes('exec node');
-}
 
 function stripQuotes(token: string): string {
   if (token.length < 2) return token;
@@ -33,7 +30,7 @@ function findUnguardedScriptFindings(commands: string[]): string[] {
   for (const command of commands) {
     const match = command.match(KIT_SCRIPT_RE);
     const scriptPath = match?.[1];
-    if (scriptPath && !isGuarded(command)) readouts.push(scriptPath);
+    if (scriptPath && !isGuardedHookCommand(command)) readouts.push(scriptPath);
   }
   return readouts;
 }
@@ -107,7 +104,7 @@ export function checkInstallHygiene(root: string, ctx: Ctx): CheckResult {
   const unguardedScripts = findUnguardedScriptFindings(commands);
   for (const scriptPath of unguardedScripts) {
     readouts.push(
-      `hook command runs ${scriptPath} without the "[[ -f ... ]] && exec node" existence guard`,
+      `hook command runs ${scriptPath} without the "[ -f ... ] && exec node" existence guard`,
     );
   }
 

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { extractBody, upsertRegion } from '@houserules/api/internal';
 import type { RegionSpec } from '@houserules/api';
 
+import { claudeMdRegion } from '../claude-md-region.js';
+
 const SPEC: RegionSpec = {
   id: 'claude-md',
   start: '<!-- houserules:claude-md start -->',
@@ -151,5 +153,23 @@ describe('extractBody', () => {
   it('returns the exact body between markers', () => {
     const content = `pre\n${SPEC.start}\nline one\nline two\n${SPEC.end}\npost`;
     expect(extractBody(content, SPEC)).toBe('line one\nline two');
+  });
+});
+
+describe('claudeMdRegion', () => {
+  const body = '### Heading\n\n- item';
+
+  it('puts a blank line after the start marker and before the end marker', () => {
+    const existing = '# Title\n\nuser prose\n';
+    const { content } = upsertRegion(existing, body, claudeMdRegion);
+    expect(content).toContain(`${claudeMdRegion.start}\n\n### Heading`);
+    expect(content).toContain(`- item\n\n${claudeMdRegion.end}`);
+    expect(content.startsWith('# Title\n')).toBe(true);
+  });
+
+  it('is idempotent when the same body is spliced twice', () => {
+    const first = upsertRegion('# Title\n', body, claudeMdRegion);
+    const second = upsertRegion(first.content, body, claudeMdRegion);
+    expect(second.content).toBe(first.content);
   });
 });

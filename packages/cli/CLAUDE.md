@@ -37,8 +37,8 @@ are relative to `packages/cli/`.
   `src/core/__tests__/config.test.ts` fails when it falls out of sync.
 - `payload/`: everything copied into user repos. Scripts are authored as `.mts` and compiled
   to `payload-dist/scripts/*.mjs`. The prose dirs (`skills/`, `agents/`, `rules/`,
-  `templates/`) are copied through verbatim. `output-styles/` moved to `plugin-prose` along
-  with the `output-prose` module, so it is no longer one of this package's prose dirs.
+  `reference/`, `templates/`) are copied through verbatim. Output styles ship from
+  `plugin-prose`, not from this package.
   **`payload-dist/` is what ships and what `payloadPath()` reads.** Zero runtime
   dependencies, node builtins only, POSIX shells, enforced by
   `payload/__tests__/dependencies.test.ts` (imports) and `payload/__tests__/execution.test.ts`
@@ -64,15 +64,14 @@ are relative to `packages/cli/`.
   since their installed bytes carry a routing tail no payload source has byte-for-byte.
 - `pnpm dogfood:watch`: `WIREIT_WATCH=true` over the `dogfood` graph, so editing or adding a
   payload `.mts` recompiles it and re-copies it into `.claude/scripts/` with no second
-  command. It covers every package that ships payload scripts, not just the CLI. This
-  replaced a bare `tsc --watch` on the payload, which compiled to `payload-dist/` and
-  stopped, leaving the copy under `.claude/scripts/` stale. Anyone following the old
-  instructions was editing a hook and testing the previous version of it.
-  **DELETING a script is still not covered. Re-run `pnpm dogfood`.** The watcher does fire,
+  command. It covers every package that ships payload scripts, not just the CLI. A bare
+  `tsc --watch` is no substitute: it stops at `payload-dist/` and leaves the copy under
+  `.claude/scripts/` stale.
+  **Deleting a script is not covered. Re-run `pnpm dogfood` after one.** The watcher fires,
   but that run treats `build:payload` as fresh and does not re-restore its output, so the
   orphaned `.mjs` survives in both `payload-dist/` and `.claude/scripts/` until a new wireit
-  process runs. Verified, not assumed. Outside the watch a deletion is handled correctly,
-  because wireit restores the cached output for the reverted fingerprint.
+  process runs. Outside the watch a deletion is handled correctly, because wireit restores
+  the cached output for the reverted fingerprint.
 
 ## Rules
 

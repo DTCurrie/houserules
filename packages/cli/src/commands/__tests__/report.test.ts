@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { onTestFinished } from 'vitest';
 
+import { claudeProjectDir } from '@houserules/payload/entry-ledger';
+
 import { useRepo } from '#test/repo';
 import { runCli, runIn } from '#test/run';
 
@@ -29,7 +31,7 @@ describe('report', () => {
     onTestFinished(() => rmSync(cfgDir, { recursive: true, force: true }));
 
     const top = runIn(root, 'git', ['rev-parse', '--show-toplevel']).trim();
-    const projDir = join(cfgDir, 'projects', top.replaceAll('/', '-'));
+    const projDir = join(cfgDir, 'projects', claudeProjectDir(top));
     mkdirSync(projDir, { recursive: true });
     writeFileSync(
       join(projDir, 'sess-abcdef12.jsonl'),
@@ -95,7 +97,7 @@ describe('report', () => {
     const subDir = join(
       cfgDir,
       'projects',
-      top.replaceAll('/', '-'),
+      claudeProjectDir(top),
       'sess-abcdef12',
       'subagents',
     );
@@ -201,6 +203,84 @@ describe('report', () => {
     expect(kept.stdout).not.toMatch(/skipped\)/);
   });
 
+  describe('corpus window', () => {
+    const DAY_MS = 86_400_000;
+    const WARNING = /cleanupPeriodDays, default 30/;
+
+    function addSession(name: string, timestamp: string): void {
+      const top = runIn(root, 'git', ['rev-parse', '--show-toplevel']).trim();
+      writeFileSync(
+        join(cfgDir, 'projects', claudeProjectDir(top), `${name}.jsonl`),
+        `${JSON.stringify({
+          type: 'assistant',
+          timestamp,
+          message: {
+            model: 'claude-opus-4-8',
+            usage: { input_tokens: 1, output_tokens: 1 },
+          },
+        })}\n`,
+      );
+    }
+
+    function replaceFirstSession(timestamp: string): void {
+      const top = runIn(root, 'git', ['rev-parse', '--show-toplevel']).trim();
+      rmSync(
+        join(cfgDir, 'projects', claudeProjectDir(top), 'sess-abcdef12.jsonl'),
+      );
+      addSession('sess-abcdef12', timestamp);
+    }
+
+    it('prints the session count and the first and last session dates', () => {
+      addSession('sess-22222222', '2026-05-03T12:00:00.000Z');
+
+      const r = runCli(['report', root], { env });
+
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toContain('sessions: 2, from 2026-05-01 to 2026-05-03');
+    });
+
+    it('warns when --since predates the oldest transcript', () => {
+      const r = runCli(['report', root, '--since', '2026-04-01'], { env });
+
+      expect(r.stdout).toContain(
+        '(warning: --since 2026-04-01 predates the oldest transcript, 2026-05-01.',
+      );
+      expect(r.stdout).toMatch(WARNING);
+    });
+
+    it('does not warn when --since falls after the oldest transcript', () => {
+      addSession('sess-33333333', '2026-06-10T00:00:00.000Z');
+
+      const r = runCli(['report', root, '--since', '2026-06-10'], { env });
+
+      expect(r.stdout).not.toMatch(WARNING);
+    });
+
+    it('warns when the oldest transcript is 29 days old', () => {
+      replaceFirstSession(new Date(Date.now() - 29 * DAY_MS).toISOString());
+
+      const r = runCli(['report', root], { env });
+
+      expect(r.stdout).toMatch(/\(warning: the oldest transcript is /);
+      expect(r.stdout).toMatch(WARNING);
+    });
+
+    it('stays quiet when the oldest transcript is 10 days old', () => {
+      replaceFirstSession(new Date(Date.now() - 10 * DAY_MS).toISOString());
+
+      const r = runCli(['report', root], { env });
+
+      expect(r.stdout).toMatch(/^sessions: 1, from /m);
+      expect(r.stdout).not.toMatch(WARNING);
+    });
+
+    it('keeps --json free of the window lines', () => {
+      const r = runCli(['report', root, '--json'], { env });
+
+      expect(() => JSON.parse(r.stdout)).not.toThrow();
+    });
+  });
+
   it('exits 1 on a malformed --since', () => {
     const r = runCli(['report', root, '--since', 'nope'], { env });
     expect(r.status).toBe(1);
@@ -236,8 +316,13 @@ describe('report', () => {
       const live = runCli(['report', root], { env });
       const imported = runCli(['report', '--import', file], { env });
       expect(imported.status, imported.stderr).toBe(0);
-      expect(imported.stdout.split('\n').slice(2)).toEqual(
-        live.stdout.split('\n').slice(2),
+      const withoutWindowLine = (out: string) =>
+        out
+          .split('\n')
+          .slice(2)
+          .filter((line) => !line.startsWith('sessions: '));
+      expect(withoutWindowLine(imported.stdout)).toEqual(
+        withoutWindowLine(live.stdout),
       );
     });
 

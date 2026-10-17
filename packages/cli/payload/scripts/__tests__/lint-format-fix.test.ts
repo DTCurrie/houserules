@@ -1,15 +1,28 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  appendFileSync,
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { delimiter, join } from 'node:path';
 
 import type { HouseConfig } from '@houserules/payload/config';
 import {
   affectedPackages,
+  FIX_BUDGET_MS,
   fixArgs,
   gatePasses,
+  overrunNotice,
   planFixSteps,
   plannedSteps,
   resolveFixSettings,
+  runFixSteps,
   type FixSettings,
 } from '../lint-format-fix.mjs';
 import { useInstalledRepo } from '#test/repo';
@@ -388,5 +401,216 @@ describe('lint-format-fix.mjs seeded houserules.config.json', () => {
 
   it('has no verify block by default', () => {
     expect(config.verify).toBe(undefined);
+  });
+});
+
+function transcriptWith(...tools: string[]): string {
+  const dir = mkdtempSync(join(tmpdir(), 'lint-fix-transcript-'));
+  const path = join(dir, 'transcript.jsonl');
+  const records = [
+    { type: 'user', message: { role: 'user', content: 'do the thing' } },
+    {
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: tools.map((name) => ({ type: 'tool_use', name, input: {} })),
+      },
+    },
+  ];
+  writeFileSync(path, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  return path;
+}
+
+function runWithGitSpy(
+  root: string,
+  payload: Record<string, unknown>,
+): { status: number | null; stderr: string; gitCalls: string[] } {
+  const binDir = mkdtempSync(join(tmpdir(), 'lint-fix-git-spy-'));
+  const log = join(binDir, 'git-calls.txt');
+  mkdirSync(binDir, { recursive: true });
+  const gitPath = join(binDir, 'git');
+  writeFileSync(gitPath, `#!/bin/sh\necho "$@" >> ${log}\nexit 0\n`);
+  chmodSync(gitPath, 0o755);
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    PATH: binDir + delimiter + process.env.PATH,
+  };
+  delete env.NODE_PATH;
+  const r = spawnSync(process.execPath, [join(root, SCRIPT)], {
+    cwd: root,
+    input: JSON.stringify(payload),
+    encoding: 'utf8',
+    env,
+  });
+  const gitCalls = existsSync(log)
+    ? readFileSync(log, 'utf8').trim().split('\n')
+    : [];
+  return { status: r.status, stderr: r.stderr, gitCalls };
+}
+
+describe('lint-format-fix.mjs gating on the ended turn', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+    stubRunner(root);
+    setRunner(root);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const x = 9;\n',
+    );
+  });
+
+  it('exits 0 without spawning git or the runner when the turn only used Read', () => {
+    const r = runWithGitSpy(root, {
+      hook_event_name: 'Stop',
+      transcript_path: transcriptWith('Read'),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(
+      r.gitCalls.filter((args) => args.startsWith('status')),
+      'git status was never spawned',
+    ).toEqual([]);
+    expect(existsSync(join(root, 'runner-calls.txt')), 'no runner call').toBe(
+      false,
+    );
+  });
+
+  it('runs the fix when the turn used Read and Edit', () => {
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({
+        hook_event_name: 'Stop',
+        transcript_path: transcriptWith('Read', 'Edit'),
+      }),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+  });
+
+  it('runs the fix when the payload carries no transcript_path', () => {
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({ hook_event_name: 'Stop' }),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+  });
+
+  it('runs the fix when the transcript file is unreadable', () => {
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({
+        hook_event_name: 'Stop',
+        transcript_path: join(root, 'missing.jsonl'),
+      }),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+  });
+
+  it('exits 0 without spawning git or the runner while background_tasks is non-empty', () => {
+    const r = runWithGitSpy(root, {
+      hook_event_name: 'Stop',
+      transcript_path: transcriptWith('Edit'),
+      background_tasks: [{}],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(
+      r.gitCalls.filter((args) => args.startsWith('status')),
+      'git status was never spawned',
+    ).toEqual([]);
+    expect(existsSync(join(root, 'runner-calls.txt')), 'no runner call').toBe(
+      false,
+    );
+  });
+
+  it('runs the fix when background_tasks is an empty array', () => {
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({
+        hook_event_name: 'Stop',
+        transcript_path: transcriptWith('Edit'),
+        background_tasks: [],
+      }),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+  });
+});
+
+describe('runFixSteps against the fix budget', () => {
+  let root: string;
+  const settings = resolveFixSettings(baseConfig());
+  const steps: [string, string][] = [
+    ['@fix/cityville', 'lint:fix'],
+    ['@fix/cityville', 'format:fix'],
+  ];
+
+  function sleepingRunner(dir: string, seconds: number): FixSettings {
+    const path = join(dir, 'sleep-runner.sh');
+    writeFileSync(
+      path,
+      `#!/bin/sh\necho "$@" >> runner-calls.txt\nsleep ${seconds}\n`,
+    );
+    chmodSync(path, 0o755);
+    return { ...settings, runner: path };
+  }
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+  });
+
+  it('reports the step that outlasts the budget and skips the rest', () => {
+    const run = runFixSteps(steps, root, sleepingRunner(root, 5), 300);
+
+    expect(run.overrun).toEqual({ pkg: '@fix/cityville', step: 'lint:fix' });
+    expect(run.errors).toEqual([]);
+    expect(recordedCalls(root), 'only the first step started').toEqual([
+      '--filter @fix/cityville lint:fix',
+    ]);
+  });
+
+  it('reports the next step as the overrun when an earlier one spent the whole budget', () => {
+    let tick = 0;
+    stubRunner(root);
+    const run = runFixSteps(
+      steps,
+      root,
+      { ...settings, runner: join(root, 'stub-runner.sh') },
+      1000,
+      () => (tick++ === 0 ? 0 : 5000),
+    );
+
+    expect(run.overrun).toEqual({ pkg: '@fix/cityville', step: 'lint:fix' });
+    expect(existsSync(join(root, 'runner-calls.txt')), 'nothing spawned').toBe(
+      false,
+    );
+  });
+
+  it('keeps residue from finished steps and reports no overrun when the budget holds', () => {
+    stubRunner(root, { fail: true });
+    const run = runFixSteps(
+      steps,
+      root,
+      { ...settings, runner: join(root, 'stub-runner.sh') },
+      FIX_BUDGET_MS,
+    );
+
+    expect(run.overrun).toBe(null);
+    expect(run.errors.map((e) => e.step)).toEqual(['lint:fix', 'format:fix']);
+  });
+
+  it('names the step and the budget on one line', () => {
+    const notice = overrunNotice(
+      { pkg: '@fix/cityville', step: 'lint:fix' },
+      90000,
+    );
+
+    expect(notice).toBe(
+      'lint-format-fix: @fix/cityville :: lint:fix did not finish within the 90000ms fix budget, skipping the remaining steps.\n',
+    );
   });
 });
