@@ -17,6 +17,8 @@ import {
 import { emptyCorpus, ingestTranscript } from '../transcript-events.js';
 
 const SECRET_PATH = '/Users/someone/work/secret.ts';
+const SECRET_DIR =
+  '/private/tmp/claude-501/-Users-someone-work/abc123/scratchpad';
 
 function bashUse(id: string, command: string): unknown {
   return {
@@ -74,6 +76,14 @@ function buildFixture(): ReportDocument {
     hookFire('t1', 1, `throw err at ${SECRET_PATH}`),
     bashUse('t3', `rm -rf ${SECRET_PATH}`),
     denial('t3'),
+    bashUse('t4', `S=${SECRET_DIR}; node ${SECRET_DIR}/probe.mjs`),
+    denial('t4'),
+    bashUse('t5', '../../packages/ui/node_modules/.bin/prettier --write src'),
+    denial('t5'),
+    bashUse('t6', '( pnpm run build && echo ok )'),
+    denial('t6'),
+    bashUse('t7', `D="${SECRET_PATH}`),
+    denial('t7'),
   ];
   ingestTranscript(
     corpus,
@@ -114,8 +124,10 @@ describe('redactDocument', () => {
     const text = JSON.stringify(redacted);
 
     expect(text).not.toContain('/Users/');
+    expect(text).not.toContain('/private/tmp/');
     expect(text).not.toContain('secret');
     expect(text).not.toContain('origin main');
+    expect(text).not.toContain('node_modules');
   });
 
   it('keeps the git subcommand as the command family', () => {
@@ -126,9 +138,26 @@ describe('redactDocument', () => {
   });
 
   it('reduces a non-git command to its first token', () => {
-    expect(redacted.friction.denials).toEqual([
-      { tool: 'Bash', command: 'rm' },
-    ]);
+    expect(redacted.friction.denials[0]).toEqual({
+      tool: 'Bash',
+      command: 'rm',
+    });
+  });
+
+  it('skips a leading variable assignment and keeps the executable that follows it', () => {
+    expect(redacted.friction.denials[1]?.command).toBe('node');
+  });
+
+  it('reduces a path-shaped executable to its basename', () => {
+    expect(redacted.friction.denials[2]?.command).toBe('prettier');
+  });
+
+  it('skips a lone subshell opener before the executable', () => {
+    expect(redacted.friction.denials[3]?.command).toBe('pnpm');
+  });
+
+  it('names a command that is only an assignment without keeping its value', () => {
+    expect(redacted.friction.denials[4]?.command).toBe('(assignment)');
   });
 
   it('keeps a missing-module signature as its basename and redacts any other', () => {

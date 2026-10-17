@@ -8,12 +8,41 @@ const SUBCOMMAND_TOOLS = new Set(['git', 'gh']);
 const MODULE_SIGNATURE = /^Cannot find module '([^']+)'$/;
 const SCRIPT_SIGNATURE = /^missing script: (.+)$/;
 const REDACTED_SIGNATURE = 'stderr line (redacted)';
+// A leading `NAME=value` pair, whose value is often a path.
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=\S*$/;
+const ASSIGNMENT_ONLY = '(assignment)';
+const EMPTY_COMMAND = '(empty)';
+
+// Shell punctuation that can precede the executable: subshell and group openers, quotes.
+function bareToken(token: string): string {
+  return token.replace(/^[({'"`]+/, '').replace(/['"`]+$/, '');
+}
+
+// A token with a slash is a path, which may name a machine, a user, or a repo. Keep what it
+// ran, which is the basename, never where it lived.
+function nameOf(token: string): string {
+  const bare = bareToken(token);
+  return bare.includes('/') ? basename(bare) : bare;
+}
+
+// A leading assignment, or bare punctuation such as a lone `(` or `{`, precedes the executable.
+function isPrefixToken(token: string): boolean {
+  return ENV_ASSIGNMENT.test(token) || bareToken(token) === '';
+}
 
 function commandFamily(command: string): string {
-  const [first = '', second] = command.trim().split(/\s+/);
-  if (second !== undefined && SUBCOMMAND_TOOLS.has(first))
-    return `${first} ${second}`;
-  return first;
+  const tokens = command.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return EMPTY_COMMAND;
+  let index = 0;
+  while (index < tokens.length && isPrefixToken(tokens[index] ?? ''))
+    index += 1;
+  const first = tokens[index];
+  if (first === undefined) return ASSIGNMENT_ONLY;
+  const name = nameOf(first);
+  const second = tokens[index + 1];
+  if (second !== undefined && SUBCOMMAND_TOOLS.has(name))
+    return `${name} ${nameOf(second)}`;
+  return name;
 }
 
 function redactSignature(signature: string): string {
