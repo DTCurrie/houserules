@@ -88,6 +88,7 @@ describe('computeResidentContext', () => {
     expect(report.rows).toEqual([
       {
         session: 'sess-aaaaaaaa',
+        entrypoint: undefined,
         recorded: true,
         systemPromptBytes: 16,
         instructionBytes: 6,
@@ -98,9 +99,15 @@ describe('computeResidentContext', () => {
         estimatedTokens: 12,
         nestedMemoryLoads: 0,
         nestedMemoryBytes: 0,
+        nestedMemoryByOrigin: {
+          main: { loads: 0, bytes: 0 },
+          subagent: { loads: 0, bytes: 0 },
+        },
+        nestedMemoryFiles: [],
       },
       {
         session: 'sess-bbbbbbbb',
+        entrypoint: undefined,
         recorded: true,
         systemPromptBytes: 10,
         instructionBytes: 0,
@@ -111,9 +118,15 @@ describe('computeResidentContext', () => {
         estimatedTokens: 3,
         nestedMemoryLoads: 2,
         nestedMemoryBytes: 10,
+        nestedMemoryByOrigin: {
+          main: { loads: 2, bytes: 10 },
+          subagent: { loads: 0, bytes: 0 },
+        },
+        nestedMemoryFiles: [{ path: '(unnamed)', loads: 2, bytes: 10 }],
       },
       {
         session: 'sess-cccccccc',
+        entrypoint: undefined,
         recorded: false,
         systemPromptBytes: 0,
         instructionBytes: 0,
@@ -224,5 +237,92 @@ describe('entrypoint medians', () => {
     const text = renderResidentContext(older).join('\n');
 
     expect(text).toContain('medians (unknown, 2 session(s)): total 200 bytes');
+  });
+});
+
+describe('nested loads breakdown', () => {
+  function nestedCorpus() {
+    const corpus = emptyCorpus(['slug']);
+    const id = 'sess-nnnnnnnn';
+    ingestTranscript(
+      corpus,
+      `${id}.jsonl`,
+      [
+        attachmentLine(id, { type: 'prompt_snapshot', systemPrompt: ['x'] }),
+        attachmentLine(id, {
+          type: 'nested_memory',
+          path: '/repo/packages/cli/CLAUDE.md',
+          content: { content: 'a'.repeat(5) },
+        }),
+        attachmentLine(id, {
+          type: 'nested_memory',
+          path: '/repo/.claude/rules/testing.md',
+          content: { content: 'b'.repeat(20) },
+        }),
+      ].join('\n'),
+    );
+    // The subagent file folds into the parent row, as readCorpus does.
+    ingestTranscript(
+      corpus,
+      'agent-1.jsonl',
+      attachmentLine(id, {
+        type: 'nested_memory',
+        path: '/repo/.claude/rules/testing.md',
+        content: { content: 'c'.repeat(7) },
+      }),
+      corpus.files[0],
+    );
+    return corpus;
+  }
+
+  it('splits loads by origin and lists files by bytes descending', () => {
+    const report = computeResidentContext(nestedCorpus(), '/repo');
+    const row = report.rows[0];
+
+    expect(row?.nestedMemoryLoads).toBe(3);
+    expect(row?.nestedMemoryBytes).toBe(32);
+    expect(row?.nestedMemoryByOrigin).toEqual({
+      main: { loads: 2, bytes: 25 },
+      subagent: { loads: 1, bytes: 7 },
+    });
+
+    const text = renderResidentContext(report).join('\n');
+    const lines = text.split('\n');
+    const start = lines.findIndex((l) => l.includes('nested loads, sess-nnn'));
+    expect(lines.slice(start, start + 5)).toEqual([
+      '  nested loads, sess-nnn: 3 loads (32 bytes)',
+      '    main chain: 2 loads (25 bytes)',
+      '    subagents: 1 loads (7 bytes)',
+      '    .claude/rules/testing.md: 2 loads (27 bytes)',
+      '    packages/cli/CLAUDE.md: 1 loads (5 bytes)',
+    ]);
+  });
+
+  it('caps file rows at ten with a +N more tail', () => {
+    const corpus = emptyCorpus(['slug']);
+    const id = 'sess-mmmmmmmm';
+    const loads = Array.from({ length: 12 }, (_, index) =>
+      attachmentLine(id, {
+        type: 'nested_memory',
+        path: `/elsewhere/f${index}.md`,
+        content: { content: 'z'.repeat(index + 1) },
+      }),
+    );
+    ingestTranscript(
+      corpus,
+      `${id}.jsonl`,
+      [
+        attachmentLine(id, { type: 'prompt_snapshot', systemPrompt: ['x'] }),
+        ...loads,
+      ].join('\n'),
+    );
+
+    const text = renderResidentContext(
+      computeResidentContext(corpus, '/repo'),
+    ).join('\n');
+
+    expect(text).toContain('/elsewhere/f11.md: 1 loads (12 bytes)');
+    expect(text).not.toContain('/elsewhere/f0.md');
+    expect(text).toContain('    +2 more');
   });
 });

@@ -157,8 +157,12 @@ Checkboxes mirror it: `[ ]` todo, `[~]` in progress, `[x]` done.
 
 ## Steps
 
+- [ ] <step: the decision made, plus the acceptance that shows it holds. Never a code block>
 - [ ] <step>
-- [ ] <step>
+
+Self-check before handing off: if fenced code is more than a tenth of a phase file's lines, the
+plan is implementing. Move the code into a "decisions" bullet as prose, or drop it. `plan-lint`
+warns above that share.
 
 ## Notes & decisions
 
@@ -193,6 +197,10 @@ Report, then wait:
 - the next command, so starting is one keystroke:
   - `/orchestrate <slug> 1` fans out scoped workers for phase 1 (needs the `orchestrate` module).
   - Or the user asks you to take phase 1 in-context.
+- the execution mode, with its cost, and a recommendation. `/orchestrate` runs workers per slice and
+  pays for briefs, dispatch, and review, which is worth it above roughly two slices. In-context is
+  one pass and cheaper below that. Recommend one for this plan and give the reason from its own phase
+  sizes. The user still makes the choice.
 
 Whoever picks it up works one phase at a time, top of the ROADMAP down. Before starting a phase, they
 set its ROADMAP line and sub-plan header to `IN PROGRESS`, then tick the sub-plan's step checkboxes as

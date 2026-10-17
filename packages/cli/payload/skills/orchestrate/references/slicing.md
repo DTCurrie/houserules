@@ -111,3 +111,24 @@ plan's status and the wave's when it lands.
 **When you drop a slice, re-home its scope.** A slice canceled mid-program usually carried more
 than the reason it was canceled for. Read its brief before deleting it and move whatever is still
 wanted into another slice, or you will rediscover the orphaned half several slices later.
+
+## Dispatch details moved out of the skill
+
+- **Effort per slice.** `effort: low` suits sweeps, boilerplate, and many small files. `high` or
+  `xhigh` suits architecture calls, tricky seams, or a slice you would otherwise pull into your own
+  context. Omit it for everything else, and the worker runs at the `task-worker` frontmatter default.
+  Below Claude Code 2.1.292 the parameter does not exist.
+- **Research slices.** `task-worker-research` carries `WebFetch` and `WebSearch` on top of the standing
+  task-worker tools. If `.claude/agents/task-worker-research.md` is absent, dispatch `general-purpose`
+  with `model: sonnet` and paste `agents/task-worker.md` inline ahead of the brief, the same fallback
+  as a missing `task-worker`.
+- **A rule that needs an MCP tool the worker lacks.** Add the full callable name,
+  `mcp__<server>__<tool>`, or the `mcp__<server>` pattern to `orchestrate.workerTools` in
+  `.claude/houserules.config.json`, then run `npx houserules update`. `doctor` reports the same gap.
+  Until then, run that tool yourself over each worker's files at wave close, before the fixer.
+- **Worktree isolation.** `isolation: 'worktree'` exists for waves that genuinely cannot be made
+  disjoint. Correct slicing is cheaper than merging, and needing it usually means the slices were
+  drawn wrong.
+- **Pre-slicing skills.** `/blast-radius` is for wide phases, so a small phase never pays for a
+  fan-out map. `/sweep` takes a rote, repo-wide step (an import rename, an API swap) as one unit, which
+  keeps the two fan-out models distinct.

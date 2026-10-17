@@ -31,7 +31,15 @@ export function plan(): Action[] {
     {
       kind: 'merge-settings',
       module: id,
-      fragment: hookFragment('PreToolUse', 'Read', 'guard-read.mjs'),
+      fragment: hookFragment(
+        'PreToolUse',
+        'Read',
+        'guard-read.mjs',
+        undefined,
+        {
+          onFailure: 'block',
+        },
+      ),
     },
     {
       kind: 'advise',

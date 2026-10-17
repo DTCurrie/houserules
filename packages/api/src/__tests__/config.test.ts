@@ -44,6 +44,14 @@ describe('parseHouseConfig', () => {
     expect(parseHouseConfig(JSON.stringify(config))).toEqual(config);
   });
 
+  it('accepts orchestrate.workerTools server patterns', () => {
+    const config = {
+      ...minimalConfig,
+      orchestrate: { workerTools: ['mcp__x', 'mcp__y__*'] },
+    };
+    expect(parseHouseConfig(JSON.stringify(config))).toEqual(config);
+  });
+
   it('rejects a misspelled key inside orchestrate', () => {
     const raw = JSON.stringify({
       ...minimalConfig,

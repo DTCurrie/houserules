@@ -130,6 +130,6 @@ export function buildReportDocument(
       ),
     },
     friction: computeFriction(corpus),
-    residentContext: computeResidentContext(corpus),
+    residentContext: computeResidentContext(corpus, top),
   };
 }

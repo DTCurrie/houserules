@@ -1,7 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+
+import { claudeProjectDir } from '@houserules/payload/entry-ledger';
+import { detect } from '../../../detect.js';
 
 import { useRepo } from '#test/repo';
 import {
@@ -711,5 +714,145 @@ describe('checkResidentSurface', () => {
     );
     expect(resident).toContain('.claude/rules/always.md');
     expect(resident).not.toContain('scoped.md');
+  });
+});
+
+function attachmentLine(
+  sessionId: string,
+  timestamp: string,
+  attachment: unknown,
+): string {
+  return JSON.stringify({ type: 'user', sessionId, timestamp, attachment });
+}
+
+function writeSnapshotTranscript(
+  configDir: string,
+  root: string,
+  session: string,
+  timestamp: string,
+  sizes: { system: number; skills: number },
+): void {
+  write(
+    configDir,
+    join(
+      'projects',
+      claudeProjectDir(detect(root).git.top ?? root),
+      `${session}.jsonl`,
+    ),
+    [
+      attachmentLine(session, timestamp, {
+        type: 'prompt_snapshot',
+        systemPrompt: ['s'.repeat(sizes.system)],
+      }),
+      attachmentLine(session, timestamp, {
+        type: 'instructions',
+        files: [
+          { path: '/x/CLAUDE.md', type: 'Project', content: 'i'.repeat(40) },
+        ],
+      }),
+      attachmentLine(session, timestamp, {
+        type: 'skill_listing',
+        content: 'k'.repeat(sizes.skills),
+        skillCount: 2,
+      }),
+      attachmentLine(session, timestamp, {
+        type: 'agent_listing_delta',
+        isInitial: true,
+        addedLines: ['a'.repeat(20)],
+        addedTypes: ['reviewer'],
+      }),
+      attachmentLine(session, timestamp, {
+        type: 'output_style_instructions',
+        style: { name: 'Terse', prompt: 'y'.repeat(10) },
+      }),
+    ].join('\n') + '\n',
+  );
+}
+
+describe('checkResidentSurface, given local transcripts', () => {
+  const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
+  let configDir: string;
+
+  beforeEach(() => {
+    configDir = mkdtempSync(join(tmpdir(), 'hr-claude-config-'));
+    process.env.CLAUDE_CONFIG_DIR = join(configDir, 'unused-default');
+  });
+
+  afterEach(() => {
+    if (previousConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previousConfigDir;
+  });
+
+  it('prints the measured total, its components, and the user-level caveat', () => {
+    const root = useRepo('pnpm-single');
+    writeSnapshotTranscript(
+      configDir,
+      root,
+      'sess-one',
+      '2026-10-01T10:00:00.000Z',
+      {
+        system: 1000,
+        skills: 200,
+      },
+    );
+
+    const result = checkResidentSurface(root, { claudeConfigDir: configDir });
+
+    expect(result.readouts).toContainEqual(
+      'measured resident prompt (sess-one): ~318 tokens / 1270 bytes = system 1000 + instructions 40 + skills 200 + agents 20 + style 10',
+    );
+    expect(result.readouts).toContainEqual(
+      expect.stringMatching(/user-level and claude\.ai-synced.*\/skill-doctor/),
+    );
+    expect(result.readouts).not.toContainEqual(
+      expect.stringContaining('no local transcript'),
+    );
+  });
+
+  it('measures the newest transcript when two carry a snapshot', () => {
+    const root = useRepo('pnpm-single');
+    writeSnapshotTranscript(
+      configDir,
+      root,
+      'sess-old',
+      '2026-10-01T10:00:00.000Z',
+      {
+        system: 1000,
+        skills: 200,
+      },
+    );
+    writeSnapshotTranscript(
+      configDir,
+      root,
+      'sess-new',
+      '2026-10-05T10:00:00.000Z',
+      {
+        system: 2000,
+        skills: 400,
+      },
+    );
+
+    const result = checkResidentSurface(root, { claudeConfigDir: configDir });
+
+    expect(result.readouts).toContainEqual(
+      'measured resident prompt (sess-new): ~618 tokens / 2470 bytes = system 2000 + instructions 40 + skills 400 + agents 20 + style 10',
+    );
+    expect(result.readouts).not.toContainEqual(
+      expect.stringContaining('sess-old'),
+    );
+  });
+
+  it('prints the estimate-only line and no measured line without a transcript directory', () => {
+    const root = useRepo('pnpm-single');
+    write(root, 'CLAUDE.md', 'a short index\n');
+
+    const result = checkResidentSurface(root, { claudeConfigDir: configDir });
+
+    expect(result.readouts).toContainEqual(
+      expect.stringContaining('no local transcript with a prompt snapshot'),
+    );
+    expect(result.readouts).not.toContainEqual(
+      expect.stringContaining('measured resident prompt'),
+    );
   });
 });

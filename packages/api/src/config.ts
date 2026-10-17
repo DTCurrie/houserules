@@ -214,7 +214,7 @@ const HouseConfigSchema = z.strictObject({
         .array(z.string())
         .optional()
         .describe(
-          'Extra tools appended to the `tools:` line of task-worker and every installed variant, by full callable name, such as "mcp__svelte__svelte-autofixer" for an MCP tool a repo rule requires. Applied by `houserules update`.',
+          'Extra tools appended to the `tools:` line of task-worker and every installed variant by `houserules update`. Each entry is a full callable name, `mcp__<server>__<tool>` such as "mcp__svelte__svelte-autofixer", or a server pattern, `mcp__<server>` or `mcp__<server>__*` (Claude Code 2.1.299+), for an MCP tool a repo rule requires.',
         ),
     })
     .optional()

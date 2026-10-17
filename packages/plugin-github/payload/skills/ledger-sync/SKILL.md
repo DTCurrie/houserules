@@ -1,6 +1,7 @@
 ---
 name: ledger-sync
 description: Push the backlog and decision ledgers to GitHub Projects (issues and project board items). Use when the user asks to sync, push, or upload to GitHub Projects or the project board.
+disable-model-invocation: true
 argument-hint: status|push|pull|backfill|compact [--dry-run]
 allowed-tools: Bash(node .claude/scripts/projects-sync.mjs:*)
 ---

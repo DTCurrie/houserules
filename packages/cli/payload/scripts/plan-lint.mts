@@ -232,6 +232,39 @@ export function checkNoPlanWorkspace(planWorkspaceDirs: string[]): Report {
   return report;
 }
 
+/** Share of a phase file's lines that may sit inside fenced code before the plan reads as implementing. */
+const FENCED_CODE_SHARE_CAP = 0.1;
+
+/**
+ * Warns when fenced code exceeds a tenth of a phase file's lines. A phase records decisions and
+ * acceptance, so a code-heavy one is writing the implementation into the plan. An unclosed fence
+ * counts every line after it as fenced.
+ */
+export function checkFencedCodeShare(file: string, markdown: string): Report {
+  const report = emptyReport();
+  const lines = markdown.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  let inFence = false;
+  let fenced = 0;
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) fenced += 1;
+  }
+  if (lines.length > 0 && fenced > lines.length * FENCED_CODE_SHARE_CAP) {
+    report.findings.push({
+      rule: 'plan-lint/fenced-code-share',
+      level: 'warn',
+      file,
+      line: null,
+      msg: `${fenced} of ${lines.length} lines are fenced code, over the ${FENCED_CODE_SHARE_CAP * 100} percent cap — record decisions and acceptance, not implementation`,
+    });
+  }
+  return report;
+}
+
 const PATH_CHECK_PREFIXES = ['packages/', '.claude/', 'scripts/'];
 const PATH_EXEMPT_CHARS = /[*?<>{}|$]/;
 /** A trailing `:36`, `:193-198`, or `:19,43` line annotation on a `path:line` reference. */
@@ -358,6 +391,7 @@ function main(): void {
       const markdown = readFileSync(phasePath, 'utf8');
       const relFile = relative(root, phasePath);
       report.findings.push(...checkSliceStatuses(relFile, markdown).findings);
+      report.findings.push(...checkFencedCodeShare(relFile, markdown).findings);
       const phaseStatus = parseStatusHeader(markdown);
       if (!workspaceArchived && !isDoneStatus(phaseStatus)) {
         report.findings.push(

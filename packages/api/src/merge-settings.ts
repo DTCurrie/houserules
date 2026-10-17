@@ -10,6 +10,8 @@ export interface HookEntry {
   timeout?: number;
   /** True when the harness should not block on this hook's completion. */
   async?: boolean;
+  /** Fail closed: a hook that errors blocks the action. Needs Claude Code 2.1.295 to take effect. */
+  onFailure?: 'block';
   [key: string]: unknown;
 }
 

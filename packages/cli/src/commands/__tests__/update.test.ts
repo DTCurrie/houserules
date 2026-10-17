@@ -1281,3 +1281,24 @@ describe('update on a repo whose instructions file is AGENTS.md', () => {
     expect(existsSync(claudeMdPath(root)), 'no CLAUDE.md created').toBe(false);
   });
 });
+
+describe('update on an install carrying a retired task-worker effort variant', () => {
+  it('prunes the manifest-recorded task-worker-low.md', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+    const staleContent = '---\nname: task-worker-low\n---\n';
+    const stalePath = join(root, '.claude/agents/task-worker-low.md');
+    writeFileSync(stalePath, staleContent);
+    const manifestPath = join(root, '.claude/houserules.manifest.json');
+    const manifest = readJson<HouseManifestShape>(manifestPath);
+    manifest.files['.claude/agents/task-worker-low.md'] = sha256(staleContent);
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    expect(existsSync(stalePath), 'stale variant pruned').toBe(false);
+    expect(
+      existsSync(join(root, '.claude/agents/task-worker.md')),
+      'task-worker kept',
+    ).toBe(true);
+  });
+});

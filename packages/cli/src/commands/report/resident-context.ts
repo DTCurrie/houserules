@@ -1,3 +1,5 @@
+import { isAbsolute, relative } from 'node:path';
+
 import { renderTable } from './render-table.js';
 import type { Corpus } from './transcript-events.js';
 
@@ -28,7 +30,22 @@ export interface ResidentContextRow {
   estimatedTokens: number;
   nestedMemoryLoads: number;
   nestedMemoryBytes: number;
+  /** Nested loads split by transcript origin. Absent in an export written before the split. */
+  nestedMemoryByOrigin?: {
+    main: NestedMemoryTally;
+    subagent: NestedMemoryTally;
+  };
+  /** Per loaded file, sorted by bytes descending. Absent in an export written before the split. */
+  nestedMemoryFiles?: ({ path: string } & NestedMemoryTally)[];
 }
+
+interface NestedMemoryTally {
+  loads: number;
+  bytes: number;
+}
+
+// The nested-loads readout lists this many files and summarizes the rest.
+const NESTED_FILE_ROWS = 10;
 
 const UNKNOWN_ENTRYPOINT = 'unknown';
 
@@ -78,8 +95,22 @@ export function entrypointMedians(
     }));
 }
 
-/** Medians cover recorded sessions only, since an unrecorded one has nothing to measure. */
-export function computeResidentContext(corpus: Corpus): ResidentContextReport {
+function repoRelative(path: string, top: string | undefined): string {
+  if (top === undefined || !isAbsolute(path)) return path;
+  const relativePath = relative(top, path);
+  return relativePath.startsWith('..') || isAbsolute(relativePath)
+    ? path
+    : relativePath;
+}
+
+/**
+ * Medians cover recorded sessions only, since an unrecorded one has nothing to measure.
+ * Pass `top` to render nested-memory file paths relative to the repo root.
+ */
+export function computeResidentContext(
+  corpus: Corpus,
+  top?: string,
+): ResidentContextReport {
   const rows = corpus.files.map((file): ResidentContextRow => {
     const session = file.file.replace(/\.jsonl$/, '');
     const capture = corpus.residentCaptures.get(session);
@@ -133,6 +164,10 @@ export function computeResidentContext(corpus: Corpus): ResidentContextReport {
       estimatedTokens: Math.ceil(residentBytes / BYTES_PER_TOKEN_ESTIMATE),
       nestedMemoryLoads: capture.nestedMemoryLoads,
       nestedMemoryBytes: capture.nestedMemoryBytes,
+      nestedMemoryByOrigin: capture.nestedMemoryByOrigin,
+      nestedMemoryFiles: [...capture.nestedMemoryFiles.entries()]
+        .map(([path, tally]) => ({ path: repoRelative(path, top), ...tally }))
+        .sort((a, b) => b.bytes - a.bytes || a.path.localeCompare(b.path)),
     };
   });
   const recordedRows = rows.filter((row) => row.recorded);
@@ -156,6 +191,27 @@ function medianLines(report: ResidentContextReport): string[] {
       (group) =>
         `medians (${group.entrypoint}, ${formatCount(group.sessions)} session(s)): total ${formatCount(group.medianResidentBytes)} bytes, ~tokens ${formatCount(group.medianEstimatedTokens)}`,
     ),
+  ];
+}
+
+function nestedLines(row: ResidentContextRow): string[] {
+  const origins = row.nestedMemoryByOrigin;
+  if (!origins || row.nestedMemoryLoads === 0) return [];
+  const files = row.nestedMemoryFiles ?? [];
+  const tally = (label: string, value: NestedMemoryTally) =>
+    `    ${label}: ${formatCount(value.loads)} loads (${formatCount(value.bytes)} bytes)`;
+  const hidden = files.length - NESTED_FILE_ROWS;
+  return [
+    `  nested loads, ${row.session.slice(0, SESSION_ID_PREVIEW_LENGTH)}: ${formatCount(row.nestedMemoryLoads)} loads (${formatCount(row.nestedMemoryBytes)} bytes)`,
+    tally('main chain', origins.main),
+    tally('subagents', origins.subagent),
+    ...files
+      .slice(0, NESTED_FILE_ROWS)
+      .map(
+        (file) =>
+          `    ${file.path}: ${formatCount(file.loads)} loads (${formatCount(file.bytes)} bytes)`,
+      ),
+    ...(hidden > 0 ? [`    +${hidden} more`] : []),
   ];
 }
 
@@ -206,6 +262,8 @@ export function renderResidentContext(report: ResidentContextReport): string[] {
     '',
     ...medianLines(report),
     '',
+    ...report.rows.flatMap((row) => nestedLines(row)),
+    ...(report.rows.some((row) => nestedLines(row).length > 0) ? [''] : []),
     '  (bytes of what Claude Code attaches at session start: the system prompt, CLAUDE.md and auto memory,',
     '   the skill and agent listings, and the output style. Nested CLAUDE.md files load on demand and are counted separately.)',
   );

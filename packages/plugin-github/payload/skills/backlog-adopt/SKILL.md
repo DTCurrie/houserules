@@ -1,6 +1,7 @@
 ---
 name: backlog-adopt
 description: Adopt a reported GitHub issue into the backlog ledger and the linked project board. Use to triage or track a GitHub issue or bug report as a backlog entry.
+disable-model-invocation: true
 argument-hint: <issue-number>
 allowed-tools: Bash(gh issue view:*), Bash(node .claude/scripts/backlog-log.mjs:*), Bash(node .claude/scripts/projects-sync.mjs:*), Bash(node .claude/scripts/adopt-lint.mjs:*), Agent
 ---

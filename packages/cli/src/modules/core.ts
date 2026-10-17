@@ -226,7 +226,9 @@ function settingsActions(): Action[] {
             'Bash(git show:*)',
           ],
         },
-        ...hookFragment('PreToolUse', 'Bash', 'guard-bash.mjs'),
+        ...hookFragment('PreToolUse', 'Bash', 'guard-bash.mjs', undefined, {
+          onFailure: 'block',
+        }),
       },
     },
     {

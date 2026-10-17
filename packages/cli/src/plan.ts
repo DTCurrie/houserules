@@ -32,6 +32,7 @@ import * as sweep from './modules/sweep.js';
 import * as readGuard from './modules/read-guard.js';
 import * as regen from './modules/regen.js';
 import * as statusline from './modules/statusline.js';
+import * as toolOutputTrim from './modules/tool-output-trim.js';
 import * as codeCleanliness from './modules/code-cleanliness.js';
 import * as ciSettings from './modules/ci-settings.js';
 
@@ -175,6 +176,7 @@ export const MODULES: ModuleDef[] = [
   readGuard,
   regen,
   statusline,
+  toolOutputTrim,
   codeCleanliness,
   ciSettings,
 ];

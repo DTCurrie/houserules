@@ -62,6 +62,11 @@ export interface HookFragmentOptions {
   if?: string;
   timeout?: number;
   async?: boolean;
+  /**
+   * `block` makes a hook that cannot start, times out, or exits unexpectedly stop the
+   * action instead of letting it through. Only the guard hooks set it.
+   */
+  onFailure?: 'block';
 }
 
 /** One settings fragment carrying a single hook entry. */
@@ -80,6 +85,7 @@ export function hookFragment(
   if (options?.if !== undefined) hook.if = options.if;
   if (options?.timeout !== undefined) hook.timeout = options.timeout;
   if (options?.async !== undefined) hook.async = options.async;
+  if (options?.onFailure !== undefined) hook.onFailure = options.onFailure;
   const group: HookGroup = matcher
     ? { matcher, hooks: [hook] }
     : { hooks: [hook] };

@@ -1,6 +1,7 @@
 ---
 name: chrome-devtools-mode
 description: Switch the Chrome DevTools MCP server between its full 29-tool surface and the slim 3-tool one (--slim). Use when asked to change, shrink, or restore the chrome-devtools MCP tool surface.
+disable-model-invocation: true
 allowed-tools: Read, Edit, Grep, Glob
 ---
 

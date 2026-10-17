@@ -23,6 +23,8 @@ import { checkPluginRegistration } from './doctor/plugin-registration.js';
 import { checkReferenceReachability } from './doctor/reference-reachability.js';
 import { checkResidentSurface } from './doctor/resident-surface.js';
 import { checkScriptImports } from './doctor/script-imports.js';
+import { checkSkillBodySize } from './doctor/skill-body-size.js';
+import { checkWorkerToolCoverage } from './doctor/worker-tool-coverage.js';
 import { checkSettingsWiring } from './doctor/settings-wiring.js';
 
 /**
@@ -92,6 +94,8 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     checkResidentSurface(root),
     checkInstructionsFile(root, ctx),
     checkAgentToolScope(root),
+    checkWorkerToolCoverage(root),
+    checkSkillBodySize(root),
     checkReferenceReachability(root, ctx),
     checkEnvironment(ctx),
     checkInstallIntegrity(root, ctx, flags.kitVersion, config.registry),

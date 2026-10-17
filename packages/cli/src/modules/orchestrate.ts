@@ -26,27 +26,22 @@ export const title = 'Phase execution via scoped workers (/orchestrate)';
 export const group: ModuleGroup = 'optional';
 
 export function hint(): string {
-  return 'drive a planned phase with per-slice sonnet workers — you review reports, not diffs (needs plans; variants include a research worker)';
+  return 'drive a planned phase with per-slice sonnet workers — you review reports, not diffs (needs plans; includes a research worker)';
 }
 
 export function defaultEnabled(): boolean {
   return false;
 }
 
-const EFFORTS = ['low', 'high', 'xhigh'] as const;
-const VARIANTS = [...EFFORTS, 'research'] as const;
+const VARIANTS = ['research'] as const;
 type Variant = (typeof VARIANTS)[number];
 
 export const options: ModuleOptions = {
-  prompt:
-    'Which task-worker effort variants should install alongside task-worker?',
+  prompt: 'Install the research worker alongside task-worker?',
   choices: [
-    { value: 'low', label: 'Low' },
-    { value: 'high', label: 'High' },
-    { value: 'xhigh', label: 'Extra high' },
     { value: 'research', label: 'Research (adds WebFetch and WebSearch)' },
   ],
-  defaults: ['low', 'xhigh', 'research'],
+  defaults: ['research'],
 };
 
 /**
@@ -66,7 +61,7 @@ function appendExtraTools(rendered: string, extraTools: string[]): string {
 /**
  * Renders `task-worker.md` from its single payload source, with `extraTools` appended to
  * `tools:`. The name, description, effort, and model stay the source's own, so this is the
- * base agent rather than any effort or research variant.
+ * base agent rather than the research variant.
  */
 export function renderTaskWorkerBase(extraTools: string[] = []): string {
   const source = readFileSync(payloadPath('agents', 'task-worker.md'), 'utf8');
@@ -74,12 +69,11 @@ export function renderTaskWorkerBase(extraTools: string[] = []): string {
 }
 
 /**
- * Renders one variant of `task-worker.md` from its single payload source. Every variant
- * swaps `name:` and `description:`. An effort variant also swaps `effort:`, leaving `tools:`
- * and `model:` unchanged. The `research` variant instead appends `WebFetch, WebSearch` to
- * `tools:`, leaving `effort:` and `model:` unchanged. `extraTools` is then appended to
- * `tools:` the same way as the base. The body always stays byte-identical, so keeping one
- * source file means a body edit never needs to land in more than one place.
+ * Renders the research variant of `task-worker.md` from its single payload source. It swaps
+ * `name:` and `description:` and appends `WebFetch, WebSearch` to `tools:`, leaving `effort:`
+ * and `model:` unchanged. `extraTools` is then appended to `tools:` the same way as the base.
+ * The body stays byte-identical, so a body edit never needs to land in more than one place.
+ * Effort is not a variant: `/orchestrate` passes it per dispatch.
  */
 export function renderTaskWorkerVariant(
   variant: Variant,
@@ -91,26 +85,15 @@ export function renderTaskWorkerVariant(
   const frontmatter = source.slice(0, frontmatterEnd);
   const body = source.slice(frontmatterEnd);
 
-  const description =
-    variant === 'research'
-      ? 'Same contract as task-worker, plus WebFetch and WebSearch for a slice that must read a page or source not on disk. Dispatched by /orchestrate with an objective, owned paths, and an acceptance command.'
-      : `Same contract as task-worker at ${variant} effort. Dispatched by /orchestrate with an objective, owned paths, and an acceptance command.`;
-
-  let rendered = frontmatter
+  const rendered = frontmatter
     .replace(/^name: .*$/m, `name: task-worker-${variant}`)
-    .replace(/^description: .*$/m, `description: ${description}`);
+    .replace(
+      /^description: .*$/m,
+      'description: Same contract as task-worker, plus WebFetch and WebSearch for a slice that must read a page or source not on disk. Dispatched by /orchestrate with an objective, owned paths, and an acceptance command.',
+    )
+    .replace(/^tools: .*$/m, (line) => `${line}, WebFetch, WebSearch`);
 
-  rendered =
-    variant === 'research'
-      ? rendered.replace(
-          /^tools: .*$/m,
-          (line) => `${line}, WebFetch, WebSearch`,
-        )
-      : rendered.replace(/^effort: .*$/m, `effort: ${variant}`);
-
-  rendered = appendExtraTools(rendered, extraTools);
-
-  return `${rendered}${body}`;
+  return `${appendExtraTools(rendered, extraTools)}${body}`;
 }
 
 /**
@@ -203,7 +186,8 @@ export function check(ctx: Ctx): CheckResult {
       }
 
       const toolsLine = text.match(/^tools: .*$/m)?.[0] ?? '';
-      const missing = extraTools.filter((tool) => !toolsLine.includes(tool));
+      const carried = toolsLine.slice('tools: '.length).split(', ');
+      const missing = extraTools.filter((tool) => !carried.includes(tool));
       if (missing.length === 0) return [];
 
       return [

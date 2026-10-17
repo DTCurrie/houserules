@@ -44,6 +44,7 @@ const config: KnipConfig = {
         'src/modules/session-context.ts',
         'src/modules/statusline.ts',
         'src/modules/sweep.ts',
+        'src/modules/tool-output-trim.ts',
         'src/modules/verify-changed.ts',
       ],
     },

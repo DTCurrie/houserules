@@ -114,6 +114,11 @@ describe('orchestrate', () => {
       expect(skillText).toMatch(/task-worker-research/);
     });
 
+    it('tells the orchestrator to pass effort on the Agent call and names no effort variant', () => {
+      expect(skillText).toMatch(/Agent tool's `effort` parameter/);
+      expect(skillText).not.toMatch(/task-worker-(low|high|xhigh)/);
+    });
+
     it('documents orchestrate.workerTools in the installed SKILL.md', () => {
       expect(skillText).toMatch(/orchestrate\.workerTools/);
     });
@@ -157,21 +162,9 @@ describe('orchestrate', () => {
 });
 
 describe('renderTaskWorkerVariant', () => {
-  it('swaps name, effort, and description, leaving tools and model untouched', () => {
-    const rendered = renderTaskWorkerVariant('high');
-
-    expect(rendered).toMatch(/^name: task-worker-high$/m);
-    expect(rendered).toMatch(/^effort: high$/m);
-    expect(rendered).toMatch(
-      /^description: Same contract as task-worker at high effort\. Dispatched by \/orchestrate with an objective, owned paths, and an acceptance command\.$/m,
-    );
-    expect(rendered).toMatch(/^tools: Read, Edit, Write, Grep, Glob, Bash$/m);
-    expect(rendered).toMatch(/^model: sonnet$/m);
-  });
-
-  it('keeps the body byte-identical to the source body', () => {
-    const rendered = renderTaskWorkerVariant('low');
-    expect(rendered.slice(-SOURCE_BODY.length)).toBe(SOURCE_BODY);
+  it('has research as its only variant', () => {
+    expect(options.choices.map((choice) => choice.value)).toEqual(['research']);
+    expect(options.defaults).toEqual(['research']);
   });
 
   it('appends WebFetch and WebSearch to tools and leaves effort untouched for research', () => {
@@ -221,7 +214,17 @@ describe('renderTaskWorkerBase', () => {
   });
 });
 
-describe('orchestrate plan(), effort variant selection', () => {
+describe('renderTaskWorkerBase, given a server pattern', () => {
+  it('writes the pattern onto the tools line unchanged', () => {
+    const rendered = renderTaskWorkerBase(['mcp__x']);
+
+    expect(rendered).toMatch(
+      /^tools: Read, Edit, Write, Grep, Glob, Bash, mcp__x$/m,
+    );
+  });
+});
+
+describe('orchestrate plan(), variant selection', () => {
   const ctx = {} as Ctx;
 
   it('emits no variant write actions when the selection is empty', () => {
@@ -233,19 +236,16 @@ describe('orchestrate plan(), effort variant selection', () => {
     expect(actions.filter((a) => a.kind === 'write')).toEqual([]);
   });
 
-  it('emits a write action per selected effort', () => {
+  it('ignores a retired effort value left in a saved selection', () => {
     const actions = plan(
       ctx,
-      baseAnswers({ moduleOptions: { orchestrate: ['high'] } }),
+      baseAnswers({ moduleOptions: { orchestrate: ['low', 'xhigh'] } }),
     );
 
-    const writes = actions.filter((a) => a.kind === 'write');
-    expect(writes.map((a) => a.dest)).toEqual([
-      '.claude/agents/task-worker-high.md',
-    ]);
+    expect(actions.filter((a) => a.kind === 'write')).toEqual([]);
   });
 
-  it('produces low, xhigh, and research when resolved to the module’s declared defaults', () => {
+  it('produces only research when resolved to the module’s declared defaults', () => {
     const actions = plan(
       ctx,
       baseAnswers({ moduleOptions: { orchestrate: options.defaults } }),
@@ -253,8 +253,6 @@ describe('orchestrate plan(), effort variant selection', () => {
 
     const writes = actions.filter((a) => a.kind === 'write');
     expect(writes.map((a) => a.dest)).toEqual([
-      '.claude/agents/task-worker-low.md',
-      '.claude/agents/task-worker-xhigh.md',
       '.claude/agents/task-worker-research.md',
     ]);
   });
@@ -274,7 +272,7 @@ describe('orchestrate plan(), effort variant selection', () => {
   it('emits the base agent as a copy and no variant carries extra tools when the key is unset', () => {
     const actions = plan(
       ctx,
-      baseAnswers({ moduleOptions: { orchestrate: ['low'] } }),
+      baseAnswers({ moduleOptions: { orchestrate: ['research'] } }),
     );
 
     expect(
@@ -302,7 +300,7 @@ describe('orchestrate plan(), orchestrate.workerTools', () => {
 
     const actions = plan(
       ctxWithTools,
-      baseAnswers({ moduleOptions: { orchestrate: ['low'] } }),
+      baseAnswers({ moduleOptions: { orchestrate: ['research'] } }),
     );
 
     const baseWrite = actions.find(
@@ -318,11 +316,12 @@ describe('orchestrate plan(), orchestrate.workerTools', () => {
       ),
     ).toBe(false);
 
-    const lowWrite = actions.find(
+    const researchWrite = actions.find(
       (a) =>
-        a.kind === 'write' && a.dest === '.claude/agents/task-worker-low.md',
+        a.kind === 'write' &&
+        a.dest === '.claude/agents/task-worker-research.md',
     );
-    expect((lowWrite as { content: string }).content).toMatch(
+    expect((researchWrite as { content: string }).content).toMatch(
       /^tools: .*mcp__svelte__svelte-autofixer$/m,
     );
   });

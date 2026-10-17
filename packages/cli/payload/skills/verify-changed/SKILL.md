@@ -1,6 +1,6 @@
 ---
 name: verify-changed
-description: Use when the ask is to verify changed packages and their dependents off-context by running check, test, and lint across a workspace or monorepo. Use it directly only when the mechanical gates alone are wanted, such as after a dependency bump or a build-breaking edit. A full pre-handoff pass is `/ready`, which runs this skill already.
+description: Verify changed packages and their dependents off-context by running check, test, and lint across a workspace or monorepo. Use directly only when the mechanical gates alone are wanted, such as after a dependency bump or a build-breaking edit. Where `/ready` is installed, it is the full pre-handoff pass.
 allowed-tools: Agent
 ---
 

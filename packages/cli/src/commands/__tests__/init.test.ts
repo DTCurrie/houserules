@@ -535,49 +535,24 @@ describe('init below the git toplevel', () => {
   });
 });
 
-describe('orchestrate module, task-worker effort variants', () => {
-  it('lands the default low and xhigh variants, and not high', () => {
+describe('orchestrate module', () => {
+  it('installs task-worker and task-worker-research only', () => {
     const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
 
     expect(
-      existsSync(join(root, '.claude/agents/task-worker-low.md')),
-      'task-worker-low installed',
+      existsSync(join(root, '.claude/agents/task-worker.md')),
+      'task-worker installed',
     ).toBe(true);
     expect(
-      existsSync(join(root, '.claude/agents/task-worker-xhigh.md')),
-      'task-worker-xhigh installed',
+      existsSync(join(root, '.claude/agents/task-worker-research.md')),
+      'task-worker-research installed',
     ).toBe(true);
-    expect(
-      existsSync(join(root, '.claude/agents/task-worker-high.md')),
-      'task-worker-high not installed',
-    ).toBe(false);
-  });
-
-  it('lands only the effort named via --module-option, when narrowed', () => {
-    const root = useRepo('npm-single');
-
-    const result = runCli([
-      'init',
-      '--yes',
-      '--modules=orchestrate',
-      '--module-option',
-      'orchestrate=high',
-      root,
-    ]);
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(
-      existsSync(join(root, '.claude/agents/task-worker-high.md')),
-      'task-worker-high installed',
-    ).toBe(true);
-    expect(
-      existsSync(join(root, '.claude/agents/task-worker-low.md')),
-      'task-worker-low not installed',
-    ).toBe(false);
-    expect(
-      existsSync(join(root, '.claude/agents/task-worker-xhigh.md')),
-      'task-worker-xhigh not installed',
-    ).toBe(false);
+    for (const retired of ['low', 'high', 'xhigh']) {
+      expect(
+        existsSync(join(root, `.claude/agents/task-worker-${retired}.md`)),
+        `task-worker-${retired} not installed`,
+      ).toBe(false);
+    }
   });
 });
 

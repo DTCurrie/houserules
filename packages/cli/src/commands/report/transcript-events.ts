@@ -94,6 +94,13 @@ interface ResidentCapture {
   outputStyleBytes?: number;
   nestedMemoryLoads: number;
   nestedMemoryBytes: number;
+  /** The same nested loads split by transcript origin, so a subagent-heavy session shows. */
+  nestedMemoryByOrigin: {
+    main: { loads: number; bytes: number };
+    subagent: { loads: number; bytes: number };
+  };
+  /** Loads and bytes per loaded file path. A load that names no path counts under `(unnamed)`. */
+  nestedMemoryFiles: Map<string, { loads: number; bytes: number }>;
 }
 
 export interface Corpus {
@@ -165,6 +172,8 @@ interface HookAttachment {
   addedTypes?: unknown;
   isInitial?: unknown;
   style?: unknown;
+  /** `nested_memory`: the file that loaded. Older transcripts put it on `content.path` instead. */
+  path?: unknown;
 }
 
 /**
@@ -331,7 +340,9 @@ export function ingestTranscript(
     }
     trackRecordStamps(record, corpus);
     aggregateUsage(record, usage);
-    extractEvents(record, fallbackSession, corpus);
+    // The main call also passes `into`, so a subagent is the call whose file differs from it.
+    const isSubagent = into !== undefined && file !== into.file;
+    extractEvents(record, fallbackSession, corpus, isSubagent);
   }
 }
 
@@ -408,12 +419,13 @@ function extractEvents(
   record: TranscriptRecord,
   fallbackSession: string,
   corpus: Corpus,
+  isSubagent: boolean,
 ): void {
   const sessionId = record.sessionId ?? fallbackSession;
   const session = sessionOf(corpus, sessionId);
   const attachment = record.attachment;
   if (attachment?.type && RESIDENT_ATTACHMENT_TYPES.has(attachment.type)) {
-    recordResidentCapture(record, attachment, sessionId, corpus);
+    recordResidentCapture(record, attachment, sessionId, corpus, isSubagent);
     return;
   }
   if (record.type === 'attachment' && attachment?.hookName) {
@@ -496,6 +508,8 @@ const RESIDENT_ATTACHMENT_TYPES = new Set([
   'nested_memory',
 ]);
 
+const UNNAMED_NESTED_FILE = '(unnamed)';
+
 function utf8Bytes(value: unknown): number {
   return typeof value === 'string' ? Buffer.byteLength(value, 'utf8') : 0;
 }
@@ -513,6 +527,11 @@ function captureOf(corpus: Corpus, sessionId: string): ResidentCapture {
       instructionFiles: [],
       nestedMemoryLoads: 0,
       nestedMemoryBytes: 0,
+      nestedMemoryByOrigin: {
+        main: { loads: 0, bytes: 0 },
+        subagent: { loads: 0, bytes: 0 },
+      },
+      nestedMemoryFiles: new Map(),
     };
     corpus.residentCaptures.set(sessionId, capture);
   }
@@ -526,6 +545,7 @@ function recordResidentCapture(
   attachment: HookAttachment,
   sessionId: string,
   corpus: Corpus,
+  isSubagent: boolean,
 ): void {
   const capture = captureOf(corpus, sessionId);
   capture.ts ??= Date.parse(record.timestamp ?? '') || undefined;
@@ -568,11 +588,29 @@ function recordResidentCapture(
     }
     case 'nested_memory': {
       const content = (attachment.content ?? {}) as
-        { content?: unknown } | string;
-      capture.nestedMemoryLoads += 1;
-      capture.nestedMemoryBytes += utf8Bytes(
+        { content?: unknown; path?: unknown } | string;
+      const bytes = utf8Bytes(
         typeof content === 'string' ? content : content.content,
       );
+      capture.nestedMemoryLoads += 1;
+      capture.nestedMemoryBytes += bytes;
+      const origin =
+        capture.nestedMemoryByOrigin[isSubagent ? 'subagent' : 'main'];
+      origin.loads += 1;
+      origin.bytes += bytes;
+      const nestedPath =
+        typeof attachment.path === 'string'
+          ? attachment.path
+          : typeof content === 'object' && typeof content.path === 'string'
+            ? content.path
+            : UNNAMED_NESTED_FILE;
+      const file = capture.nestedMemoryFiles.get(nestedPath) ?? {
+        loads: 0,
+        bytes: 0,
+      };
+      file.loads += 1;
+      file.bytes += bytes;
+      capture.nestedMemoryFiles.set(nestedPath, file);
       return;
     }
     default:

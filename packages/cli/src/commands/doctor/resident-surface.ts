@@ -8,7 +8,11 @@ import {
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
+import { claudeProjectDir } from '@houserules/payload/entry-ledger';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
+import { detect } from '../../detect.js';
+import { computeResidentContext } from '../report/resident-context.js';
+import { readCorpus } from '../report/transcript-events.js';
 import { frontmatterBlock, splitFrontmatter } from '../../core/frontmatter.js';
 import type { CheckResult, Finding } from '@houserules/api';
 
@@ -489,11 +493,59 @@ export function measureActiveOutputStyle(
   return null;
 }
 
+interface MeasuredResident {
+  session: string;
+  systemPromptBytes: number;
+  instructionBytes: number;
+  skillListingBytes: number;
+  agentListingBytes: number;
+  outputStyleBytes: number;
+  residentBytes: number;
+  estimatedTokens: number;
+}
+
+export interface ResidentSurfaceOptions {
+  /** Directory holding `projects/<slug>`. Defaults to `CLAUDE_CONFIG_DIR`, else `~/.claude`. */
+  claudeConfigDir?: string;
+}
+
+/**
+ * The newest local session whose transcript carries a `prompt_snapshot`, resolved the way
+ * `houserules report` finds transcripts. Null when none exists.
+ */
+function measureLatestResident(
+  root: string,
+  options: ResidentSurfaceOptions = {},
+): MeasuredResident | null {
+  const top = detect(root).git.top ?? root;
+  const base =
+    options.claudeConfigDir ??
+    process.env.CLAUDE_CONFIG_DIR ??
+    join(homedir(), '.claude');
+  const corpus = readCorpus(join(base, 'projects'), [claudeProjectDir(top)]);
+  const { rows } = computeResidentContext(corpus, top);
+  let newest: MeasuredResident | null = null;
+  let newestCapturedAt = -Infinity;
+  for (const row of rows) {
+    if (!row.recorded) continue;
+    // A capture with no timestamp sorts oldest, but still wins over nothing.
+    const capturedAt = corpus.residentCaptures.get(row.session)?.ts ?? -1;
+    if (capturedAt >= newestCapturedAt) {
+      newest = row;
+      newestCapturedAt = capturedAt;
+    }
+  }
+  return newest;
+}
+
 /**
  * The resident-surface budget, which makes houserules' #1 lever measurable instead of only
  * prose. Read-only, and WARNs past budget rather than ERRORing.
  */
-export function checkResidentSurface(root: string): CheckResult {
+export function checkResidentSurface(
+  root: string,
+  options: ResidentSurfaceOptions = {},
+): CheckResult {
   const findings: Finding[] = [];
   const readouts: string[] = [];
   const resident = measureResident(root);
@@ -516,6 +568,9 @@ export function checkResidentSurface(root: string): CheckResult {
           ? ` — OVER`
           : ` — ${RESIDENT_TOKEN_BUDGET - resident.tokens} tokens, ${RESIDENT_LINE_BUDGET - resident.lines} lines headroom`),
     );
+    // The budget compares the repo-controlled estimate, never the measurement. The measured
+    // total includes the system prompt and user-level skills, so gating on it would WARN on
+    // every repo for things the repo cannot trim.
     // Every always-loaded tier alone, or any combination, can push the total over.
     const combinedTokens = resident.tokens + skillAgentTokens + styleTokens;
     const combinedOver =
@@ -575,6 +630,21 @@ export function checkResidentSurface(root: string): CheckResult {
     readouts.push(
       `on-invoke skill/agent bodies (${onInvokeBodies.skills} skill(s) + ${onInvokeBodies.agents} agent(s)): ~${onInvokeBodies.tokens} tokens`,
     );
+
+  const measured = measureLatestResident(root, options);
+  if (measured) {
+    readouts.push(
+      `measured resident prompt (${measured.session}): ~${measured.estimatedTokens} tokens / ${measured.residentBytes} bytes = ` +
+        `system ${measured.systemPromptBytes} + instructions ${measured.instructionBytes} + skills ${measured.skillListingBytes} + ` +
+        `agents ${measured.agentListingBytes} + style ${measured.outputStyleBytes}`,
+      'the skill and agent listings include user-level and claude.ai-synced entries this repo cannot trim; /skill-doctor attributes them',
+    );
+  } else if (resident) {
+    // With no estimate either, there is no number for this line to qualify.
+    readouts.push(
+      'no local transcript with a prompt snapshot was found, so the resident number above is the estimate',
+    );
+  }
 
   return { findings, readouts };
 }

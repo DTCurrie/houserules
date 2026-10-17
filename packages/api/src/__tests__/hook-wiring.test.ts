@@ -39,6 +39,24 @@ describe('hookFragment', () => {
     expect('async' in hook, 'hook has no async key').toBe(false);
   });
 
+  it('lands onFailure block on the emitted hook entry when set', () => {
+    const fragment = hookFragment(
+      'PreToolUse',
+      'Bash',
+      'guard-bash.mjs',
+      undefined,
+      { onFailure: 'block' },
+    );
+    const hook = fragment.hooks!.PreToolUse![0]!.hooks[0]!;
+    expect(hook.onFailure).toBe('block');
+  });
+
+  it('omits onFailure when unset', () => {
+    const fragment = hookFragment('PreToolUse', 'Bash', 'guard-bash.mjs');
+    const hook = fragment.hooks!.PreToolUse![0]!.hooks[0]!;
+    expect('onFailure' in hook, 'hook has no onFailure key').toBe(false);
+  });
+
   it('round-trips if, timeout, and async through mergeSettings', () => {
     const fragment = hookFragment(
       'PreToolUse',

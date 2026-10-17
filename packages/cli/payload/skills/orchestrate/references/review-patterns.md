@@ -47,3 +47,9 @@ extra cost as another reason to keep the cap at 2.
 
 **Load-bearing** means the seam implementation, a security-relevant branch, the one hunk the brief
 called out. Everything else stays unread.
+
+## Before you accuse a worker of a deviation
+
+Grep locates, and it shows only the first line of each list item. A `REVISE` grounded on that
+extraction costs a full round when the worker can refute it with line numbers. `Read` the cited step in
+full first. Do not read a full diff to settle it, because that forfeits the point of orchestrating.

@@ -312,12 +312,13 @@ Each of these is a standing habit, not a script:
   the agent writes (changesets, plans, docs, backlog entries, and the sentences inside code comments)
   rather than its chat replies, so it composes with any output style. It buys clarity more than
   tokens. Splitting an em-dashed clause into two sentences is roughly token-neutral.
-- **Tool-output compression via hooks isn't reliable.** PostToolUse output replacement
-  (`updatedToolOutput`) is not honored on current Claude Code, verified inert on 2.1.208, where the
-  hook runs but the model still receives the raw output. houserules therefore ships no tool-output
-  compressor. Claude Code's own large-output persistence covers the worst case, and the durable lever
-  stays subagents: route high-volume reads and runs through one so the transcript never hits the main
-  thread.
+- **Tool-output trimming via a PostToolUse hook works when the shape matches.** `updatedToolOutput`
+  is honored when its value is the full `tool_response` object with the changed field replaced,
+  verified on 2.1.302. A bare string is dropped silently, which is what the 2026-08 "inert" verdict
+  on 2.1.208 most likely hit. The optional `tool-output-trim` module ships on that shape, trimming
+  `stdout` for Bash and `file.content` for Read to head plus tail, capped at 16 KiB because Claude Code persists results of roughly 30 KB and above to disk itself and a higher cap would never fire. Verify a change to it by reading
+  the `tool_result` in the session `.jsonl`, never the model's reply, because the model describes
+  what it believes it saw whether or not the hook fired. MCP results are not trimmed.
 
 ## 11. Plugin surface semver policy
 

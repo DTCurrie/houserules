@@ -168,6 +168,11 @@ describe('ingestTranscript resident captures', () => {
       outputStyleBytes: 8,
       nestedMemoryLoads: 0,
       nestedMemoryBytes: 0,
+      nestedMemoryByOrigin: {
+        main: { loads: 0, bytes: 0 },
+        subagent: { loads: 0, bytes: 0 },
+      },
+      nestedMemoryFiles: new Map(),
     });
   });
 
@@ -189,6 +194,10 @@ describe('ingestTranscript resident captures', () => {
     const kept = corpus.residentCaptures.get('sess-1');
     expect(kept?.nestedMemoryLoads).toBe(2);
     expect(kept?.nestedMemoryBytes).toBe(8);
+    expect([...(kept?.nestedMemoryFiles ?? [])]).toEqual([
+      ['/Users/x/packages/cli/CLAUDE.md', { loads: 1, bytes: 3 }],
+      ['(unnamed)', { loads: 1, bytes: 5 }],
+    ]);
     expect(kept?.systemPromptBytes).toBeUndefined();
   });
 

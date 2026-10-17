@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import {
   checkBlastRadiusShape,
+  checkFencedCodeShare,
   checkFixOnSubagentStop,
   checkNoPlanWorkspace,
   checkPlanPaths,
@@ -151,6 +152,46 @@ describe('checkNoPlanWorkspace', () => {
     const report = checkNoPlanWorkspace([]);
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0]?.rule).toBe('plan-lint/no-plan-workspace');
+  });
+});
+
+describe('checkFencedCodeShare', () => {
+  const prose = (count: number) =>
+    Array.from({ length: count }, (_, i) => `line ${i}`);
+  const fence = (count: number) => [
+    '```ts',
+    ...Array.from({ length: count }, (_, i) => `code ${i}`),
+    '```',
+  ];
+
+  it('warns with the count, the total, and the cap on a code-heavy phase', () => {
+    const markdown = [...prose(20), ...fence(8)].join('\n');
+
+    const report = checkFencedCodeShare('phase-1.md', markdown);
+
+    expect(markdown.split('\n')).toHaveLength(30);
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]?.rule).toBe('plan-lint/fenced-code-share');
+    expect(report.findings[0]?.level).toBe('warn');
+    expect(report.findings[0]?.msg).toContain('8 of 30');
+    expect(report.findings[0]?.msg).toContain('10 percent');
+  });
+
+  it('reports nothing on a prose phase with two fenced lines', () => {
+    const markdown = [...prose(26), ...fence(2)].join('\n');
+
+    const report = checkFencedCodeShare('phase-1.md', markdown);
+
+    expect(markdown.split('\n')).toHaveLength(30);
+    expect(report.findings).toEqual([]);
+  });
+
+  it('does not throw on an unclosed fence', () => {
+    const markdown = [...prose(5), '```ts', 'code'].join('\n');
+
+    const report = checkFencedCodeShare('phase-1.md', markdown);
+
+    expect(report.findings).toHaveLength(1);
   });
 });
 

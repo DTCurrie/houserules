@@ -1,6 +1,6 @@
 ---
 name: tidy
-description: Tidy and clean up the working diff against the installed code-cleanliness rule, covering naming, function size, magic values, and dead code. Use after writing or changing code, when the ask is to tidy, clean up, or polish what the diff touched. Reuse, efficiency, and architecture cleanups are out of scope here, so route those to `/review-change`.
+description: Tidy, clean up, or polish the working diff against the installed code-cleanliness rule: naming, function size, magic values, dead code. Use after writing or changing code. Reuse, efficiency, and architecture go to `/review-change` where installed.
 allowed-tools: Read, Edit, Grep, Glob, Bash
 ---
 
@@ -17,7 +17,7 @@ git diff --name-only
 
 Reviewing a branch rather than just the working tree? Use `git diff --name-only <base>...HEAD`.
 Limit the audit to the changed files and the changed hunks inside them. Never sweep the whole
-repo. A repo-wide mechanical pass is `/sweep`, not this skill.
+repo. A repo-wide mechanical pass is `/sweep` where it is installed, not this skill.
 
 ## 2. Read the rule
 
@@ -79,7 +79,7 @@ design-level duplication. Those belong to the repo's linter, `code-comments.md`,
 Fix the mechanical findings directly: local renames, extracted constants, deleted dead code, and
 early returns. Do not touch anything outside the Naming, Function size, Magic values, and Dead
 code sections. Performance, architecture, and reuse findings are out of scope here. Leave those
-for `/review-change`.
+for `/review-change` where it is installed, and otherwise list them in the step 6 report.
 
 The one correctness risk is renaming an exported symbol. A textual rename can miss a caller and
 silently break it. Check for `.claude/scripts/rename.mjs`:

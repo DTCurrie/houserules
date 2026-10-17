@@ -28,6 +28,29 @@ describe('core plan, the merged Bash gate', () => {
   });
 });
 
+describe('core plan, hook failure mode', () => {
+  function hookFor(script: string): Record<string, unknown> | undefined {
+    return plan(makeCtx(), makeAnswers())
+      .filter(
+        (a): a is Extract<typeof a, { kind: 'merge-settings' }> =>
+          a.kind === 'merge-settings',
+      )
+      .flatMap((a) => Object.values(a.fragment.hooks ?? {}).flat())
+      .flatMap((group) => group.hooks)
+      .find((h) => h.command.includes(script));
+  }
+
+  it('fails closed on the guard-bash hook', () => {
+    expect(hookFor('guard-bash.mjs')?.onFailure).toBe('block');
+  });
+
+  it('leaves the ledger-inject hook without onFailure', () => {
+    const hook = hookFor('ledger-inject.mjs');
+    expect(hook).toBeDefined();
+    expect('onFailure' in hook!).toBe(false);
+  });
+});
+
 describe('core plan, the ledger directory .gitignore', () => {
   function ctxWithLedgerConsumer(): ReturnType<typeof makeCtx> {
     const ctx = makeCtx();
