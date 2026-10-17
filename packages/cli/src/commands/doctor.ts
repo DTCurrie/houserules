@@ -16,6 +16,7 @@ import {
 } from './doctor/findings-report.js';
 import { checkInstallHygiene } from './doctor/install-hygiene.js';
 import { checkInstallIntegrity } from './doctor/install-integrity.js';
+import { checkInstructionsFile } from './doctor/instructions-file.js';
 import { checkLaunchRoot } from './doctor/launch-root.js';
 import { checkModuleHealth } from './doctor/module-health.js';
 import { checkPluginRegistration } from './doctor/plugin-registration.js';
@@ -89,6 +90,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   // as the user left it.
   const checks: CheckResult[] = [
     checkResidentSurface(root),
+    checkInstructionsFile(root, ctx),
     checkAgentToolScope(root),
     checkReferenceReachability(root, ctx),
     checkEnvironment(ctx),

@@ -172,7 +172,13 @@ export function profileCard(ctx: Ctx): string {
     ctx.claude.settingsLocalExists
       ? 'settings.local.json (never touched)'
       : null,
-    ctx.claude.claudeMdExists ? 'CLAUDE.md' : pc.dim('no CLAUDE.md'),
+    ctx.claude.instructionsFileExists
+      ? `${ctx.claude.instructionsFile}${
+          ctx.claude.claudeMdExists && ctx.claude.agentsMdExists
+            ? ' (AGENTS.md also present)'
+            : ''
+        }`
+      : pc.dim(`no ${ctx.claude.instructionsFile}`),
     ctx.claude.manifest
       ? pc.yellow(
           `houserules v${ctx.claude.manifest.kitVersion} already installed`,

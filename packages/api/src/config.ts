@@ -2,6 +2,13 @@ import { z } from 'zod';
 import type { Simplify } from 'type-fest';
 
 /** A package-manager invocation block: how to run a script in one package. */
+/**
+ * The two files Claude Code reads project instructions from. CLAUDE.md wins when both exist,
+ * unless the user's `claude-md-and-agents-md` setting loads both.
+ */
+export const INSTRUCTIONS_FILES = ['CLAUDE.md', 'AGENTS.md'] as const;
+export type InstructionsFile = (typeof INSTRUCTIONS_FILES)[number];
+
 const runnerBlock = z.strictObject({
   runner: z.string().min(1).describe('Package manager binary, e.g. "pnpm".'),
   filterFlag: z
@@ -232,10 +239,17 @@ const HouseConfigSchema = z.strictObject({
         .boolean()
         .optional()
         .describe(
-          'Let houserules maintain its marked block in CLAUDE.md. Set false to opt out; houserules then never touches the file.',
+          'Let houserules maintain its marked block in the instructions file (CLAUDE.md, or AGENTS.md). Set false to opt out; houserules then never touches the file.',
         ),
     })
     .optional(),
+
+  instructionsFile: z
+    .enum(INSTRUCTIONS_FILES)
+    .optional()
+    .describe(
+      'Which file carries the houserules block. Unset, houserules honors the file the repo already has: CLAUDE.md when present, else AGENTS.md when present, else it seeds CLAUDE.md. Set it to force one. Claude Code reads AGENTS.md on its own only when no CLAUDE.md, .claude/CLAUDE.md, or CLAUDE.local.md exists in the working directory or above it.',
+    ),
 
   readGuard: z
     .strictObject({

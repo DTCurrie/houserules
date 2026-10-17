@@ -83,6 +83,25 @@ only what is inside those markers. Every byte outside them is yours and is never
 Opt out with `"claudeMd": { "managed": false }` in `.claude/houserules.config.json` and houserules will
 not touch the file at all.
 
+houserules writes that block into the file your repo already has: `CLAUDE.md`, else `AGENTS.md`,
+else it seeds `CLAUDE.md`. Set `"instructionsFile": "AGENTS.md"` or `"CLAUDE.md"` in
+`.claude/houserules.config.json` to force one. `claudeMd.managed` keeps its name and covers either
+file. Claude Code reads `AGENTS.md` natively from v2.1.277, but only when no `CLAUDE.md` is on the
+path, so a `CLAUDE.md` silences the block in `AGENTS.md`. `doctor` warns when that happens. You have
+two ways out. Add an `@AGENTS.md` line to the `CLAUDE.md`, or set the following in
+`~/.claude/settings.json`. Claude Code reads this setting from the user file only and ignores it in
+project and local settings.
+
+```json
+{
+  "pluginConfigs": {
+    "cc-plugin-agents-md@builtin": {
+      "options": { "instructionFiles": "claude-md-and-agents-md" }
+    }
+  }
+}
+```
+
 ## Modules
 
 `@houserules/cli` ships exactly 17 modules. Everything else lives in a plugin package.

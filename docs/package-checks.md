@@ -18,9 +18,10 @@ any package's tsconfig, wireit block, or scripts.
   source ships no orphan, replacing the old `rm -rf` prefixes. The CLI's `build` also runs
   `publint` after assembling `payload-dist/`.
 - Root `pnpm build|test|check` are wireit aggregators that depend on each package's script
-  by path, replacing `pnpm -r`. The `test` aggregator lists **fifteen** packages, not
-  sixteen, because `@houserules/test` ships no `test` script and naming a script that does
-  not exist is a wireit error rather than the no-op `pnpm -r` gave you. Root `lint` is also
+  by path, replacing `pnpm -r`. The three lists differ on purpose: `build` names all
+  seventeen packages, `check` sixteen, and `test` fifteen. The thin `houserules` package has
+  no source, so it carries only `build`, and `@houserules/test` ships no `test` script. Naming
+  a script that does not exist is a wireit error rather than the no-op `pnpm -r` gave you. Root `lint` is also
   wireit, and `lint:fix`, `format`, and `format:check` stay plain scripts. A fixer mutates
   its own inputs, so caching it is wrong, and a repo-wide formatter's input set is
   `.prettierignore`, which should not be restated in `package.json` where the two would

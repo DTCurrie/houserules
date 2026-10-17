@@ -183,11 +183,16 @@
       "type": "object",
       "properties": {
         "managed": {
-          "description": "Let houserules maintain its marked block in CLAUDE.md. Set false to opt out; houserules then never touches the file.",
+          "description": "Let houserules maintain its marked block in the instructions file (CLAUDE.md, or AGENTS.md). Set false to opt out; houserules then never touches the file.",
           "type": "boolean"
         }
       },
       "additionalProperties": false
+    },
+    "instructionsFile": {
+      "description": "Which file carries the houserules block. Unset, houserules honors the file the repo already has: CLAUDE.md when present, else AGENTS.md when present, else it seeds CLAUDE.md. Set it to force one. Claude Code reads AGENTS.md on its own only when no CLAUDE.md, .claude/CLAUDE.md, or CLAUDE.local.md exists in the working directory or above it.",
+      "type": "string",
+      "enum": ["CLAUDE.md", "AGENTS.md"]
     },
     "readGuard": {
       "type": "object",

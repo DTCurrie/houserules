@@ -21,6 +21,7 @@
   ],
   "exports": {
     "./package.json": "./package.json",
+    "./bin/houserules.mjs": "./bin/houserules.mjs",
     "./plugin": {
       "types": "./dist/plugin.d.ts",
       "default": "./dist/plugin.js"

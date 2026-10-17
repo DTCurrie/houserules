@@ -5,7 +5,7 @@
 ### houserules sections
 
 This block is maintained by `npx houserules update`. Content outside the markers is yours
-and never touched. Templates for a fuller CLAUDE.md skeleton and for guardrail rules live
+and never touched. Templates for a fuller instructions-file skeleton and for guardrail rules live
 in `.claude/templates/`.
 
 ### Skill triggers
@@ -80,10 +80,12 @@ Interactive installer for portable Claude Code context discipline. Read
 
 ## Workspace
 
-A pnpm workspace of sixteen packages. Per-package conventions live in each package's own
+A pnpm workspace of seventeen packages. Per-package conventions live in each package's own
 CLAUDE.md (`cli`, `api`, `payload`, `test`), loaded when you touch that package.
 
 - `packages/cli` is `@houserules/cli`, the installer. It ships the binary **`houserules`**.
+- `packages/houserules` is `houserules`, the thin package `npx houserules` resolves. One bin,
+  one dependency on the cli. No source, no tests.
 - `packages/api` is `@houserules/api`, the plugin contract package: action types, module
   definitions, and the `houserules.config.json` schema plugin authors build against.
 - `packages/payload` is `@houserules/payload`, the ten shared payload libs, imported by

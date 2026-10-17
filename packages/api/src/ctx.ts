@@ -3,7 +3,11 @@ import type {
   WorkspacePackage,
 } from '@houserules/payload/workspaces';
 
-import type { HouseConfig, HouseConfigTarget } from './config.js';
+import type {
+  HouseConfig,
+  HouseConfigTarget,
+  InstructionsFile,
+} from './config.js';
 import type { HouseManifest } from './manifest.js';
 import type { Settings } from './merge-settings.js';
 
@@ -57,6 +61,15 @@ export interface ClaudeState {
   settingsParseError: string | null;
   settingsLocalExists: boolean;
   claudeMdExists: boolean;
+  agentsMdExists: boolean;
+  /**
+   * Where the houserules block goes: the file the repo already has, CLAUDE.md for a repo with
+   * neither, or the `instructionsFile` config override. Every seed, region, readout, and doctor
+   * check that names the instructions file reads this, never the literal.
+   */
+  instructionsFile: InstructionsFile;
+  /** Whether `instructionsFile` exists on disk. The whole-file seed runs only when it does not. */
+  instructionsFileExists: boolean;
   manifest: HouseManifest | null;
   houseConfig: HouseConfig | null;
   agents: string[];

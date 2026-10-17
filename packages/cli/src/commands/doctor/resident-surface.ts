@@ -45,6 +45,18 @@ const RESIDENT_MEMORY_FILES = [
   'CLAUDE.local.md',
 ];
 
+// Claude Code falls back to AGENTS.md only when none of the CLAUDE.md files exists, so the
+// fallback set is resident exactly then.
+const RESIDENT_AGENTS_FILES = ['AGENTS.md', '.claude/AGENTS.md'];
+
+function residentMemoryFiles(root: string): string[] {
+  const claude = RESIDENT_MEMORY_FILES.filter((rel) =>
+    existsSync(join(root, rel)),
+  );
+  if (claude.length) return claude;
+  return RESIDENT_AGENTS_FILES.filter((rel) => existsSync(join(root, rel)));
+}
+
 /**
  * Strips YAML quoting and any trailing inline comment from one sequence entry.
  *
@@ -128,10 +140,7 @@ export interface ResidentMeasurement {
  */
 export function measureResident(root: string): ResidentMeasurement | null {
   const globless = globlessRuleFiles(root);
-  const sources = [
-    ...RESIDENT_MEMORY_FILES.filter((rel) => existsSync(join(root, rel))),
-    ...globless,
-  ];
+  const sources = [...residentMemoryFiles(root), ...globless];
   if (!sources.length) return null;
   const seen = new Set<string>();
   let chars = 0;
@@ -513,13 +522,16 @@ export function checkResidentSurface(root: string): CheckResult {
       combinedTokens > RESIDENT_TOKEN_BUDGET ||
       resident.lines > RESIDENT_LINE_BUDGET;
     if (combinedOver) {
-      const parts = [`root CLAUDE.md/rules (~${resident.tokens} tokens)`];
+      const memoryFile = resident.sources.includes('AGENTS.md')
+        ? 'AGENTS.md'
+        : 'CLAUDE.md';
+      const parts = [`root ${memoryFile}/rules (~${resident.tokens} tokens)`];
       if (skillAgentTokens)
         parts.push(`skill/agent descriptions (~${skillAgentTokens} tokens)`);
       if (styleTokens) parts.push(`output style (~${styleTokens} tokens)`);
       findings.push({
         level: 'WARN',
-        msg: `always-loaded context exceeds budget (~${combinedTokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}). ${parts.join(' + ')}. Trim root CLAUDE.md to a one-line index + on-demand files (CONVENTIONS §1)`,
+        msg: `always-loaded context exceeds budget (~${combinedTokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}). ${parts.join(' + ')}. Trim root ${memoryFile} to a one-line index + on-demand files (CONVENTIONS §1)`,
       });
     }
     // A globless rule loads every turn. Usually not intended, and invisible without

@@ -54,7 +54,12 @@ export type { HookFallback, HookFragmentOptions } from './hook-wiring.js';
  * same reason `Ctx` and `Target` are exported. The functions that produce and validate a
  * config file are the installer's job and live in `@houserules/api/internal` instead.
  */
-export type { HouseConfig, HouseConfigTarget } from './config.js';
+export type {
+  HouseConfig,
+  HouseConfigTarget,
+  InstructionsFile,
+} from './config.js';
+export { INSTRUCTIONS_FILES } from './config.js';
 
 /**
  * What a plugin factory receives. Everything here is bound to the plugin's own package, so a

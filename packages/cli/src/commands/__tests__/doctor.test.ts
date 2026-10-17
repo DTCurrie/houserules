@@ -7,6 +7,8 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { useInstalledRepo, useRepo } from '#test/repo';
@@ -788,5 +790,26 @@ describe('doctor flag validation', () => {
     expect(runCli(['doctor', '--force']).stderr).toMatch(
       /--force requires --fix/,
     );
+  });
+});
+
+describe('doctor instructions-file silencing', () => {
+  it('warns only once a CLAUDE.md appears beside the AGENTS.md carrying the block', () => {
+    const root = useRepo('pnpm-single');
+    writeFileSync(join(root, 'AGENTS.md'), '# Repo\n');
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+    // An empty HOME keeps the developer's real user settings out of the result.
+    const env = {
+      ...process.env,
+      HOME: mkdtempSync(join(tmpdir(), 'kit-home-')),
+    };
+
+    const before = runCli(['doctor', root], { env });
+    expect(before.status, before.stdout).toBe(0);
+    expect(before.stdout).not.toMatch(/silences AGENTS\.md/);
+
+    writeFileSync(join(root, 'CLAUDE.md'), '# mine\n');
+    const after = runCli(['doctor', root], { env });
+    expect(after.stdout).toMatch(/CLAUDE\.md silences AGENTS\.md/);
   });
 });

@@ -1,0 +1,52 @@
+{
+  "name": "houserules",
+  "version": "0.0.0",
+  "description": "Bare-name shim for @houserules/cli, so `npx houserules` resolves.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "houserules": "bin/houserules.mjs"
+  },
+  "files": [
+    "bin"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "prepack": "npm run build"
+  },
+  "wireit": {
+    "build": {
+      "command": "publint",
+      "files": [
+        "package.json",
+        "bin/**"
+      ],
+      "output": []
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
+    "directory": "packages/houserules"
+  },
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/houserules#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
+  "dependencies": {
+    "@houserules/cli": "workspace:^"
+  },
+  "devDependencies": {
+    "publint": "catalog:",
+    "wireit": "catalog:"
+  },
+  "license": "MIT",
+  "author": "Devin T. Currie (https://github.com/DTCurrie)",
+  "keywords": [
+    "houserules",
+    "claude-code"
+  ]
+}

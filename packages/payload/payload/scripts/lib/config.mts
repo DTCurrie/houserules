@@ -60,6 +60,8 @@ export interface HouseConfig {
   ledgers?: { dir?: string };
   readGuard?: { enabled?: boolean; maxBytes?: number; denyGlobs?: string[] };
   claudeMd?: { managed?: boolean };
+  /** Which file carries the houserules block. Unset honors the file the repo already has. */
+  instructionsFile?: 'CLAUDE.md' | 'AGENTS.md';
   /** Read by the design plugin's `design.mjs`: the stylesheet Tailwind compiles, repo-root-relative. */
   design?: { themeEntry?: string };
   targets: ConfigTarget[];

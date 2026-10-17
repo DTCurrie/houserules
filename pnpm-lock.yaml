@@ -363,6 +363,19 @@ importers:
         specifier: workspace:*
         version: link:../../../payload
 
+  packages/houserules:
+    dependencies:
+      '@houserules/cli':
+        specifier: workspace:^
+        version: link:../cli
+    devDependencies:
+      publint:
+        specifier: 'catalog:'
+        version: 0.3.25
+      wireit:
+        specifier: 'catalog:'
+        version: 0.14.13
+
   packages/payload:
     devDependencies:
       '@houserules/test':

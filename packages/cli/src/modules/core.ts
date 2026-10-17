@@ -153,10 +153,11 @@ function selfGitignoredDirActions(ctx: Ctx): Action[] {
 }
 
 /**
- * The `houserules.config.json` seed, and the `CLAUDE.md` seed-or-region: a whole-file seed for a
- * repo with no CLAUDE.md yet, otherwise the managed region upserted into the existing one.
+ * The `houserules.config.json` seed, and the instructions-file seed-or-region (`CLAUDE.md` or
+ * `AGENTS.md`, whichever `ctx.claude.instructionsFile` resolved to): a whole-file seed for a
+ * repo with neither yet, otherwise the managed region upserted into the existing one.
  */
-function claudeMdActions(ctx: Ctx, answers: Answers): Action[] {
+function instructionsFileActions(ctx: Ctx, answers: Answers): Action[] {
   const actions: Action[] = [];
   actions.push({
     kind: 'seed',
@@ -171,17 +172,18 @@ function claudeMdActions(ctx: Ctx, answers: Answers): Action[] {
 
   // The seed must land BEFORE the region action below, so a brand-new repo gets the file
   // and then the managed block upserted into it in the same run.
-  if (!ctx.claude.claudeMdExists) {
+  const instructionsFile = ctx.claude.instructionsFile;
+  if (!ctx.claude.instructionsFileExists) {
     actions.push({
       kind: 'seed',
-      dest: 'CLAUDE.md',
+      dest: instructionsFile,
       content: renderClaudeMd(ctx, answers),
       module: id,
-      reason: 'CLAUDE.md seeded from detected repo facts',
+      reason: `${instructionsFile} seeded from detected repo facts`,
     });
     actions.push({
       kind: 'advise',
-      text: 'Fill the <!-- TODO --> comments in the seeded CLAUDE.md (one-line project description).',
+      text: `Fill the <!-- TODO --> comments in the seeded ${instructionsFile} (one-line project description).`,
       module: id,
     });
   }
@@ -191,13 +193,13 @@ function claudeMdActions(ctx: Ctx, answers: Answers): Action[] {
   if (ctx.claude.houseConfig?.claudeMd?.managed === false) {
     actions.push({
       kind: 'advise',
-      text: 'CLAUDE.md region management is disabled (claudeMd.managed: false). See .claude/templates/ for houserules sections to merge by hand.',
+      text: `${instructionsFile} region management is disabled (claudeMd.managed: false). See .claude/templates/ for houserules sections to merge by hand.`,
       module: id,
     });
   } else {
     actions.push({
       kind: 'region',
-      dest: 'CLAUDE.md',
+      dest: instructionsFile,
       body: renderClaudeAdditions(ctx, answers),
       region: claudeMdRegion,
       module: id,
@@ -244,7 +246,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     ...libActions(),
     ...templateActions(),
     ...selfGitignoredDirActions(ctx),
-    ...claudeMdActions(ctx, answers),
+    ...instructionsFileActions(ctx, answers),
     ...settingsActions(),
   ];
 }

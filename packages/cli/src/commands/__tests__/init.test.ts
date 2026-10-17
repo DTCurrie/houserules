@@ -374,6 +374,47 @@ describe('init on an existing CLAUDE.md', () => {
   });
 });
 
+describe('init on a repo with AGENTS.md and no CLAUDE.md', () => {
+  it('writes the managed region into AGENTS.md, leaves its other bytes alone, and creates no CLAUDE.md', () => {
+    const root = useRepo('non-js');
+    const agentsPath = join(root, 'AGENTS.md');
+    const original = '# my-agents\n\nUser-owned agent notes.\n';
+    writeFileSync(agentsPath, original);
+
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+
+    const after = readFileSync(agentsPath, 'utf8');
+    expect(after).toContain(REGION_START);
+    expect(after).toContain(REGION_END);
+    const outside =
+      after.slice(0, after.indexOf(REGION_START)) +
+      after.slice(after.indexOf(REGION_END) + REGION_END.length);
+    expect(outside.replace(/\n{2,}/g, '\n')).toBe(
+      original.replace(/\n{2,}/g, '\n'),
+    );
+    expect(existsSync(claudeMdPath(root)), 'no CLAUDE.md created').toBe(false);
+    expect(Object.keys(manifestOf(root).files)).toContain('AGENTS.md');
+    expect(Object.keys(manifestOf(root).files)).not.toContain('CLAUDE.md');
+  });
+
+  it('writes into AGENTS.md even when CLAUDE.md exists, if the config says instructionsFile', () => {
+    const root = useRepo('npm-single');
+    const agentsPath = join(root, 'AGENTS.md');
+    const claudeBefore = readClaudeMd(root);
+    writeFileSync(agentsPath, '# agents\n');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(
+      houseConfigPath(root),
+      `${JSON.stringify({ instructionsFile: 'AGENTS.md' })}\n`,
+    );
+
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+
+    expect(readFileSync(agentsPath, 'utf8')).toContain(REGION_START);
+    expect(readClaudeMd(root)).toBe(claudeBefore);
+  });
+});
+
 describe('init on a repo with no CLAUDE.md', () => {
   it('seeds one with the managed markers', () => {
     const root = useRepo('non-js');

@@ -187,6 +187,7 @@ export const MODULES: ModuleDef[] = [
 export const SHARED_HOST_FILES: ReadonlySet<string> = new Set([
   '.claude/settings.json',
   'CLAUDE.md',
+  'AGENTS.md',
   '.gitignore',
   '.prettierignore',
 ]);

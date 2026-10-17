@@ -1266,3 +1266,18 @@ describe('update on an install with a pre-relocation settings.json.bak', () => {
     ).toBe(false);
   });
 });
+
+describe('update on a repo whose instructions file is AGENTS.md', () => {
+  it('keeps the region in AGENTS.md and creates no CLAUDE.md', () => {
+    const root = useRepo('non-js');
+    writeFileSync(join(root, 'AGENTS.md'), '# agents\n');
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+
+    expect(runCli(['update', root]).status).toBe(0);
+
+    const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8');
+    expect(agents).toContain(REGION_START);
+    expect(agents).toContain(REGION_END);
+    expect(existsSync(claudeMdPath(root)), 'no CLAUDE.md created').toBe(false);
+  });
+});

@@ -245,6 +245,67 @@ describe('detect', () => {
     });
   });
 
+  describe('instructions file resolution', () => {
+    it.each([
+      {
+        name: 'AGENTS.md only',
+        claude: false,
+        agents: true,
+        config: undefined,
+        file: 'AGENTS.md',
+        exists: true,
+      },
+      {
+        name: 'both files',
+        claude: true,
+        agents: true,
+        config: undefined,
+        file: 'CLAUDE.md',
+        exists: true,
+      },
+      {
+        name: 'neither file',
+        claude: false,
+        agents: false,
+        config: undefined,
+        file: 'CLAUDE.md',
+        exists: false,
+      },
+      {
+        name: 'a config override with CLAUDE.md present',
+        claude: true,
+        agents: false,
+        config: 'AGENTS.md',
+        file: 'AGENTS.md',
+        exists: false,
+      },
+      {
+        name: 'a config override with both present',
+        claude: true,
+        agents: true,
+        config: 'AGENTS.md',
+        file: 'AGENTS.md',
+        exists: true,
+      },
+    ])('$name', ({ claude, agents, config, file, exists }) => {
+      const root = useRepo('non-js');
+      if (claude) writeFileSync(join(root, 'CLAUDE.md'), '# c\n');
+      if (agents) writeFileSync(join(root, 'AGENTS.md'), '# a\n');
+      if (config) {
+        mkdirSync(join(root, '.claude'), { recursive: true });
+        writeFileSync(
+          join(root, '.claude/houserules.config.json'),
+          JSON.stringify({ instructionsFile: config }),
+        );
+      }
+      const state = detect(root).claude;
+      expect(state.instructionsFile).toBe(file);
+      expect(state.instructionsFileExists).toBe(exists);
+      expect(state.claudeMdExists).toBe(claude);
+      expect(state.agentsMdExists).toBe(agents);
+    });
+  });
+
   describe('on an npm single-package repo', () => {
     let ctx: ReturnType<typeof detect>;
 

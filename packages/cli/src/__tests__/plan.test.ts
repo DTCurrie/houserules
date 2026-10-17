@@ -210,11 +210,12 @@ describe('buildPlan, given a registry with a plugin-contributed module', () => {
 });
 
 describe('SHARED_HOST_FILES', () => {
-  it('contains exactly the four user-owned, region-managed paths', () => {
+  it('contains exactly the five user-owned, region-managed paths', () => {
     expect(SHARED_HOST_FILES).toEqual(
       new Set([
         '.claude/settings.json',
         'CLAUDE.md',
+        'AGENTS.md',
         '.gitignore',
         '.prettierignore',
       ]),

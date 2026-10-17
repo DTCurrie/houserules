@@ -284,7 +284,7 @@ function subagentExceptionLine(
   ];
 }
 
-/** Seeds a whole CLAUDE.md, markers included, for a repo that has none. */
+/** Seeds a whole instructions file (the one `ctx.claude.instructionsFile` names), markers included, for a repo that has none. */
 export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   const name = ctx.rootPkg?.name ?? 'this repo';
   const lines = [
@@ -350,13 +350,13 @@ function alignedTable(rows: string[][]): string[] {
   return [line(header), separator, ...body.map(line)];
 }
 
-/** The managed-region body spliced into a CLAUDE.md the user already has. */
+/** The managed-region body spliced into the instructions file the user already has. */
 export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   const body = [
     '### houserules sections',
     '',
     'This block is maintained by `npx houserules update`. Content outside the markers is yours',
-    'and never touched. Templates for a fuller CLAUDE.md skeleton and for guardrail rules live',
+    'and never touched. Templates for a fuller instructions-file skeleton and for guardrail rules live',
     'in `.claude/templates/`.',
     '',
     ...skillTriggersSection(answers),

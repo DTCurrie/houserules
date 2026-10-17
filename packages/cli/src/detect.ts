@@ -10,7 +10,13 @@ import type {
   PackageJson,
   WorkspacePackage,
 } from '@houserules/payload/workspaces';
-import type { Ctx, HouseConfig, Settings, Target } from '@houserules/api';
+import type {
+  Ctx,
+  HouseConfig,
+  InstructionsFile,
+  Settings,
+  Target,
+} from '@houserules/api';
 import type {
   ChangesetInvocation,
   HouseManifest,
@@ -440,18 +446,48 @@ function detectClaudeState(root: string): ClaudeState {
       return [];
     }
   };
+  const houseConfig = readJson<HouseConfig>(
+    join(dir, 'houserules.config.json'),
+  );
+  const claudeMdExists = existsSync(join(root, 'CLAUDE.md'));
+  const agentsMdExists = existsSync(join(root, 'AGENTS.md'));
+  const instructionsFile = resolveInstructionsFile(
+    houseConfig?.instructionsFile,
+    claudeMdExists,
+    agentsMdExists,
+  );
   return {
     dirExists: existsSync(dir),
     settingsExists: existsSync(settingsPath),
     settings,
     settingsParseError,
     settingsLocalExists: existsSync(join(dir, 'settings.local.json')),
-    claudeMdExists: existsSync(join(root, 'CLAUDE.md')),
+    claudeMdExists,
+    agentsMdExists,
+    instructionsFile,
+    instructionsFileExists:
+      instructionsFile === 'CLAUDE.md' ? claudeMdExists : agentsMdExists,
     manifest: readJson<HouseManifest>(join(dir, 'houserules.manifest.json')),
-    houseConfig: readJson<HouseConfig>(join(dir, 'houserules.config.json')),
+    houseConfig,
     agents: listNames('agents'),
     skills: listNames('skills'),
   };
+}
+
+/**
+ * Honors the file the repo already has. A config override forces either; a repo with
+ * CLAUDE.md keeps it even when AGENTS.md is also present, since Claude Code reads only
+ * CLAUDE.md in that case; a repo with neither gets CLAUDE.md.
+ */
+function resolveInstructionsFile(
+  configured: InstructionsFile | undefined,
+  claudeMdExists: boolean,
+  agentsMdExists: boolean,
+): InstructionsFile {
+  if (configured) return configured;
+  if (claudeMdExists) return 'CLAUDE.md';
+  if (agentsMdExists) return 'AGENTS.md';
+  return 'CLAUDE.md';
 }
 
 function detectPnpmCatalogModeStrict(root: string): boolean {

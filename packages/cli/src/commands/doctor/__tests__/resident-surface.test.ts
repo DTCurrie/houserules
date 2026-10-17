@@ -167,6 +167,27 @@ describe('frontmatterDescription', () => {
 });
 
 describe('measureResident', () => {
+  it('counts AGENTS.md as resident when no CLAUDE.md file exists', () => {
+    const root = useRepo('pnpm-single');
+    write(root, 'AGENTS.md', '# Repo\n\nsome rules here\n');
+
+    const resident = measureResident(root);
+
+    expect(resident?.sources).toContain('AGENTS.md');
+    expect(resident?.tokens).toBeGreaterThan(0);
+  });
+
+  it('counts CLAUDE.md and not AGENTS.md when both exist', () => {
+    const root = useRepo('pnpm-single');
+    write(root, 'AGENTS.md', '# Repo\n\nsome rules here\n');
+    write(root, 'CLAUDE.md', '# Repo\n');
+
+    const resident = measureResident(root);
+
+    expect(resident?.sources).toContain('CLAUDE.md');
+    expect(resident?.sources).not.toContain('AGENTS.md');
+  });
+
   it('returns null when the repo has no resident memory file and no rules', () => {
     const root = useRepo('pnpm-single');
 
