@@ -39,8 +39,9 @@ in `.claude/templates/`.
 
 - Stage-sized work (≤ a handful of files): implement directly in-context, with no implementation
   subagents. Reserve subagents for genuinely parallel or unbounded work (wide sweeps, migrations).
-- Exception, a planned phase under `/orchestrate`: dispatch one scoped `task-worker` per slice
-  and review the returned reports. Never pull a worker’s diff into the main context.
+- Exception, a planned phase under `/orchestrate`: dispatch one `phase-orchestrator` for the phase
+  and relay its reports. Under `--flat`, dispatch one scoped `task-worker` per slice and review
+  the returned reports. Never pull a worker’s diff into the main context.
 - Verify with static gates (tests, typecheck, lint) plus a short falsifiable acceptance checklist
   for the user. No browser/screenshot verification unless explicitly asked.
 - Run those gates in order: format first, since it rewrites in place and settles the mechanical

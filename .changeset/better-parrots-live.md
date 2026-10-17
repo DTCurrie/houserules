@@ -2,4 +2,4 @@
 '@houserules/cli': minor
 ---
 
-Add `--nested` to /orchestrate: a sonnet phase-orchestrator runs a phase one layer down.
+/orchestrate runs each phase one layer down on a sonnet phase-orchestrator by default, `--flat` opts out.

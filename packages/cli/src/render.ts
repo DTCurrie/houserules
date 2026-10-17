@@ -279,8 +279,9 @@ function subagentExceptionLine(
     ? '- **Exception, a planned phase under `/orchestrate`**:'
     : '- Exception, a planned phase under `/orchestrate`:';
   return [
-    `${lead} dispatch one scoped \`task-worker\` per slice`,
-    '  and review the returned reports. Never pull a worker’s diff into the main context.',
+    `${lead} dispatch one \`phase-orchestrator\` for the phase`,
+    '  and relay its reports. Under `--flat`, dispatch one scoped `task-worker` per slice and review',
+    '  the returned reports. Never pull a worker’s diff into the main context.',
   ];
 }
 

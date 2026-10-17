@@ -29,9 +29,9 @@ grep -l . .claude/plans/*/ROADMAP.md | xargs grep -H '^\*\*Status:\*\*'
 
 ### Arguments
 
-`/orchestrate [<plan-slug>] [<phase> | all] [--auto] [--ignore-gates <key,key>]`, both leading
-parts optional. A bare token that is a number or `all` is the **phase**. Anything else is the
-**plan slug**.
+`/orchestrate [<plan-slug>] [<phase> | all] [--auto] [--flat] [--ignore-gates <key,key>]`, both
+leading parts optional. A bare token that is a number or `all` is the **phase**. Anything else is
+the **plan slug**. Each phase runs one layer down by default (§4). `--flat` runs it here.
 
 | Invocation                     | Means                                                   |
 | ------------------------------ | ------------------------------------------------------- |
@@ -40,7 +40,7 @@ parts optional. A bare token that is a number or `all` is the **phase**. Anythin
 | `/orchestrate 3`               | resolved plan, phase 3                                  |
 | `/orchestrate auth-rework all` | that plan, every remaining phase, check-in between each |
 | `… all --auto`                 | same, without the inter-phase check-in                  |
-| `… --nested`                   | one sonnet `phase-orchestrator` per phase, you relay    |
+| `… --flat`                     | run §1 to §8 here, which suits a phase under two slices |
 
 **Live phase** is the one marked `IN PROGRESS` in that plan's `ROADMAP.md`. If none is marked, take
 the first `TODO`.
@@ -142,9 +142,9 @@ the resume grep in §9.
 
 ## 4. Dispatch a wave — one message, one worker per slice
 
-Under `--nested`, §1 through §8 run one layer down, one `phase-orchestrator` spawn per phase, and
-you relay its reports. `references/nested.md` carries the brief, the relay, and the `all` loop,
-which doubles as the context-size gate.
+By default, §1 through §8 run one layer down, one `phase-orchestrator` spawn per phase, and you
+relay its reports. `references/nested.md` carries the brief, the relay, and the `all` loop, which
+doubles as the context-size gate. Under `--flat` you run them here, for a phase under two slices.
 
 Send every slice in the wave as parallel `Agent` calls **in a single message**, each with
 `subagent_type: task-worker` and `model: sonnet`. (No `task-worker` installed? `references/slicing.md`

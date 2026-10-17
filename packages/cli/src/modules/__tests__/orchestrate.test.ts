@@ -14,6 +14,7 @@ import { runCli } from '#test/run';
 import { manifestOf } from '#test/installed-tree';
 import {
   check,
+  hint,
   options,
   plan,
   renderTaskWorkerBase,
@@ -130,14 +131,24 @@ describe('orchestrate', () => {
       ).toBe(true);
     });
 
-    it('lists --nested in the invocation table as one phase-orchestrator per phase', () => {
-      expect(skillText).toMatch(/^\| `… --nested` .*phase-orchestrator/m);
+    it('lists --flat in the invocation table as the run that stays at this layer', () => {
+      expect(skillText).toMatch(/^\| `… --flat` .*here/m);
     });
 
-    it('points --nested at references/nested.md for the brief and the relay', () => {
+    it('names one layer down as the default in §4 and points at references/nested.md', () => {
       expect(skillText).toMatch(
-        /--nested`[^\n]*\n[^\n]*references\/nested\.md/,
+        /By default, §1 through §8 run one layer down[^\n]*\n[^\n]*references\/nested\.md/,
       );
+    });
+
+    it('tells the phase-orchestrator to run the skill at its own layer and never nest again', () => {
+      expect(orchestratorText).toMatch(/never spawn a\s+`phase-orchestrator`/);
+    });
+
+    it('leaves no installed orchestrate surface describing --nested as a flag', () => {
+      expect(
+        [skillText, nestedText, orchestratorText].join('\n'),
+      ).not.toContain('--nested');
     });
 
     it('orders the phase-orchestrator report headings from status table to resume', () => {
@@ -148,6 +159,8 @@ describe('orchestrate', () => {
         'Ruling needed',
         'Rulings made',
         'Backlogged',
+        'Out of scope',
+        'Requests',
         'Decide candidates',
         'Resume',
       ];
@@ -189,6 +202,31 @@ describe('orchestrate', () => {
       'depth-limit',
     ])('names the %s gate in nested.md', (gate) => {
       expect(nestedText).toContain(gate);
+    });
+
+    it('merges several orchestrators into one table with the Plan column first', () => {
+      expect(nestedText).toMatch(/^\| Plan +\| Slice +\| Owns +\| State +\|$/m);
+    });
+
+    it('resumes only the orchestrator that asked for a ruling, tagged with its plan', () => {
+      expect(nestedText).toMatch(/tagged with its plan/);
+      expect(nestedText).toMatch(/resume only the agent\s+that asked/);
+    });
+
+    it('keeps the seam with the main conversation and routes a change up as a request', () => {
+      expect(nestedText).toMatch(/Neither orchestrator edits the seam/);
+      expect(nestedText).toMatch(/comes up as\s+a `Requests` line/);
+    });
+
+    it('runs the repo-wide fixer and verify once, after every orchestrator returns DONE', () => {
+      expect(nestedText).toMatch(
+        /After every orchestrator has returned `DONE`[^.]*repo-wide fixer and `\/verify-changed` once/,
+      );
+    });
+
+    it('tells the phase-orchestrator to report sibling findings and seam changes upward', () => {
+      expect(orchestratorText).toMatch(/Out of scope/);
+      expect(orchestratorText).toMatch(/Requests/);
     });
 
     it('records the phase-orchestrator and nested reference in the manifest', () => {
@@ -425,6 +463,21 @@ describe('orchestrate plan(), phase-orchestrator', () => {
       ),
       'not written with extra tools',
     ).toBe(false);
+  });
+
+  it('advises that each phase runs one layer down by default and --flat keeps it here', () => {
+    const answers = { ...baseAnswers(), moduleIds: ['orchestrate', 'plans'] };
+    const advice = plan({} as Ctx, answers).flatMap((action) =>
+      action.kind === 'advise' ? [action.text] : [],
+    );
+
+    expect(advice.join('\n')).toMatch(
+      /By default it hands each phase to a sonnet phase-orchestrator[^]*--flat keeps the slicing/,
+    );
+  });
+
+  it('hints the one-layer-down default', () => {
+    expect(hint()).toMatch(/phase-orchestrator/);
   });
 });
 

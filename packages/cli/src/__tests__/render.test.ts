@@ -346,13 +346,16 @@ describe('renderClaudeAdditions', () => {
     expect(body).not.toMatch(/planned phase under `\/orchestrate`/);
   });
 
-  it('includes the orchestrate exception line when orchestrate is selected', () => {
+  it('includes the orchestrate exception line, naming the phase-orchestrator default and the --flat fallback, when orchestrate is selected', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(
       ctx,
       makeAnswers({ moduleIds: ['core', 'orchestrate'] }),
     );
     expect(body).toMatch(/planned phase under `\/orchestrate`/);
+    expect(body).toMatch(
+      /dispatch one `phase-orchestrator` for the phase\n\s+and relay its reports\. Under `--flat`, dispatch one scoped `task-worker` per slice/,
+    );
   });
 
   it('orders the verify gates so autofix runs before typecheck and test', () => {

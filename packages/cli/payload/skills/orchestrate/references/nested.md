@@ -1,6 +1,6 @@
 # The nested layer
 
-Open this when `/orchestrate` was invoked with `--nested`. `SKILL.md` §4 names the flag. This
+Open this on every `/orchestrate` run without `--flat`. `SKILL.md` §4 names the default. This
 carries the brief going down, the report coming up, the gates one layer down, and what the main
 conversation does with each report. The `phase-orchestrator` agent runs the skill itself, one layer
 down, and `agents/phase-orchestrator.md` carries only its delta over the skill.
@@ -26,7 +26,7 @@ Ruling: <on a resume only: the answer to the last NEEDS_RULING, verbatim>
 
 The first line is `PHASE <slug>/<N>: WAVE_CLOSED <n>/<total> | DONE | NEEDS_RULING | BLOCKED | PARTIAL`.
 The sections follow in this order: `Status table`, `Landed`, `Verify`, `Ruling needed`,
-`Rulings made`, `Backlogged`, `Decide candidates`, `Resume`. The format itself closes
+`Rulings made`, `Backlogged`, `Out of scope`, `Requests`, `Decide candidates`, `Resume`. The format itself closes
 `agents/phase-orchestrator.md`.
 
 ## Gates, one layer down
@@ -73,3 +73,56 @@ finished.
 **Preflight.** A `BLOCKED` report naming `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` means the depth limit
 withheld `Agent` from the orchestrator. Set the variable and spawn fresh with the same brief. A
 re-brief changes nothing.
+
+## Several orchestrators
+
+Run two or more orchestrators at once only when each phase fits a domain of its own. Dispatch them
+in one message, one `Agent` call each, and keep every agent id. All the single-orchestrator rules
+above hold per agent.
+
+**Domains.** `Domain:` is the set of path roots an orchestrator and its workers may write. Draw
+domains by the shared-resource rule in `slicing.md`, so no path root is in two domains. Name
+everything two domains might both write, and keep it out of every domain: lockfiles, root config,
+generated indexes, and the ledgers belong to the main conversation. `Siblings:` carries the other
+orchestrators' domains, so a worker that finds a defect there reports it under `Out of scope` and
+leaves it. Two orchestrators never share a plan workspace. Each plan's `ROADMAP.md` belongs to the
+orchestrator driving it.
+
+**The cross-domain seam.** Before dispatching either orchestrator, write what both domains depend
+on and pass the paths on the `Seam:` line. That is shared types, route contracts, and config keys,
+which is the skill's §2 one level up. A backend phase and the frontend phase that consumes it get
+the API contract on disk first. Neither orchestrator edits the seam. A change one needs comes up as
+a `Requests` line, and the main conversation applies it, then sends the other orchestrators whose
+work it touches a `SendMessage` naming the changed path.
+
+**The barrier, split.** Each orchestrator runs its §7 fixer and `/tidy` over its domain's paths and
+verifies by an explicit `--filter` over its domain's packages, never repo-wide. It never runs
+`/verify-changed` there, because that scopes by `git diff`, which with siblings mid-edit pulls in
+their packages. Where `fix.filterFlag` is empty and the fixer cannot scope by package, run the
+formatter and `eslint --fix` on the domain's paths directly. Two cold `pnpm --filter <pkg> test` runs on disjoint
+packages that shared upstream builds finished green together, so the scoped verifies run
+concurrently. Wireit holds no cross-process lock, so a verify that fails on build state instead of
+a test is rerun once alone before it is judged. After every orchestrator has returned `DONE`, the
+main conversation runs the repo-wide fixer and `/verify-changed` once. That run is the only
+whole-tree proof.
+
+**The merged table.** Each time any orchestrator returns, print one table with a `Plan` column
+first, then every orchestrator's latest rows verbatim:
+
+```markdown
+| Plan   | Slice            | Owns                  | State      |
+| ------ | ---------------- | --------------------- | ---------- |
+| api    | 1a route schema  | `packages/api/src/**` | ✅ done    |
+| client | 1a fetch wrapper | `packages/web/src/**` | 🔄 running |
+```
+
+An orchestrator that has not returned since the last printing keeps the rows it last returned.
+
+**Rulings.** Relay each `NEEDS_RULING` tagged with its plan and phase, and resume only the agent
+that asked, by its own id. The others keep running, and a `WAVE_CLOSED` from one gets its
+`continue` without waiting on the ruling.
+
+**Ledgers and lint.** `/backlog-add` stays nested. The ledger takes one appended line per entry,
+and its `.md` surface is a render the next call rebuilds. `Decide candidates` travel up. Each
+orchestrator runs `plan-lint.mjs` after it updates its own workspace. The checker scans every
+workspace and takes no path, so a finding in a sibling's workspace goes under `Out of scope`.
