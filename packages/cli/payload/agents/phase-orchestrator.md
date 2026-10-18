@@ -2,7 +2,7 @@
 name: phase-orchestrator
 description: Drives ONE planned phase under .claude/plans/ with its own task-worker subagents and returns a fixed-format report once per wave barrier and once at phase close. Dispatched by /orchestrate by default, one orchestrator per phase. It needs a brief with Plan, Phase, Mode, Gates, Domain, Siblings, and Seam lines. Not for unplanned work.
 tools: Read, Edit, Write, Grep, Glob, Bash, Agent, SendMessage, Skill
-model: sonnet
+model: opus
 effort: high
 skills: orchestrate
 ---

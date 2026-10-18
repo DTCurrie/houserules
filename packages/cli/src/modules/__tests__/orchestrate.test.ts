@@ -114,8 +114,8 @@ describe('orchestrate', () => {
       expect(manifest.modules).toContain('orchestrate');
     });
 
-    it('installs a sonnet phase-orchestrator that preloads the orchestrate skill', () => {
-      expect(orchestratorText).toMatch(/^model: sonnet$/m);
+    it('installs an opus phase-orchestrator that preloads the orchestrate skill', () => {
+      expect(orchestratorText).toMatch(/^model: opus$/m);
       expect(orchestratorText).toMatch(/^skills: orchestrate$/m);
     });
 
@@ -298,8 +298,11 @@ describe('orchestrate', () => {
       expect(skillText).toMatch(/task-worker-research/);
     });
 
-    it('tells the orchestrator to pass effort on the Agent call and names no effort variant', () => {
-      expect(skillText).toMatch(/Agent tool's `effort` parameter/);
+    it('tells the orchestrator to pick model and effort per slice and names no effort variant', () => {
+      expect(skillText).toMatch(
+        /plus the `model` and `effort` its shape earns/,
+      );
+      expect(skillText).not.toMatch(/model: sonnet/);
       expect(skillText).not.toMatch(/task-worker-(low|high|xhigh)/);
     });
 

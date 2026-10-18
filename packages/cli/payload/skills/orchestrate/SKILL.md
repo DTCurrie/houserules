@@ -147,12 +147,10 @@ By default, §1 through §8 run one layer down, one `phase-orchestrator` spawn p
 `references/nested.md` carries the brief, the relay, and the `all` loop (also the context-size gate).
 
 Send every slice in the wave as parallel `Agent` calls **in a single message**, each with
-`subagent_type: task-worker` and `model: sonnet`. (No `task-worker` installed? `references/slicing.md`
-carries the fallback.)
+`subagent_type: task-worker` plus the `model` and `effort` its shape earns, from the table in
+`references/slicing.md`. (No `task-worker` installed? The same file carries the fallback.)
 
 Mark the slices `DISPATCHED` before you send.
-
-Pass the Agent tool's `effort` parameter per slice, as `references/slicing.md` says.
 
 A slice whose steps must fetch a page or search the web takes `task-worker-research`. If that agent is
 absent, use the same fallback.

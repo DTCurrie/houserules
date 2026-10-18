@@ -114,10 +114,21 @@ wanted into another slice, or you will rediscover the orphaned half several slic
 
 ## Dispatch details moved out of the skill
 
-- **Effort per slice.** `effort: low` suits sweeps, boilerplate, and many small files. `high` or
-  `xhigh` suits architecture calls, tricky seams, or a slice you would otherwise pull into your own
-  context. Omit it for everything else, and the worker runs at the `task-worker` frontmatter default.
-  Below Claude Code 2.1.292 the parameter does not exist.
+- **Model and effort per slice.** Classify the slice by its shape, then pass both Agent parameters
+  from the row it lands in. Omit both for the middle row, and the worker runs at the `task-worker`
+  frontmatter defaults.
+
+  | Slice shape                                                                         | `model` | `effort`          |
+  | ----------------------------------------------------------------------------------- | ------- | ----------------- |
+  | Mechanical: a sweep, boilerplate, many small files under one rule, no judgment      | `haiku` | `low`             |
+  | Ordinary implementation with an acceptance command to make pass                     | omit    | omit              |
+  | An architecture call, a tricky seam, or a slice you would otherwise pull in-context | `opus`  | `high` or `xhigh` |
+
+  The haiku row is strict. The revise loop caps at two rounds, and a haiku worker that misreads a
+  seam burns both before a sonnet one would have started. When the slice has an acceptance command
+  it must reason its way to, it is not mechanical, whatever its file count. Below Claude Code
+  2.1.292 the `effort` parameter does not exist, so pass `model` alone.
+
 - **Research slices.** `task-worker-research` carries `WebFetch` and `WebSearch` on top of the standing
   task-worker tools. If `.claude/agents/task-worker-research.md` is absent, dispatch `general-purpose`
   with `model: sonnet` and paste `agents/task-worker.md` inline ahead of the brief, the same fallback
