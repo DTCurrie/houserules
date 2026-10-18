@@ -1,5 +1,18 @@
 # @houserules/cli
 
+## 0.11.0
+
+### Minor Changes
+
+- f2a4008: Phase orchestrator runs on opus and workers take model and effort from slice shape.
+
+### Patch Changes
+
+- 77142ce: Lint/format Stop hook now fixes only files modified during the ended turn.
+- Updated dependencies [77142ce]
+  - @houserules/payload@0.4.1
+  - @houserules/api@0.6.1
+
 ## 0.10.0
 
 ### Minor Changes

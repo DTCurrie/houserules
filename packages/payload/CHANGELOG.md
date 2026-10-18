@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.4.1
+
+### Patch Changes
+
+- 77142ce: Lint/format Stop hook now fixes only files modified during the ended turn.
+
 ## 0.4.0
 
 ### Minor Changes
