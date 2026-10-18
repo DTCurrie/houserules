@@ -6,12 +6,34 @@ import { join } from 'node:path';
 import {
   READ_ONLY_TOOLS,
   toolUsesSinceLastPrompt,
+  turnStartedAt,
   turnTouchedFiles,
   type TurnRecord,
 } from '../transcript-turn.mjs';
 
 function prompt(text = 'do the thing'): TurnRecord {
   return { type: 'user', message: { content: text } };
+}
+
+function promptAt(timestamp: string): TurnRecord {
+  return { ...prompt(), timestamp };
+}
+
+function taskNotificationAt(timestamp: string): TurnRecord {
+  return {
+    type: 'user',
+    timestamp,
+    origin: { kind: 'task-notification' },
+    message: { content: '<task-notification>done</task-notification>' },
+  };
+}
+
+function compactSummary(): TurnRecord {
+  return {
+    type: 'user',
+    isCompactSummary: true,
+    message: { content: 'This session is being continued' },
+  };
 }
 
 function metaPrompt(): TurnRecord {
@@ -70,6 +92,28 @@ describe('toolUsesSinceLastPrompt', () => {
     expect(toolUsesSinceLastPrompt(records)).toEqual(['Write']);
   });
 
+  it('walks past a task notification to the prompt that dispatched the agent', () => {
+    const records = [
+      prompt(),
+      assistant('Agent'),
+      toolResult(),
+      assistant(),
+      taskNotificationAt('2026-01-01T01:00:00.000Z'),
+      assistant('Read'),
+    ];
+    expect(toolUsesSinceLastPrompt(records)).toEqual(['Agent', 'Read']);
+  });
+
+  it('walks past a compaction summary to the prompt that opened the turn', () => {
+    const records = [
+      prompt(),
+      assistant('Edit'),
+      compactSummary(),
+      assistant(),
+    ];
+    expect(toolUsesSinceLastPrompt(records)).toEqual(['Edit']);
+  });
+
   it('treats a user record of text blocks without a tool_result as the prompt', () => {
     const records: TurnRecord[] = [
       assistant('Edit'),
@@ -91,23 +135,23 @@ describe('toolUsesSinceLastPrompt', () => {
   });
 });
 
+let dir: string | undefined;
+afterEach(() => {
+  if (dir) rmSync(dir, { recursive: true, force: true });
+  dir = undefined;
+});
+
+function transcript(records: (TurnRecord | string)[]): string {
+  dir = mkdtempSync(join(tmpdir(), 'transcript-turn-'));
+  const path = join(dir, 'session.jsonl');
+  const lines = records.map((r) =>
+    typeof r === 'string' ? r : JSON.stringify(r),
+  );
+  writeFileSync(path, lines.join('\n') + '\n');
+  return path;
+}
+
 describe('turnTouchedFiles', () => {
-  let dir: string | undefined;
-  afterEach(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
-    dir = undefined;
-  });
-
-  function transcript(records: (TurnRecord | string)[]): string {
-    dir = mkdtempSync(join(tmpdir(), 'transcript-turn-'));
-    const path = join(dir, 'session.jsonl');
-    const lines = records.map((r) =>
-      typeof r === 'string' ? r : JSON.stringify(r),
-    );
-    writeFileSync(path, lines.join('\n') + '\n');
-    return path;
-  }
-
   it('is undefined with no transcript path', () => {
     expect(turnTouchedFiles(undefined)).toBeUndefined();
     expect(turnTouchedFiles('')).toBeUndefined();
@@ -172,5 +216,37 @@ describe('turnTouchedFiles', () => {
       assistant(),
     ]);
     expect(turnTouchedFiles(path)).toBe(false);
+  });
+});
+
+describe('turnStartedAt', () => {
+  it('is the last human prompt’s timestamp in epoch milliseconds', () => {
+    const path = transcript([
+      promptAt('2026-01-01T00:00:00.000Z'),
+      assistant('Edit'),
+      toolResult(),
+      promptAt('2026-01-01T01:00:00.000Z'),
+      assistant('Read'),
+    ]);
+    expect(turnStartedAt(path)).toBe(1767229200000);
+  });
+
+  it('is the dispatching prompt’s timestamp after a task notification', () => {
+    const path = transcript([
+      promptAt('2026-01-01T00:00:00.000Z'),
+      assistant('Agent'),
+      toolResult(),
+      taskNotificationAt('2026-01-01T01:00:00.000Z'),
+      assistant('Read'),
+    ]);
+    expect(turnStartedAt(path)).toBe(1767225600000);
+  });
+
+  it('is undefined with no transcript path', () => {
+    expect(turnStartedAt(undefined)).toBeUndefined();
+  });
+
+  it('is undefined when the prompt carries no timestamp', () => {
+    expect(turnStartedAt(transcript([prompt(), assistant()]))).toBeUndefined();
   });
 });

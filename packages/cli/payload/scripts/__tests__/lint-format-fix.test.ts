@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -18,7 +19,9 @@ import {
   FIX_BUDGET_MS,
   fixArgs,
   gatePasses,
+  modifiedSince,
   overrunNotice,
+  pathsFromPorcelain,
   planFixSteps,
   plannedSteps,
   resolveFixSettings,
@@ -298,6 +301,49 @@ describe('planFixSteps', () => {
   });
 });
 
+describe('pathsFromPorcelain', () => {
+  it('lists each path after its two status columns', () => {
+    expect(
+      pathsFromPorcelain(' M apps/studio/src/main.ts\n?? notes.md\n'),
+    ).toEqual(['apps/studio/src/main.ts', 'notes.md']);
+  });
+
+  it('reduces a rename to its new path', () => {
+    expect(
+      pathsFromPorcelain(
+        'R  apps/studio/src/old.ts -> apps/studio/src/new.ts\n',
+      ),
+    ).toEqual(['apps/studio/src/new.ts']);
+  });
+});
+
+function fileModifiedAt(dir: string, name: string, iso: string): void {
+  writeFileSync(join(dir, name), 'export {};\n');
+  utimesSync(join(dir, name), new Date(iso), new Date(iso));
+}
+
+describe('modifiedSince', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lint-fix-mtime-'));
+  });
+
+  it('keeps a file modified at or after the cutoff and drops one modified before it', () => {
+    fileModifiedAt(dir, 'before.ts', '2026-01-01T00:00:00.000Z');
+    fileModifiedAt(dir, 'at.ts', '2026-01-01T01:00:00.000Z');
+    fileModifiedAt(dir, 'after.ts', '2026-01-01T02:00:00.000Z');
+
+    expect(
+      modifiedSince(['before.ts', 'at.ts', 'after.ts'], dir, 1767229200000),
+    ).toEqual(['at.ts', 'after.ts']);
+  });
+
+  it('drops a path whose file no longer exists', () => {
+    expect(modifiedSince(['deleted.ts'], dir, 0)).toEqual([]);
+  });
+});
+
 describe('lint-format-fix.mjs on a changed package in a monorepo', () => {
   let root: string;
 
@@ -405,10 +451,21 @@ describe('lint-format-fix.mjs seeded houserules.config.json', () => {
 });
 
 function transcriptWith(...tools: string[]): string {
+  return transcriptPromptedAt(undefined, ...tools);
+}
+
+function transcriptPromptedAt(
+  timestamp: string | undefined,
+  ...tools: string[]
+): string {
   const dir = mkdtempSync(join(tmpdir(), 'lint-fix-transcript-'));
   const path = join(dir, 'transcript.jsonl');
   const records = [
-    { type: 'user', message: { role: 'user', content: 'do the thing' } },
+    {
+      type: 'user',
+      timestamp,
+      message: { role: 'user', content: 'do the thing' },
+    },
     {
       type: 'assistant',
       message: {
@@ -533,6 +590,57 @@ describe('lint-format-fix.mjs gating on the ended turn', () => {
         hook_event_name: 'Stop',
         transcript_path: transcriptWith('Edit'),
         background_tasks: [],
+      }),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+  });
+});
+
+describe('lint-format-fix.mjs scoping the fix to the ended turn', () => {
+  let root: string;
+  let changedFile: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+    stubRunner(root);
+    setRunner(root);
+    changedFile = join(root, 'games/cityville/src/game.ts');
+    appendFileSync(changedFile, 'export const x = 9;\n');
+  });
+
+  it('runs nothing after a Bash turn when the only change predates its prompt', () => {
+    const at = new Date('2026-01-01T00:00:00.000Z');
+    utimesSync(changedFile, at, at);
+
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({
+        hook_event_name: 'Stop',
+        transcript_path: transcriptPromptedAt(
+          '2026-01-01T01:00:00.000Z',
+          'Bash',
+        ),
+      }),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(existsSync(join(root, 'runner-calls.txt')), 'no runner call').toBe(
+      false,
+    );
+  });
+
+  it('fixes the package whose file changed after the prompt', () => {
+    const at = new Date('2026-01-01T01:00:00.000Z');
+    utimesSync(changedFile, at, at);
+
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({
+        hook_event_name: 'Stop',
+        transcript_path: transcriptPromptedAt(
+          '2026-01-01T00:00:00.000Z',
+          'Bash',
+        ),
       }),
     });
 

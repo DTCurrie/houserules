@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 /**
- * Stop and SubagentStop hook. Runs the repo's fix commands on the packages with
- * working-tree changes, then exits 2 with stderr if anything did not auto-fix, so Claude
+ * Stop and SubagentStop hook. Runs the repo's fix commands on the packages whose files the
+ * ended turn modified, then exits 2 with stderr if anything did not auto-fix, so Claude
  * sees only the residue instead of running lint by hand and reading the full output.
+ *
+ * A working-tree change belongs to the turn when its file was modified at or after the
+ * prompt that opened it, so edits the user or an earlier turn left uncommitted are never
+ * fixed. With no transcript to read that prompt from, every working-tree change counts.
  *
  * Exits 0 when stop_hook_active is set (which avoids loops), when the working tree is
  * clean, and when only generated files changed. It also exits 0 before spawning anything
@@ -24,7 +28,8 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
+import { realpathSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -35,7 +40,10 @@ import {
   type HouseConfig,
 } from '@houserules/payload/config';
 import { readStdinJson, repoRoot, tail } from '@houserules/payload/proc';
-import { turnTouchedFiles } from '@houserules/payload/transcript-turn';
+import {
+  turnStartedAt,
+  turnTouchedFiles,
+} from '@houserules/payload/transcript-turn';
 
 interface HookInput {
   stop_hook_active?: boolean;
@@ -231,6 +239,19 @@ const GIT_TIMEOUT_MS = 15_000;
  */
 export const FIX_BUDGET_MS = 90_000;
 
+/** The paths `git status --porcelain` lists, with a rename reduced to its new path. */
+export function pathsFromPorcelain(stdout: string): string[] {
+  return stdout
+    .split('\n')
+    .map((line) =>
+      line
+        .slice(3)
+        .trim()
+        .replace(/^.* -> /, ''),
+    )
+    .filter(Boolean);
+}
+
 function changedPaths(cwd: string): string[] {
   const r = spawnSync('git', ['status', '--porcelain'], {
     encoding: 'utf-8',
@@ -239,10 +260,25 @@ function changedPaths(cwd: string): string[] {
     killSignal: 'SIGKILL',
   });
   if (r.status !== 0 || !r.stdout) return [];
-  return r.stdout
-    .split('\n')
-    .map((line) => line.slice(3).trim())
-    .filter(Boolean);
+  return pathsFromPorcelain(r.stdout);
+}
+
+/**
+ * The `paths`, relative to `cwd`, whose file was modified at or after `sinceMs`. A path
+ * that cannot be stat'd, such as a deletion, is dropped, since there is nothing to fix.
+ */
+export function modifiedSince(
+  paths: string[],
+  cwd: string,
+  sinceMs: number,
+): string[] {
+  return paths.filter((path) => {
+    try {
+      return statSync(join(cwd, path)).mtimeMs >= sinceMs;
+    } catch {
+      return false;
+    }
+  });
 }
 
 function runStep(
@@ -337,7 +373,10 @@ function main(): void {
   if (turnTouchedFiles(input.transcript_path) === false) process.exit(0);
 
   const cwd = root;
-  const paths = changedPaths(cwd);
+  const startedAt = turnStartedAt(input.transcript_path);
+  const changed = changedPaths(cwd);
+  const paths =
+    startedAt === undefined ? changed : modifiedSince(changed, cwd, startedAt);
   const steps = planFixSteps(paths, settings);
   if (steps.length === 0) process.exit(0);
 
