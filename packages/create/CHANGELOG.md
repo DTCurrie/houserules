@@ -1,5 +1,13 @@
 # @houserules/create
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [482a44d]
+- Updated dependencies [482a44d]
+  - @houserules/cli@0.12.0
+
 ## 0.1.2
 
 ### Patch Changes
