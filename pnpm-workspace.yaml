@@ -13,7 +13,7 @@ catalog:
   type-fest: ^5.10.0
   typescript: ^6.0.3
   vitest: ^5.0.5
-  wireit: ^0.14.13
+  wireit: ^0.15.0
 minimumReleaseAgeExclude:
   - '@houserules/api@0.6.0'
   - '@houserules/cli@0.9.1'
