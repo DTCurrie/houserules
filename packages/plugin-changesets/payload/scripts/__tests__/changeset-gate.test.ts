@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  readFileSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,11 +20,22 @@ import {
 const SCRIPT = '.claude/scripts/changeset-gate.mjs';
 const PLUGIN_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
+const PACKAGE_DIRS = ['games/cityville', 'apps/studio'];
+
+/** The shared fixture's packages are private, which the gate skips, so each test flips them. */
 function installChangesets(): string {
-  return useInstalledRepo('pnpm-monorepo', {
+  const root = useInstalledRepo('pnpm-monorepo', {
     modules: 'cs/changesets',
     plugins: [{ name: PLUGIN_ROOT, alias: 'cs' }],
   });
+  for (const dir of PACKAGE_DIRS) {
+    rewritePackageJson(root, dir, (pkg) => {
+      pkg.private = false;
+    });
+  }
+  runIn(root, 'git', ['add', '-A']);
+  runIn(root, 'git', ['commit', '-qm', 'chore: publishable packages']);
+  return root;
 }
 
 function rewritePackageJson(
@@ -50,6 +66,7 @@ describe('checkPackageDrift', () => {
     const report = checkPackageDrift(
       [{ id: 'kit-abc123', declaredPkgs: ['@fix/cityville'] }],
       ['@fix/cityville', '@fix/studio'],
+      [],
     );
 
     expect(report.findings).toEqual([
@@ -70,6 +87,17 @@ describe('checkPackageDrift', () => {
         { id: 'kit-def456', declaredPkgs: ['@fix/studio'] },
       ],
       ['@fix/cityville', '@fix/studio'],
+      [],
+    );
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('reports nothing when a settled changeset from an earlier turn declares the package', () => {
+    const report = checkPackageDrift(
+      [{ id: 'kit-new', declaredPkgs: ['@fix/cityville'] }],
+      ['@fix/cityville', '@fix/studio'],
+      [{ id: 'kit-settled', declaredPkgs: ['@fix/studio'] }],
     );
 
     expect(report.findings).toEqual([]);
@@ -79,6 +107,7 @@ describe('checkPackageDrift', () => {
     const report = checkPackageDrift(
       [{ id: 'kit-abc123', declaredPkgs: ['@fix/cityville', '@fix/studio'] }],
       ['@fix/cityville', '@fix/studio'],
+      [],
     );
 
     expect(report.findings).toEqual([]);
@@ -531,5 +560,249 @@ describe('changeset-gate.mjs, turn tool uses', () => {
 
     expect(r.status, r.stderr).toBe(2);
     expect(r.stderr).toMatch(/h5-package-drift/);
+  });
+});
+
+describe('changeset-gate.mjs, packages and files that ship nothing', () => {
+  function declareStudioOnly(root: string): void {
+    writeFileSync(
+      join(root, '.changeset/kit-studio.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+  }
+
+  function touchCityville(root: string): void {
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const x = 1;\n',
+    );
+  }
+
+  function writeIgnore(root: string, ignore: string[]): void {
+    writeFileSync(
+      join(root, '.changeset/config.json'),
+      JSON.stringify({ ignore }),
+    );
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'chore: changesets config']);
+  }
+
+  it('stays silent for a package the changesets ignore list names', () => {
+    const root = installChangesets();
+    writeIgnore(root, ['@fix/cityville']);
+    touchCityville(root);
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).not.toMatch(/cityville/);
+  });
+
+  it('honors a scope glob in the changesets ignore list', () => {
+    const root = installChangesets();
+    writeIgnore(root, ['@fix/*']);
+    touchCityville(root);
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('still flags the package when the ignore list names only another one', () => {
+    const root = installChangesets();
+    writeIgnore(root, ['@fix/studio']);
+    touchCityville(root);
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('does not throw on a malformed changesets config', () => {
+    const root = installChangesets();
+    writeFileSync(join(root, '.changeset/config.json'), '{not json');
+    touchCityville(root);
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('stays silent for a private package', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.private = true;
+    });
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'chore: private']);
+    touchCityville(root);
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('ignores a root eslint.config.js the files list does not ship', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.files = ['dist'];
+    });
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'chore: files list']);
+    writeFileSync(
+      join(root, 'games/cityville/eslint.config.js'),
+      'export default [];\n',
+    );
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('counts a root js file the files list names', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.files = ['dist', 'fonts.js'];
+    });
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'chore: files list']);
+    writeFileSync(
+      join(root, 'games/cityville/fonts.js'),
+      'export default [];\n',
+    );
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('counts a root eslint.config.js when package.json has no files list', () => {
+    const root = installChangesets();
+    writeFileSync(
+      join(root, 'games/cityville/eslint.config.js'),
+      'export default [];\n',
+    );
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('silences a path matching changesets.gateIgnore that would otherwise fire', () => {
+    const root = installChangesets();
+    touchCityville(root);
+    declareStudioOnly(root);
+    expect(runScript(root, SCRIPT, { input: '{}' }).status).toBe(2);
+
+    const configPath = join(root, '.claude/houserules.config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    config.changesets = { gateIgnore: ['games/cityville/src/**'] };
+    writeFileSync(configPath, JSON.stringify(config));
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+});
+
+describe('changeset-gate.mjs, scoping h5 to the turn', () => {
+  const LONG_AGO = new Date('2026-01-01T00:00:00.000Z');
+  const PROMPT_AT = '2026-01-01T01:00:00.000Z';
+  const AFTER_PROMPT = new Date('2026-01-01T02:00:00.000Z');
+
+  function transcript(root: string, timestamp: string | undefined): string {
+    const path = join(root, 'transcript.jsonl');
+    const records = [
+      {
+        type: 'user',
+        timestamp,
+        message: { role: 'user', content: 'do the thing' },
+      },
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 'toolu_0', name: 'Edit', input: {} },
+          ],
+        },
+      },
+    ];
+    writeFileSync(
+      path,
+      records.map((r) => JSON.stringify(r)).join('\n') + '\n',
+    );
+    return JSON.stringify({ transcript_path: path });
+  }
+
+  function driftedWithChangesetAt(at: Date): string {
+    const root = installChangesets();
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const two = 2;\n',
+    );
+    const file = join(root, '.changeset/kit-drift.md');
+    writeFileSync(file, '---\n"@fix/cityville": patch\n---\n\nMore.\n');
+    utimesSync(file, at, at);
+    return root;
+  }
+
+  it('does not judge a changeset written before the prompt', () => {
+    const root = driftedWithChangesetAt(LONG_AGO);
+
+    const r = runScript(root, SCRIPT, {
+      input: transcript(root, PROMPT_AT),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('judges a changeset written after the prompt', () => {
+    const root = driftedWithChangesetAt(AFTER_PROMPT);
+
+    const r = runScript(root, SCRIPT, {
+      input: transcript(root, PROMPT_AT),
+    });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/studio/);
+  });
+
+  it('counts a changeset written before the prompt as covering its package', () => {
+    const root = driftedWithChangesetAt(AFTER_PROMPT);
+    const settled = join(root, '.changeset/kit-settled.md');
+    writeFileSync(settled, '---\n"@fix/studio": patch\n---\n\nEarlier.\n');
+    utimesSync(settled, LONG_AGO, LONG_AGO);
+
+    const r = runScript(root, SCRIPT, {
+      input: transcript(root, PROMPT_AT),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('falls back to every branch changeset when the prompt has no timestamp', () => {
+    const root = driftedWithChangesetAt(LONG_AGO);
+
+    const r = runScript(root, SCRIPT, {
+      input: transcript(root, undefined),
+    });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/studio/);
   });
 });

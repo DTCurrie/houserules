@@ -33,8 +33,8 @@ select them when `init` asks.
     routing table.
   - **`.claude/reference/design-visual-principles.md`**, a pull-only reference with the layer
     that holds across design systems: contrast thresholds and the ratio formula, hit-target
-    minimums, type scale, spacing rhythm, token coverage. Ships alongside `design-layout.md`
-    and `design-performance.md`.
+    minimums, type scale, spacing rhythm, token coverage. Ships alongside `design-layout.md`,
+    `design-performance.md`, and `design-interaction.md`.
   - **`.claude/scripts/design.mjs`**, the query script.
 
   Scoped to `**/*.css`, `**/*.jsx`, `**/*.tsx`, `**/*.svelte`, `**/*.vue`, and `**/*.astro`

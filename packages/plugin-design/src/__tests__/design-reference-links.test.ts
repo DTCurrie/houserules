@@ -37,6 +37,7 @@ describe('design rule reference links', () => {
       { link: '../reference/design-visual-principles.md', installed: true },
       { link: '../reference/design-layout.md', installed: true },
       { link: '../reference/design-performance.md', installed: true },
+      { link: '../reference/design-interaction.md', installed: true },
     ]);
   });
 
@@ -50,6 +51,7 @@ describe('design rule reference links', () => {
       { link: '../reference/design-visual-principles.md', installed: true },
       { link: '../reference/design-layout.md', installed: true },
       { link: '../reference/design-performance.md', installed: true },
+      { link: '../reference/design-interaction.md', installed: true },
       { link: '../reference/design-tailwind-theming.md', installed: true },
     ]);
   });
@@ -65,6 +67,7 @@ describe('design rule reference links', () => {
       { link: '../reference/design-visual-principles.md', installed: true },
       { link: '../reference/design-layout.md', installed: true },
       { link: '../reference/design-performance.md', installed: true },
+      { link: '../reference/design-interaction.md', installed: true },
       { link: '../reference/design-game-hud.md', installed: true },
     ]);
   });

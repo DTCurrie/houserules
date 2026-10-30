@@ -144,19 +144,19 @@ the resume grep in §9.
 ## 4. Dispatch a wave — one message, one worker per slice
 
 By default, §1 through §8 run one layer down, one `phase-orchestrator` spawn per phase.
-`references/nested.md` carries the brief, the relay, and the `all` loop (also the context-size gate).
+`references/nested.md` carries the brief, the relay, the `all` loop, and the context-size gate.
 
-Send every slice in the wave as parallel `Agent` calls **in a single message**, each with
+Send the wave as parallel `Agent` calls **in a single message**, up to the "Wave ceiling" in
+`references/slicing.md` and batched past it, each with
 `subagent_type: task-worker` plus the `model` and `effort` its shape earns, from the table in
 `references/slicing.md`. (No `task-worker` installed? The same file carries the fallback.)
 
-Mark the slices `DISPATCHED` before you send.
+Mark the slices `DISPATCHED` first.
 
-A slice whose steps must fetch a page or search the web takes `task-worker-research`. If that agent is
-absent, use the same fallback.
+A slice that must fetch a page or search the web takes `task-worker-research`, or the same fallback.
 
 Before dispatching, check whether a rule scoped to the wave's paths needs an MCP tool the worker's
-`tools:` line lacks. `orchestrate.workerTools` is the fix, and `references/slicing.md` has the recipe.
+`tools:` line lacks. The fix is `orchestrate.workerTools`, with its recipe in `references/slicing.md`.
 
 `task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice,
 and **never restates or overrides a standing rule**. The one most often violated is the fixer
@@ -172,7 +172,7 @@ prohibition (below).
 > report.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
 
-Never hand a worker the whole plan. It gets its slice, its seam, and its constraints.
+Hand a worker its slice, seam, and constraints, never the whole plan.
 
 ### The status table — the one shape you print between waves
 

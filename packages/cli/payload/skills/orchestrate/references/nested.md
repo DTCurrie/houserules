@@ -19,6 +19,7 @@ Gates: none | <ignored gate keys, comma-separated>
 Domain: all | <path roots the orchestrator and its workers may write, comma-separated>
 Siblings: none | <the domains of the other orchestrators in flight>
 Seam: none | <paths the layer above wrote, comma-separated>
+Workers: <n, optional: the wave ceiling for this orchestrator>
 Ruling: <on a resume only: the answer to the last NEEDS_RULING, verbatim>
 ```
 
@@ -96,6 +97,10 @@ the ready set. `Domain:` is copied from the phase header, and `Siblings:` from t
 this plan or another. It needs no plan slug, because domains are paths. A comma list, `2,3`, is an
 explicit set. The dispatcher refuses it before any spawn when a domain is missing or two overlap,
 and names the overlap.
+
+**Workers.** Under `all`, the main conversation runs `node .claude/scripts/wave-ceiling.mjs` once and
+divides `ceiling` across the ready set, at least one each. It sends each orchestrator its share as
+`Workers:`. An absent line means the orchestrator runs the script itself.
 
 **Ownership.** `ROADMAP.md` is the main conversation's: the `IN PROGRESS` flip before each spawn,
 the `DONE` flip on each report, the `## Log` line, the `**Updated:**` bump, and the `plan-lint.mjs`

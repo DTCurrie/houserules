@@ -97,6 +97,21 @@ describe('design-review', () => {
     expect(agentText).toMatch(/defaults/);
   });
 
+  it('checks a drag handle for a hold timer', () => {
+    const root = installed();
+
+    const agentText = readFileSync(
+      join(root, '.claude/agents/design-reviewer.md'),
+      'utf8',
+    );
+    const checks = agentText.slice(
+      agentText.indexOf('## What you check'),
+      agentText.indexOf('## When to ask for a rendered check'),
+    );
+
+    expect(checks).toMatch(/hold timer/);
+  });
+
   it('installs design-checks.mjs as a lib through the design module', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'design/design',

@@ -181,6 +181,12 @@ const HouseConfigSchema = z.strictObject({
       enabled: z.boolean().optional(),
       stopCheck: z.boolean().optional(),
       baseBranch: z.string().optional(),
+      gateIgnore: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Globs of repo-relative paths the Stop-hook changeset gate never counts as a touched package, for edits that ship nothing.',
+        ),
     })
     .optional(),
 
@@ -224,10 +230,18 @@ const HouseConfigSchema = z.strictObject({
         .describe(
           'Extra tools appended to the `tools:` line of task-worker and every installed variant by `houserules update`. Each entry is a full callable name, `mcp__<server>__<tool>` such as "mcp__svelte__svelte-autofixer", or a server pattern, `mcp__<server>` or `mcp__<server>__*` (Claude Code 2.1.299+), for an MCP tool a repo rule requires.',
         ),
+      maxWorkers: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe(
+          'The most task-workers one /orchestrate wave dispatches at once. Read at runtime by `wave-ceiling.mjs`, which otherwise derives the ceiling from the machine: half the CPU count, at least 2, halved again when the one-minute load is at or above the CPU count. Set it higher than the CPU count and it still wins, since it is an explicit override.',
+        ),
     })
     .optional()
     .describe(
-      'Read at plan time by the orchestrate module. Top level like `projects`, since the module is built in and has no `plugins[].config` entry.',
+      'Read at plan time by the orchestrate module, and at runtime by `wave-ceiling.mjs`. Top level like `projects`, since the module is built in and has no `plugins[].config` entry.',
     ),
 
   ledgers: z

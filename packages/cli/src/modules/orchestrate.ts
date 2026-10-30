@@ -155,6 +155,11 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       'plan-lint.mjs',
       'validate a .claude/plans/ workspace: slice status vocabulary, ROADMAP/sub-plan sync, fix.onSubagentStop, blast-radius artifact shape',
     ),
+    script(
+      id,
+      'wave-ceiling.mjs',
+      'print the most workers one /orchestrate wave dispatches at once, from the CPU count, the load average, and orchestrate.maxWorkers',
+    ),
     ...chosenVariants.map((variant): Action => ({
       kind: 'write',
       dest: `.claude/agents/task-worker-${variant}.md`,

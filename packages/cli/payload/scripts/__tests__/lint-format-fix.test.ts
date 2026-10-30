@@ -649,6 +649,58 @@ describe('lint-format-fix.mjs scoping the fix to the ended turn', () => {
   });
 });
 
+describe('lint-format-fix.mjs on a file in a directory git has never seen', () => {
+  let root: string;
+  let newDir: string;
+
+  function runAfterPrompt(...names: string[]): ReturnType<typeof runScript> {
+    const before = new Date('2026-01-01T00:00:00.000Z');
+    utimesSync(join(root, 'games/cityville/src/game.ts'), before, before);
+    const after = new Date('2026-01-01T02:00:00.000Z');
+    for (const name of names) {
+      writeFileSync(join(newDir, name), 'export const y = 1;\n');
+      utimesSync(join(newDir, name), after, after);
+    }
+    return runScript(root, SCRIPT, {
+      input: JSON.stringify({
+        hook_event_name: 'Stop',
+        transcript_path: transcriptPromptedAt(
+          '2026-01-01T01:00:00.000Z',
+          'Bash',
+        ),
+      }),
+    });
+  }
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+    stubRunner(root);
+    setRunner(root);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const x = 9;\n',
+    );
+    newDir = join(root, 'games/cityville/src/levels/boss');
+    mkdirSync(newDir, { recursive: true });
+  });
+
+  it('fixes the package when the new directory holds a lintable file beside a non-lintable one', () => {
+    const r = runAfterPrompt('Arena.tsx', 'arena.bin');
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+  });
+
+  it('runs nothing when the new directory holds only a non-lintable file', () => {
+    const r = runAfterPrompt('arena.bin');
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(existsSync(join(root, 'runner-calls.txt')), 'no runner call').toBe(
+      false,
+    );
+  });
+});
+
 describe('runFixSteps against the fix budget', () => {
   let root: string;
   const settings = resolveFixSettings(baseConfig());

@@ -57,7 +57,13 @@ export interface HouseConfig {
     prCreate?: boolean;
     custom?: { pattern: string; message: string }[];
   };
-  changesets?: { enabled?: boolean; stopCheck?: boolean; baseBranch?: string };
+  changesets?: {
+    enabled?: boolean;
+    stopCheck?: boolean;
+    baseBranch?: string;
+    /** Repo-relative path globs the Stop-hook changeset gate never counts. */
+    gateIgnore?: string[];
+  };
   ledger?: { enabled?: boolean };
   ledgers?: { dir?: string };
   readGuard?: { enabled?: boolean; maxBytes?: number; denyGlobs?: string[] };
@@ -66,6 +72,8 @@ export interface HouseConfig {
   instructionsFile?: 'CLAUDE.md' | 'AGENTS.md';
   /** Read by the design plugin's `design.mjs`: the stylesheet Tailwind compiles, repo-root-relative. */
   design?: { themeEntry?: string };
+  /** `maxWorkers` is read by `wave-ceiling.mjs`: the per-wave worker ceiling, overriding the machine-derived one. */
+  orchestrate?: { workerTools?: string[]; maxWorkers?: number };
   targets: ConfigTarget[];
   [key: string]: unknown;
 }

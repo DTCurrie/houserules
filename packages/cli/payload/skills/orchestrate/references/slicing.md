@@ -112,6 +112,21 @@ plan's status and the wave's when it lands.
 than the reason it was canceled for. Read its brief before deleting it and move whatever is still
 wanted into another slice, or you will rediscover the orphaned half several slices later.
 
+## Wave ceiling
+
+Run `node .claude/scripts/wave-ceiling.mjs` before every dispatch and read `ceiling` from its JSON
+line. It is a number you read, not a limit the harness enforces. Weigh each slice in the wave. An
+acceptance that boots a test runner, type-checker, or linter counts as one worker, and a grep-or-script
+acceptance counts as half. When the wave's weight is above the ceiling, dispatch the first batch up to
+the ceiling, close it at a barrier like any wave, then send the next batch.
+
+A `Workers: <n>` line in a nested brief replaces the script's number. `orchestrate.maxWorkers` in
+`.claude/houserules.config.json` overrides the machine-derived ceiling for the repo.
+
+The lower slice bound sits beside the upper one in SKILL.md §1. A brief under about three steps, or one
+tiny module, merges into a sibling slice in the same domain instead of taking its own worker, since
+every worker pays a cold acceptance boot.
+
 ## Dispatch details moved out of the skill
 
 - **Model and effort per slice.** Classify the slice by its shape, then pass both Agent parameters

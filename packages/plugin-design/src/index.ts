@@ -147,6 +147,11 @@ function designModule(api: PluginApi): ModuleDef {
           'design-performance',
           'pull-only guide to the design decisions that cost rendering performance',
         ),
+        api.payload.reference(
+          id,
+          'design-interaction',
+          'pull-only guide to pointer gestures: when a drag starts, what a hold delay is for',
+        ),
         api.payload.script(
           id,
           'design.mjs',

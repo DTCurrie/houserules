@@ -60,6 +60,38 @@ describe('parseHouseConfig', () => {
     expect(() => parseHouseConfig(raw)).toThrow(HouseConfigError);
   });
 
+  it('accepts orchestrate.maxWorkers as a positive integer', () => {
+    const config = { ...minimalConfig, orchestrate: { maxWorkers: 16 } };
+    expect(parseHouseConfig(JSON.stringify(config))).toEqual(config);
+  });
+
+  it.each([0, -2, 2.5])(
+    'rejects orchestrate.maxWorkers of %s',
+    (maxWorkers) => {
+      const raw = JSON.stringify({
+        ...minimalConfig,
+        orchestrate: { maxWorkers },
+      });
+      expect(() => parseHouseConfig(raw)).toThrow(HouseConfigError);
+    },
+  );
+
+  it('accepts changesets.gateIgnore as a list of path globs', () => {
+    const config = {
+      ...minimalConfig,
+      changesets: { gateIgnore: ['packages/*/eslint.config.js'] },
+    };
+    expect(parseHouseConfig(JSON.stringify(config))).toEqual(config);
+  });
+
+  it('rejects a non-array changesets.gateIgnore', () => {
+    const raw = JSON.stringify({
+      ...minimalConfig,
+      changesets: { gateIgnore: 'packages/*/eslint.config.js' },
+    });
+    expect(() => parseHouseConfig(raw)).toThrow(HouseConfigError);
+  });
+
   it('rejects a missing required field', () => {
     const raw = JSON.stringify({ version: 2, targets: [] });
     try {
