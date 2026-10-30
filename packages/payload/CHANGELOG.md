@@ -1,5 +1,12 @@
 # @houserules/payload
 
+## 0.4.2
+
+### Patch Changes
+
+- 482a44d: Orchestrate caps each wave at a machine-derived worker ceiling, settable via orchestrate.maxWorkers.
+- 482a44d: Changeset gate skips ignored, private, and unshipped-file packages, scopes to the turn, and honors changesets.gateIgnore.
+
 ## 0.4.1
 
 ### Patch Changes

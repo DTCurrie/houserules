@@ -1,5 +1,11 @@
 # @houserules/plugin-design
 
+## 0.4.1
+
+### Patch Changes
+
+- 482a44d: A pull-only interaction reference and the design reviewer flag a hold delay on a dedicated drag handle.
+
 ## 0.4.0
 
 ### Minor Changes

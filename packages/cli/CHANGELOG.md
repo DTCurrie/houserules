@@ -1,5 +1,19 @@
 # @houserules/cli
 
+## 0.12.0
+
+### Minor Changes
+
+- 482a44d: Orchestrate caps each wave at a machine-derived worker ceiling, settable via orchestrate.maxWorkers.
+
+### Patch Changes
+
+- 482a44d: Lint fixer now reaches files created in directories git has never tracked.
+- Updated dependencies [482a44d]
+- Updated dependencies [482a44d]
+  - @houserules/api@0.7.0
+  - @houserules/payload@0.4.2
+
 ## 0.11.0
 
 ### Minor Changes

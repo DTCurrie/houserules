@@ -1,5 +1,11 @@
 # @houserules/plugin-changesets
 
+## 0.3.1
+
+### Patch Changes
+
+- 482a44d: Changeset gate skips ignored, private, and unshipped-file packages, scopes to the turn, and honors changesets.gateIgnore.
+
 ## 0.3.0
 
 ### Minor Changes
