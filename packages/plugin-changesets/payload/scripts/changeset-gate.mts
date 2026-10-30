@@ -21,13 +21,31 @@
  * runs every gate as usual.
  */
 
-import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { listWorkspacePackages } from '@houserules/payload/workspaces';
-import { git, readStdinJson, repoRoot } from '@houserules/payload/proc';
-import { turnTouchedFiles } from '@houserules/payload/transcript-turn';
+import {
+  listWorkspacePackages,
+  type WorkspacePackage,
+} from '@houserules/payload/workspaces';
+import { loadConfigSafe } from '@houserules/payload/config';
+import {
+  git,
+  globToRe,
+  readStdinJson,
+  repoRoot,
+} from '@houserules/payload/proc';
+import {
+  turnStartedAt,
+  turnTouchedFiles,
+} from '@houserules/payload/transcript-turn';
 import {
   emptyReport,
   hasErrors,
@@ -73,20 +91,27 @@ export interface PendingChangeset {
  * declared packages are missing one the current diff touches.
  */
 /**
- * Reports a package the diff touches that **no** pending changeset declares.
+ * Reports a package the diff touches that **no** pending changeset declares. `pending` is the
+ * set judged this turn, and `settled` is the branch's other pending changesets, which count
+ * toward coverage but are never reported on.
  *
  * The union matters. Comparing each changeset against the whole diff individually treats every
  * sibling changeset as drift, so a repo with one changeset per package reports every one of them
  * as wrong forever. That is what happened the first time this gate ran for real, against 16
- * pending first-release changesets.
+ * pending first-release changesets. A settled sibling counts for the same reason: once the gate
+ * scoped itself to the turn, a changeset written two turns earlier covered its package and the
+ * gate reported it anyway.
  */
 export function checkPackageDrift(
   pending: PendingChangeset[],
   touchedPkgs: string[],
+  settled: PendingChangeset[],
 ): Report {
   const report = emptyReport();
   if (pending.length === 0) return report;
-  const covered = new Set(pending.flatMap((cs) => cs.declaredPkgs));
+  const covered = new Set(
+    [...pending, ...settled].flatMap((cs) => cs.declaredPkgs),
+  );
   const missing = touchedPkgs.filter((p) => !covered.has(p));
   if (missing.length === 0) return report;
   report.findings.push({
@@ -251,6 +276,25 @@ function newChangesetIds(root: string): Set<string> {
   return ids;
 }
 
+/** The ids whose changeset file was last written at or after `turnStart`, epoch milliseconds. */
+function writtenSinceTurnStart(
+  root: string,
+  ids: Set<string>,
+  turnStart: number,
+): Set<string> {
+  return new Set(
+    [...ids].filter((id) => {
+      try {
+        return (
+          statSync(join(root, '.changeset', `${id}.md`)).mtimeMs >= turnStart
+        );
+      } catch {
+        return true;
+      }
+    }),
+  );
+}
+
 /**
  * True for a path whose change cannot reach a published package.
  *
@@ -307,33 +351,61 @@ const ALWAYS_PACKED =
   /^(readme|license|licence|notice|copying|changelog|changes|history)(\.|$)/i;
 
 /**
- * True for a package-root markdown file the published tarball cannot contain.
+ * True for a package-root file the published tarball cannot contain.
  *
- * npm packs a root doc only when `files` names it (the CLI ships CONVENTIONS.md that way) or
- * when npm always includes it (README, LICENSE, CHANGELOG and their variants). Anything else
- * at the package root, most commonly a CLAUDE.md, is repo documentation: it ships no bytes,
- * so it owes no changeset entry. A `files` entry is matched by exact name. A glob that
- * happens to cover the doc is the same rare false negative the tsconfig exclusion above
- * already trades for, and a package with no `files` list packs everything, so its docs count.
+ * npm packs a root file only when `files` names it (the CLI ships CONVENTIONS.md that way) or
+ * when npm always includes it (README, LICENSE, CHANGELOG and their variants, and package.json).
+ * Anything else at the package root, such as a CLAUDE.md or an eslint.config.js, is repo
+ * tooling or documentation: it ships no bytes, so it owes no changeset entry. A `files` entry
+ * is matched by exact name. A glob that happens to cover the file is the same rare false
+ * negative the tsconfig exclusion above already trades for, and a package with no `files` list
+ * packs everything, so its root files count.
  */
-function unshippedRootDoc(root: string, path: string, relDir: string): boolean {
+function unshippedRootFile(
+  root: string,
+  path: string,
+  relDir: string,
+): boolean {
   const name = path.startsWith(`${relDir}/`)
     ? path.slice(relDir.length + 1)
     : path;
-  if (name.includes('/') || !/\.md$/i.test(name) || ALWAYS_PACKED.test(name))
+  if (name.includes('/') || name === 'package.json' || ALWAYS_PACKED.test(name))
     return false;
+  const pkg = readPackageJson(root, relDir);
+  if (!pkg || !Array.isArray(pkg.files)) return false;
+  return !pkg.files.some(
+    (entry) =>
+      typeof entry === 'string' &&
+      entry.replace(/^\.\//, '').replace(/\/$/, '') === name,
+  );
+}
+
+function readPackageJson(
+  root: string,
+  relDir: string,
+): { files?: unknown; private?: unknown } | null {
   try {
-    const pkg = JSON.parse(
+    return JSON.parse(
       readFileSync(join(root, relDir, 'package.json'), 'utf8'),
-    ) as { files?: unknown };
-    if (!Array.isArray(pkg.files)) return false;
-    return !pkg.files.some(
-      (entry) =>
-        typeof entry === 'string' &&
-        entry.replace(/^\.\//, '').replace(/\/$/, '') === name,
-    );
+    ) as { files?: unknown; private?: unknown };
   } catch {
-    return false;
+    return null;
+  }
+}
+
+/** The `ignore` entries of `.changeset/config.json`, empty when it is missing or malformed. */
+function changesetsIgnore(root: string): string[] {
+  try {
+    const config = JSON.parse(
+      readFileSync(join(root, '.changeset', 'config.json'), 'utf8'),
+    ) as { ignore?: unknown };
+    return Array.isArray(config.ignore)
+      ? config.ignore.filter(
+          (entry): entry is string => typeof entry === 'string',
+        )
+      : [];
+  } catch {
+    return [];
   }
 }
 
@@ -359,21 +431,41 @@ function touchedPackages(root: string): string[] {
   }
   // A branch-committed path diffs against the merge base, a merely-dirty one against HEAD.
   const committedSet = new Set(committed);
+  const gateIgnore = (loadConfigSafe(root).changesets?.gateIgnore ?? []).map(
+    globToRe,
+  );
+  const ignoredPackage = changesetsIgnore(root).map(globToRe);
   const touched = [...dirty, ...committed].filter(
     (p) =>
       !isChangesetMd(p) &&
+      !gateIgnore.some((re) => re.test(p)) &&
       !shipsNothing(p) &&
       !wireitOnlyEdit(root, p, committedSet.has(p) ? mergeBase : 'HEAD'),
   );
   const names = new Set<string>();
   for (const path of touched) {
-    const owner = pkgs.find(
-      (pkg) => path === pkg.relDir || path.startsWith(`${pkg.relDir}/`),
-    );
-    if (owner && !unshippedRootDoc(root, path, owner.relDir))
-      names.add(owner.name);
+    const name = gatedOwnerName(root, path, pkgs, ignoredPackage);
+    if (name) names.add(name);
   }
   return [...names];
+}
+
+/**
+ * The name of the package owning `path` when its edit owes a changeset, or null when no
+ * package owns it, changesets ignores the owner, the owner is private, or the path ships nothing.
+ */
+function gatedOwnerName(
+  root: string,
+  path: string,
+  pkgs: WorkspacePackage[],
+  ignoredPackage: RegExp[],
+): string | null {
+  const owner = pkgs.find(
+    (pkg) => path === pkg.relDir || path.startsWith(`${pkg.relDir}/`),
+  );
+  if (!owner || ignoredPackage.some((re) => re.test(owner.name))) return null;
+  if (readPackageJson(root, owner.relDir)?.private === true) return null;
+  return unshippedRootFile(root, path, owner.relDir) ? null : owner.name;
 }
 
 function main(): void {
@@ -390,15 +482,27 @@ function main(): void {
     report.declined.push(...DECLINED);
 
     const pendingFiles = readPendingChangesets(root);
-    const newIds = newChangesetIds(root);
-    const pending: PendingChangeset[] = [...newIds]
+    const branchIds = newChangesetIds(root);
+    const turnStart = turnStartedAt(input.transcript_path);
+    // A changeset last written before the prompt belongs to an earlier turn.
+    const newIds =
+      turnStart === undefined
+        ? branchIds
+        : writtenSinceTurnStart(root, branchIds, turnStart);
+    const toPending = (id: string): PendingChangeset => ({
+      id,
+      declaredPkgs: parseDeclaredPackages(pendingFiles.get(id)!),
+    });
+    const pending = [...newIds]
       .filter((id) => pendingFiles.has(id))
-      .map((id) => ({
-        id,
-        declaredPkgs: parseDeclaredPackages(pendingFiles.get(id)!),
-      }));
+      .map(toPending);
+    // This branch's own changesets from earlier turns. One already on main belongs to another
+    // feature and never covers this diff.
+    const settled = [...branchIds]
+      .filter((id) => !newIds.has(id) && pendingFiles.has(id))
+      .map(toPending);
     report.findings.push(
-      ...checkPackageDrift(pending, touchedPackages(root)).findings,
+      ...checkPackageDrift(pending, touchedPackages(root), settled).findings,
     );
 
     if (input.transcript_path && existsSync(input.transcript_path)) {

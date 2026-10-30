@@ -20,8 +20,9 @@ The message that spawned you is the brief. `references/nested.md` defines it onc
 `--ignore-gates`. `Domain:` bounds every slice's `owns` and every seam file you write. `Siblings:`
 are domains other orchestrators own, and you never write there. Read each `Seam:` path before
 slicing and never rewrite it, because a change it needs goes up under `Requests`. A finding in a
-sibling's domain goes under `Out of scope` and is never fixed. `Ruling:` arrives on a resume, and
-you continue where you stopped.
+sibling's domain goes under `Out of scope` and is never fixed. `Workers:` is the wave ceiling, and
+absent it you run `node .claude/scripts/wave-ceiling.mjs` yourself. `Ruling:` arrives on a resume,
+and you continue where you stopped.
 
 ## When you return
 
@@ -40,11 +41,12 @@ under `Ruling needed`.
 
 ## Dispatching a wave
 
-Send the wave as parallel `Agent` calls in one message. Then end your turn and wait for the
-completion notifications. Never return `WAVE_CLOSED` before every worker in the wave has reported. A
-notification saying a worker awaits its own background work is interim and not its report. The
-excuse is "the wave was mostly done, so I reported what I had", and the answer is to end the turn
-and wait.
+Send the wave as parallel `Agent` calls in one message, batched to that ceiling per
+`references/slicing.md` "Wave ceiling", each batch closed at a barrier before the next goes out.
+Then end your turn and wait for the completion notifications. Never return `WAVE_CLOSED` before
+every worker in the wave has reported. A notification saying a worker awaits its own background
+work is interim and not its report. The excuse is "the wave was mostly done, so I reported what I
+had", and the answer is to end the turn and wait.
 
 When every live worker is itself waiting on background work, the harness sees no live child and
 nudges you to hand back (`handback-send-enforce`). Do not. A hand back ends your run with the wave

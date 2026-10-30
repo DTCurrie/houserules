@@ -252,13 +252,21 @@ export function pathsFromPorcelain(stdout: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Every changed path, with `--untracked-files=all` so a file in a directory git has never seen
+ * lists on its own line instead of collapsing into one extensionless directory entry.
+ */
 function changedPaths(cwd: string): string[] {
-  const r = spawnSync('git', ['status', '--porcelain'], {
-    encoding: 'utf-8',
-    cwd,
-    timeout: GIT_TIMEOUT_MS,
-    killSignal: 'SIGKILL',
-  });
+  const r = spawnSync(
+    'git',
+    ['status', '--porcelain', '--untracked-files=all'],
+    {
+      encoding: 'utf-8',
+      cwd,
+      timeout: GIT_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+    },
+  );
   if (r.status !== 0 || !r.stdout) return [];
   return pathsFromPorcelain(r.stdout);
 }

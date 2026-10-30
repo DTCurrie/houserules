@@ -90,6 +90,28 @@ describe('design layout and performance references', () => {
     );
   });
 
+  it('installs design-interaction.md with no frontmatter, since it is pull-only', () => {
+    const root = installed();
+
+    expect(readInstalledReference(root, 'design-interaction.md')).not.toMatch(
+      /^---/,
+    );
+  });
+
+  it('keeps the drag-handle clause in design-interaction.md and out of the rule body', () => {
+    const root = installed();
+
+    const ruleText = readFileSync(
+      join(root, '.claude/rules/design.md'),
+      'utf8',
+    );
+    const reference = readInstalledReference(root, 'design-interaction.md');
+
+    expect(reference).toMatch(/^## Dedicated handles drag on movement/m);
+    expect(ruleText).toContain('design-interaction.md');
+    expect(ruleText).not.toMatch(/^### Press and drag$/m);
+  });
+
   it('pairs every mention of 44 as a target size with WCAG 2.5.5, never presenting it as a floor', () => {
     const root = installed();
 

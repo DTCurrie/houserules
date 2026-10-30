@@ -194,6 +194,7 @@ describe('orchestrate', () => {
       'Domain:',
       'Siblings:',
       'Seam:',
+      'Workers:',
       'Ruling:',
     ])('defines the %s brief label in nested.md', (label) => {
       expect(nestedText).toContain(label);
@@ -274,6 +275,25 @@ describe('orchestrate', () => {
       expect(dests).toContain('.claude/agents/phase-orchestrator.md');
       expect(dests).toContain(
         '.claude/skills/orchestrate/references/nested.md',
+      );
+    });
+
+    it('pins the wave ceiling across the skill, references, agent, and script install', () => {
+      const slicing = readFileSync(
+        join(root, '.claude/skills/orchestrate/references/slicing.md'),
+        'utf8',
+      );
+
+      expect(slicing).toContain('## Wave ceiling');
+      expect(slicing).toContain('wave-ceiling.mjs');
+      expect(skillText).toContain('Wave ceiling');
+      expect(orchestratorText).toContain('Workers:');
+      expect(
+        existsSync(join(root, '.claude/scripts/wave-ceiling.mjs')),
+        'wave-ceiling.mjs installed',
+      ).toBe(true);
+      expect(Object.keys(manifestOf(root).files)).toContain(
+        '.claude/scripts/wave-ceiling.mjs',
       );
     });
 

@@ -30,6 +30,10 @@ the judgment those checks cannot make.
      Reuse is the default. A new token is a design decision, not a convenience.
    - Whether visual emphasis lands on the primary action, or a secondary element is
      competing with it.
+   - Whether a drag handle waits on a hold timer before it moves. Judge by the element's
+     role: if its press does nothing but start a drag (a grip, splitter, resize bar, or
+     reorder handle), a hold delay is a finding. A delay is acceptable only where the same
+     press also has another primary action.
    - Whether the design carries three or more of the generated defaults listed under
      "Generated defaults" in `.claude/reference/design-visual-principles.md`. If it does,
      flag it once, list the defaults present, and ask whether each is a choice for this
