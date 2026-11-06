@@ -141,7 +141,7 @@
     "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.13.0",
-    "globals": "^17.13.0",
+    "globals": "^17.14.0",
     "knip": "^6.43.0",
     "prettier": "catalog:",
     "typescript": "catalog:",
