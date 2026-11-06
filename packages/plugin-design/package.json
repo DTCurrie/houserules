@@ -111,7 +111,7 @@
     "@houserules/payload": "workspace:*",
     "@houserules/test": "workspace:*",
     "@arethetypeswrong/cli": "catalog:",
-    "@tailwindcss/oxide": "^4.3.3",
+    "@tailwindcss/oxide": "^4.3.4",
     "@types/node": "catalog:",
     "publint": "catalog:",
     "tailwindcss": "^4.3.3",
