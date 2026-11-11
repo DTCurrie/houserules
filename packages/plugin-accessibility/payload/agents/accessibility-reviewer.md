@@ -3,7 +3,7 @@ description: 'Read-only reviewer for accessibility (a11y, WCAG) in changed marku
 name: 'accessibility-reviewer'
 tools: Read, Grep, Glob, Bash
 model: haiku
-effort: low
+effort: medium
 omitClaudeMd: true
 ---
 

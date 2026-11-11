@@ -534,12 +534,28 @@ describe('orchestrate plan(), phase-orchestrator', () => {
     );
 
     expect(advice.join('\n')).toMatch(
-      /By default it hands each phase to a sonnet phase-orchestrator[^]*--flat keeps the slicing/,
+      /By default it hands each phase to a phase-orchestrator[^]*--flat keeps the slicing/,
     );
   });
 
   it('hints the one-layer-down default', () => {
     expect(hint()).toMatch(/phase-orchestrator/);
+  });
+
+  it('names no model tier in the hint, any reason, or the advise text', () => {
+    const answers = {
+      ...baseAnswers({ moduleOptions: { orchestrate: ['research'] } }),
+      moduleIds: ['orchestrate', 'plans'],
+    };
+    const strings = plan({} as Ctx, answers).flatMap((action) => {
+      if (action.kind === 'advise') return [action.text];
+      return 'reason' in action ? [action.reason] : [];
+    });
+
+    expect(strings.length).toBeGreaterThan(1);
+    for (const text of [hint(), ...strings]) {
+      expect(text).not.toMatch(/\b(sonnet|opus|haiku|fable)\b/i);
+    }
   });
 });
 

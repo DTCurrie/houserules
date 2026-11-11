@@ -1,14 +1,14 @@
 ---
 name: verify-changed
-description: Verify changed packages and their dependents off-context by running check, test, and lint across a workspace or monorepo. Use directly only when the mechanical gates alone are wanted, such as after a dependency bump or a build-breaking edit. Where `/ready` is installed, it is the full pre-handoff pass.
+description: Verify changed packages and their dependents off-context by running check, test, and lint across a workspace or monorepo. Use directly only when the mechanical gates alone are wanted. `/ready` is the full pre-handoff pass.
 allowed-tools: Bash(node .claude/scripts/verify-changed.mjs:*), Read
 ---
 
 Verify the current change **without pulling the full test transcript into this context.**
 
 The helper already compacts its output to one line per package plus a short residue tail per
-failure, so a subagent buys nothing. A subagent blocked on one multi-minute foreground call emits
-no progress and is aborted at the harness stall timeout.
+failure, so a subagent buys nothing. A subagent's foreground call blocks it until Claude Code moves the
+call to the background anyway, so the subagent saves nothing.
 
 ## What to do
 

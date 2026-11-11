@@ -64,7 +64,7 @@ checkout, run `node /path/to/houserules/packages/cli/dist/cli.js init`.
 
 Requires Node 22 or newer.
 
-Claude Code 2.1.288 or later is the floor. `doctor` warns when the running version is below the highest one an installed module relies on, and the default modules need 2.1.295.
+Claude Code 2.1.314 or later is the floor. `doctor` warns when the running version is below the highest one the install relies on, and an install with an agent pinned to `model: fable` needs 2.1.321.
 
 ## What `init` does
 

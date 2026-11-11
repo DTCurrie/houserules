@@ -23,7 +23,7 @@ this repo installed.
 The rule assumes a test you are writing. When you are changing behavior instead, the test
 that covers it is part of the change, not a follow-up.
 
-## Rule — follow without deliberation
+## Rule
 
 ### Whether the test is worth writing
 

@@ -13,7 +13,7 @@ paths:
 Domain guidance for tests that cover a simulation, a tick loop, seeded randomness, or floating
 arithmetic. See `testing.md` for the runner-agnostic rules this guide assumes.
 
-## Rule — follow without deliberation
+## Rule
 
 - **A deterministic sim pins exact state.** If the code under test takes `dt` (delta time) as a parameter
   and reads no clock and no `Math.random`, assert with `toBe` or `toEqual`. A tolerance on a

@@ -1,6 +1,6 @@
 ---
 name: research-synth
-description: Synthesis agent. Reads a set of raw research or gap-analysis reports plus the plan baseline, reconciles them into ONE reference document at the path it is given, and flags contradictions and gaps between the inputs. Dispatched by planned synthesis phases under `.claude/plans/`. Not for implementation.
+description: Synthesis agent. Reconciles raw research or gap-analysis reports and the plan baseline into ONE reference document, flagging contradictions and gaps. Dispatched by planned synthesis phases under `.claude/plans/`.
 tools: Read, Grep, Glob, Bash, WebFetch, Write
 model: fable
 effort: high

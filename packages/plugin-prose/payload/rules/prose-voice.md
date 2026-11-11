@@ -31,7 +31,7 @@ rule is installed.
 This governs prose you write. It does not govern prose you are quoting, or text you are
 editing on the user's behalf in their voice.
 
-## Rule — follow without deliberation
+## Rule
 
 - **Write plain sentences.** Subject, verb, object. A sentence that needs to be re-read to
   parse should be split into two.

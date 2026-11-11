@@ -1,4 +1,5 @@
 import type { Corpus, FileUsage, UsageSlice } from './transcript-events.js';
+import { REAL_SUBAGENT_USAGE_FROM } from './transcript-events.js';
 
 interface TokenTotals {
   turns: number;
@@ -10,6 +11,7 @@ interface TokenTotals {
   models: string[];
   sidechainTurns: number;
   skippedLines: number;
+  excludedPlaceholderRecords: number;
 }
 
 export interface TokenUsageReport {
@@ -65,6 +67,7 @@ export function computeTokenUsage(corpus: Corpus): TokenUsageReport {
     models: [],
     sidechainTurns: 0,
     skippedLines: 0,
+    excludedPlaceholderRecords: 0,
   };
   const seenModels = new Set<string>();
   for (const file of corpus.files) {
@@ -76,6 +79,7 @@ export function computeTokenUsage(corpus: Corpus): TokenUsageReport {
     totals.toolResults += file.toolResults;
     totals.sidechainTurns += file.sidechainTurns;
     totals.skippedLines += file.skippedLines;
+    totals.excludedPlaceholderRecords += file.excludedPlaceholderRecords;
     for (const model of file.models) {
       if (!seenModels.has(model)) {
         seenModels.add(model);
@@ -150,6 +154,11 @@ function renderTotals(report: TokenUsageReport): string[] {
   lines.push(
     `  models: ${totals.models.join(', ') || '(none)'} | sidechain turns: ${pct(totals.sidechainTurns, totals.turns)}`,
   );
+  if (totals.excludedPlaceholderRecords) {
+    lines.push(
+      `  ${totals.excludedPlaceholderRecords} subagent record(s) from Claude Code before ${REAL_SUBAGENT_USAGE_FROM} had placeholder token usage, excluded from the token totals (turns still counted)`,
+    );
+  }
   lines.push('');
   lines.push(
     '(cache_read is cost-weighted, never summed flat with fresh input; native /usage covers the live view.)',

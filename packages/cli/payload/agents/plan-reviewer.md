@@ -1,6 +1,6 @@
 ---
 name: plan-reviewer
-description: Reads a finished plan workspace as the person who would build it and returns a fixed-format list of what they would still need to ask. Dispatched once by /plan-project at handoff, before the report. Read-only. It needs the workspace path.
+description: Reads a finished plan workspace as its builder would and lists what they would still need to ask. Dispatched once by /plan-project at handoff. Read-only.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium

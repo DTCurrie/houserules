@@ -48,8 +48,8 @@ describe('design-tailwind check', () => {
 
     expect(result?.findings).toEqual([]);
     expect(result?.readouts).toEqual([
-      'design: tailwindcss@4.3.3 found',
-      'design: @tailwindcss/oxide@4.3.3 found',
+      'design: tailwindcss@4.3.5 found',
+      'design: @tailwindcss/oxide@4.3.5 found',
     ]);
   });
 
@@ -75,8 +75,8 @@ describe('design-tailwind check', () => {
 
     expect(result?.findings).toEqual([]);
     expect(result?.readouts).toHaveLength(3);
-    expect(result?.readouts[0]).toBe('design: tailwindcss@4.3.3 found');
-    expect(result?.readouts[1]).toBe('design: @tailwindcss/oxide@4.3.3 found');
+    expect(result?.readouts[0]).toBe('design: tailwindcss@4.3.5 found');
+    expect(result?.readouts[1]).toBe('design: @tailwindcss/oxide@4.3.5 found');
     expect(result?.readouts[2]).toContain('design.themeEntry');
     expect(result?.readouts[2]).toContain('src/app.css');
   });

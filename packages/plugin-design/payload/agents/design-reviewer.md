@@ -3,7 +3,7 @@ description: 'Read-only reviewer for a design system (design, design system, tok
 name: 'design-reviewer'
 tools: Read, Grep, Glob, Bash
 model: haiku
-effort: low
+effort: medium
 omitClaudeMd: true
 ---
 
@@ -41,7 +41,7 @@ the judgment those checks cannot make.
 
 ## When to ask for a rendered check
 
-You are read-only and low-effort, and a browser launch is a real cost against that budget.
+You are read-only, and a browser launch is a real cost, so run one only when the check needs it.
 Ask for `node .claude/scripts/design.mjs render <target>` only when a contrast finding
 depends on a background you cannot see from source, such as a layer painted by another
 component or a gradient the CSS alone does not resolve. Do not reach for it as a matter of

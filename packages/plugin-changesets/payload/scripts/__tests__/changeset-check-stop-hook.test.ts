@@ -4,6 +4,7 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,15 +13,35 @@ import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useInstalledRepo } from '#test/repo';
+import { runIn } from '#test/run';
 import { hookCommandsFor, settingsOf } from '#test/installed-tree';
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
+function rewritePackageJson(
+  root: string,
+  dir: string,
+  mutate: (pkg: Record<string, unknown>) => void,
+): void {
+  const path = join(root, dir, 'package.json');
+  const pkg = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  mutate(pkg);
+  writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
 function installChangesets(): string {
-  return useInstalledRepo('pnpm-monorepo', {
+  const root = useInstalledRepo('pnpm-monorepo', {
     modules: 'cs/changesets',
     plugins: [{ name: PLUGIN_ROOT, alias: 'cs' }],
   });
+  for (const dir of ['games/cityville', 'apps/studio']) {
+    rewritePackageJson(root, dir, (pkg) => {
+      pkg.private = false;
+    });
+  }
+  runIn(root, 'git', ['add', '-A']);
+  runIn(root, 'git', ['commit', '-qm', 'chore: publishable packages']);
+  return root;
 }
 
 function stopHookCommandFor(root: string, scriptBasename: string): string {
@@ -192,5 +213,140 @@ describe('changeset-check.mjs, turn tool uses', () => {
 
     expect(r.status, r.stderr).toBe(2);
     expect(existsSync(spy.log)).toBe(true);
+  });
+});
+
+describe('changeset-check.mjs, packages the gate would not gate', () => {
+  function commitAll(root: string, message: string): void {
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', message]);
+  }
+
+  function writeChangesetsIgnore(root: string, ignore: string[]): void {
+    writeFileSync(
+      join(root, '.changeset/config.json'),
+      JSON.stringify({ ignore }),
+    );
+    commitAll(root, 'chore: changesets ignore');
+  }
+
+  function touchSource(root: string, dir: string, file: string): void {
+    appendFileSync(join(root, dir, file), 'export const more = 2;\n');
+  }
+
+  function nudge(root: string): { status: number | null; stderr: string } {
+    return runShellCommand(
+      root,
+      stopHookCommandFor(root, 'changeset-check.mjs'),
+      '{}',
+    );
+  }
+
+  it('still nudges for a shipped source file in a public, non-ignored package', () => {
+    const root = installChangesets();
+    touchSource(root, 'games/cityville', 'src/game.ts');
+
+    const r = nudge(root);
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/--pkg @fix\/cityville/);
+  });
+
+  it('stays silent for a scoped package the changesets ignore list names', () => {
+    const root = installChangesets();
+    writeChangesetsIgnore(root, ['@fix/cityville']);
+    touchSource(root, 'games/cityville', 'src/game.ts');
+
+    const r = nudge(root);
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('stays silent for packages a scope glob in the ignore list covers', () => {
+    const root = installChangesets();
+    writeChangesetsIgnore(root, ['@fix/*']);
+    touchSource(root, 'games/cityville', 'src/game.ts');
+
+    const r = nudge(root);
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('stays silent for an unscoped package the ignore list names', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.name = 'cityville';
+    });
+    writeChangesetsIgnore(root, ['cityville']);
+    touchSource(root, 'games/cityville', 'src/game.ts');
+
+    const r = nudge(root);
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('stays silent for a private package', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'apps/studio', (pkg) => {
+      pkg.private = true;
+    });
+    commitAll(root, 'chore: studio private');
+    touchSource(root, 'apps/studio', 'src/main.ts');
+
+    const r = nudge(root);
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('names only the public package when a private one changed beside it', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'apps/studio', (pkg) => {
+      pkg.private = true;
+    });
+    commitAll(root, 'chore: studio private');
+    touchSource(root, 'apps/studio', 'src/main.ts');
+    touchSource(root, 'games/cityville', 'src/game.ts');
+
+    const r = nudge(root);
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/--pkg @fix\/cityville/);
+    expect(r.stderr).not.toMatch(/studio/);
+  });
+
+  it('stays silent for a package-root file the files list does not ship', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.files = ['dist'];
+    });
+    commitAll(root, 'chore: files list');
+    writeFileSync(
+      join(root, 'games/cityville/eslint.config.js'),
+      'export default [];\n',
+    );
+
+    const r = nudge(root);
+
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('stays silent for a path matching changesets.gateIgnore', () => {
+    const root = installChangesets();
+    const configPath = join(root, '.claude/houserules.config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    config.changesets = {
+      ...(config.changesets as Record<string, unknown>),
+      gateIgnore: ['games/cityville/src/**'],
+    };
+    writeFileSync(configPath, JSON.stringify(config));
+    commitAll(root, 'chore: gate ignore');
+    touchSource(root, 'games/cityville', 'src/game.ts');
+
+    const r = nudge(root);
+
+    expect(r.status, r.stderr).toBe(0);
   });
 });

@@ -8,7 +8,7 @@ paths:
 Vue-specific residue on top of `accessibility.md`, which this guide assumes. It covers only
 what Vue's templating and reactivity change about the accessibility tree.
 
-## Rule — follow without deliberation
+## Rule
 
 - **`v-if` removes the element, `v-show` hides it and keeps it.** `v-if` drops the node from
   the DOM. `v-show` sets `display: none` and leaves the node mounted with its state. Either

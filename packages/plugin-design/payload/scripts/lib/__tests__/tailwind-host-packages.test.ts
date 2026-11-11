@@ -19,7 +19,7 @@ describe('resolveHostPackage', () => {
 
     expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
-    expect(result.value.version).toBe('4.3.3');
+    expect(result.value.version).toBe('4.3.5');
     expect(result.value.entryModuleUrl).toMatch(/dist\/lib\.mjs$/);
   });
 
@@ -52,7 +52,7 @@ describe('resolveHostPackage', () => {
 
     expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
-    expect(result.value.version).toBe('4.3.3');
+    expect(result.value.version).toBe('4.3.5');
   });
 
   it('resolves a transitive oxide nested under @tailwindcss/vite rather than tailwindcss', () => {
@@ -62,6 +62,6 @@ describe('resolveHostPackage', () => {
 
     expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
-    expect(result.value.version).toBe('4.3.3');
+    expect(result.value.version).toBe('4.3.5');
   });
 });

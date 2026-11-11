@@ -13,7 +13,7 @@ runner-agnostic rules on placement, structure, and naming that this guide assume
 runnable Vitest examples, see `testing-typescript.md` if that rule is installed. The patterns
 there apply directly to JavaScript test files, with the type annotations dropped.
 
-## Rule — follow without deliberation
+## Rule
 
 - **Pick one suffix per package, `.test.js` or `.spec.js`, and never mix them within one.**
   Two conventions mean every glob in the package has to list both, and one of them

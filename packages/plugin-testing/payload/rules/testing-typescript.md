@@ -15,7 +15,7 @@ rules on placement, structure, and naming that this guide assumes. The examples 
 Vitest and TypeScript, but the principles they illustrate apply to any test runner with a
 `describe`/`it` shape.
 
-## Rule — follow without deliberation
+## Rule
 
 - **Pick one suffix per package, `.test.ts` or `.spec.ts`, and never mix them within one.**
   Two conventions mean every glob in the package has to list both, and one of them

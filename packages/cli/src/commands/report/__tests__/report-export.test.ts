@@ -241,6 +241,7 @@ describe('token usage serialization', () => {
       models: new Set(['sonnet', 'opus']),
       sidechainTurns: 1,
       skippedLines: 0,
+      excludedPlaceholderRecords: 0,
       firstTs: 1_760_000_000_000,
       lastTs: 1_760_000_900_000,
       byOrigin: {

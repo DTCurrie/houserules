@@ -29,7 +29,7 @@ function backlogModule(api: PluginApi): ModuleDef {
         api.payload.agent(
           id,
           'backlog-reviewer',
-          'validates fresh backlog entries (haiku)',
+          'validates fresh backlog entries',
         ),
         {
           kind: 'merge-settings',

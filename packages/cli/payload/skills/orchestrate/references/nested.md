@@ -54,8 +54,8 @@ Every later message to this orchestrator goes to that id with `SendMessage`.
 the columns cannot carry. Then act on the first line of the report:
 
 - `WAVE_CLOSED`: send `continue` with `SendMessage`.
-- `DONE`: run `/decide` and `/pr-description` at this layer, from `Decide candidates`, with
-  `/pr-description` after the last phase only. Under `all`, spawn the recomputed ready set
+- `DONE`: run `/backlog-add` for each `Backlogged` entry, then `/decide` and `/pr-description` at
+  this layer, from `Decide candidates`, with `/pr-description` after the last phase only. Under `all`, spawn the recomputed ready set
   (see Several orchestrators), one fresh brief each, in one message. Check-in mode stops for the user first. The fresh spawn doubles as the
   context-size gate, because the new orchestrator starts with an empty context.
 - `NEEDS_RULING`: the round trip below.
@@ -121,10 +121,9 @@ work it touches a `SendMessage` naming the changed path.
 verifies by an explicit `--filter` over its domain's packages, never repo-wide. It never runs
 `/verify-changed` there, because that scopes by `git diff`, which with siblings mid-edit pulls in
 their packages. Where `fix.filterFlag` is empty and the fixer cannot scope by package, run the
-formatter and `eslint --fix` on the domain's paths directly. Two cold `pnpm --filter <pkg> test` runs on disjoint
-packages that shared upstream builds finished green together, so the scoped verifies run
-concurrently. Wireit holds no cross-process lock, so a verify that fails on build state instead of
-a test is rerun once alone before it is judged. After every orchestrator has returned `DONE`, the
+formatter and `eslint --fix` on the domain's paths directly. Scoped verifies on disjoint packages
+may run concurrently. A build tool with no cross-process lock can fail on shared build state, so a
+verify that fails on build state instead of a test is rerun once alone before it is judged. After every orchestrator has returned `DONE`, the
 main conversation runs the repo-wide fixer and `/verify-changed` once. That run is the only
 whole-tree proof.
 
@@ -145,8 +144,8 @@ An orchestrator that has not returned since the last printing keeps the rows it 
 that asked, by its own id. The others keep running, and a `WAVE_CLOSED` from one gets its
 `continue` without waiting on the ruling.
 
-**Ledgers and lint.** `/backlog-add` stays nested. The ledger takes one appended line per entry,
-and its `.md` surface is a render the next call rebuilds. `Decide candidates` travel up. An
+**Ledgers and lint.** The subagent write gate refuses ledger writes, so `Backlogged` entries and
+`Decide candidates` travel up, and the dispatcher runs `/backlog-add` for each at its relay. An
 orchestrator runs `plan-lint.mjs` after its own sub-plan writes, and the dispatcher runs it after
 each `ROADMAP.md` write. The checker scans every
 workspace and takes no path, so a finding in a sibling's workspace goes under `Out of scope`.

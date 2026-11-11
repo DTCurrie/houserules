@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
 import type { CheckResult, Finding } from '@houserules/api';
@@ -39,7 +41,34 @@ const GATES: readonly ClaudeGate[] = [
         SERVER_LEVEL_TOOL.test(tool),
       ),
   },
+  {
+    version: '2.1.314',
+    reason: 'guard-bash sees commands the Monitor tool starts',
+    applies: () => true,
+  },
+  {
+    version: '2.1.321',
+    reason:
+      'an agent pins model: fable, which means Fable 5.2 only from this version',
+    applies: (ctx) => anyAgentPinsFable(ctx.root),
+  },
 ];
+
+const FABLE_PIN = /^model:\s*['"]?fable['"]?\s*$/m;
+
+/** True when any `.claude/agents/*.md` frontmatter sets `model: fable`. */
+function anyAgentPinsFable(root: string): boolean {
+  const agentsDir = join(root, '.claude', 'agents');
+  if (!existsSync(agentsDir)) return false;
+  return readdirSync(agentsDir)
+    .filter((name) => name.endsWith('.md'))
+    .some((name) => {
+      const frontmatter = /^---\n([\s\S]*?)\n---/.exec(
+        readFileSync(join(agentsDir, name), 'utf8'),
+      );
+      return frontmatter !== null && FABLE_PIN.test(frontmatter[1] ?? '');
+    });
+}
 
 function parseVersion(version: string): number[] {
   return version.split('.').map(Number);

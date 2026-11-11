@@ -168,6 +168,51 @@ describe('plan, wiring SubagentStop', () => {
   });
 });
 
+describe('update on an install carrying a SubagentStop group the config does not ask for', () => {
+  const FIX_SCRIPT = 'lint-format-fix.mjs';
+  const PRE_RENAME_COMMAND = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${FIX_SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${FIX_SCRIPT}" || echo "[kit] ${FIX_SCRIPT} missing. Run: npx agent-kit update"`;
+  const USER_COMMAND = 'node ./my-own-subagent-hook.mjs';
+  let root: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+    const settings = settingsOf(root);
+    settings.hooks!.SubagentStop = [
+      { hooks: [{ type: 'command', command: PRE_RENAME_COMMAND }] },
+      { hooks: [{ type: 'command', command: USER_COMMAND }] },
+    ];
+    writeFileSync(
+      join(root, '.claude/settings.json'),
+      JSON.stringify(settings, null, 2),
+    );
+  });
+
+  it('drops the lint-format-fix group and keeps the user hook', () => {
+    const result = runCli(['update', root]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(hookCommandsFor(settingsOf(root), 'SubagentStop')).toEqual([
+      USER_COMMAND,
+    ]);
+  });
+
+  it('keeps the group when fix.onSubagentStop is true', () => {
+    editHouseConfig(root, (c) => {
+      (c.fix as Record<string, unknown>).onSubagentStop = true;
+    });
+
+    const result = runCli(['update', root]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(
+      hookCommandsFor(settingsOf(root), 'SubagentStop').some((command) =>
+        command.includes(FIX_SCRIPT),
+      ),
+      'a lint-format-fix SubagentStop hook is wired',
+    ).toBe(true);
+  });
+});
+
 describe('plan, given a root-scoped fix block whose commands are not real root scripts', () => {
   it('does not wire the Stop hook and advises instead', () => {
     const ctx = makeCtx({

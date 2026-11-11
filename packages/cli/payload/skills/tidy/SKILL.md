@@ -1,6 +1,6 @@
 ---
 name: tidy
-description: Tidy, clean up, or polish the working diff against the installed code-cleanliness rule: naming, function size, magic values, dead code. Use after writing or changing code. Reuse, efficiency, and architecture go to `/review-change` where installed.
+description: 'Tidy, clean up, or polish the working diff against the code-cleanliness rule: naming, function size, magic values, dead code. Use after writing or changing code. Reuse and architecture go to `/review-change`.'
 allowed-tools: Read, Edit, Grep, Glob, Bash, Agent
 ---
 
@@ -33,10 +33,10 @@ the rule's. Do not read the rule here, because the subagent reads it.
 
 ## 3. Dispatch the audit
 
-Send one `Agent` call with `subagent_type: "general-purpose"` and `model: "sonnet"`, in the
-foreground, because the fixes wait on its answer. The brief carries the changed-file list from
-step 1 and the rule path, and tells the subagent to do the following in order. It must not edit
-any file.
+Send one `Agent` call with `subagent_type: "general-purpose"`, `model: "sonnet"`, and
+`effort: "medium"`, in the foreground, because the fixes wait on its answer. The brief carries the
+changed-file list from step 1 and the rule path, and tells the subagent to do the following in
+order. It must not edit any file.
 
 1. Read `.claude/rules/code-cleanliness.md`.
 2. Run these over just the changed files, never the whole repo:
@@ -50,9 +50,10 @@ any file.
      `constants.ts`, `utils.ts`, `shared.ts`, or `helpers.ts` basename outright, the Catch-all
      files clause.
    - **Function length, as a candidate list and not a gate.** If the flat config keeps a
-     diff-scoped ruleset behind a named export, the way this repo's own `changedFilesConfig` in
-     `eslint.config.mjs` does, ESLint's `--config` CLI flag reads only the default export and
-     silently misses it. Load the named export through the Node API instead:
+     diff-scoped ruleset behind a named export, ESLint's `--config` CLI flag reads only the
+     default export and silently misses it. Load that export through the Node API instead, with
+     its real name in place of `changedFilesConfig`. With no such export, cover length in step
+     4's read instead of running this:
 
      ```
      node -e "

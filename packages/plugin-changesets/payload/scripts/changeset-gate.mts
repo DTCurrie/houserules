@@ -31,11 +31,11 @@ import {
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { loadConfigSafe } from '@houserules/payload/config';
 import {
   listWorkspacePackages,
   type WorkspacePackage,
 } from '@houserules/payload/workspaces';
-import { loadConfigSafe } from '@houserules/payload/config';
 import {
   git,
   globToRe,
@@ -296,26 +296,6 @@ function writtenSinceTurnStart(
 }
 
 /**
- * True for a path whose change cannot reach a published package.
- *
- * Tests are excluded from every package's `dist` and `payload-dist` by its build tsconfig, so a
- * package whose only diff is a test ships identical bytes and needs no changeset entry. Counting
- * it produced a false positive the first time this gate ran for real: `plugin-backlog` was
- * reported as drift on the strength of a single edited test file.
- *
- * tsconfigs are excluded the same way: they configure the compiler and are not `files` entries.
- * An `exclude` edit CAN change what `dist/` emits, so this trades that rare false negative for
- * the common false positive, a repo-wide tsconfig sweep reporting every package as drift.
- */
-function shipsNothing(path: string): boolean {
-  return (
-    /(^|\/)__tests?__\//.test(path) ||
-    /\.test\.[cm]?[jt]sx?$/.test(path) ||
-    /(^|\/)tsconfig[^/]*\.json$/.test(path)
-  );
-}
-
-/**
  * True when `path` is a package.json whose only difference from `ref` is its `wireit` block.
  *
  * Wireit config (dependency graph, input globs) never changes what a consumer of the published
@@ -344,6 +324,26 @@ function wireitOnlyEdit(
   }
   for (const pkg of pair) delete pkg.wireit;
   return JSON.stringify(pair[0]) === JSON.stringify(pair[1]);
+}
+
+/**
+ * True for a path whose change cannot reach a published package.
+ *
+ * Tests are excluded from every package's `dist` and `payload-dist` by its build tsconfig, so a
+ * package whose only diff is a test ships identical bytes and needs no changeset entry. Counting
+ * it produced a false positive the first time this gate ran for real: `plugin-backlog` was
+ * reported as drift on the strength of a single edited test file.
+ *
+ * tsconfigs are excluded the same way: they configure the compiler and are not `files` entries.
+ * An `exclude` edit CAN change what `dist/` emits, so this trades that rare false negative for
+ * the common false positive, a repo-wide tsconfig sweep reporting every package as drift.
+ */
+function shipsNothing(path: string): boolean {
+  return (
+    /(^|\/)__tests?__\//.test(path) ||
+    /\.test\.[cm]?[jt]sx?$/.test(path) ||
+    /(^|\/)tsconfig[^/]*\.json$/.test(path)
+  );
 }
 
 // npm packs these package-root files regardless of `files` (any case, any extension).
@@ -409,6 +409,47 @@ function changesetsIgnore(root: string): string[] {
   }
 }
 
+/**
+ * The name of the package owning `path` when its edit owes a changeset, or null when no
+ * package owns it, changesets ignores the owner, the owner is private, or the path ships nothing.
+ */
+function gatedOwnerName(
+  root: string,
+  path: string,
+  pkgs: WorkspacePackage[],
+  ignoredPackage: RegExp[],
+): string | null {
+  const owner = pkgs.find(
+    (pkg) => path === pkg.relDir || path.startsWith(`${pkg.relDir}/`),
+  );
+  if (!owner || ignoredPackage.some((re) => re.test(owner.name))) return null;
+  if (readPackageJson(root, owner.relDir)?.private === true) return null;
+  return unshippedRootFile(root, path, owner.relDir) ? null : owner.name;
+}
+
+/**
+ * Builds the one answer to "which package does editing this path owe a changeset to", shared
+ * by the Stop-hook gate and the presence nudge so they cannot disagree.
+ *
+ * The returned function yields the owning package's name, or null when `changesets.gateIgnore`
+ * matches the path, the path ships nothing, no package owns it, changesets ignores the owner,
+ * the owner is private, or the path is a package-root file the owner does not ship.
+ */
+export function createGatedOwnerResolver(
+  root: string,
+  pkgs: WorkspacePackage[],
+): (path: string) => string | null {
+  const gateIgnore = (loadConfigSafe(root).changesets?.gateIgnore ?? []).map(
+    globToRe,
+  );
+  const ignoredPackage = changesetsIgnore(root).map(globToRe);
+  return (path) => {
+    if (gateIgnore.some((re) => re.test(path)) || shipsNothing(path))
+      return null;
+    return gatedOwnerName(root, path, pkgs, ignoredPackage);
+  };
+}
+
 function touchedPackages(root: string): string[] {
   const pkgs = listWorkspacePackages(root);
   const status = git(root, ['status', '--porcelain']) ?? '';
@@ -431,41 +472,16 @@ function touchedPackages(root: string): string[] {
   }
   // A branch-committed path diffs against the merge base, a merely-dirty one against HEAD.
   const committedSet = new Set(committed);
-  const gateIgnore = (loadConfigSafe(root).changesets?.gateIgnore ?? []).map(
-    globToRe,
-  );
-  const ignoredPackage = changesetsIgnore(root).map(globToRe);
-  const touched = [...dirty, ...committed].filter(
-    (p) =>
-      !isChangesetMd(p) &&
-      !gateIgnore.some((re) => re.test(p)) &&
-      !shipsNothing(p) &&
-      !wireitOnlyEdit(root, p, committedSet.has(p) ? mergeBase : 'HEAD'),
-  );
+  const gatedOwner = createGatedOwnerResolver(root, pkgs);
   const names = new Set<string>();
-  for (const path of touched) {
-    const name = gatedOwnerName(root, path, pkgs, ignoredPackage);
+  for (const path of [...dirty, ...committed]) {
+    if (isChangesetMd(path)) continue;
+    if (wireitOnlyEdit(root, path, committedSet.has(path) ? mergeBase : 'HEAD'))
+      continue;
+    const name = gatedOwner(path);
     if (name) names.add(name);
   }
   return [...names];
-}
-
-/**
- * The name of the package owning `path` when its edit owes a changeset, or null when no
- * package owns it, changesets ignores the owner, the owner is private, or the path ships nothing.
- */
-function gatedOwnerName(
-  root: string,
-  path: string,
-  pkgs: WorkspacePackage[],
-  ignoredPackage: RegExp[],
-): string | null {
-  const owner = pkgs.find(
-    (pkg) => path === pkg.relDir || path.startsWith(`${pkg.relDir}/`),
-  );
-  if (!owner || ignoredPackage.some((re) => re.test(owner.name))) return null;
-  if (readPackageJson(root, owner.relDir)?.private === true) return null;
-  return unshippedRootFile(root, path, owner.relDir) ? null : owner.name;
 }
 
 function main(): void {

@@ -92,9 +92,12 @@ slices might both write, then draw the slices so each one is owned once:
 **Lanes, when a resource cannot be partitioned.** Work whose SUBJECT is one of those shared
 resources does not belong in the main checkout beside slices that merely read it. Give it a lane: a
 worktree on its own branch, or a checkout pinned at HEAD for read-only falsification. Two costs to
-plan for. A worktree needs its own dependency install, and **it carries none of the tool directory**,
-so a lane worker cannot be pointed at a brief by path and cannot capture a baseline that assumes an
-installed tree. Give a lane worker its brief inline.
+plan for. A worktree needs its own dependency install, and **it does not carry gitignored files**
+(list the ones it needs in `.worktreeinclude`), so a lane worker cannot be pointed at a brief by path
+and cannot capture a baseline that assumes an installed tree. Give a lane worker its brief inline.
+A subagent worktree branches from the default branch unless `worktree.baseRef` is `"head"`, so a worker
+isolated mid-plan does not see earlier waves. It reads `.claude/agents`, `.claude/commands`, and (from
+Claude Code 2.1.277) skills through from the main checkout.
 
 ## Waves across plans, and dropped slices
 
@@ -123,21 +126,21 @@ the ceiling, close it at a barrier like any wave, then send the next batch.
 A `Workers: <n>` line in a nested brief replaces the script's number. `orchestrate.maxWorkers` in
 `.claude/houserules.config.json` overrides the machine-derived ceiling for the repo.
 
-The lower slice bound sits beside the upper one in SKILL.md §1. A brief under about three steps, or one
+The lower slice bound is here. A brief under about three steps, or one
 tiny module, merges into a sibling slice in the same domain instead of taking its own worker, since
 every worker pays a cold acceptance boot.
 
-## Dispatch details moved out of the skill
+## Dispatch details: model, tools, worktrees
 
 - **Model and effort per slice.** Classify the slice by its shape, then pass both Agent parameters
   from the row it lands in. Omit both for the middle row, and the worker runs at the `task-worker`
   frontmatter defaults.
 
-  | Slice shape                                                                         | `model` | `effort`          |
-  | ----------------------------------------------------------------------------------- | ------- | ----------------- |
-  | Mechanical: a sweep, boilerplate, many small files under one rule, no judgment      | `haiku` | `low`             |
-  | Ordinary implementation with an acceptance command to make pass                     | omit    | omit              |
-  | An architecture call, a tricky seam, or a slice you would otherwise pull in-context | `opus`  | `high` or `xhigh` |
+  | Slice shape                                                                         | `model` | `effort` |
+  | ----------------------------------------------------------------------------------- | ------- | -------- |
+  | Mechanical: a sweep, boilerplate, many small files under one rule, no judgment      | `haiku` | `medium` |
+  | Ordinary implementation with an acceptance command to make pass                     | omit    | omit     |
+  | An architecture call, a tricky seam, or a slice you would otherwise pull in-context | `opus`  | `high`   |
 
   The haiku row is strict. The revise loop caps at two rounds, and a haiku worker that misreads a
   seam burns both before a sonnet one would have started. When the slice has an acceptance command
@@ -146,15 +149,15 @@ every worker pays a cold acceptance boot.
 
 - **Research slices.** `task-worker-research` carries `WebFetch` and `WebSearch` on top of the standing
   task-worker tools. If `.claude/agents/task-worker-research.md` is absent, dispatch `general-purpose`
-  with `model: sonnet` and paste `agents/task-worker.md` inline ahead of the brief, the same fallback
-  as a missing `task-worker`.
+  with `model: sonnet` and `effort: medium`, and paste `agents/task-worker.md` inline ahead of the
+  brief, the same fallback as a missing `task-worker`.
 - **A rule that needs an MCP tool the worker lacks.** Add the full callable name,
   `mcp__<server>__<tool>`, or the `mcp__<server>` pattern to `orchestrate.workerTools` in
   `.claude/houserules.config.json`, then run `npx houserules update`. `doctor` reports the same gap.
   Until then, run that tool yourself over each worker's files at wave close, before the fixer.
 - **Worktree isolation.** `isolation: 'worktree'` exists for waves that genuinely cannot be made
   disjoint. Correct slicing is cheaper than merging, and needing it usually means the slices were
-  drawn wrong.
+  drawn wrong. Set `worktree.baseRef` to `"head"` when the worktree must see earlier waves.
 - **Pre-slicing skills.** `/blast-radius` is for wide phases, so a small phase never pays for a
   fan-out map. `/sweep` takes a rote, repo-wide step (an import rename, an API swap) as one unit, which
   keeps the two fan-out models distinct.

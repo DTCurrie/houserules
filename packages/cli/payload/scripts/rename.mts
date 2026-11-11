@@ -4,7 +4,9 @@
  * Code's Rename Symbol. Renames a symbol and every reference to it, including
  * `@link` targets in TSDoc comments, across the file's tsconfig project.
  *
- * TypeScript repos only. It hard-fails at import without the `typescript` package.
+ * TypeScript repos only. It loads the host's `typescript` at use, from the working
+ * directory first and then from beside the script, and exits non-zero naming the fix
+ * when neither resolves.
  *
  * Usage:
  *   node .claude/scripts/rename.mjs <file>:<line>:<col> <newName> [--dry-run]
@@ -13,10 +15,12 @@
  * tsconfig.json above <file>, so a cross-package symbol is renamed only within its own
  * package. Verify with the package's typecheck afterward.
  */
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
-import ts from 'typescript';
+import type * as TsTypes from 'typescript';
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -41,6 +45,36 @@ const col = Number(parts.pop());
 const line = Number(parts.pop());
 const file = path.resolve(parts.join(':'));
 if (!Number.isFinite(line) || !Number.isFinite(col)) usage();
+
+// Lazy and probed, not a static import: a monorepo can keep `typescript` only in its
+// sub-packages, and a static bare import would then fail before usage() could speak.
+// createRequire resolves relative to a file path, and the file does not have to exist.
+const RESOLUTION_ANCHOR_FILENAME = 'noop.js';
+
+const loadTypescript = async (): Promise<typeof TsTypes> => {
+  const anchors = [
+    path.join(process.cwd(), RESOLUTION_ANCHOR_FILENAME),
+    path.join(import.meta.dirname, RESOLUTION_ANCHOR_FILENAME),
+  ];
+  for (const anchor of anchors) {
+    let resolved: string;
+    try {
+      resolved = createRequire(anchor).resolve('typescript');
+    } catch {
+      continue;
+    }
+    const loaded = (await import(pathToFileURL(resolved).href)) as {
+      default: typeof TsTypes;
+    };
+    return loaded.default;
+  }
+  console.error(
+    'typescript is not installed where rename.mjs can reach it. Add typescript as a dev dependency at the repo root, or run this from a package that has it.',
+  );
+  process.exit(1);
+};
+
+const ts = await loadTypescript();
 
 const findTsconfig = (start: string): string | undefined => {
   let dir = path.dirname(start);
@@ -78,7 +112,8 @@ const host = {
   },
   getCurrentDirectory: () => process.cwd(),
   getCompilationSettings: () => parsed.options,
-  getDefaultLibFileName: (o: ts.CompilerOptions) => ts.getDefaultLibFilePath(o),
+  getDefaultLibFileName: (o: TsTypes.CompilerOptions) =>
+    ts.getDefaultLibFilePath(o),
   fileExists: ts.sys.fileExists,
   readFile: ts.sys.readFile,
   readDirectory: ts.sys.readDirectory,
@@ -107,7 +142,7 @@ if (!locations || locations.length === 0) {
   process.exit(1);
 }
 
-const byFile = new Map<string, ts.RenameLocation[]>();
+const byFile = new Map<string, TsTypes.RenameLocation[]>();
 const skipped: string[] = [];
 for (const loc of locations) {
   const f = path.resolve(loc.fileName);

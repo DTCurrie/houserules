@@ -49,6 +49,7 @@ describe('computeTokenUsage', () => {
       models: ['claude-3-opus'],
       sidechainTurns: 0,
       skippedLines: 0,
+      excludedPlaceholderRecords: 0,
     });
   });
 
@@ -95,6 +96,7 @@ describe('computeTokenUsage', () => {
       models: ['claude-3-sonnet'],
       sidechainTurns: 0,
       skippedLines: 0,
+      excludedPlaceholderRecords: 0,
     });
   });
 
@@ -374,6 +376,7 @@ describe('renderTokenUsage per-session breakdown', () => {
       models: new Set(),
       sidechainTurns: 0,
       skippedLines: 0,
+      excludedPlaceholderRecords: 0,
       byOrigin: { main: emptyUsageSlice(), subagent: emptyUsageSlice() },
       byModel: new Map(),
       ...overrides,
@@ -393,6 +396,7 @@ describe('renderTokenUsage per-session breakdown', () => {
         models: [],
         sidechainTurns: 0,
         skippedLines: 0,
+        excludedPlaceholderRecords: 0,
       },
       unreadableFileCount: 0,
     };

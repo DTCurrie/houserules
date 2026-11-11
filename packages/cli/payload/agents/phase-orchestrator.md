@@ -1,6 +1,6 @@
 ---
 name: phase-orchestrator
-description: Drives ONE planned phase under .claude/plans/ with its own task-worker subagents and returns a fixed-format report once per wave barrier and once at phase close. Dispatched by /orchestrate by default, one orchestrator per phase. It needs a brief with Plan, Phase, Mode, Gates, Domain, Siblings, and Seam lines. Not for unplanned work.
+description: Drives ONE planned phase under .claude/plans/ with its own task-worker subagents, returning a fixed-format report per wave barrier and at phase close. Dispatched by /orchestrate, one per phase.
 tools: Read, Edit, Write, Grep, Glob, Bash, Agent, SendMessage, Skill
 model: opus
 effort: high
@@ -56,9 +56,12 @@ and wakes you too.
 
 ## Skills and state
 
-Run `/blast-radius`, `/sweep`, `/tidy`, `/verify-changed`, `/backlog-add`, and the close-of-phase
-reviews here, as the skill says. Never run `/decide` or `/pr-description`. They need the user, so
-list their candidates under `Decide candidates` and the main conversation runs them.
+Run `/blast-radius`, `/sweep`, `/tidy`, `/verify-changed`, and the close-of-phase reviews here,
+as the skill says. Never run `/decide` or `/pr-description`. They need the user, so list their
+candidates under `Decide candidates` and the main conversation runs them. Never run `/backlog-add`
+either, because the subagent write gate refuses every ledger write. List each out-of-scope finding
+under `Backlogged` with its area, a one-line problem, and where it lives, and the main conversation
+logs it.
 
 When `Siblings:` is not `none`, the §7 fixer and `/tidy` take your `Domain:` paths, and verify is
 an explicit `--filter` over the domain's packages. Never run `/verify-changed` or the bare fix
@@ -97,7 +100,7 @@ Rulings made
 - <each mid-run departure from the plan with its cost if wrong, or "none">
 
 Backlogged
-- <each out-of-scope finding and where it was logged, or "none">
+- <each out-of-scope finding as area, one-line problem, and where, for the dispatcher to log, or "none">
 
 Out of scope
 - <each finding in a sibling's domain or the seam, reported and left unfixed, or "none">

@@ -87,6 +87,9 @@ const KIT_STOCK_FORMATS: ((basename: string) => string)[] = [
   // The same wrapper from before the agent-kit to houserules rename.
   (name) =>
     `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || echo "[kit] ${name} missing — run: npx agent-kit update"`,
+  // The pre-rename wrapper after its message was reworded and before the houserules rename.
+  (name) =>
+    `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || echo "[kit] ${name} missing. Run: npx agent-kit update"`,
 ];
 
 // A placeholder basename, standing in for hookCommand's own scriptName parameter so the shape
@@ -434,13 +437,19 @@ export function reconcileSettings(
     recorded.hooks.map((h) => keyOf(h.event, h.matcher, h.script)),
   );
 
+  // A module can emit an event only under an option, so a manifest written while the option
+  // was off never lists that tuple. A script the manifest records under some event is still
+  // houserules' own under any other event.
+  const recordedScripts = new Set(recorded.hooks.map((h) => h.script));
+
   for (const [event, groups] of Object.entries(merged.hooks)) {
     const keptGroups: HookGroup[] = [];
     for (const group of groups ?? []) {
       const keptHooks = (group?.hooks ?? []).filter((hook) => {
         const script = kitBasenames(hook.command)[0] ?? null;
         const key = keyOf(event, group.matcher ?? null, script);
-        if (!recordedKeys.has(key) || declared.has(key)) return true;
+        const isRecorded = recordedKeys.has(key) || recordedScripts.has(script);
+        if (!isRecorded || declared.has(key)) return true;
         if (!script || !isKitStockCommand(hook.command, script)) return true;
         dropped.push({ event, matcher: group.matcher ?? null, script });
         return false;

@@ -21,8 +21,8 @@ import type { CheckResult, Finding } from '@houserules/api';
 const RESIDENT_TOKEN_BUDGET = 4000;
 const RESIDENT_LINE_BUDGET = 200;
 
-// An @-import chain deeper than this is pathological. Stop rather than walk it.
-const MAX_IMPORT_DEPTH = 5;
+// Claude Code follows an @-import chain to a maximum depth of four hops.
+const MAX_IMPORT_DEPTH = 4;
 
 const estimateTokens = (chars: number) => Math.ceil(chars / 4); // dumb-simple, no tokenizer dep.
 const countLines = (t: string) =>

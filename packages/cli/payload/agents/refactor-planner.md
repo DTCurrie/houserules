@@ -1,9 +1,9 @@
 ---
 name: refactor-planner
-description: Synthesis and design agent for a code quality pass. Reads a set of audit reports plus the repo, reconciles them into ONE refactor plan with slices and an architecture document at the paths it is given, and lists every decision only the user can make. Also usable for a single refactor slice that carries a design decision. Dispatched by planned quality phases under .claude/plans/.
+description: Synthesis and design agent for a code quality pass. Reconciles audit reports plus the repo into ONE refactor plan with slices and an architecture document, listing decisions only the user can make. Dispatched by planned quality phases under .claude/plans/.
 tools: Read, Grep, Glob, Bash, WebFetch, Write, Edit
 model: opus
-effort: xhigh
+effort: high
 ---
 
 You turn several audit reports into one plan other agents will execute, and one architecture

@@ -26,6 +26,7 @@ import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { git, readStdinJson } from '@houserules/payload/proc';
 import { turnTouchedFiles } from '@houserules/payload/transcript-turn';
+import { createGatedOwnerResolver } from './changeset-gate.mjs';
 
 const STATE_DIR = '.claude/state';
 const STATE_FILE = 'changeset-check.json';
@@ -179,8 +180,19 @@ try {
   }
 
   const isGenerated = generatedFileRe(config.generatedFilePattern);
+  // A path inside a workspace package counts only when the gate would gate it. A path no
+  // workspace package owns (a root-package repo's own files) keeps the scope match alone.
+  const workspacePackages = listWorkspacePackages(root);
+  const gatedOwner = createGatedOwnerResolver(root, workspacePackages);
+  const isOwned = (p: string): boolean =>
+    workspacePackages.some(
+      (pkg) => p === pkg.relDir || p.startsWith(`${pkg.relDir}/`),
+    );
   const srcChanged = [...dirty, ...committed].filter(
-    (p) => matchScope(p) && !isGenerated.test(`/${p}`),
+    (p) =>
+      matchScope(p) &&
+      !isGenerated.test(`/${p}`) &&
+      (!isOwned(p) || gatedOwner(p) !== null),
   );
   const hasChangeset =
     dirty.some(isChangesetMd) || committedNewChangesets.some(isChangesetMd);

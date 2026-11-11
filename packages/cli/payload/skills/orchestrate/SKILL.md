@@ -80,7 +80,8 @@ Two pre-slicing moments, each skipped silently when its skill is not installed:
   the impact map inform the `owns` sets and wave boundaries.
 - **Codemod-shaped step → `/sweep`, not slices.** A rote, rule-based, repo-wide step goes to `/sweep`
   as one unit. Judgment-scoped work still slices.
-  A well-formed slice has:
+
+A well-formed slice has:
 
 - **`owns`:** the exact paths/globs that worker may write. Nothing outside them.
 - **a falsifiable done:** a command at its narrowest form, e.g. `vitest run <file>`, reachable as
@@ -238,7 +239,7 @@ than reslicing. Mark the slice `IN REVIEW` and judge it against the brief:
 Read `references/review-patterns.md` when a report reads green and you are deciding whether to
 believe it. It carries the worked failure for each check above.
 
-A worker that stalled has no report, and a report containing the word "stalled" is the same case. Its
+A stalled worker is marked failed, partial result attached, as is a report saying "stalled". Its
 slice is not approved. Run `git diff --name-only` against its `owns`, because its partial edits are on
 disk. Mark the slice `REVISING` or dispatch a fresh worker with what landed in the brief. A
 notification saying the worker awaits its own background work is interim, so wait for its final
@@ -338,7 +339,7 @@ grep -n 'DISPATCHED\|IN REVIEW\|REVISING\|BLOCKED' .claude/plans/<slug>/phase-*.
 
 Those slices' workers are gone and their edits are not. Check `git diff --name-only`, reconcile the
 table, and redispatch what's unfinished. Never assume a `DISPATCHED` slice did nothing: a stalled
-worker is the same case, edits on disk and no report.
+worker is the same case, edits on disk, marked failed.
 
 ## Notes
 

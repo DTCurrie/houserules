@@ -284,7 +284,7 @@ describe('renderClaudeAdditions', () => {
     expect(body).toMatch(/record a changeset with `\/changeset`/);
   });
 
-  it('points the backlog trigger at the config targets instead of listing prefixes', () => {
+  it('renders the backlog trigger without listing target prefixes', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(
       ctx,
@@ -294,7 +294,6 @@ describe('renderClaudeAdditions', () => {
       }),
     );
     expect(body).toMatch(/Do not fix it inline/);
-    expect(body).toMatch(/houserules\.config\.json/);
     expect(body).not.toMatch(/`WEB`/);
   });
 
@@ -346,15 +345,14 @@ describe('renderClaudeAdditions', () => {
     expect(body).not.toMatch(/planned phase under `\/orchestrate`/);
   });
 
-  it('includes the orchestrate exception line, naming the phase-orchestrator default and the --flat fallback, when orchestrate is selected', () => {
+  it('includes the orchestrate exception line, deferring dispatch to the skill, when orchestrate is selected', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(
       ctx,
       makeAnswers({ moduleIds: ['core', 'orchestrate'] }),
     );
-    expect(body).toMatch(/planned phase under `\/orchestrate`/);
-    expect(body).toMatch(
-      /dispatch one `phase-orchestrator` for the phase\n\s+and relay its reports\. Under `--flat`, dispatch one scoped `task-worker` per slice/,
+    expect(body).toContain(
+      '- Exception, a planned phase under `/orchestrate`: dispatch as that skill says. Never pull a\n  worker’s diff into the main context.',
     );
   });
 
@@ -460,16 +458,15 @@ describe('renderClaudeMd', () => {
     );
   });
 
-  it('emits the evasion table with prettier column alignment', () => {
+  it('nests each recorded evasion under the done bullet with its answer', () => {
     const body = renderClaudeAdditions(makeCtx(), makeAnswers());
     expect(body).toContain(
       [
-        '  | Excuse                            | Reality                                                                    |',
-        '  | --------------------------------- | -------------------------------------------------------------------------- |',
-        '  | "The edits are in, so it is done" | Done is the checks passing, with output you read.                          |',
-        '  | "I know this fact from memory"    | State it only after running the command that could falsify it.             |',
-        '  | "It passed earlier"               | A stale or cached pass is not this change\'s pass. Re-run on current bytes. |',
-        '  | "The subagent reported success"   | The tree is the evidence. Check it before believing the report.            |',
+        '  or never ran, with its output. The recorded evasions, and what each one means:',
+        '  - "The edits are in, so it is done": done is the checks passing, with output you read.',
+        '  - "I know this fact from memory": state it only after running the command that could falsify it.',
+        '  - "It passed earlier": a stale or cached pass is not this change\'s pass. Re-run on current bytes.',
+        '  - "The subagent reported success": the tree is the evidence, not the report.',
       ].join('\n'),
     );
   });
@@ -480,8 +477,13 @@ describe('renderClaudeMd', () => {
       '`run_in_background: true`, ends its turn without reporting',
     );
     expect(body).toContain(
-      '`CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS` (600 s by default)',
+      'A foreground call blocks the\n  subagent until Claude Code moves it to the background anyway, so starting it there saves the\n  blocked minutes and lets the subagent end its turn.',
     );
+  });
+
+  it('gives the backgrounding reason without claiming the harness aborts the subagent', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+    expect(body).not.toMatch(/aborted|CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS/);
   });
 
   it('embeds the same additions body between the markers', () => {

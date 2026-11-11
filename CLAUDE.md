@@ -4,78 +4,62 @@
 
 ### houserules sections
 
-This block is maintained by `npx houserules update`. Content outside the markers is yours
-and never touched. Templates for a fuller instructions-file skeleton and for guardrail rules live
-in `.claude/templates/`.
+Maintained by `npx houserules update`. Text outside the markers is yours and never touched.
+Fuller templates live in `.claude/templates/`.
 
 ### Skill triggers
 
 - After a meaningful change to a package: record a changeset with `/changeset`, **before
   the commit**.
 - Discovered a real issue outside the current scope? **Do not fix it inline.** Log it with
-  `/backlog-add`. Area prefixes are listed in `houserules.config.json`'s targets, and the
-  skill points at them when it runs.
+  `/backlog-add`.
 - Settled a design question the code does not explain on its own? Record it with `/decide`.
 - Too big to hold in one plan: scaffold with `/plan-project`, then execute each phase with
   `/orchestrate`.
-- Ledger ids stay in the ledger. Never cite one in code, docs, changesets, commit
-  messages, or issue text.
+- Ledger ids stay in the ledger, never in code, docs, changesets, commit messages, or issues.
 
 ### Conventions
 
 - **The user always handles `git commit` / `push` / PR-create.** Describe what is ready and stop.
-  (Enforced by `.claude/scripts/guard-bash.mjs`.)
 - **Edit from the file's current bytes.** Re-read before editing when your view of it is
-  second-hand (an earlier snapshot, a build or lint error, another tool's output) or the user may
-  have it open. A tool's report and the file on disk can disagree within seconds.
+  second-hand (a snapshot, a lint error, another tool's output) or the user may have it open.
 - **Do not rewrite what is not yours to change.** When the user presents a file as their own
   finished work, or has it open mid-edit, surface the problem and let them decide.
-- **Watch for the missing `[houserules]` SessionStart banner.** Every session start prints a
-  `[houserules] branch:` line. If this session shows none, it started below the repo root and
-  the installed hooks, including the Bash guard, are not active, so tell the user and suggest
-  relaunching Claude Code from the repo root.
+- **Watch for the missing `[houserules]` SessionStart banner.** Without it, the session started
+  below the repo root and the installed hooks, including the Bash guard, are not active. Tell
+  the user to relaunch Claude Code from the repo root.
 
 ### Cost & verification discipline
 
-- Stage-sized work (≤ a handful of files): implement directly in-context, with no implementation
-  subagents. Reserve subagents for genuinely parallel or unbounded work (wide sweeps, migrations).
-- Exception, a planned phase under `/orchestrate`: dispatch one `phase-orchestrator` for the phase
-  and relay its reports. Under `--flat`, dispatch one scoped `task-worker` per slice and review
-  the returned reports. Never pull a worker’s diff into the main context.
+- Implement stage-sized work (a handful of files) in-context, with no implementation subagents.
+  Reserve subagents for parallel or unbounded work (wide sweeps, migrations).
+- Exception, a planned phase under `/orchestrate`: dispatch as that skill says. Never pull a
+  worker’s diff into the main context.
 - Verify with static gates (tests, typecheck, lint) plus a short falsifiable acceptance checklist
   for the user. No browser/screenshot verification unless explicitly asked.
-- Run those gates in order: format first, since it rewrites in place and settles the mechanical
-  noise, then lint with autofix so only real problems are left, then typecheck and test. Scope
-  each command to the packages you changed. This order is for work you do yourself.
-  When subagents are editing in parallel, the fixer runs once after they report, never inside
-  one of them, since it rewrites files their siblings still have open.
+- Run them in order, scoped to the packages you changed: format first, then lint with autofix,
+  then typecheck and test, so only real problems are left.
 - **"Done" means every check passed, not that the edits were made.** Report a check that failed
-  or never ran, with its output. Never claim success over one you did not see pass.
-  The recorded evasions, and what each one actually means:
-  | Excuse                            | Reality                                                                    |
-  | --------------------------------- | -------------------------------------------------------------------------- |
-  | "The edits are in, so it is done" | Done is the checks passing, with output you read.                          |
-  | "I know this fact from memory"    | State it only after running the command that could falsify it.             |
-  | "It passed earlier"               | A stale or cached pass is not this change's pass. Re-run on current bytes. |
-  | "The subagent reported success"   | The tree is the evidence. Check it before believing the report.            |
-- In a live loop where the user is blocked on each turn, a cheap reversible action is itself
-  the check: run it and let its result falsify, instead of multi-call pre-verification (doc
-  fetches, code surveys). Cap pre-action checks at the single cheapest one.
+  or never ran, with its output. The recorded evasions, and what each one means:
+  - "The edits are in, so it is done": done is the checks passing, with output you read.
+  - "I know this fact from memory": state it only after running the command that could falsify it.
+  - "It passed earlier": a stale or cached pass is not this change's pass. Re-run on current bytes.
+  - "The subagent reported success": the tree is the evidence, not the report.
+- When the user is blocked on each turn, a cheap reversible action is itself the check. Run it
+  and let its result falsify, with at most one cheaper check first.
 - Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.
 - A subagent runs a command expected to outlast the default Bash timeout with
   `run_in_background: true`, ends its turn without reporting, and reports when the completion
-  notification re-invokes it, reading the output file it names. One foreground call emits no
-  progress, so the subagent is aborted at `CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS` (600 s by default).
+  notification re-invokes it, reading the output file it names. A foreground call blocks the
+  subagent until Claude Code moves it to the background anyway, so starting it there saves the
+  blocked minutes and lets the subagent end its turn.
 - On AskUserQuestion timeout, stop and re-ask later. Never carry tentative selections forward.
 - Read the repo's own docs + targeted greps before fanning out Explore/Plan agents.
 
 ### Tool-use efficiency
 
-- `grep -n` to locate, then `Read` with `offset`/`limit`. Never read big files whole.
-  Grep output is location data, not content: never judge text against a grep listing of it.
-- Never `git stash` to baseline-check. Use `git diff --name-only` / `git show HEAD:<path>`.
-- Never `git checkout -- <path>` / `git restore` to undo an edit. They revert the whole file
-  to HEAD, discarding every uncommitted change in it. Undo with the inverse Edit.
+- `grep -n` to locate, then `Read` with `offset`/`limit`. Grep output is location data, not
+  content: never judge text against a grep listing of it.
 - Pipe long command output through `grep`, and batch related greps into one call.
 
 <!-- houserules:claude-md end -->

@@ -34,7 +34,7 @@ function decisionsModule(api: PluginApi): ModuleDef {
         api.payload.agent(
           id,
           'decision-reviewer',
-          'gut-checks a fresh decision record against the bar (haiku)',
+          'gut-checks a fresh decision record against the bar',
         ),
         api.payload.script(
           id,

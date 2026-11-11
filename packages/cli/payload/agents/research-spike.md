@@ -1,9 +1,9 @@
 ---
 name: research-spike
-description: Deep research agent for ONE scoped question set. Reads the repo read-only, searches and fetches primary sources on the web, and writes exactly one markdown report at the path it is given. Dispatched by planned research phases under `.claude/plans/`. Not for implementation.
+description: Deep research agent for ONE scoped question set. Reads the repo and primary web sources, writes one markdown report at the path given. Dispatched by planned research phases under `.claude/plans/`.
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, Write
 model: opus
-effort: xhigh
+effort: high
 ---
 
 You answer one scoped research brief and write one report. Your report is a return value

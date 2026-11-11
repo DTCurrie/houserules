@@ -99,8 +99,9 @@ Delete the instrumentation once fixed. The dir should only hold active investiga
   instead of a screenshot-and-iterate loop.
 - **Background any command that outlasts the default Bash timeout.** A subagent runs it with
   `run_in_background: true`, ends its turn without reporting, and reports when the completion
-  notification re-invokes it, reading the output file it names. One foreground call emits no
-  progress, so the subagent is aborted at `CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS` (600 s by default).
+  notification re-invokes it, reading the output file it names. A foreground call blocks the
+  subagent until Claude Code moves it to the background anyway, so starting it there saves the
+  blocked minutes and lets the subagent end its turn.
 - **An unanswered question is not an answer.** If an AskUserQuestion times out or goes
   unanswered, stop the dependent work and re-ask when the user returns. Never carry
   tentative or partial selections forward.

@@ -119,7 +119,7 @@ function changesetsModule(api: PluginApi): ModuleDef {
         api.payload.agent(
           id,
           'changeset-writer',
-          'writes the changeset for a completed change (haiku)',
+          'writes the changeset for a completed change',
         ),
         {
           kind: 'merge-settings',

@@ -8,6 +8,7 @@ import {
   ingestTranscript,
   readCorpus,
 } from '../transcript-events.js';
+import { computeTokenUsage, renderTokenUsage } from '../token-usage.js';
 
 function line(record: unknown): string {
   return JSON.stringify(record);
@@ -405,5 +406,62 @@ describe('readCorpus per-session usage origin', () => {
       cacheRead: 0,
       cacheWrite: 0,
     });
+  });
+});
+
+describe('subagent placeholder usage before Claude Code 2.1.307', () => {
+  // A record with no version stamp is counted: nothing proves it is a placeholder.
+  it('excludes sub-2.1.307 subagent records from totals and counts them', () => {
+    const base = mkdtempSync(join(tmpdir(), 'corpus-placeholder-'));
+    mkdirSync(join(base, 'slug', 'sess-1', 'subagents'), { recursive: true });
+    const turn = (output: number, version?: string) =>
+      line({
+        type: 'assistant',
+        sessionId: 'sess-1',
+        timestamp: '2026-10-01T10:00:00Z',
+        ...(version === undefined ? {} : { version }),
+        message: {
+          role: 'assistant',
+          model: 'model-a',
+          usage: { input_tokens: 1, output_tokens: output },
+        },
+      });
+    // 2.1.31 is numerically below 2.1.307 though it sorts above it as a string.
+    writeFileSync(
+      join(base, 'slug', 'sess-1.jsonl'),
+      turn(1000, '2.1.302') + '\n',
+    );
+    writeFileSync(
+      join(base, 'slug', 'sess-1', 'subagents', 'agent-x.jsonl'),
+      [
+        turn(8, '2.1.302'),
+        turn(3, '2.1.306'),
+        turn(16, '2.1.31'),
+        turn(100, '2.1.307'),
+        turn(200, '2.1.322'),
+        turn(400, '2.2.0'),
+        turn(50),
+      ].join('\n'),
+    );
+
+    const corpus = readCorpus(base, ['slug']);
+    const row = corpus.files[0]!;
+
+    expect(row.byOrigin.main.output).toBe(1000);
+    expect(row.byOrigin.main.turns).toBe(1);
+    expect(row.byOrigin.subagent).toEqual({
+      turns: 7,
+      input: 4,
+      output: 750,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
+    expect(row.output).toBe(1750);
+    expect(row.turns).toBe(8);
+    expect(row.excludedPlaceholderRecords).toBe(3);
+    expect(computeTokenUsage(corpus).totals.excludedPlaceholderRecords).toBe(3);
+    expect(renderTokenUsage(computeTokenUsage(corpus)).join('\n')).toContain(
+      '3 subagent record(s) from Claude Code before 2.1.307 had placeholder token usage',
+    );
   });
 });

@@ -3,6 +3,7 @@ import {
   appendFileSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -16,11 +17,30 @@ import { houseConfigPath, readJson } from '#test/installed-tree';
 const SCRIPT = '.claude/scripts/changeset-check.mjs';
 const PLUGIN_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
+function rewritePackageJson(
+  root: string,
+  dir: string,
+  mutate: (pkg: Record<string, unknown>) => void,
+): void {
+  const path = join(root, dir, 'package.json');
+  const pkg = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  mutate(pkg);
+  writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
 function installChangesets(): string {
-  return useInstalledRepo('pnpm-monorepo', {
+  const root = useInstalledRepo('pnpm-monorepo', {
     modules: 'cs/changesets',
     plugins: [{ name: PLUGIN_ROOT, alias: 'cs' }],
   });
+  for (const dir of ['games/cityville', 'apps/studio']) {
+    rewritePackageJson(root, dir, (pkg) => {
+      pkg.private = false;
+    });
+  }
+  runIn(root, 'git', ['add', '-A']);
+  runIn(root, 'git', ['commit', '-qm', 'chore: publishable packages']);
+  return root;
 }
 
 function commitRepoWithNoPendingChangesets(root: string): void {
@@ -254,8 +274,6 @@ describe('changeset-check.mjs', () => {
 describe('changeset-check.mjs, non-target changes', () => {
   it('stays silent when only a non-target file (README.md) is dirty', () => {
     const root = installChangesets();
-    runIn(root, 'git', ['add', '-A']);
-    runIn(root, 'git', ['commit', '-qm', 'install houserules']);
     appendFileSync(join(root, 'README.md'), 'docs only\n');
     const r = runScript(root, SCRIPT, { input: '{}' });
     expect(r.status, r.stderr).toBe(0);

@@ -1,6 +1,6 @@
 ---
 name: blast-radius-mapper
-description: Maps ONE search angle of a change's blast radius and returns a compact consumer list in a fixed format. Dispatched by the /blast-radius skill, one mapper per angle, in parallel. Read-only. It needs the exact surface (symbols, files, keys) and its one angle.
+description: Maps ONE search angle of a change's blast radius into a compact consumer list. Dispatched by /blast-radius, one mapper per angle, in parallel. Read-only.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium

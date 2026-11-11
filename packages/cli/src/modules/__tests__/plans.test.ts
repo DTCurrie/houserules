@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { useInstalledRepo } from '#test/repo';
 import { runCli } from '#test/run';
 import { manifestOf } from '#test/installed-tree';
+import { hint, plan } from '../plans.js';
 
 describe('plans', () => {
   describe('when enabled', () => {
@@ -159,5 +160,16 @@ describe('plans', () => {
       expect(claudeMd).not.toContain('/plan-project');
       expect(claudeMd).not.toContain('.claude/plans/');
     });
+  });
+
+  it('names no model tier in the hint or any action reason', () => {
+    const reasons = plan().flatMap((action) =>
+      'reason' in action ? [action.reason] : [],
+    );
+
+    expect(reasons.length).toBeGreaterThan(1);
+    for (const text of [hint(), ...reasons]) {
+      expect(text).not.toMatch(/\b(sonnet|opus|haiku|fable)\b/i);
+    }
   });
 });

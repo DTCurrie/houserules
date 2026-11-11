@@ -268,4 +268,69 @@ describe('reconcileSettings', () => {
     expect(groups[0]!.matcher).toBe('Edit');
     expect(groups[0]!.hooks[0]!.command).toBe(hookCommand(SCRIPT));
   });
+
+  describe('a SubagentStop group the config no longer asks for', () => {
+    const FIX_SCRIPT = 'lint-format-fix.mjs';
+    const PRE_RENAME_COMMAND = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${FIX_SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${FIX_SCRIPT}" || echo "[kit] ${FIX_SCRIPT} missing. Run: npx agent-kit update"`;
+    const USER_COMMAND = 'node ./my-own-subagent-hook.mjs';
+    const recordedStopOnly: SettingsSignature = {
+      hooks: [{ event: 'Stop', matcher: null, script: FIX_SCRIPT }],
+      permissions: [],
+    };
+    const stopFragment = fragmentFor('Stop', null, FIX_SCRIPT);
+
+    it.each([
+      ['pre-rename text', PRE_RENAME_COMMAND],
+      ['current text', hookCommand(FIX_SCRIPT)],
+    ])(
+      'is dropped when its command carries the %s, and a user hook beside it survives',
+      (_label, command) => {
+        const existing: Settings = {
+          hooks: {
+            Stop: [
+              {
+                hooks: [{ type: 'command', command: hookCommand(FIX_SCRIPT) }],
+              },
+            ],
+            SubagentStop: [
+              { hooks: [{ type: 'command', command }] },
+              { hooks: [{ type: 'command', command: USER_COMMAND }] },
+            ],
+          },
+        };
+
+        const { merged, dropped } = reconcileSettings(
+          existing,
+          [stopFragment],
+          recordedStopOnly,
+        );
+
+        expect(dropped).toEqual([
+          { event: 'SubagentStop', matcher: null, script: FIX_SCRIPT },
+        ]);
+        expect(merged.hooks!.SubagentStop).toEqual([
+          { hooks: [{ type: 'command', command: USER_COMMAND }] },
+        ]);
+        expect(merged.hooks!.Stop).toEqual(existing.hooks!.Stop);
+      },
+    );
+
+    it('is kept when a current fragment still declares SubagentStop', () => {
+      const existing: Settings = {
+        hooks: {
+          SubagentStop: [
+            { hooks: [{ type: 'command', command: PRE_RENAME_COMMAND }] },
+          ],
+        },
+      };
+
+      const { dropped } = reconcileSettings(
+        existing,
+        [stopFragment, fragmentFor('SubagentStop', null, FIX_SCRIPT)],
+        recordedStopOnly,
+      );
+
+      expect(dropped).toEqual([]);
+    });
+  });
 });

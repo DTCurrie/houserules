@@ -1,5 +1,5 @@
 ---
-description: 'Read-only reviewer for new decision records. Invoke immediately after recording a decision to check it clears the recording bar, carries a rejected alternative and a revisit trigger, and does not duplicate an existing accepted decision.'
+description: 'Read-only reviewer for new decision records. Invoke right after recording a decision to check it clears the recording bar, has a rejected alternative and revisit trigger, and is not a duplicate.'
 name: 'decision-reviewer'
 tools: Read, Grep, Glob, Bash
 model: haiku

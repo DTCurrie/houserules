@@ -27,7 +27,7 @@ export const title = 'Phase execution via scoped workers (/orchestrate)';
 export const group: ModuleGroup = 'optional';
 
 export function hint(): string {
-  return 'drive a planned phase one layer down: a sonnet phase-orchestrator runs per-slice sonnet workers and you relay its reports, never diffs (needs plans; includes a research worker)';
+  return 'drive a planned phase one layer down: a phase-orchestrator runs per-slice task-workers and you relay its reports, never diffs (needs plans; includes a research worker)';
 }
 
 export function defaultEnabled(): boolean {
@@ -121,7 +121,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       ? agent(
           id,
           'task-worker',
-          'the sonnet implementer /orchestrate dispatches: one slice, owned paths only, fixed report format',
+          'the implementer /orchestrate dispatches: one slice, owned paths only, fixed report format',
         )
       : {
           kind: 'write',
@@ -129,7 +129,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
           content: renderTaskWorkerBase(extraTools),
           module: id,
           reason:
-            'the sonnet implementer /orchestrate dispatches, with orchestrate.workerTools appended to its tools: line',
+            'the implementer /orchestrate dispatches, with orchestrate.workerTools appended to its tools: line',
         };
   return [
     skill(
@@ -148,7 +148,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     agent(
       id,
       'phase-orchestrator',
-      'the sonnet orchestrator /orchestrate dispatches by default: one phase, its own task-workers, fixed report format',
+      'the orchestrator /orchestrate dispatches by default: one phase, its own task-workers, fixed report format',
     ),
     script(
       id,
@@ -170,7 +170,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     {
       kind: 'advise',
       text: withPlans
-        ? 'Executing a plan: run /orchestrate [<plan-slug>] [<phase>|all] to drive a .claude/plans/<slug>/ phase. By default it hands each phase to a sonnet phase-orchestrator one layer down, which slices by file ownership, dispatches one sonnet task-worker per slice (task-worker-research for a slice that must fetch), and reports back per wave while you relay. --flat keeps the slicing at the main conversation. It stops for you between phases unless you pass --auto.'
+        ? 'Executing a plan: run /orchestrate [<plan-slug>] [<phase>|all] to drive a .claude/plans/<slug>/ phase. By default it hands each phase to a phase-orchestrator one layer down, which slices by file ownership, dispatches one task-worker per slice (task-worker-research for a slice that must fetch), and reports back per wave while you relay. --flat keeps the slicing at the main conversation. It stops for you between phases unless you pass --auto.'
         : 'Executing a plan: /orchestrate drives a .claude/plans/<slug>/ phase, but the `plans` module is off, so nothing scaffolds those workspaces. Enable it (npx houserules modules --modules=plans) or /orchestrate will just send you to /plan-project.',
       module: id,
     },

@@ -213,9 +213,9 @@ takes that away. A phase that looks small enough to just do is still the user's 
 Before the report, dispatch one `plan-reviewer` on the workspace path with
 `subagent_type: "plan-reviewer"` and wait for its list. It reads the finished plan as the person who
 would build it and returns what that person would still have to ask. Carry each question into the
-handoff under the assumptions line, or say the list was empty. It costs one sonnet run and catches
-a mis-specified slice before a worker spends a run on it. Do not edit the plan to answer a question.
-The user decides.
+handoff under the assumptions line, or say the list was empty. It costs one `plan-reviewer` run
+and catches a mis-specified slice before a worker spends a run on it. Do not edit the plan to
+answer a question. The user decides.
 
 Report, then wait:
 

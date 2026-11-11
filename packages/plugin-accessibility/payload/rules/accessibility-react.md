@@ -10,7 +10,7 @@ Framework-specific guidance for React and JSX. See `accessibility.md` for the ru
 semantics, names, keyboard, focus, forms, color, motion, and structure that this guide
 assumes.
 
-## Rule — follow without deliberation
+## Rule
 
 - **Use `htmlFor`, not `for`, and `className`, not `class`.** JSX reserves the plain HTML
   attribute names for JavaScript keywords.

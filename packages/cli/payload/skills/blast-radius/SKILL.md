@@ -19,8 +19,8 @@ Get the concrete names to search for. A blast-radius map is only as good as the 
 ## 2. Fan out read-only mappers: once, in one message
 
 Dispatch one `blast-radius-mapper` agent per search angle, in parallel, so no single agent holds the
-whole picture and you don't serialize the survey. The agent definition pins the sonnet model, the
-read-only toolset, and the report format, so a brief carries only the surface and its one angle:
+whole picture and you don't serialize the survey. Its definition pins the model, the read-only
+toolset, and the report format, so a brief carries only the surface and its one angle:
 
 - **by symbol:** direct importers and callers of each changed export.
 - **by string:** config keys, route paths, feature flags, magic strings the change renames or removes.
@@ -29,8 +29,9 @@ read-only toolset, and the report format, so a brief carries only the surface an
 
 Each mapper returns a compact list of `file:line → how it consumes the surface → risk if it breaks`,
 plus a coverage note. When the `blast-radius-mapper` agent is not installed, fall back to read-only
-`Agent`/Explore calls with `model: "sonnet"` passed on each. Mapping consumers is search-and-report
-work, and inheriting a premium session model multiplies the survey's cost without widening it.
+`Agent`/Explore calls with `model: "sonnet"` and `effort: "low"` passed on each. Mapping consumers
+is search-and-report work, and inheriting a premium session model multiplies the survey's cost
+without widening it.
 
 ## 3. Write the dated artifact
 

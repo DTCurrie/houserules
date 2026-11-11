@@ -15,7 +15,7 @@ system's values come from a seeded token file or from this repo's Tailwind theme
 this install uses. It is guidance, not a linter, so a value that violates a rule below is a
 finding to weigh, not an error to block on.
 
-## Rule — follow without deliberation
+## Rule
 
 ### Tokens over literals
 

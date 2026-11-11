@@ -34,8 +34,11 @@ function ctxWith(modules: string[], overrides: Partial<Ctx> = {}): Ctx {
 }
 
 describe('checkModuleHealth, per-module prerequisites', () => {
-  it('warns when rename is installed in a repo with no typescript dependency', () => {
-    const ctx = ctxWith(['rename'], { typescript: false });
+  it('warns when rename is installed and the repo root does not provide typescript', () => {
+    const ctx = ctxWith(['rename'], {
+      typescript: true,
+      rootPkg: { name: 'root' },
+    });
 
     expect(checkModuleHealth('/repo', ctx, BUILT_INS).findings).toContainEqual(
       expect.objectContaining({
@@ -44,8 +47,11 @@ describe('checkModuleHealth, per-module prerequisites', () => {
     );
   });
 
-  it('stays quiet about rename when typescript is present', () => {
-    const ctx = ctxWith(['rename'], { typescript: true });
+  it('stays quiet about rename when the repo root declares typescript', () => {
+    const ctx = ctxWith(['rename'], {
+      typescript: true,
+      rootPkg: { name: 'root', devDependencies: { typescript: '^6.0.0' } },
+    });
 
     expect(checkModuleHealth('/repo', ctx, BUILT_INS).findings).toEqual([]);
   });

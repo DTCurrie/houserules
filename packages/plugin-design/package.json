@@ -111,10 +111,10 @@
     "@houserules/payload": "workspace:*",
     "@houserules/test": "workspace:*",
     "@arethetypeswrong/cli": "catalog:",
-    "@tailwindcss/oxide": "^4.3.3",
+    "@tailwindcss/oxide": "^4.3.5",
     "@types/node": "catalog:",
     "publint": "catalog:",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^4.3.5",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wireit": "catalog:"

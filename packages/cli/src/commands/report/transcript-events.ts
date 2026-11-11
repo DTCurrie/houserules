@@ -82,6 +82,8 @@ export interface FileUsage {
   models: Set<string>;
   sidechainTurns: number;
   skippedLines: number;
+  /** Subagent records left out of the token counts: Claude Code before 2.1.307 wrote placeholder usage. */
+  excludedPlaceholderRecords: number;
   /** Earliest and latest timestamped record in this session, folded subagents included, epoch ms. */
   firstTs?: number;
   lastTs?: number;
@@ -327,6 +329,7 @@ function createFileUsage(file: string): FileUsage {
     models: new Set(),
     sidechainTurns: 0,
     skippedLines: 0,
+    excludedPlaceholderRecords: 0,
     byOrigin: { main: emptyUsageSlice(), subagent: emptyUsageSlice() },
     byModel: new Map(),
   };
@@ -400,6 +403,25 @@ export function skillFires(corpus: Corpus, skillName?: string): SkillFire[] {
   return fires;
 }
 
+/** Claude Code stamped subagent transcripts with placeholder token usage before this release. */
+export const REAL_SUBAGENT_USAGE_FROM = '2.1.307';
+const REAL_SUBAGENT_USAGE_FROM_PARTS =
+  REAL_SUBAGENT_USAGE_FROM.split('.').map(Number);
+
+/**
+ * True when a record's `version` is numerically below `REAL_SUBAGENT_USAGE_FROM`. A missing
+ * or unparseable stamp is not excluded, since nothing proves such a record carries placeholder usage.
+ */
+function isPlaceholderUsageVersion(version: string | undefined): boolean {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version ?? '');
+  if (!match) return false;
+  for (const [i, floor] of REAL_SUBAGENT_USAGE_FROM_PARTS.entries()) {
+    const part = Number(match[i + 1]);
+    if (part !== floor) return part < floor;
+  }
+  return false;
+}
+
 // Token aggregation matches the original report command exactly, keying on type OR role,
 // so promoting the metrics families leaves the token section's numbers unchanged.
 function aggregateUsage(
@@ -409,10 +431,14 @@ function aggregateUsage(
 ): void {
   const msg = record.message ?? {};
   if (record.type === 'assistant' || msg.role === 'assistant') {
+    // The turn still happened, so it counts. Only its placeholder token fields are dropped.
+    const hasPlaceholderUsage =
+      origin === 'subagent' && isPlaceholderUsageVersion(record.version);
+    if (hasPlaceholderUsage) usage.excludedPlaceholderRecords += 1;
     usage.turns += 1;
     if (record.isSidechain) usage.sidechainTurns += 1;
     if (msg.model) usage.models.add(msg.model);
-    const u = msg.usage ?? {};
+    const u = hasPlaceholderUsage ? {} : (msg.usage ?? {});
     usage.input += u.input_tokens ?? 0;
     usage.output += u.output_tokens ?? 0;
     usage.cacheRead += u.cache_read_input_tokens ?? 0;

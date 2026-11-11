@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { MANIFEST_PATH } from '@houserules/api/internal';
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { detect } from '../../../detect.js';
+import { payloadPath } from '../../../paths.js';
 import { checkScriptImports, importSpecifiersIn } from '../script-imports.js';
 
 function write(root: string, rel: string, text: string): void {
@@ -145,6 +146,26 @@ describe('checkScriptImports', () => {
     expect(found).toHaveLength(1);
     expect(found[0]).toContain('not-a-real-package');
     expect(found[0]).toContain('bare specifier');
+  });
+
+  it('is silent on the shipped rename.mjs where typescript neither resolves nor is declared, while a static typescript import in the same repo is flagged', () => {
+    const root = useInstalledRepo('npm-single');
+    write(
+      root,
+      '.claude/scripts/rename.mjs',
+      readFileSync(payloadPath('scripts/rename.mjs'), 'utf8'),
+    );
+    write(
+      root,
+      '.claude/scripts/control-static.mjs',
+      "import ts from 'typescript';\nconsole.log(ts);\n",
+    );
+
+    const found = messages(root);
+
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('control-static.mjs');
+    expect(found[0]).toContain('imports typescript, a bare specifier');
   });
 
   it('is silent when no scripts directory exists', () => {

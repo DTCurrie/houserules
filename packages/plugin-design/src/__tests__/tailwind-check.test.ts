@@ -20,8 +20,8 @@ describe('checkTailwindAvailable', () => {
 
     expect(result.findings).toEqual([]);
     expect(result.readouts).toEqual([
-      'design: tailwindcss@4.3.3 found',
-      'design: @tailwindcss/oxide@4.3.3 found',
+      'design: tailwindcss@4.3.5 found',
+      'design: @tailwindcss/oxide@4.3.5 found',
     ]);
   });
 
@@ -33,7 +33,7 @@ describe('checkTailwindAvailable', () => {
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]?.level).toBe('WARN');
     expect(result.findings[0]?.msg).toContain('@tailwindcss/oxide not found');
-    expect(result.readouts).toEqual(['design: tailwindcss@4.3.3 found']);
+    expect(result.readouts).toEqual(['design: tailwindcss@4.3.5 found']);
   });
 
   it('warns about both packages, each naming an install command, on a bare repo', () => {
