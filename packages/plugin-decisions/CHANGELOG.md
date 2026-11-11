@@ -1,5 +1,12 @@
 # @houserules/plugin-decisions
 
+## 0.2.1
+
+### Patch Changes
+
+- a198513: Shorten the managed CLAUDE.md region and resident skill and agent descriptions.
+- a198513: Retune agent and slice effort defaults for the current Claude models.
+
 ## 0.2.0
 
 ### Minor Changes

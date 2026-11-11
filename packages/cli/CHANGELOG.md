@@ -1,5 +1,21 @@
 # @houserules/cli
 
+## 0.12.1
+
+### Patch Changes
+
+- a198513: Shorten the managed CLAUDE.md region and resident skill and agent descriptions.
+- a198513: Retune agent and slice effort defaults for the current Claude models.
+- a198513: Rules, skills, and agent prompts are reworded for the current Claude models.
+- a198513: Rename script loads typescript lazily instead of failing doctor's import check.
+- f83c4e8: The managed commit rule names only the actions the guard config still blocks.
+- a198513: Doctor follows CLAUDE.md imports four hops deep, matching Claude Code.
+- a198513: Bump commander, @clack/prompts, and semver to their latest minor and patch releases.
+- a198513: Doctor raises its Claude Code floor to 2.1.314, or 2.1.321 for agents pinned to fable.
+- a198513: Report excludes placeholder subagent token counts written by Claude Code before 2.1.307.
+- Updated dependencies [a198513]
+  - @houserules/api@0.7.1
+
 ## 0.12.0
 
 ### Minor Changes

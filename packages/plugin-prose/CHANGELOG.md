@@ -1,5 +1,12 @@
 # @houserules/plugin-prose
 
+## 0.2.2
+
+### Patch Changes
+
+- a198513: Prose style allows a short closing recap in the final message.
+- a198513: Rules, skills, and agent prompts are reworded for the current Claude models.
+
 ## 0.2.1
 
 ### Patch Changes

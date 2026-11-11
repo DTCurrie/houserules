@@ -1,5 +1,12 @@
 # @houserules/plugin-design
 
+## 0.4.2
+
+### Patch Changes
+
+- a198513: Retune agent and slice effort defaults for the current Claude models.
+- a198513: Rules, skills, and agent prompts are reworded for the current Claude models.
+
 ## 0.4.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @houserules/api
 
+## 0.7.1
+
+### Patch Changes
+
+- a198513: Update removes a stale SubagentStop lint hook left by an older install.
+
 ## 0.7.0
 
 ### Minor Changes

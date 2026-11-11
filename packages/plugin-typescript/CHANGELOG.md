@@ -1,5 +1,11 @@
 # @houserules/plugin-typescript
 
+## 0.1.3
+
+### Patch Changes
+
+- a198513: Rules, skills, and agent prompts are reworded for the current Claude models.
+
 ## 0.1.2
 
 ### Patch Changes
