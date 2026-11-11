@@ -1,5 +1,14 @@
 # @houserules/plugin-changesets
 
+## 0.3.2
+
+### Patch Changes
+
+- a198513: Shorten the managed CLAUDE.md region and resident skill and agent descriptions.
+- a198513: Changeset presence nudge skips the packages the changeset gate skips.
+- a198513: Retune agent and slice effort defaults for the current Claude models.
+- f83c4e8: Changeset gate ignores an edit under a package's unshipped top-level test directory.
+
 ## 0.3.1
 
 ### Patch Changes

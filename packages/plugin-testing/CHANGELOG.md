@@ -1,5 +1,11 @@
 # @houserules/plugin-testing
 
+## 0.3.3
+
+### Patch Changes
+
+- a198513: Rules, skills, and agent prompts are reworded for the current Claude models.
+
 ## 0.3.2
 
 ### Patch Changes
