@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
+import { useBareRepo, useStagedTailwindRepo } from '#test/tailwind-fixture';
 
 import designPlugin from '../index.js';
 
@@ -42,14 +42,14 @@ function moduleById(id: string): ModuleDef {
 describe('design-tailwind check', () => {
   it('reads out both Tailwind packages on a repo that has them', () => {
     const moduleDef = moduleById('design-tailwind');
-    const root = useTailwindRepo({ withOxide: true });
+    const root = useStagedTailwindRepo({ withOxide: true });
 
     const result = moduleDef.check?.(ctxAt(root));
 
     expect(result?.findings).toEqual([]);
     expect(result?.readouts).toEqual([
-      'design: tailwindcss@4.3.5 found',
-      'design: @tailwindcss/oxide@4.3.5 found',
+      'design: tailwindcss@4.1.0 found',
+      'design: @tailwindcss/oxide@4.1.0 found',
     ]);
   });
 
@@ -69,14 +69,14 @@ describe('design-tailwind check', () => {
 
   it('appends a theme-entry readout after the package readouts when design.themeEntry is configured', () => {
     const moduleDef = moduleById('design-tailwind');
-    const root = useTailwindRepo({ withOxide: true });
+    const root = useStagedTailwindRepo({ withOxide: true });
 
     const result = moduleDef.check?.(ctxWithThemeEntry(root, 'src/app.css'));
 
     expect(result?.findings).toEqual([]);
     expect(result?.readouts).toHaveLength(3);
-    expect(result?.readouts[0]).toBe('design: tailwindcss@4.3.5 found');
-    expect(result?.readouts[1]).toBe('design: @tailwindcss/oxide@4.3.5 found');
+    expect(result?.readouts[0]).toBe('design: tailwindcss@4.1.0 found');
+    expect(result?.readouts[1]).toBe('design: @tailwindcss/oxide@4.1.0 found');
     expect(result?.readouts[2]).toContain('design.themeEntry');
     expect(result?.readouts[2]).toContain('src/app.css');
   });

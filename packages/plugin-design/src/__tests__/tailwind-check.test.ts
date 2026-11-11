@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { useBareRepo, useTailwindRepo } from '#test/tailwind-fixture';
+import { useBareRepo, useStagedTailwindRepo } from '#test/tailwind-fixture';
 
 import { checkTailwindAvailable } from '../tailwind-check.js';
 
@@ -14,26 +14,26 @@ function ctxAt(root: string): Ctx {
 
 describe('checkTailwindAvailable', () => {
   it('reports no findings and readouts for both packages when oxide is linked too', () => {
-    const root = useTailwindRepo({ withOxide: true });
+    const root = useStagedTailwindRepo({ withOxide: true });
 
     const result = checkTailwindAvailable(ctxAt(root));
 
     expect(result.findings).toEqual([]);
     expect(result.readouts).toEqual([
-      'design: tailwindcss@4.3.5 found',
-      'design: @tailwindcss/oxide@4.3.5 found',
+      'design: tailwindcss@4.1.0 found',
+      'design: @tailwindcss/oxide@4.1.0 found',
     ]);
   });
 
   it('warns about oxide only, and still reads out tailwindcss, when oxide is not linked', () => {
-    const root = useTailwindRepo();
+    const root = useStagedTailwindRepo();
 
     const result = checkTailwindAvailable(ctxAt(root));
 
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]?.level).toBe('WARN');
     expect(result.findings[0]?.msg).toContain('@tailwindcss/oxide not found');
-    expect(result.readouts).toEqual(['design: tailwindcss@4.3.5 found']);
+    expect(result.readouts).toEqual(['design: tailwindcss@4.1.0 found']);
   });
 
   it('warns about both packages, each naming an install command, on a bare repo', () => {

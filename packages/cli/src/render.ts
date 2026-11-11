@@ -316,6 +316,29 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   return `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}`;
 }
 
+/** The Conventions bullet naming the git actions the guard blocks. Absent config counts as on. */
+function userHandlesLine(ctx: Ctx): string[] {
+  const guard = ctx.claude.houseConfig?.guard;
+  const isEnabled = (flag: boolean | undefined): boolean => flag !== false;
+  const commit = isEnabled(guard?.gitCommit);
+  const push = isEnabled(guard?.gitPush);
+  const prCreate = isEnabled(guard?.prCreate);
+  if (commit && push && prCreate) {
+    return [
+      '- **The user always handles `git commit` / `push` / PR-create.** Describe what is ready and stop.',
+    ];
+  }
+  const labels = [
+    commit ? '`git commit`' : null,
+    push ? '`git push`' : null,
+    prCreate ? 'PR-create' : null,
+  ].filter((label): label is string => label !== null);
+  if (labels.length === 0) return [];
+  return [
+    `- **The user always handles ${labels.join(' / ')}.** Describe what is ready and stop.`,
+  ];
+}
+
 /** The managed-region body spliced into the instructions file the user already has. */
 export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   const body = [
@@ -327,7 +350,7 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
     ...skillTriggersSection(answers),
     '### Conventions',
     '',
-    '- **The user always handles `git commit` / `push` / PR-create.** Describe what is ready and stop.',
+    ...userHandlesLine(ctx),
     "- **Edit from the file's current bytes.** Re-read before editing when your view of it is",
     "  second-hand (a snapshot, a lint error, another tool's output) or the user may have it open.",
     '- **Do not rewrite what is not yours to change.** When the user presents a file as their own',

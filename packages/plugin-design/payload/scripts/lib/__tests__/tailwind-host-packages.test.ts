@@ -8,19 +8,29 @@ import {
 import {
   useBareRepo,
   usePnpmTailwindRepo,
+  useStagedTailwindRepo,
   useTailwindRepo,
 } from '#test/tailwind-fixture';
 
 describe('resolveHostPackage', () => {
-  it('resolves tailwindcss to its version and its ESM entry module', () => {
+  it('resolves the real tailwindcss install to its ESM entry module', () => {
     const root = useTailwindRepo();
 
     const result = resolveHostPackage(root, TAILWIND_PACKAGE);
 
     expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
-    expect(result.value.version).toBe('4.3.5');
-    expect(result.value.entryModuleUrl).toMatch(/dist\/lib\.mjs$/);
+    expect(result.value.entryModuleUrl.endsWith('dist/lib.mjs')).toBe(true);
+  });
+
+  it('resolves a staged tailwindcss to its declared version', () => {
+    const root = useStagedTailwindRepo();
+
+    const result = resolveHostPackage(root, TAILWIND_PACKAGE);
+
+    expect(result.ok, result.ok ? '' : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.version).toBe('4.1.0');
   });
 
   it('reports the install command when tailwindcss is not installed', () => {
@@ -46,22 +56,25 @@ describe('resolveHostPackage', () => {
   });
 
   it('resolves a transitive oxide through the pnpm virtual store when only tailwindcss is linked at the top level', () => {
-    const root = usePnpmTailwindRepo();
+    const root = usePnpmTailwindRepo({ isStaged: true });
 
     const result = resolveHostPackage(root, OXIDE_PACKAGE);
 
     expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
-    expect(result.value.version).toBe('4.3.5');
+    expect(result.value.version).toBe('4.1.0');
   });
 
   it('resolves a transitive oxide nested under @tailwindcss/vite rather than tailwindcss', () => {
-    const root = usePnpmTailwindRepo({ anchor: '@tailwindcss/vite' });
+    const root = usePnpmTailwindRepo({
+      anchor: '@tailwindcss/vite',
+      isStaged: true,
+    });
 
     const result = resolveHostPackage(root, OXIDE_PACKAGE);
 
     expect(result.ok, result.ok ? '' : result.error).toBe(true);
     if (!result.ok) return;
-    expect(result.value.version).toBe('4.3.5');
+    expect(result.value.version).toBe('4.1.0');
   });
 });

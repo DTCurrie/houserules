@@ -371,13 +371,51 @@ function unshippedRootFile(
     : path;
   if (name.includes('/') || name === 'package.json' || ALWAYS_PACKED.test(name))
     return false;
-  const pkg = readPackageJson(root, relDir);
-  if (!pkg || !Array.isArray(pkg.files)) return false;
-  return !pkg.files.some(
-    (entry) =>
-      typeof entry === 'string' &&
-      entry.replace(/^\.\//, '').replace(/\/$/, '') === name,
+  const entries = filesEntries(root, relDir);
+  return entries !== null && !entries.includes(name);
+}
+
+const TOP_LEVEL_TEST_DIRECTORY = /^(tests?)\//;
+
+/**
+ * True for a path under the package's top-level `test/` or `tests/` directory that the
+ * published tarball cannot contain.
+ *
+ * That directory holds fixtures and shared test setup, which `shipsNothing` cannot recognize by
+ * name the way it does a `__tests__` directory or a `.test.` file. It ships only when `files`
+ * names it or a path inside it, or when there is no `files` list and npm packs everything. A
+ * source directory such as `src` is never exempt this way, because `files` names build outputs
+ * and an edit there changes what `dist` emits. Entries are matched by exact name, the same
+ * trade `unshippedRootFile` makes.
+ */
+function unshippedTestDirectory(
+  root: string,
+  path: string,
+  relDir: string,
+): boolean {
+  const directory = TOP_LEVEL_TEST_DIRECTORY.exec(
+    path.startsWith(`${relDir}/`) ? path.slice(relDir.length + 1) : path,
+  )?.[1];
+  if (!directory) return false;
+  const entries = filesEntries(root, relDir);
+  return (
+    entries !== null &&
+    !entries.some(
+      (entry) => entry === directory || entry.startsWith(`${directory}/`),
+    )
   );
+}
+
+/**
+ * The package's `files` entries without a leading `./` or a trailing `/`, or null when it has no
+ * `files` list and so packs everything.
+ */
+function filesEntries(root: string, relDir: string): string[] | null {
+  const pkg = readPackageJson(root, relDir);
+  if (!pkg || !Array.isArray(pkg.files)) return null;
+  return pkg.files
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.replace(/^\.\//, '').replace(/\/$/, ''));
 }
 
 function readPackageJson(
@@ -424,7 +462,10 @@ function gatedOwnerName(
   );
   if (!owner || ignoredPackage.some((re) => re.test(owner.name))) return null;
   if (readPackageJson(root, owner.relDir)?.private === true) return null;
-  return unshippedRootFile(root, path, owner.relDir) ? null : owner.name;
+  const isUnshipped =
+    unshippedRootFile(root, path, owner.relDir) ||
+    unshippedTestDirectory(root, path, owner.relDir);
+  return isUnshipped ? null : owner.name;
 }
 
 /**
@@ -433,7 +474,8 @@ function gatedOwnerName(
  *
  * The returned function yields the owning package's name, or null when `changesets.gateIgnore`
  * matches the path, the path ships nothing, no package owns it, changesets ignores the owner,
- * the owner is private, or the path is a package-root file the owner does not ship.
+ * the owner is private, or the path is a package-root file or a top-level `test/` directory the
+ * owner does not ship.
  */
 export function createGatedOwnerResolver(
   root: string,

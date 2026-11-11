@@ -264,6 +264,56 @@ describe('renderChangesetConfig', () => {
 });
 
 describe('renderClaudeAdditions', () => {
+  const guardCtx = (guard: Record<string, boolean>) => {
+    const base = makeCtx();
+    return makeCtx({
+      claude: {
+        ...base.claude,
+        houseConfig: { guard } as unknown as typeof base.claude.houseConfig,
+      },
+    });
+  };
+  const opening = '- **The user always handles';
+
+  it('keeps the full commit rule when there is no guard config', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+    expect(body).toContain(
+      '- **The user always handles `git commit` / `push` / PR-create.** Describe what is ready and stop.',
+    );
+  });
+
+  it('drops git commit from the rule when gitCommit is off', () => {
+    const body = renderClaudeAdditions(
+      guardCtx({ gitCommit: false }),
+      makeAnswers(),
+    );
+    expect(body).toContain(
+      '- **The user always handles `git push` / PR-create.** Describe what is ready and stop.',
+    );
+  });
+
+  it('drops git push from the rule when gitPush is off', () => {
+    const body = renderClaudeAdditions(
+      guardCtx({ gitPush: false }),
+      makeAnswers(),
+    );
+    expect(body).toContain(
+      '- **The user always handles `git commit` / PR-create.** Describe what is ready and stop.',
+    );
+  });
+
+  it('omits the rule, leaving no blank line, when all three flags are off', () => {
+    const body = renderClaudeAdditions(
+      guardCtx({ gitCommit: false, gitPush: false, prCreate: false }),
+      makeAnswers(),
+    );
+    expect(body).not.toContain(opening);
+    expect(body).not.toMatch(/\n\n\n/);
+    expect(body).toContain(
+      "### Conventions\n\n- **Edit from the file's current bytes.**",
+    );
+  });
+
   it('renders no Skill triggers section when no skill-shipping module is selected', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(

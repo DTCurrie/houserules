@@ -26,6 +26,7 @@ import {
   plannedSteps,
   resolveFixSettings,
   runFixSteps,
+  stepTimedOut,
   type FixSettings,
 } from '../lint-format-fix.mjs';
 import { useInstalledRepo } from '#test/repo';
@@ -701,6 +702,20 @@ describe('lint-format-fix.mjs on a file in a directory git has never seen', () =
   });
 });
 
+describe('stepTimedOut', () => {
+  it('classifies a step killed by a signal with no exit status as timed out', () => {
+    expect(stepTimedOut({ status: null, signal: 'SIGKILL' })).toBe(true);
+  });
+
+  it('classifies a step that exited nonzero as not timed out', () => {
+    expect(stepTimedOut({ status: 1, signal: null })).toBe(false);
+  });
+
+  it('classifies a step that exited 0 as not timed out', () => {
+    expect(stepTimedOut({ status: 0, signal: null })).toBe(false);
+  });
+});
+
 describe('runFixSteps against the fix budget', () => {
   let root: string;
   const settings = resolveFixSettings(baseConfig());
@@ -713,10 +728,16 @@ describe('runFixSteps against the fix budget', () => {
     const path = join(dir, 'sleep-runner.sh');
     writeFileSync(
       path,
-      `#!/bin/sh\necho "$@" >> runner-calls.txt\nsleep ${seconds}\n`,
+      `#!/bin/sh\necho "$@" >> runner-calls.txt\nexec sleep ${seconds}\n`,
     );
     chmodSync(path, 0o755);
     return { ...settings, runner: path };
+  }
+
+  function clockReading(first: number, ...rest: number[]): () => number {
+    const readings = [first, ...rest];
+    let call = 0;
+    return () => readings[Math.min(call++, readings.length - 1)] ?? first;
   }
 
   beforeEach(() => {
@@ -724,7 +745,7 @@ describe('runFixSteps against the fix budget', () => {
   });
 
   it('reports the step that outlasts the budget and skips the rest', () => {
-    const run = runFixSteps(steps, root, sleepingRunner(root, 5), 300);
+    const run = runFixSteps(steps, root, sleepingRunner(root, 30), 3000);
 
     expect(run.overrun).toEqual({ pkg: '@fix/cityville', step: 'lint:fix' });
     expect(run.errors).toEqual([]);
@@ -748,6 +769,40 @@ describe('runFixSteps against the fix budget', () => {
     expect(existsSync(join(root, 'runner-calls.txt')), 'nothing spawned').toBe(
       false,
     );
+  });
+
+  it('counts elapsed time equal to the budget as nothing left, so the step is never started', () => {
+    stubRunner(root);
+    const run = runFixSteps(
+      steps,
+      root,
+      { ...settings, runner: join(root, 'stub-runner.sh') },
+      1000,
+      clockReading(0, 1000),
+    );
+
+    expect(run.overrun).toEqual({ pkg: '@fix/cityville', step: 'lint:fix' });
+    expect(
+      existsSync(join(root, 'runner-calls.txt')),
+      'remaining === 0 must end the run before spawning, as remaining <= 0 does',
+    ).toBe(false);
+  });
+
+  it('ends the run at a later step that starts with exactly the budget elapsed, keeping the earlier step', () => {
+    stubRunner(root);
+    const run = runFixSteps(
+      steps,
+      root,
+      { ...settings, runner: join(root, 'stub-runner.sh') },
+      FIX_BUDGET_MS,
+      clockReading(0, 0, FIX_BUDGET_MS),
+    );
+
+    expect(run.overrun).toEqual({ pkg: '@fix/cityville', step: 'format:fix' });
+    expect(run.errors).toEqual([]);
+    expect(recordedCalls(root), 'only the first step started').toEqual([
+      '--filter @fix/cityville lint:fix',
+    ]);
   });
 
   it('keeps residue from finished steps and reports no overrun when the budget holds', () => {

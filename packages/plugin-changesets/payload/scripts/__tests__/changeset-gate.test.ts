@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendFileSync,
+  mkdirSync,
   readFileSync,
   utimesSync,
   writeFileSync,
@@ -8,11 +9,12 @@ import {
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { useInstalledRepo } from '#test/repo';
+import { useInstalledRepo, useRepo } from '#test/repo';
 import { runIn, runScript } from '#test/run';
 import {
   checkPackageDrift,
   checkTranscriptOrdering,
+  createGatedOwnerResolver,
   parseDeclaredPackages,
   parseTranscript,
 } from '../changeset-gate.mjs';
@@ -212,6 +214,71 @@ describe('checkTranscriptOrdering', () => {
 
     expect(report.findings).toEqual([]);
   });
+});
+
+describe('createGatedOwnerResolver', () => {
+  function publishableCityvilleResolver(
+    files: string[] | undefined,
+  ): (path: string) => string | null {
+    const root = useRepo('pnpm-monorepo');
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.private = false;
+      pkg.files = files;
+    });
+    return createGatedOwnerResolver(root, [
+      {
+        name: '@fix/cityville',
+        dir: join(root, 'games/cityville'),
+        relDir: 'games/cityville',
+        pkg: {},
+      },
+    ]);
+  }
+
+  it.each([
+    {
+      files: ['dist'],
+      path: 'games/cityville/test/fixture.ts',
+      owner: null,
+    },
+    {
+      files: ['dist'],
+      path: 'games/cityville/tests/fixture.ts',
+      owner: null,
+    },
+    {
+      files: ['dist'],
+      path: 'games/cityville/src/game.ts',
+      owner: '@fix/cityville',
+    },
+    {
+      files: ['dist'],
+      path: 'games/cityville/src/test/helper.ts',
+      owner: '@fix/cityville',
+    },
+    {
+      files: ['dist', 'test'],
+      path: 'games/cityville/test/fixture.ts',
+      owner: '@fix/cityville',
+    },
+    {
+      files: ['dist', './test/fixtures/'],
+      path: 'games/cityville/test/fixtures/world.ts',
+      owner: '@fix/cityville',
+    },
+    {
+      files: undefined,
+      path: 'games/cityville/test/fixture.ts',
+      owner: '@fix/cityville',
+    },
+  ])(
+    'resolves $path to $owner when the files list is $files',
+    ({ files, path, owner }) => {
+      const resolveOwner = publishableCityvilleResolver(files);
+
+      expect(resolveOwner(path)).toBe(owner);
+    },
+  );
 });
 
 describe('parseTranscript', () => {
@@ -698,6 +765,29 @@ describe('changeset-gate.mjs, packages and files that ship nothing', () => {
 
     expect(r.status, r.stderr).toBe(2);
     expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('ignores an edited fixture under a top-level test directory the files list does not ship', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.files = ['dist'];
+    });
+    mkdirSync(join(root, 'games/cityville/test'));
+    writeFileSync(
+      join(root, 'games/cityville/test/fixture.ts'),
+      'export const world = 1;\n',
+    );
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'chore: files list and fixture']);
+    appendFileSync(
+      join(root, 'games/cityville/test/fixture.ts'),
+      'export const moon = 2;\n',
+    );
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
   });
 
   it('silences a path matching changesets.gateIgnore that would otherwise fire', () => {

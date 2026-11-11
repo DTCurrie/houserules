@@ -9,6 +9,7 @@ import {
   planLines,
   resolveScope,
   resolveVerifyCommands,
+  spawnTimedOut,
   verifyArgv,
   withDependents,
   type ScopeEntry,
@@ -272,6 +273,51 @@ describe('planLines', () => {
   });
 });
 
+describe('spawnTimedOut', () => {
+  const etimedout = Object.assign(
+    new Error('spawnSync ./stub-runner.sh ETIMEDOUT'),
+    { code: 'ETIMEDOUT' },
+  );
+
+  it.each([
+    {
+      name: 'a capped step killed with an ETIMEDOUT error and SIGTERM',
+      result: { error: etimedout, signal: 'SIGTERM' as const },
+      cap: 3000,
+      expected: true,
+    },
+    {
+      name: 'a capped step carrying only the ETIMEDOUT error',
+      result: { error: etimedout, signal: null },
+      cap: 3000,
+      expected: true,
+    },
+    {
+      name: 'a capped step ended by a signal with no error',
+      result: { signal: 'SIGKILL' as const },
+      cap: 3000,
+      expected: true,
+    },
+    {
+      name: 'a capped step that exited nonzero on its own',
+      result: { signal: null },
+      cap: 3000,
+      expected: false,
+    },
+    {
+      name: 'an uncapped step ended by a signal',
+      result: { signal: 'SIGTERM' as const },
+      cap: undefined,
+      expected: false,
+    },
+  ])(
+    'classifies $name as timed out: $expected',
+    ({ result, cap, expected }) => {
+      expect(spawnTimedOut(result, cap)).toBe(expected);
+    },
+  );
+});
+
 describe('verify-changed.mjs --json', () => {
   it('resolves a changed package plus its transitive dependent, with an exact argv per scope entry', () => {
     const root = repoWithStudioDependingOnCityville();
@@ -360,11 +406,11 @@ describe('verify-changed.mjs --run', () => {
   });
 
   it('reports a step that outlives verify.timeoutMs as timed out, keeps its output, and exits 2', () => {
-    useStubVerifyRunner(root, { hangMs: 5000, timeoutMs: 500 });
+    useStubVerifyRunner(root, { hangMs: 30_000, timeoutMs: 3000 });
     const r = runScript(root, SCRIPT, { args: ['--run'] });
     expect(r.status).toBe(2);
     expect(r.stdout).toMatch(
-      /@fix\/cityville: FAIL \(verify, timed out after 0\.5s\)/,
+      /@fix\/cityville: FAIL \(verify, timed out after 3s\)/,
     );
     expect(r.stderr).toMatch(/started-before-cap/);
     expect(readFileSync(join(root, 'runner-calls.txt'), 'utf8')).toMatch(

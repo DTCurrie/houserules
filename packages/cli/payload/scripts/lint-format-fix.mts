@@ -289,6 +289,20 @@ export function modifiedSince(
   });
 }
 
+/** The fields of a finished `spawnSync` result that {@link stepTimedOut} reads. */
+export interface FinishedSpawn {
+  status: number | null;
+  signal: NodeJS.Signals | null;
+}
+
+/**
+ * Whether a fix step was killed rather than exiting. Every step runs under a timeout, so a
+ * signal with no exit status is the timeout's kill.
+ */
+export function stepTimedOut(result: FinishedSpawn): boolean {
+  return result.signal !== null && result.status === null;
+}
+
 function runStep(
   pkg: string,
   script: string,
@@ -309,7 +323,7 @@ function runStep(
   );
   return {
     ok: r.status === 0,
-    timedOut: r.signal !== null && r.status === null,
+    timedOut: stepTimedOut(r),
     output: (r.stdout || '') + (r.stderr || ''),
   };
 }

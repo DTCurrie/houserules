@@ -2,7 +2,8 @@
 /**
  * Dev-only tool, never published. Wires this repo to run its own houserules by seeding
  * `.claude/houserules.config.json` and `.claude/settings.json`, then running the real installer
- * (`node dist/cli.js init --yes`) over this repo's own workspace. `.claude/` is gitignored.
+ * (`node dist/cli.js init --yes`), then `update` to reconcile settings, over this repo's own
+ * workspace. `.claude/` is gitignored.
  *
  * This runs the SAME plan/apply pipeline a user's `init` runs: every module's `plan()`
  * executes for real, `.claude/houserules.manifest.json` records what it installed, and an
@@ -414,6 +415,13 @@ console.log(
   `\nRunning the real installer: node ${initArgs.slice(1).join(' ')}\n`,
 );
 execFileSync(process.execPath, initArgs, { stdio: 'inherit', cwd: repoRoot });
+
+// `update` is the only command that reconciles `.claude/settings.json`, and `init` never touches it
+// once seeded, so this pass runs before relink to bring the seeded settings in line with the plan.
+execFileSync(process.execPath, [cliEntry, 'update', repoRoot], {
+  stdio: 'inherit',
+  cwd: repoRoot,
+});
 
 /** Files houserules only owns PART of. Never relinked, whatever surface they happen to sit in. */
 const SHARED_HOST_FILES = new Set([

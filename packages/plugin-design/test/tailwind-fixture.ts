@@ -72,6 +72,35 @@ export function useTailwindRepo(options: TailwindRepoOptions = {}): string {
   return root;
 }
 
+/** The version the staged repos report, a known literal for version and readout assertions. */
+const STAGED_TAILWIND_VERSION = '4.1.0';
+
+/**
+ * A synthetic repo whose Tailwind packages are written out at `STAGED_TAILWIND_VERSION`, with
+ * just the manifest fields the resolver reads (`version`, `main`) and an entry file. For tests
+ * that assert the version or a readout; tests that need real Tailwind behavior use
+ * `useTailwindRepo`.
+ */
+export function useStagedTailwindRepo(
+  options: { withOxide?: boolean } = {},
+): string {
+  const root = makeRepo('design-staged-');
+  const names = ['tailwindcss'];
+  if (options.withOxide) names.push('@tailwindcss/oxide');
+  for (const name of names) {
+    addPackage(
+      root,
+      name,
+      { version: STAGED_TAILWIND_VERSION, main: 'index.js' },
+      { 'index.js': 'module.exports = {};\n' },
+    );
+  }
+  const cssPath = join(root, 'src/app.css');
+  mkdirSync(dirname(cssPath), { recursive: true });
+  writeFileSync(cssPath, DEFAULT_ENTRY_CSS);
+  return root;
+}
+
 /**
  * A synthetic repo with no Tailwind installed, removed after the current test. The other half
  * of every detection test.
@@ -116,7 +145,9 @@ function copyRealPackage(destination: string, packageName: string): void {
  * only through the anchor's realpath. The store entries are real directories inside the repo
  * (copied, not symlinked out), matching where pnpm's own store lives.
  */
-export function usePnpmTailwindRepo(options: { anchor?: string } = {}): string {
+export function usePnpmTailwindRepo(
+  options: { anchor?: string; isStaged?: boolean } = {},
+): string {
   const root = makeRepo('design-pnpm-');
   const anchor = options.anchor ?? 'tailwindcss';
   const storeModules = join(
@@ -127,7 +158,7 @@ export function usePnpmTailwindRepo(options: { anchor?: string } = {}): string {
   );
 
   const anchorDirectory = join(storeModules, anchor);
-  if (anchor === 'tailwindcss') {
+  if (anchor === 'tailwindcss' && !options.isStaged) {
     copyRealPackage(anchorDirectory, anchor);
   } else {
     mkdirSync(anchorDirectory, { recursive: true });
@@ -136,10 +167,17 @@ export function usePnpmTailwindRepo(options: { anchor?: string } = {}): string {
       `${JSON.stringify({ name: anchor, version: '4.0.0', main: 'index.js' }, null, 2)}\n`,
     );
   }
-  copyRealPackage(
-    join(storeModules, '@tailwindcss/oxide'),
-    '@tailwindcss/oxide',
-  );
+  const oxideDirectory = join(storeModules, '@tailwindcss/oxide');
+  if (options.isStaged) {
+    mkdirSync(oxideDirectory, { recursive: true });
+    writeFileSync(
+      join(oxideDirectory, 'package.json'),
+      `${JSON.stringify({ name: '@tailwindcss/oxide', version: STAGED_TAILWIND_VERSION, main: 'index.js' }, null, 2)}\n`,
+    );
+    writeFileSync(join(oxideDirectory, 'index.js'), 'module.exports = {};\n');
+  } else {
+    copyRealPackage(oxideDirectory, '@tailwindcss/oxide');
+  }
 
   const topLevelLink = join(root, 'node_modules', anchor);
   mkdirSync(dirname(topLevelLink), { recursive: true });

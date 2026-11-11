@@ -294,6 +294,28 @@ function main() {
   process.exit(residues.length > 0 ? 2 : 0);
 }
 
+/** The fields of a finished `spawnSync` result that {@link spawnTimedOut} reads. */
+export interface FinishedSpawn {
+  error?: Error;
+  signal: NodeJS.Signals | null;
+}
+
+/**
+ * Whether a failed step ended because `cap` killed it. An uncapped step is never timed
+ * out, since nothing here sent the signal.
+ */
+export function spawnTimedOut(
+  result: FinishedSpawn,
+  cap: number | undefined,
+): boolean {
+  return (
+    cap !== undefined &&
+    ((result.error as NodeJS.ErrnoException | undefined)?.code ===
+      'ETIMEDOUT' ||
+      result.signal !== null)
+  );
+}
+
 interface Residue {
   pkg: string;
   step: string;
@@ -333,12 +355,8 @@ function runScope(
       );
       if (r.status !== 0) {
         failedStep = script;
-        timedOut =
-          cap !== undefined &&
-          ((r.error as NodeJS.ErrnoException | undefined)?.code ===
-            'ETIMEDOUT' ||
-            r.signal !== null);
         output = (r.stdout || '') + (r.stderr || '');
+        timedOut = spawnTimedOut(r, cap);
         break;
       }
     }
