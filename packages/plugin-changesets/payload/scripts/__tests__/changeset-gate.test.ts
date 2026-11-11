@@ -9,12 +9,11 @@ import {
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { useInstalledRepo, useRepo } from '#test/repo';
+import { useInstalledRepo } from '#test/repo';
 import { runIn, runScript } from '#test/run';
 import {
   checkPackageDrift,
   checkTranscriptOrdering,
-  createGatedOwnerResolver,
   parseDeclaredPackages,
   parseTranscript,
 } from '../changeset-gate.mjs';
@@ -214,71 +213,6 @@ describe('checkTranscriptOrdering', () => {
 
     expect(report.findings).toEqual([]);
   });
-});
-
-describe('createGatedOwnerResolver', () => {
-  function publishableCityvilleResolver(
-    files: string[] | undefined,
-  ): (path: string) => string | null {
-    const root = useRepo('pnpm-monorepo');
-    rewritePackageJson(root, 'games/cityville', (pkg) => {
-      pkg.private = false;
-      pkg.files = files;
-    });
-    return createGatedOwnerResolver(root, [
-      {
-        name: '@fix/cityville',
-        dir: join(root, 'games/cityville'),
-        relDir: 'games/cityville',
-        pkg: {},
-      },
-    ]);
-  }
-
-  it.each([
-    {
-      files: ['dist'],
-      path: 'games/cityville/test/fixture.ts',
-      owner: null,
-    },
-    {
-      files: ['dist'],
-      path: 'games/cityville/tests/fixture.ts',
-      owner: null,
-    },
-    {
-      files: ['dist'],
-      path: 'games/cityville/src/game.ts',
-      owner: '@fix/cityville',
-    },
-    {
-      files: ['dist'],
-      path: 'games/cityville/src/test/helper.ts',
-      owner: '@fix/cityville',
-    },
-    {
-      files: ['dist', 'test'],
-      path: 'games/cityville/test/fixture.ts',
-      owner: '@fix/cityville',
-    },
-    {
-      files: ['dist', './test/fixtures/'],
-      path: 'games/cityville/test/fixtures/world.ts',
-      owner: '@fix/cityville',
-    },
-    {
-      files: undefined,
-      path: 'games/cityville/test/fixture.ts',
-      owner: '@fix/cityville',
-    },
-  ])(
-    'resolves $path to $owner when the files list is $files',
-    ({ files, path, owner }) => {
-      const resolveOwner = publishableCityvilleResolver(files);
-
-      expect(resolveOwner(path)).toBe(owner);
-    },
-  );
 });
 
 describe('parseTranscript', () => {

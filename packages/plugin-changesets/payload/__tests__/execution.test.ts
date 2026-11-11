@@ -63,16 +63,16 @@ function runHook(script: string, input = '{}') {
 }
 
 describe('every lib module loads on bare node', () => {
-  const libDir = join(SCRIPTS, 'lib');
-  const hasLibDir = existsSync(libDir);
+  const emittedLibDir = join(SCRIPTS, 'lib');
+  const hasLibDir = existsSync(emittedLibDir);
 
   const libFiles = hasLibDir
-    ? readdirSync(libDir).filter((f) => f.endsWith('.mjs'))
+    ? readdirSync(emittedLibDir).filter((f) => f.endsWith('.mjs'))
     : [];
 
   describe.runIf(hasLibDir)('scripts/lib', () => {
     function importLibInChildProcess(file: string) {
-      const fileUrl = pathToFileURL(join(libDir, file)).href;
+      const fileUrl = pathToFileURL(join(stagedScripts, 'lib', file)).href;
       return spawnSync(
         process.execPath,
         ['--input-type=module', '-e', `await import('${fileUrl}')`],
@@ -85,7 +85,7 @@ describe('every lib module loads on bare node', () => {
     }
 
     it('has lib files to check', () => {
-      expect(libFiles).toHaveLength(0);
+      expect(libFiles).toEqual(['changeset-owner.mjs']);
     });
 
     it.each(libFiles)('%s imports and exits 0', (file) => {

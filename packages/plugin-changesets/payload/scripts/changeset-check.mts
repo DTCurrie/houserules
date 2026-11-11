@@ -26,7 +26,7 @@ import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { git, readStdinJson } from '@houserules/payload/proc';
 import { turnTouchedFiles } from '@houserules/payload/transcript-turn';
-import { createGatedOwnerResolver } from './changeset-gate.mjs';
+import { createGatedOwnerResolver } from './lib/changeset-owner.mjs';
 
 const STATE_DIR = '.claude/state';
 const STATE_FILE = 'changeset-check.json';
@@ -183,7 +183,11 @@ try {
   // A path inside a workspace package counts only when the gate would gate it. A path no
   // workspace package owns (a root-package repo's own files) keeps the scope match alone.
   const workspacePackages = listWorkspacePackages(root);
-  const gatedOwner = createGatedOwnerResolver(root, workspacePackages);
+  const gatedOwner = createGatedOwnerResolver(
+    root,
+    workspacePackages,
+    config.changesets?.gateIgnore ?? [],
+  );
   const isOwned = (p: string): boolean =>
     workspacePackages.some(
       (pkg) => p === pkg.relDir || p.startsWith(`${pkg.relDir}/`),
