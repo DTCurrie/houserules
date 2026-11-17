@@ -1,5 +1,11 @@
 # @houserules/cli
 
+## 0.12.2
+
+### Patch Changes
+
+- 73b7d68: `/blast-radius` writes its impact map into the associated plan's workspace.
+
 ## 0.12.1
 
 ### Patch Changes
