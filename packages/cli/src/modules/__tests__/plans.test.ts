@@ -20,6 +20,7 @@ describe('plans', () => {
       expect(existsSync(skillPath), 'blast-radius skill installed').toBe(true);
       const text = readFileSync(skillPath, 'utf8');
       expect(text).toMatch(/\.claude\/plans\/blast-radius-/);
+      expect(text).toMatch(/\.claude\/plans\/<plan>\/blast-radius-/);
       expect(text).toMatch(/disclaimer|Snapshot at commit/i);
       expect(text).toMatch(/Completeness self-audit/);
     });

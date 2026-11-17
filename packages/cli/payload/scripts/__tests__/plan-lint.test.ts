@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import {
   checkBlastRadiusShape,
@@ -12,12 +12,13 @@ import {
   checkReviewFocus,
   checkRoadmapSync,
   checkSliceStatuses,
+  listImpactMaps,
   parseDomain,
   parseRoadmapPhases,
 } from '../plan-lint.mjs';
 
 import { repoRootSafe } from '@houserules/payload/config';
-import { useInstalledRepo } from '#test/repo';
+import { useInstalledRepo, useRepo } from '#test/repo';
 import { runScript } from '#test/run';
 
 const SLICE_TABLE = (status: string) => `## Slices
@@ -143,6 +144,47 @@ x
       rules.some((m) => m.includes('staleness disclaimer')),
       'flags missing staleness disclaimer',
     ).toBe(true);
+  });
+});
+
+describe('listImpactMaps', () => {
+  function stagePlansDir(files: string[]): string {
+    const plansDir = join(useRepo('non-js'), '.claude/plans');
+    for (const file of files) {
+      const filePath = join(plansDir, file);
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeFileSync(filePath, '');
+    }
+    return plansDir;
+  }
+
+  it('finds a map inside the workspace of the plan it served', () => {
+    const plansDir = stagePlansDir([
+      'auth-rework/ROADMAP.md',
+      'auth-rework/blast-radius-session-store-2026-08-18.md',
+    ]);
+    expect(listImpactMaps(plansDir, ['auth-rework'])).toEqual([
+      join(plansDir, 'auth-rework/blast-radius-session-store-2026-08-18.md'),
+    ]);
+  });
+
+  it('finds a root map and the maps of two workspaces together', () => {
+    const plansDir = stagePlansDir([
+      'blast-radius-config-key-2026-07-02.md',
+      'auth-rework/blast-radius-session-store-2026-08-18.md',
+      'payments-v2/blast-radius-ledger-2026-09-30.md',
+      'payments-v2/phase-1-ledger.md',
+    ]);
+    expect(listImpactMaps(plansDir, ['auth-rework', 'payments-v2'])).toEqual([
+      join(plansDir, 'blast-radius-config-key-2026-07-02.md'),
+      join(plansDir, 'auth-rework/blast-radius-session-store-2026-08-18.md'),
+      join(plansDir, 'payments-v2/blast-radius-ledger-2026-09-30.md'),
+    ]);
+  });
+
+  it('returns nothing when the plans directory does not exist', () => {
+    const plansDir = join(useRepo('non-js'), '.claude/plans');
+    expect(listImpactMaps(plansDir, [])).toEqual([]);
   });
 });
 
@@ -685,6 +727,37 @@ ${SLICE_TABLE('In Progress')}`,
     const result = runScript(root, SCRIPT);
     expect(result.status, result.stdout).toBe(1);
     expect(result.stdout).toContain('plan-lint/slice-status-vocabulary');
+  });
+
+  it('exits 1 naming a workspace impact map that lacks its self-audit', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+    const planDir = join(root, '.claude/plans/demo');
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(
+      join(planDir, 'blast-radius-auth-2026-08-18.md'),
+      `# Blast radius: auth: 2026-08-18
+
+> Snapshot at commit \`abc123\` on 2026-08-18.
+
+## Surface
+
+x
+
+## Impact by file
+
+x
+
+## Cross-package / boundary impact
+
+x
+`,
+    );
+    const result = runScript(root, SCRIPT);
+    expect(result.status, result.stdout).toBe(1);
+    expect(result.stdout).toContain('plan-lint/blast-radius-shape');
+    expect(result.stdout).toContain(
+      '.claude/plans/demo/blast-radius-auth-2026-08-18.md',
+    );
   });
 
   it('does not flag a missing plan-path in a phase doc whose own Status header is DONE', () => {

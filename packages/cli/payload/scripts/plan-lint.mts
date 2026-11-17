@@ -470,6 +470,28 @@ export function checkBlastRadiusShape(file: string, markdown: string): Report {
   return report;
 }
 
+const IMPACT_MAP_FILE = /^blast-radius-.*\.md$/;
+
+/**
+ * Lists the path of every impact map under `plansDir`. `blast-radius/SKILL.md` §3 writes a
+ * map into the workspace of the plan it served, and to the root only when no plan was in
+ * play, so both homes are read. `workspaceDirs` is every directory directly under `plansDir`.
+ */
+export function listImpactMaps(
+  plansDir: string,
+  workspaceDirs: string[],
+): string[] {
+  const homes = [
+    plansDir,
+    ...workspaceDirs.map((slug) => join(plansDir, slug)),
+  ];
+  return homes.flatMap((home) =>
+    listEntries(home)
+      .filter((name) => IMPACT_MAP_FILE.test(name))
+      .map((name) => join(home, name)),
+  );
+}
+
 /**
  * Flags the case `orchestrate/SKILL.md` §0 names as its own precondition: no plan workspace
  * to slice. `planWorkspaceDirs` is every directory found directly under `.claude/plans/`.
@@ -677,6 +699,15 @@ function isArchivedWorkspaceStatus(status: string | null): boolean {
   );
 }
 
+/** The names directly inside `dir`, or none when it is missing or unreadable. */
+function listEntries(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
 function listSubdirectories(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -746,16 +777,13 @@ function main(): void {
     }
   }
 
-  if (existsSync(plansDir)) {
-    for (const name of readdirSync(plansDir)) {
-      if (!/^blast-radius-.*\.md$/.test(name)) continue;
-      const filePath = join(plansDir, name);
-      const markdown = readFileSync(filePath, 'utf8');
-      const relFile = relative(root, filePath);
-      report.findings.push(
-        ...checkBlastRadiusShape(relFile, markdown).findings,
-      );
-    }
+  for (const filePath of listImpactMaps(plansDir, workspaceDirs)) {
+    report.findings.push(
+      ...checkBlastRadiusShape(
+        relative(root, filePath),
+        readFileSync(filePath, 'utf8'),
+      ).findings,
+    );
   }
 
   process.stdout.write(`${renderReport(report)}\n`);
