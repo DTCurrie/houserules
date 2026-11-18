@@ -1,5 +1,5 @@
 import type { Corpus } from './transcript-events.js';
-import { isCrash } from './hook-crash.js';
+import { isCrash, uncoveredOutcomes } from './hook-crash.js';
 
 export interface GuardBlock {
   session: string;
@@ -21,6 +21,18 @@ export function computeGuardBlocks(corpus: Corpus): GuardBlock[] {
       blocks.push({
         session: sessionId.slice(0, 8),
         blockedCommand: blocked?.command ?? '(tool_use not found)',
+      });
+    }
+    for (const outcome of uncoveredOutcomes(session)) {
+      if (isCrash(outcome)) continue;
+      const index =
+        outcome.toolUseId !== undefined
+          ? session.toolUseIndexById.get(outcome.toolUseId)
+          : undefined;
+      const use = index !== undefined ? session.toolUses[index] : undefined;
+      blocks.push({
+        session: sessionId.slice(0, 8),
+        blockedCommand: use?.command || use?.name || '(tool_use not found)',
       });
     }
   }

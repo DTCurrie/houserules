@@ -90,6 +90,13 @@ const KIT_STOCK_FORMATS: ((basename: string) => string)[] = [
   // The pre-rename wrapper after its message was reworded and before the houserules rename.
   (name) =>
     `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || echo "[kit] ${name} missing. Run: npx agent-kit update"`,
+  // The em-dash wrapper with a stdout echo, stock just before the 2026-08-20 sweep. Installs
+  // last updated then still carry it.
+  (name) =>
+    `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || echo "[houserules] ${name} missing — run: npx houserules update"`,
+  // The guard wrapper from before its notice said the call is blocked.
+  (name) =>
+    `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || { echo "[houserules] ${name} missing. Run: npx houserules update" >&2; exit 1; }`,
 ];
 
 // A placeholder basename, standing in for hookCommand's own scriptName parameter so the shape

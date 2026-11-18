@@ -315,6 +315,55 @@ describe('ingestTranscript per-session usage', () => {
     return row;
   }
 
+  it('counts one API response split over several records once', () => {
+    const block = (extra: Record<string, unknown>) =>
+      line({
+        type: 'assistant',
+        sessionId: 'sess-1',
+        timestamp: '2026-10-01T10:00:00Z',
+        requestId: 'req-1',
+        message: {
+          id: 'msg-1',
+          role: 'assistant',
+          model: 'model-a',
+          usage: {
+            input_tokens: 10,
+            output_tokens: 20,
+            cache_read_input_tokens: 100,
+            cache_creation_input_tokens: 5,
+          },
+          ...extra,
+        },
+      });
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-1.jsonl',
+      [
+        block({ content: [{ type: 'thinking' }] }),
+        block({ content: [{ type: 'text', text: 'a' }] }),
+        block({ content: [{ type: 'tool_use', id: 't1', name: 'Bash' }] }),
+        line({
+          type: 'assistant',
+          sessionId: 'sess-1',
+          timestamp: '2026-10-01T10:00:01Z',
+          requestId: 'req-2',
+          message: { id: 'msg-2', role: 'assistant', model: 'model-a' },
+        }),
+      ].join('\n'),
+    );
+    const row = corpus.files[0]!;
+
+    expect(row.turns).toBe(1);
+    expect(row.input).toBe(10);
+    expect(row.output).toBe(20);
+    expect(row.cacheRead).toBe(100);
+    expect(row.cacheWrite).toBe(5);
+    expect(row.byOrigin.main.turns).toBe(1);
+    expect(row.byModel.get('model-a')?.turns).toBe(1);
+    expect(row.byModel.get('model-a')?.input).toBe(10);
+  });
+
   it('splits tokens by origin, by model, and spans the folded timestamps', () => {
     const row = ingestPair();
 

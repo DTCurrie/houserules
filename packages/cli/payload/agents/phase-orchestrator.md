@@ -119,8 +119,8 @@ Pick the first-line status by what the main conversation has to do next. `WAVE_C
 closed and the phase is open, so print the table and send `continue`. `DONE` means the phase is
 closed and the sub-plan header says so. `NEEDS_RULING` means only the user can answer, and `Ruling needed`
 holds the question. `BLOCKED` means you cannot run the phase at all, such as `Agent` withheld or a
-`Plan:` with no workspace on disk. `PARTIAL` means you stopped at the context-size gate after the
-current wave closed, and `Resume` names what a fresh spawn picks up.
+`Plan:` with no workspace on disk. `PARTIAL` means you stopped at the context-size gate, past 300,000
+tokens of context and before compaction near 364,000, after the current wave closed, and `Resume` names what a fresh spawn picks up.
 
 Hard rules for the report: **no diffs, no file contents, no per-file logs, no narration.** Print the
 status table verbatim, with every slice in the phase. One line per slice under `Landed`. If a ruling

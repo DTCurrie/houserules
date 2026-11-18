@@ -80,7 +80,7 @@ describe('computeTokenUsage', () => {
       'sess-abcdef12.jsonl',
       line({
         type: 'assistant',
-        message: { role: 'assistant', model: 'claude-3-sonnet' },
+        message: { role: 'assistant', model: 'claude-3-sonnet', usage: {} },
       }),
     );
 
@@ -179,7 +179,7 @@ describe('computeTokenUsage', () => {
       'sess-first111.jsonl',
       line({
         type: 'assistant',
-        message: { role: 'assistant', model: 'model-b' },
+        message: { role: 'assistant', model: 'model-b', usage: {} },
       }),
     );
     ingestTranscript(
@@ -188,11 +188,11 @@ describe('computeTokenUsage', () => {
       [
         line({
           type: 'assistant',
-          message: { role: 'assistant', model: 'model-a' },
+          message: { role: 'assistant', model: 'model-a', usage: {} },
         }),
         line({
           type: 'assistant',
-          message: { role: 'assistant', model: 'model-b' },
+          message: { role: 'assistant', model: 'model-b', usage: {} },
         }),
       ].join('\n'),
     );

@@ -1,5 +1,5 @@
-import type { Corpus, HookFire } from './transcript-events.js';
-import { crashSignature, isCrash } from './hook-crash.js';
+import type { Corpus, HookFire, HookOutcome } from './transcript-events.js';
+import { crashSignature, isCrash, uncoveredOutcomes } from './hook-crash.js';
 import { renderTable } from './render-table.js';
 
 interface HookHealthRow {
@@ -53,20 +53,46 @@ function accumulate(
   else row.blocks += 1;
 }
 
+// A guard block reaches the transcript only as an error tool_result, which records no exit
+// code and no position, so the synthesized fire takes the blocking exit and no position.
+const BLOCKING_EXIT_CODE = 2;
+const UNKNOWN_TOOL_USE_POSITION = 0;
+
+function fireFromOutcome(outcome: HookOutcome): HookFire {
+  return {
+    hookName: `PreToolUse:${outcome.tool}`,
+    exitCode: BLOCKING_EXIT_CODE,
+    stderr: outcome.stderr,
+    content: '',
+    toolUseID: outcome.toolUseId,
+    afterToolUseCount: UNKNOWN_TOOL_USE_POSITION,
+  };
+}
+
+function countCrashSignature(
+  fire: HookFire,
+  crashSignatureCounts: Map<string, number>,
+): void {
+  if (!fire.exitCode || !isCrash(fire)) return;
+  const signature = crashSignature(fire);
+  crashSignatureCounts.set(
+    signature,
+    (crashSignatureCounts.get(signature) ?? 0) + 1,
+  );
+}
+
 export function computeHookHealth(corpus: Corpus): HookHealthReport {
   const byHook = new Map<string, HookAccumulator>();
   const crashSignatureCounts = new Map<string, number>();
   let bashCalls = 0;
   for (const session of corpus.sessions.values()) {
-    for (const fire of session.hookFires) {
+    const fires = [
+      ...session.hookFires,
+      ...uncoveredOutcomes(session).map(fireFromOutcome),
+    ];
+    for (const fire of fires) {
       accumulate(fire, byHook);
-      if (fire.exitCode && isCrash(fire)) {
-        const signature = crashSignature(fire);
-        crashSignatureCounts.set(
-          signature,
-          (crashSignatureCounts.get(signature) ?? 0) + 1,
-        );
-      }
+      countCrashSignature(fire, crashSignatureCounts);
     }
     bashCalls += session.toolUses.filter((use) => use.name === 'Bash').length;
   }

@@ -304,6 +304,38 @@ describe('computeLedgerOutcome', () => {
     });
   });
 
+  it('counts a decide entry in the decisions ledger as an add', () => {
+    const root = tempRoot();
+    writeFile(
+      root,
+      '.claude/ledgers/decisions.jsonl',
+      `${JSON.stringify({ action: 'decide', id: 'D-1', chat: 'sess-d' })}\n`,
+    );
+    const corpus = corpusFromLines([
+      skillFireLine('sess-d', '2026-01-01T00:00:00.000Z', 'decide'),
+    ]);
+
+    expect(
+      computeLedgerOutcome(corpus, root, 'decisions.jsonl', 'decide'),
+    ).toEqual({ skill: 'decide', fires: 1, matched: 1, totalAdds: 1 });
+  });
+
+  it('counts a supersede entry in the decisions ledger as an add', () => {
+    const root = tempRoot();
+    writeFile(
+      root,
+      '.claude/ledgers/decisions.jsonl',
+      `${JSON.stringify({ action: 'supersede', id: 'D-1', chat: 'sess-s' })}\n`,
+    );
+    const corpus = corpusFromLines([
+      skillFireLine('sess-s', '2026-01-01T00:00:00.000Z', 'decide'),
+    ]);
+
+    expect(
+      computeLedgerOutcome(corpus, root, 'decisions.jsonl', 'decide'),
+    ).toEqual({ skill: 'decide', fires: 1, matched: 1, totalAdds: 1 });
+  });
+
   it('matches an index entry when the jsonl is empty', () => {
     const root = tempRoot();
     writeFile(root, '.claude/ledgers/backlog.jsonl', '');

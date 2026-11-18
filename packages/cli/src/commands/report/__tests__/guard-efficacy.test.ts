@@ -195,3 +195,154 @@ describe('renderGuardEfficacy', () => {
     ]);
   });
 });
+
+const WRAPPER =
+  '[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs" || { echo "[houserules] guard-bash.mjs missing. Run: npx houserules update" >&2; exit 1; }';
+
+function toolUseLine(
+  id: string,
+  name: string,
+  input: Record<string, unknown>,
+): string {
+  return JSON.stringify({
+    type: 'assistant',
+    sessionId: 'session-aaaaaaaa-bbbb',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'tool_use', id, name, input }],
+    },
+  });
+}
+
+function hookErrorLine(id: string, tool: string, stderr: string): string {
+  return JSON.stringify({
+    type: 'user',
+    sessionId: 'session-aaaaaaaa-bbbb',
+    message: {
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: id,
+          is_error: true,
+          content: `PreToolUse:${tool} hook error: [${WRAPPER}]: ${stderr}`,
+        },
+      ],
+    },
+  });
+}
+
+describe('computeGuardBlocks from error tool_results', () => {
+  it('counts a default-rule Bash refusal even though the echoed command holds the old notice', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'g.jsonl',
+      [
+        toolUseLine('t1', 'Bash', { command: 'git stash' }),
+        hookErrorLine(
+          't1',
+          'Bash',
+          'Blocked by houserules guard: git stash dumps the full untracked-file list into context.',
+        ),
+      ].join('\n'),
+    );
+
+    expect(computeGuardBlocks(corpus)).toEqual([
+      { session: 'session-', blockedCommand: 'git stash' },
+    ]);
+  });
+
+  it('counts a subagent write-gate refusal and names the tool', () => {
+    const corpus = emptyCorpus(['slug']);
+    const parent = { file: 'parent.jsonl' } as never;
+    ingestTranscript(
+      corpus,
+      'agent-1.jsonl',
+      [
+        toolUseLine('t2', 'Write', { file_path: '/x/CHANGELOG.md' }),
+        hookErrorLine(
+          't2',
+          'Write',
+          'Blocked by houserules guard: subagents may not write here.',
+        ),
+      ].join('\n'),
+      parent,
+    );
+
+    expect(computeGuardBlocks(corpus)).toEqual([
+      { session: 'session-', blockedCommand: 'Write' },
+    ]);
+    const session = corpus.sessions.get('session-aaaaaaaa-bbbb');
+    expect(session?.hookOutcomes[0]?.isSubagent).toBe(true);
+  });
+
+  it('counts a Read-guard refusal', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'r.jsonl',
+      [
+        toolUseLine('t3', 'Read', { file_path: '/x/big.log' }),
+        hookErrorLine(
+          't3',
+          'Read',
+          'Blocked by houserules guard: read a slice instead.',
+        ),
+      ].join('\n'),
+    );
+
+    expect(computeGuardBlocks(corpus)).toEqual([
+      { session: 'session-', blockedCommand: 'Read' },
+    ]);
+  });
+
+  it('does not count a missing-script crash under either notice', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'c.jsonl',
+      [
+        toolUseLine('t4', 'Bash', { command: 'ls' }),
+        hookErrorLine(
+          't4',
+          'Bash',
+          '[houserules] guard-bash.mjs missing. Run: npx houserules update',
+        ),
+        toolUseLine('t5', 'Bash', { command: 'ls' }),
+        hookErrorLine(
+          't5',
+          'Bash',
+          '[houserules] guard-bash.mjs is missing, so this call is blocked. Restore it from your terminal: npx houserules update',
+        ),
+      ].join('\n'),
+    );
+
+    expect(computeGuardBlocks(corpus)).toEqual([]);
+  });
+
+  it('counts a call recorded as both attachment and error tool_result once', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'd.jsonl',
+      [
+        toolUseLine('t6', 'Bash', { command: 'git stash' }),
+        JSON.stringify({
+          type: 'attachment',
+          sessionId: 'session-aaaaaaaa-bbbb',
+          attachment: {
+            hookName: 'PreToolUse:Bash',
+            exitCode: 2,
+            stderr: 'Blocked by houserules guard: x',
+            content: '',
+            toolUseID: 't6',
+          },
+        }),
+        hookErrorLine('t6', 'Bash', 'Blocked by houserules guard: x'),
+      ].join('\n'),
+    );
+
+    expect(computeGuardBlocks(corpus)).toHaveLength(1);
+  });
+});

@@ -1,3 +1,8 @@
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -81,8 +86,24 @@ describe('hookFragment fallback by event', () => {
 
   it('writes the stderr notice and exit 1 for PreToolUse', () => {
     expect(commandFor('PreToolUse')).toMatch(
-      / \|\| \{ echo "\[houserules\] x\.mjs missing\. Run: npx houserules update" >&2; exit 1; \}$/,
+      / \|\| \{ echo "\[houserules\] x\.mjs is missing, so this call is blocked\. Restore it from your terminal: npx houserules update" >&2; exit 1; \}$/,
     );
+  });
+
+  it('blocks with the notice on stderr when the script is absent in a real shell', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hookwiring-'));
+    try {
+      const result = spawnSync('sh', ['-c', hookCommand('x.mjs', 'guard')], {
+        env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+        encoding: 'utf8',
+      });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toBe(
+        '[houserules] x.mjs is missing, so this call is blocked. Restore it from your terminal: npx houserules update\n',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('writes the stdout notice then exit 0 for SessionStart', () => {

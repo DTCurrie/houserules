@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { loadIndex } from '@houserules/payload/ledger-index';
 import type { LedgerKind } from '@houserules/payload/ledger-index';
@@ -142,6 +142,14 @@ const LEDGER_KIND_BY_FILE: Record<string, LedgerKind> = {
   'decisions.jsonl': 'decisions',
 };
 
+function isAddAction(action: string | undefined, path: string): boolean {
+  if (action === 'add') return true;
+  return (
+    LEDGER_KIND_BY_FILE[basename(path)] === 'decisions' &&
+    (action === 'decide' || action === 'supersede')
+  );
+}
+
 function readJsonlAdds(path: string): Map<string, RecordedEntry> {
   const adds = new Map<string, RecordedEntry>();
   if (!existsSync(path)) return adds;
@@ -155,7 +163,7 @@ function readJsonlAdds(path: string): Map<string, RecordedEntry> {
         ts?: string;
         chat?: string;
       };
-      if (entry.action !== 'add') continue;
+      if (!isAddAction(entry.action, path)) continue;
       const key =
         typeof entry.id === 'string' ? entry.id : `anonymous-${anonymous++}`;
       adds.set(key, {

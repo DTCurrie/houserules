@@ -25,18 +25,21 @@ export function hookCommand(
   fallback: HookFallback = 'guard',
 ): string {
   const path = `"$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
-  const notice = `[houserules] ${scriptName} missing. Run: npx houserules update`;
+  const hintNotice = `[houserules] ${scriptName} missing. Run: npx houserules update`;
+  const guardNotice = `[houserules] ${scriptName} is missing, so this call is blocked. Restore it from your terminal: npx houserules update`;
   const head = `[ -f ${path} ] && exec node ${path}`;
   if (fallback === 'silent') return `${head} || exit 0`;
-  if (fallback === 'hint') return `${head} || { echo "${notice}"; exit 0; }`;
-  return `${head} || { echo "${notice}" >&2; exit 1; }`;
+  if (fallback === 'hint')
+    return `${head} || { echo "${hintNotice}"; exit 0; }`;
+  return `${head} || { echo "${guardNotice}" >&2; exit 1; }`;
 }
 
 /**
  * What a hook command does when its script is absent. `guard` prints the notice to stderr
- * and exits 1, which the harness shows as a non-blocking error. `hint` prints the notice to
- * stdout and exits 0, so a SessionStart hook hands Claude the notice as context, since the
- * stderr notice of a fresh clone is never read. `silent` prints nothing and exits 0.
+ * and exits 1. The guard hooks carry `onFailure: 'block'`, so the call is blocked until the
+ * script is restored. `hint` prints the notice to stdout and exits 0, so a SessionStart hook
+ * hands Claude the notice as context, since the stderr notice of a fresh clone is never read.
+ * `silent` prints nothing and exits 0.
  */
 export type HookFallback = 'guard' | 'hint' | 'silent';
 

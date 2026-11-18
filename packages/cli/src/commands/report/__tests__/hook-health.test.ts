@@ -290,3 +290,65 @@ describe('renderHookHealth', () => {
     expect(rendered.join('\n')).not.toContain('crash signatures');
   });
 });
+
+describe('computeHookHealth from error tool_results', () => {
+  const wrapper =
+    '[ -f x ] || { echo "[houserules] guard-bash.mjs missing. Run: npx houserules update" >&2; exit 1; }';
+  function errorLine(id: string, stderr: string): string {
+    return JSON.stringify({
+      type: 'user',
+      sessionId: 'sess-1',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: id,
+            is_error: true,
+            content: `PreToolUse:Bash hook error: [${wrapper}]: ${stderr}`,
+          },
+        ],
+      },
+    });
+  }
+
+  it('counts crashes under both notices and a real refusal as a block', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'h.jsonl',
+      [
+        errorLine(
+          'a',
+          '[houserules] guard-bash.mjs missing. Run: npx houserules update',
+        ),
+        errorLine(
+          'b',
+          '[houserules] guard-bash.mjs is missing, so this call is blocked. Restore it from your terminal: npx houserules update',
+        ),
+        errorLine(
+          'c',
+          'Blocked by houserules guard: git stash dumps the list.',
+        ),
+      ].join('\n'),
+    );
+
+    const report = computeHookHealth(corpus);
+
+    expect(report.rows).toEqual([
+      {
+        hook: 'PreToolUse:Bash',
+        fires: 3,
+        nonZero: 3,
+        crashes: 2,
+        blocks: 1,
+        p50: 0,
+        p95: 0,
+        max: 0,
+      },
+    ]);
+    expect(report.crashSignatures).toEqual([
+      { signature: 'missing script: guard-bash.mjs', count: 2 },
+    ]);
+  });
+});

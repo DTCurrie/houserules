@@ -71,7 +71,7 @@ describe('renderComparison', () => {
   it('carries each corpus turn count in label order', () => {
     const lines = renderComparison([home, work]);
 
-    expect(cells(lines, 'turns')).toEqual(['turns', '3', '7']);
+    expect(cells(lines, 'turns')).toEqual(['turns', '3', '6']);
   });
 
   it('shows a dash under the label that never saw the hook', () => {
@@ -113,6 +113,6 @@ describe('renderComparison', () => {
 
     const lines = renderComparison([home, work, third]);
 
-    expect(cells(lines, 'turns')).toEqual(['turns', '3', '7', '1']);
+    expect(cells(lines, 'turns')).toEqual(['turns', '3', '6', '1']);
   });
 });

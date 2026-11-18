@@ -41,7 +41,7 @@ cap stay nested, because they are the orchestrator's own calls, not the user's.
 | `check-in`      | §8, between phases                                            | `DONE`, the pause lives at the main conversation                                                            |
 | `blocked-slice` | §7, a slice marked `BLOCKED`                                  | `NEEDS_RULING`                                                                                              |
 | `needs-context` | §5, a worker's `NEEDS_CONTEXT` the plan on disk cannot answer | `NEEDS_RULING`                                                                                              |
-| `context-size`  | §8, past roughly half the window                              | `PARTIAL`, after the current wave closes                                                                    |
+| `context-size`  | §8, past 300,000 tokens, before compaction near 364,000       | `PARTIAL`, after the current wave closes                                                                    |
 | `depth-limit`   | preflight, `Agent` withheld from the orchestrator             | `BLOCKED`, naming `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`                                                    |
 
 ## The main conversation

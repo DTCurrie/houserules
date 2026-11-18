@@ -12,6 +12,8 @@ import {
 
 const SCRIPT = 'guard-bash.mjs';
 const HISTORICAL_COMMAND = `node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}"`;
+const EM_DASH_COMMAND = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || echo "[houserules] ${SCRIPT} missing — run: npx houserules update"`;
+const PREVIOUS_GUARD_COMMAND = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || { echo "[houserules] ${SCRIPT} missing. Run: npx houserules update" >&2; exit 1; }`;
 const USER_EDITED_COMMAND = `${hookCommand(SCRIPT)} --strict`;
 
 function fragmentFor(
@@ -55,6 +57,16 @@ describe('isKitStockCommand', () => {
     expect(
       isKitStockCommand(agentKit, SCRIPT),
       `${agentKit} is recognized as stock for ${SCRIPT}`,
+    ).toBe(true);
+  });
+
+  it.each([
+    ['em-dash wrapper', EM_DASH_COMMAND],
+    ['previous guard wrapper', PREVIOUS_GUARD_COMMAND],
+  ])('is true for the %s', (_label, command) => {
+    expect(
+      isKitStockCommand(command, SCRIPT),
+      `${command} is recognized as stock for ${SCRIPT}`,
     ).toBe(true);
   });
 
@@ -118,6 +130,26 @@ describe('mergeSettings hook upgrade', () => {
       changes.some((c) => c.detail.includes('upgraded')),
       'a reported change mentions the upgrade',
     ).toBe(true);
+  });
+
+  it.each([
+    ['em-dash wrapper', EM_DASH_COMMAND],
+    ['previous guard wrapper', PREVIOUS_GUARD_COMMAND],
+  ])('upgrades the %s to the current form', (_label, command) => {
+    const existing: Settings = {
+      hooks: {
+        PreToolUse: [
+          { matcher: 'Bash', hooks: [{ type: 'command', command }] },
+        ],
+      },
+    };
+    const { merged } = mergeSettings(
+      existing,
+      fragmentFor('PreToolUse', 'Bash', SCRIPT),
+    );
+    const hooks = merged.hooks!.PreToolUse![0]!.hooks;
+    expect(hooks).toHaveLength(1);
+    expect(hooks[0]!.command).toBe(hookCommand(SCRIPT));
   });
 
   it('preserves a user-edited command with the same basename byte-identical', () => {

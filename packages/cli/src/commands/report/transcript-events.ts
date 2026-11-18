@@ -23,6 +23,15 @@ export interface HookFire {
   afterToolUseCount: number;
 }
 
+/** A PreToolUse refusal the harness recorded as an error tool_result rather than an attachment. */
+export interface HookOutcome {
+  tool: string;
+  toolUseId?: string;
+  /** The hook's stderr, with the echoed hook command stripped. */
+  stderr: string;
+  isSubagent: boolean;
+}
+
 interface ToolUse {
   id: string;
   name: string;
@@ -47,8 +56,9 @@ interface CommandFire {
   ts?: number;
 }
 
-interface SessionEvents {
+export interface SessionEvents {
   hookFires: HookFire[];
+  hookOutcomes: HookOutcome[];
   toolUses: ToolUse[];
   toolUseIndexById: Map<string, number>;
   toolResults: ToolResultMeta[];
@@ -166,12 +176,14 @@ interface ContentBlock {
   text?: string;
   content?: unknown;
   tool_use_id?: string;
+  is_error?: boolean;
   id?: string;
   name?: string;
   input?: { command?: unknown; skill?: unknown };
 }
 
 interface TranscriptMessage {
+  id?: string;
   role?: string;
   model?: string;
   usage?: Usage;
@@ -211,6 +223,7 @@ interface TranscriptRecord {
   version?: string;
   isSidechain?: boolean;
   isMeta?: boolean;
+  requestId?: string;
   attachment?: HookAttachment;
   message?: TranscriptMessage;
 }
@@ -355,6 +368,7 @@ export function ingestTranscript(
   // The main call also passes its own row as `into`, so only a different file is a subagent.
   const isSubagent = into !== undefined && into.file !== file;
   const origin = isSubagent ? 'subagent' : 'main';
+  const seenResponses = new Set<string>();
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     corpus.lines += 1;
@@ -367,7 +381,7 @@ export function ingestTranscript(
       continue;
     }
     trackRecordStamps(record, corpus, usage);
-    aggregateUsage(record, usage, origin);
+    aggregateUsage(record, usage, origin, seenResponses);
     extractEvents(record, fallbackSession, corpus, isSubagent);
   }
 }
@@ -422,15 +436,36 @@ function isPlaceholderUsageVersion(version: string | undefined): boolean {
   return false;
 }
 
+/**
+ * True when the record repeats a response already counted in this file, matched on
+ * `message.id` plus `requestId`. A record carrying neither is always its own response.
+ */
+function isRepeatedResponse(
+  record: TranscriptRecord,
+  seenResponses: Set<string>,
+): boolean {
+  const responseId = record.message?.id;
+  if (responseId === undefined && record.requestId === undefined) return false;
+  const key = JSON.stringify([responseId, record.requestId]);
+  if (seenResponses.has(key)) return true;
+  seenResponses.add(key);
+  return false;
+}
+
 // Token aggregation matches the original report command exactly, keying on type OR role,
 // so promoting the metrics families leaves the token section's numbers unchanged.
 function aggregateUsage(
   record: TranscriptRecord,
   usage: FileUsage,
   origin: 'main' | 'subagent',
+  seenResponses: Set<string>,
 ): void {
   const msg = record.message ?? {};
   if (record.type === 'assistant' || msg.role === 'assistant') {
+    // Claude Code writes one record per content block of a response, each with a copy of the
+    // same usage. A record with no usage is not a response, and a repeated id pair is a copy.
+    if (!msg.usage) return;
+    if (isRepeatedResponse(record, seenResponses)) return;
     // The turn still happened, so it counts. Only its placeholder token fields are dropped.
     const hasPlaceholderUsage =
       origin === 'subagent' && isPlaceholderUsageVersion(record.version);
@@ -473,6 +508,7 @@ function sessionOf(corpus: Corpus, id: string): SessionEvents {
   if (!session) {
     session = {
       hookFires: [],
+      hookOutcomes: [],
       toolUses: [],
       toolUseIndexById: new Map(),
       toolResults: [],
@@ -515,6 +551,7 @@ function extractEvents(
     for (const block of message.content as ContentBlock[]) {
       if (block?.type === 'tool_result') {
         const parts = textParts(block.content);
+        recordHookOutcome(session, block, parts.join('\n'), isSubagent);
         session.toolResults.push({
           toolUseId: block.tool_use_id,
           bytes: JSON.stringify(block.content ?? '').length,
@@ -711,6 +748,30 @@ function scanUserCommands(
           skill: match[1],
           ts: Date.parse(record.timestamp ?? '') || undefined,
         });
+}
+
+// The harness echoes the hook command in brackets before the stderr, and the wrapper's own
+// fallback text sits inside that command, so only the text after this marker is the stderr.
+const HOOK_COMMAND_END = ']: ';
+
+/** Records a PreToolUse refusal that reached the transcript as an error tool_result. */
+function recordHookOutcome(
+  session: SessionEvents,
+  block: ContentBlock,
+  text: string,
+  isSubagent: boolean,
+): void {
+  if (block.is_error !== true) return;
+  const hookError = /^PreToolUse:(\w+) hook error:/.exec(text);
+  if (!hookError?.[1]) return;
+  const commandEnd = text.indexOf(HOOK_COMMAND_END);
+  session.hookOutcomes.push({
+    tool: hookError[1],
+    toolUseId: block.tool_use_id,
+    stderr:
+      commandEnd >= 0 ? text.slice(commandEnd + HOOK_COMMAND_END.length) : text,
+    isSubagent,
+  });
 }
 
 function textParts(content: unknown): string[] {
