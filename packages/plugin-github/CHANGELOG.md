@@ -1,5 +1,12 @@
 # @houserules/plugin-github
 
+## 0.2.5
+
+### Patch Changes
+
+- 2161dc4: doctor reports the last failed ledger sync push and its pending count.
+- 2161dc4: projects-sync status lists backlog rows whose issue is closed upstream.
+
 ## 0.2.4
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @houserules/plugin-changesets
 
+## 0.4.0
+
+### Minor Changes
+
+- 2161dc4: The changeset-condense skill is folded into /changeset as a condense section.
+
+### Patch Changes
+
+- 2161dc4: Checkers fail and name the path when a file argument cannot be read.
+
 ## 0.3.3
 
 ### Patch Changes
