@@ -32,6 +32,39 @@ export interface HookOutcome {
   isSubagent: boolean;
 }
 
+/** One hook inside a `stop_hook_summary` record, named as the record names it. */
+export interface StopHookRun {
+  /** The hook's `statusMessage` when it set one, otherwise its command. Never mapped here. */
+  command: string;
+  durationMs?: number;
+}
+
+/**
+ * One `system` record with subtype `stop_hook_summary`: every Stop hook that ran at one turn
+ * end, including the quiet runs no attachment records.
+ */
+export interface StopHookSummary {
+  hooks: StopHookRun[];
+  /** Entries in the record's `hookErrors`. */
+  errorCount: number;
+  preventedContinuation: boolean;
+  /** The record's `version` stamp, e.g. `2.1.327`. */
+  version?: string;
+  isSubagent: boolean;
+}
+
+/** One main-chain API response, counted once on the same basis as the token totals. */
+export interface MainRequest {
+  ts?: number;
+  model?: string;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  /** The 1-hour TTL part of `cacheWrite`, from `usage.cache_creation.ephemeral_1h_input_tokens`. */
+  cacheWrite1h: number;
+}
+
 interface ToolUse {
   id: string;
   name: string;
@@ -39,6 +72,8 @@ interface ToolUse {
   command: string;
   /** Set only for a model-initiated Skill tool call. */
   skill?: string;
+  /** Set only for an `Artifact` tool call that names an `action` input. */
+  action?: string;
   ts?: number;
   isSidechain: boolean;
 }
@@ -65,6 +100,9 @@ export interface SessionEvents {
   commandFires: CommandFire[];
   /** Interrupts that landed as text blocks in a user message rather than tool_results. */
   interrupts: number;
+  stopHookSummaries: StopHookSummary[];
+  /** Main-chain responses in transcript order. Folded subagent transcripts add none. */
+  mainRequests: MainRequest[];
 }
 
 /** Token counts for one slice of a session, split by transcript origin or by model. */
@@ -74,10 +112,22 @@ export interface UsageSlice {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  /**
+   * The 1-hour TTL part of `cacheWrite`. Absent in a document exported before the field
+   * existed, which reads as 0, so every write prices at the 5-minute rate there.
+   */
+  cacheWrite1h?: number;
 }
 
 export function emptyUsageSlice(): UsageSlice {
-  return { turns: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+  return {
+    turns: 0,
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cacheWrite1h: 0,
+  };
 }
 
 /** Token telemetry for one transcript file, the shape the token section renders. */
@@ -88,6 +138,8 @@ export interface FileUsage {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  /** The 1-hour TTL part of `cacheWrite`. Absent in a document exported before the field existed. */
+  cacheWrite1h?: number;
   toolResults: number;
   models: Set<string>;
   sidechainTurns: number;
@@ -169,6 +221,10 @@ interface Usage {
   output_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
+  cache_creation?: {
+    ephemeral_1h_input_tokens?: number;
+    ephemeral_5m_input_tokens?: number;
+  };
 }
 
 interface ContentBlock {
@@ -179,7 +235,7 @@ interface ContentBlock {
   is_error?: boolean;
   id?: string;
   name?: string;
-  input?: { command?: unknown; skill?: unknown };
+  input?: { command?: unknown; skill?: unknown; action?: unknown };
 }
 
 interface TranscriptMessage {
@@ -224,6 +280,10 @@ interface TranscriptRecord {
   isSidechain?: boolean;
   isMeta?: boolean;
   requestId?: string;
+  subtype?: string;
+  hookInfos?: unknown;
+  hookErrors?: unknown;
+  preventedContinuation?: unknown;
   attachment?: HookAttachment;
   message?: TranscriptMessage;
 }
@@ -338,6 +398,7 @@ function createFileUsage(file: string): FileUsage {
     output: 0,
     cacheRead: 0,
     cacheWrite: 0,
+    cacheWrite1h: 0,
     toolResults: 0,
     models: new Set(),
     sidechainTurns: 0,
@@ -381,7 +442,11 @@ export function ingestTranscript(
       continue;
     }
     trackRecordStamps(record, corpus, usage);
-    aggregateUsage(record, usage, origin, seenResponses);
+    const counted = aggregateUsage(record, usage, origin, seenResponses);
+    if (counted && !isSubagent)
+      sessionOf(corpus, record.sessionId ?? fallbackSession).mainRequests.push(
+        counted,
+      );
     extractEvents(record, fallbackSession, corpus, isSubagent);
   }
 }
@@ -452,20 +517,26 @@ function isRepeatedResponse(
   return false;
 }
 
-// Token aggregation matches the original report command exactly, keying on type OR role,
-// so promoting the metrics families leaves the token section's numbers unchanged.
+/**
+ * Adds one record's tokens to the file row. Token aggregation matches the original report
+ * command exactly, keying on type OR role, so promoting the metrics families leaves the
+ * token section's numbers unchanged.
+ *
+ * @returns The response this record counted, or `undefined` when it counted none, so the
+ * request series and the totals share one dedup decision.
+ */
 function aggregateUsage(
   record: TranscriptRecord,
   usage: FileUsage,
   origin: 'main' | 'subagent',
   seenResponses: Set<string>,
-): void {
+): MainRequest | undefined {
   const msg = record.message ?? {};
   if (record.type === 'assistant' || msg.role === 'assistant') {
     // Claude Code writes one record per content block of a response, each with a copy of the
     // same usage. A record with no usage is not a response, and a repeated id pair is a copy.
-    if (!msg.usage) return;
-    if (isRepeatedResponse(record, seenResponses)) return;
+    if (!msg.usage) return undefined;
+    if (isRepeatedResponse(record, seenResponses)) return undefined;
     // The turn still happened, so it counts. Only its placeholder token fields are dropped.
     const hasPlaceholderUsage =
       origin === 'subagent' && isPlaceholderUsageVersion(record.version);
@@ -473,11 +544,13 @@ function aggregateUsage(
     usage.turns += 1;
     if (record.isSidechain) usage.sidechainTurns += 1;
     if (msg.model) usage.models.add(msg.model);
-    const u = hasPlaceholderUsage ? {} : (msg.usage ?? {});
+    const u: Usage = hasPlaceholderUsage ? {} : (msg.usage ?? {});
+    const cacheWrite1h = u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
     usage.input += u.input_tokens ?? 0;
     usage.output += u.output_tokens ?? 0;
     usage.cacheRead += u.cache_read_input_tokens ?? 0;
     usage.cacheWrite += u.cache_creation_input_tokens ?? 0;
+    usage.cacheWrite1h = (usage.cacheWrite1h ?? 0) + cacheWrite1h;
     const slices = [usage.byOrigin[origin]];
     if (msg.model) {
       let modelSlice = usage.byModel.get(msg.model);
@@ -493,7 +566,17 @@ function aggregateUsage(
       slice.output += u.output_tokens ?? 0;
       slice.cacheRead += u.cache_read_input_tokens ?? 0;
       slice.cacheWrite += u.cache_creation_input_tokens ?? 0;
+      slice.cacheWrite1h = (slice.cacheWrite1h ?? 0) + cacheWrite1h;
     }
+    return {
+      ts: Date.parse(record.timestamp ?? '') || undefined,
+      model: msg.model,
+      input: u.input_tokens ?? 0,
+      output: u.output_tokens ?? 0,
+      cacheRead: u.cache_read_input_tokens ?? 0,
+      cacheWrite: u.cache_creation_input_tokens ?? 0,
+      cacheWrite1h,
+    };
   } else if (record.type === 'user' || msg.role === 'user') {
     const content = msg.content;
     if (Array.isArray(content))
@@ -501,6 +584,7 @@ function aggregateUsage(
         (b) => (b as ContentBlock)?.type === 'tool_result',
       ).length;
   }
+  return undefined;
 }
 
 function sessionOf(corpus: Corpus, id: string): SessionEvents {
@@ -514,6 +598,8 @@ function sessionOf(corpus: Corpus, id: string): SessionEvents {
       toolResults: [],
       commandFires: [],
       interrupts: 0,
+      stopHookSummaries: [],
+      mainRequests: [],
     };
     corpus.sessions.set(id, session);
   }
@@ -543,6 +629,10 @@ function extractEvents(
       toolUseID: attachment.toolUseID,
       afterToolUseCount: session.toolUses.length,
     });
+    return;
+  }
+  if (record.type === 'system' && record.subtype === 'stop_hook_summary') {
+    session.stopHookSummaries.push(stopHookSummaryOf(record, isSubagent));
     return;
   }
   const message = record.message;
@@ -590,10 +680,48 @@ function extractEvents(
         block.name === 'Skill' && typeof block.input?.skill === 'string'
           ? block.input.skill
           : undefined,
+      action:
+        block.name === 'Artifact' && typeof block.input?.action === 'string'
+          ? block.input.action
+          : undefined,
       ts: Date.parse(record.timestamp ?? '') || undefined,
       isSidechain: record.isSidechain === true,
     });
   }
+}
+
+function stopHookSummaryOf(
+  record: TranscriptRecord,
+  isSubagent: boolean,
+): StopHookSummary {
+  const hooks: StopHookRun[] = [];
+  if (Array.isArray(record.hookInfos))
+    for (const info of record.hookInfos as unknown[]) {
+      const entry = (info ?? {}) as {
+        statusMessage?: unknown;
+        command?: unknown;
+        durationMs?: unknown;
+      };
+      const command =
+        typeof entry.statusMessage === 'string' && entry.statusMessage
+          ? entry.statusMessage
+          : typeof entry.command === 'string'
+            ? entry.command
+            : undefined;
+      if (command === undefined) continue;
+      hooks.push({
+        command,
+        durationMs:
+          typeof entry.durationMs === 'number' ? entry.durationMs : undefined,
+      });
+    }
+  return {
+    hooks,
+    errorCount: Array.isArray(record.hookErrors) ? record.hookErrors.length : 0,
+    preventedContinuation: record.preventedContinuation === true,
+    version: typeof record.version === 'string' ? record.version : undefined,
+    isSubagent,
+  };
 }
 
 function trackRecordStamps(

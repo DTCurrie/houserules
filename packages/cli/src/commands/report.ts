@@ -7,6 +7,7 @@ import { detect } from '../detect.js';
 import type { Flags } from '../cli-contract.js';
 import { HouseError } from '../house-error.js';
 import { json } from './log.js';
+import { renderArtifactEpisodes } from './report/artifact-episodes.js';
 import { renderFriction } from './report/friction.js';
 import { renderGuardEfficacy } from './report/guard-efficacy.js';
 import { renderHookHealth } from './report/hook-health.js';
@@ -82,11 +83,12 @@ function renderDocument(document: ReportDocument): string[] {
       document.outcomes.ledgers,
     ),
     renderFriction(document.friction),
+    renderArtifactEpisodes(document.artifacts),
     renderResidentContext(document.residentContext),
   ];
-  return sections.flatMap((section, index) =>
-    index === 0 ? section : ['', ...section],
-  );
+  return sections
+    .filter((section) => section.length > 0)
+    .flatMap((section, index) => (index === 0 ? section : ['', ...section]));
 }
 
 function reportImports(paths: string[], flags: Flags): number {

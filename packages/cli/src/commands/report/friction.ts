@@ -1,3 +1,4 @@
+import { detect } from '../../detect.js';
 import type { Corpus } from './transcript-events.js';
 import { renderTable } from './render-table.js';
 
@@ -6,6 +7,10 @@ const RETRY_SIMILARITY = 0.9;
 
 const READ_ONLY_GIT_CHECK =
   /^(?:cd\s+\S+\s*&&\s*)?git\s+(?:status\b|diff\s+--name-only\b)/;
+
+// The size the `tool-output-trim` hook caps a Bash or Read result at, copied from MAX_BYTES in
+// payload/scripts/tool-output-trim.mts because `src` cannot import a payload script.
+const TRIM_CAP_BYTES = 16384;
 
 const BULK_TOP_N = 10;
 const RETRY_TOP_N = 5;
@@ -22,12 +27,31 @@ interface ToolBulk {
   bytes: number;
 }
 
+/** Result sizes for one tool, measured the way {@link ToolBulk} measures bytes. */
+export interface ResultSizeTally {
+  results: number;
+  bytes: number;
+  /** Results above {@link ToolResultSizes.capBytes}. */
+  overCap: number;
+}
+
+/** `Read` and `Bash` result sizes against the `tool-output-trim` cap. */
+export interface ToolResultSizes {
+  capBytes: number;
+  read: ResultSizeTally;
+  bash: ResultSizeTally;
+  /** Whether the install records the `tool-output-trim` module. Absent when it could not be read. */
+  isTrimInstalled?: boolean;
+}
+
 export interface FrictionReport {
   compactedSessions: string[];
   bulkByTool: ToolBulk[];
   retryRuns: RetryRun[];
   denials: { tool: string; command: string }[];
   interrupts: number;
+  /** Absent in a document exported before result sizes were read, and rendered as absent, not zero. */
+  toolResultSizes?: ToolResultSizes;
 }
 
 function bigramCounts(text: string): Map<string, number> {
@@ -67,6 +91,11 @@ export function isReadOnlyGitCheck(command: string): boolean {
  * Read-only git status shapes never count as retries, because a skill prescribes them before every review, so repeating them is the procedure and not friction.
  */
 export function computeFriction(corpus: Corpus): FrictionReport {
+  const sizes: ToolResultSizes = {
+    capBytes: TRIM_CAP_BYTES,
+    read: { results: 0, bytes: 0, overCap: 0 },
+    bash: { results: 0, bytes: 0, overCap: 0 },
+  };
   const compactedSessions: string[] = [];
   const bulkByTool = new Map<string, ToolBulk>();
   const retryRuns: RetryRun[] = [];
@@ -91,6 +120,7 @@ export function computeFriction(corpus: Corpus): FrictionReport {
       row.results += 1;
       row.bytes += result.bytes;
       bulkByTool.set(tool, row);
+      tallyResultSize(sizes, tool, result.bytes);
       if (result.denied) denials.push({ tool, command: use?.command ?? '' });
       else if (result.interrupted) interrupts += 1;
     }
@@ -128,7 +158,56 @@ export function computeFriction(corpus: Corpus): FrictionReport {
     retryRuns,
     denials,
     interrupts,
+    toolResultSizes: sizes,
   };
+}
+
+/** Counts one result against its tool's tally. Tools other than `Read` and `Bash` count nowhere. */
+function tallyResultSize(
+  sizes: ToolResultSizes,
+  tool: string,
+  bytes: number,
+): void {
+  const tally =
+    tool === 'Read' ? sizes.read : tool === 'Bash' ? sizes.bash : undefined;
+  if (!tally) return;
+  tally.results += 1;
+  tally.bytes += bytes;
+  if (bytes > sizes.capBytes) tally.overCap += 1;
+}
+
+/**
+ * Whether the install at `top` records the `tool-output-trim` module.
+ * Returns `undefined` when nothing is installed or the manifest cannot be read.
+ */
+export function readTrimInstalled(top: string): boolean | undefined {
+  try {
+    const modules = detect(top).claude.manifest?.modules;
+    return modules ? modules.includes('tool-output-trim') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function describeTally(label: string, tally: ResultSizeTally): string {
+  const average = tally.results ? Math.round(tally.bytes / tally.results) : 0;
+  return `${label} ${tally.results} results, avg ${average.toLocaleString('en-US')} bytes, ${tally.overCap} over cap`;
+}
+
+/** The result-size line, plus the trim hint when the module is absent and a result ran over. */
+function renderResultSizes(sizes: ToolResultSizes): string[] {
+  const lines = [
+    `  result size vs ${sizes.capBytes.toLocaleString('en-US')}-byte trim cap: ` +
+      `${describeTally('Read', sizes.read)}; ${describeTally('Bash', sizes.bash)}`,
+  ];
+  if (
+    sizes.isTrimInstalled === false &&
+    sizes.read.overCap + sizes.bash.overCap > 0
+  )
+    lines.push(
+      '    tool-output-trim is not installed. Enable it with `npx houserules modules`.',
+    );
+  return lines;
 }
 
 export function renderFriction(report: FrictionReport): string[] {
@@ -156,6 +235,8 @@ export function renderFriction(report: FrictionReport): string[] {
         ]),
     ),
   );
+  if (report.toolResultSizes)
+    lines.push('', ...renderResultSizes(report.toolResultSizes));
   const retriedCalls = report.retryRuns.reduce(
     (sum, run) => sum + run.length - 1,
     0,

@@ -5,6 +5,10 @@ import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { HouseError } from '../../../house-error.js';
+import { renderArtifactEpisodes } from '../artifact-episodes.js';
+import { renderFriction } from '../friction.js';
+import { renderHookHealth } from '../hook-health.js';
+import { renderTokenUsage } from '../token-usage.js';
 import {
   buildReportDocument,
   deserializeTokenUsage,
@@ -297,5 +301,187 @@ describe('token usage serialization', () => {
       'opus',
       'sonnet',
     ]);
+  });
+});
+
+const USERNAME = 'alice';
+
+function withNewFields(document: ReportDocument): ReportDocument {
+  const slice = { turns: 1, input: 1, output: 1, cacheRead: 1, cacheWrite: 4 };
+  return {
+    ...document,
+    hooks: {
+      ...document.hooks,
+      stopHooks: [
+        {
+          hook: 'lint-format-fix.mjs',
+          runs: 3,
+          p50: 10,
+          p95: 20,
+          max: 30,
+          timeouts: 0,
+        },
+        {
+          hook: `/Users/${USERNAME}/work/bin/stop-check --token ${USERNAME}`,
+          runs: 2,
+          p50: 5,
+          p95: 6,
+          max: 7,
+          timeouts: 1,
+        },
+        {
+          hook: `node /Users/${USERNAME}/work/hooks/custom.mjs`,
+          runs: 1,
+          p50: 1,
+          p95: 1,
+          max: 1,
+          timeouts: 0,
+        },
+        {
+          hook: '(per Stop total)',
+          runs: 3,
+          p50: 12,
+          p95: 22,
+          max: 32,
+          timeouts: 1,
+        },
+      ],
+    },
+    friction: {
+      ...document.friction,
+      toolResultSizes: {
+        capBytes: 16384,
+        read: { results: 4, bytes: 90000, overCap: 2 },
+        bash: { results: 5, bytes: 1000, overCap: 0 },
+        isTrimInstalled: false,
+      },
+    },
+    artifacts: {
+      episodes: [
+        {
+          session: 'abcdef12',
+          artifactCalls: 3,
+          commentCalls: 1,
+          publishes: 2,
+          requests: 9,
+          output: 500,
+          weightedInput: 4000,
+          sessionWeightedInput: 8000,
+          model: 'claude-sonnet-5-5',
+          wallMs: 120000,
+        },
+      ],
+    },
+    tokens: {
+      ...document.tokens,
+      totals: { ...document.tokens.totals, cacheWrite1h: 3 },
+      files: [
+        {
+          ...(document.tokens
+            .files[0] as ReportDocument['tokens']['files'][number]),
+          cacheWrite1h: 3,
+          byOrigin: {
+            main: { ...slice, cacheWrite1h: 3 },
+            subagent: { ...slice, cacheWrite1h: 0 },
+          },
+          byModel: { 'claude-sonnet-5-5': { ...slice, cacheWrite1h: 3 } },
+        },
+      ],
+    },
+  };
+}
+
+describe('redactDocument on the fields added after the first exports', () => {
+  const original = withNewFields(buildFixture());
+  const redacted = redactDocument(original);
+
+  it('holds no path and no username anywhere in the export', () => {
+    const text = JSON.stringify(redacted);
+
+    expect(text).not.toContain('/Users/');
+    expect(text).not.toContain(USERNAME);
+    expect(text).not.toContain('--token');
+  });
+
+  it('keeps a bare script name and the per-Stop total, and reduces any other Stop hook name to its command family', () => {
+    expect(redacted.hooks.stopHooks?.map((row) => row.hook)).toEqual([
+      'lint-format-fix.mjs',
+      'stop-check',
+      'node',
+      '(per Stop total)',
+    ]);
+  });
+
+  it('keeps every count on a Stop row', () => {
+    expect(redacted.hooks.stopHooks?.[1]).toEqual({
+      hook: 'stop-check',
+      runs: 2,
+      p50: 5,
+      p95: 6,
+      max: 7,
+      timeouts: 1,
+    });
+  });
+
+  it('keeps the result sizes, the artifact episodes, and the 1-hour cache writes untouched', () => {
+    expect(redacted.friction.toolResultSizes).toEqual(
+      original.friction.toolResultSizes,
+    );
+    expect(redacted.artifacts).toEqual(original.artifacts);
+    expect(redacted.tokens).toEqual(original.tokens);
+    expect(redacted.tokens.totals.cacheWrite1h).toBe(3);
+  });
+});
+
+describe('a document exported before the new readouts', () => {
+  function preReadoutDocument(): ReportDocument {
+    const stripped = JSON.parse(
+      JSON.stringify(withNewFields(buildFixture())),
+      (key, value: unknown) =>
+        key === 'cacheWrite1h' ||
+        key === 'stopHooks' ||
+        key === 'toolResultSizes' ||
+        key === 'artifacts'
+          ? undefined
+          : value,
+    ) as ReportDocument;
+    return stripped;
+  }
+
+  it('imports through readImportFiles', () => {
+    const path = join(
+      mkdtempSync(join(tmpdir(), 'report-export-old-')),
+      'old.json',
+    );
+    writeExportFile(path, preReadoutDocument());
+
+    const [imported] = readImportFiles([path]);
+
+    expect(imported?.meta.label).toBe('work');
+    expect(imported?.hooks.stopHooks).toBeUndefined();
+  });
+
+  it('renders with no Stop table, no result-size line, and no artifact section', () => {
+    const document = preReadoutDocument();
+
+    const hooks = renderHookHealth(document.hooks).join('\n');
+    const friction = renderFriction(document.friction).join('\n');
+
+    expect(hooks).not.toContain('Stop hooks');
+    expect(friction).not.toContain('result size');
+    expect(renderArtifactEpisodes(document.artifacts)).toEqual([]);
+  });
+
+  it('prints the cache-write split as not recorded, not as zero', () => {
+    const document = preReadoutDocument();
+
+    const tokens = renderTokenUsage(
+      deserializeTokenUsage(document.tokens),
+    ).join('\n');
+
+    expect(tokens).toContain(
+      'cache_write split: 1-hour vs 5-minute not recorded in this document',
+    );
+    expect(tokens).not.toContain('cache_write split: 1-hour 0');
   });
 });

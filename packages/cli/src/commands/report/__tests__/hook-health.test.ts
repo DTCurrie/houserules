@@ -267,6 +267,8 @@ describe('renderHookHealth', () => {
       '',
       '  crash signatures:',
       "       1  Cannot find module '/x/y.mjs'",
+      '',
+      '  Stop hooks: no Stop runs were recorded.',
     ]);
   });
 
@@ -284,9 +286,7 @@ describe('renderHookHealth', () => {
     const report = computeHookHealth(corpus);
     const rendered = renderHookHealth(report);
 
-    expect(rendered.at(-1)).toBe(
-      '   For scale: this corpus holds 0 Bash tool calls.)',
-    );
+    expect(rendered.at(-1)).toBe('  Stop hooks: no Stop runs were recorded.');
     expect(rendered.join('\n')).not.toContain('crash signatures');
   });
 });
@@ -350,5 +350,103 @@ describe('computeHookHealth from error tool_results', () => {
     expect(report.crashSignatures).toEqual([
       { signature: 'missing script: guard-bash.mjs', count: 2 },
     ]);
+  });
+});
+
+function stopSummaryLine(
+  version: string,
+  hooks: { command?: string; statusMessage?: string; durationMs?: number }[],
+): string {
+  return JSON.stringify({
+    type: 'system',
+    subtype: 'stop_hook_summary',
+    sessionId: 'sess-stop',
+    version,
+    hookInfos: hooks,
+    hookErrors: [],
+    preventedContinuation: false,
+  });
+}
+
+const CHECK_COMMAND =
+  '[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/changeset-check.mjs" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/changeset-check.mjs" || exit 0';
+
+describe('Stop hook timing from stop_hook_summary records', () => {
+  const corpus = emptyCorpus(['slug']);
+  ingestTranscript(
+    corpus,
+    'stop.jsonl',
+    [
+      stopSummaryLine('2.1.322', [
+        { command: CHECK_COMMAND, durationMs: 10 },
+        { statusMessage: 'Running lint/format auto-fix', durationMs: 200000 },
+      ]),
+      stopSummaryLine('2.1.327', [
+        { command: CHECK_COMMAND, durationMs: 20 },
+        { statusMessage: 'Running lint:fix + format:fix', durationMs: 50 },
+        { statusMessage: 'Some custom hook', durationMs: 5 },
+      ]),
+      stopSummaryLine('2.1.327', [{ command: CHECK_COMMAND, durationMs: 90 }]),
+      stopSummaryLine('2.1.327', [{ command: CHECK_COMMAND }]),
+      stopSummaryLine('2.1.327', [{ command: CHECK_COMMAND, durationMs: 40 }]),
+    ].join('\n'),
+  );
+  const report = computeHookHealth(corpus);
+
+  it('names runs by script and computes percentiles on an uneven set', () => {
+    expect(report.stopHooks).toEqual([
+      // 0 (no durationMs), 10, 20, 40, 90 sorted
+      {
+        hook: 'changeset-check.mjs',
+        runs: 5,
+        p50: 20,
+        p95: 90,
+        max: 90,
+        timeouts: 0,
+      },
+      {
+        hook: 'lint-format-fix.mjs',
+        runs: 2,
+        p50: 50,
+        p95: 200000,
+        max: 200000,
+        timeouts: 1,
+      },
+      {
+        hook: 'Some custom hook',
+        runs: 1,
+        p50: 5,
+        p95: 5,
+        max: 5,
+        timeouts: 0,
+      },
+      // per-summary sums: 200010, 75, 90, 0, 40
+      {
+        hook: '(per Stop total)',
+        runs: 5,
+        p50: 75,
+        p95: 200010,
+        max: 200010,
+        timeouts: 1,
+      },
+    ]);
+  });
+
+  it('renders the table with script basenames only', () => {
+    const rendered = renderHookHealth(report).join('\n');
+    expect(rendered).toContain(
+      'Stop hooks (every stop_hook_summary, quiet runs included):',
+    );
+    expect(rendered).toContain('changeset-check.mjs');
+    expect(rendered).toContain('(per Stop total)');
+    expect(rendered).not.toContain('CLAUDE_PROJECT_DIR');
+  });
+
+  it('renders nothing for an absent stopHooks and one line for an empty one', () => {
+    const base = { rows: [], crashSignatures: [], bashCalls: 0 };
+    expect(renderHookHealth(base).join('\n')).not.toContain('Stop');
+    expect(renderHookHealth({ ...base, stopHooks: [] }).at(-1)).toBe(
+      '  Stop hooks: no Stop runs were recorded.',
+    );
   });
 });

@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { emptyCorpus, ingestTranscript } from '../transcript-events.js';
 import {
   computeFriction,
   isReadOnlyGitCheck,
+  readTrimInstalled,
   renderFriction,
 } from '../friction.js';
 import type { FrictionReport } from '../friction.js';
@@ -441,5 +445,170 @@ describe('renderFriction', () => {
       '  denials: 1 tool use(s) rejected by the user, 2 interrupted mid-call',
       '    Bash  rm -rf /tmp/data',
     ]);
+  });
+});
+
+function useAndResult(
+  id: string,
+  name: string,
+  content: string,
+  session = 'sizes-session',
+): string[] {
+  return [
+    JSON.stringify({
+      type: 'assistant',
+      sessionId: session,
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id, name, input: { command: 'x' } }],
+      },
+    }),
+    JSON.stringify({
+      type: 'user',
+      sessionId: session,
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: id, content }],
+      },
+    }),
+  ];
+}
+
+describe('computeFriction toolResultSizes', () => {
+  it('tallies Read and Bash results with bytes and over-cap counts', () => {
+    const big = 'a'.repeat(20000);
+    const corpus = corpusFrom(
+      [
+        ...useAndResult('r1', 'Read', big),
+        ...useAndResult('r2', 'Read', 'tiny'),
+        ...useAndResult('b1', 'Bash', 'hello'),
+        ...useAndResult('g1', 'Grep', big),
+      ].join('\n'),
+    );
+
+    const sizes = computeFriction(corpus).toolResultSizes;
+
+    expect(sizes).toEqual({
+      capBytes: 16384,
+      read: { results: 2, bytes: 20002 + 6, overCap: 1 },
+      bash: { results: 1, bytes: 7, overCap: 0 },
+    });
+  });
+
+  it('counts a result with no matching tool_use for neither tool', () => {
+    const corpus = corpusFrom(
+      JSON.stringify({
+        type: 'user',
+        sessionId: 'miss-session',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'nope',
+              content: 'a'.repeat(20000),
+            },
+          ],
+        },
+      }),
+    );
+
+    const sizes = computeFriction(corpus).toolResultSizes;
+
+    expect(sizes?.read.results).toBe(0);
+    expect(sizes?.bash.results).toBe(0);
+  });
+});
+
+describe('renderFriction result sizes', () => {
+  const base: FrictionReport = {
+    compactedSessions: [],
+    bulkByTool: [],
+    retryRuns: [],
+    denials: [],
+    interrupts: 0,
+  };
+  const sizes = {
+    capBytes: 16384,
+    read: { results: 2, bytes: 40000, overCap: 1 },
+    bash: { results: 0, bytes: 0, overCap: 0 },
+  };
+  const sizeLine =
+    '  result size vs 16,384-byte trim cap: Read 2 results, avg 20,000 bytes, 1 over cap; Bash 0 results, avg 0 bytes, 0 over cap';
+
+  it('prints the size line and the trim hint when trim is missing and a result is over cap', () => {
+    const lines = renderFriction({
+      ...base,
+      toolResultSizes: { ...sizes, isTrimInstalled: false },
+    });
+
+    const index = lines.indexOf(sizeLine);
+    expect(index).toBeGreaterThan(-1);
+    expect(lines[index + 1]).toBe(
+      '    tool-output-trim is not installed. Enable it with `npx houserules modules`.',
+    );
+  });
+
+  it('omits the hint when trim is installed, unknown, or nothing is over cap', () => {
+    for (const toolResultSizes of [
+      { ...sizes, isTrimInstalled: true },
+      { ...sizes },
+      {
+        ...sizes,
+        read: { results: 1, bytes: 5, overCap: 0 },
+        isTrimInstalled: false,
+      },
+    ]) {
+      const lines = renderFriction({ ...base, toolResultSizes });
+      expect(lines.some((line) => line.includes('result size vs'))).toBe(true);
+      expect(lines.some((line) => line.includes('tool-output-trim'))).toBe(
+        false,
+      );
+    }
+  });
+
+  it('prints no size line when toolResultSizes is absent', () => {
+    const lines = renderFriction(base);
+
+    expect(lines.some((line) => line.includes('result size vs'))).toBe(false);
+  });
+});
+
+describe('readTrimInstalled', () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true });
+  });
+
+  function installWith(modules: string[] | null): string {
+    const root = mkdtempSync(join(tmpdir(), 'trim-installed-'));
+    dirs.push(root);
+    if (modules) {
+      mkdirSync(join(root, '.claude'));
+      writeFileSync(
+        join(root, '.claude', 'houserules.manifest.json'),
+        JSON.stringify({
+          kitVersion: '0.0.0',
+          installedAt: '2026-01-01',
+          modules,
+          files: {},
+        }),
+      );
+    }
+    return root;
+  }
+
+  it('is true when the manifest records the module', () => {
+    expect(readTrimInstalled(installWith(['core', 'tool-output-trim']))).toBe(
+      true,
+    );
+  });
+
+  it('is false when the manifest omits the module', () => {
+    expect(readTrimInstalled(installWith(['core']))).toBe(false);
+  });
+
+  it('is undefined when nothing is installed', () => {
+    expect(readTrimInstalled(installWith(null))).toBeUndefined();
   });
 });

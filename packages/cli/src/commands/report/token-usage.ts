@@ -1,4 +1,5 @@
 import type { Corpus, FileUsage, UsageSlice } from './transcript-events.js';
+import { computeListPrice } from './model-prices.js';
 import { REAL_SUBAGENT_USAGE_FROM } from './transcript-events.js';
 
 interface TokenTotals {
@@ -7,6 +8,8 @@ interface TokenTotals {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  /** The 1-hour TTL part of `cacheWrite`. Absent in a document exported before the field existed. */
+  cacheWrite1h?: number;
   toolResults: number;
   models: string[];
   sidechainTurns: number;
@@ -21,24 +24,32 @@ export interface TokenUsageReport {
 }
 
 // Anthropic cache multipliers relative to base input price: a cache READ bills at
-// ~0.1×, a cache WRITE at ~1.25×. Output is a different axis, reported separately.
+// ~0.1×, a 5-minute cache WRITE at 1.25×, a 1-hour one at 2×. Output is a different
+// axis, reported separately.
 const CACHE_READ_WEIGHT = 0.1;
 const CACHE_WRITE_WEIGHT = 1.25;
+const CACHE_WRITE_1H_WEIGHT = 2;
 
 const n = (x: number) => x.toLocaleString('en-US');
 const pct = (num: number, den: number) =>
   den ? `${Math.round((num / den) * 100)}%` : '0%';
 
-// Cost-weighted input-equivalent: fresh input at 1×, cache writes at 1.25×, cache
-// reads at 0.1×. So a session that offloaded work into the cache reads as cheaper.
+/**
+ * Cost-weighted input-equivalent: fresh input at 1×, 5-minute cache writes at 1.25×,
+ * 1-hour cache writes at 2×, cache reads at 0.1×. A count with no `cacheWrite1h`, such as
+ * a document exported before the split existed, prices every write at the 5-minute rate.
+ */
 export function weightedInput(a: {
   input: number;
   cacheRead: number;
   cacheWrite: number;
+  cacheWrite1h?: number;
 }): number {
+  const write1h = a.cacheWrite1h ?? 0;
   return Math.round(
     a.input +
-      a.cacheWrite * CACHE_WRITE_WEIGHT +
+      (a.cacheWrite - write1h) * CACHE_WRITE_WEIGHT +
+      write1h * CACHE_WRITE_1H_WEIGHT +
       a.cacheRead * CACHE_READ_WEIGHT,
   );
 }
@@ -63,6 +74,7 @@ export function computeTokenUsage(corpus: Corpus): TokenUsageReport {
     output: 0,
     cacheRead: 0,
     cacheWrite: 0,
+    cacheWrite1h: 0,
     toolResults: 0,
     models: [],
     sidechainTurns: 0,
@@ -76,6 +88,7 @@ export function computeTokenUsage(corpus: Corpus): TokenUsageReport {
     totals.output += file.output;
     totals.cacheRead += file.cacheRead;
     totals.cacheWrite += file.cacheWrite;
+    totals.cacheWrite1h = (totals.cacheWrite1h ?? 0) + (file.cacheWrite1h ?? 0);
     totals.toolResults += file.toolResults;
     totals.sidechainTurns += file.sidechainTurns;
     totals.skippedLines += file.skippedLines;
@@ -135,6 +148,30 @@ function renderFileUsage(file: FileUsage): string[] {
   return lines;
 }
 
+const dollars = (x: number) =>
+  `$${x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** The list-price line, plus a line naming models the price table lacks. Empty when no model was recorded. */
+function renderListPrice(report: TokenUsageReport): string[] {
+  const slices = report.files.flatMap((file) => [...file.byModel]);
+  if (!slices.length) return [];
+  const price = computeListPrice(slices, weightedInput);
+  const lines = [
+    `  list price: ${dollars(price.total)} (fresh ${dollars(price.fresh)}, cache read ${dollars(price.cacheRead)}, cache write ${dollars(price.cacheWrite)}, output ${dollars(price.output)})`,
+  ];
+  if (price.unpriced.length) {
+    lines.push(
+      `  not priced, no list price for: ${price.unpriced
+        .map(
+          ({ model, weightedShare }) =>
+            `${model} (${pct(weightedShare, 1)} of weighted input)`,
+        )
+        .join(', ')}`,
+    );
+  }
+  return lines;
+}
+
 function renderTotals(report: TokenUsageReport): string[] {
   const lines: string[] = [];
   const { totals } = report;
@@ -149,8 +186,14 @@ function renderTotals(report: TokenUsageReport): string[] {
     `  cache-read share of input: ${pct(totals.cacheRead, cacheableIn)} (cheap tier — the higher the better)`,
   );
   lines.push(
-    `  cost-weighted input-equivalent: ${n(weightedInput(totals))} (cache_read ×${CACHE_READ_WEIGHT}, cache_write ×${CACHE_WRITE_WEIGHT})`,
+    totals.cacheWrite1h === undefined
+      ? '  cache_write split: 1-hour vs 5-minute not recorded in this document'
+      : `  cache_write split: 1-hour ${n(totals.cacheWrite1h)} | 5-minute ${n(totals.cacheWrite - totals.cacheWrite1h)}`,
   );
+  lines.push(
+    `  cost-weighted input-equivalent: ${n(weightedInput(totals))} (cache_read ×${CACHE_READ_WEIGHT}, 5-minute cache_write ×${CACHE_WRITE_WEIGHT}, 1-hour cache_write ×${CACHE_WRITE_1H_WEIGHT})`,
+  );
+  lines.push(...renderListPrice(report));
   lines.push(
     `  models: ${totals.models.join(', ') || '(none)'} | sidechain turns: ${pct(totals.sidechainTurns, totals.turns)}`,
   );

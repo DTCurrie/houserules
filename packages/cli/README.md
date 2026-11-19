@@ -182,7 +182,36 @@ names, model ids, and dates. Blocked and denied commands are reduced to their fi
 first two for `git` and `gh`), crash signatures to a script basename, and no path or hostname is
 written. Then `npx houserules report --import report.json --import home.json` renders both side
 by side. A `resident context` section reads each session's first recorded system prompt, which
-Claude Code writes from 2.1.300 on, so older transcripts show as `not recorded`.
+Claude Code writes from 2.1.300 on, so older transcripts show as `not recorded`. A Stop hook name
+that is not a bare script name is reduced to its first word in an export, the same as a command.
+
+The report has five readouts beyond the per-session token tables:
+
+- **Stop hooks.** Under `hook health`, one row per Stop hook with its runs, p50, p95, and max in
+  milliseconds. A final `(per Stop total)` row sums the hooks of each Stop, so it shows what one
+  stop cost you. The record carries no timeout marker, so `timeouts` counts runs of 120 s or more,
+  which is the Stop-hook timeout the kit installs.
+- **1-hour cache writes.** The totals split `cache_write` into 1-hour and 5-minute writes. The
+  cost-weighted input now weighs 1-hour writes at 2x and 5-minute writes at 1.25x. An export made
+  before the split has no 1-hour count, so it prints `not recorded` and weighs every write at 1.25x.
+- **List price.** One dollar figure for the corpus, split into fresh input, cache read, cache write,
+  and output, priced per model. A model the price table does not list adds no dollars and is named
+  with its share of weighted input. The table is written into the CLI, so it goes stale when
+  prices change. Treat the figure as a ratio between runs, not as a bill.
+- **Result sizes.** Under `friction`, how many `Read` and `Bash` results there were, their average
+  size, and how many ran over the `tool-output-trim` cap of 16,384 bytes. When results ran over and
+  the module is not installed, a hint names `npx houserules modules`.
+- **Artifact episodes.** One row per session that called `Artifact`, from the first quickstart or
+  publish through the last publish: calls, comment calls, publishes, requests, wall time, output,
+  weighted input, its share of the session, and the model on most requests.
+
+An export made before a readout existed renders without that section, and `--import` comparisons
+show `-` in its rows, never `0`.
+
+`doctor` also reads npm's `latest` for `@houserules/cli` and prints a readout when both the
+install and the running CLI are behind it, with the command that updates the CLI and then the
+install. It stays quiet when the running CLI is already at `latest`, when npm cannot be reached,
+and under `CI`, `NO_UPDATE_NOTIFIER`, or `NODE_ENV=test`.
 
 Every command takes the target repo as a positional `[dir]` or via `--cwd <dir>`, plus a
 global `--dry-run`. Flags are scoped per subcommand, so a flag that doesn't apply is an

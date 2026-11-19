@@ -45,6 +45,7 @@ describe('computeTokenUsage', () => {
       output: 50,
       cacheRead: 20,
       cacheWrite: 10,
+      cacheWrite1h: 0,
       toolResults: 0,
       models: ['claude-3-opus'],
       sidechainTurns: 0,
@@ -92,6 +93,7 @@ describe('computeTokenUsage', () => {
       output: 0,
       cacheRead: 0,
       cacheWrite: 0,
+      cacheWrite1h: 0,
       toolResults: 0,
       models: ['claude-3-sonnet'],
       sidechainTurns: 0,
@@ -318,7 +320,10 @@ describe('renderTokenUsage', () => {
       '  turns 1 | fresh input 200 | output 40',
       '  cache_read 30 | cache_write 8 | tool_results 2',
       '  cache-read share of input: 13% (cheap tier — the higher the better)',
-      '  cost-weighted input-equivalent: 213 (cache_read ×0.1, cache_write ×1.25)',
+      '  cache_write split: 1-hour 0 | 5-minute 8',
+      '  cost-weighted input-equivalent: 213 (cache_read ×0.1, 5-minute cache_write ×1.25, 1-hour cache_write ×2)',
+      '  list price: $0.00 (fresh $0.00, cache read $0.00, cache write $0.00, output $0.00)',
+      '  not priced, no list price for: claude-3-opus (100% of weighted input)',
       '  models: claude-3-opus | sidechain turns: 0%',
       '',
       '(cache_read is cost-weighted, never summed flat with fresh input; native /usage covers the live view.)',
@@ -355,6 +360,101 @@ describe('renderTokenUsage', () => {
 
     expect(rendered[rendered.length - 1]).toBe(
       '(cache_read is cost-weighted, never summed flat with fresh input; native /usage covers the live view.)',
+    );
+  });
+});
+
+describe('renderTokenUsage cache write split and list price', () => {
+  const totalsWithout1h = {
+    turns: 1,
+    input: 1,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 10,
+    toolResults: 0,
+    models: [],
+    sidechainTurns: 0,
+    skippedLines: 0,
+    excludedPlaceholderRecords: 0,
+  };
+
+  it('splits cache writes into 1-hour and 5-minute from the transcript', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-abcdef12.jsonl',
+      line({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          usage: {
+            input_tokens: 1,
+            cache_creation_input_tokens: 10,
+            cache_creation: {
+              ephemeral_1h_input_tokens: 4,
+              ephemeral_5m_input_tokens: 6,
+            },
+          },
+        },
+      }),
+    );
+
+    const rendered = renderTokenUsage(computeTokenUsage(corpus));
+
+    expect(rendered).toContain('  cache_write split: 1-hour 4 | 5-minute 6');
+  });
+
+  it('says the split was not recorded for a document exported without it, never 0', () => {
+    const report: TokenUsageReport = {
+      files: [],
+      totals: totalsWithout1h,
+      unreadableFileCount: 0,
+    };
+
+    const rendered = renderTokenUsage(report);
+
+    expect(rendered).toContain(
+      '  cache_write split: 1-hour vs 5-minute not recorded in this document',
+    );
+  });
+
+  it('prices an imported document from byModel, writes at the 5-minute rate', () => {
+    const file: FileUsage = {
+      file: 'sess-abcdef12.jsonl',
+      turns: 1,
+      input: 1_000_000,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 1_000_000,
+      toolResults: 0,
+      models: new Set(['claude-sonnet-5-5']),
+      sidechainTurns: 0,
+      skippedLines: 0,
+      excludedPlaceholderRecords: 0,
+      byOrigin: { main: emptyUsageSlice(), subagent: emptyUsageSlice() },
+      byModel: new Map([
+        [
+          'claude-sonnet-5-5',
+          {
+            turns: 1,
+            input: 1_000_000,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 1_000_000,
+          },
+        ],
+      ]),
+    };
+    const report: TokenUsageReport = {
+      files: [file],
+      totals: totalsWithout1h,
+      unreadableFileCount: 0,
+    };
+
+    const rendered = renderTokenUsage(report);
+
+    expect(rendered).toContain(
+      '  list price: $4.50 (fresh $2.00, cache read $0.00, cache write $2.50, output $0.00)',
     );
   });
 });

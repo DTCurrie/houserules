@@ -373,6 +373,7 @@ describe('ingestTranscript per-session usage', () => {
       output: 22,
       cacheRead: 103,
       cacheWrite: 9,
+      cacheWrite1h: 0,
     });
     expect(row.byOrigin.subagent).toEqual({
       turns: 2,
@@ -380,6 +381,7 @@ describe('ingestTranscript per-session usage', () => {
       output: 11,
       cacheRead: 9,
       cacheWrite: 11,
+      cacheWrite1h: 0,
     });
     expect(row.byModel.get('model-a')).toEqual({
       turns: 2,
@@ -387,6 +389,7 @@ describe('ingestTranscript per-session usage', () => {
       output: 22,
       cacheRead: 103,
       cacheWrite: 9,
+      cacheWrite1h: 0,
     });
     // The model-less subagent turn counts toward its origin but opens no model slice.
     expect(row.byModel.get('model-b')).toEqual({
@@ -395,6 +398,7 @@ describe('ingestTranscript per-session usage', () => {
       output: 8,
       cacheRead: 9,
       cacheWrite: 10,
+      cacheWrite1h: 0,
     });
     expect(row.byModel.size).toBe(2);
     expect(row.firstTs).toBe(Date.parse('2026-10-01T10:00:00Z'));
@@ -447,6 +451,7 @@ describe('readCorpus per-session usage origin', () => {
       output: 6,
       cacheRead: 0,
       cacheWrite: 0,
+      cacheWrite1h: 0,
     });
     expect(row.byOrigin.subagent).toEqual({
       turns: 1,
@@ -454,6 +459,7 @@ describe('readCorpus per-session usage origin', () => {
       output: 40,
       cacheRead: 0,
       cacheWrite: 0,
+      cacheWrite1h: 0,
     });
   });
 });
@@ -504,6 +510,7 @@ describe('subagent placeholder usage before Claude Code 2.1.307', () => {
       output: 750,
       cacheRead: 0,
       cacheWrite: 0,
+      cacheWrite1h: 0,
     });
     expect(row.output).toBe(1750);
     expect(row.turns).toBe(8);
@@ -512,5 +519,282 @@ describe('subagent placeholder usage before Claude Code 2.1.307', () => {
     expect(renderTokenUsage(computeTokenUsage(corpus)).join('\n')).toContain(
       '3 subagent record(s) from Claude Code before 2.1.307 had placeholder token usage',
     );
+  });
+});
+
+describe('ingestTranscript 1-hour cache writes and main requests', () => {
+  function response(
+    id: string,
+    usage: Record<string, unknown>,
+    extra: Record<string, unknown> = {},
+  ): string {
+    return line({
+      type: 'assistant',
+      sessionId: 'sess-1',
+      timestamp: '2026-11-18T10:00:00.000Z',
+      requestId: `req-${id}`,
+      message: {
+        id: `msg-${id}`,
+        role: 'assistant',
+        model: 'model-a',
+        usage,
+        content: [{ type: 'text', text: 'x' }],
+      },
+      ...extra,
+    });
+  }
+
+  it('sums the 1-hour part of cache writes and leaves cacheWrite as the total', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-1.jsonl',
+      [
+        response('1', {
+          cache_creation_input_tokens: 30,
+          cache_creation: {
+            ephemeral_1h_input_tokens: 20,
+            ephemeral_5m_input_tokens: 10,
+          },
+        }),
+        response('2', { cache_creation_input_tokens: 7 }),
+        response('3', {
+          cache_creation_input_tokens: 4,
+          cache_creation: { ephemeral_1h_input_tokens: 4 },
+        }),
+      ].join('\n'),
+    );
+    const row = corpus.files[0]!;
+
+    expect(row.cacheWrite).toBe(41);
+    expect(row.cacheWrite1h).toBe(24);
+    expect(row.byOrigin.main.cacheWrite1h).toBe(24);
+    expect(row.byModel.get('model-a')?.cacheWrite1h).toBe(24);
+  });
+
+  it('counts a response split over content-block records once in 1-hour writes and main requests', () => {
+    const split = response('1', {
+      input_tokens: 2,
+      output_tokens: 9,
+      cache_read_input_tokens: 50,
+      cache_creation_input_tokens: 30,
+      cache_creation: { ephemeral_1h_input_tokens: 30 },
+    });
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(corpus, 'sess-1.jsonl', [split, split, split].join('\n'));
+
+    expect(corpus.files[0]!.cacheWrite1h).toBe(30);
+    expect(corpus.sessions.get('sess-1')?.mainRequests).toEqual([
+      {
+        ts: Date.parse('2026-11-18T10:00:00.000Z'),
+        model: 'model-a',
+        input: 2,
+        output: 9,
+        cacheRead: 50,
+        cacheWrite: 30,
+        cacheWrite1h: 30,
+      },
+    ]);
+  });
+
+  it('keys main requests by the file name when a record has no session id', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'fallback-id.jsonl',
+      line({
+        type: 'assistant',
+        message: { role: 'assistant', usage: { output_tokens: 3 } },
+      }),
+    );
+
+    expect(corpus.sessions.get('fallback-id')?.mainRequests).toEqual([
+      {
+        ts: undefined,
+        model: undefined,
+        input: 0,
+        output: 3,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cacheWrite1h: 0,
+      },
+    ]);
+  });
+
+  it('adds no main requests from a folded subagent transcript but still counts its 1-hour writes', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-1.jsonl',
+      response('1', { output_tokens: 1 }),
+    );
+    const row = corpus.files[0]!;
+    ingestTranscript(
+      corpus,
+      'agent-1.jsonl',
+      response('2', {
+        output_tokens: 5,
+        cache_creation_input_tokens: 8,
+        cache_creation: { ephemeral_1h_input_tokens: 8 },
+      }),
+      row,
+    );
+
+    expect(
+      corpus.sessions.get('sess-1')?.mainRequests.map((r) => r.output),
+    ).toEqual([1]);
+    expect(row.byOrigin.subagent.cacheWrite1h).toBe(8);
+    expect(row.byOrigin.main.cacheWrite1h).toBe(0);
+  });
+
+  it('leaves the 1-hour part out of a placeholder-usage subagent record', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-1.jsonl',
+      response('1', { output_tokens: 1 }),
+    );
+    const row = corpus.files[0]!;
+    ingestTranscript(
+      corpus,
+      'agent-1.jsonl',
+      response(
+        '2',
+        {
+          cache_creation_input_tokens: 8,
+          cache_creation: { ephemeral_1h_input_tokens: 8 },
+        },
+        { version: '2.1.302' },
+      ),
+      row,
+    );
+
+    expect(row.cacheWrite1h).toBe(0);
+  });
+});
+
+describe('ingestTranscript stop hook summaries', () => {
+  function summary(fields: Record<string, unknown>, sessionId = 'sess-1') {
+    return line({
+      type: 'system',
+      subtype: 'stop_hook_summary',
+      sessionId,
+      timestamp: '2026-11-18T10:00:00.000Z',
+      ...fields,
+    });
+  }
+
+  it('reads one run per hook with the statusMessage preferred over the command, stamped 2.1.322', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-1.jsonl',
+      summary({
+        version: '2.1.322',
+        hookInfos: [
+          { command: 'node check.mjs', durationMs: 84 },
+          {
+            command: 'node lint.mjs',
+            statusMessage: 'Running lint',
+            durationMs: 44,
+          },
+        ],
+        hookErrors: ['boom'],
+        preventedContinuation: true,
+      }),
+    );
+
+    expect(corpus.sessions.get('sess-1')?.stopHookSummaries).toEqual([
+      {
+        hooks: [
+          { command: 'node check.mjs', durationMs: 84 },
+          { command: 'Running lint', durationMs: 44 },
+        ],
+        errorCount: 1,
+        preventedContinuation: true,
+        version: '2.1.322',
+        isSubagent: false,
+      },
+    ]);
+  });
+
+  it('defaults a summary stamped 2.1.327 with no hookErrors and a hook with no duration', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-1.jsonl',
+      summary({
+        version: '2.1.327',
+        hookInfos: [{ command: 'node a.mjs' }, null, {}],
+      }),
+    );
+
+    expect(corpus.sessions.get('sess-1')?.stopHookSummaries).toEqual([
+      {
+        hooks: [{ command: 'node a.mjs', durationMs: undefined }],
+        errorCount: 0,
+        preventedContinuation: false,
+        version: '2.1.327',
+        isSubagent: false,
+      },
+    ]);
+  });
+
+  it('survives a summary with no hookInfos and marks a folded subagent summary', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(corpus, 'sess-1.jsonl', stamped('2026-11-18T10:00:00Z'));
+    const row = corpus.files[0]!;
+    ingestTranscript(
+      corpus,
+      'agent-1.jsonl',
+      summary({ hookInfos: 'oops' }),
+      row,
+    );
+
+    expect(corpus.sessions.get('sess-1')?.stopHookSummaries).toEqual([
+      {
+        hooks: [],
+        errorCount: 0,
+        preventedContinuation: false,
+        version: undefined,
+        isSubagent: true,
+      },
+    ]);
+  });
+});
+
+describe('ingestTranscript Artifact actions', () => {
+  function toolUse(name: string, input: Record<string, unknown>, id: string) {
+    return {
+      type: 'tool_use',
+      id,
+      name,
+      input,
+    };
+  }
+
+  it('records the action of an Artifact call and ignores a non-string action or another tool', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-1.jsonl',
+      line({
+        type: 'assistant',
+        sessionId: 'sess-1',
+        message: {
+          role: 'assistant',
+          content: [
+            toolUse('Artifact', { action: 'update' }, 'a1'),
+            toolUse('Artifact', { action: 7 }, 'a2'),
+            toolUse('Artifact', {}, 'a3'),
+            toolUse('Bash', { action: 'update', command: 'ls' }, 'b1'),
+          ],
+        },
+      }),
+    );
+
+    expect(
+      corpus.sessions.get('sess-1')?.toolUses.map((use) => use.action),
+    ).toEqual(['update', undefined, undefined, undefined]);
   });
 });

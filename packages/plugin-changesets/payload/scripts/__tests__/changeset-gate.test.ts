@@ -497,20 +497,20 @@ describe('changeset-gate.mjs', () => {
   });
 });
 
-describe('changeset-gate.mjs, turn tool uses', () => {
-  function driftedRepo(): string {
-    const root = installChangesets();
-    appendFileSync(
-      join(root, 'apps/studio/src/main.ts'),
-      'export const two = 2;\n',
-    );
-    writeFileSync(
-      join(root, '.changeset/kit-drift.md'),
-      '---\n"@fix/cityville": patch\n---\n\nMore.\n',
-    );
-    return root;
-  }
+function driftedRepo(): string {
+  const root = installChangesets();
+  appendFileSync(
+    join(root, 'apps/studio/src/main.ts'),
+    'export const two = 2;\n',
+  );
+  writeFileSync(
+    join(root, '.changeset/kit-drift.md'),
+    '---\n"@fix/cityville": patch\n---\n\nMore.\n',
+  );
+  return root;
+}
 
+describe('changeset-gate.mjs, turn tool uses', () => {
   function payloadWithTools(root: string, toolNames: string[]): string {
     const path = join(root, 'transcript.jsonl');
     const records = [
@@ -561,6 +561,51 @@ describe('changeset-gate.mjs, turn tool uses', () => {
 
     expect(r.status, r.stderr).toBe(2);
     expect(r.stderr).toMatch(/h5-package-drift/);
+  });
+});
+
+describe('changeset-gate.mjs, live background work', () => {
+  it('stays silent on a drifted repo while background_tasks is non-empty', () => {
+    const root = driftedRepo();
+
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({ background_tasks: [{}] }),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toBe('');
+  });
+
+  it('flags the drift when background_tasks is an empty array', () => {
+    const root = driftedRepo();
+
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({ background_tasks: [] }),
+    });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/h5-package-drift/);
+  });
+
+  it('still flags a major bump with no proposal while background_tasks is non-empty', () => {
+    const root = installChangesets();
+    const transcriptPath = join(root, 'transcript.jsonl');
+    writeFileSync(
+      transcriptPath,
+      [userEntry(), majorCallEntry()]
+        .map((entry) => JSON.stringify(entry))
+        .join('\n'),
+    );
+
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({
+        transcript_path: transcriptPath,
+        background_tasks: [{}],
+      }),
+    });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/h6-major-confirm/);
   });
 });
 

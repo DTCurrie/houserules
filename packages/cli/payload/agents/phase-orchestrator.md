@@ -50,9 +50,11 @@ had", and the answer is to end the turn and wait.
 
 When every live worker is itself waiting on background work, the harness sees no live child and
 nudges you to hand back (`handback-send-enforce`). Do not. A hand back ends your run with the wave
-open. Start a keepalive instead, `sleep 600` with `run_in_background: true`, end the turn, and start
-another each time it wakes you with the wave still open. The worker's report arrives as a message
-and wakes you too.
+open. Start a keepalive instead, `sleep 270` with `run_in_background: true`, end the turn, and start
+another each time it wakes you with the wave still open. A wake inside 300 seconds re-reads your
+cached context, and a later one rewrites all of it. After seven keepalive wakes in one wait, about
+30 minutes, switch to `sleep 1800`, because by then the short wakes have cost about one rewrite.
+The worker's report arrives as a message and wakes you too.
 
 ## Skills and state
 

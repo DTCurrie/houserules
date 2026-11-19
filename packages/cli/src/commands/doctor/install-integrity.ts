@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -36,6 +37,137 @@ function shippedScripts(dirs: string[]): Set<string> {
   return scripts;
 }
 
+/** How doctor learns the published `latest`, injectable so tests never reach the network. */
+export interface PublishedVersionLookup {
+  /** The environment the skip conditions read. */
+  env: NodeJS.ProcessEnv;
+  /** The registry's `latest` for `@houserules/cli`, or null when it cannot be known. */
+  latestVersion: () => string | null;
+}
+
+const CLI_PACKAGE = '@houserules/cli';
+const REGISTRY_TIMEOUT_MS = 3000;
+
+/**
+ * Asks npm for the `latest` dist-tag, so the user's registry and proxy config apply. Null on
+ * every failure (offline, npm absent, non-zero exit, timeout, unparseable output), never a throw.
+ */
+function npmLatestVersion(): string | null {
+  try {
+    const out = execFileSync('npm', ['view', CLI_PACKAGE, 'dist-tags.latest'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: REGISTRY_TIMEOUT_MS,
+      // Windows resolves npm only as npm.cmd, which Node spawns only through a shell.
+      // Every argument here is a constant, so the shell has nothing to interpolate.
+      shell: process.platform === 'win32',
+    }).trim();
+    return parseSemver(out) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+const DEFAULT_LOOKUP: PublishedVersionLookup = {
+  env: process.env,
+  latestVersion: npmLatestVersion,
+};
+
+/**
+ * update-notifier's skip conditions: `NO_UPDATE_NOTIFIER` set to anything, `NODE_ENV=test`,
+ * or a CI environment as `is-in-ci` detects one (`CI`, `CONTINUOUS_INTEGRATION`, or any
+ * `CI_*` variable, unless `CI` is `0` or `false`).
+ */
+function isUpdateCheckSkipped(env: NodeJS.ProcessEnv): boolean {
+  if ('NO_UPDATE_NOTIFIER' in env) return true;
+  if (env.NODE_ENV === 'test') return true;
+  if (env.CI === '0' || env.CI === 'false') return false;
+  return (
+    'CI' in env ||
+    'CONTINUOUS_INTEGRATION' in env ||
+    Object.keys(env).some((key) => key.startsWith('CI_'))
+  );
+}
+
+interface Semver {
+  release: number[];
+  prerelease: string[];
+}
+
+function parseSemver(version: string): Semver | null {
+  const match =
+    /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(
+      version.trim(),
+    );
+  if (!match) return null;
+  return {
+    release: [Number(match[1]), Number(match[2]), Number(match[3])],
+    prerelease: match[4] ? match[4].split('.') : [],
+  };
+}
+
+/** Semver precedence of two prerelease identifiers: numeric ones compare as numbers and sort first. */
+function compareIdentifiers(left: string, right: string): number {
+  const leftNumeric = /^\d+$/.test(left);
+  const rightNumeric = /^\d+$/.test(right);
+  if (leftNumeric && rightNumeric) return Number(left) - Number(right);
+  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** Semver precedence: numeric release parts first, then a prerelease sorts below its release. */
+function compareSemver(left: Semver, right: Semver): number {
+  for (let i = 0; i < left.release.length; i++) {
+    const difference = left.release[i]! - right.release[i]!;
+    if (difference !== 0) return difference;
+  }
+  if (!left.prerelease.length || !right.prerelease.length)
+    return right.prerelease.length - left.prerelease.length;
+  const shared = Math.min(left.prerelease.length, right.prerelease.length);
+  for (let i = 0; i < shared; i++) {
+    const difference = compareIdentifiers(
+      left.prerelease[i]!,
+      right.prerelease[i]!,
+    );
+    if (difference !== 0) return difference;
+  }
+  return left.prerelease.length - right.prerelease.length;
+}
+
+/** The command that moves the repo's devDependency CLI to `latest`, in the repo's package manager. */
+function cliUpgradeCommand(ctx: Ctx): string {
+  const manager = ctx.packageManager?.name ?? 'npm';
+  if (manager === 'npm') return `npm install -D ${CLI_PACKAGE}@latest`;
+  const workspaceRoot = manager === 'pnpm' && ctx.isMonorepo ? ' -w' : '';
+  return `${manager} add -D${workspaceRoot} ${CLI_PACKAGE}@latest`;
+}
+
+/**
+ * A readout when the install AND the running CLI are both behind the published `latest`. The
+ * running-CLI comparison cannot see this, since a repo's own devDependency CLI is as old as its
+ * install. When the running CLI is already at `latest`, that comparison's `update` advice is
+ * the whole fix, so this stays silent. Also silent when skipped or when the lookup fails.
+ */
+function publishedVersionReadout(
+  ctx: Ctx,
+  installed: string,
+  runningCli: string,
+  lookup: PublishedVersionLookup,
+): string[] {
+  const installedSemver = parseSemver(installed);
+  const runningSemver = parseSemver(runningCli);
+  if (!installedSemver || !runningSemver || isUpdateCheckSkipped(lookup.env))
+    return [];
+  const latest = lookup.latestVersion();
+  const latestSemver = latest ? parseSemver(latest) : null;
+  if (!latestSemver) return [];
+  if (compareSemver(installedSemver, latestSemver) >= 0) return [];
+  if (compareSemver(runningSemver, latestSemver) >= 0) return [];
+  return [
+    `installed houserules v${installed}, latest published is v${latest}. Update the CLI, then the install: ${cliUpgradeCommand(ctx)} && npx houserules update`,
+  ];
+}
+
 /**
  * Whether what the manifest claims still matches what houserules ships: the receipt
  * exists, its version is current, nothing generated got committed, and no retired
@@ -44,12 +176,15 @@ function shippedScripts(dirs: string[]): Set<string> {
  * @param registry Built-ins plus every configured plugin's modules, as `checkConfigValidity`
  * resolved it. Null only when a plugin failed to resolve, which that check already reported,
  * and the retired-module scan then falls back to the built-ins.
+ * @param lookup Where the published `latest` comes from. Defaults to `npm view`, gated by
+ * update-notifier's skip conditions on `process.env`.
  */
 export function checkInstallIntegrity(
   root: string,
   ctx: Ctx,
   kitVersion: string,
   registry: Registry | null,
+  lookup: PublishedVersionLookup = DEFAULT_LOOKUP,
 ): CheckResult {
   const findings: Finding[] = [];
   const manifest = ctx.claude.manifest;
@@ -151,5 +286,13 @@ export function checkInstallIntegrity(
     });
   }
 
-  return { findings, readouts: [] };
+  return {
+    findings,
+    readouts: publishedVersionReadout(
+      ctx,
+      manifest.kitVersion,
+      kitVersion,
+      lookup,
+    ),
+  };
 }

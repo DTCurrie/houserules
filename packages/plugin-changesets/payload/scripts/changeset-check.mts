@@ -6,6 +6,8 @@
  * not. Exit 0 stays silent, and every failure path exits 0, because a nudge hook must
  * never break a session. A turn whose transcript shows only read-only tool uses exits 0
  * before any git call, and a missing or unreadable transcript runs the check as usual.
+ * A Stop payload whose background_tasks is non-empty exits 0 the same way, since background
+ * agents are still changing the tree. The nudge lands on the first stop after they finish.
  *
  * Config (houserules.config.json): changesets.enabled must be true, changesets.stopCheck
  * (default true) is the kill-switch, changesets.baseBranch (default "main") is the
@@ -78,10 +80,13 @@ function writeLastSignature(root: string, signature: string): void {
 interface HookInput {
   stop_hook_active?: boolean;
   transcript_path?: string;
+  background_tasks?: unknown[];
 }
 
 const input = readStdinJson<HookInput>();
 if (input.stop_hook_active) process.exit(0);
+if (Array.isArray(input.background_tasks) && input.background_tasks.length > 0)
+  process.exit(0);
 if (turnTouchedFiles(input.transcript_path) === false) process.exit(0);
 
 const isChangesetMd = (p: string): boolean =>

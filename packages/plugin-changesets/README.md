@@ -36,7 +36,9 @@ a monorepo, or when `.changeset/` already exists.
   sees the nudge and can act on it in the same turn instead of losing the context. Exit 1 is
   only a non-blocking error. Every other path, including any internal failure, exits 0, so the
   hook can never break a session. It also exits 0 without running when the turn that just
-  ended used no file-writing tool.
+  ended used no file-writing tool, and while background agents are still running, since
+  their unfinished edits are not a change to record yet. The nudge then comes on the first
+  stop after they finish.
   It seeds `.changeset/config.json` when the repo has none, and writes the `/changeset` skill
   plus the `changeset-condense` skill and the `changeset-writer` agent (haiku).
 

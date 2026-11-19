@@ -216,6 +216,48 @@ describe('changeset-check.mjs, turn tool uses', () => {
   });
 });
 
+function stopPayload(root: string, backgroundTasks: unknown[]): string {
+  return JSON.stringify({
+    transcript_path: transcriptWith(root, ['Edit']),
+    background_tasks: backgroundTasks,
+  });
+}
+
+describe('changeset-check.mjs, live background work', () => {
+  let root: string;
+  let command: string;
+
+  beforeEach(() => {
+    root = installChangesets();
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+    command = stopHookCommandFor(root, 'changeset-check.mjs');
+  });
+
+  it('exits 0 silently, spawning no git, while background_tasks is non-empty', () => {
+    const spy = gitSpy(root);
+
+    const r = runShellCommand(root, command, stopPayload(root, [{}]), spy.env);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toBe('');
+    expect(existsSync(spy.log), 'git was never spawned').toBe(false);
+  });
+
+  it('nudges on the first stop after the background work ends', () => {
+    const whileLive = runShellCommand(root, command, stopPayload(root, [{}]));
+
+    expect(whileLive.status, `while live: ${whileLive.stderr}`).toBe(0);
+
+    const afterItEnds = runShellCommand(root, command, stopPayload(root, []));
+
+    expect(afterItEnds.status, `after it ends: ${afterItEnds.stderr}`).toBe(2);
+    expect(afterItEnds.stderr).toMatch(/--pkg @fix\/cityville/);
+  });
+});
+
 describe('changeset-check.mjs, packages the gate would not gate', () => {
   function commitAll(root: string, message: string): void {
     runIn(root, 'git', ['add', '-A']);

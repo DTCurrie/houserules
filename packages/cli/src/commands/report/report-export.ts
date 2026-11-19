@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 
 import { HouseError } from '../../house-error.js';
+import { STOP_TOTAL_LABEL } from './hook-health.js';
 import type { ReportDocument } from './report-document.js';
 
 const SUBCOMMAND_TOOLS = new Set(['git', 'gh']);
@@ -64,16 +65,37 @@ function redactSignatures(
   return [...merged].map(([signature, count]) => ({ signature, count }));
 }
 
+const BARE_SCRIPT_NAME = /^[\w-]+\.(?:mjs|cjs|js)$/;
+// A Stop hook that maps to no script keeps its raw command as its name, and a command can
+// carry a path or an argument. A bare script basename and the per-Stop total row are safe.
+function redactStopHookName(name: string): string {
+  if (BARE_SCRIPT_NAME.test(name) || name === STOP_TOTAL_LABEL) return name;
+  return commandFamily(name);
+}
+
+function redactStopHooks(
+  stopHooks: NonNullable<ReportDocument['hooks']['stopHooks']>,
+): NonNullable<ReportDocument['hooks']['stopHooks']> {
+  // Two raw commands can reduce to one family and stay two rows, since percentiles do not add.
+  return stopHooks.map((row) => ({
+    ...row,
+    hook: redactStopHookName(row.hook),
+  }));
+}
+
 /**
- * Returns a copy with every command reduced to its family and every crash signature reduced
- * to a module basename or a fixed placeholder. The input is not mutated.
+ * Returns a copy with every command reduced to its family, every crash signature reduced
+ * to a module basename or a fixed placeholder, and every Stop hook name that is not a bare
+ * script name reduced to its command family. The input is not mutated.
  */
 export function redactDocument(document: ReportDocument): ReportDocument {
+  const { stopHooks } = document.hooks;
   return {
     ...document,
     hooks: {
       ...document.hooks,
       crashSignatures: redactSignatures(document.hooks.crashSignatures),
+      ...(stopHooks ? { stopHooks: redactStopHooks(stopHooks) } : {}),
     },
     guard: document.guard.map((block) => ({
       ...block,

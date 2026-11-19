@@ -11,6 +11,7 @@ import {
   checkPlanPaths,
   checkReviewFocus,
   checkRoadmapSync,
+  checkSliceRowsAfterDone,
   checkSliceStatuses,
   listImpactMaps,
   parseDomain,
@@ -47,6 +48,64 @@ describe('checkSliceStatuses', () => {
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0]?.rule).toBe('plan-lint/slice-status-vocabulary');
     expect(report.findings[0]?.msg).toContain('In Progress');
+  });
+});
+
+describe('checkSliceRowsAfterDone', () => {
+  const phaseOf = (header: string, ...statuses: string[]) =>
+    [
+      '# Phase 3',
+      '',
+      `**Status:** ${header}`,
+      '',
+      '## Slices',
+      '',
+      '| id | owns | status |',
+      '| -- | ---- | ------ |',
+      ...statuses.map(
+        (status, index) => `| 3${'abc'[index]} | x | ${status} |`,
+      ),
+      '',
+    ].join('\n');
+
+  it('flags the one non-terminal row under a DONE header, at its line', () => {
+    const report = checkSliceRowsAfterDone(
+      'phase-3.md',
+      phaseOf('DONE (2026-11-18)', 'DONE', 'DISPATCHED'),
+    );
+    expect(report.findings).toEqual([
+      {
+        rule: 'plan-lint/slice-row-after-done',
+        level: 'warn',
+        file: 'phase-3.md',
+        line: 10,
+        msg: 'slice `3b` is `DISPATCHED` but the phase is `DONE`',
+      },
+    ]);
+  });
+
+  it('flags BLOCKED too', () => {
+    const report = checkSliceRowsAfterDone(
+      'phase-3.md',
+      phaseOf('DONE', 'BLOCKED'),
+    );
+    expect(report.findings).toHaveLength(1);
+  });
+
+  it('reports nothing when every row is DONE', () => {
+    const report = checkSliceRowsAfterDone(
+      'phase-3.md',
+      phaseOf('DONE', 'DONE', 'DONE (1 revise)'),
+    );
+    expect(report.findings).toEqual([]);
+  });
+
+  it('reports nothing when the header is not DONE', () => {
+    const report = checkSliceRowsAfterDone(
+      'phase-3.md',
+      phaseOf('IN PROGRESS', 'TODO'),
+    );
+    expect(report.findings).toEqual([]);
   });
 });
 

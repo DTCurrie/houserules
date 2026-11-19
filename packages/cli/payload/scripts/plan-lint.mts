@@ -52,16 +52,26 @@ const DECLINED = [
 interface SliceTable {
   header: string[];
   rows: string[][];
+  /** The 1-based line of each entry in `rows`. */
+  rowLines: number[];
 }
+
+/** The header row and the separator row that open every markdown table. */
+const TABLE_PREAMBLE_ROWS = 2;
 
 /** Finds the `## Slices` markdown table in a phase sub-plan, if it has one. */
 function parseSliceTable(markdown: string): SliceTable | null {
   const start = markdown.indexOf('## Slices');
   if (start === -1) return null;
   const lines: string[] = [];
-  for (const line of markdown.slice(start).split('\n')) {
-    if (line.trim().startsWith('|')) lines.push(line);
-    else if (lines.length > 0) break;
+  const lineNumbers: number[] = [];
+  const firstLine = markdown.slice(0, start).split('\n').length;
+  const following = markdown.slice(start).split('\n');
+  for (const [offset, line] of following.entries()) {
+    if (line.trim().startsWith('|')) {
+      lines.push(line);
+      lineNumbers.push(firstLine + offset);
+    } else if (lines.length > 0) break;
   }
   if (lines.length < 2 || lines[0] === undefined) return null;
   const splitRow = (line: string): string[] => {
@@ -71,11 +81,15 @@ function parseSliceTable(markdown: string): SliceTable | null {
     return cells;
   };
   const header = splitRow(lines[0]);
-  const rows = lines
-    .slice(2)
-    .map(splitRow)
-    .filter((cells) => cells.length >= 2);
-  return { header, rows };
+  const rows: string[][] = [];
+  const rowLines: number[] = [];
+  lines.slice(TABLE_PREAMBLE_ROWS).forEach((line, index) => {
+    const cells = splitRow(line);
+    if (cells.length < 2) return;
+    rows.push(cells);
+    rowLines.push(lineNumbers[index + TABLE_PREAMBLE_ROWS] ?? firstLine);
+  });
+  return { header, rows, rowLines };
 }
 
 /**
@@ -105,6 +119,40 @@ export function checkSliceStatuses(file: string, markdown: string): Report {
       msg: `slice ${id ?? '?'} status "${cell}" is not one of TODO, DISPATCHED, IN REVIEW, REVISING, DONE, BLOCKED`,
     });
   }
+  return report;
+}
+
+/**
+ * Flags each `## Slices` row whose status is not `DONE` in a sub-plan whose `**Status:**`
+ * header reads `DONE`, dated or not. A finished phase with a live row is a stale table, and
+ * `BLOCKED` counts, since a finished phase has nothing left to block.
+ */
+export function checkSliceRowsAfterDone(
+  file: string,
+  markdown: string,
+): Report {
+  const report = emptyReport();
+  if (!isDoneStatus(parseStatusHeader(markdown))) return report;
+  const table = parseSliceTable(markdown);
+  if (!table) return report;
+  const idIdx = table.header.findIndex((h) => h.toLowerCase() === 'id');
+  const statusIdx = table.header.findIndex((h) => h.toLowerCase() === 'status');
+  if (statusIdx === -1) return report;
+  table.rows.forEach((row, index) => {
+    const base = (row[statusIdx] ?? '')
+      .trim()
+      .replace(/\s*\(.*\)\s*$/, '')
+      .trim();
+    if (!base || base === 'DONE') return;
+    const id = idIdx === -1 ? '?' : (row[idIdx] ?? '').trim();
+    report.findings.push({
+      rule: 'plan-lint/slice-row-after-done',
+      level: 'warn',
+      file,
+      line: table.rowLines[index] ?? null,
+      msg: `slice \`${id}\` is \`${base}\` but the phase is \`DONE\``,
+    });
+  });
   return report;
 }
 
@@ -753,6 +801,9 @@ function main(): void {
       const markdown = readFileSync(phasePath, 'utf8');
       const relFile = relative(root, phasePath);
       report.findings.push(...checkSliceStatuses(relFile, markdown).findings);
+      report.findings.push(
+        ...checkSliceRowsAfterDone(relFile, markdown).findings,
+      );
       report.findings.push(...checkFencedCodeShare(relFile, markdown).findings);
       report.findings.push(...checkReviewFocus(relFile, markdown).findings);
       const phaseStatus = parseStatusHeader(markdown);

@@ -1,6 +1,14 @@
 import { join } from 'node:path';
 
-import { computeFriction, type FrictionReport } from './friction.js';
+import {
+  computeArtifactEpisodes,
+  type ArtifactReport,
+} from './artifact-episodes.js';
+import {
+  computeFriction,
+  readTrimInstalled,
+  type FrictionReport,
+} from './friction.js';
 import { computeGuardBlocks, type GuardBlock } from './guard-efficacy.js';
 import { computeHookHealth, type HookHealthReport } from './hook-health.js';
 import {
@@ -68,6 +76,8 @@ export interface ReportDocument {
   outcomes: { changesets: ChangesetOutcome; ledgers: LedgerOutcome[] };
   friction: FrictionReport;
   residentContext: ResidentContextReport;
+  /** Absent in a document exported before the section existed, and rendered as absent, not zero. */
+  artifacts?: ArtifactReport;
 }
 
 export interface BuildOptions {
@@ -109,6 +119,21 @@ function isoDay(ts: number | undefined): string | undefined {
   return ts === undefined ? undefined : new Date(ts).toISOString().slice(0, 10);
 }
 
+/** Stamps whether the install at `top` has the trim module onto the result-size readout. */
+function withTrimInstalled(
+  friction: FrictionReport,
+  top: string,
+): FrictionReport {
+  if (!friction.toolResultSizes) return friction;
+  return {
+    ...friction,
+    toolResultSizes: {
+      ...friction.toolResultSizes,
+      isTrimInstalled: readTrimInstalled(top),
+    },
+  };
+}
+
 /** Computes every section once over the corpus. `top` is the repo root the ledgers live in. */
 export function buildReportDocument(
   corpus: Corpus,
@@ -136,7 +161,8 @@ export function buildReportDocument(
         computeLedgerOutcome(corpus, top, ledgerFile, skill),
       ),
     },
-    friction: computeFriction(corpus),
+    friction: withTrimInstalled(computeFriction(corpus), top),
     residentContext: computeResidentContext(corpus, top),
+    artifacts: computeArtifactEpisodes(corpus),
   };
 }

@@ -18,7 +18,9 @@
  * Exit 2 with the report on stderr when a gate is violated. Every failure path exits 0,
  * because a nudge hook must never break a session. A turn whose transcript shows only
  * read-only tool uses exits 0 before any git call, and a missing or unreadable transcript
- * runs every gate as usual.
+ * runs every gate as usual. While the Stop payload's background_tasks is non-empty, h5 is
+ * skipped, since background agents are still changing the diff it compares against. h6 and
+ * h9 read only the transcript and still run.
  */
 
 import {
@@ -357,10 +359,39 @@ function touchedPackages(root: string): string[] {
   return [...names];
 }
 
+/** h5 over the changesets written this turn, with the branch's earlier ones counted as coverage. */
+function packageDriftFindings(
+  root: string,
+  transcriptPath: string | undefined,
+): Finding[] {
+  const pendingFiles = readPendingChangesets(root);
+  const branchIds = newChangesetIds(root);
+  const turnStart = turnStartedAt(transcriptPath);
+  // A changeset last written before the prompt belongs to an earlier turn.
+  const newIds =
+    turnStart === undefined
+      ? branchIds
+      : writtenSinceTurnStart(root, branchIds, turnStart);
+  const toPending = (id: string): PendingChangeset => ({
+    id,
+    declaredPkgs: parseDeclaredPackages(pendingFiles.get(id)!),
+  });
+  const pending = [...newIds]
+    .filter((id) => pendingFiles.has(id))
+    .map(toPending);
+  // This branch's own changesets from earlier turns. One already on main belongs to another
+  // feature and never covers this diff.
+  const settled = [...branchIds]
+    .filter((id) => !newIds.has(id) && pendingFiles.has(id))
+    .map(toPending);
+  return checkPackageDrift(pending, touchedPackages(root), settled).findings;
+}
+
 function main(): void {
   const input = readStdinJson<{
     stop_hook_active?: boolean;
     transcript_path?: string;
+    background_tasks?: unknown[];
   }>();
   if (input.stop_hook_active) process.exit(0);
   if (turnTouchedFiles(input.transcript_path) === false) process.exit(0);
@@ -370,29 +401,14 @@ function main(): void {
     const report = emptyReport();
     report.declined.push(...DECLINED);
 
-    const pendingFiles = readPendingChangesets(root);
-    const branchIds = newChangesetIds(root);
-    const turnStart = turnStartedAt(input.transcript_path);
-    // A changeset last written before the prompt belongs to an earlier turn.
-    const newIds =
-      turnStart === undefined
-        ? branchIds
-        : writtenSinceTurnStart(root, branchIds, turnStart);
-    const toPending = (id: string): PendingChangeset => ({
-      id,
-      declaredPkgs: parseDeclaredPackages(pendingFiles.get(id)!),
-    });
-    const pending = [...newIds]
-      .filter((id) => pendingFiles.has(id))
-      .map(toPending);
-    // This branch's own changesets from earlier turns. One already on main belongs to another
-    // feature and never covers this diff.
-    const settled = [...branchIds]
-      .filter((id) => !newIds.has(id) && pendingFiles.has(id))
-      .map(toPending);
-    report.findings.push(
-      ...checkPackageDrift(pending, touchedPackages(root), settled).findings,
-    );
+    // Only h5 reads the diff, which background agents are still changing. h6 and h9 read the transcript.
+    const isTreeMoving =
+      Array.isArray(input.background_tasks) &&
+      input.background_tasks.length > 0;
+    if (!isTreeMoving)
+      report.findings.push(
+        ...packageDriftFindings(root, input.transcript_path),
+      );
 
     if (input.transcript_path && existsSync(input.transcript_path)) {
       const transcript = parseTranscript(

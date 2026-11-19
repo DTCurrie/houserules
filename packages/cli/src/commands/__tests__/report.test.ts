@@ -177,6 +177,7 @@ describe('report', () => {
     expect(r.status, r.stderr).toBe(0);
     const document = JSON.parse(r.stdout) as Record<string, unknown>;
     expect(Object.keys(document).sort()).toEqual([
+      'artifacts',
       'friction',
       'guard',
       'hooks',
@@ -187,6 +188,47 @@ describe('report', () => {
       'tokens',
     ]);
     expect(document.meta).toMatchObject({ sessions: 1, label: 'local' });
+  });
+
+  it('wires the artifact section into the text report and the --json document', () => {
+    const top = runIn(root, 'git', ['rev-parse', '--show-toplevel']).trim();
+    writeFileSync(
+      join(cfgDir, 'projects', claudeProjectDir(top), 'sess-artifact1.jsonl'),
+      [
+        JSON.stringify({
+          type: 'assistant',
+          sessionId: 'sess-artifact1',
+          timestamp: '2026-05-01T00:00:00.000Z',
+          message: {
+            role: 'assistant',
+            model: 'claude-opus-4-8',
+            usage: { input_tokens: 10, output_tokens: 5 },
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tu1',
+                name: 'Artifact',
+                input: { action: 'publish' },
+              },
+            ],
+          },
+        }),
+        '',
+      ].join('\n'),
+    );
+
+    const text = runCli(['report', root], { env });
+    const json = runCli(['report', root, '--json'], { env });
+
+    expect(text.status, text.stderr).toBe(0);
+    expect(text.stdout).toMatch(/-- artifact episodes --/);
+    expect(text.stdout).toMatch(/sess-art/);
+    const document = JSON.parse(json.stdout) as {
+      artifacts: { episodes: { session: string; publishes: number }[] };
+    };
+    expect(document.artifacts.episodes).toEqual([
+      expect.objectContaining({ session: 'sess-art', publishes: 1 }),
+    ]);
   });
 
   it('skips sessions before --since and keeps later ones', () => {

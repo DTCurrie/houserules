@@ -13,10 +13,28 @@ interface HookHealthRow {
   max: number;
 }
 
+/** One Stop hook's timing over every `stop_hook_summary`, quiet runs included. */
+export interface StopHookRow {
+  /** The script the hook runs, mapped back from the record's `statusMessage` where one was set. */
+  hook: string;
+  runs: number;
+  p50: number;
+  p95: number;
+  max: number;
+  /**
+   * Runs at or past {@link STOP_HOOK_TIMEOUT_MS}. The record carries no timeout marker, so
+   * this is the kit's 120 s Stop-hook timeout read off `durationMs`. A run with no
+   * `durationMs` counts as 0 ms.
+   */
+  timeouts: number;
+}
+
 export interface HookHealthReport {
   rows: HookHealthRow[];
   crashSignatures: { signature: string; count: number }[];
   bashCalls: number;
+  /** Absent in a document exported before Stop runs were read, and rendered as absent, not zero. */
+  stopHooks?: StopHookRow[];
 }
 
 interface HookAccumulator {
@@ -25,6 +43,59 @@ interface HookAccumulator {
   crashes: number;
   blocks: number;
   durations: number[];
+}
+
+const STOP_HOOK_TIMEOUT_MS = 120_000;
+const MS_PER_SECOND = 1000;
+export const STOP_TOTAL_LABEL = '(per Stop total)';
+
+// A summary names a hook by its statusMessage when it set one. lint-fix.ts sets the first
+// text, and the second is the older wording field-quality-scan.mjs also maps.
+const STATUS_MESSAGE_SCRIPTS = new Map([
+  ['Running lint/format auto-fix', 'lint-format-fix.mjs'],
+  ['Running lint:fix + format:fix', 'lint-format-fix.mjs'],
+]);
+const SCRIPT_BASENAME = /([\w-]+\.mjs)/;
+
+function stopHookName(command: string): string {
+  const mapped = STATUS_MESSAGE_SCRIPTS.get(command);
+  if (mapped) return mapped;
+  return SCRIPT_BASENAME.exec(command)?.[1] ?? command;
+}
+
+function stopRow(hook: string, durations: number[]): StopHookRow {
+  const sorted = [...durations].sort((a, b) => a - b);
+  return {
+    hook,
+    runs: sorted.length,
+    p50: percentile(sorted, 50),
+    p95: percentile(sorted, 95),
+    max: sorted.at(-1) ?? 0,
+    timeouts: sorted.filter((ms) => ms >= STOP_HOOK_TIMEOUT_MS).length,
+  };
+}
+
+function computeStopHooks(corpus: Corpus): StopHookRow[] {
+  const byHook = new Map<string, number[]>();
+  const totals: number[] = [];
+  for (const session of corpus.sessions.values())
+    for (const summary of session.stopHookSummaries) {
+      let total = 0;
+      for (const run of summary.hooks) {
+        const name = stopHookName(run.command);
+        const ms = run.durationMs ?? 0;
+        const list = byHook.get(name) ?? [];
+        list.push(ms);
+        byHook.set(name, list);
+        total += ms;
+      }
+      totals.push(total);
+    }
+  if (!totals.length) return [];
+  const rows = [...byHook.entries()]
+    .map(([hook, durations]) => stopRow(hook, durations))
+    .sort((a, b) => b.runs - a.runs || a.hook.localeCompare(b.hook));
+  return [...rows, stopRow(STOP_TOTAL_LABEL, totals)];
 }
 
 function percentile(sorted: number[], p: number): number {
@@ -117,7 +188,12 @@ export function computeHookHealth(corpus: Corpus): HookHealthReport {
     .map(([signature, count]) => ({ signature, count }))
     .sort((a, b) => b.count - a.count);
 
-  return { rows, crashSignatures, bashCalls };
+  return {
+    rows,
+    crashSignatures,
+    bashCalls,
+    stopHooks: computeStopHooks(corpus),
+  };
 }
 
 export function renderHookHealth(report: HookHealthReport): string[] {
@@ -156,5 +232,27 @@ export function renderHookHealth(report: HookHealthReport): string[] {
     for (const { signature, count } of report.crashSignatures)
       lines.push(`    ${String(count).padStart(4)}  ${signature}`);
   }
+  if (report.stopHooks) lines.push(...renderStopHooks(report.stopHooks));
   return lines;
+}
+
+function renderStopHooks(stopHooks: StopHookRow[]): string[] {
+  if (!stopHooks.length)
+    return ['', '  Stop hooks: no Stop runs were recorded.'];
+  return [
+    '',
+    '  Stop hooks (every stop_hook_summary, quiet runs included):',
+    ...renderTable(
+      ['hook', 'runs', 'p50ms', 'p95ms', 'maxms', 'timeouts'],
+      stopHooks.map((row) => [
+        row.hook,
+        row.runs,
+        row.p50,
+        row.p95,
+        row.max,
+        row.timeouts,
+      ]),
+    ),
+    `  (timeouts count runs of ${STOP_HOOK_TIMEOUT_MS / MS_PER_SECOND} s or more.)`,
+  ];
 }

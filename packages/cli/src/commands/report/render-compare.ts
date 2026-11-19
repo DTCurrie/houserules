@@ -1,7 +1,12 @@
+import { computeListPrice } from './model-prices.js';
 import { entrypointMedians } from './resident-context.js';
+import { STOP_TOTAL_LABEL } from './hook-health.js';
 import type { ReportDocument } from './report-document.js';
 import { renderTable } from './render-table.js';
 import { weightedInput } from './token-usage.js';
+
+// Dollars print to the cent.
+const CENTS_DIGITS = 2;
 
 type Row = [metric: string, ...values: (string | number)[]];
 
@@ -18,6 +23,42 @@ function row(
   value: (document: ReportDocument) => number,
 ): Row {
   return [metric, ...documents.map((document) => formatCount(value(document)))];
+}
+
+/** A row whose value a document may lack, shown as `-` rather than a zero it never recorded. */
+function optionalRow(
+  metric: string,
+  documents: ReportDocument[],
+  value: (document: ReportDocument) => number | undefined,
+): Row {
+  return [
+    metric,
+    ...documents.map((document) => {
+      const found = value(document);
+      return found === undefined ? MISSING : formatCount(found);
+    }),
+  ];
+}
+
+const stopTotal = (doc: ReportDocument) =>
+  doc.hooks.stopHooks?.find((stop) => stop.hook === STOP_TOTAL_LABEL);
+
+function listPriceRow(documents: ReportDocument[]): Row {
+  return [
+    'list price ($)',
+    ...documents.map((doc) => {
+      const slices = doc.tokens.files.flatMap((file) =>
+        Object.entries(file.byModel),
+      );
+      const price = computeListPrice(slices, weightedInput);
+      const models = new Set(slices.map(([model]) => model));
+      if (price.unpriced.length === models.size) return MISSING;
+      return price.total.toLocaleString('en-US', {
+        minimumFractionDigits: CENTS_DIGITS,
+        maximumFractionDigits: CENTS_DIGITS,
+      });
+    }),
+  ];
 }
 
 /** One row per name in the union across documents, `-` where a document never saw the name. */
@@ -47,9 +88,15 @@ function tokenRows(documents: ReportDocument[]): Row[] {
     row('output', documents, (doc) => doc.tokens.totals.output),
     row('cache read', documents, (doc) => doc.tokens.totals.cacheRead),
     row('cache write', documents, (doc) => doc.tokens.totals.cacheWrite),
+    optionalRow(
+      'cache write (1-hour)',
+      documents,
+      (doc) => doc.tokens.totals.cacheWrite1h,
+    ),
     row('weighted-in', documents, (doc) =>
       sum(doc.tokens.files.map((file) => weightedInput(file))),
     ),
+    listPriceRow(documents),
     row(
       'sidechain turns',
       documents,
@@ -70,6 +117,12 @@ function hookRows(documents: ReportDocument[]): Row[] {
     row('crashes', documents, total('crashes')),
     row('blocks', documents, total('blocks')),
     row('bash calls', documents, (doc) => doc.hooks.bashCalls),
+    optionalRow('stop runs', documents, (doc) =>
+      doc.hooks.stopHooks ? (stopTotal(doc)?.runs ?? 0) : undefined,
+    ),
+    optionalRow('stop p95 ms (per Stop)', documents, (doc) =>
+      doc.hooks.stopHooks ? stopTotal(doc)?.p95 : undefined,
+    ),
     ...unionRows(
       documents,
       (doc) => new Map(doc.hooks.rows.map((hook) => [hook.hook, hook.fires])),
@@ -142,6 +195,16 @@ function frictionRows(documents: ReportDocument[]): Row[] {
     row('bulk tool bytes', documents, (doc) =>
       sum(doc.friction.bulkByTool.map((tool) => tool.bytes)),
     ),
+    optionalRow(
+      'Read results over trim cap',
+      documents,
+      (doc) => doc.friction.toolResultSizes?.read.overCap,
+    ),
+    optionalRow(
+      'Bash results over trim cap',
+      documents,
+      (doc) => doc.friction.toolResultSizes?.bash.overCap,
+    ),
   ];
 }
 
@@ -186,6 +249,16 @@ export function renderComparison(documents: ReportDocument[]): string[] {
     ['skill outcomes', outcomeRows(documents)],
     ['friction', frictionRows(documents)],
     ['resident context', residentRows(documents)],
+    [
+      'artifact episodes',
+      [
+        optionalRow(
+          'episodes',
+          documents,
+          (doc) => doc.artifacts?.episodes.length,
+        ),
+      ],
+    ],
   ];
   return sections.flatMap(([title, rows]) => [
     `-- ${title} --`,
