@@ -1,5 +1,11 @@
 # @houserules/plugin-changesets
 
+## 0.3.3
+
+### Patch Changes
+
+- fb9eb89: Changeset Stop hooks no longer block on background agents' unfinished edits.
+
 ## 0.3.2
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @houserules/api
 
+## 0.7.2
+
+### Patch Changes
+
+- 9194d3d: `update` recognizes the em-dash hook wrapper as stock and upgrades it.
+- 9194d3d: Upgrade `type-fest` to 6.
+- 9194d3d: Reword the guard hook missing-script notice to say the call is blocked.
+
 ## 0.7.1
 
 ### Patch Changes
