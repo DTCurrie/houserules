@@ -52,6 +52,7 @@ export function chromeDevtoolsMcpModule(api: PluginApi): ModuleDef {
     id,
     title: 'Chrome DevTools MCP server config (.claude/mcp/)',
     group: 'optional',
+    uses: [{ id: 'design' }],
     hint(): string {
       return `stdio and VS Code configs for the Chrome DevTools MCP server, ${FULL_TOOL_COUNT} tools by default with a slim ${SLIM_TOOL_COUNT}-tool option`;
     },

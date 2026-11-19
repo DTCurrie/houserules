@@ -231,4 +231,68 @@ describe('checkReferenceReachability', () => {
 
     expect(messages(root, detect(root))).toEqual([]);
   });
+
+  describe('managed region paths', () => {
+    const region = (body: string) =>
+      `# Title\n\n<!-- houserules:claude-md start -->\n\n${body}\n\n<!-- houserules:claude-md end -->\n`;
+
+    it('warns once for a missing .claude path named in the region', () => {
+      const root = useRepo('pnpm-monorepo');
+      write(
+        root,
+        'CLAUDE.md',
+        region('- Take tokens from `.claude/design/tokens.json`, always.'),
+      );
+      expect(messages(root, makeCtx())).toEqual([
+        'CLAUDE.md: the managed region points at .claude/design/tokens.json, which does not exist.',
+      ]);
+    });
+
+    it('is silent for present files and directories, with or without a trailing slash', () => {
+      const root = useRepo('pnpm-monorepo');
+      write(root, '.claude/design/tokens.json', '{}');
+      write(root, '.claude/templates/a.md', 'x');
+      write(
+        root,
+        'CLAUDE.md',
+        region(
+          'Use `.claude/design/tokens.json`, `.claude/templates/` and `.claude/templates`.',
+        ),
+      );
+      expect(messages(root, makeCtx())).toEqual([]);
+    });
+
+    it('warns for a missing directory written with a trailing slash', () => {
+      const root = useRepo('pnpm-monorepo');
+      write(
+        root,
+        'CLAUDE.md',
+        region('Templates live in `.claude/templates/`.'),
+      );
+
+      expect(messages(root, makeCtx())).toEqual([
+        'CLAUDE.md: the managed region points at .claude/templates/, which does not exist.',
+      ]);
+    });
+
+    it('ignores a missing path on a line outside the markers', () => {
+      const root = useRepo('pnpm-monorepo');
+      write(
+        root,
+        'CLAUDE.md',
+        `${region('Nothing here.')}\nMine: \`.claude/design/tokens.json\`\n`,
+      );
+      expect(messages(root, makeCtx())).toEqual([]);
+    });
+
+    it('skips a placeholder path', () => {
+      const root = useRepo('pnpm-monorepo');
+      write(
+        root,
+        'CLAUDE.md',
+        region('Run from `.claude/plans/<slug>/` or `.claude/plans/*.md`.'),
+      );
+      expect(messages(root, makeCtx())).toEqual([]);
+    });
+  });
 });

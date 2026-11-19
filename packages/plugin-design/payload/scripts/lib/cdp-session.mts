@@ -39,6 +39,9 @@ const LAUNCH_POLL_INTERVAL_MS = 100;
 // Chrome answers.
 const LAUNCH_TIMEOUT_MS = 30_000;
 const LAUNCH_POLL_ATTEMPTS = LAUNCH_TIMEOUT_MS / LAUNCH_POLL_INTERVAL_MS;
+// Same budget as the launch: a screenshot or an awaited evaluate on a loaded CI runner takes
+// seconds, and a call Chrome never answers must still end instead of hanging the check.
+const SEND_TIMEOUT_MS = 30_000;
 const DEFAULT_VIEWPORT = { width: 1280, height: 900 };
 const EXIT_WAIT_MS = 2000;
 const PROFILE_REMOVE_RETRIES = 10;
@@ -134,43 +137,111 @@ interface Connection {
   close(): void;
 }
 
-function connect(url: string): Promise<Connection> {
+interface PendingCall {
+  method: string;
+  timer: ReturnType<typeof setTimeout>;
+  resolve: (value: Record<string, unknown>) => void;
+  reject: (reason: Error) => void;
+}
+
+interface CdpReply {
+  id?: number;
+  error?: { message: string };
+  result?: Record<string, unknown>;
+}
+
+/** The calls awaiting a reply, each bounded by {@link SEND_TIMEOUT_MS}. */
+function createPendingCalls() {
+  const calls = new Map<number, PendingCall>();
+  let nextId = 0;
+
+  const take = (id: number): PendingCall | undefined => {
+    const call = calls.get(id);
+    if (!call) return undefined;
+    calls.delete(id);
+    clearTimeout(call.timer);
+    return call;
+  };
+
+  return {
+    /** Registers a call and returns its id. The call rejects itself once the bound passes. */
+    register(method: string, settle: Pick<PendingCall, 'resolve' | 'reject'>) {
+      nextId += 1;
+      const id = nextId;
+      const timer = setTimeout(() => {
+        calls.delete(id);
+        settle.reject(
+          new Error(
+            `Chrome did not answer ${method} within ${SEND_TIMEOUT_MS} ms`,
+          ),
+        );
+      }, SEND_TIMEOUT_MS);
+      calls.set(id, { method, timer, ...settle });
+      return id;
+    },
+    take,
+    /** Settles a reply. One whose call already timed out has no entry and is dropped. */
+    answer(reply: CdpReply) {
+      const call = reply.id === undefined ? undefined : take(reply.id);
+      if (!call) return;
+      if (reply.error) call.reject(new Error(reply.error.message));
+      else call.resolve(reply.result ?? {});
+    },
+    rejectAll() {
+      for (const id of [...calls.keys()]) {
+        const call = take(id);
+        call?.reject(
+          new Error(
+            `the Chrome debugging socket closed before ${call.method} answered`,
+          ),
+        );
+      }
+    },
+  };
+}
+
+/**
+ * Opens a CDP connection. Every `send` rejects if Chrome does not answer within
+ * {@link SEND_TIMEOUT_MS} or if the socket closes first.
+ */
+export function connect(url: string): Promise<Connection> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
-    const pending = new Map<
-      number,
-      {
-        resolve: (value: Record<string, unknown>) => void;
-        reject: (reason: Error) => void;
-      }
-    >();
-    let nextId = 0;
+    const pending = createPendingCalls();
+    let isSocketClosed = false;
 
+    socket.addEventListener('close', () => {
+      isSocketClosed = true;
+      pending.rejectAll();
+    });
     socket.addEventListener('error', () =>
       reject(new Error('the Chrome debugging socket errored')),
     );
     socket.addEventListener('message', (event: MessageEvent) => {
-      const message = JSON.parse(String(event.data)) as {
-        id?: number;
-        error?: { message: string };
-        result?: Record<string, unknown>;
-      };
-      if (message.id === undefined) return;
-      const entry = pending.get(message.id);
-      if (!entry) return;
-      pending.delete(message.id);
-      if (message.error) entry.reject(new Error(message.error.message));
-      else entry.resolve(message.result ?? {});
+      pending.answer(JSON.parse(String(event.data)) as CdpReply);
     });
     socket.addEventListener('open', () => {
       resolve({
         send(method, params = {}, sessionId) {
           return new Promise((resolveSend, rejectSend) => {
-            nextId += 1;
-            pending.set(nextId, { resolve: resolveSend, reject: rejectSend });
-            socket.send(
-              JSON.stringify({ id: nextId, method, params, sessionId }),
-            );
+            if (isSocketClosed) {
+              rejectSend(
+                new Error(
+                  `the Chrome debugging socket closed before ${method} was sent`,
+                ),
+              );
+              return;
+            }
+            const id = pending.register(method, {
+              resolve: resolveSend,
+              reject: rejectSend,
+            });
+            try {
+              socket.send(JSON.stringify({ id, method, params, sessionId }));
+            } catch (error) {
+              pending.take(id);
+              rejectSend(error as Error);
+            }
           });
         },
         close: () => socket.close(),

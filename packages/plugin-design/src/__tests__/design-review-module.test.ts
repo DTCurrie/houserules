@@ -27,6 +27,14 @@ describe('design-review', () => {
     expect(existsSync(skillPath), `${skillPath} exists`).toBe(true);
   });
 
+  it('installs the design rule alongside, since design-review requires design', () => {
+    const root = installed();
+
+    const rulePath = join(root, '.claude/rules/design.md');
+
+    expect(existsSync(rulePath), `${rulePath} exists`).toBe(true);
+  });
+
   it('declares the design-reviewer agent read-only, without Write or Edit', () => {
     const root = installed();
 

@@ -204,14 +204,35 @@ function pluginTag(m: RegisteredModule): string {
   return m.source ? ` ${pc.dim(`[${m.source.alias}]`)}` : '';
 }
 
+function pickerSuffix(
+  m: RegisteredModule,
+  requiredBy: Record<string, string>,
+): string {
+  if (m.def.locked) return ` ${pc.dim('(always)')}`;
+  const requirer = requiredBy[m.id];
+  return requirer === undefined
+    ? ''
+    : ` ${pc.dim(`(required by ${requirer})`)}`;
+}
+
+/**
+ * The module picker. A module in `requiredBy` is labeled with its requirer and starts
+ * checked. After the pick, `closeOverRequirements` re-derives each of those from the requirers the user
+ * kept, so a deselected required module returns while its requirer stays and is gone when
+ * the requirer was deselected too.
+ *
+ * @param closeOverRequirements Closes a picked id set over module requirements and returns the full id list.
+ */
 export async function selectModules(
   modules: RegisteredModule[],
   ctx: Ctx,
   preselectedIds: string[],
+  requiredBy: Record<string, string>,
+  closeOverRequirements: (moduleIds: string[]) => string[],
 ): Promise<string[]> {
   const options = modules.map((m) => ({
     value: m.id,
-    label: `${m.def.locked ? `${m.def.title} ${pc.dim('(always)')}` : m.def.title}${pluginTag(m)}`,
+    label: `${m.def.title}${pickerSuffix(m, requiredBy)}${pluginTag(m)}`,
     hint: `${m.def.group === 'experimental' ? 'EXPERIMENTAL — ' : ''}${m.def.hint(ctx)}`,
   }));
   const picked = bail<string[]>(
@@ -222,7 +243,10 @@ export async function selectModules(
       required: true,
     }),
   );
-  return picked.includes('core') ? picked : ['core', ...picked];
+  const withCore = picked.includes('core') ? picked : ['core', ...picked];
+  return closeOverRequirements(
+    withCore.filter((id) => requiredBy[id] === undefined),
+  );
 }
 
 /**
@@ -360,6 +384,60 @@ const OP_STYLE: Record<OpStyleKey, [string, (s: string) => string]> = {
   'skip-modified': ['!', pc.red],
 };
 
+/** Most added and removed lines a region entry prints before collapsing the rest. */
+const REGION_DIFF_CAP = 10;
+
+/** Trimmed, non-empty lines of `next` absent from `previous` (added) and the reverse (removed). */
+function regionLineDiff(
+  previous: string,
+  next: string,
+): { added: string[]; removed: string[] } {
+  const lines = (text: string) =>
+    text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  const take = (from: string[], against: string[]) => {
+    const pool = new Map<string, number>();
+    for (const line of against) pool.set(line, (pool.get(line) ?? 0) + 1);
+    return from.filter((line) => {
+      const remainingCount = pool.get(line) ?? 0;
+      if (remainingCount > 0) {
+        pool.set(line, remainingCount - 1);
+        return false;
+      }
+      return true;
+    });
+  };
+  const previousLines = lines(previous);
+  const nextLines = lines(next);
+  return {
+    added: take(nextLines, previousLines),
+    removed: take(previousLines, nextLines),
+  };
+}
+
+/** The `+`/`-` lines printed under a changed managed region, capped at {@link REGION_DIFF_CAP}. */
+function regionDiffLines(
+  previousBody: string,
+  body: string,
+  width: number,
+): string[] {
+  const { added, removed } = regionLineDiff(previousBody, body);
+  const diff = [
+    ...added.map((line) => ({ text: `    + ${line}`, color: pc.green })),
+    ...removed.map((line) => ({ text: `    - ${line}`, color: pc.red })),
+  ];
+  const printed = diff
+    .slice(0, REGION_DIFF_CAP)
+    .flatMap(({ text, color }) => bullet(text, width, color));
+  if (diff.length > REGION_DIFF_CAP)
+    printed.push(
+      pc.dim(`    … ${diff.length - REGION_DIFF_CAP} more changed line(s)`),
+    );
+  return printed;
+}
+
 export function renderPreview({
   effects,
   settingsPlan,
@@ -386,7 +464,7 @@ export function renderPreview({
       );
       continue;
     }
-    for (const { action } of matching) {
+    for (const { action, previousBody } of matching) {
       const [sigil, color] = OP_STYLE[op];
       const suffix =
         op === 'skip-exists'
@@ -407,6 +485,12 @@ export function renderPreview({
           color,
         ),
       );
+      if (
+        op === 'update' &&
+        action.kind === 'region' &&
+        previousBody !== undefined
+      )
+        lines.push(...regionDiffLines(previousBody, action.body, width));
     }
   }
   if (settingsPlan) {

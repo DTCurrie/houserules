@@ -59,5 +59,5 @@ geometry with JavaScript, take a picture. Pick full when the model needs to debu
 not write: read console errors, inspect a network waterfall, run a trace, or drive a flow it
 cannot script blind.
 
-Neither replaces `node .claude/scripts/design.mjs render`, which returns composited contrast
+If `.claude/scripts/design.mjs` exists, neither replaces `node .claude/scripts/design.mjs render`, which returns composited contrast
 and rendered geometry as text with no model in the loop.

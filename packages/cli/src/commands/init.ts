@@ -7,6 +7,13 @@ import {
   parseModuleOptionFlags,
   resolveModuleOptions,
 } from '../module-options.js';
+import {
+  assertNotWithdrawn,
+  closeSelection,
+  requiredByNote,
+  withdrawnModuleIds,
+} from '../module-requires.js';
+import type { RequirementClosure } from '../module-requires.js';
 import { hasModule } from '../plugin-registry.js';
 import {
   MODULES,
@@ -85,7 +92,25 @@ export async function init(dir: string, flags: Flags): Promise<number> {
 
   // Already installed? Default to the previously chosen modules.
   const installed = ctx.claude.manifest;
+  const optionOverrides = parseModuleOptionFlags(flags.moduleOption ?? []);
+  const optionsFor = (ids: string[]) =>
+    resolveModuleOptions(
+      registry,
+      ids,
+      ctx.claude.houseConfig?.moduleOptions,
+      optionOverrides,
+    );
+  const closeOver = (
+    ids: readonly string[],
+    chosen: Record<string, string[]> = {},
+  ) =>
+    closeSelection(registry, ids, {
+      persisted: ctx.claude.houseConfig?.moduleOptions,
+      chosen: { ...optionOverrides, ...chosen },
+      packageManager: ctx.packageManager?.name,
+    });
   let moduleIds: string[];
+  let closure: RequirementClosure;
   try {
     moduleIds = installed?.modules?.length
       ? resolveModuleIds(
@@ -94,6 +119,9 @@ export async function init(dir: string, flags: Flags): Promise<number> {
           flags.modules ? flags.modules : installed.modules.join(','),
         )
       : resolveModuleIds(ctx, registry, flags.modules);
+    closure = closeOver(moduleIds).closure;
+    assertNotWithdrawn(closure, withdrawnModuleIds(flags.modules));
+    moduleIds = closure.moduleIds;
   } catch (e) {
     console.error((e as Error).message);
     return 1;
@@ -104,26 +132,39 @@ export async function init(dir: string, flags: Flags): Promise<number> {
     );
   }
 
+  const initiallyRequired = closure.requiredBy;
   let targets = ctx.targets;
-  const optionOverrides = parseModuleOptionFlags(flags.moduleOption ?? []);
-  let moduleOptions = resolveModuleOptions(
-    registry,
-    moduleIds,
-    ctx.claude.houseConfig?.moduleOptions,
-    optionOverrides,
-  );
-  if (!flags.yes) {
-    moduleIds = await ui.selectModules(registry.modules, ctx, moduleIds);
-    targets = await ui.confirmTargets(targets);
-    moduleOptions = resolveModuleOptions(
-      registry,
-      moduleIds,
-      ctx.claude.houseConfig?.moduleOptions,
-      optionOverrides,
+  let moduleOptions = optionsFor(moduleIds);
+  try {
+    if (!flags.yes) {
+      moduleIds = await ui.selectModules(
+        registry.modules,
+        ctx,
+        moduleIds,
+        closure.requiredBy,
+        (ids) => closeOver(ids).closure.moduleIds,
+      );
+      targets = await ui.confirmTargets(targets);
+      moduleOptions = optionsFor(moduleIds);
+      const enabled = registry.modules.filter((m) => moduleIds.includes(m.id));
+      moduleOptions = await ui.selectModuleOptions(enabled, moduleOptions);
+    }
+    const selection = closeOver(
+      moduleIds.filter((id) => initiallyRequired[id] === undefined),
+      moduleOptions,
     );
-    const enabled = registry.modules.filter((m) => moduleIds.includes(m.id));
-    moduleOptions = await ui.selectModuleOptions(enabled, moduleOptions);
+    closure = selection.closure;
+    moduleIds = closure.moduleIds;
+    moduleOptions = selection.moduleOptions;
+  } catch (e) {
+    if (e instanceof HouseError) {
+      console.error(e.message);
+      return 1;
+    }
+    throw e;
   }
+  const requiredNote = requiredByNote(closure);
+  if (requiredNote !== null) ui.message(requiredNote);
 
   const answers: Answers = {
     moduleIds,

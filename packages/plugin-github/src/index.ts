@@ -40,6 +40,7 @@ function projectsModule(api: PluginApi): ModuleDef {
     id,
     title: 'GitHub Projects sync (backlog + decision ledgers)',
     group: 'optional',
+    uses: [{ id: 'backlog', package: '@houserules/plugin-backlog' }],
     hint(): string {
       return 'mirrors the backlog and decision ledgers to a GitHub Project';
     },

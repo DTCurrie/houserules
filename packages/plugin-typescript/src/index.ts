@@ -19,6 +19,11 @@ function typescriptModule(api: PluginApi): ModuleDef {
     id,
     title: 'TypeScript rule (.claude/rules/typescript.md)',
     group: 'optional',
+    uses: [
+      { id: 'code-comments', package: '@houserules/plugin-prose' },
+      { id: 'code-cleanliness' },
+      { id: 'prose-voice', package: '@houserules/plugin-prose' },
+    ],
     hint(): string {
       return 'path-scoped rule: interface vs type, unknown over any, assumes strict: true';
     },

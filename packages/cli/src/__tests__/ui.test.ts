@@ -1,8 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as clack from '@clack/prompts';
 
-import { optionPromptMessage, wrap } from '../ui.js';
+import {
+  optionPromptMessage,
+  renderPreview,
+  selectModules,
+  wrap,
+} from '../ui.js';
 
 import type { ModuleDef } from '@houserules/api';
+import type { Ctx } from '../detect.js';
+import type { Effect } from '../plan.js';
 import type { RegisteredModule } from '../plugin-registry.js';
 
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
@@ -89,5 +97,117 @@ describe('optionPromptMessage', () => {
     );
 
     expect(plain(message)).toBe('code-cleanliness  Which guides?');
+  });
+});
+
+describe('renderPreview, given a region effect', () => {
+  const region = (body: string, op: Effect['op'], previousBody?: string) =>
+    ({
+      action: {
+        kind: 'region',
+        module: 'core',
+        dest: 'CLAUDE.md',
+        body,
+        reason: 'test',
+      },
+      op,
+      content: null,
+      ...(previousBody === undefined ? {} : { previousBody }),
+    }) as unknown as Effect;
+  const render = (effect: Effect) =>
+    plain(renderPreview({ effects: [effect], settingsPlan: null })).split('\n');
+  const numbered = (lineCount: number, prefix: string) =>
+    Array.from({ length: lineCount }, (_, i) => `${prefix}${i}`).join('\n');
+
+  it('prints one added line and nothing else under the entry', () => {
+    const out = render(region('- a\n- b', 'update', '- a'));
+    expect(out.slice(1)).toEqual(['    + - b']);
+  });
+
+  it('prints a removed line and an added line, added first', () => {
+    const out = render(region('- a\n- c', 'update', '- a\n- b'));
+    expect(out.slice(1)).toEqual(['    + - c', '    - - b']);
+  });
+
+  it('caps at ten lines and counts the remainder', () => {
+    const out = render(region(numbered(15, 'n'), 'update', 'old'));
+    expect(out.slice(1)).toHaveLength(11);
+    expect(out[1]).toBe('    + n0');
+    expect(out[10]).toBe('    + n9');
+    expect(out[11]).toBe('    … 6 more changed line(s)');
+  });
+
+  it('prints exactly ten lines with no overflow line', () => {
+    const out = render(region(numbered(10, 'n'), 'update', ''));
+    expect(out.slice(1)).toHaveLength(10);
+    expect(out.join('\n')).not.toContain('more changed');
+  });
+
+  it('prints 15 changed lines as ten plus a remainder of five', () => {
+    const out = render(region(numbered(15, 'n'), 'update', ''));
+    expect(out[11]).toBe('    … 5 more changed line(s)');
+  });
+
+  it('prints a skip-identical region as a single entry line', () => {
+    expect(render(region('x', 'skip-identical', 'x'))).toEqual([
+      '= CLAUDE.md (managed block)',
+    ]);
+  });
+
+  it('prints an update with no previousBody as a single entry line', () => {
+    expect(render(region('x', 'update'))).toEqual([
+      '~ CLAUDE.md (managed block)',
+    ]);
+  });
+});
+
+vi.mock('@clack/prompts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@clack/prompts')>()),
+  multiselect: vi.fn(),
+}));
+
+describe('selectModules with a required module', () => {
+  const modules = ['core', 'orchestrate', 'sweep'].map((id) =>
+    registered(id, null),
+  );
+  const requiredBy = { sweep: 'orchestrate' };
+  const close = (ids: string[]) =>
+    ids.includes('orchestrate') && !ids.includes('sweep')
+      ? [...ids, 'sweep']
+      : ids;
+  const ctx = {} as Ctx;
+
+  beforeEach(() => {
+    vi.mocked(clack.multiselect).mockReset();
+  });
+
+  it('labels the required module with its requirer', async () => {
+    vi.mocked(clack.multiselect).mockResolvedValue(['core', 'orchestrate']);
+
+    await selectModules(modules, ctx, ['core'], requiredBy, close);
+
+    const options = vi.mocked(clack.multiselect).mock.calls[0]![0].options;
+    expect(
+      options.find((option) => option.value === 'orchestrate')!.label,
+    ).toBe('orchestrate title');
+    expect(options.find((option) => option.value === 'sweep')!.label).toContain(
+      '(required by orchestrate)',
+    );
+  });
+
+  it('re-adds a deselected required module while its requirer stays', async () => {
+    vi.mocked(clack.multiselect).mockResolvedValue(['core', 'orchestrate']);
+
+    const ids = await selectModules(modules, ctx, ['core'], requiredBy, close);
+
+    expect(ids).toEqual(['core', 'orchestrate', 'sweep']);
+  });
+
+  it('drops the required module when its requirer is deselected too', async () => {
+    vi.mocked(clack.multiselect).mockResolvedValue(['core', 'sweep']);
+
+    const ids = await selectModules(modules, ctx, ['core'], requiredBy, close);
+
+    expect(ids).toEqual(['core']);
   });
 });

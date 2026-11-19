@@ -334,24 +334,43 @@ describe('renderClaudeAdditions', () => {
     expect(body).toMatch(/record a changeset with `\/changeset`/);
   });
 
-  it('points UI and artifact work at the token file when the design module is selected', () => {
+  it('renders contributed trigger lines after the ledger-ids bullet', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(
       ctx,
-      makeAnswers({ moduleIds: ['core', 'design'] }),
+      makeAnswers({
+        moduleIds: ['core', 'backlog'],
+        contributedSkillTriggers: [
+          '- Contributed first line',
+          '  second line.',
+        ],
+      }),
     );
     expect(body).toContain(
-      '- Building UI, an artifact, or a deck? Take colors, type, and spacing from\n  `.claude/design/tokens.json`, never a palette of your own.',
+      '- Discovered a real issue outside the current scope? **Do not fix it inline.** Log it with\n  `/backlog-add`.\n- Ledger ids stay in the ledger, never in code, docs, changesets, commit messages, or issues.\n- Contributed first line\n  second line.\n',
     );
   });
 
-  it('names no token file when the design module is not selected', () => {
+  it('renders the Skill triggers heading when the only bullets are contributed', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(
       ctx,
-      makeAnswers({ moduleIds: ['core', 'changesets'] }),
+      makeAnswers({
+        moduleIds: ['core'],
+        contributedSkillTriggers: ['- Only contributed.'],
+      }),
     );
-    expect(body).not.toContain('tokens.json');
+    expect(body).toContain('### Skill triggers\n\n- Only contributed.\n');
+  });
+
+  it('renders no design text when no lines are contributed, even with a design module id selected', () => {
+    const ctx = makeCtx();
+    const body = renderClaudeAdditions(
+      ctx,
+      makeAnswers({ moduleIds: ['core', 'design', 'ui/design-tailwind'] }),
+    );
+    expect(body).not.toContain('Building UI');
+    expect(body).not.toContain('### Skill triggers');
   });
 
   it('renders the backlog trigger without listing target prefixes', () => {

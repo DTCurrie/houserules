@@ -62,9 +62,11 @@ describe('design game references', () => {
       modules: 'design/design-game',
       plugins: PLUGINS,
     });
-    const referenceDir = join(root, '.claude/reference');
+    const hudPath = referencePath(root, 'design-game-hud.md');
+    const visualPath = referencePath(root, 'design-game-visual.md');
 
-    expect(existsSync(referenceDir), `${referenceDir} absent`).toBe(false);
+    expect(existsSync(hudPath), `${hudPath} absent`).toBe(false);
+    expect(existsSync(visualPath), `${visualPath} absent`).toBe(false);
   });
 
   it('installs design-game-hud.md with no frontmatter, since it is pull-only', () => {
@@ -114,7 +116,7 @@ describe('design game references', () => {
     expect(ruleText).not.toContain('design-game-visual');
   });
 
-  it('installs no reference doc when design-game is chosen without design, since nothing could link it', () => {
+  it('installs the chosen guide and the design rule when design-game is chosen without design', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'design/design-game',
       plugins: PLUGINS,
@@ -122,7 +124,9 @@ describe('design game references', () => {
     });
 
     const hudPath = referencePath(root, 'design-game-hud.md');
+    const rulePath = join(root, '.claude/rules/design.md');
 
-    expect(existsSync(hudPath), `${hudPath} absent`).toBe(false);
+    expect(existsSync(hudPath), `${hudPath} exists`).toBe(true);
+    expect(existsSync(rulePath), `${rulePath} exists`).toBe(true);
   });
 });

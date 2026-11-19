@@ -7,6 +7,7 @@ import type {
   CheckResult,
   ModuleGroup,
   ModuleOptions,
+  ModuleRequirement,
 } from '@houserules/api';
 import type { Ctx } from '../detect.js';
 import { payloadPath } from '../paths.js';
@@ -27,12 +28,31 @@ export const title = 'Phase execution via scoped workers (/orchestrate)';
 export const group: ModuleGroup = 'optional';
 
 export function hint(): string {
-  return 'drive a planned phase one layer down: a phase-orchestrator runs per-slice task-workers and you relay its reports, never diffs (needs plans; includes a research worker)';
+  return 'drive a planned phase one layer down: a phase-orchestrator runs per-slice task-workers and you relay its reports, never diffs (installs plans with it; includes a research worker)';
 }
 
 export function defaultEnabled(): boolean {
   return false;
 }
+
+// The skill sends every codemod-shaped step to /sweep instead of slicing it.
+// It also stops without a plan workspace, which only the plans module writes.
+export const requires: ModuleRequirement[] = [{ id: 'sweep' }, { id: 'plans' }];
+
+// Modules this one's shipped prose hands off to when installed, and skips or falls back from
+// when not. Read by the root `verify:module-references` check.
+export const uses: ModuleRequirement[] = [
+  { id: 'code-cleanliness' },
+  { id: 'ready' },
+  { id: 'research' },
+  { id: 'lint-fix' },
+  { id: 'verify-changed' },
+  { id: 'backlog', package: '@houserules/plugin-backlog' },
+  { id: 'decisions', package: '@houserules/plugin-decisions' },
+  { id: 'pr-description', package: '@houserules/plugin-prose' },
+  { id: 'accessibility-review', package: '@houserules/plugin-accessibility' },
+  { id: 'design-review', package: '@houserules/plugin-design' },
+];
 
 const VARIANTS = ['research'] as const;
 type Variant = (typeof VARIANTS)[number];
@@ -106,11 +126,9 @@ export function renderTaskWorkerVariant(
  * O(slices x report), and no worker accumulates another slice's context.
  *
  * Script-free, because the value is the slice, seam, wave, and review discipline rather
- * than tooling. It pairs with `plans` but degrades gracefully, sending a user with no
- * plan workspace to /plan-project.
+ * than tooling. It requires `plans`, which scaffolds the workspaces it drives.
  */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
-  const withPlans = answers.moduleIds.includes('plans');
   const chosenVariants = (answers.moduleOptions[id] ?? []).filter(
     (value): value is Variant =>
       (VARIANTS as readonly string[]).includes(value),
@@ -169,9 +187,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     })),
     {
       kind: 'advise',
-      text: withPlans
-        ? 'Executing a plan: run /orchestrate [<plan-slug>] [<phase>|all] to drive a .claude/plans/<slug>/ phase. By default it hands each phase to a phase-orchestrator one layer down, which slices by file ownership, dispatches one task-worker per slice (task-worker-research for a slice that must fetch), and reports back per wave while you relay. --flat keeps the slicing at the main conversation. It stops for you between phases unless you pass --auto.'
-        : 'Executing a plan: /orchestrate drives a .claude/plans/<slug>/ phase, but the `plans` module is off, so nothing scaffolds those workspaces. Enable it (npx houserules modules --modules=plans) or /orchestrate will just send you to /plan-project.',
+      text: 'Executing a plan: run /orchestrate [<plan-slug>] [<phase>|all] to drive a .claude/plans/<slug>/ phase. By default it hands each phase to a phase-orchestrator one layer down, which slices by file ownership, dispatches one task-worker per slice (task-worker-research for a slice that must fetch), and reports back per wave while you relay. --flat keeps the slicing at the main conversation. It stops for you between phases unless you pass --auto.',
       module: id,
     },
   ];

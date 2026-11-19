@@ -92,11 +92,27 @@ function designModule(api: PluginApi): ModuleDef {
     id,
     title: 'Design system (.claude/design/tokens.json + design rule)',
     group: 'optional',
+    uses: [
+      { id: 'accessibility', package: '@houserules/plugin-accessibility' },
+      { id: 'prose-voice', package: '@houserules/plugin-prose' },
+      { id: 'code-cleanliness' },
+    ],
     hint(): string {
       return 'a DTCG token set an agent queries by name, plus a path-scoped rule covering contrast, hit targets, type scale, and spacing rhythm';
     },
     defaultEnabled(): boolean {
       return false;
+    },
+    skillTriggers(answers: Answers): string[] {
+      if (answers.moduleIds.includes(`${api.alias}/design-tailwind`))
+        return [
+          '- Building UI, an artifact, or a deck? Take colors, type, and spacing from the Tailwind theme',
+          '  via `node .claude/scripts/design.mjs token <name>`, never a palette of your own.',
+        ];
+      return [
+        '- Building UI, an artifact, or a deck? Take colors, type, and spacing from',
+        '  `.claude/design/tokens.json`, never a palette of your own.',
+      ];
     },
     plan(_ctx: Ctx, answers: Answers): Action[] {
       const tailwindSelected = answers.moduleIds.includes(
@@ -216,6 +232,15 @@ function designReviewModule(api: PluginApi): ModuleDef {
     id,
     title: 'Design review (/design-review + design-reviewer agent)',
     group: 'optional',
+    requires: [{ id: 'design' }],
+    uses: [
+      {
+        id: 'accessibility-review',
+        package: '@houserules/plugin-accessibility',
+      },
+      { id: 'chrome-devtools-mcp' },
+      { id: 'ready' },
+    ],
     hint(): string {
       return 'check a UI diff against the design system: exact contrast ratios, nearest scale values, and the token a literal should have been';
     },
@@ -236,7 +261,7 @@ function designReviewModule(api: PluginApi): ModuleDef {
         ),
         {
           kind: 'advise',
-          text: 'Design review installed. Run /design-review after changing UI code. It runs `node .claude/scripts/design.mjs check` over the changed files, which computes exact contrast ratios, the nearest value on each scale, and which token a hardcoded literal should have been. The design-reviewer agent then covers only what the script cannot compute. It needs the design module for the script and the token set. Accessibility stays with the accessibility plugin, and this review defers to it rather than duplicating WCAG coverage.',
+          text: 'Design review installed. Run /design-review after changing UI code. It runs `node .claude/scripts/design.mjs check` over the changed files, which computes exact contrast ratios, the nearest value on each scale, and which token a hardcoded literal should have been. The design-reviewer agent then covers only what the script cannot compute. The design module installs with it, for the script and the token set. Accessibility stays with the accessibility plugin, and this review defers to it rather than duplicating WCAG coverage.',
           module: id,
         },
       ];
@@ -246,9 +271,9 @@ function designReviewModule(api: PluginApi): ModuleDef {
 
 /**
  * Makes the repo's own Tailwind v4 theme the design system `design.mjs` queries and audits,
- * in place of the DTCG token seed. Depends on nothing from the `design` module: a repo can
- * install this alone and still get the doctor check and the payload libs, though the query
- * commands stay inert without `design` installed for the script itself.
+ * in place of the DTCG token seed. Requires the `design` module, which owns the script that
+ * answers the queries and the rule that links the theming reference, so choosing this alone
+ * installs `design` too.
  */
 function designTailwindModule(api: PluginApi): ModuleDef {
   const id = 'design-tailwind';
@@ -257,23 +282,16 @@ function designTailwindModule(api: PluginApi): ModuleDef {
     title:
       'Tailwind design system (query the repo theme instead of a token file)',
     group: 'optional',
+    requires: [{ id: 'design' }],
     hint(): string {
       return "the repo's own Tailwind v4 theme becomes the design system the plugin queries and audits";
     },
-    // Detectable from `ctx.rootPkg`, unlike `design-game`, but `defaultEnabled(ctx)` cannot
-    // see `answers.moduleIds` and this module's whole value depends on `design` also being
-    // selected. Auto-enabling here would install libs for a script that may not be installed.
+    // Detectable from `ctx.rootPkg`, unlike `design-game`, but auto-enabling here would pull
+    // `design` into every Tailwind v4 repo, and that stays the user's choice.
     defaultEnabled(): boolean {
       return false;
     },
-    plan(_ctx: Ctx, answers: Answers): Action[] {
-      // The theming reference is linked only from the design rule's `appendBody`, which the
-      // `design` module owns. Installing it without `design` selected would leave it an
-      // orphan no rule, skill, or agent ever routes a reader to.
-      const designSelected = answers.moduleIds.includes(`${api.alias}/design`);
-      const referenceLine = designSelected
-        ? 'See .claude/reference/design-tailwind-theming.md for how to extend it and build a runtime theme, linked from the design rule.'
-        : "The theming reference guide was NOT installed, because only the design module's rule can link it into an agent's working context. Install design/design alongside this module to get .claude/reference/design-tailwind-theming.md.";
+    plan(): Action[] {
       return [
         // Every lib these scripts import has to be listed here. One left out installs a
         // script that fails with ERR_MODULE_NOT_FOUND in the user's repo, which no unit
@@ -289,18 +307,14 @@ function designTailwindModule(api: PluginApi): ModuleDef {
           'tailwind-theme.css.template',
           'starter @theme to copy into your own entry stylesheet',
         ),
-        ...(designSelected
-          ? [
-              api.payload.reference(
-                id,
-                'design-tailwind-theming',
-                'pull-only guide to extending Tailwind into a design system and building a runtime theme',
-              ),
-            ]
-          : []),
+        api.payload.reference(
+          id,
+          'design-tailwind-theming',
+          'pull-only guide to extending Tailwind into a design system and building a runtime theme',
+        ),
         {
           kind: 'advise',
-          text: `Tailwind theme wired as the design system. No ${TOKENS_PATH} is seeded, and design.mjs answers token, list, and scales queries from this repo's own @theme block merged with Tailwind's defaults. It reads whichever stylesheet imports Tailwind, or the one you name with --theme <path>, or the one you name with design.themeEntry in .claude/houserules.config.json for a repo where more than one stylesheet imports Tailwind. \`check\` also scans each file's class names with \`@tailwindcss/oxide\` and judges them against the same theme, alongside any \`<style>\` block declarations, naming an arbitrary value's nearest theme step and reporting a contrast finding for a \`bg-*\`/\`text-*\` pairing on one element. That half needs \`@tailwindcss/oxide\` installed separately from \`tailwindcss\`, and \`check\` says so rather than reporting a clean file when it is missing. houserules never writes into the Tailwind compile path, so your entry stylesheet and build config are untouched. A starter \`@theme\` installs at .claude/templates/tailwind-theme.css.template, a reference to copy from, not a file houserules ever writes into your CSS. ${referenceLine} It needs the design module for the script itself. If this repo already had ${TOKENS_PATH} from an earlier install, nothing reads it now and houserules will not delete it, since a seed is yours. Remove it yourself, and \`houserules doctor\` will remind you while it is still there.`,
+          text: `Tailwind theme wired as the design system. No ${TOKENS_PATH} is seeded, and design.mjs answers token, list, and scales queries from this repo's own @theme block merged with Tailwind's defaults. It reads whichever stylesheet imports Tailwind, or the one you name with --theme <path>, or the one you name with design.themeEntry in .claude/houserules.config.json for a repo where more than one stylesheet imports Tailwind. \`check\` also scans each file's class names with \`@tailwindcss/oxide\` and judges them against the same theme, alongside any \`<style>\` block declarations, naming an arbitrary value's nearest theme step and reporting a contrast finding for a \`bg-*\`/\`text-*\` pairing on one element. That half needs \`@tailwindcss/oxide\` installed separately from \`tailwindcss\`, and \`check\` says so rather than reporting a clean file when it is missing. houserules never writes into the Tailwind compile path, so your entry stylesheet and build config are untouched. A starter \`@theme\` installs at .claude/templates/tailwind-theme.css.template, a reference to copy from, not a file houserules ever writes into your CSS. See .claude/reference/design-tailwind-theming.md for how to extend it and build a runtime theme, linked from the design rule. If this repo already had ${TOKENS_PATH} from an earlier install, nothing reads it now and houserules will not delete it, since a seed is yours. Remove it yourself, and \`houserules doctor\` will remind you while it is still there.`,
           module: id,
         },
       ];
@@ -336,6 +350,7 @@ function designGameModule(api: PluginApi): ModuleDef {
     id,
     title: 'Game UI references (.claude/reference/design-game-*.md)',
     group: 'optional',
+    requires: [{ id: 'design' }],
     hint(): string {
       return 'pull-only references for game interfaces: DOM-over-canvas HUD layering, and game visual hierarchy, color, and motion';
     },
@@ -355,20 +370,8 @@ function designGameModule(api: PluginApi): ModuleDef {
     plan(_ctx, answers): Action[] {
       const chosen = answers.moduleOptions[`${api.alias}/${id}`] ?? [];
       if (chosen.length === 0) return [];
-      // A game guide is linked only from the design rule's `appendBody`, which the `design`
-      // module owns. Installing it without `design` selected would leave it an orphan no
-      // rule, skill, or agent ever routes a reader to, so the guides stay uninstalled until
-      // both are selected.
-      const designSelected = answers.moduleIds.includes(`${api.alias}/design`);
-      if (!designSelected) {
-        return [
-          {
-            kind: 'advise',
-            text: "Game UI references were NOT installed, because only the design module's rule can link a guide into an agent's working context. Install design/design alongside design-game to get the guides you chose under .claude/reference/.",
-            module: id,
-          },
-        ];
-      }
+      // `requires` pulls the design module in, whose rule links each chosen guide, so the
+      // guides install whenever chosen.
       const guideActions = chosen.flatMap((guide): Action[] => {
         if (!GAME_GUIDES.includes(guide)) return [];
         return [

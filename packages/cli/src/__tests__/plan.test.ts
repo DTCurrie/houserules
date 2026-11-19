@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -1044,6 +1050,35 @@ describe('computeEffects, given a "region" action on a padded region', () => {
     expect(effect.op).toBe('update');
   });
 
+  it('carries the old body on an update and none on a create', () => {
+    const root = tempDir();
+    hostFile(root, CURRENT, 'old body');
+    const updated = single(
+      computeEffects(root, [regionAction('new body')], {
+        manifest: manifestRecording(sha256('old body')),
+      }).effects,
+    );
+    expect(updated.op).toBe('update');
+    expect(updated.previousBody?.trim()).toBe('old body');
+
+    const fresh = tempDir();
+    const created = single(
+      computeEffects(fresh, [regionAction('new body')]).effects,
+    );
+    expect(created.op).toBe('create');
+    expect(created.previousBody).toBeUndefined();
+  });
+
+  it('plans an update with no previousBody for a host file that has no block yet', () => {
+    const root = tempDir();
+    writeFileSync(join(root, 'CLAUDE.md'), '# Title\n\nUser prose.\n');
+    const effect = single(
+      computeEffects(root, [regionAction('new body')]).effects,
+    );
+    expect(effect.op).toBe('update');
+    expect(effect.previousBody).toBeUndefined();
+  });
+
   it('still refuses a body the user edited', () => {
     const root = tempDir();
     hostFile(root, CURRENT, 'body the user rewrote');
@@ -1367,5 +1402,92 @@ describe('computePrune, given a manifest entry whose file is already absent', ()
     });
 
     expect(deletes).toEqual([{ dest: 'rules/vanished.md', gone: true }]);
+  });
+});
+
+describe('computePrune, given a manifest destination that is a symlink', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-prune-link-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  function manifestOf(files: Record<string, string>) {
+    return {
+      kitVersion: '1.0.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      modules: [],
+      files,
+    };
+  }
+
+  it('prunes a dangling link as a real delete, never as gone', () => {
+    const root = tempDir();
+    mkdirSync(join(root, 'rules'));
+    symlinkSync(join(root, 'missing-target.md'), join(root, 'rules/link.md'));
+
+    const { deletes, kept } = computePrune(root, {
+      manifest: manifestOf({ 'rules/link.md': sha256('x\n') }),
+      plannedDests: new Set(),
+    });
+
+    expect(deletes).toEqual([{ dest: 'rules/link.md', modified: false }]);
+    expect(kept).toEqual([]);
+  });
+
+  it('hashes a link to a file through the link', () => {
+    const root = tempDir();
+    mkdirSync(join(root, 'rules'));
+    writeFileSync(join(root, 'real.md'), 'x\n');
+    symlinkSync(join(root, 'real.md'), join(root, 'rules/link.md'));
+
+    const { deletes } = computePrune(root, {
+      manifest: manifestOf({ 'rules/link.md': sha256('x\n') }),
+      plannedDests: new Set(),
+    });
+
+    expect(deletes).toEqual([{ dest: 'rules/link.md', modified: false }]);
+  });
+
+  it('keeps a link to a directory unless forced, and never reads it', () => {
+    const root = tempDir();
+    mkdirSync(join(root, 'rules'));
+    mkdirSync(join(root, 'realdir'));
+    symlinkSync(join(root, 'realdir'), join(root, 'rules/link'));
+    const manifest = manifestOf({ 'rules/link': sha256('x\n') });
+
+    const unforced = computePrune(root, { manifest, plannedDests: new Set() });
+    expect(unforced.kept).toEqual(['rules/link']);
+    expect(unforced.deletes).toEqual([]);
+
+    const forced = computePrune(root, {
+      manifest,
+      plannedDests: new Set(),
+      force: true,
+    });
+    expect(forced.deletes).toEqual([{ dest: 'rules/link', modified: true }]);
+  });
+
+  it('never prunes a dangling link at a shared host file', () => {
+    const root = tempDir();
+    const dest = [...SHARED_HOST_FILES][0]!;
+    mkdirSync(dirname(join(root, dest)), { recursive: true });
+    symlinkSync(join(root, 'missing.md'), join(root, dest));
+
+    const { deletes, kept } = computePrune(root, {
+      manifest: manifestOf({ [dest]: sha256('x\n') }),
+      plannedDests: new Set(),
+      force: true,
+    });
+
+    expect(deletes).toEqual([]);
+    expect(kept).toEqual([]);
   });
 });

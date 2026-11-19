@@ -128,7 +128,7 @@ their packages. Where `fix.filterFlag` is empty and the fixer cannot scope by pa
 formatter and `eslint --fix` on the domain's paths directly. Scoped verifies on disjoint packages
 may run concurrently. A build tool with no cross-process lock can fail on shared build state, so a
 verify that fails on build state instead of a test is rerun once alone before it is judged. After every orchestrator has returned `DONE`, the
-main conversation runs the repo-wide fixer and `/verify-changed` once. That run is the only
+main conversation runs the repo-wide fixer and `/verify-changed` once, or the repo's own verify when it is not installed. That run is the only
 whole-tree proof.
 
 **The merged table.** Each time any orchestrator returns, print one table with a `Phase` column

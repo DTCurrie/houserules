@@ -1,9 +1,17 @@
-import type { Action, ModuleGroup } from '@houserules/api';
+import type { Action, ModuleGroup, ModuleRequirement } from '@houserules/api';
 import { agent, selfGitignoreAction, skill } from './copy-actions.js';
 
 export const id = 'plans';
 export const title = 'Phased-implementation planning (/plan-project)';
 export const group: ModuleGroup = 'optional';
+
+// Modules this one's shipped prose hands off to when installed, and skips or falls back from
+// when not. Read by the root `verify:module-references` check.
+export const uses: ModuleRequirement[] = [
+  { id: 'orchestrate' },
+  { id: 'research' },
+  { id: 'decisions', package: '@houserules/plugin-decisions' },
+];
 
 export function hint(): string {
   return 'persist large/multi-phase work to .claude/plans/<name>/ (PLAN + living ROADMAP + per-phase sub-plans)';

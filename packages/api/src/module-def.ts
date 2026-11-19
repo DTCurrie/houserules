@@ -9,11 +9,32 @@ import type { Ctx, Target } from './ctx.js';
  */
 export type ModuleGroup = 'recommended' | 'optional' | 'experimental';
 
+/**
+ * Another module this one names, by the bare id that module's own `ModuleDef` declares.
+ *
+ * Bare because the alias is the installing repo's choice: a requirement on `design` is met by
+ * `design/design`, `ui/design`, or any other alias that registers it.
+ */
+export interface ModuleRequirement {
+  /** The named module's bare `id`, never alias-qualified. */
+  id: string;
+  /**
+   * The npm package that ships the module, for one that is not built into the CLI. The CLI
+   * names it, with its install command, when no installed plugin supplies `id`.
+   */
+  package?: string;
+}
+
 /** One selectable value in a module's option set. */
 export interface ModuleOptionChoice {
   value: string;
   label: string;
   hint?: string;
+  /**
+   * Modules this value cannot work without. Selecting the value installs each one, exactly as
+   * a module-level {@link ModuleDef.requires} does. An unselected value requires nothing.
+   */
+  requires?: ModuleRequirement[];
 }
 
 /**
@@ -55,6 +76,12 @@ export interface Answers {
    * extension point, so it belongs in the seam rather than in a local intersection.
    */
   reviewerTargets?: string[];
+  /**
+   * Every selected module's {@link ModuleDef.skillTriggers} lines, in registry order. The CLI
+   * fills this in before any module's `plan()` runs, and the core module renders it into the
+   * managed CLAUDE.md region. A module reads it, never sets it.
+   */
+  contributedSkillTriggers?: string[];
 }
 
 /**
@@ -74,6 +101,25 @@ export interface ModuleDef {
    * module does, and the module takes no options at all.
    */
   options?: ModuleOptions;
+  /**
+   * Modules this one cannot do its job without. Selecting this module installs each of them,
+   * transitively, in `init`, the picker, `update`, and `modules`. Withdrawing one while this
+   * module stays selected is an error. A requirement no installed plugin supplies stops the
+   * run before anything is written.
+   */
+  requires?: ModuleRequirement[];
+  /**
+   * Modules this one hands off to when they are installed and correctly skips when they are
+   * not. Declaring one installs nothing. It records the dependency so a check can hold the
+   * module's prose to it.
+   */
+  uses?: ModuleRequirement[];
+  /**
+   * Markdown bullet lines this module adds to the "Skill triggers" section of the managed
+   * CLAUDE.md region, already wrapped, or an empty array for none. Called only when the module
+   * is selected. Read sibling modules from `answers.moduleIds`, qualified by your plugin's alias.
+   */
+  skillTriggers?(answers: Answers): string[];
   plan(ctx: Ctx, answers: Answers): Action[];
   /**
    * Health check for an INSTALLED module. Pure and read-only: never writes, spawns, or

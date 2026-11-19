@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
+import { extractBody } from '@houserules/api/internal';
 import type { Ctx } from '../../detect.js';
+import { claudeMdRegion } from '../../core/claude-md-region.js';
 import type { CheckResult, Finding } from '@houserules/api';
 
 const REFERENCE_DIR = join('.claude', 'reference');
@@ -48,6 +50,40 @@ const resolveLink = (root: string, source: string, link: string) =>
     : resolve(dirname(join(root, source)), link);
 
 /**
+ * A WARN for each `.claude/` path in inline code inside the houserules managed region of
+ * CLAUDE.md that is absent on disk. Only the region is read, since lines outside the markers
+ * are the user's. A path with a placeholder (`<slug>`, a glob) names no single file and is
+ * skipped.
+ */
+function managedRegionPathFindings(root: string): Finding[] {
+  let body: string | null;
+  try {
+    body = extractBody(
+      readFileSync(join(root, 'CLAUDE.md'), 'utf8'),
+      claudeMdRegion,
+    );
+  } catch {
+    return [];
+  }
+  if (body === null) return [];
+  const seen = new Set<string>();
+  const findings: Finding[] = [];
+  for (const span of body.matchAll(/`([^`\n]+)`/g)) {
+    for (const hit of span[1]!.matchAll(/\.claude\/[^\s`]*/g)) {
+      const path = hit[0];
+      if (/[<*{]/.test(path) || seen.has(path)) continue;
+      seen.add(path);
+      if (existsSync(join(root, path))) continue;
+      findings.push({
+        level: 'WARN',
+        msg: `CLAUDE.md: the managed region points at ${path}, which does not exist.`,
+      });
+    }
+  }
+  return findings;
+}
+
+/**
  * Whether the installed reference docs and the links into them agree, in both directions.
  *
  * A DANGLING link is a rule telling the model to read a file that is not installed, which is
@@ -68,16 +104,16 @@ export function checkReferenceReachability(
   root: string,
   ctx: Ctx,
 ): CheckResult {
+  const findings: Finding[] = managedRegionPathFindings(root);
   let docs: string[];
   try {
     docs = readdirSync(join(root, REFERENCE_DIR)).filter((name) =>
       name.endsWith('.md'),
     );
   } catch {
-    return { findings: [], readouts: [] };
+    return { findings, readouts: [] };
   }
 
-  const findings: Finding[] = [];
   const linked = new Set<string>();
   for (const source of linkSources(root)) {
     let text: string;

@@ -18,6 +18,14 @@ function svelteModule(api: PluginApi): ModuleDef {
     id,
     title: 'Svelte 5 rule (.claude/rules/svelte.md)',
     group: 'optional',
+    uses: [
+      { id: 'typescript', package: '@houserules/plugin-typescript' },
+      { id: 'code-comments', package: '@houserules/plugin-prose' },
+      { id: 'code-cleanliness' },
+      { id: 'prose-voice', package: '@houserules/plugin-prose' },
+      { id: 'accessibility', package: '@houserules/plugin-accessibility' },
+      { id: 'orchestrate' },
+    ],
     hint(): string {
       return 'path-scoped rule for Svelte 5 runes and component conventions, with an opt-in SvelteKit guide';
     },

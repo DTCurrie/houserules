@@ -1,5 +1,10 @@
 import { renderReviewerDraft } from '../render.js';
-import type { Action, Answers, ModuleGroup } from '@houserules/api';
+import type {
+  Action,
+  Answers,
+  ModuleGroup,
+  ModuleRequirement,
+} from '@houserules/api';
 import type { Ctx } from '../detect.js';
 import { script, skill } from './copy-actions.js';
 
@@ -7,6 +12,15 @@ export const id = 'reviewers';
 export const title =
   'Per-target reviewer agent drafts + /review-change dispatch';
 export const group: ModuleGroup = 'optional';
+
+// Modules this one's shipped prose hands off to when installed, and skips or falls back from
+// when not. Read by the root `verify:module-references` check.
+export const uses: ModuleRequirement[] = [
+  { id: 'ready' },
+  { id: 'verify-changed' },
+  { id: 'accessibility-review', package: '@houserules/plugin-accessibility' },
+  { id: 'design-review', package: '@houserules/plugin-design' },
+];
 
 export function hint(ctx: Ctx): string {
   return `generates DRAFT agents for ${ctx.targets.length || 'your'} target(s). You fill in the authoritative sources`;

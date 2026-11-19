@@ -335,31 +335,32 @@ describe('orchestrate', () => {
     });
   });
 
-  describe('enabled without the plans module', () => {
+  describe('selected alone', () => {
     let root: string;
 
     beforeEach(() => {
       root = useInstalledRepo('npm-single', { modules: 'orchestrate' });
     });
 
-    it('still installs', () => {
+    it('installs the orchestrate skill', () => {
       expect(
         existsSync(join(root, '.claude/skills/orchestrate/SKILL.md')),
         'orchestrate skill installed',
       ).toBe(true);
     });
 
-    it('does not create a plans workspace', () => {
+    it('installs the plans module with it', () => {
       expect(
-        existsSync(join(root, '.claude/plans/.gitignore')),
-        'no plans workspace created',
-      ).toBe(false);
+        existsSync(join(root, '.claude/skills/plan-project/SKILL.md')),
+        'plan-project skill installed',
+      ).toBe(true);
     });
 
-    it('points to the plans module in its advisory output', () => {
-      const result = runCli(['init', '--yes', '--modules=orchestrate', root]);
-
-      expect(result.stdout).toMatch(/plans/);
+    it('creates the plans workspace', () => {
+      expect(
+        existsSync(join(root, '.claude/plans/.gitignore')),
+        'plans workspace created',
+      ).toBe(true);
     });
 
     it('passes doctor', () => {

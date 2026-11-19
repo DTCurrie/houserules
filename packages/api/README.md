@@ -44,6 +44,65 @@ slice of `.claude/houserules.config.json`, verbatim and unvalidated.
 Validate that config slice yourself and fail loudly. A plugin that silently accepts a typo'd key is
 a plugin whose config does nothing.
 
+## Declaring what a module needs
+
+A requirement names another module by its bare id. It is met under any alias, because the alias
+is the installing repo's choice.
+
+```ts
+const module: ModuleDef = {
+  id: 'my-rule',
+  // ...
+  requires: [
+    { id: 'core' },
+    { id: 'design', package: '@houserules/plugin-design' },
+  ],
+  uses: [{ id: 'reviewers' }],
+  options: {
+    prompt: 'Which checks?',
+    defaults: ['lint'],
+    choices: [
+      { value: 'lint', label: 'Lint' },
+      { value: 'browser', label: 'Browser', requires: [{ id: 'design' }] },
+    ],
+  },
+  skillTriggers: (answers) =>
+    answers.moduleIds.includes(`${api.alias}/design`)
+      ? ['- Building UI? Take tokens from the design module.']
+      : [],
+};
+```
+
+`requires` is for a module this one cannot do its job without. Selecting the module installs each
+requirement, transitively, in `init`, the interactive picker, `update`, and `modules`. The picker
+shows a required module locked on and names the requirer. Withdrawing a required module while its
+requirer stays selected stops with an error naming both. `doctor` warns when an installed module's
+requirement is missing.
+
+A requirement that no installed plugin supplies stops `init` and `update` before anything is
+written. The error names the package and its install command. Set `package` on any requirement for
+a module outside the CLI, so the error can name it.
+
+`uses` is for a hand-off the module skips correctly when the other module is absent. It installs
+nothing. If the module cannot do its job without the hand-off, use `requires`.
+
+A `requires` on an option choice is met only while that value is selected.
+
+Declare every module your plugin's prose names. That covers another module's skill, agent, script,
+rule, reference, or output style mentioned in a skill, agent, rule, or template the plugin ships.
+Use `requires` when your module cannot work without the named one. Use `uses` when your prose
+states what to do in a repo where the named module is absent. An undeclared name reads fine in a
+repo that has everything installed and points at nothing in one that does not.
+
+houserules checks this for its own first-party packages only, at build time, against their payload
+sources. The check never ships, so it cannot see a third-party plugin's prose. As a third-party
+author, you declare your own.
+
+`skillTriggers(answers)` returns bullet lines the module adds to the "Skill triggers" section of
+the managed CLAUDE.md region. The CLI calls it only when the module is selected. Read a sibling
+module from `answers.moduleIds` as `${api.alias}/<id>`. `answers.contributedSkillTriggers` holds
+the collected lines. The CLI fills it, and a module never sets it.
+
 ## What it deliberately does not give you
 
 Nothing here writes. `apply`, the filesystem target, and the plan engine are not reachable from this
