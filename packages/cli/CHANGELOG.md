@@ -1,5 +1,29 @@
 # @houserules/cli
 
+## 0.13.0
+
+### Minor Changes
+
+- fb9eb89: `report` shows `Read` and `Bash` result sizes against the `tool-output-trim` cap.
+- fb9eb89: `report` times every Stop hook run, quiet ones included, per script and per Stop.
+- fb9eb89: `report` adds an artifact episodes section.
+- fb9eb89: `doctor` notes when the install and the running CLI both trail the published `latest`.
+- fb9eb89: `plan-lint` warns on a slice row that is not `DONE` under a `DONE` phase.
+- fb9eb89: `report` weighs 1-hour cache writes at 2x in its cost-weighted input.
+- fb9eb89: `report` prints a list-price dollar figure for the corpus.
+
+### Patch Changes
+
+- fb9eb89: The `phase-orchestrator` keepalive is `sleep 270`, then `sleep 1800` after seven wakes.
+- 9194d3d: `report` guard efficacy and hook health now count guard blocks.
+- 9194d3d: `report` skill outcomes now match `/decide` fires to decision ledger entries.
+- 9194d3d: The orchestrate context-size gate now fires past 300,000 tokens, before compaction.
+- 9194d3d: Fix `report` counting each API response once per content block, roughly halving earlier totals.
+- Updated dependencies [9194d3d]
+- Updated dependencies [9194d3d]
+- Updated dependencies [9194d3d]
+  - @houserules/api@0.7.2
+
 ## 0.12.2
 
 ### Patch Changes
