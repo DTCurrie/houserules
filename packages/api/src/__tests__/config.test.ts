@@ -52,6 +52,14 @@ describe('parseHouseConfig', () => {
     expect(parseHouseConfig(JSON.stringify(config))).toEqual(config);
   });
 
+  it('accepts orchestrate.orchestratorTools as a list of tool names', () => {
+    const config = {
+      ...minimalConfig,
+      orchestrate: { orchestratorTools: ['mcp__chrome-devtools'] },
+    };
+    expect(parseHouseConfig(JSON.stringify(config))).toEqual(config);
+  });
+
   it('rejects a misspelled key inside orchestrate', () => {
     const raw = JSON.stringify({
       ...minimalConfig,

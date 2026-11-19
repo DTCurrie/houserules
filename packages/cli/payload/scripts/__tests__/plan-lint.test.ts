@@ -16,6 +16,7 @@ import {
   listImpactMaps,
   parseDomain,
   parseRoadmapPhases,
+  parseSignals,
 } from '../plan-lint.mjs';
 
 import { repoRootSafe } from '@houserules/payload/config';
@@ -542,9 +543,77 @@ describe('parseDomain', () => {
   });
 });
 
+describe('parseSignals', () => {
+  it('reads comma-separated values, dropping backticks and a trailing note', () => {
+    expect(
+      parseSignals('**Signals:** `ui`, wide (six packages), live\n'),
+    ).toEqual(['ui', 'wide', 'live']);
+  });
+
+  it('returns an empty list when the header has no Signals line', () => {
+    expect(parseSignals('**Status:** TODO\n**Domain:** `lib/a`\n')).toEqual([]);
+  });
+});
+
 describe('checkPhaseSchedule', () => {
-  const run = (markdown: string, domains: Record<string, string[] | null>) =>
-    checkPhaseSchedule('ROADMAP.md', markdown, domains).findings;
+  const run = (
+    markdown: string,
+    domains: Record<string, string[] | null>,
+    signals: Record<string, string[]> = {},
+  ) => checkPhaseSchedule('ROADMAP.md', markdown, domains, signals).findings;
+
+  it.each([
+    { signals: { 'phase-3.md': ['ui', 'live'] }, carrier: 'phase 3 carries' },
+    {
+      signals: { 'phase-2.md': ['live'], 'phase-3.md': ['live'] },
+      carrier: 'both carry',
+    },
+  ])(
+    'flags concurrent phases with disjoint domains when $carrier the live signal',
+    ({ signals, carrier }) => {
+      const findings = run(
+        roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+        { 'phase-1.md': ['a'], 'phase-2.md': ['b'], 'phase-3.md': ['c'] },
+        signals,
+      );
+
+      expect(findings.map((finding) => finding.msg)).toEqual([
+        `phases 2 and 3 can run concurrently, but ${carrier} the live signal`,
+      ]);
+    },
+  );
+
+  it('accepts a live phase that After orders against every other', () => {
+    const findings = run(
+      roadmapOf(
+        phaseLine(1),
+        phaseLine(2, '1'),
+        phaseLine(3, '1'),
+        phaseLine(4, '2,3'),
+      ),
+      {
+        'phase-1.md': ['a'],
+        'phase-2.md': ['b'],
+        'phase-3.md': ['c'],
+        'phase-4.md': ['d'],
+      },
+      { 'phase-4.md': ['live'] },
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('reports a live phase that also lacks a domain once, by its signal', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+      { 'phase-1.md': ['a'], 'phase-2.md': ['b'] },
+      { 'phase-3.md': ['live'] },
+    );
+
+    expect(findings.map((finding) => finding.msg)).toEqual([
+      'phases 2 and 3 can run concurrently, but phase 3 carries the live signal',
+    ]);
+  });
 
   it('reports nothing for an unmarked three-phase chain', () => {
     const findings = run(roadmapOf(phaseLine(1), phaseLine(2), phaseLine(3)), {
@@ -912,7 +981,12 @@ Owns \`packages/cli/src/does-not-exist.ts\`.
   });
 
   describe('phase schedule', () => {
-    const stage = (domain2: string, domain3: string, after: string) => {
+    const stage = (
+      domain2: string,
+      domain3: string,
+      after: string,
+      signals3 = 'none',
+    ) => {
       const root = useInstalledRepo('pnpm-monorepo', {
         modules: 'orchestrate',
       });
@@ -931,14 +1005,14 @@ Owns \`packages/cli/src/does-not-exist.ts\`.
 - [ ] **Phase 3: right** · Status: TODO · [sub-plan](phase-3-right.md)${after}
 `,
       );
-      const phase = (name: string, domain: string) =>
+      const phase = (name: string, domain: string, signals = 'none') =>
         writeFileSync(
           join(planDir, name),
-          `# Phase\n\n**Status:** TODO\n**Signals:** none\n${domain}\n`,
+          `# Phase\n\n**Status:** TODO\n**Signals:** ${signals}\n${domain}\n`,
         );
       phase('phase-1-base.md', '');
       phase('phase-2-left.md', domain2);
-      phase('phase-3-right.md', domain3);
+      phase('phase-3-right.md', domain3, signals3);
       return runScript(root, SCRIPT);
     };
 
@@ -982,6 +1056,17 @@ Owns \`packages/cli/src/does-not-exist.ts\`.
       const result = stage('**Domain:**', '**Domain:** `lib/b`', ' · After: 1');
       expect(result.status, result.stdout).toBe(1);
       expect(result.stdout).toContain('no backticked root');
+    });
+
+    it('exits 1 naming the live phase when it can run beside another', () => {
+      const result = stage(
+        '**Domain:** `lib/a`',
+        '**Domain:** `lib/b`',
+        ' · After: 1',
+        'live',
+      );
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain('phase 3 carries the live signal');
     });
 
     it('exits 0 when the concurrent roots are disjoint', () => {

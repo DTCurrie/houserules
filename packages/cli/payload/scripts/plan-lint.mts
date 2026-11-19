@@ -234,6 +234,20 @@ export function parseDomain(markdown: string): string[] | null {
 }
 
 /**
+ * Reads the values of a sub-plan's `**Signals:**` line, such as `['ui', 'wide']`, or an empty
+ * array when the header has none. Values are comma-separated, and each is the first word of its
+ * item with backticks dropped, so `` `wide` (six packages) `` still reads as `wide`.
+ */
+export function parseSignals(markdown: string): string[] {
+  const line = markdown.match(/^\*\*Signals:\*\*(.*)$/m);
+  if (!line) return [];
+  return (line[1] ?? '')
+    .split(',')
+    .map((item) => item.replace(/`/g, '').trim().split(/\s+/)[0] ?? '')
+    .filter((signal) => signal !== '');
+}
+
+/**
  * Checks that every ROADMAP phase line names the same status, ignoring any trailing
  * parenthetical, as the `**Status:**` header of the sub-plan it links to. A ROADMAP marked
  * `DONE` while its sub-plan header still reads `TODO` is the exact drift `/orchestrate`'s
@@ -285,6 +299,9 @@ export function checkRoadmapSync(
 
 const GLOB_CHARS = /[*?{}[\]]/;
 
+/** The `**Signals:**` value for a phase that reads a running process, so it never runs beside another. */
+const LIVE_SIGNAL = 'live';
+
 /** Phase numbers that can reach `start` by following `dependenciesByPhase`, never `start` itself unless it sits on a cycle. */
 function ancestorsOf(
   start: number,
@@ -330,22 +347,25 @@ function reportInvalidDomainRoots(
 }
 
 /**
- * Checks that the `After` markers on a ROADMAP and the `**Domain:**` roots of its sub-plans
- * describe a schedule that can run. It errors on an `After` naming an unknown phase or its own
- * phase, on a cycle, on a glob character in a root, and on any two phases that neither
- * depends on the other through `After` when either has no domain or their roots overlap.
- * A phase in a cycle or with a bad `After` is left out of the concurrency pairs, since its
- * ordering is already reported. A workspace with no markers is a total order, so it has no
- * concurrent pair and reports nothing.
+ * Checks that the `After` markers on a ROADMAP and the `**Domain:**` roots and `**Signals:**`
+ * of its sub-plans describe a schedule that can run. It errors on an `After` naming an unknown
+ * phase or its own phase, on a cycle, on a glob character in a root, and on any two phases
+ * that neither depends on the other through `After` when either carries the `live` signal,
+ * either has no domain, or their roots overlap. A pair is reported once, by the first of those
+ * that holds. A phase in a cycle or with a bad `After` is left out of the concurrency pairs,
+ * since its ordering is already reported. A workspace with no markers is a total order, so it
+ * has no concurrent pair and reports nothing.
  *
  * `subplanDomains` maps each sub-plan filename to its parsed roots, or `null` when the file
  * is missing or has no `**Domain:**` line. An empty array is a `**Domain:**` line with no
- * backticked root, which is an error.
+ * backticked root, which is an error. `subplanSignals` maps each sub-plan filename to its
+ * parsed signals, and a filename missing from it carries none.
  */
 export function checkPhaseSchedule(
   roadmapFile: string,
   roadmapMarkdown: string,
   subplanDomains: Record<string, string[] | null>,
+  subplanSignals: Record<string, string[]>,
 ): Report {
   const report = emptyReport();
   const phases = parseRoadmapPhases(roadmapMarkdown);
@@ -432,6 +452,17 @@ export function checkPhaseSchedule(
       if (broken.has(first.number) || broken.has(second.number)) continue;
       if (ancestors.get(first.number)?.has(second.number)) continue;
       if (ancestors.get(second.number)?.has(first.number)) continue;
+      const live = [first, second]
+        .filter((phase) => subplanSignals[phase.subplan]?.includes(LIVE_SIGNAL))
+        .map((phase) => phase.number);
+      if (live.length > 0) {
+        const carrier =
+          live.length === 1 ? `phase ${live[0]} carries` : 'both carry';
+        fail(
+          `phases ${first.number} and ${second.number} can run concurrently, but ${carrier} the live signal`,
+        );
+        continue;
+      }
       const firstRoots = rootsOf(first);
       const secondRoots = rootsOf(second);
       const lacking = [
@@ -806,6 +837,7 @@ function main(): void {
     const phaseFiles = entries.filter((name) => /^phase-.*\.md$/.test(name));
     const subplanStatuses: Record<string, string | null> = {};
     const subplanDomains: Record<string, string[] | null> = {};
+    const subplanSignals: Record<string, string[]> = {};
     for (const name of phaseFiles) {
       const phasePath = join(workspaceDir, name);
       const markdown = readFileSync(phasePath, 'utf8');
@@ -824,6 +856,7 @@ function main(): void {
       }
       subplanStatuses[name] = phaseStatus;
       subplanDomains[name] = parseDomain(markdown);
+      subplanSignals[name] = parseSignals(markdown);
     }
 
     if (roadmapMarkdown !== null) {
@@ -832,8 +865,12 @@ function main(): void {
         ...checkRoadmapSync(relFile, roadmapMarkdown, subplanStatuses).findings,
       );
       report.findings.push(
-        ...checkPhaseSchedule(relFile, roadmapMarkdown, subplanDomains)
-          .findings,
+        ...checkPhaseSchedule(
+          relFile,
+          roadmapMarkdown,
+          subplanDomains,
+          subplanSignals,
+        ).findings,
       );
     }
   }

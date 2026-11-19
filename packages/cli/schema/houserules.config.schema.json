@@ -177,6 +177,11 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "orchestratorTools": {
+          "description": "Extra tools appended to the `tools:` line of phase-orchestrator by `houserules update`, in the same entry forms as `workerTools`. A phase whose steps need a tool that line lacks cannot run one layer down, so /orchestrate runs it at the main conversation after the nested phases return.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "maxWorkers": {
           "description": "The most task-workers one /orchestrate wave dispatches at once. Read at runtime by `wave-ceiling.mjs`, which otherwise derives the ceiling from the machine: half the CPU count, at least 2, halved again when the one-minute load is at or above the CPU count. Set it higher than the CPU count and it still wins, since it is an explicit override.",
           "type": "integer",

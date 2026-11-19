@@ -264,6 +264,28 @@ describe('orchestrate', () => {
       );
     });
 
+    it('holds a phase that cannot nest out of the spawn and runs it flat after the rest', () => {
+      expect(nestedText).toMatch(/run the\s+held phase flat here/);
+      expect(nestedText).toMatch(/orchestrate\.orchestratorTools/);
+    });
+
+    it('runs a phase that carries the live signal alone', () => {
+      expect(nestedText).toMatch(
+        /`live` on its `\*\*Signals:\*\*` line, runs alone/,
+      );
+    });
+
+    it("closes a sibling orchestrator's barrier on slice acceptances, with no package-wide verify", () => {
+      expect(orchestratorText).toMatch(
+        /reruns each slice's acceptance command in place of a verify/,
+      );
+      expect(nestedText).toMatch(/It runs no package-wide\s+verify/);
+    });
+
+    it('lets a verify already running finish rather than killing it', () => {
+      expect(orchestratorText).toMatch(/never try to kill it/);
+    });
+
     it('tells the phase-orchestrator to report sibling findings and seam changes upward', () => {
       expect(orchestratorText).toMatch(/Out of scope/);
       expect(orchestratorText).toMatch(/Requests/);
@@ -528,6 +550,35 @@ describe('orchestrate plan(), phase-orchestrator', () => {
     ).toBe(false);
   });
 
+  it('writes the agent with orchestrate.orchestratorTools appended and no longer copies it', () => {
+    const ctx = {
+      claude: {
+        houseConfig: {
+          orchestrate: { orchestratorTools: ['mcp__chrome-devtools'] },
+        },
+      },
+    } as Ctx;
+
+    const actions = plan(ctx, baseAnswers());
+
+    const write = actions.find(
+      (action) =>
+        action.kind === 'write' &&
+        action.dest === '.claude/agents/phase-orchestrator.md',
+    );
+    expect((write as { content: string } | undefined)?.content).toMatch(
+      /^tools: Read, Edit, Write, Grep, Glob, Bash, Agent, SendMessage, Skill, mcp__chrome-devtools$/m,
+    );
+    expect(
+      actions.some(
+        (action) =>
+          action.kind === 'copy' &&
+          action.dest === '.claude/agents/phase-orchestrator.md',
+      ),
+      'no longer copied',
+    ).toBe(false);
+  });
+
   it('advises that each phase runs one layer down by default and --flat keeps it here', () => {
     const answers = { ...baseAnswers(), moduleIds: ['orchestrate', 'plans'] };
     const advice = plan({} as Ctx, answers).flatMap((action) =>
@@ -600,15 +651,54 @@ describe('orchestrate plan(), orchestrate.workerTools', () => {
 });
 
 describe('check', () => {
-  function tempRootWithAgent(toolsLine: string): string {
+  function tempRootWithAgent(toolsLine: string, name = 'task-worker'): string {
     const root = mkdtempSync(join(tmpdir(), 'orchestrate-check-'));
     mkdirSync(join(root, '.claude', 'agents'), { recursive: true });
     writeFileSync(
-      join(root, '.claude', 'agents', 'task-worker.md'),
-      `---\nname: task-worker\n${toolsLine}\nmodel: sonnet\n---\nbody\n`,
+      join(root, '.claude', 'agents', `${name}.md`),
+      `---\nname: ${name}\n${toolsLine}\nmodel: sonnet\n---\nbody\n`,
     );
     return root;
   }
+
+  it('warns when phase-orchestrator lacks a tool orchestrate.orchestratorTools names', () => {
+    const root = tempRootWithAgent('tools: Read, Agent', 'phase-orchestrator');
+    const ctx = {
+      root,
+      claude: {
+        agents: ['phase-orchestrator.md'],
+        houseConfig: {
+          orchestrate: { orchestratorTools: ['mcp__chrome-devtools'] },
+        },
+      },
+    } as Ctx;
+
+    const result = check(ctx);
+
+    expect(result.findings).toEqual([
+      {
+        level: 'WARN',
+        msg: 'agent phase-orchestrator.md is missing mcp__chrome-devtools from its tools: line — run npx houserules update to refresh it',
+      },
+    ]);
+  });
+
+  it('does not hold task-worker to orchestrate.orchestratorTools', () => {
+    const root = tempRootWithAgent('tools: Read, Edit, Write');
+    const ctx = {
+      root,
+      claude: {
+        agents: ['task-worker.md'],
+        houseConfig: {
+          orchestrate: { orchestratorTools: ['mcp__chrome-devtools'] },
+        },
+      },
+    } as Ctx;
+
+    const result = check(ctx);
+
+    expect(result.findings).toEqual([]);
+  });
 
   it('warns naming the missing tool and pointing at houserules update when a configured tool is absent', () => {
     const root = tempRootWithAgent('tools: Read, Edit, Write');
