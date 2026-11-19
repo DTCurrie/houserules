@@ -39,6 +39,13 @@ function testingModule(api: PluginApi): ModuleDef {
     id,
     title: 'Testing discipline rule (.claude/rules/testing.md)',
     group: 'optional',
+    uses: [
+      { id: 'code-comments', package: '@houserules/plugin-prose' },
+      { id: 'prose-voice', package: '@houserules/plugin-prose' },
+      { id: 'code-cleanliness' },
+      { id: 'svelte', package: '@houserules/plugin-svelte' },
+      { id: 'three', package: '@houserules/plugin-three' },
+    ],
     hint(): string {
       return 'path-scoped rule: a test must fail when the behavior breaks, no coverage-chasing, colocate tests in one test directory (default `__tests__`), pin a decision at the lowest layer that can observe it, behavioral test names, no comments explaining assertions';
     },

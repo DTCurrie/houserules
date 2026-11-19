@@ -1,10 +1,20 @@
-import type { Action, ModuleGroup } from '@houserules/api';
+import type { Action, ModuleGroup, ModuleRequirement } from '@houserules/api';
 import { reference, rule, script, skill } from './copy-actions.js';
 
 export const id = 'code-cleanliness';
 export const title =
   'Code cleanliness rule + design-principles reference (.claude/rules/ + .claude/reference/)';
 export const group: ModuleGroup = 'optional';
+
+// Modules this one's shipped prose hands off to when installed, and skips or falls back from
+// when not. Read by the root `verify:module-references` check.
+export const uses: ModuleRequirement[] = [
+  { id: 'sweep' },
+  { id: 'reviewers' },
+  { id: 'rename' },
+  { id: 'code-comments', package: '@houserules/plugin-prose' },
+  { id: 'testing', package: '@houserules/plugin-testing' },
+];
 
 export function hint(): string {
   return 'path-scoped rule: intention-revealing names, functions under 20-30 lines, no magic values, no dead code. Principles doc is pull-only';

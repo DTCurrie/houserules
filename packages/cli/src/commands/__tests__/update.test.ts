@@ -3,6 +3,7 @@ import {
   appendFileSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -15,13 +16,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { useInstalledRepo, useRepo } from '#test/repo';
+import { treeHash, useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn, type RunResult } from '#test/run';
 import {
   claudeMdPath,
   editHouseConfig,
   type HouseManifestShape,
   hookCommandsFor,
+  manifestOf,
   readClaudeMd,
   readJson,
   REGION_END,
@@ -29,6 +31,7 @@ import {
   type Settings,
   settingsOf,
   sha256,
+  writeManifest,
 } from '#test/installed-tree';
 import { splitFrontmatter } from '../../core/frontmatter.js';
 import { PRETTIERIGNORE_REGION } from '../../modules/prettier-guard.js';
@@ -1300,5 +1303,203 @@ describe('update on an install carrying a retired task-worker effort variant', (
       existsSync(join(root, '.claude/agents/task-worker.md')),
       'task-worker kept',
     ).toBe(true);
+  });
+});
+
+describe('update on a retired manifest destination that is a symlink', () => {
+  const retired = '.claude/scripts/compact-tool-output.mjs';
+
+  function plantLink(root: string, target: string, type?: 'dir'): void {
+    const manifestPath = join(root, '.claude/houserules.manifest.json');
+    const manifest = readJson<HouseManifestShape>(manifestPath);
+    manifest.files[retired] = sha256('recorded\n');
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    symlinkSync(target, join(root, retired), type);
+  }
+
+  it('leaves no entry at a dangling link', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    plantLink(root, join(root, 'deleted-target.mjs'));
+
+    const r = runCli(['update', root]);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(lstatSync(join(root, retired), { throwIfNoEntry: false })).toBe(
+      undefined,
+    );
+  });
+
+  it('unlinks a forced directory link without touching the directory it points at', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const targetDir = join(root, 'linked-dir');
+    mkdirSync(targetDir);
+    writeFileSync(join(targetDir, 'keep.txt'), 'survives\n');
+    plantLink(root, targetDir, 'dir');
+
+    const r = runCli(['update', '--force', root]);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(lstatSync(join(root, retired), { throwIfNoEntry: false })).toBe(
+      undefined,
+    );
+    expect(readFileSync(join(targetDir, 'keep.txt'), 'utf8')).toBe(
+      'survives\n',
+    );
+  });
+});
+
+describe('update on an install whose manifest records a module without its requirement', () => {
+  const SWEEP_SKILL = '.claude/skills/sweep/SKILL.md';
+  let root: string;
+  let filesBefore: string[];
+
+  beforeEach(() => {
+    root = useInstalledRepo('npm-single', { modules: 'orchestrate' });
+    const manifest = manifestOf(root);
+    manifest.modules = manifest.modules.filter((id) => id !== 'sweep');
+    for (const dest of Object.keys(manifest.files)) {
+      if (!dest.startsWith('.claude/skills/sweep/')) continue;
+      delete manifest.files[dest];
+      rmSync(join(root, dest), { force: true });
+    }
+    writeManifest(root, manifest);
+    filesBefore = Object.keys(manifest.files);
+  });
+
+  it('installs the missing module', () => {
+    const result = runCli(['update', root]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(join(root, SWEEP_SKILL)), 'sweep skill installed').toBe(
+      true,
+    );
+  });
+
+  it('records the added module in the manifest', () => {
+    runCli(['update', root]);
+
+    expect(manifestOf(root).modules).toContain('sweep');
+  });
+
+  it('names the module that required it', () => {
+    const result = runCli(['update', root]);
+
+    expect(result.stdout + result.stderr).toContain(
+      '  sweep, required by orchestrate',
+    );
+  });
+
+  it('keeps every file the manifest recorded before', () => {
+    runCli(['update', root]);
+
+    const missing = filesBefore.filter((dest) => !existsSync(join(root, dest)));
+    expect(missing).toEqual([]);
+  });
+});
+
+describe('update on an install that predates both of orchestrate requirements', () => {
+  const EDITED = '.claude/skills/orchestrate/SKILL.md';
+  let root: string;
+  let editedBytes: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('npm-single', { modules: 'orchestrate' });
+    const manifest = manifestOf(root);
+    manifest.modules = manifest.modules.filter(
+      (id) => id !== 'sweep' && id !== 'plans',
+    );
+    for (const dest of Object.keys(manifest.files)) {
+      if (
+        !dest.startsWith('.claude/skills/sweep/') &&
+        !dest.startsWith('.claude/skills/plan-project/') &&
+        !dest.startsWith('.claude/skills/plans/')
+      ) {
+        continue;
+      }
+      delete manifest.files[dest];
+      rmSync(join(root, dest), { force: true });
+    }
+    writeManifest(root, manifest);
+    appendFileSync(join(root, EDITED), '\nuser-added line\n');
+    editedBytes = readFileSync(join(root, EDITED), 'utf8');
+  });
+
+  it('installs both modules, records both, and keeps the user-edited file', () => {
+    const result = runCli(['update', root]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(join(root, '.claude/skills/sweep/SKILL.md'))).toBe(true);
+    expect(existsSync(join(root, '.claude/skills/plan-project/SKILL.md'))).toBe(
+      true,
+    );
+    expect(manifestOf(root).modules).toEqual(
+      expect.arrayContaining(['sweep', 'plans']),
+    );
+    expect(readFileSync(join(root, EDITED), 'utf8')).toBe(editedBytes);
+  });
+});
+
+describe('update retains a non-default option of a module another module requires', () => {
+  const PLUGIN = join(KIT_ROOT, 'test/plugin-fixture/option-retention');
+
+  it('keeps the recorded non-default selection across two updates', () => {
+    const root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    editHouseConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: PLUGIN, alias: 'ret' },
+      ];
+    });
+    const init = runCli([
+      'init',
+      '--yes',
+      '--modules=core,ret/needy',
+      '--module-option',
+      'ret/choosy=spicy',
+      root,
+    ]);
+    expect(init.status, init.stderr).toBe(0);
+    const recorded = (): unknown =>
+      (
+        readJson(join(root, '.claude/houserules.config.json')) as {
+          moduleOptions: Record<string, string[]>;
+        }
+      ).moduleOptions['ret/choosy'];
+    expect(recorded()).toEqual(['spicy']);
+
+    const first = runCli(['update', root]);
+    expect(first.status, first.stderr).toBe(0);
+    expect(recorded(), 'after the first update').toEqual(['spicy']);
+
+    const second = runCli(['update', root]);
+    expect(second.status, second.stderr).toBe(0);
+    expect(recorded(), 'after the second update').toEqual(['spicy']);
+  });
+});
+
+describe('update on an install recording a module whose requirement no plugin supplies', () => {
+  it('exits 1 with the unmet message and writes nothing', () => {
+    const root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    editHouseConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        {
+          name: join(KIT_ROOT, 'test/plugin-fixture/requires-unmet'),
+          alias: 'unmet',
+        },
+      ];
+    });
+    const manifest = manifestOf(root);
+    manifest.modules.push('unmet/needy');
+    writeManifest(root, manifest);
+    const before = treeHash(root);
+
+    const result = runCli(['update', root]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Module "unmet/needy" requires "ghost-module", which no installed plugin supplies.\nInstall it: npm install -D @acme/ghost\n',
+    );
+    expect(treeHash(root)).toBe(before);
   });
 });

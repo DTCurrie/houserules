@@ -35,9 +35,11 @@
     "verify:payload-copy-set": "wireit",
     "verify:payload-test-coverage": "wireit",
     "verify:payload-lib-declarations": "wireit",
+    "verify:module-references": "wireit",
     "verify:checker-determinism": "wireit",
     "verify:payload-prose": "wireit",
     "verify:knip": "wireit",
+    "test:scripts": "wireit",
     "verify:knip:audit": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles --include-entry-exports"
   },
   "wireit": {
@@ -95,6 +97,7 @@
         "verify:payload-copy-set",
         "verify:payload-test-coverage",
         "verify:payload-lib-declarations",
+        "verify:module-references",
         "verify:checker-determinism",
         "verify:payload-prose",
         "verify:knip"
@@ -145,6 +148,21 @@
         "scripts/verify-payload-lib-declarations.mjs",
         "packages/*/package.json",
         "packages/*/src/**/*.ts",
+        "!**/node_modules/**"
+      ],
+      "output": []
+    },
+    "verify:module-references": {
+      "command": "node scripts/verify-module-references.mjs",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "scripts/verify-module-references.mjs",
+        "packages/*/payload/**/*.md",
+        "packages/*/payload/**/*.template",
+        "packages/*/src/**/*.ts",
+        "packages/*/package.json",
         "!**/node_modules/**"
       ],
       "output": []
@@ -214,7 +232,7 @@
       ]
     },
     "test": {
-      "//": "Fifteen entries, not sixteen. @houserules/test ships no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
+      "//": "Sixteen entries: fifteen packages plus the root scripts suite, not seventeen. @houserules/test ships no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
       "dependencies": [
         "./packages/api:test",
         "./packages/cli:test",
@@ -230,8 +248,18 @@
         "./packages/plugin-svelte:test",
         "./packages/plugin-testing:test",
         "./packages/plugin-three:test",
-        "./packages/plugin-typescript:test"
+        "./packages/plugin-typescript:test",
+        "test:scripts"
       ]
+    },
+    "test:scripts": {
+      "command": "node --test scripts/__tests__/*.test.mjs",
+      "files": [
+        "scripts/__tests__/*.test.mjs",
+        "scripts/verify-payload-lib-declarations.mjs",
+        "scripts/verify-module-references.mjs"
+      ],
+      "output": []
     },
     "attw": {
       "dependencies": [

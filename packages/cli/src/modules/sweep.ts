@@ -1,9 +1,13 @@
-import type { Action, ModuleGroup } from '@houserules/api';
+import type { Action, ModuleGroup, ModuleRequirement } from '@houserules/api';
 import { skill } from './copy-actions.js';
 
 export const id = 'sweep';
 export const title = 'Sharded mechanical sweep (/sweep)';
 export const group: ModuleGroup = 'optional';
+
+// Modules this one's shipped prose hands off to when installed, and skips or falls back from
+// when not. Read by the root `verify:module-references` check.
+export const uses: ModuleRequirement[] = [{ id: 'verify-changed' }];
 
 export function hint(): string {
   return 'fan a repo-wide rote edit into per-package writers reporting only counts — O(shards), not O(matches)';

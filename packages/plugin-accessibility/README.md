@@ -48,11 +48,14 @@ one read. Missing one costs a defect.
 
 ## It is not a linter, on purpose
 
-`eslint-plugin-jsx-a11y`, `eslint-plugin-vuejs-accessibility`, and Svelte's own compiler
-warnings already do the mechanical checking, and they are better at it than anything shipped
-here would be. This plugin owns the routing and the reasoning, and points at those for the rest.
+`eslint-plugin-jsx-a11y` (or its fork `eslint-plugin-jsx-a11y-x`, which supports ESLint 10),
+`eslint-plugin-vuejs-accessibility`, and Svelte's own compiler warnings already do the
+mechanical checking, and they are better at it than anything shipped here would be. Astro needs
+`eslint-plugin-astro` as well, because it is what applies those rules to `.astro` files. This
+plugin owns the routing and the reasoning, and points at those for the rest.
 `houserules doctor` warns when a repo has a markup framework and no accessibility linter
-configured for it.
+configured for it. Its install hint names a plugin that supports the ESLint version the repo
+declares.
 
 Nothing here decides contrast ratios, real focus order, or whether alt text is meaningful. Those
 need a rendered page or human judgment, and the rule, the skill, and the agent all say so rather

@@ -19,6 +19,11 @@ function codeCommentsModule(api: PluginApi): ModuleDef {
     id,
     title: 'Comment discipline rule (.claude/rules/code-comments.md)',
     group: 'optional',
+    uses: [
+      { id: 'prose-voice' },
+      { id: 'code-cleanliness' },
+      { id: 'testing', package: '@houserules/plugin-testing' },
+    ],
     hint(): string {
       return 'path-scoped rule: TSDoc for exported API, no file headers or landmarks, no narration, 200-char cap';
     },
@@ -61,6 +66,7 @@ function proseVoiceModule(api: PluginApi): ModuleDef {
     id,
     title: 'Writing voice rule (.claude/rules/prose-voice.md)',
     group: 'optional',
+    uses: [{ id: 'code-comments' }],
     hint(): string {
       return 'path-scoped rule: plain sentences, no semicolons, em dashes rewritten away, filler cut, American English';
     },
@@ -214,6 +220,7 @@ function prDescriptionModule(api: PluginApi): ModuleDef {
     id,
     title: 'PR description format (/pr-description)',
     group: 'optional',
+    uses: [{ id: 'verify-changed' }, { id: 'prose-voice' }],
     hint(): string {
       return 'skill: reviewer-facing PR body, one section per layer touched, Testing last, pasteable markdown';
     },

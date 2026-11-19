@@ -77,6 +77,21 @@ describe('TargetRepo.write, given a destination that is a symlink', () => {
   });
 });
 
+describe('TargetRepo.exists and remove, given a dangling symlink', () => {
+  it('sees the link as present, and remove unlinks it', () => {
+    const root = tempDir();
+    symlinkSync(join(root, 'no-target'), join(root, 'link.md'));
+    const repo = new TargetRepo(root, false);
+
+    expect(repo.exists('link.md')).toBe(true);
+    repo.remove('link.md');
+
+    expect(lstatSync(join(root, 'link.md'), { throwIfNoEntry: false })).toBe(
+      undefined,
+    );
+  });
+});
+
 describe('backupDestFor', () => {
   it.each([
     {

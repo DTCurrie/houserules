@@ -19,6 +19,7 @@ export type {
   ModuleGroup,
   ModuleOptionChoice,
   ModuleOptions,
+  ModuleRequirement,
 } from './module-def.js';
 export type {
   HookEntry,

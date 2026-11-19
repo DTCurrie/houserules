@@ -19,6 +19,7 @@ import { checkInstallIntegrity } from './doctor/install-integrity.js';
 import { checkInstructionsFile } from './doctor/instructions-file.js';
 import { checkLaunchRoot } from './doctor/launch-root.js';
 import { checkModuleHealth } from './doctor/module-health.js';
+import { checkModuleRequirements } from './doctor/module-requirements.js';
 import { checkPluginRegistration } from './doctor/plugin-registration.js';
 import { checkReferenceReachability } from './doctor/reference-reachability.js';
 import { checkResidentSurface } from './doctor/resident-surface.js';
@@ -105,6 +106,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     checkSettingsWiring(root, ctx),
     checkInstallHygiene(root, ctx),
     checkModuleHealth(root, ctx, config.registry),
+    checkModuleRequirements(ctx, config.registry),
     checkPluginRegistration(root, ctx),
     checkLaunchRoot(root, ctx),
     checkTranscriptRetention(ctx),

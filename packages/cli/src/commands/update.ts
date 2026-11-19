@@ -13,16 +13,18 @@ import type { Ctx } from '../detect.js';
 import { backupDestFor, ensureBackupDir } from '../core/fs-target.js';
 import { ledgerDirFor } from '../core/ledger-dir.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
-import {
-  assertOptionsRecorded,
-  resolveModuleOptions,
-} from '../module-options.js';
+import { assertOptionsRecorded } from '../module-options.js';
 import {
   assertNoRetiredModules,
   resolveRecordedModuleIds,
 } from '../retired-modules.js';
 import { MODULES, buildPlan, computeEffects, computePrune } from '../plan.js';
 import { HouseError } from '../house-error.js';
+import {
+  closeSelection,
+  requiredByNote,
+  type RequirementClosure,
+} from '../module-requires.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import {
   parseSettingsText,
@@ -215,28 +217,42 @@ function resolveUpdatePlan(
   manifest: NonNullable<Ctx['claude']['manifest']>,
   targets: Ctx['targets'],
   flags: Flags,
-): { planResult: PlanResult; updateModuleIds: string[] } {
+): {
+  planResult: PlanResult;
+  updateModuleIds: string[];
+  closure: RequirementClosure;
+} {
   const recordedModuleIds = manifest.modules ?? ['core'];
   // Resolution runs first. A pre-split manifest records bare ids that the registry no longer
   // answers to, and buildPlan matches on the registered id, so leaving them bare would drop
   // every plugin module's actions and prune its files. The gate runs on the resolved ids, and
   // an id nothing supplies survives resolution unchanged, so it is still reported.
-  const updateModuleIds = resolveRecordedModuleIds(recordedModuleIds, registry);
-  assertNoRetiredModules(updateModuleIds, registry);
+  const resolvedModuleIds = resolveRecordedModuleIds(
+    recordedModuleIds,
+    registry,
+  );
+  assertNoRetiredModules(resolvedModuleIds, registry);
   // Same placement rule as the retired-module gate above: before any plan exists, so the
   // prune below can never be computed from a fallback selection the user never chose.
   if (!flags.force) {
     assertOptionsRecorded(
       registry,
-      updateModuleIds,
+      resolvedModuleIds,
       ctx.claude.houseConfig?.moduleOptions,
     );
   }
-  const moduleOptions = resolveModuleOptions(
+  // A requirement the recorded set lacks is installed here. It closes before any plan exists
+  // for the same reason as the gates above, and an unmet one throws with nothing written.
+  const { closure, moduleOptions } = closeSelection(
     registry,
-    updateModuleIds,
-    ctx.claude.houseConfig?.moduleOptions,
+    resolvedModuleIds,
+    {
+      persisted: ctx.claude.houseConfig?.moduleOptions,
+      chosen: {},
+      packageManager: ctx.packageManager?.name,
+    },
   );
+  const updateModuleIds = closure.moduleIds;
   const answers: Answers = {
     moduleIds: updateModuleIds,
     targets,
@@ -248,7 +264,7 @@ function resolveUpdatePlan(
     force: flags.force,
     plugins: registry.plugins,
   });
-  return { planResult, updateModuleIds };
+  return { planResult, updateModuleIds, closure };
 }
 
 /**
@@ -343,8 +359,9 @@ export async function update(dir: string, flags: Flags): Promise<number> {
 
   let planResult: PlanResult;
   let updateModuleIds: string[];
+  let closure: RequirementClosure;
   try {
-    ({ planResult, updateModuleIds } = resolveUpdatePlan(
+    ({ planResult, updateModuleIds, closure } = resolveUpdatePlan(
       root,
       ctx,
       registry,
@@ -391,6 +408,9 @@ export async function update(dir: string, flags: Flags): Promise<number> {
         !updateModuleIds.includes(m.id),
     )
     .map((m) => m.id);
+
+  const requiredNote = requiredByNote(closure);
+  if (requiredNote !== null) ui.message(requiredNote);
 
   ui.note(
     ui.renderPreview(planResult),

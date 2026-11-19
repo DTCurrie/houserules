@@ -11,6 +11,8 @@ Argument: $ARGUMENTS
 
 ## Steps
 
+0. If `.claude/scripts/backlog-log.mjs` is absent, stop and tell the user this skill needs
+   the backlog module from `@houserules/plugin-backlog`.
 1. Read the issue once:
    `gh issue view <n> --json number,title,body,url,labels,author,state`
 2. Check the body for `<!-- houserules:entry:` first. If that marker is already there, the

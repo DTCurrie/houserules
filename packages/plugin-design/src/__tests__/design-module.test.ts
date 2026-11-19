@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { useInstalledRepo } from '#test/repo';
 import { manifestOf, settingsOf, sha256 } from '#test/installed-tree';
 
+import designPlugin from '../index.js';
+
+import type { Answers, ModuleDef, PayloadBuilders } from '@houserules/api';
+
 const PLUGIN_DESIGN = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_DESIGN, alias: 'design' }];
 
@@ -114,4 +118,61 @@ describe('design', () => {
     expect(manifest.modules).not.toContain('design/design');
     expect(existsSync(rulePath), `${rulePath} absent`).toBe(false);
   });
+});
+
+const TOKEN_FILE_LINES = [
+  '- Building UI, an artifact, or a deck? Take colors, type, and spacing from',
+  '  `.claude/design/tokens.json`, never a palette of your own.',
+];
+
+const TAILWIND_LINES = [
+  '- Building UI, an artifact, or a deck? Take colors, type, and spacing from the Tailwind theme',
+  '  via `node .claude/scripts/design.mjs token <name>`, never a palette of your own.',
+];
+
+function designModuleUnderAlias(alias: string): ModuleDef {
+  const modules = designPlugin({
+    payload: {} as PayloadBuilders,
+    packageName: '@houserules/plugin-design',
+    alias,
+    config: undefined,
+  });
+  const found = modules.find((moduleDef) => moduleDef.id === 'design');
+  if (!found) throw new Error('design module not registered');
+  return found;
+}
+
+describe('design skillTriggers', () => {
+  it.each([
+    {
+      alias: 'design',
+      moduleIds: ['core', 'design/design'],
+      expected: TOKEN_FILE_LINES,
+    },
+    {
+      alias: 'design',
+      moduleIds: ['core', 'design/design', 'design/design-tailwind'],
+      expected: TAILWIND_LINES,
+    },
+    {
+      alias: 'ui',
+      moduleIds: ['core', 'ui/design', 'ui/design-tailwind'],
+      expected: TAILWIND_LINES,
+    },
+    {
+      alias: 'ui',
+      moduleIds: ['core', 'ui/design', 'design/design-tailwind'],
+      expected: TOKEN_FILE_LINES,
+    },
+  ])(
+    'returns the right bullet for alias $alias with $moduleIds',
+    ({ alias, moduleIds, expected }) => {
+      const lines = designModuleUnderAlias(alias).skillTriggers?.({
+        moduleIds,
+        moduleOptions: {},
+      } as unknown as Answers);
+
+      expect(lines).toEqual(expected);
+    },
+  );
 });

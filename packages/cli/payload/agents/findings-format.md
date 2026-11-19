@@ -23,7 +23,7 @@ prefixes and any run path, and the destination set goes on the checker's command
 - **note:** <optional, one or two sentences>
 ```
 
-The separator between a URL and its quote is `→`, not an em dash. `prose-lint.mjs` counts em dashes
+The separator between a URL and its quote is `→`, not an em dash. `prose-lint.mjs`, if `.claude/scripts/prose-lint.mjs` exists, counts em dashes
 per paragraph, and a findings list is one paragraph, so two URL lines with em dashes fail it.
 
 An evidence line may also cite another report in the same workspace by anchor,

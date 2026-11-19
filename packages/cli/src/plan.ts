@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 
@@ -101,6 +101,11 @@ export interface Effect {
    * beside `hash` as {@link BodyHashes}.
    */
   frontmatterHash?: string;
+  /**
+   * `region` actions with op `update` only: the managed block's body as it stood before this
+   * plan, so a preview can show what changes. Absent on every other effect.
+   */
+  previousBody?: string;
 }
 
 export interface ComputeEffectsOptions {
@@ -235,10 +240,19 @@ export function buildPlan(
   answers: Answers,
   registry: Registry,
 ): Action[] {
+  const selected = registry.modules.filter((module) =>
+    answers.moduleIds.includes(module.id),
+  );
+  // Collected before any plan() runs, because core renders them and core plans first.
+  const planAnswers: Answers = {
+    ...answers,
+    contributedSkillTriggers: selected.flatMap(
+      (module) => module.def.skillTriggers?.(answers) ?? [],
+    ),
+  };
   const actions: Action[] = [];
-  for (const module of registry.modules) {
-    if (!answers.moduleIds.includes(module.id)) continue;
-    actions.push(...module.def.plan(ctx, answers));
+  for (const module of selected) {
+    actions.push(...module.def.plan(ctx, planAnswers));
   }
   // Last, and deliberately outside the loop. The prettier guard derives its block from the
   // dests the plan actually writes, so it has to see every module's actions. Inside core's
@@ -385,11 +399,15 @@ function effectForRegion(
     return { action, op: 'skip-modified', content, hash };
   }
   pendingContent.set(action.dest, next.content);
+  if (next.status === 'created') {
+    return { action, op: 'create', content, hash };
+  }
   return {
     action,
-    op: next.status === 'created' ? 'create' : 'update',
+    op: 'update',
     content,
     hash,
+    ...(currentBody !== null && { previousBody: currentBody }),
   };
 }
 
@@ -694,11 +712,43 @@ export function computeEffects(
   };
 }
 
+type RetiredEntryVerdict =
+  { kind: 'gone' } | { kind: 'keep' } | { kind: 'delete'; modified: boolean };
+
+/**
+ * Judges one retired manifest entry by `lstat`, so a link is judged as itself. A dangling link
+ * is a delete, never gone, since `existsSync` would follow it and leave it on disk. A link to a
+ * directory is never read and counts as modified. A link to a file is hashed through the link.
+ */
+function judgeRetiredEntry(
+  absolutePath: string,
+  hash: HouseManifest['files'][string],
+  force: boolean,
+): RetiredEntryVerdict {
+  const entry = lstatSync(absolutePath, { throwIfNoEntry: false });
+  if (entry === undefined) return { kind: 'gone' };
+  const target = entry.isSymbolicLink()
+    ? statSync(absolutePath, { throwIfNoEntry: false })
+    : entry;
+  if (target === undefined) return { kind: 'delete', modified: false };
+  if (target.isDirectory()) {
+    return force ? { kind: 'delete', modified: true } : { kind: 'keep' };
+  }
+  const modified =
+    typeof hash === 'object'
+      ? sha256(splitFrontmatter(readFileSync(absolutePath, 'utf8')).body) !==
+        hash.body
+      : sha256(readFileSync(absolutePath)) !== hash;
+  if (modified && !force) return { kind: 'keep' };
+  return { kind: 'delete', modified };
+}
+
 /**
  * Manifest-diff prune, used by `update`. A file the previous manifest recorded as
  * kit-owned but the current plan no longer produces is retired. Only kit-owned,
  * hash-unmodified files are deleted. A locally edited one is kept and warned about
- * unless `force`. A file already gone is just dropped from the manifest.
+ * unless `force`. A file already gone is just dropped from the manifest. A symlink is
+ * judged as itself, see `judgeRetiredEntry`.
  *
  * Pure computation. Only `apply()` writes, and dry-run renders exactly this.
  *
@@ -724,20 +774,10 @@ export function computePrune(
     // A stale manifest entry here would propose deleting the user's CLAUDE.md outright.
     // The recorded hash is the region BODY's, so it would not even read as modified.
     if (SHARED_HOST_FILES.has(dest)) continue;
-    const abs = join(root, dest);
-    if (!existsSync(abs)) {
-      deletes.push({ dest, gone: true });
-      continue;
-    }
-    const modified =
-      typeof hash === 'object'
-        ? sha256(splitFrontmatter(readFileSync(abs, 'utf8')).body) !== hash.body
-        : sha256(readFileSync(abs)) !== hash;
-    if (modified && !force) {
-      kept.push(dest);
-      continue;
-    }
-    deletes.push({ dest, modified });
+    const verdict = judgeRetiredEntry(join(root, dest), hash, force);
+    if (verdict.kind === 'gone') deletes.push({ dest, gone: true });
+    else if (verdict.kind === 'keep') kept.push(dest);
+    else deletes.push({ dest, modified: verdict.modified });
   }
 
   // Retired scripts (that a hook might still reference). Surfaced for unwiring.

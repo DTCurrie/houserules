@@ -6,7 +6,7 @@ Working on the plugin contract package: action types, module definitions, and th
 - The map of shared types that cross the plugin boundary: `Ctx` and `Target` in
   `src/ctx.ts` (re-exported from the CLI's `src/detect.ts`, which stays the sole producer,
   the code that actually builds a `Ctx`), `HouseManifest` in `src/manifest.ts`, the `Action`
-  union in `src/actions.ts`, `ModuleDef`/`Answers` in `src/module-def.ts`, and the
+  union in `src/actions.ts`, `ModuleDef`/`Answers`/`ModuleRequirement` in `src/module-def.ts`, and the
   `Settings*`/`Hook*` shapes in `src/merge-settings.ts`. `src/config.ts` is the zod schema
   for `houserules.config.json`, from which the CLI generates
   `schema/houserules.config.schema.json`.

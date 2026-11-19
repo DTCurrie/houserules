@@ -9,7 +9,12 @@ import {
   renderClaudeMd,
   renderHouseConfig,
 } from '../render.js';
-import type { Action, Answers, ModuleGroup } from '@houserules/api';
+import type {
+  Action,
+  Answers,
+  ModuleGroup,
+  ModuleRequirement,
+} from '@houserules/api';
 import type { Ctx } from '../detect.js';
 import { lib, script, selfGitignoreAction, template } from './copy-actions.js';
 import { hookFragment } from '@houserules/api';
@@ -21,6 +26,14 @@ const MODULE_OWNED_TEMPLATES = new Set(['agents/debugger.agent.md.template']);
 export const id = 'core';
 export const title = 'Core (config, Bash guard, permissions, CLAUDE.md seed)';
 export const group: ModuleGroup = 'recommended';
+
+// Modules this one's shipped prose hands off to when installed, and skips or falls back from
+// when not. Read by the root `verify:module-references` check.
+export const uses: ModuleRequirement[] = [
+  { id: 'backlog', package: '@houserules/plugin-backlog' },
+  { id: 'changesets', package: '@houserules/plugin-changesets' },
+  { id: 'decisions', package: '@houserules/plugin-decisions' },
+];
 export const locked = true;
 
 export function hint(): string {

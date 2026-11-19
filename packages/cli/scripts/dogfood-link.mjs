@@ -214,10 +214,11 @@ const PLUGINS = [
 
 /**
  * The explicit module set this repo installs. Deliberately not "every module every plugin
- * ships": `reviewers`, `debug-session`, `ready`, `sweep`, `read-guard`, `regen`, `statusline`,
+ * ships": `reviewers`, `debug-session`, `ready`, `read-guard`, `regen`, `statusline`,
  * `ci-settings`, `accessibility-review`, `design-review`, `svelte-mcp`, and `pr-description`
  * are all real modules this repo does not turn on, because nothing in this repo's own
- * CLAUDE.md or workflow evidences them.
+ * CLAUDE.md or workflow evidences them. `sweep` is not listed either, but `orchestrate`
+ * requires it, so `init` installs it anyway.
  *
  * `core`, `lint-fix`, `session-context`, and `rename` are `defaultEnabled` for this repo
  * already (TypeScript, fix scripts, always-on) and are listed anyway for clarity, since

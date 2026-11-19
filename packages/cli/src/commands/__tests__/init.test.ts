@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   existsSync,
   mkdirSync,
@@ -26,6 +26,9 @@ import {
 } from '#test/installed-tree';
 import { selectModuleOptions } from '../../ui.js';
 import type { ModuleDef } from '@houserules/api';
+import * as ui from '../../ui.js';
+import { init } from '../init.js';
+import type { Flags } from '../../cli-contract.js';
 import type { RegisteredModule } from '../../plugin-registry.js';
 
 function optionlessModule(id: string): RegisteredModule {
@@ -670,6 +673,113 @@ describe('init --module-option against a houserules.config.json that already exi
       existsSync(join(root, '.claude/fixture-lang-beta.md')),
       'fixture-lang-beta.md kept',
     ).toBe(true);
+  });
+});
+
+describe('init with module requirements', () => {
+  const WITHDRAWAL =
+    'Cannot withdraw "sweep": "orchestrate" requires it. Withdraw "orchestrate" too, or keep "sweep".\nNothing was changed.';
+
+  it('installs a required module and names its requirer', () => {
+    const root = useRepo('npm-single');
+
+    const result = runCli(['init', '--yes', '--modules', 'orchestrate', root]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('  sweep, required by orchestrate');
+    expect(existsSync(join(root, '.claude/skills/sweep/SKILL.md'))).toBe(true);
+    expect(manifestOf(root).modules).toContain('sweep');
+  });
+
+  it('refuses to withdraw a module another selected module requires', () => {
+    const root = useRepo('npm-single');
+    const before = treeHash(root);
+
+    const result = runCli([
+      'init',
+      '--yes',
+      '--modules',
+      'orchestrate,-sweep',
+      root,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(WITHDRAWAL);
+    expect(treeHash(root)).toBe(before);
+  });
+
+  it('refuses a requirement no plugin supplies and writes nothing', () => {
+    ensureFixtureSelfLink();
+    const root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    const plugin = join(KIT_ROOT, 'test/plugin-fixture/requires-unmet');
+    editHouseConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: plugin, alias: 'unmet' },
+      ];
+    });
+    const before = treeHash(root);
+
+    const result = runCli([
+      'init',
+      '--yes',
+      '--modules',
+      'core,unmet/needy',
+      root,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Module "unmet/needy" requires "ghost-module", which no installed plugin supplies.\nInstall it: npm install -D @acme/ghost\n',
+    );
+    expect(treeHash(root)).toBe(before);
+  });
+});
+
+vi.mock('../../ui.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../ui.js')>();
+  return {
+    ...actual,
+    selectModules: vi.fn(actual.selectModules),
+    confirmTargets: vi.fn(actual.confirmTargets),
+    selectModuleOptions: vi.fn(actual.selectModuleOptions),
+    confirm: vi.fn(actual.confirm),
+    message: vi.fn(actual.message),
+  };
+});
+
+describe('init interactive option choice that declares a requirement', () => {
+  it('installs the module the chosen option value requires', async () => {
+    ensureFixtureSelfLink();
+    const root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    editHouseConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        {
+          name: join(KIT_ROOT, 'test/plugin-fixture/requires-unmet'),
+          alias: 'unmet',
+        },
+      ];
+    });
+    vi.mocked(ui.selectModules).mockResolvedValue(['core', 'unmet/choosy']);
+    vi.mocked(ui.confirmTargets).mockImplementation(async (targets) => targets);
+    vi.mocked(ui.selectModuleOptions).mockResolvedValue({
+      'unmet/choosy': ['extra'],
+    });
+    vi.mocked(ui.confirm).mockResolvedValue(true);
+    vi.mocked(ui.message).mockClear();
+
+    const status = await init(root, {
+      yes: false,
+      dryRun: true,
+      modules: '',
+      kitVersion: '0.0.0',
+    } as Flags);
+
+    expect(status).toBe(0);
+    expect(vi.mocked(ui.message)).toHaveBeenCalledWith(
+      'Added because another module requires it:\n  sweep, required by unmet/choosy',
+    );
   });
 });
 

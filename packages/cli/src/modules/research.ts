@@ -1,10 +1,16 @@
-import type { Action, ModuleGroup } from '@houserules/api';
+import type { Action, ModuleGroup, ModuleRequirement } from '@houserules/api';
 import { agent, script } from './copy-actions.js';
 import { payloadPath } from '../paths.js';
 
 export const id = 'research';
 export const title = 'Planned research & synthesis agents';
 export const group: ModuleGroup = 'optional';
+
+// Modules this one's shipped prose hands off to when installed, and skips or falls back from
+// when not. Read by the root `verify:module-references` check.
+export const uses: ModuleRequirement[] = [
+  { id: 'prose-voice', package: '@houserules/plugin-prose' },
+];
 
 export function hint(): string {
   return 'off-context agents for planned phases: research-spike, research-synth, refactor-planner (pairs with plans)';

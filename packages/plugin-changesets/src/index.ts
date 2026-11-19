@@ -190,6 +190,7 @@ function ledgerModule(api: PluginApi): ModuleDef {
     id,
     title: 'Per-commit changelog ledger (in addition to changesets)',
     group: 'optional',
+    uses: [{ id: 'backlog', package: '@houserules/plugin-backlog' }],
     hint(): string {
       return 'commit-granular history in .claude/changelogs/ — most repos should rely on changesets alone';
     },

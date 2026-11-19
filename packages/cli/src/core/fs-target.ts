@@ -34,8 +34,12 @@ export class TargetRepo {
     return join(this.root, relativePath);
   }
 
+  /** True when any entry sits at the path, a dangling symlink included. */
   exists(relativePath: string): boolean {
-    return existsSync(this.path(relativePath));
+    return (
+      lstatSync(this.path(relativePath), { throwIfNoEntry: false }) !==
+      undefined
+    );
   }
 
   /** File text, or null when it is missing or unreadable. */

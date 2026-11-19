@@ -14,6 +14,11 @@
  * second declaration source. `@houserules/payload` itself is skipped, since it is the source
  * those sidecars point at, not a package with its own install pipeline.
  *
+ * Import forms seen: any `from './x.mjs'` clause (named, default, namespace, multi-line,
+ * `export {…} from`, `export * from`), a side-effect `import './x.mjs'`, and a dynamic
+ * `import()` whose sole argument is one quoted or no-substitution backtick literal. Left out:
+ * a computed `import(expr)`, a parent-relative `../x.mjs`, and `require()`.
+ *
  * Falsifies the declared-lib-imports decision across every package at once, rather than the
  * one package `packages/plugin-design/src/__tests__/payload-lib-imports.test.ts` covers.
  *
@@ -25,6 +30,7 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(import.meta.dirname, '..');
 const packagesDir = join(repoRoot, 'packages');
@@ -103,14 +109,20 @@ function sidecarDeclaredLibNames(packageDir) {
   return Object.values(sidecar.libs ?? {}).flat();
 }
 
-function importedRelativeLibNames(content) {
-  const matches = content.matchAll(
-    /from\s+['"]\.\/(?:[\w-]+\/)*([\w-]+)\.mjs['"]/g,
+const RELATIVE_LIB_IMPORT_PATTERNS = [
+  /from\s+['"]\.\/(?:[\w-]+\/)*(?<libName>[\w-]+)\.mjs['"]/g,
+  /\bimport\s*['"]\.\/(?:[\w-]+\/)*(?<libName>[\w-]+)\.mjs['"]/g,
+  /\bimport\s*\(\s*(['"`])\.\/(?:[\w-]+\/)*(?<libName>[\w-]+)\.mjs\1\s*\)/g,
+];
+
+export function importedRelativeLibNames(content) {
+  const names = RELATIVE_LIB_IMPORT_PATTERNS.flatMap((pattern) =>
+    [...content.matchAll(pattern)].map((match) => match.groups.libName),
   );
-  return [...new Set([...matches].map((match) => match[1]))];
+  return [...new Set(names)];
 }
 
-function verifyPackage(packageDir) {
+export function verifyPackage(packageDir) {
   const scriptsDir = join(packageDir, 'payload-dist', 'scripts');
   if (!existsSync(scriptsDir)) return [];
 
@@ -183,4 +195,4 @@ function main() {
   }
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) main();

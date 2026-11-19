@@ -50,6 +50,7 @@ inspects the diff, picks patch/minor/major per package, and records via
 `node .claude/scripts/changeset-write.mjs`, which validates package names against the workspace.
 Nothing release-worthy? Record that too: `changeset-write.mjs --empty --summary "<why>"`.
 Never hand-edit `CHANGELOG.md` or `.changeset/*.md`.
+Drop this section if `.claude/skills/changeset/` does not exist.
 
 ### Planning non-trivial features
 
@@ -64,6 +65,7 @@ with the `/backlog-add` skill, backed by `node .claude/scripts/backlog-log.mjs`.
 - Prefixes by area: `<PREFIX>` (`<path>`), ...
 - After every add, the skill spawns `backlog-reviewer` to validate, dedupe, and gut-check the
   entry. Reconcile its verdict first.
+Drop this section if `.claude/skills/backlog-add/` does not exist.
 - On resolving an item while shipping: `node .claude/scripts/backlog-log.mjs remove <ID> <area> "<resolution>"`.
   `<area>` is the bare target name, not a path. Omit it for the repo-root backlog.
 - No wishlist or vague items, and nothing already covered by an active plan.

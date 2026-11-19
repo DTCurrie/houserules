@@ -401,6 +401,10 @@ importers:
         version: 0.15.0
 
   packages/plugin-accessibility:
+    dependencies:
+      semver:
+        specifier: ^7.8.6
+        version: 7.8.6
     devDependencies:
       '@arethetypeswrong/cli':
         specifier: 'catalog:'
@@ -420,6 +424,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.6
+      '@types/semver':
+        specifier: ^7.8.0
+        version: 7.8.0
       publint:
         specifier: 'catalog:'
         version: 0.3.25

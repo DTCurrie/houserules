@@ -72,7 +72,7 @@ describe('design rule reference links', () => {
     ]);
   });
 
-  it('installs no design-tailwind-theming reference when design-tailwind is chosen without design', () => {
+  it('installs the design rule and the theming reference, and the rule links it, when design-tailwind is chosen without design', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'design/design-tailwind',
       plugins: PLUGINS,
@@ -82,11 +82,16 @@ describe('design rule reference links', () => {
       root,
       '.claude/reference/design-tailwind-theming.md',
     );
+    const rulePath = join(root, '.claude/rules/design.md');
 
-    expect(existsSync(referencePath), `${referencePath} absent`).toBe(false);
+    expect(existsSync(referencePath), `${referencePath} exists`).toBe(true);
+    expect(existsSync(rulePath), `${rulePath} exists`).toBe(true);
+    expect(readFileSync(rulePath, 'utf8')).toContain(
+      '../reference/design-tailwind-theming.md',
+    );
   });
 
-  it('installs no design-game reference when design-game is chosen without design', () => {
+  it('installs the design rule and the chosen guide, and the rule links it, when design-game is chosen without design', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'design/design-game',
       plugins: PLUGINS,
@@ -94,7 +99,12 @@ describe('design rule reference links', () => {
     });
 
     const referencePath = join(root, '.claude/reference/design-game-hud.md');
+    const rulePath = join(root, '.claude/rules/design.md');
 
-    expect(existsSync(referencePath), `${referencePath} absent`).toBe(false);
+    expect(existsSync(referencePath), `${referencePath} exists`).toBe(true);
+    expect(existsSync(rulePath), `${rulePath} exists`).toBe(true);
+    expect(readFileSync(rulePath, 'utf8')).toContain(
+      '../reference/design-game-hud.md',
+    );
   });
 });

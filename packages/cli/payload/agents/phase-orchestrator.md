@@ -62,8 +62,8 @@ The worker's report arrives as a message and wakes you too.
 
 ## Skills and state
 
-Run `/blast-radius`, `/sweep`, `/tidy`, `/verify-changed`, and the close-of-phase reviews here,
-as the skill says. Never run `/decide` or `/pr-description`. They need the user, so list their
+Run `/blast-radius`, `/sweep`, `/tidy`, `/verify-changed` (the repo's own verify on the touched packages when it is not
+installed), and the close-of-phase reviews here, as the skill says. Never run `/decide` or `/pr-description`. They need the user, so list their
 candidates under `Decide candidates` and the main conversation runs them. Never run `/backlog-add`
 either, because the subagent write gate refuses every ledger write. List each out-of-scope finding
 under `Backlogged` with its area, a one-line problem, and where it lives, and the main conversation

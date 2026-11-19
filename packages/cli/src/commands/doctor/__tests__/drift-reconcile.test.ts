@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Flags } from '../../../cli-contract.js';
@@ -103,5 +103,25 @@ describe('reconcileDrift, given a manifest entry naming a file already gone from
     const manifestPath = join(root, '.claude', 'houserules.manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     expect(manifest.files[dest]).toBeUndefined();
+  });
+});
+
+describe('reconcileDrift, given a manifest entry that is a dangling symlink', () => {
+  it('reports it as orphaned, not as a stale manifest entry', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const manifestPath = join(root, '.claude', 'houserules.manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const dest = '.claude/scripts/dangling.mjs';
+    manifest.files[dest] = 'deadbeef';
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    mkdirSync(join(root, '.claude', 'scripts'), { recursive: true });
+    symlinkSync(join(root, 'no-such-target.mjs'), join(root, dest));
+
+    const found = messages(root);
+
+    expect(found).toContainEqual(expect.stringContaining(`${dest}`));
+    expect(found).not.toContainEqual(
+      expect.stringContaining('manifest lists it but the file is gone'),
+    );
   });
 });

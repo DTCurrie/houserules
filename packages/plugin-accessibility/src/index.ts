@@ -42,6 +42,7 @@ function accessibilityModule(api: PluginApi): ModuleDef {
     id,
     title: 'Accessibility rule (.claude/rules/accessibility.md)',
     group: 'optional',
+    uses: [{ id: 'prose-voice', package: '@houserules/plugin-prose' }],
     hint(): string {
       return 'path-scoped rule for HTML and HTML-like markup: semantic elements, accessible names, keyboard reachability, WCAG routing';
     },
@@ -131,6 +132,8 @@ function accessibilityReviewModule(api: PluginApi): ModuleDef {
     id,
     title: 'Accessibility review (/accessibility-review + reviewer agent)',
     group: 'optional',
+    requires: [{ id: 'accessibility' }],
+    uses: [{ id: 'ready' }],
     hint(): string {
       return 'audit a markup diff against the criteria the router names, not against the whole corpus';
     },

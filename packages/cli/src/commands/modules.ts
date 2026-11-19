@@ -7,6 +7,12 @@ import {
 } from '../module-options.js';
 import { MODULES, buildPlan, computeEffects, computePrune } from '../plan.js';
 import { HouseError } from '../house-error.js';
+import {
+  assertNotWithdrawn,
+  closeSelection,
+  requiredByNote,
+  type ClosedSelection,
+} from '../module-requires.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import {
   parseSettingsText,
@@ -122,14 +128,14 @@ async function reconfigureModules(
     return 0;
   }
 
-  const moduleIds = [...installed];
+  const installedIds = [...installed];
   const targets = ctx.claude.houseConfig?.targets?.length
     ? ctx.claude.houseConfig.targets
     : ctx.targets;
 
   let moduleOptions = resolveModuleOptions(
     registry,
-    moduleIds,
+    installedIds,
     ctx.claude.houseConfig?.moduleOptions,
     optionOverrides,
   );
@@ -147,7 +153,18 @@ async function reconfigureModules(
   }
 
   let planResult: PlanResult;
+  let moduleIds: string[];
   try {
+    const selection = closeSelection(registry, installedIds, {
+      persisted: ctx.claude.houseConfig?.moduleOptions,
+      chosen: { ...optionOverrides, ...moduleOptions },
+      packageManager: ctx.packageManager?.name,
+    });
+    const { closure } = selection;
+    moduleIds = closure.moduleIds;
+    moduleOptions = selection.moduleOptions;
+    const requiredNote = requiredByNote(closure);
+    if (requiredNote !== null) ui.message(requiredNote);
     planResult = computeEffects(
       root,
       buildPlan(
@@ -259,7 +276,6 @@ async function disableModules(
     return 0;
   }
 
-  const remaining = [...installed].filter((id) => !doomed.includes(id));
   const targets = ctx.claude.houseConfig?.targets?.length
     ? ctx.claude.houseConfig.targets
     : ctx.targets;
@@ -270,6 +286,27 @@ async function disableModules(
     optionOverrides,
   );
   const base = { targets, seedChangesetConfig: false, moduleOptions };
+
+  let remaining: string[];
+  try {
+    const { closure } = closeSelection(
+      registry,
+      [...installed].filter((id) => !doomed.includes(id)),
+      {
+        persisted: ctx.claude.houseConfig?.moduleOptions,
+        chosen: optionOverrides,
+        packageManager: ctx.packageManager?.name,
+      },
+    );
+    assertNotWithdrawn(closure, doomed);
+    remaining = closure.moduleIds;
+  } catch (error) {
+    if (error instanceof HouseError) {
+      console.error(error.message);
+      return 1;
+    }
+    throw error;
+  }
 
   const fragmentsOf = (moduleIds: string[]) =>
     buildPlan(ctx, { ...base, moduleIds }, registry)
@@ -489,15 +526,15 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
     }
   }
 
-  const moduleIds = [...new Set([...installed, ...chosen])];
   // Config is the contract when the user has edited it. Detection is the fallback.
   const targets = ctx.claude.houseConfig?.targets?.length
     ? ctx.claude.houseConfig.targets
     : ctx.targets;
 
+  const wantedIds = [...new Set([...installed, ...chosen])];
   let addedOptions = resolveModuleOptions(
     registry,
-    moduleIds,
+    wantedIds,
     ctx.claude.houseConfig?.moduleOptions,
     optionOverrides,
   );
@@ -507,6 +544,25 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
       addedOptions,
     );
   }
+  let selection: ClosedSelection;
+  try {
+    selection = closeSelection(registry, wantedIds, {
+      persisted: ctx.claude.houseConfig?.moduleOptions,
+      chosen: { ...optionOverrides, ...addedOptions },
+      packageManager: ctx.packageManager?.name,
+    });
+  } catch (error) {
+    if (error instanceof HouseError) {
+      console.error(error.message);
+      return 1;
+    }
+    throw error;
+  }
+  const { closure } = selection;
+  const moduleIds = closure.moduleIds;
+  addedOptions = selection.moduleOptions;
+  const requiredNote = requiredByNote(closure);
+  if (requiredNote !== null) ui.message(requiredNote);
 
   const answers: Answers = {
     moduleIds,
@@ -550,8 +606,8 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
 
   // buildPlan re-plans the whole module set, so its advisories cover modules installed
   // long ago. Only the newly-added ones are news here.
-  const advisories = planResult.advisories.filter((a) =>
-    chosen.includes(a.module),
+  const advisories = planResult.advisories.filter(
+    (a) => !installed.has(a.module) && moduleIds.includes(a.module),
   );
 
   if (flags.dryRun) {

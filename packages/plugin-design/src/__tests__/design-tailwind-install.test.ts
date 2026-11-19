@@ -66,6 +66,22 @@ describe('design-tailwind install', () => {
     expect(existsSync(tokensPath), `${tokensPath} exists`).toBe(true);
   });
 
+  it('installs design too when design-tailwind is chosen alone', () => {
+    const root = useInstalledRepo('pnpm-monorepo', {
+      modules: 'design/design-tailwind',
+      plugins: PLUGINS,
+    });
+
+    const recorded = manifestOf(root).modules.filter((moduleId) =>
+      moduleId.startsWith('design/'),
+    );
+
+    expect(recorded.sort()).toEqual([
+      'design/design',
+      'design/design-tailwind',
+    ]);
+  });
+
   it('records the three Tailwind libs in the manifest so update refreshes them', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'design/design,design/design-tailwind',

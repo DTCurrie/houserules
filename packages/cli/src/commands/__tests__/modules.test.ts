@@ -739,3 +739,29 @@ describe('modules --reconfigure on an installed module that declares options', (
     expect(result.stderr).toMatch(/No options to configure/);
   });
 });
+
+describe('modules with a module that requires another', () => {
+  const WITHDRAWAL =
+    'Cannot withdraw "sweep": "orchestrate" requires it. Withdraw "orchestrate" too, or keep "sweep".\nNothing was changed.';
+
+  it('refuses to disable a module an installed module requires and writes nothing', () => {
+    const root = useInstalledRepo('npm-single', { modules: 'orchestrate' });
+    const before = treeHash(root);
+
+    const result = runCli(['modules', '--disable', 'sweep', '--yes', root]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(WITHDRAWAL);
+    expect(treeHash(root)).toBe(before);
+  });
+
+  it('installs the required module when adding the module that requires it', () => {
+    const root = useInstalledRepo('npm-single');
+
+    const result = runCli(['modules', '--yes', '--modules=orchestrate', root]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(manifestOf(root).modules).toContain('sweep');
+    expect(existsSync(join(root, '.claude/skills/sweep/SKILL.md'))).toBe(true);
+  });
+});

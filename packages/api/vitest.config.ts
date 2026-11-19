@@ -16,5 +16,10 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 30_000,
     expect: { requireAssertions: true },
+    // Without this, vitest strips types and every expectTypeOf assertion passes unchecked.
+    typecheck: {
+      enabled: true,
+      include: ['src/**/__tests__/module-def.test.ts'],
+    },
   },
 });
