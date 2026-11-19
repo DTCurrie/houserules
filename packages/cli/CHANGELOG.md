@@ -1,5 +1,28 @@
 # @houserules/cli
 
+## 0.14.0
+
+### Minor Changes
+
+- 2161dc4: The research module ships a finding format, its checker, and a synthesis scaffold.
+
+### Patch Changes
+
+- 2161dc4: A nested orchestrator is resumed only after its finished notice, with SendMessage as its fallback.
+- 2161dc4: report writes a zero-session export and exits 0 when --since cuts every session.
+- 2161dc4: doctor compares versions one way and warns on a prerelease below the floor.
+- 2161dc4: CLAUDE.md points UI and artifact work at the design token file when the design module is installed.
+- 2161dc4: doctor prints transcript retention, and report reads the real cleanupPeriodDays.
+- 2161dc4: The debug-session skill description leads with its trigger.
+- 2161dc4: report guard efficacy opens with a per-guard summary and shortens command previews to 80 characters.
+- 2161dc4: report shows the count and share of Stop hook runs over one second.
+- 2161dc4: Checkers fail and name the path when a file argument cannot be read.
+- Updated dependencies [2161dc4]
+- Updated dependencies [2161dc4]
+- Updated dependencies [2161dc4]
+  - @houserules/api@0.7.3
+  - @houserules/payload@0.5.0
+
 ## 0.13.0
 
 ### Minor Changes

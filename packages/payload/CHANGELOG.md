@@ -1,5 +1,12 @@
 # @houserules/payload
 
+## 0.5.0
+
+### Minor Changes
+
+- 2161dc4: The research module ships a finding format, its checker, and a synthesis scaffold.
+- 2161dc4: Checkers fail and name the path when a file argument cannot be read.
+
 ## 0.4.2
 
 ### Patch Changes

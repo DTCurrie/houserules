@@ -1,5 +1,11 @@
 # @houserules/plugin-testing
 
+## 0.3.4
+
+### Patch Changes
+
+- 2161dc4: Checkers fail and name the path when a file argument cannot be read.
+
 ## 0.3.3
 
 ### Patch Changes

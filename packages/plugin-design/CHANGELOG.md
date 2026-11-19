@@ -1,5 +1,11 @@
 # @houserules/plugin-design
 
+## 0.4.3
+
+### Patch Changes
+
+- 2161dc4: Document that plugins should compile with exactOptionalPropertyTypes, which type-fest 6 requires.
+
 ## 0.4.2
 
 ### Patch Changes

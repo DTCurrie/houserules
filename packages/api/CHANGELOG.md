@@ -1,5 +1,14 @@
 # @houserules/api
 
+## 0.7.3
+
+### Patch Changes
+
+- 2161dc4: Document that plugins should compile with exactOptionalPropertyTypes, which type-fest 6 requires.
+- Updated dependencies [2161dc4]
+- Updated dependencies [2161dc4]
+  - @houserules/payload@0.5.0
+
 ## 0.7.2
 
 ### Patch Changes

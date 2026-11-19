@@ -1,5 +1,11 @@
 # @houserules/plugin-prose
 
+## 0.2.3
+
+### Patch Changes
+
+- 2161dc4: Checkers fail and name the path when a file argument cannot be read.
+
 ## 0.2.2
 
 ### Patch Changes
