@@ -1,3 +1,8 @@
+import { spawnSync } from 'node:child_process';
+import { cpSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -158,5 +163,43 @@ describe('checkPathWatchableScope', () => {
     );
     const report = checkPathWatchableScope(FILE, markdown);
     expect(report.findings).toEqual([]);
+  });
+});
+
+describe('decision-lint.mjs with an unreadable path', () => {
+  it('names the unreadable path, still lints the readable one, and exits 1', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'decision-lint-unreadable-'));
+    const staged = join(dir, 'scripts');
+    cpSync(
+      fileURLToPath(new URL('../../../payload-dist/scripts', import.meta.url)),
+      staged,
+      { recursive: true },
+    );
+    cpSync(
+      fileURLToPath(
+        new URL(
+          '../../../../payload/payload-dist/scripts/lib',
+          import.meta.url,
+        ),
+      ),
+      join(staged, 'lib'),
+      { recursive: true, filter: (src) => !src.endsWith('.d.mts') },
+    );
+    const readable = join(dir, 'DECISIONS.md');
+    writeFileSync(readable, entry('No fields here.'));
+    const missing = join(dir, 'missing.md');
+    const env = { ...process.env };
+    delete env.NODE_PATH;
+
+    const r = spawnSync(
+      process.execPath,
+      [join(staged, 'decision-lint.mjs'), readable, missing],
+      { encoding: 'utf8', env },
+    );
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('decide/required-fields');
+    expect(r.stdout).toContain('checker/unreadable-input');
+    expect(r.stdout).toContain(missing);
   });
 });

@@ -1197,7 +1197,7 @@ describe('computeEffects, given a "seed" action with managedKeys', () => {
   it('leaves a seed without managedKeys alone when the dest exists', () => {
     const root = tempDir();
     writeExistingConfig(root, { version: 2 });
-    const action = { ...seedAction(), managedKeys: undefined };
+    const { managedKeys: _managedKeys, ...action } = seedAction();
 
     const { effects } = computeEffects(root, [action]);
     const effect = single(effects);

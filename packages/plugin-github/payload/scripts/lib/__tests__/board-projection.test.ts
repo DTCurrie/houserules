@@ -130,6 +130,7 @@ describe('projectBoardItems for backlog', () => {
         under: null,
         supersedes: [],
         supersededBy: null,
+        issueState: 'OPEN',
       },
     ]);
     expect(skipped).toEqual([]);
@@ -172,6 +173,7 @@ describe('projectBoardItems for backlog', () => {
         under: null,
         supersedes: [],
         supersededBy: null,
+        issueState: 'OPEN',
       },
     ]);
   });
@@ -241,6 +243,7 @@ describe('projectBoardItems for decisions', () => {
         under: 'DECISIONS-parent1',
         supersedes: ['DECISIONS-old1', 'DECISIONS-old2'],
         supersededBy: 'DECISIONS-newer1',
+        issueState: 'OPEN',
       },
     ]);
   });
@@ -265,6 +268,7 @@ describe('projectBoardItems for decisions', () => {
         under: null,
         supersedes: [],
         supersededBy: null,
+        issueState: 'OPEN',
       },
     ]);
   });
@@ -288,5 +292,43 @@ describe('fieldValue against a union member the query did not fully spread', () 
     };
 
     expect(fieldValue(item, 'Area')).toBe('cli');
+  });
+});
+
+describe('projectBoardItems issueState', () => {
+  function contentItem(content: BoardItem['content']): BoardItem {
+    return { id: 'item-x', content, fieldValues: { nodes: [] } };
+  }
+
+  it('carries OPEN for an open Issue', () => {
+    const { entries } = projectBoardItems('backlog', [issueItem()]);
+
+    expect(entries[0]?.issueState).toBe('OPEN');
+  });
+
+  it('carries CLOSED for a closed Issue', () => {
+    const item = contentItem({
+      __typename: 'Issue',
+      number: 7,
+      title: 'Done upstream',
+      body: appendMarker('b', 'BACKLOG-closed1'),
+      state: 'CLOSED',
+    });
+
+    const { entries } = projectBoardItems('backlog', [item]);
+
+    expect(entries[0]?.issueState).toBe('CLOSED');
+  });
+
+  it('carries null for a draft, which has no issue state', () => {
+    const item = contentItem({
+      __typename: 'DraftIssue',
+      title: 'A draft',
+      body: appendMarker('b', 'BACKLOG-draft01'),
+    });
+
+    const { entries } = projectBoardItems('backlog', [item]);
+
+    expect(entries[0]?.issueState).toBeNull();
   });
 });

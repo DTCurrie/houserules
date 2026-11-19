@@ -52,10 +52,9 @@ pnpm --filter @houserules/plugin-testing check
 `pnpm build` runs a full build across the workspace and is required before probing anything
 under a package's `dist/`.
 
-CI's `packages` job also runs `pnpm attw` and three `pnpm verify:*` scripts
-(`verify:packages`, `verify:payload-copy-set`, `verify:payload-test-coverage`) that check a
-package's published shape. Run them if you touch a package's `exports`, `files`, or payload
-copy list.
+`pnpm check` also runs the root `verify` block, the post-build assertions CI's `packages` job
+runs, which check a package's published shape. It builds first, so a cold run is slow. The
+list lives in the root `package.json`.
 
 Every `build`, `check`, and `test` script runs through
 [wireit](https://github.com/google/wireit), which means two things day to day. A script whose

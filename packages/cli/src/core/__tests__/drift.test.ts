@@ -51,7 +51,12 @@ function effect(
   content = '',
   hash?: string,
 ): Effect {
-  return { action, op, content: Buffer.from(content, 'utf8'), hash };
+  return {
+    action,
+    op,
+    content: Buffer.from(content, 'utf8'),
+    ...(hash !== undefined && { hash }),
+  };
 }
 
 const REGION: RegionSpec = {

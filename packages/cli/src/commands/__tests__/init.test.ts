@@ -674,6 +674,12 @@ describe('init --module-option against a houserules.config.json that already exi
 });
 
 describe('research module', () => {
+  const RESEARCH_FINDINGS_FILES = [
+    '.claude/reference/findings-format.md',
+    '.claude/scripts/check-findings.mjs',
+    '.claude/scripts/scaffold-synthesis.mjs',
+  ];
+
   it('lands all three research agents when enabled', () => {
     const root = useInstalledRepo('pnpm-monorepo', { modules: 'research' });
 
@@ -701,6 +707,20 @@ describe('research module', () => {
       'utf8',
     );
     expect(refactorPlannerText).not.toMatch(/\.claude\/rules\//);
+  });
+
+  it('installs the format doc, the checker, and the scaffold when enabled', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'research' });
+
+    for (const path of RESEARCH_FINDINGS_FILES)
+      expect(existsSync(join(root, path)), `${path} installed`).toBe(true);
+  });
+
+  it('installs none of the format doc, the checker, or the scaffold by default', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+
+    for (const path of RESEARCH_FINDINGS_FILES)
+      expect(existsSync(join(root, path)), `${path} not installed`).toBe(false);
   });
 
   it('lands none of the agents by default', () => {

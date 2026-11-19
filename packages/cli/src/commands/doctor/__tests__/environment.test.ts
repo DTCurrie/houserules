@@ -136,6 +136,40 @@ describe('checkEnvironment, Claude Code version gates', () => {
     expect(findings).toEqual([]);
   });
 
+  it('warns when the running version is a prerelease of the floor', () => {
+    const floor = /\(floor (\S+)\)/.exec(
+      checkEnvironment(makeCtx(), { claudeVersion: '99.0.0' }).readouts[0] ??
+        '',
+    )?.[1];
+
+    const { findings } = checkEnvironment(makeCtx(), {
+      claudeVersion: `${floor}-beta.1`,
+    });
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.level).toBe('WARN');
+    expect(findings[0]?.msg).toContain(`claude ${floor}-beta.1 < ${floor}`);
+  });
+
+  it('parses every gate version, including those whose conditions do not apply', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kit-env-gates-'));
+
+    expect(() =>
+      checkEnvironment(makeCtx({ root }), { claudeVersion: '99.0.0' }),
+    ).not.toThrow();
+  });
+
+  it('gives an INFO readout naming the raw string when the running version does not parse', () => {
+    const { findings, readouts } = checkEnvironment(makeCtx(), {
+      claudeVersion: 'nightly',
+    });
+
+    expect(findings).toEqual([]);
+    expect(readouts).toEqual([
+      'INFO claude version "nightly" is not semver, so the floor was not checked',
+    ]);
+  });
+
   it('gives one INFO readout and no finding when the claude binary is missing', () => {
     const { findings, readouts } = checkEnvironment(makeCtx(), {
       claudeVersion: null,

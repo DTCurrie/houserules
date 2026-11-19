@@ -53,6 +53,8 @@ function libActions(): Action[] {
     'proc.mjs',
     'findings.mjs',
     'transcript-turn.mjs',
+    'checker-input.mjs',
+    'finding-blocks.mjs',
   ]) {
     actions.push(lib(id, name));
   }

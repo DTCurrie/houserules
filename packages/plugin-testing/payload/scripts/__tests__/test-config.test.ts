@@ -262,3 +262,17 @@ describe('test-config.mjs given no findings', () => {
     expect(r.stdout).toContain('Not checked by this checker:');
   });
 });
+
+describe('test-config.mjs given an unreadable path', () => {
+  it('names the missing path and still reports findings for the readable file', () => {
+    const root = stage();
+    writeFile(root, 'vitest.config.ts', 'export default { test: {} };\n');
+
+    const r = run(root, ['vitest.config.ts', 'missing.config.ts']);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('no-assertion-free-test-config');
+    expect(r.stdout).toContain('checker/unreadable-input');
+    expect(r.stdout).toContain('missing.config.ts');
+  });
+});

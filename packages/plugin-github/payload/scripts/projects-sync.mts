@@ -71,7 +71,10 @@ import {
   loadIndex,
   serializeIndex,
 } from '@houserules/payload/ledger-index';
-import type { LedgerIndex } from '@houserules/payload/ledger-index';
+import type {
+  LedgerEntry,
+  LedgerIndex,
+} from '@houserules/payload/ledger-index';
 import {
   describeStep,
   planBootstrap,
@@ -93,6 +96,8 @@ import {
   syncedRecord,
 } from './lib/push-queue.mjs';
 import type { LedgerRecord, PushOp } from './lib/push-queue.mjs';
+import { recordPushOutcomeOnExit } from './lib/push-outcome.mjs';
+import type { PendingCounts } from './lib/push-outcome.mjs';
 import {
   backfillFieldValue,
   fieldValueLiteral,
@@ -898,6 +903,47 @@ function printSurfaceOrphans(
   return total;
 }
 
+/** The board `Status` the backlog ledger treats as finished. Mirrors `backlog-log.mts`. */
+const BACKLOG_DONE_STATUS = 'Done';
+
+/**
+ * Backlog rows the backlog ledger still counts as open whose linked issue is closed upstream.
+ *
+ * Open follows `backlog-log.mjs list`: a row whose board `Status` is `Done`, or whose id the queue
+ * removed (and did not add back after), is finished and not listed, or every removed entry would
+ * show forever. Reads the local index and queue only. An index pulled before `issueState`
+ * existed carries no field and lists nothing.
+ */
+function closedUpstreamRows(entries: readonly LedgerEntry[]): LedgerEntry[] {
+  const removed = new Set<string>();
+  for (const record of readLog<LedgerRecord>(backlogLedgerPath())) {
+    if (record.action === 'remove') removed.add(record.id);
+    else if (record.action === 'add') removed.delete(record.id);
+  }
+  return entries.filter(
+    (entry) =>
+      (entry as { issueState?: unknown }).issueState === 'CLOSED' &&
+      entry.status !== BACKLOG_DONE_STATUS &&
+      !removed.has(entry.id),
+  );
+}
+
+/** Lists each open backlog row whose issue closed upstream, then the command that removes it. */
+function printClosedUpstream(): void {
+  const rows = closedUpstreamRows(
+    loadIndex(LEDGER_DIRECTORY, 'backlog')?.entries ?? [],
+  );
+  if (rows.length === 0) return;
+  for (const row of rows) {
+    console.log(
+      `backlog: closed upstream ${row.id}  #${row.issue ?? '?'}  ${row.title}  (${row.surface})`,
+    );
+  }
+  console.log(
+    'Remove each with `backlog-log.mjs remove <id> <area> <reason>`. A pull never deletes a row.',
+  );
+}
+
 function runStatus(): void {
   const { repo } = preflight();
   printGateState();
@@ -916,6 +962,8 @@ function runStatus(): void {
       );
     }
   }
+
+  printClosedUpstream();
 
   const orphanTotal = printSurfaceOrphans(allSurfaceOrphans());
   if (orphanTotal > 0) {
@@ -1603,7 +1651,18 @@ function executePushQueue(
   }
 }
 
+function countPending(): PendingCounts {
+  const summary = summarizeQueue(readPushQueue());
+  return {
+    backlog: summary.backlogPending,
+    decisions: summary.decisionsPending,
+  };
+}
+
 function runPush(dryRun: boolean): void {
+  // Registered before preflight, since a missing scope or token is the failure doctor most
+  // needs to see, and preflight is where it exits.
+  if (!dryRun) recordPushOutcomeOnExit(countPending);
   const { owner, repo } = preflight();
   checkGate('push', owner, repo);
 
@@ -1939,8 +1998,18 @@ function runPull(dryRun: boolean): void {
     }
     console.log(`${kind}: ${index.entries.length} entries from ${boardList}`);
     writeIndex(kind, index);
+    if (kind === 'backlog') printClosedUpstreamCount(index.entries);
     renderSurfaces(kind);
   }
+}
+
+/** One line counting the open backlog rows whose issue is closed upstream, or nothing when none. */
+function printClosedUpstreamCount(entries: readonly LedgerEntry[]): void {
+  const closed = closedUpstreamRows(entries).length;
+  if (closed === 0) return;
+  console.log(
+    `backlog: ${closed} open ${closed === 1 ? 'row has' : 'rows have'} an issue closed upstream. Run \`status\` to list them.`,
+  );
 }
 
 function usage(): void {

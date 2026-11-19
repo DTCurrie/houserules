@@ -760,6 +760,14 @@ describe('plan-lint.mjs (installed)', () => {
     expect(result.stdout).toContain('no plan workspace');
   });
 
+  it('exits 1 naming an argument, since it takes none', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+    const result = runScript(root, SCRIPT, { args: ['no-such-file-xyz.md'] });
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stdout).toContain('no-such-file-xyz.md');
+    expect(result.stdout).toContain('checker/unexpected-argument');
+  });
+
   it('exits 1 on a slice status outside the fixed vocabulary', () => {
     const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
     const planDir = join(root, '.claude/plans/demo');

@@ -1,5 +1,6 @@
 import type { Action, ModuleGroup } from '@houserules/api';
-import { agent } from './copy-actions.js';
+import { agent, script } from './copy-actions.js';
+import { payloadPath } from '../paths.js';
 
 export const id = 'research';
 export const title = 'Planned research & synthesis agents';
@@ -29,6 +30,24 @@ export function plan(): Action[] {
       id,
       'refactor-planner',
       'reconciles a set of audit reports into one sliced refactor plan plus an architecture document',
+    ),
+    {
+      kind: 'copy',
+      src: payloadPath('agents', 'findings-format.md'),
+      dest: '.claude/reference/findings-format.md',
+      module: id,
+      reason:
+        'the finding format research reports are written in and checked against',
+    },
+    script(
+      id,
+      'check-findings.mjs',
+      'checks findings reports and a synthesis against the finding format',
+    ),
+    script(
+      id,
+      'scaffold-synthesis.mjs',
+      'lays out a synthesis skeleton with one table row per finding id',
     ),
     {
       kind: 'advise',

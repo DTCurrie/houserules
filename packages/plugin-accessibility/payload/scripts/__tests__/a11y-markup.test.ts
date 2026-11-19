@@ -158,4 +158,17 @@ describe('a11y-markup.mjs', () => {
 
     expect(result.stdout).toContain('Not checked by this checker');
   });
+
+  it('names an unreadable path, still checks the readable one, and exits 1', () => {
+    const root = installed();
+    writeFileSync(join(root, 'Comp.tsx'), '<div tabindex="3">go</div>');
+    const missing = join(root, 'Missing.tsx');
+
+    const result = a11yMarkup(root, join(root, 'Comp.tsx'), missing);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('accessibility/no-positive-tabindex');
+    expect(result.stdout).toContain('checker/unreadable-input');
+    expect(result.stdout).toContain(missing);
+  });
 });

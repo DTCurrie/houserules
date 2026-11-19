@@ -32,8 +32,8 @@ export interface LedgerOutcome {
 }
 
 interface RecordedEntry {
-  ts?: number;
-  chat?: string;
+  ts?: number | undefined;
+  chat?: string | undefined;
   used: boolean;
 }
 

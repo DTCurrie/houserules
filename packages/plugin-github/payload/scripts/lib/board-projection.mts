@@ -53,7 +53,21 @@ export interface BoardItem {
  * construction rather than by exception. A VALUE from core still cannot be imported here, and a
  * lib that needs one takes it as a parameter from the script that called it.
  */
-export type BoardEntry = LedgerEntry;
+export type BoardEntry = LedgerEntry & {
+  /**
+   * The linked issue's `state` when the item is an Issue, null for a draft. Owned by this plugin:
+   * core's `LedgerEntry` does not name it, and `parseIndex` passes it through untouched.
+   */
+  issueState: IssueState | null;
+};
+
+/** The two states GitHub reports for an issue. */
+export type IssueState = 'OPEN' | 'CLOSED';
+
+/** True when `value` is an {@link IssueState}. Narrows the plain `LedgerEntry` an index loads. */
+function isIssueState(value: unknown): value is IssueState {
+  return value === 'OPEN' || value === 'CLOSED';
+}
 
 export interface BoardProjection {
   /** Items carrying an entry marker. The index reads these. */
@@ -116,6 +130,10 @@ function projectEntry(
     supersedes:
       kind === 'backlog' ? [] : splitListField(fieldValue(item, 'Supersedes')),
     supersededBy: kind === 'backlog' ? null : fieldValue(item, 'Superseded by'),
+    issueState:
+      item.content?.__typename === 'Issue' && isIssueState(item.content.state)
+        ? item.content.state
+        : null,
   };
 }
 

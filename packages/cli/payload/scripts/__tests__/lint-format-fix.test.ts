@@ -754,7 +754,7 @@ describe('runFixSteps against the fix budget', () => {
     ]);
   });
 
-  it('reports the next step as the overrun when an earlier one spent the whole budget', () => {
+  it('reports the first step as the overrun when the budget is spent before it starts', () => {
     let tick = 0;
     stubRunner(root);
     const run = runFixSteps(

@@ -2,8 +2,8 @@
 /**
  * Stop hook. Structural gates over the changesets houserules itself writes.
  *
- * Three checks, each covering one MECHANICAL clause from the `changeset` and
- * `changeset-condense` skills that survived the determinism audit:
+ * Three checks, each covering one MECHANICAL clause from the `changeset` skill and its
+ * condense section that survived the determinism audit:
  *
  *   h5 — a newly-written pending changeset's declared package set has drifted from what
  *        the current diff actually touches ("the package set grew").

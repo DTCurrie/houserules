@@ -15,7 +15,7 @@ export interface WorkspacePackage {
 
 /**
  * Parsed JSON, or null when the file is missing or unparseable. Defaults to
- * `PackageJson` because that is the overwhelming caller; pass `T` for the others.
+ * `PackageJson` because that is the overwhelming caller. Pass `T` for the others.
  */
 export function readJson<T = PackageJson>(path: string): T | null {
   try {
@@ -142,7 +142,7 @@ function subdirectories(base: string): string[] {
   }
 }
 
-// Recursion cap for `descendants`. No real workspace nests packages this deep; this guards
+// Recursion cap for `descendants`. No real workspace nests packages this deep. This guards
 // against a symlink loop or a pathological tree rather than encoding a known layout.
 const MAX_WORKSPACE_DEPTH = 12;
 

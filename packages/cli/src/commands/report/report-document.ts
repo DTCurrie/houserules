@@ -83,7 +83,7 @@ export interface ReportDocument {
 export interface BuildOptions {
   label: string;
   cliVersion: string;
-  since?: string;
+  since?: string | undefined;
   now?: Date;
 }
 
@@ -115,8 +115,8 @@ export function deserializeTokenUsage(
   };
 }
 
-function isoDay(ts: number | undefined): string | undefined {
-  return ts === undefined ? undefined : new Date(ts).toISOString().slice(0, 10);
+function isoDay(ts: number): string {
+  return new Date(ts).toISOString().slice(0, 10);
 }
 
 /** Stamps whether the install at `top` has the trim module onto the result-size readout. */
@@ -125,11 +125,12 @@ function withTrimInstalled(
   top: string,
 ): FrictionReport {
   if (!friction.toolResultSizes) return friction;
+  const isTrimInstalled = readTrimInstalled(top);
   return {
     ...friction,
     toolResultSizes: {
       ...friction.toolResultSizes,
-      isTrimInstalled: readTrimInstalled(top),
+      ...(isTrimInstalled === undefined ? {} : { isTrimInstalled }),
     },
   };
 }
@@ -146,9 +147,9 @@ export function buildReportDocument(
       cliVersion: options.cliVersion,
       claudeVersions: [...corpus.claudeVersions].sort(),
       sessions: corpus.files.length,
-      from: isoDay(corpus.firstTs),
-      to: isoDay(corpus.lastTs),
-      since: options.since,
+      ...(corpus.firstTs === undefined ? {} : { from: isoDay(corpus.firstTs) }),
+      ...(corpus.lastTs === undefined ? {} : { to: isoDay(corpus.lastTs) }),
+      ...(options.since === undefined ? {} : { since: options.since }),
       generatedAt: (options.now ?? new Date()).toISOString(),
     },
     tokens: serializeTokenUsage(computeTokenUsage(corpus)),

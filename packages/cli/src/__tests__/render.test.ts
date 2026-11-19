@@ -334,6 +334,26 @@ describe('renderClaudeAdditions', () => {
     expect(body).toMatch(/record a changeset with `\/changeset`/);
   });
 
+  it('points UI and artifact work at the token file when the design module is selected', () => {
+    const ctx = makeCtx();
+    const body = renderClaudeAdditions(
+      ctx,
+      makeAnswers({ moduleIds: ['core', 'design'] }),
+    );
+    expect(body).toContain(
+      '- Building UI, an artifact, or a deck? Take colors, type, and spacing from\n  `.claude/design/tokens.json`, never a palette of your own.',
+    );
+  });
+
+  it('names no token file when the design module is not selected', () => {
+    const ctx = makeCtx();
+    const body = renderClaudeAdditions(
+      ctx,
+      makeAnswers({ moduleIds: ['core', 'changesets'] }),
+    );
+    expect(body).not.toContain('tokens.json');
+  });
+
   it('renders the backlog trigger without listing target prefixes', () => {
     const ctx = makeCtx();
     const body = renderClaudeAdditions(

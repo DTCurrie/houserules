@@ -66,10 +66,17 @@ function redactSignatures(
 }
 
 const BARE_SCRIPT_NAME = /^[\w-]+\.(?:mjs|cjs|js)$/;
-// A Stop hook that maps to no script keeps its raw command as its name, and a command can
-// carry a path or an argument. A bare script basename and the per-Stop total row are safe.
-function redactStopHookName(name: string): string {
-  if (BARE_SCRIPT_NAME.test(name) || name === STOP_TOTAL_LABEL) return name;
+const PRE_TOOL_USE_LABEL = /^PreToolUse:[\w-]+$/;
+// A hook that maps to no script keeps its raw command as its name, and a command can carry a
+// path or an argument. A bare script basename, the per-Stop total row, and a
+// `PreToolUse:<tool>` label are safe.
+function redactHookName(name: string): string {
+  if (
+    BARE_SCRIPT_NAME.test(name) ||
+    name === STOP_TOTAL_LABEL ||
+    PRE_TOOL_USE_LABEL.test(name)
+  )
+    return name;
   return commandFamily(name);
 }
 
@@ -79,7 +86,7 @@ function redactStopHooks(
   // Two raw commands can reduce to one family and stay two rows, since percentiles do not add.
   return stopHooks.map((row) => ({
     ...row,
-    hook: redactStopHookName(row.hook),
+    hook: redactHookName(row.hook),
   }));
 }
 
@@ -97,9 +104,10 @@ export function redactDocument(document: ReportDocument): ReportDocument {
       crashSignatures: redactSignatures(document.hooks.crashSignatures),
       ...(stopHooks ? { stopHooks: redactStopHooks(stopHooks) } : {}),
     },
-    guard: document.guard.map((block) => ({
+    guard: document.guard.map(({ reason: _reason, guard, ...block }) => ({
       ...block,
       blockedCommand: commandFamily(block.blockedCommand),
+      ...(guard === undefined ? {} : { guard: redactHookName(guard) }),
     })),
     friction: {
       ...document.friction,

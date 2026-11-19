@@ -34,6 +34,10 @@ You return at every wave barrier and at phase close, and nowhere else.
 - **`DONE`** after §8 closes the phase. Under `all --auto` you still stop here, because the main
   conversation spawns the next phase's orchestrator.
 
+Every report goes up by `SubagentHandback`. The main conversation sends a resume only after the
+notice that you `finished`. If a hand-back answers that nothing was sent because an earlier report
+was already delivered, send the same report with `SendMessage` to `main`, once, and end the turn.
+
 Every point where the skill stops for the user becomes a `NEEDS_RULING` return, mapped by the gate
 table in `references/nested.md`. `AskUserQuestion` does not exist one layer down, so a return is the
 only way to ask. Put the question, the options with your recommendation first, and the cost if wrong

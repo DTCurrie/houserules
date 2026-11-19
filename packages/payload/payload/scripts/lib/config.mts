@@ -3,18 +3,18 @@ import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 
 export interface RunnerBlock {
-  runner?: string;
-  filterFlag?: string;
-  runScriptPrefix?: string[];
-  commands?: string[];
+  runner?: string | undefined;
+  filterFlag?: string | undefined;
+  runScriptPrefix?: string[] | undefined;
+  commands?: string[] | undefined;
   /** `fix` only: run the fixer when a subagent stops. */
-  onSubagentStop?: boolean;
+  onSubagentStop?: boolean | undefined;
   /** `fix` only: per-command file extensions, e.g. {"lint:fix": ["ts","tsx"]}. */
-  commandExtensions?: Record<string, string[]>;
+  commandExtensions?: Record<string, string[]> | undefined;
   /** `verify` only: branch the changed-file diff is taken against. */
-  baseBranch?: string;
+  baseBranch?: string | undefined;
   /** `verify` only: per-command wall-clock cap in milliseconds. Unset means no cap. */
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
 }
 
 export interface ConfigTarget {

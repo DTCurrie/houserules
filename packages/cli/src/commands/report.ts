@@ -5,6 +5,10 @@ import { claudeProjectDir } from '@houserules/payload/entry-ledger';
 
 import { detect } from '../detect.js';
 import type { Flags } from '../cli-contract.js';
+import {
+  resolveRetention,
+  windowWarnings,
+} from '../core/transcript-retention.js';
 import { HouseError } from '../house-error.js';
 import { json } from './log.js';
 import { renderArtifactEpisodes } from './report/artifact-episodes.js';
@@ -28,10 +32,6 @@ import { renderSkillOutcomes } from './report/skill-outcomes.js';
 import { renderTokenUsage } from './report/token-usage.js';
 import { readCorpus } from './report/transcript-events.js';
 
-const MS_PER_DAY = 86_400_000;
-const RETENTION_DEFAULT_DAYS = 30;
-const RETENTION_MARGIN_DAYS = 2;
-
 const SINCE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseSince(since: string): number {
@@ -45,30 +45,6 @@ function parseSince(since: string): number {
 
 function isoDay(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
-}
-
-/**
- * Warnings about a corpus that may be truncated. Claude Code deletes transcripts after
- * `cleanupPeriodDays`, default 30, so a first transcript 28 to 30 days old suggests the
- * oldest sessions are already gone.
- */
-function windowWarnings(
-  firstTs: number,
-  since: number | undefined,
-  sinceFlag: string | undefined,
-  now: number,
-): string[] {
-  const oldest = isoDay(firstTs);
-  const retention = `Claude Code deletes transcripts after cleanupPeriodDays, default ${RETENTION_DEFAULT_DAYS}`;
-  if (since !== undefined && since < firstTs)
-    return [
-      `(warning: --since ${sinceFlag} predates the oldest transcript, ${oldest}. ${retention})`,
-    ];
-  const ageDays = (now - firstTs) / MS_PER_DAY;
-  const windowStart = RETENTION_DEFAULT_DAYS - RETENTION_MARGIN_DAYS;
-  if (ageDays >= windowStart && ageDays <= RETENTION_DEFAULT_DAYS)
-    return [`(warning: the oldest transcript is ${oldest}. ${retention})`];
-  return [];
 }
 
 /** Renders every section of a document, one blank line between sections. */
@@ -152,7 +128,12 @@ export async function report(dir: string, flags: Flags): Promise<number> {
   if (slugs.length > 1) say(`transcript dirs: ${slugs.join(', ')}`);
   if (corpus.skippedBySince > 0)
     say(`(${corpus.skippedBySince} session(s) before ${flags.since} skipped)`);
-  if (!corpus.files.length && !flags.json) {
+  const cutEverySession = !corpus.files.length && corpus.skippedBySince > 0;
+  if (cutEverySession)
+    say(
+      `No sessions on or after ${flags.since}, so there is nothing to report.`,
+    );
+  if (!corpus.files.length && !cutEverySession && !flags.json) {
     const dirs = slugs.map((slug) => join(base, 'projects', slug));
     const present = dirs.filter((d) => !corpus.missingDirs.includes(d));
     if (present.length)
@@ -169,6 +150,7 @@ export async function report(dir: string, flags: Flags): Promise<number> {
       since,
       flags.since,
       Date.now(),
+      resolveRetention(top, base),
     ))
       say(line);
   }
@@ -195,7 +177,7 @@ export async function report(dir: string, flags: Flags): Promise<number> {
     json(document);
     return 0;
   }
-  console.log(renderDocument(document).join('\n'));
+  if (!cutEverySession) console.log(renderDocument(document).join('\n'));
   console.log('');
   return 0;
 }

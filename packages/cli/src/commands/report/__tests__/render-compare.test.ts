@@ -165,6 +165,7 @@ describe('renderComparison on an old document beside a new one', () => {
         p95: 1500,
         max: 9,
         timeouts: 0,
+        slowRuns: 1,
       },
     ],
   };
@@ -203,6 +204,11 @@ describe('renderComparison on an old document beside a new one', () => {
       'stop p95 ms (per Stop)',
       '-',
       '1,500',
+    ]);
+    expect(cells(lines, 'stop over 1s (per Stop)')).toEqual([
+      'stop over 1s (per Stop)',
+      '-',
+      '1 (25.00%)',
     ]);
     expect(cells(lines, 'Read results over trim cap')).toEqual([
       'Read results over trim cap',

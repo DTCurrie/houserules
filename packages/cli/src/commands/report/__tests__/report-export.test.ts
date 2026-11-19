@@ -141,9 +141,39 @@ describe('redactDocument', () => {
 
   it('keeps the git subcommand as the command family', () => {
     expect(redacted.guard).toEqual([
-      { session: 'sess-abc', blockedCommand: 'git push' },
+      {
+        session: 'sess-abc',
+        blockedCommand: 'git push',
+        guard: 'PreToolUse:Bash',
+      },
     ]);
     expect(redacted.friction.retryRuns[0]?.command).toBe('git push');
+  });
+
+  it('drops a guard reason and reduces a raw-command guard name to its family', () => {
+    const document = buildFixture();
+    document.guard = [
+      {
+        session: 'sess-abc',
+        blockedCommand: 'git push origin main',
+        guard: 'node /Users/someone/secret/guard.mjs --flag',
+        reason: 'refused to touch /Users/someone/secret/file.txt',
+      },
+      {
+        session: 'sess-abc',
+        blockedCommand: 'ls',
+        guard: 'PreToolUse:Bash',
+        reason: 'x',
+      },
+    ];
+
+    const exported = redactDocument(document);
+
+    expect(exported.guard).toEqual([
+      { session: 'sess-abc', blockedCommand: 'git push', guard: 'node' },
+      { session: 'sess-abc', blockedCommand: 'ls', guard: 'PreToolUse:Bash' },
+    ]);
+    expect(exported.guard.some((block) => 'reason' in block)).toBe(false);
   });
 
   it('reduces a non-git command to its first token', () => {
@@ -328,6 +358,7 @@ function withNewFields(document: ReportDocument): ReportDocument {
           p95: 6,
           max: 7,
           timeouts: 1,
+          slowRuns: 2,
         },
         {
           hook: `node /Users/${USERNAME}/work/hooks/custom.mjs`,
@@ -420,6 +451,7 @@ describe('redactDocument on the fields added after the first exports', () => {
       p95: 6,
       max: 7,
       timeouts: 1,
+      slowRuns: 2,
     });
   });
 

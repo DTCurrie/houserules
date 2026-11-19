@@ -39,8 +39,8 @@ a monorepo, or when `.changeset/` already exists.
   ended used no file-writing tool, and while background agents are still running, since
   their unfinished edits are not a change to record yet. The nudge then comes on the first
   stop after they finish.
-  It seeds `.changeset/config.json` when the repo has none, and writes the `/changeset` skill
-  plus the `changeset-condense` skill and the `changeset-writer` agent (haiku).
+  It seeds `.changeset/config.json` when the repo has none, and writes the `/changeset` skill,
+  which also condenses pending changesets, and the `changeset-writer` agent (haiku).
 
   If `.changeset/config.json` is missing after install, or `@changesets/cli` is not a
   devDependency, `houserules doctor` reports it.

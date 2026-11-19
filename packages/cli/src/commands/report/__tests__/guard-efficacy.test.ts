@@ -38,7 +38,12 @@ describe('computeGuardBlocks', () => {
     const blocks = computeGuardBlocks(corpus);
 
     expect(blocks).toEqual([
-      { session: 'session-', blockedCommand: 'rm -rf /tmp/x' },
+      {
+        session: 'session-',
+        blockedCommand: 'rm -rf /tmp/x',
+        guard: 'PreToolUse:Bash',
+        reason: 'blocked by guard',
+      },
     ]);
   });
 
@@ -60,7 +65,12 @@ describe('computeGuardBlocks', () => {
     const blocks = computeGuardBlocks(corpus);
 
     expect(blocks).toEqual([
-      { session: 'session-', blockedCommand: '(tool_use not found)' },
+      {
+        session: 'session-',
+        blockedCommand: '(tool_use not found)',
+        guard: 'PreToolUse:Bash',
+        reason: 'blocked by guard',
+      },
     ]);
   });
 
@@ -144,7 +154,12 @@ describe('computeGuardBlocks', () => {
     const blocks = computeGuardBlocks(corpus);
 
     expect(blocks).toEqual([
-      { session: 'session-', blockedCommand: '(tool_use not found)' },
+      {
+        session: 'session-',
+        blockedCommand: '(tool_use not found)',
+        guard: 'PreToolUse:Write',
+        reason: 'blocked by guard',
+      },
     ]);
   });
 
@@ -165,7 +180,12 @@ describe('computeGuardBlocks', () => {
     const blocks = computeGuardBlocks(corpus);
 
     expect(blocks).toEqual([
-      { session: 'no-sessi', blockedCommand: '(tool_use not found)' },
+      {
+        session: 'no-sessi',
+        blockedCommand: '(tool_use not found)',
+        guard: 'PreToolUse:Bash',
+        reason: 'blocked by guard',
+      },
     ]);
   });
 });
@@ -181,18 +201,105 @@ describe('renderGuardEfficacy', () => {
     ]);
   });
 
-  it('renders one line per block with the session and blocked command', () => {
+  it('leads with a summary table of each guard and reason, most blocks first', () => {
     const lines = renderGuardEfficacy([
-      { session: 'abc12345', blockedCommand: 'rm -rf /tmp/x' },
-      { session: 'def67890', blockedCommand: '(tool_use not found)' },
+      {
+        session: 's1',
+        blockedCommand: 'a',
+        guard: 'PreToolUse:Bash',
+        reason: 'stash',
+      },
+      {
+        session: 's1',
+        blockedCommand: 'b',
+        guard: 'PreToolUse:Read',
+        reason: 'big file',
+      },
+      {
+        session: 's2',
+        blockedCommand: 'c',
+        guard: 'PreToolUse:Bash',
+        reason: 'stash',
+      },
+      {
+        session: 's2',
+        blockedCommand: 'd',
+        guard: 'PreToolUse:Bash',
+        reason: 'stash',
+      },
+      {
+        session: 's3',
+        blockedCommand: 'e',
+        guard: 'PreToolUse:Bash',
+        reason: 'force push',
+      },
+      {
+        session: 's3',
+        blockedCommand: 'f',
+        guard: 'PreToolUse:Read',
+        reason: 'big file',
+      },
     ]);
 
-    expect(lines).toEqual([
+    expect(lines.slice(0, 7)).toEqual([
       '-- guard efficacy --',
       '',
-      '  abc12345  blocked: rm -rf /tmp/x',
-      '  def67890  blocked: (tool_use not found)',
+      '  guard            reason      blocks',
+      '  ---------------  ----------  ------',
+      '  PreToolUse:Bash  stash       3     ',
+      '  PreToolUse:Read  big file    2     ',
+      '  PreToolUse:Bash  force push  1     ',
     ]);
+  });
+
+  it('lists each block after the summary with its session and command', () => {
+    const lines = renderGuardEfficacy([
+      {
+        session: 'abc12345',
+        blockedCommand: 'rm -rf /tmp/x',
+        guard: 'PreToolUse:Bash',
+        reason: 'rm',
+      },
+    ]);
+
+    expect(lines.slice(-2)).toEqual(['', '  abc12345  blocked: rm -rf /tmp/x']);
+  });
+
+  it('groups blocks with no guard or reason under the unknown labels', () => {
+    const lines = renderGuardEfficacy([
+      { session: 'abc12345', blockedCommand: 'x' },
+    ]);
+
+    expect(lines[4]).toBe('  (unknown guard)  (no reason recorded)  1     ');
+  });
+
+  it('truncates a command over 80 characters to exactly 80 ending in an ellipsis and leaves shorter ones whole', () => {
+    const long = 'a'.repeat(81);
+    const exact = 'b'.repeat(80);
+    const lines = renderGuardEfficacy([
+      { session: 's1', blockedCommand: long, guard: 'g', reason: 'r' },
+      { session: 's1', blockedCommand: exact, guard: 'g', reason: 'r' },
+      { session: 's1', blockedCommand: 'short', guard: 'g', reason: 'r' },
+    ]);
+
+    expect(lines.slice(-3)).toEqual([
+      `  s1  blocked: ${'a'.repeat(79)}…`,
+      `  s1  blocked: ${'b'.repeat(80)}`,
+      '  s1  blocked: short',
+    ]);
+  });
+
+  it('collapses a newline in a command to a space before truncating', () => {
+    const lines = renderGuardEfficacy([
+      {
+        session: 's1',
+        blockedCommand: 'echo one\necho two',
+        guard: 'g',
+        reason: 'r',
+      },
+    ]);
+
+    expect(lines.at(-1)).toBe('  s1  blocked: echo one echo two');
   });
 });
 
@@ -249,7 +356,12 @@ describe('computeGuardBlocks from error tool_results', () => {
     );
 
     expect(computeGuardBlocks(corpus)).toEqual([
-      { session: 'session-', blockedCommand: 'git stash' },
+      {
+        session: 'session-',
+        blockedCommand: 'git stash',
+        guard: 'PreToolUse:Bash',
+        reason: 'git stash dumps the full untracked-file list into context.',
+      },
     ]);
   });
 
@@ -271,7 +383,12 @@ describe('computeGuardBlocks from error tool_results', () => {
     );
 
     expect(computeGuardBlocks(corpus)).toEqual([
-      { session: 'session-', blockedCommand: 'Write' },
+      {
+        session: 'session-',
+        blockedCommand: 'Write',
+        guard: 'PreToolUse:Write',
+        reason: 'subagents may not write here.',
+      },
     ]);
     const session = corpus.sessions.get('session-aaaaaaaa-bbbb');
     expect(session?.hookOutcomes[0]?.isSubagent).toBe(true);
@@ -293,7 +410,12 @@ describe('computeGuardBlocks from error tool_results', () => {
     );
 
     expect(computeGuardBlocks(corpus)).toEqual([
-      { session: 'session-', blockedCommand: 'Read' },
+      {
+        session: 'session-',
+        blockedCommand: 'Read',
+        guard: 'PreToolUse:Read',
+        reason: 'read a slice instead.',
+      },
     ]);
   });
 

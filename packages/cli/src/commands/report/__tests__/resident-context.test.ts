@@ -228,10 +228,10 @@ describe('entrypoint medians', () => {
 
   it('renders rows from an older export and groups them as unknown', () => {
     const current = computeResidentContext(entrypointCorpus());
+    const { medianByEntrypoint: _medians, ...currentWithoutMedians } = current;
     const older = {
-      ...current,
+      ...currentWithoutMedians,
       rows: current.rows.map(({ entrypoint: _drop, ...rest }) => rest),
-      medianByEntrypoint: undefined,
     };
 
     const text = renderResidentContext(older).join('\n');

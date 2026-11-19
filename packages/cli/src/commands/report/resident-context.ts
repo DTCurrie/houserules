@@ -124,7 +124,9 @@ export function computeResidentContext(
     if (!recorded) {
       return {
         session,
-        entrypoint: capture?.entrypoint,
+        ...(capture?.entrypoint === undefined
+          ? {}
+          : { entrypoint: capture.entrypoint }),
         recorded: false,
         systemPromptBytes: 0,
         instructionBytes: 0,
@@ -153,7 +155,9 @@ export function computeResidentContext(
       outputStyleBytes;
     return {
       session,
-      entrypoint: capture.entrypoint,
+      ...(capture.entrypoint === undefined
+        ? {}
+        : { entrypoint: capture.entrypoint }),
       recorded: true,
       systemPromptBytes,
       instructionBytes,

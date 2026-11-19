@@ -53,7 +53,9 @@ Every later message to this orchestrator goes to that id with `SendMessage`.
 **Relay.** Print `Status table` verbatim, with no prose over it. Put one line under it for anything
 the columns cannot carry. Then act on the first line of the report:
 
-- `WAVE_CLOSED`: send `continue` with `SendMessage`.
+- `WAVE_CLOSED`: wait for the notice that the orchestrator `finished`, then send `continue` with
+  `SendMessage`. A resume sent while its keepalive still runs appears to stay inside the result
+  that already reported, and the next hand-back is refused. The same wait holds for a `Ruling:`.
 - `DONE`: run `/backlog-add` for each `Backlogged` entry, then `/decide` and `/pr-description` at
   this layer, from `Decide candidates`, with `/pr-description` after the last phase only. Under `all`, spawn the recomputed ready set
   (see Several orchestrators), one fresh brief each, in one message. Check-in mode stops for the user first. The fresh spawn doubles as the
@@ -69,7 +71,9 @@ Never respawn for a ruling, because the same id keeps its context.
 
 **Interim notifications.** A notification saying the orchestrator awaits its own background work is
 interim. Wait for its final report, because reviewing the interim one judges a phase that has not
-finished.
+finished. An interim notice after a delivered report may hide the next one. An orchestrator whose
+hand-back answers that nothing was sent sends the same report with `SendMessage` instead, so read
+the messages that arrived before you judge the phase still running.
 
 **Preflight.** A `BLOCKED` report naming `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` means the depth limit
 withheld `Agent` from the orchestrator. Set the variable and spawn fresh with the same brief. A

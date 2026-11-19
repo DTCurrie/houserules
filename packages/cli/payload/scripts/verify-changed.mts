@@ -13,12 +13,12 @@
  *   (default)  print the resolved scope + the exact command per package — a plan the
  *              subagent executes, reporting one compact line per package.
  *   --json     emit the resolved scope as JSON (tests / tooling).
- *   --run      run each package's verify commands; print "<pkg>: PASS|FAIL" (+ a
- *              trimmed residue tail on failure); exit 2 if any package failed.
+ *   --run      run each package's verify commands, then print "<pkg>: PASS|FAIL", plus a
+ *              trimmed residue tail on failure. Exit 2 if any package failed.
  *
  * Config (houserules.config.json, verify block — mirrors fix): verify.runner / filterFlag /
  * runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
- * "main"); per-target verifyCommands overrides commands for that package. A target
+ * "main"). Per-target verifyCommands overrides commands for that package. A target
  * resolving to no verify commands is reported as skipped, never as passing.
  */
 
@@ -108,7 +108,7 @@ export function withDependents(
 
 /**
  * The verify scope for `changed` paths: for a single-package repo (`packages` empty), the
- * whole repo as one entry when any non-dotfile changed; for a monorepo, every changed
+ * whole repo as one entry when any non-dotfile changed. For a monorepo, every changed
  * package (longest `pathPrefix` wins on overlap) plus its transitive dependents.
  */
 export function resolveScope(

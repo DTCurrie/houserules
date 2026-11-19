@@ -230,3 +230,17 @@ describe('svelte-lint.mjs svelte/eslint-config-missing-rule', () => {
     expect(r.stdout).not.toContain('svelte/eslint-config-missing-rule');
   });
 });
+
+describe('svelte-lint.mjs given an unreadable path', () => {
+  it('names the missing path and still reports findings for the readable file', () => {
+    const root = stage();
+    writeFile(root, 'src/Card.svelte', '<div>\n  <slot />\n</div>\n');
+
+    const r = run(root, ['src/Card.svelte', 'src/Missing.svelte']);
+
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('svelte/no-slot');
+    expect(r.stdout).toContain('checker/unreadable-input');
+    expect(r.stdout).toContain('src/Missing.svelte');
+  });
+});

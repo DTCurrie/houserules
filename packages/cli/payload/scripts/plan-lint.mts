@@ -160,7 +160,7 @@ export function checkSliceRowsAfterDone(
  * The ROADMAP phase line, shared by `checkRoadmapSync` and `parseRoadmapPhases` so the two
  * read one grammar. Groups: phase number, status cell, sub-plan file, and the optional
  * trailing `After` text. The group takes whatever follows `After:` so a malformed value is
- * seen, not silently read as the chain; `parseRoadmapPhases` decides whether it is `none` or a
+ * seen, not silently read as the chain. `parseRoadmapPhases` decides whether it is `none` or a
  * comma-separated list of phase numbers.
  */
 const ROADMAP_PHASE_LINE =
@@ -767,6 +767,16 @@ function main(): void {
   const plansDir = join(root, '.claude/plans');
   const report = emptyReport();
   report.declined.push(...DECLINED);
+
+  for (const arg of process.argv.slice(2)) {
+    report.findings.push({
+      rule: 'checker/unexpected-argument',
+      level: 'error',
+      file: arg,
+      line: null,
+      msg: 'plan-lint takes no arguments and scans .claude/plans/ itself, so this path was not read',
+    });
+  }
 
   const workspaceDirs = existsSync(plansDir)
     ? listSubdirectories(plansDir)

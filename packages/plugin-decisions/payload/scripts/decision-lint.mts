@@ -7,10 +7,11 @@
  * pass the check, is judgment the skill keeps. This only checks that the fields exist, and
  * that a path-shaped token in the revisit trigger made it into `--scope`.
  */
-import { readFileSync, realpathSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import { ENTRY_HEAD } from '@houserules/payload/backlog-id';
+import { readCheckerInputs } from '@houserules/payload/checker-input';
 import { SEPARATOR } from '@houserules/payload/entry-ledger';
 import {
   emptyReport,
@@ -173,13 +174,9 @@ function main(): void {
   const files = process.argv.slice(2);
   const report = emptyReport();
   report.declined.push(...DECLINED);
-  for (const file of files) {
-    let text: string;
-    try {
-      text = readFileSync(file, 'utf8');
-    } catch {
-      continue;
-    }
+  const { inputs, unreadable } = readCheckerInputs(files);
+  report.findings.push(...unreadable);
+  for (const { path: file, text } of inputs) {
     report.findings.push(...checkFile(file, text));
   }
   process.stdout.write(`${renderReport(report)}\n`);

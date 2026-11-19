@@ -28,7 +28,7 @@ interface ToolBulk {
 }
 
 /** Result sizes for one tool, measured the way {@link ToolBulk} measures bytes. */
-export interface ResultSizeTally {
+interface ResultSizeTally {
   results: number;
   bytes: number;
   /** Results above {@link ToolResultSizes.capBytes}. */
@@ -36,7 +36,7 @@ export interface ResultSizeTally {
 }
 
 /** `Read` and `Bash` result sizes against the `tool-output-trim` cap. */
-export interface ToolResultSizes {
+interface ToolResultSizes {
   capBytes: number;
   read: ResultSizeTally;
   bash: ResultSizeTally;

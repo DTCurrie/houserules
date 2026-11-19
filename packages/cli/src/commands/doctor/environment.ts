@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
 import type { CheckResult, Finding } from '@houserules/api';
+import { compareSemver, parseSemver } from './semver.js';
 
 const MIN_NODE_MAJOR = 20;
 
@@ -70,34 +71,31 @@ function anyAgentPinsFable(root: string): boolean {
     });
 }
 
-function parseVersion(version: string): number[] {
-  return version.split('.').map(Number);
-}
-
-/** Numeric per-segment comparison, since "2.1.9" sorts above "2.1.288" as a string. */
-function compareVersions(left: string, right: string): number {
-  const leftParts = parseVersion(left);
-  const rightParts = parseVersion(right);
-  for (let i = 0; i < leftParts.length; i++) {
-    const difference = (leftParts[i] ?? 0) - (rightParts[i] ?? 0);
-    if (difference !== 0) return difference;
-  }
-  return 0;
-}
-
 function claudeVersion(): string | null {
   const result = spawnSync('claude', ['--version'], { encoding: 'utf8' });
   if (result.error || result.status !== 0) return null;
-  return /\d+\.\d+\.\d+/.exec(result.stdout)?.[0] ?? null;
+  return (
+    /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?/.exec(
+      result.stdout,
+    )?.[0] ?? null
+  );
 }
 
 function checkClaudeVersion(
   ctx: Ctx,
   running: string | null,
 ): { findings: Finding[]; readouts: string[] } {
-  const applicable = GATES.filter((gate) => gate.applies(ctx));
-  const highest = applicable.reduce((top, gate) =>
-    compareVersions(gate.version, top.version) > 0 ? gate : top,
+  const parsedGates = GATES.map((gate) => {
+    const parsed = parseSemver(gate.version);
+    if (!parsed)
+      throw new Error(
+        `Claude Code gate version "${gate.version}" is not semver`,
+      );
+    return { gate, parsed };
+  });
+  const applicable = parsedGates.filter(({ gate }) => gate.applies(ctx));
+  const { gate: highest, parsed: floor } = applicable.reduce((top, entry) =>
+    compareSemver(entry.parsed, top.parsed) > 0 ? entry : top,
   );
   if (running === null)
     return {
@@ -106,7 +104,15 @@ function checkClaudeVersion(
         `INFO claude binary not found on PATH (floor ${highest.version})`,
       ],
     };
-  if (compareVersions(running, highest.version) < 0)
+  const runningParsed = parseSemver(running);
+  if (runningParsed === null)
+    return {
+      findings: [],
+      readouts: [
+        `INFO claude version "${running}" is not semver, so the floor was not checked`,
+      ],
+    };
+  if (compareSemver(runningParsed, floor) < 0)
     return {
       findings: [
         {

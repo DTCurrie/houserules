@@ -17,6 +17,8 @@ Fuller templates live in `.claude/templates/`.
 - Too big to hold in one plan: scaffold with `/plan-project`, then execute each phase with
   `/orchestrate`.
 - Ledger ids stay in the ledger, never in code, docs, changesets, commit messages, or issues.
+- Building UI, an artifact, or a deck? Take colors, type, and spacing from
+  `.claude/design/tokens.json`, never a palette of your own.
 
 ### Conventions
 
@@ -79,7 +81,7 @@ CLAUDE.md (`cli`, `api`, `payload`, `test`), loaded when you touch that package.
   to `house-rules`.
 - `packages/api` is `@houserules/api`, the plugin contract package: action types, module
   definitions, and the `houserules.config.json` schema plugin authors build against.
-- `packages/payload` is `@houserules/payload`, the ten shared payload libs, imported by
+- `packages/payload` is `@houserules/payload`, the twelve shared payload libs, imported by
   package name.
 - Twelve first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved
   out of the core (`src/retired-modules.ts` in the cli maps ids to packages).
@@ -110,7 +112,8 @@ add the input (`docs/package-checks.md`).
 
 - `pnpm build`: `tsc` → `dist/`, assemble `payload-dist/`, regenerate the JSON Schema.
   Required before any `dist/` probe.
-- `pnpm check`: `tsc --noEmit` over `src/` + `test/` + colocated `__tests__/` dirs.
+- `pnpm check`: `tsc --noEmit` over `src/` + `test/` + colocated `__tests__/` dirs, then the
+  root `verify` block of post-build assertions, so a cold run builds first.
 - `pnpm test`: full suite, including end-to-end init/update/doctor on fixtures. A bare
   `npx vitest` needs a prior `pnpm build`.
 - `pnpm lint` / `pnpm lint:fix`: run from the workspace root only. No package defines its

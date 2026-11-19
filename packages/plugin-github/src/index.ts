@@ -1,6 +1,8 @@
 import { definePlugin, hookFragment, scriptPermission } from '@houserules/api';
 import type { Action, ModuleDef, PluginApi } from '@houserules/api';
 
+import { checkSyncHealth } from './sync-health.js';
+
 /**
  * The plugin's own config slice, which today recognizes nothing.
  *
@@ -44,6 +46,7 @@ function projectsModule(api: PluginApi): ModuleDef {
     defaultEnabled(): boolean {
       return false;
     },
+    check: checkSyncHealth,
     plan(): Action[] {
       return [
         api.payload.script(
@@ -61,6 +64,7 @@ function projectsModule(api: PluginApi): ModuleDef {
         api.payload.lib(id, 'board-projection.mjs'),
         api.payload.lib(id, 'backfill-plan.mjs'),
         api.payload.lib(id, 'surface-orphans.mjs'),
+        api.payload.lib(id, 'push-outcome.mjs'),
         api.payload.script(
           id,
           'projects-sync-hook.mjs',

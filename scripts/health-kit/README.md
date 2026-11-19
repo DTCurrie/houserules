@@ -1,20 +1,31 @@
 # Audit kit
 
-Tooling for a health pass: a finding-block format, a checker that enforces it, and a template
-for the synthesis. Nothing in the kit names a pass. A pass's destinations, report prefixes, and
-run path go on the command line and in its briefs, never into these files.
+Tooling specific to a health pass: a template for the synthesis and the gather scripts. The
+finding-block format, the checker, and the synthesis scaffold ship with the `research` module,
+which this repo dogfoods. After `pnpm dogfood` they run from `.claude/scripts/`, and the format
+is at `.claude/reference/findings-format.md`. Nothing in the kit names a pass. A pass picks its
+report id prefixes and its destination set in its own briefs and plan, and passes the
+destinations on the command line.
 
-The kit is dev-only tooling for this repo, never published. Run a script from the repo root as
-`node scripts/health-kit/<script>.mjs`, or from this directory as the examples below do.
+The kit is dev-only tooling for this repo, never published. Run the kit's own files from the
+tracked path, as `node scripts/health-kit/<path>` from the repo root.
 
-- `FORMAT.md`: the finding block and the rules the checker enforces.
-- `check-findings.mjs`: node builtins only, no install.
 - `synthesis-template.md`: the `##` headings of a synthesis, in order.
+- `gather/`: the gather scripts. See `gather/README.md`.
+
+## Build the synthesis
+
+Start from the scaffold, then rank, reconcile, and merge by hand.
+
+```
+node .claude/scripts/scaffold-synthesis.mjs --destinations <a,b,...,none> \
+  --template scripts/health-kit/synthesis-template.md <report.md> <report.md> ... > SYNTHESIS.md
+```
 
 ## Check one report
 
 ```
-node check-findings.mjs --destinations <a,b,...,none> <report.md>
+node .claude/scripts/check-findings.mjs --destinations <a,b,...,none> <report.md>
 ```
 
 ## Check the synthesis
@@ -22,12 +33,9 @@ node check-findings.mjs --destinations <a,b,...,none> <report.md>
 Pass the synthesis alone, because `--order` and `--covers` apply to every file given.
 
 ```
-node check-findings.mjs --destinations <a,b,...,none> --order synthesis-template.md \
+node .claude/scripts/check-findings.mjs --destinations <a,b,...,none> \
+  --order scripts/health-kit/synthesis-template.md \
   --covers <report.md,report.md,...> <SYNTHESIS.md>
 ```
 
 Exit 0 is clean, 1 names each defect, and 2 is a usage error such as a missing `--destinations`.
-
-## Gather scripts
-
-See `gather/`.

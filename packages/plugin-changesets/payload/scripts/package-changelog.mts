@@ -12,9 +12,9 @@
  * Targets are defined in .claude/houserules.config.json (the `targets` array. `name` is the key).
  *
  * Storage (per target):
- *   <changelogPath>            — human-readable index (subject, file count, backlog, reason, changes)
- *   <logPath>                  — append-only JSONL. Same metadata plus the full file list.
- *                                Diffs/prior file content are NOT stored — recover via
+ *   <changelogPath>            : human-readable index (subject, file count, backlog, reason, changes)
+ *   <logPath>                  : append-only JSONL. Same metadata plus the full file list.
+ *                                Diffs/prior file content are NOT stored. Recover via
  *                                `git show <sha>` or `git show <sha>~1:<file>`.
  */
 

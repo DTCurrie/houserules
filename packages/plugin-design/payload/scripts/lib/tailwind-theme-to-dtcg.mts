@@ -119,7 +119,7 @@ function collectThemeEntries(theme: TailwindTheme): CollectedTheme {
     }
   }
 
-  return { entries, multiplier };
+  return multiplier === undefined ? { entries } : { entries, multiplier };
 }
 
 function originOf(theme: TailwindTheme, key: string): ThemeOrigin {

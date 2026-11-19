@@ -403,6 +403,7 @@ describe('Stop hook timing from stop_hook_summary records', () => {
         p95: 90,
         max: 90,
         timeouts: 0,
+        slowRuns: 0,
       },
       {
         hook: 'lint-format-fix.mjs',
@@ -411,6 +412,7 @@ describe('Stop hook timing from stop_hook_summary records', () => {
         p95: 200000,
         max: 200000,
         timeouts: 1,
+        slowRuns: 1,
       },
       {
         hook: 'Some custom hook',
@@ -419,6 +421,7 @@ describe('Stop hook timing from stop_hook_summary records', () => {
         p95: 5,
         max: 5,
         timeouts: 0,
+        slowRuns: 0,
       },
       // per-summary sums: 200010, 75, 90, 0, 40
       {
@@ -428,6 +431,7 @@ describe('Stop hook timing from stop_hook_summary records', () => {
         p95: 200010,
         max: 200010,
         timeouts: 1,
+        slowRuns: 1,
       },
     ]);
   });
@@ -448,5 +452,64 @@ describe('Stop hook timing from stop_hook_summary records', () => {
     expect(renderHookHealth({ ...base, stopHooks: [] }).at(-1)).toBe(
       '  Stop hooks: no Stop runs were recorded.',
     );
+  });
+});
+
+describe('Stop hook tail share', () => {
+  const row = (command: string, durations: number[]) =>
+    durations.map((durationMs) =>
+      stopSummaryLine('2.1.327', [{ command, durationMs }]),
+    );
+  const render = (lines: string[]) => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(corpus, 'tail.jsonl', lines.join('\n'));
+    return computeHookHealth(corpus);
+  };
+
+  it('counts 1001 ms as slow and 1000 ms as not', () => {
+    const report = render(row('a.mjs', [1000, 1001, 5]));
+    expect(report.stopHooks?.[0]).toMatchObject({ runs: 3, slowRuns: 1 });
+  });
+
+  it('renders 26 slow of 531 runs beside a p95 of 40 ms (bimodal tail under 5 percent)', () => {
+    const durations = [
+      ...Array<number>(26).fill(2000),
+      ...Array<number>(505).fill(40),
+    ];
+    const rendered = renderHookHealth(render(row('a.mjs', durations))).join(
+      '\n',
+    );
+    expect(rendered).toContain('26 (4.90%)');
+    expect(rendered).toMatch(/a\.mjs\s+531\s+40\s+40\s+26 \(4\.90%\)/);
+  });
+
+  it('renders 28 slow of 553 runs beside a p95 of 2000 ms (unimodal slow)', () => {
+    const durations = [
+      ...Array<number>(28).fill(2000),
+      ...Array<number>(525).fill(1000),
+    ];
+    const report = render(row('a.mjs', durations));
+    expect(report.stopHooks?.[0]).toMatchObject({ runs: 553, slowRuns: 28 });
+    expect(renderHookHealth(report).join('\n')).toContain('28 (5.06%)');
+  });
+
+  it('renders a hook with no slow runs as 0 (0.00%)', () => {
+    const rendered = renderHookHealth(render(row('a.mjs', [1, 2, 3]))).join(
+      '\n',
+    );
+    expect(rendered).toContain('0 (0.00%)');
+    expect(rendered).not.toContain('NaN');
+  });
+
+  it('renders a row from an older document as an absent marker', () => {
+    const rendered = renderHookHealth({
+      rows: [],
+      crashSignatures: [],
+      bashCalls: 0,
+      stopHooks: [
+        { hook: 'a.mjs', runs: 4, p50: 1, p95: 2, max: 3, timeouts: 0 },
+      ],
+    }).join('\n');
+    expect(rendered).toMatch(/a\.mjs\s+4\s+1\s+2\s+-\s+3\s+0/);
   });
 });

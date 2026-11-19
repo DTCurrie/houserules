@@ -1,12 +1,13 @@
 # Finding format
 
-Every report in a pass and the `SYNTHESIS.md` that merges them use this one block shape per
-finding, so the synthesis can merge by field instead of re-reading prose. `check-findings.mjs`
-beside this file validates them. A report with zero findings is valid when it says why.
+Every research report that carries checked findings, and the synthesis that merges them, use
+this one block shape per finding, so the synthesis can merge by field instead of re-reading
+prose. `.claude/scripts/check-findings.mjs` validates them, and
+`.claude/scripts/scaffold-synthesis.mjs` builds the synthesis skeleton from them. A report with
+zero findings is valid when it says why.
 
-This file and the checker hold nothing specific to one pass. The pass supplies its report id
-prefixes in its own briefs, its run path wherever it names one, and its destination set on the
-checker's command line.
+This file and both scripts hold nothing specific to one study. The brief supplies the report id
+prefixes and any run path, and the destination set goes on the checker's command line.
 
 ```
 ### <PREFIX>-<NN> <short title>
@@ -45,14 +46,14 @@ Rules the checker enforces:
 
 ## Destination rule
 
-The action word says what to do, and the destination says which phase does it. A pass defines
+The action word says what to do, and the destination says which phase does it. The study defines
 what each destination means in its own plan. A row that fits two destinations goes to the one
-the pass ranks first, and no row goes to two.
+the study ranks first, and no row goes to two.
 
 ## Prefixes
 
-Each report in a pass gets a two-letter prefix, and the synthesis gets its own. The pass picks
-them and lists them in its briefs.
+Each report gets a two-letter prefix, and the synthesis gets its own. The study picks them and
+lists them in its briefs.
 
 ## Prior verdicts
 

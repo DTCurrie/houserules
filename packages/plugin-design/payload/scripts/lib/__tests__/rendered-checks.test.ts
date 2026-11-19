@@ -14,7 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { discoverChrome, launchSession } from '../cdp-session.mts';
 import { backgroundAlpha, checkRenderedPage } from '../rendered-checks.mts';
 
-import type { RenderSession } from '../cdp-session.mts';
+import type { RenderSession, SessionResult } from '../cdp-session.mts';
 
 function stubSession(evaluations: unknown[]): RenderSession {
   let call = 0;
@@ -208,19 +208,26 @@ describe('checkRenderedPage, computed color drift against an oklch token', () =>
   });
 });
 
-describe.skipIf(!discoverChrome())(
+async function launchBeforeAnyHookTimerStarts(): Promise<
+  SessionResult<RenderSession> | undefined
+> {
+  return discoverChrome() ? await launchSession() : undefined;
+}
+
+const liveLaunch = await launchBeforeAnyHookTimerStarts();
+
+afterAll(async () => {
+  if (liveLaunch?.ok) await liveLaunch.value.close();
+});
+
+describe.skipIf(!liveLaunch)(
   'checkRenderedPage, against a live rendered page',
   () => {
     let session: RenderSession | undefined;
 
-    beforeAll(async () => {
-      const launched = await launchSession();
-      if (!launched.ok) throw new Error(launched.error);
-      session = launched.value;
-    });
-
-    afterAll(async () => {
-      await session?.close();
+    beforeAll(() => {
+      if (!liveLaunch?.ok) throw new Error(liveLaunch?.error);
+      session = liveLaunch.value;
     });
 
     it('reports composited contrast against the nearest opaque ancestor, not the page body', async () => {

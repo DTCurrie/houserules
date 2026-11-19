@@ -16,9 +16,10 @@
  * document quotes precisely in order to forbid it. That is why this reads prose through
  * `stripToProse` and never through its own regex.
  */
-import { readFileSync, realpathSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
+import { readCheckerInputs } from '@houserules/payload/checker-input';
 import { stripToProse } from '@houserules/payload/markdown-segment';
 import {
   emptyReport,
@@ -572,15 +573,11 @@ function main(): void {
   const files = process.argv.slice(2);
   const report = emptyReport();
   report.declined.push(...DECLINED);
-  for (const file of files) {
-    let text: string;
-    try {
-      text = readFileSync(file, 'utf8');
-    } catch {
-      continue;
-    }
-    report.findings.push(...checkProse(file, text).findings);
+  const { inputs, unreadable } = readCheckerInputs(files);
+  for (const { path, text } of inputs) {
+    report.findings.push(...checkProse(path, text).findings);
   }
+  report.findings.push(...unreadable);
   process.stdout.write(`${renderReport(report)}\n`);
   process.exit(exitCodeFor(report));
 }

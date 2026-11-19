@@ -15,6 +15,7 @@ import { payloadPath } from '../../paths.js';
 import { MODULES } from '../../plan.js';
 import type { Registry } from '../../plugin-registry.js';
 import type { CheckResult, Finding } from '@houserules/api';
+import { compareSemver, parseSemver } from './semver.js';
 import { allHookCommands } from './settings-wiring.js';
 
 /** Every `.mjs` script name shipped across a set of built payload directories. */
@@ -87,51 +88,6 @@ function isUpdateCheckSkipped(env: NodeJS.ProcessEnv): boolean {
     'CONTINUOUS_INTEGRATION' in env ||
     Object.keys(env).some((key) => key.startsWith('CI_'))
   );
-}
-
-interface Semver {
-  release: number[];
-  prerelease: string[];
-}
-
-function parseSemver(version: string): Semver | null {
-  const match =
-    /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(
-      version.trim(),
-    );
-  if (!match) return null;
-  return {
-    release: [Number(match[1]), Number(match[2]), Number(match[3])],
-    prerelease: match[4] ? match[4].split('.') : [],
-  };
-}
-
-/** Semver precedence of two prerelease identifiers: numeric ones compare as numbers and sort first. */
-function compareIdentifiers(left: string, right: string): number {
-  const leftNumeric = /^\d+$/.test(left);
-  const rightNumeric = /^\d+$/.test(right);
-  if (leftNumeric && rightNumeric) return Number(left) - Number(right);
-  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-/** Semver precedence: numeric release parts first, then a prerelease sorts below its release. */
-function compareSemver(left: Semver, right: Semver): number {
-  for (let i = 0; i < left.release.length; i++) {
-    const difference = left.release[i]! - right.release[i]!;
-    if (difference !== 0) return difference;
-  }
-  if (!left.prerelease.length || !right.prerelease.length)
-    return right.prerelease.length - left.prerelease.length;
-  const shared = Math.min(left.prerelease.length, right.prerelease.length);
-  for (let i = 0; i < shared; i++) {
-    const difference = compareIdentifiers(
-      left.prerelease[i]!,
-      right.prerelease[i]!,
-    );
-    if (difference !== 0) return difference;
-  }
-  return left.prerelease.length - right.prerelease.length;
 }
 
 /** The command that moves the repo's devDependency CLI to `latest`, in the repo's package manager. */

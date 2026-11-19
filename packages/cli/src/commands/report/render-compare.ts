@@ -1,6 +1,10 @@
 import { computeListPrice } from './model-prices.js';
 import { entrypointMedians } from './resident-context.js';
-import { STOP_TOTAL_LABEL } from './hook-health.js';
+import {
+  SLOW_STOP_LABEL,
+  STOP_TOTAL_LABEL,
+  formatTailShare,
+} from './hook-health.js';
 import type { ReportDocument } from './report-document.js';
 import { renderTable } from './render-table.js';
 import { weightedInput } from './token-usage.js';
@@ -123,6 +127,13 @@ function hookRows(documents: ReportDocument[]): Row[] {
     optionalRow('stop p95 ms (per Stop)', documents, (doc) =>
       doc.hooks.stopHooks ? stopTotal(doc)?.p95 : undefined,
     ),
+    [
+      `stop ${SLOW_STOP_LABEL} (per Stop)`,
+      ...documents.map((doc) => {
+        const total = stopTotal(doc);
+        return doc.hooks.stopHooks && total ? formatTailShare(total) : MISSING;
+      }),
+    ],
     ...unionRows(
       documents,
       (doc) => new Map(doc.hooks.rows.map((hook) => [hook.hook, hook.fires])),

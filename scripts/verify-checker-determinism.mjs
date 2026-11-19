@@ -40,16 +40,11 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { stageChecker } from './lib/stage-checker.mjs';
+
 const repoRoot = join(import.meta.dirname, '..');
 const packagesDir = join(repoRoot, 'packages');
-const sharedLibDir = join(
-  repoRoot,
-  'packages/payload/payload-dist/scripts/lib',
-);
-
 const FINDINGS_IMPORT = /from\s+['"]\.\/lib\/findings\.mjs['"]/;
-const LIB_IMPORT = /from\s+['"]\.\/lib\/([\w.-]+\.mjs)['"]/g;
-const SIBLING_LIB_IMPORT = /from\s+['"]\.\/([\w.-]+\.mjs)['"]/g;
 
 /** Every top-level `.mjs` under a package's `payload-dist/scripts/`, skipping `lib/`. */
 function scriptFilesOf(packageDir) {
@@ -72,57 +67,6 @@ function discoverCheckers() {
     }
   }
   return checkers;
-}
-
-/** Where a lib named `libName` actually lives: the checker's own package first, then shared. */
-function resolveLibSource(packageDir, libName) {
-  const local = join(packageDir, 'payload-dist', 'scripts', 'lib', libName);
-  if (existsSync(local)) return local;
-  const shared = join(sharedLibDir, libName);
-  if (existsSync(shared)) return shared;
-  return null;
-}
-
-/**
- * Every lib a checker needs, transitively, by name. Throws when a lib the source imports
- * cannot be found anywhere, since that is a real build defect this gate should not hide.
- */
-function collectLibs(checker) {
-  const libs = new Map();
-  const queue = [...checker.source.matchAll(LIB_IMPORT)].map((m) => m[1]);
-  const visited = new Set(queue);
-  while (queue.length > 0) {
-    const libName = queue.shift();
-    const src = resolveLibSource(checker.packageDir, libName);
-    if (!src) {
-      throw new Error(
-        `${checker.scriptPath} imports ./lib/${libName}, which resolves nowhere`,
-      );
-    }
-    const content = readFileSync(src, 'utf8');
-    libs.set(libName, content);
-    for (const match of content.matchAll(SIBLING_LIB_IMPORT)) {
-      const sibling = match[1];
-      if (visited.has(sibling)) continue;
-      visited.add(sibling);
-      queue.push(sibling);
-    }
-  }
-  return libs;
-}
-
-/** Stages a checker plus its libs into a fresh `scripts/` tree. Returns the script's path. */
-function stageChecker(checker, stagingRoot) {
-  const scriptsDir = join(stagingRoot, 'scripts');
-  const libDir = join(scriptsDir, 'lib');
-  mkdirSync(libDir, { recursive: true });
-  const basename = checker.scriptPath.split('/').pop();
-  const stagedScript = join(scriptsDir, basename);
-  writeFileSync(stagedScript, checker.source);
-  for (const [libName, content] of collectLibs(checker)) {
-    writeFileSync(join(libDir, libName), content);
-  }
-  return stagedScript;
 }
 
 function initGitFixture(dir) {

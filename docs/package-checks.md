@@ -14,12 +14,16 @@ any package's tsconfig, wireit block, or scripts.
   costs about 0.3s rather than 26s, and a `--filter`ed command pulls that package's upstream
   builds in on its own. And a `files` glob that misses a real input fails **silently**, by
   skipping work that should have run, so add the glob the same day you add the input.
+- Root `check` is `check:types` plus `verify`. `check:types` is the per-package typecheck
+  aggregator. `verify` is the one list of post-build assertions CI runs, and it depends on
+  `build`, so a cold `pnpm check` builds first. CI's `lint` job runs `check:types` alone and
+  its `packages` job runs `verify`. The list itself lives in the root `package.json`, not here.
 - Wireit's declared `output` plus its default `clean: true` is what guarantees a deleted
   source ships no orphan, replacing the old `rm -rf` prefixes. The CLI's `build` also runs
   `publint` after assembling `payload-dist/`.
 - Root `pnpm build|test|check` are wireit aggregators that depend on each package's script
   by path, replacing `pnpm -r`. The three lists differ on purpose: `build` names all
-  seventeen packages, `check` sixteen, and `test` fifteen. The thin `houserules` package has
+  seventeen packages, the per-package typecheck behind `check` sixteen, and `test` fifteen. The thin `houserules` package has
   no source, so it carries only `build`, and `@houserules/test` ships no `test` script. Naming
   a script that does not exist is a wireit error rather than the no-op `pnpm -r` gave you. Root `lint` is also
   wireit, and `lint:fix`, `format`, and `format:check` stay plain scripts. A fixer mutates

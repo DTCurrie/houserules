@@ -346,7 +346,7 @@ release time by `changeset version`. The module wires the agent side of that:
   hand-write `.changeset/*.md`.
 - **`/changeset` skill + `changeset-writer` agent (haiku)** inspect the diff, pick
   patch/minor/major (major always asks first), and record via the script.
-- **`/changeset-condense` skill** folds pending changesets that describe one feature into one
+- **`/changeset condense`** folds pending changesets that describe one feature into one
   entry. Everything in `.changeset/` ships in the same release, so a later changeset that
   supersedes, extends, or fixes an earlier one otherwise leaves a release note describing
   something no user ever saw.

@@ -21,7 +21,7 @@ Each place two inputs disagree, with both positions, the pick, and the reason.
 
 ## Findings
 
-The merged `SY-NN` finding blocks in the shape `FORMAT.md` defines.
+The merged `SY-NN` finding blocks in the shape `.claude/reference/findings-format.md` defines.
 
 ## Phase shape
 

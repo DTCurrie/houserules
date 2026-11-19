@@ -44,7 +44,7 @@ const topLevelScripts = readdirSync(EMITTED_SCRIPTS_DIR).filter((f) =>
 
 describe('the emitted payload script tree', () => {
   it('has scripts to check', () => {
-    expect(allScripts.length).toBe(13);
+    expect(allScripts.length).toBe(14);
   });
 
   it.each(topLevelScripts)('%s keeps its shebang', (file) => {

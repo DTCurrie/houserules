@@ -245,6 +245,72 @@ describe('report', () => {
     expect(kept.stdout).not.toMatch(/skipped\)/);
   });
 
+  describe('a --since that cuts every session', () => {
+    const CUT = '2027-01-01';
+
+    function addDatedSession(name: string, timestamp: string): void {
+      const top = runIn(root, 'git', ['rev-parse', '--show-toplevel']).trim();
+      writeFileSync(
+        join(cfgDir, 'projects', claudeProjectDir(top), `${name}.jsonl`),
+        `${JSON.stringify({
+          type: 'assistant',
+          timestamp,
+          message: {
+            model: 'claude-haiku-4-5',
+            usage: { input_tokens: 3, output_tokens: 2 },
+          },
+        })}\n`,
+      );
+    }
+
+    it('names the cut in the text render and omits the no-transcripts message', () => {
+      addDatedSession('sess-44444444', '2026-08-09T10:30:00.000Z');
+
+      const r = runCli(['report', root, '--since', CUT], { env });
+
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toContain(`(2 session(s) before ${CUT} skipped)`);
+      expect(r.stdout).toContain(
+        `No sessions on or after ${CUT}, so there is nothing to report.`,
+      );
+      expect(r.stdout).not.toMatch(/No \.jsonl transcripts/);
+    });
+
+    it('writes a zero-session export and exits 0', () => {
+      const out = join(cfgDir, 'cut-export.json');
+
+      const r = runCli(['report', root, '--since', CUT, '--export', out], {
+        env,
+      });
+
+      expect(r.status, r.stderr).toBe(0);
+      const document = JSON.parse(readFileSync(out, 'utf8')) as {
+        meta: { sessions: number };
+      };
+      expect(document.meta.sessions).toBe(0);
+    });
+
+    it('prints a zero-session document under --json with no --export', () => {
+      const r = runCli(['report', root, '--since', CUT, '--json'], { env });
+
+      expect(r.status, r.stderr).toBe(0);
+      const document = JSON.parse(r.stdout) as { meta: { sessions: number } };
+      expect(document.meta.sessions).toBe(0);
+    });
+
+    it('still says no transcripts when the project dir holds none', () => {
+      const top = runIn(root, 'git', ['rev-parse', '--show-toplevel']).trim();
+      rmSync(
+        join(cfgDir, 'projects', claudeProjectDir(top), 'sess-abcdef12.jsonl'),
+      );
+
+      const r = runCli(['report', root, '--since', CUT], { env });
+
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toMatch(/No \.jsonl transcripts in /);
+    });
+  });
+
   describe('corpus window', () => {
     const DAY_MS = 86_400_000;
     const WARNING = /cleanupPeriodDays, default 30/;

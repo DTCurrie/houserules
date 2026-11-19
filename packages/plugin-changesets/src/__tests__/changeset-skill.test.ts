@@ -9,7 +9,8 @@ import { manifestOf, settingsOf, sha256 } from '#test/installed-tree';
 const PLUGIN_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_ROOT, alias: 'cs' }];
 
-const SKILL_PATH = '.claude/skills/changeset-condense/SKILL.md';
+const SKILL_PATH = '.claude/skills/changeset/SKILL.md';
+const RETIRED_SKILL_PATH = '.claude/skills/changeset-condense/SKILL.md';
 
 function installed(): string {
   return useInstalledRepo('pnpm-monorepo', {
@@ -22,7 +23,7 @@ function frontmatter(text: string): string {
   return text.split('---')[1] ?? '';
 }
 
-describe('changeset-condense', () => {
+describe('changeset skill condense section', () => {
   it('installs the skill and tracks it under the changesets module', () => {
     const root = installed();
 
@@ -37,6 +38,16 @@ describe('changeset-condense', () => {
     );
   });
 
+  it('does not install a separate changeset-condense skill', () => {
+    const root = installed();
+
+    expect(
+      existsSync(join(root, '.claude/skills/changeset-condense')),
+      'changeset-condense skill directory absent',
+    ).toBe(false);
+    expect(manifestOf(root).files[RETIRED_SKILL_PATH]).toBeUndefined();
+  });
+
   it('carries the routing terms a request to condense changesets would use', () => {
     const root = installed();
 
@@ -45,7 +56,17 @@ describe('changeset-condense', () => {
     );
     expect(description).toMatch(/condens/i);
     expect(description).toMatch(/consolidat/i);
-    expect(description).toMatch(/changeset/i);
+    expect(description).toMatch(/supersedes, extends, or fixes an earlier one/);
+    expect(description).toMatch(/Record a pending release note/);
+  });
+
+  it('has a Condense section that points step 1 at it instead of a separate skill', () => {
+    const root = installed();
+
+    const body = readFileSync(join(root, SKILL_PATH), 'utf8');
+    expect(body).toMatch(/^## Condense$/m);
+    expect(body).toMatch(/\/changeset condense \[id \.\.\.\]/);
+    expect(body).not.toContain('/changeset-condense');
   });
 
   it('names the flag-rename case as one entry superseding another', () => {
@@ -69,9 +90,8 @@ describe('changeset-condense', () => {
 
     const body = readFileSync(join(root, SKILL_PATH), 'utf8');
     expect(body).toMatch(
-      /node \.claude\/scripts\/changeset-write\.mjs --amend/,
+      /node \.claude\/scripts\/changeset-write\.mjs --amend <survivor> --absorb/,
     );
-    expect(body).toMatch(/--absorb/);
     expect(body).toMatch(/Never hand-edit a `\.changeset\/\*\.md`/);
   });
 

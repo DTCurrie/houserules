@@ -7,9 +7,14 @@
  * `test-layout.mts`: this reports rather than tests, since a convention check written as a
  * test would be a lint rule in a test costume.
  */
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import {
+  readCheckerInputs,
+  type CheckerInput,
+} from '@houserules/payload/checker-input';
 
 import {
   emptyReport,
@@ -31,10 +36,7 @@ const SVELTE_CHECK_SKIPPED =
   'the Svelte vitest project structure, since the Svelte guide (testing-svelte.md) is not ' +
   'installed and --svelte was not passed';
 
-export interface FileInput {
-  path: string;
-  text: string;
-}
+type FileInput = CheckerInput;
 
 const DECLINED = [
   'whether a setup file that calls requireAssertions is actually wired via setupFiles, ' +
@@ -133,16 +135,6 @@ export function checkVitestProjectStructure(
   return report;
 }
 
-function readInputs(paths: string[]): FileInput[] {
-  return paths.flatMap((path) => {
-    try {
-      return [{ path, text: readFileSync(path, 'utf8') }];
-    } catch {
-      return [];
-    }
-  });
-}
-
 /**
  * The Svelte project check installs alongside the Svelte guide, so it only runs when that
  * guide is present. This script ships at `.claude/scripts/test-config.mjs`, the guide at
@@ -157,10 +149,11 @@ function main(): void {
   const argv = process.argv.slice(2);
   const svelteFlag = argv.includes('--svelte');
   const paths = argv.filter((arg) => arg !== '--svelte');
-  const files = readInputs(paths);
+  const { inputs: files, unreadable } = readCheckerInputs(paths);
   const checkSvelte = svelteFlag || svelteGuideInstalled();
 
   const report = emptyReport();
+  report.findings.push(...unreadable);
   report.declined.push(...DECLINED);
   if (!checkSvelte) report.declined.push(SVELTE_CHECK_SKIPPED);
   report.findings.push(...checkRequireAssertions(files).findings);

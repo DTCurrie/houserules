@@ -30,6 +30,10 @@ export default definePlugin((api: PluginApi): ModuleDef[] => [
 ]);
 ```
 
+## Compile with `exactOptionalPropertyTypes`
+
+Compile your plugin with `exactOptionalPropertyTypes: true`. `@houserules/api` exports `HouseConfig` and `HouseConfigTarget` through `Simplify` from `type-fest`, and `type-fest` 6 requires the flag, calling `false` unsupported. houserules itself compiles with the flag on. Existing plugins keep working, but turning it on keeps your types consistent with the ones you import.
+
 ## What a plugin gets
 
 `PluginApi` carries three things, all bound to the plugin's own package so it resolves no paths of

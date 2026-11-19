@@ -135,7 +135,7 @@ function decodeBody(content: string | undefined): string {
   }
 }
 
-/** Latest add/update record per id (later lines win); remove tombstones the entry. */
+/** Latest add/update record per id (later lines win). Remove tombstones the entry. */
 function projectBacklog(logFile: string): Map<string, BacklogRecord> {
   const latest = new Map<string, BacklogRecord>();
   if (!existsSync(logFile)) return latest;

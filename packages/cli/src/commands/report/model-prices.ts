@@ -45,7 +45,7 @@ export function lookupModelPrice(modelId: string): ModelPrice | undefined {
   return undefined;
 }
 
-export interface UnpricedModel {
+interface UnpricedModel {
   model: string;
   /** Fraction of the report's weighted input, 0 to 1. */
   weightedShare: number;

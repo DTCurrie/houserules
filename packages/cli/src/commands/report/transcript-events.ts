@@ -14,11 +14,11 @@ const INTERRUPT_PREFIX = '[Request interrupted by user';
 /** One hook attachment. Attachments exist only when the hook emitted output. */
 export interface HookFire {
   hookName: string;
-  exitCode?: number;
+  exitCode?: number | undefined;
   stderr: string;
   content: string;
-  durationMs?: number;
-  toolUseID?: string;
+  durationMs?: number | undefined;
+  toolUseID?: string | undefined;
   /** Tool_use count the session had seen at this fire, anchoring one with no toolUseID. */
   afterToolUseCount: number;
 }
@@ -26,37 +26,37 @@ export interface HookFire {
 /** A PreToolUse refusal the harness recorded as an error tool_result rather than an attachment. */
 export interface HookOutcome {
   tool: string;
-  toolUseId?: string;
+  toolUseId?: string | undefined;
   /** The hook's stderr, with the echoed hook command stripped. */
   stderr: string;
   isSubagent: boolean;
 }
 
 /** One hook inside a `stop_hook_summary` record, named as the record names it. */
-export interface StopHookRun {
+interface StopHookRun {
   /** The hook's `statusMessage` when it set one, otherwise its command. Never mapped here. */
   command: string;
-  durationMs?: number;
+  durationMs?: number | undefined;
 }
 
 /**
  * One `system` record with subtype `stop_hook_summary`: every Stop hook that ran at one turn
  * end, including the quiet runs no attachment records.
  */
-export interface StopHookSummary {
+interface StopHookSummary {
   hooks: StopHookRun[];
   /** Entries in the record's `hookErrors`. */
   errorCount: number;
   preventedContinuation: boolean;
   /** The record's `version` stamp, e.g. `2.1.327`. */
-  version?: string;
+  version?: string | undefined;
   isSubagent: boolean;
 }
 
 /** One main-chain API response, counted once on the same basis as the token totals. */
 export interface MainRequest {
-  ts?: number;
-  model?: string;
+  ts?: number | undefined;
+  model?: string | undefined;
   input: number;
   output: number;
   cacheRead: number;
@@ -71,15 +71,15 @@ interface ToolUse {
   /** First {@link COMMAND_PREVIEW_LENGTH} chars of a Bash command, empty for other tools. */
   command: string;
   /** Set only for a model-initiated Skill tool call. */
-  skill?: string;
+  skill?: string | undefined;
   /** Set only for an `Artifact` tool call that names an `action` input. */
-  action?: string;
-  ts?: number;
+  action?: string | undefined;
+  ts?: number | undefined;
   isSidechain: boolean;
 }
 
 interface ToolResultMeta {
-  toolUseId?: string;
+  toolUseId?: string | undefined;
   bytes: number;
   denied: boolean;
   interrupted: boolean;
@@ -88,7 +88,7 @@ interface ToolResultMeta {
 /** A slash command the user typed. It injects the skill with no Skill tool call. */
 interface CommandFire {
   skill: string;
-  ts?: number;
+  ts?: number | undefined;
 }
 
 export interface SessionEvents {
@@ -165,16 +165,16 @@ export interface FileUsage {
  */
 interface ResidentCapture {
   sessionId: string;
-  ts?: number;
+  ts?: number | undefined;
   /** How the session was launched, e.g. `cli` for interactive and `sdk-cli` for headless. */
-  entrypoint?: string;
+  entrypoint?: string | undefined;
   systemPromptBytes?: number;
   /** One entry per file in the first `instructions` attachment, e.g. `Project`, `AutoMem`. */
   instructionFiles: { type: string; bytes: number }[];
   skillListingBytes?: number;
-  skillCount?: number;
+  skillCount?: number | undefined;
   agentListingBytes?: number;
-  agentCount?: number;
+  agentCount?: number | undefined;
   outputStyleBytes?: number;
   nestedMemoryLoads: number;
   nestedMemoryBytes: number;
@@ -213,7 +213,7 @@ export interface CorpusOptions {
    * Epoch ms. A session file whose first timestamped record predates it is skipped, along
    * with its subagent transcripts. A file with no timestamps falls back to its mtime.
    */
-  since?: number;
+  since?: number | undefined;
 }
 
 interface Usage {
@@ -454,7 +454,7 @@ export function ingestTranscript(
 /** Every skill invocation: model Skill tool calls plus user-typed slash commands. */
 export interface SkillFire {
   skill: string;
-  ts?: number;
+  ts?: number | undefined;
   sessionId: string;
   source: 'model' | 'user';
 }

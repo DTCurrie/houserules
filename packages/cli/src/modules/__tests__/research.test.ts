@@ -27,6 +27,32 @@ describe('research module plan()', () => {
     expect(action).toBeDefined();
   });
 
+  it('copies the finding format doc under reference, not agents', () => {
+    const action = actions.find(
+      (a) => a.kind === 'copy' && a.dest.endsWith('findings-format.md'),
+    );
+    expect(action).toMatchObject({
+      dest: '.claude/reference/findings-format.md',
+    });
+  });
+
+  it('copies the check-findings script', () => {
+    const action = actions.find(
+      (a) =>
+        a.kind === 'copy' && a.dest === '.claude/scripts/check-findings.mjs',
+    );
+    expect(action).toBeDefined();
+  });
+
+  it('copies the scaffold-synthesis script', () => {
+    const action = actions.find(
+      (a) =>
+        a.kind === 'copy' &&
+        a.dest === '.claude/scripts/scaffold-synthesis.mjs',
+    );
+    expect(action).toBeDefined();
+  });
+
   it('advises how a planner dispatches these agents from a research phase', () => {
     const advise = actions.find((a) => a.kind === 'advise');
     expect(advise).toBeDefined();

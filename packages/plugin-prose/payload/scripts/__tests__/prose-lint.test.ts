@@ -346,12 +346,37 @@ describe('findBritishSpellings', () => {
 });
 
 describe('prose-lint.mjs given a file it cannot read', () => {
-  it('exits 0 and reports no findings rather than crashing', () => {
+  it('still reports findings for the readable file and names the missing path, exiting 1', () => {
     const root = stage();
+    const rel = writeMarkdown(root, 'doc.md', 'A clause; a second clause.\n');
 
-    const r = lint(root, 'missing.md');
+    const r = lint(root, rel, 'missing.md');
 
-    expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toContain('No findings.');
+    expect(r.status, r.stderr).toBe(1);
+    expect(r.stdout).toContain('[prose-voice/no-semicolons]');
+    expect(r.stdout).toContain('missing.md');
+    expect(r.stdout).toContain('[checker/unreadable-input]');
+  });
+
+  it('reports one argument holding two existing paths joined by a space as unreadable', () => {
+    const root = stage();
+    const a = writeMarkdown(root, 'a.md', 'Clean.\n');
+    const b = writeMarkdown(root, 'b.md', 'Clean.\n');
+
+    const r = lint(root, `${a} ${b}`);
+
+    expect(r.status, r.stdout).toBe(1);
+    expect(r.stdout).toContain('[checker/unreadable-input]');
+    expect(r.stdout).not.toContain('No findings.');
+  });
+
+  it('reports a directory argument as unreadable', () => {
+    const root = stage();
+    mkdirSync(join(root, 'docs'), { recursive: true });
+
+    const r = lint(root, 'docs');
+
+    expect(r.status, r.stdout).toBe(1);
+    expect(r.stdout).toContain('[checker/unreadable-input]');
   });
 });

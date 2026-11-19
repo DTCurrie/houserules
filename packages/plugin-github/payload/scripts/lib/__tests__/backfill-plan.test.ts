@@ -38,6 +38,7 @@ function boardEntry(overrides: Partial<BoardEntry> = {}): BoardEntry {
     under: null,
     supersedes: [],
     supersededBy: null,
+    issueState: null,
     ...overrides,
   };
 }

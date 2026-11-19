@@ -262,6 +262,11 @@ function skillTriggersSection(answers: Answers): string[] {
     bullets.push(
       '- Ledger ids stay in the ledger, never in code, docs, changesets, commit messages, or issues.',
     );
+  if (has('design'))
+    bullets.push(
+      '- Building UI, an artifact, or a deck? Take colors, type, and spacing from',
+      '  `.claude/design/tokens.json`, never a palette of your own.',
+    );
   if (!bullets.length) return [];
   return ['### Skill triggers', '', ...bullets, ''];
 }

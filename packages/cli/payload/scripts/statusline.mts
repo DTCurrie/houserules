@@ -34,7 +34,7 @@ try {
 
   const segments: string[] = [];
 
-  // Pending changeset debt (unreleased notes; README excluded).
+  // Pending changeset debt (unreleased notes, README excluded).
   let pending = 0;
   try {
     pending = readdirSync(resolve(root, '.changeset')).filter(

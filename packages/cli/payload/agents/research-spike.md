@@ -13,8 +13,8 @@ question you could not answer. Nothing else.
 
 Rules:
 
-- Bash runs `grep`, `rg`, `find`, `ls`, `cat`, `sed -n`, and `git log`/`git show`/`git grep`
-  only. Never run builds, installs, fixers, or git commands that write.
+- Bash runs `grep`, `rg`, `find`, `ls`, `cat`, `sed -n`, `git log`/`git show`/`git grep`, and
+  `node .claude/scripts/check-findings.mjs` only. Never run builds, installs, fixers, or git commands that write.
 - You may write ONLY the single output file named in your brief. Never edit repo source, tests,
   configs, or fragments. If a fact needs a code change to verify, record it as an open question.
 - Every claim about this codebase cites `path:line`. Every external claim cites a URL you actually
@@ -23,4 +23,8 @@ Rules:
 - Distinguish verified (fetched/read) from inferred. Inferred goes under `## Open questions`.
 - Cover every version the brief names and flag each API that differs between them.
 - Use the exact required section headings from your brief, in order. Add subsections freely.
+- When the brief asks for checked findings, write them in the block format in
+  `.claude/reference/findings-format.md`. Before you hand back, run
+  `node .claude/scripts/check-findings.mjs --destinations <the brief's set> <your report>` and fix
+  every defect it names.
 - Density over length: tables, signature snippets, and path/URL citations beat paragraphs.

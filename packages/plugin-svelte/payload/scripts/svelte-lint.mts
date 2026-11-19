@@ -23,8 +23,13 @@
  * `test-config.mts`: it reads a passed config file's text rather than resolving or running
  * ESLint itself.
  */
-import { readFileSync, realpathSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+
+import {
+  readCheckerInputs,
+  type CheckerInput,
+} from '@houserules/payload/checker-input';
 
 import {
   emptyReport,
@@ -79,10 +84,7 @@ const DECLINED = [
     'since it is allowed by path alone',
 ];
 
-export interface FileInput {
-  path: string;
-  text: string;
-}
+type FileInput = CheckerInput;
 
 function withoutHtmlComments(markup: string): string {
   return markup.replace(/<!--[\s\S]*?-->/g, (match) =>
@@ -182,19 +184,12 @@ export function checkEslintSvelteConfig(file: FileInput): Report {
   return report;
 }
 
-function readInputs(paths: string[]): FileInput[] {
-  return paths.flatMap((path) => {
-    try {
-      return [{ path, text: readFileSync(path, 'utf8') }];
-    } catch {
-      return [];
-    }
-  });
-}
-
 function main(): void {
-  const files = readInputs(process.argv.slice(2));
+  const { inputs: files, unreadable } = readCheckerInputs(
+    process.argv.slice(2),
+  );
   const report = emptyReport();
+  report.findings.push(...unreadable);
   report.declined.push(...DECLINED);
   for (const file of files) {
     report.findings.push(...checkComponent(file.path, file.text).findings);

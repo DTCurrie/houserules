@@ -14,7 +14,7 @@ interface HookHealthRow {
 }
 
 /** One Stop hook's timing over every `stop_hook_summary`, quiet runs included. */
-export interface StopHookRow {
+interface StopHookRow {
   /** The script the hook runs, mapped back from the record's `statusMessage` where one was set. */
   hook: string;
   runs: number;
@@ -27,6 +27,11 @@ export interface StopHookRow {
    * `durationMs` counts as 0 ms.
    */
   timeouts: number;
+  /**
+   * Runs longer than {@link SLOW_STOP_MS}, the tail the p95 can hide. Absent in a document
+   * exported before it was counted, and rendered as absent, not zero.
+   */
+  slowRuns?: number;
 }
 
 export interface HookHealthReport {
@@ -47,6 +52,12 @@ interface HookAccumulator {
 
 const STOP_HOOK_TIMEOUT_MS = 120_000;
 const MS_PER_SECOND = 1000;
+const SLOW_STOP_MS = 1000;
+/** Column label for {@link formatTailShare}, derived so it tracks the threshold. */
+export const SLOW_STOP_LABEL = `over ${SLOW_STOP_MS / MS_PER_SECOND}s`;
+const PERCENT = 100;
+const TAIL_SHARE_DECIMALS = 2;
+const ABSENT = '-';
 export const STOP_TOTAL_LABEL = '(per Stop total)';
 
 // A summary names a hook by its statusMessage when it set one. lint-fix.ts sets the first
@@ -72,7 +83,15 @@ function stopRow(hook: string, durations: number[]): StopHookRow {
     p95: percentile(sorted, 95),
     max: sorted.at(-1) ?? 0,
     timeouts: sorted.filter((ms) => ms >= STOP_HOOK_TIMEOUT_MS).length,
+    slowRuns: sorted.filter((ms) => ms > SLOW_STOP_MS).length,
   };
+}
+
+/** `<count> (<pct>%)` of runs over {@link SLOW_STOP_MS}, or `-` for a row without the count. */
+export function formatTailShare(row: StopHookRow): string {
+  if (row.slowRuns === undefined) return ABSENT;
+  const pct = row.runs ? (row.slowRuns / row.runs) * PERCENT : 0;
+  return `${row.slowRuns} (${pct.toFixed(TAIL_SHARE_DECIMALS)}%)`;
 }
 
 function computeStopHooks(corpus: Corpus): StopHookRow[] {
@@ -243,12 +262,13 @@ function renderStopHooks(stopHooks: StopHookRow[]): string[] {
     '',
     '  Stop hooks (every stop_hook_summary, quiet runs included):',
     ...renderTable(
-      ['hook', 'runs', 'p50ms', 'p95ms', 'maxms', 'timeouts'],
+      ['hook', 'runs', 'p50ms', 'p95ms', SLOW_STOP_LABEL, 'maxms', 'timeouts'],
       stopHooks.map((row) => [
         row.hook,
         row.runs,
         row.p50,
         row.p95,
+        formatTailShare(row),
         row.max,
         row.timeouts,
       ]),

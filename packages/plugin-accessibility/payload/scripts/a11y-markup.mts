@@ -6,13 +6,14 @@
  * reads `package.json` for the accessibility linter each declared framework should have.
  *
  * Every other clause in the accessibility rules stays JUDGMENT or HYBRID and is not attempted
- * here. `wcag.mts` routes markup to WCAG criteria; this checker is the first in the package that
+ * here. `wcag.mts` routes markup to WCAG criteria. This checker is the first in the package that
  * actually decides one, and it decides only the four listed above.
  */
-import { readFileSync, realpathSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { readCheckerInputs } from '@houserules/payload/checker-input';
 import {
   emptyReport,
   exitCodeFor,
@@ -193,13 +194,9 @@ function main(): void {
   const files = process.argv.slice(2);
   const report: Report = emptyReport();
   report.declined.push(...DECLINED);
-  for (const file of files) {
-    let source: string;
-    try {
-      source = readFileSync(file, 'utf8');
-    } catch {
-      continue;
-    }
+  const { inputs, unreadable } = readCheckerInputs(files);
+  report.findings.push(...unreadable);
+  for (const { path: file, text: source } of inputs) {
     if (basename(file) === 'package.json') {
       report.findings.push(
         ...checkA11yTooling(file, declaredDependencies(source)),

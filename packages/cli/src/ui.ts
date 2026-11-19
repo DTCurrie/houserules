@@ -286,7 +286,7 @@ export async function selectModuleOptions(
         options: options.choices.map((choice) => ({
           value: choice.value,
           label: choice.label,
-          hint: choice.hint,
+          ...(choice.hint !== undefined && { hint: choice.hint }),
         })),
         initialValues: resolved[m.id] ?? [...options.defaults],
         required: false,

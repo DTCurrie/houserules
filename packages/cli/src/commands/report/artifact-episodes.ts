@@ -20,8 +20,8 @@ interface ArtifactEpisode {
   /** The weighted input of the whole session, the denominator for the episode's share. */
   sessionWeightedInput: number;
   /** The model on most of the episode's requests. */
-  model?: string;
-  wallMs?: number;
+  model?: string | undefined;
+  wallMs?: number | undefined;
 }
 
 export interface ArtifactReport {
@@ -33,7 +33,7 @@ const MS_PER_MINUTE = 60_000;
 const PERCENT = 100;
 
 interface ArtifactCall {
-  ts?: number;
+  ts?: number | undefined;
   isPublish: boolean;
   isQuickstart: boolean;
 }

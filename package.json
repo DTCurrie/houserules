@@ -17,6 +17,8 @@
   "scripts": {
     "build": "wireit",
     "check": "wireit",
+    "check:types": "wireit",
+    "verify": "wireit",
     "test": "wireit",
     "lint": "wireit",
     "lint:fix": "eslint . --fix",
@@ -29,12 +31,13 @@
     "dogfood": "pnpm --filter @houserules/cli dogfood",
     "dogfood:watch": "pnpm --filter @houserules/cli dogfood:watch",
     "attw": "wireit",
-    "verify:packages": "node scripts/verify-packages.mjs",
-    "verify:payload-copy-set": "node scripts/verify-payload-copy-set.mjs",
-    "verify:payload-test-coverage": "node scripts/verify-payload-test-coverage.mjs",
-    "verify:payload-lib-declarations": "node scripts/verify-payload-lib-declarations.mjs",
-    "verify:checker-determinism": "node scripts/verify-checker-determinism.mjs",
-    "verify:knip": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles",
+    "verify:packages": "wireit",
+    "verify:payload-copy-set": "wireit",
+    "verify:payload-test-coverage": "wireit",
+    "verify:payload-lib-declarations": "wireit",
+    "verify:checker-determinism": "wireit",
+    "verify:payload-prose": "wireit",
+    "verify:knip": "wireit",
     "verify:knip:audit": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles --include-entry-exports"
   },
   "wireit": {
@@ -78,6 +81,119 @@
       ]
     },
     "check": {
+      "//": "The local gate runs what CI runs. CI splits the same two halves across its lint and packages jobs.",
+      "dependencies": [
+        "check:types",
+        "verify"
+      ]
+    },
+    "verify": {
+      "//": "Every post-build assertion CI runs, listed once. CI runs `pnpm verify`, and `pnpm check` depends on it.",
+      "dependencies": [
+        "attw",
+        "verify:packages",
+        "verify:payload-copy-set",
+        "verify:payload-test-coverage",
+        "verify:payload-lib-declarations",
+        "verify:checker-determinism",
+        "verify:payload-prose",
+        "verify:knip"
+      ]
+    },
+    "verify:packages": {
+      "command": "node scripts/verify-packages.mjs",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "scripts/verify-packages.mjs",
+        "packages/*/package.json"
+      ],
+      "output": []
+    },
+    "verify:payload-copy-set": {
+      "command": "node scripts/verify-payload-copy-set.mjs",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "scripts/verify-payload-copy-set.mjs",
+        "packages/*/package.json",
+        "packages/*/payload/**",
+        "!**/node_modules/**"
+      ],
+      "output": []
+    },
+    "verify:payload-test-coverage": {
+      "command": "node scripts/verify-payload-test-coverage.mjs",
+      "files": [
+        "scripts/verify-payload-test-coverage.mjs",
+        "packages/*/package.json",
+        "packages/*/tsconfig.json",
+        "packages/*/vitest.config.ts",
+        "packages/*/payload/**/*.mts",
+        "!**/node_modules/**"
+      ],
+      "output": []
+    },
+    "verify:payload-lib-declarations": {
+      "command": "node scripts/verify-payload-lib-declarations.mjs",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "scripts/verify-payload-lib-declarations.mjs",
+        "packages/*/package.json",
+        "packages/*/src/**/*.ts",
+        "!**/node_modules/**"
+      ],
+      "output": []
+    },
+    "verify:checker-determinism": {
+      "command": "node scripts/verify-checker-determinism.mjs",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "scripts/verify-checker-determinism.mjs",
+        "scripts/lib/**/*.mjs"
+      ],
+      "output": []
+    },
+    "verify:payload-prose": {
+      "command": "node scripts/verify-payload-prose.mjs",
+      "dependencies": [
+        "./packages/plugin-prose:build",
+        "./packages/payload:build"
+      ],
+      "files": [
+        "scripts/verify-payload-prose.mjs",
+        "scripts/lib/**/*.mjs",
+        "packages/*/payload/**/*.mts",
+        "packages/*/payload/**/*.md",
+        "!**/node_modules/**"
+      ],
+      "output": []
+    },
+    "verify:knip": {
+      "command": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles",
+      "files": [
+        "knip.ts",
+        "package.json",
+        "pnpm-workspace.yaml",
+        "packages/*/package.json",
+        "packages/*/src/**/*.ts",
+        "packages/*/test/**/*.ts",
+        "packages/*/payload/**/*.mts",
+        "packages/*/payload/**/*.ts",
+        "packages/*/scripts/**/*.mjs",
+        "packages/*/*.ts",
+        "scripts/**/*.mjs",
+        "!**/node_modules/**"
+      ],
+      "output": []
+    },
+    "check:types": {
       "dependencies": [
         "./packages/api:check",
         "./packages/cli:check",

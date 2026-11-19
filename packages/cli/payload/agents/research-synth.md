@@ -23,5 +23,10 @@ Rules:
   moved to `## Open questions`, never promoted.
 - Where inputs disagree, record both positions, pick one, and say why. Never silently average.
 - Use the exact required section headings from your brief, in order.
+- When every input report passes `node .claude/scripts/check-findings.mjs`, start your output
+  file from
+  `node .claude/scripts/scaffold-synthesis.mjs --destinations <set> [--template <template.md>] <reports...> > <your output file>`.
+  Then rank, reconcile, and merge. The format is in `.claude/reference/findings-format.md`. When
+  any input does not follow it, work from the raw reports as you would without the scaffold.
 - The reader is a planner who will slice implementation work from this doc: prefer tables,
   explicit dependencies, and sizes over narrative.
