@@ -5,9 +5,15 @@ const config: KnipConfig = {
   // instead, because every `entry` below exists for a reason knip cannot see.
   workspaces: {
     '.': {
-      // Dev-facing probe documented in CLAUDE.md, invoked by hand as
-      // `node scripts/probe-plugin.mjs <pkg>`. Nothing in the workspace imports it.
-      entry: ['scripts/probe-plugin.mjs'],
+      entry: [
+        // Dev-facing probe documented in CLAUDE.md, invoked by hand as
+        // `node scripts/probe-plugin.mjs <pkg>`. Nothing in the workspace imports it.
+        'scripts/probe-plugin.mjs',
+        // The health-pass audit kit, documented in scripts/health-kit/README.md and invoked
+        // by hand as `node scripts/health-kit/<script>.mjs`. Nothing in the workspace
+        // imports it.
+        'scripts/health-kit/**/*.mjs',
+      ],
     },
     'packages/cli': {
       entry: [
