@@ -42,11 +42,12 @@ export interface TurnRecord {
 
 /**
  * Whether a `user` record carries a human prompt rather than a tool result. A meta record
- * (a command caveat), a task notification, and a compaction summary are inserted by the
- * harness and continue the turn already running. Stopping at one would hide the tool uses
- * before it, such as the dispatch of the background agent that just reported.
+ * (a command caveat, hook feedback, a subagent's hand-back), a task notification, and a
+ * compaction summary are inserted by the harness and continue the turn already running.
+ * Stopping at one would hide the tool uses before it, such as the dispatch of the
+ * background agent that just reported.
  */
-function isHumanPrompt(record: TurnRecord): boolean {
+export function isHumanPrompt(record: TurnRecord): boolean {
   if (record.type !== 'user' || record.isMeta === true) return false;
   if (record.isCompactSummary === true) return false;
   if (record.origin?.kind === 'task-notification') return false;
