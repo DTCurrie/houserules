@@ -36,11 +36,15 @@ const GATES: readonly ClaudeGate[] = [
   },
   {
     version: '2.1.299',
-    reason: 'orchestrate.workerTools holds a server-level tool pattern',
-    applies: (ctx) =>
-      (ctx.claude.houseConfig?.orchestrate?.workerTools ?? []).some((tool) =>
-        SERVER_LEVEL_TOOL.test(tool),
-      ),
+    reason:
+      'orchestrate.workerTools or orchestratorTools holds a server-level tool pattern',
+    applies: (ctx) => {
+      const orchestrate = ctx.claude.houseConfig?.orchestrate;
+      return [
+        ...(orchestrate?.workerTools ?? []),
+        ...(orchestrate?.orchestratorTools ?? []),
+      ].some((tool) => SERVER_LEVEL_TOOL.test(tool));
+    },
   },
   {
     version: '2.1.314',

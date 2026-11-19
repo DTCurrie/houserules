@@ -230,6 +230,12 @@ const HouseConfigSchema = z.strictObject({
         .describe(
           'Extra tools appended to the `tools:` line of task-worker and every installed variant by `houserules update`. Each entry is a full callable name, `mcp__<server>__<tool>` such as "mcp__svelte__svelte-autofixer", or a server pattern, `mcp__<server>` or `mcp__<server>__*` (Claude Code 2.1.299+), for an MCP tool a repo rule requires.',
         ),
+      orchestratorTools: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Extra tools appended to the `tools:` line of phase-orchestrator by `houserules update`, in the same entry forms as `workerTools`. A phase whose steps need a tool that line lacks cannot run one layer down, so /orchestrate runs it at the main conversation after the nested phases return.',
+        ),
       maxWorkers: z
         .number()
         .int()

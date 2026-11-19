@@ -5,6 +5,7 @@ import type {
   Action,
   Answers,
   CheckResult,
+  Finding,
   ModuleGroup,
   ModuleOptions,
   ModuleRequirement,
@@ -118,6 +119,28 @@ export function renderTaskWorkerVariant(
 }
 
 /**
+ * Installs `phase-orchestrator.md`: a plain copy of its payload source with no `extraTools`,
+ * otherwise that source written with `extraTools` appended to its `tools:` line, the same
+ * rendering `orchestrate.workerTools` gives task-worker.
+ */
+function phaseOrchestratorAgent(extraTools: string[]): Action {
+  const reason =
+    'the orchestrator /orchestrate dispatches by default: one phase, its own task-workers, fixed report format';
+  if (extraTools.length === 0) return agent(id, 'phase-orchestrator', reason);
+  const source = readFileSync(
+    payloadPath('agents', 'phase-orchestrator.md'),
+    'utf8',
+  );
+  return {
+    kind: 'write',
+    dest: '.claude/agents/phase-orchestrator.md',
+    content: appendExtraTools(source, extraTools),
+    module: id,
+    reason: `${reason}, with orchestrate.orchestratorTools appended to its tools: line`,
+  };
+}
+
+/**
  * The execution layer for planned phases: the skill, the task-worker agent it dispatches,
  * and the phase-orchestrator agent that runs each phase one layer down by default, with
  * `--flat` keeping the single layer at the main conversation. The orchestrator
@@ -163,10 +186,8 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       reason: 'deep-dive reference the orchestrate SKILL.md defers to',
     })),
     baseAgent,
-    agent(
-      id,
-      'phase-orchestrator',
-      'the orchestrator /orchestrate dispatches by default: one phase, its own task-workers, fixed report format',
+    phaseOrchestratorAgent(
+      ctx.claude?.houseConfig?.orchestrate?.orchestratorTools ?? [],
     ),
     script(
       id,
@@ -193,38 +214,54 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
   ];
 }
 
+/** Each `orchestrate` key that appends tools, and the installed agent files it appends them to. */
+const TOOL_KEYS = [
+  { key: 'workerTools', agentFile: /^task-worker.*\.md$/ },
+  { key: 'orchestratorTools', agentFile: /^phase-orchestrator\.md$/ },
+] as const;
+
 /**
  * Warns when `orchestrate.workerTools` names a tool that an installed `task-worker*.md`
- * agent's `tools:` line does not carry, so a wave dispatches with a rule-required tool
- * silently missing. Nothing to check when the key is absent or empty. Never throws: an
- * unreadable agent file is skipped rather than failing the whole health check.
+ * agent's `tools:` line does not carry, or `orchestrate.orchestratorTools` one that
+ * `phase-orchestrator.md` does not, so a dispatch goes out with a configured tool silently
+ * missing. Nothing to check when both keys are absent or empty. Never throws: an unreadable
+ * agent file is skipped rather than failing the whole health check.
  */
 export function check(ctx: Ctx): CheckResult {
-  const extraTools = ctx.claude?.houseConfig?.orchestrate?.workerTools ?? [];
-  if (extraTools.length === 0) return { findings: [], readouts: [] };
-
-  const findings = ctx.claude.agents
-    .filter((file) => /^task-worker.*\.md$/.test(file))
-    .flatMap((file) => {
-      let text: string;
-      try {
-        text = readFileSync(join(ctx.root, '.claude', 'agents', file), 'utf8');
-      } catch {
-        return [];
-      }
-
-      const toolsLine = text.match(/^tools: .*$/m)?.[0] ?? '';
-      const carried = toolsLine.slice('tools: '.length).split(', ');
-      const missing = extraTools.filter((tool) => !carried.includes(tool));
-      if (missing.length === 0) return [];
-
-      return [
-        {
-          level: 'WARN' as const,
-          msg: `agent ${file} is missing ${missing.join(', ')} from its tools: line — run npx houserules update to refresh it`,
-        },
-      ];
-    });
+  const orchestrate = ctx.claude?.houseConfig?.orchestrate;
+  const findings = TOOL_KEYS.flatMap(({ key, agentFile }) => {
+    const tools = orchestrate?.[key] ?? [];
+    if (tools.length === 0) return [];
+    return ctx.claude.agents
+      .filter((file) => agentFile.test(file))
+      .flatMap((file) => missingToolsFinding(ctx.root, file, tools));
+  });
 
   return { findings, readouts: [] };
+}
+
+/** A WARN naming each of `tools` the installed agent `file` lacks on its `tools:` line, or none when the file is unreadable. */
+function missingToolsFinding(
+  root: string,
+  file: string,
+  tools: string[],
+): Finding[] {
+  let text: string;
+  try {
+    text = readFileSync(join(root, '.claude', 'agents', file), 'utf8');
+  } catch {
+    return [];
+  }
+
+  const toolsLine = text.match(/^tools: .*$/m)?.[0] ?? '';
+  const carried = toolsLine.slice('tools: '.length).split(', ');
+  const missing = tools.filter((tool) => !carried.includes(tool));
+  if (missing.length === 0) return [];
+
+  return [
+    {
+      level: 'WARN',
+      msg: `agent ${file} is missing ${missing.join(', ')} from its tools: line — run npx houserules update to refresh it`,
+    },
+  ];
 }
