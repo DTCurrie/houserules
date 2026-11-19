@@ -1,5 +1,11 @@
 # @houserules/plugin-prose
 
+## 0.2.4
+
+### Patch Changes
+
+- 60517b4: Rules declare the other modules they mention.
+
 ## 0.2.3
 
 ### Patch Changes

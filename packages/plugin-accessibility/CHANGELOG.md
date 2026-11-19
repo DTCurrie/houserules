@@ -1,5 +1,16 @@
 # @houserules/plugin-accessibility
 
+## 0.3.0
+
+### Minor Changes
+
+- 60517b4: `accessibility-review` now installs the `accessibility` module it needs.
+
+### Patch Changes
+
+- 60517b4: Accessibility linter check recognizes `eslint-plugin-jsx-a11y-x` and requires `eslint-plugin-astro` for Astro.
+- 60517b4: Skills, rules, and templates now say what happens when a module they mention is absent.
+
 ## 0.2.2
 
 ### Patch Changes

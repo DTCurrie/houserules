@@ -1,5 +1,11 @@
 # @houserules/plugin-typescript
 
+## 0.1.4
+
+### Patch Changes
+
+- 60517b4: Rules declare the other modules they mention.
+
 ## 0.1.3
 
 ### Patch Changes
