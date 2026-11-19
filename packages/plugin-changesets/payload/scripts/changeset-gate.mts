@@ -13,7 +13,8 @@
  *        the call ("Propose, then confirm... Wait for approval").
  *
  * h6 and h9 read `transcript_path` off the Stop hook payload and are silent when it is
- * absent, since ordering has nothing to check without a transcript.
+ * absent, since ordering has nothing to check without a transcript. They judge only the
+ * calls made since the last human prompt.
  *
  * Exit 2 with the report on stderr when a gate is violated. Every failure path exits 0,
  * because a nudge hook must never break a session. A turn whose transcript shows only
@@ -37,8 +38,10 @@ import { loadConfigSafe } from '@houserules/payload/config';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { git, readStdinJson, repoRoot } from '@houserules/payload/proc';
 import {
+  isHumanPrompt,
   turnStartedAt,
   turnTouchedFiles,
+  type TurnRecord,
 } from '@houserules/payload/transcript-turn';
 import {
   emptyReport,
@@ -53,6 +56,7 @@ const DECLINED = [
   'whether two changesets describe the same feature — feature identity is a reading-comprehension judgment the changeset skill keeps',
   'whether a major/minor/patch level is the RIGHT level for a change — semver judgment stays in the skill',
   'the accuracy of a proposal message shown before an absorb or a major bump — only that a proposal and a user turn happened before the call, never whether the proposal was correct',
+  'whether assistant text written after the user answered narrates the approved call or proposes something new, so text never undoes an answer',
 ];
 
 const CHANGESET_MD = /\.changeset\/[^/]+\.md$/;
@@ -122,12 +126,15 @@ export function checkPackageDrift(
 interface TranscriptContentBlock {
   type?: string;
   text?: string;
+  id?: string;
+  name?: string;
+  tool_use_id?: string;
+  is_error?: boolean;
   input?: { command?: string };
 }
 
-interface TranscriptEntry {
-  type?: string;
-  message?: { content?: TranscriptContentBlock[] };
+interface TranscriptEntry extends TurnRecord {
+  message?: { content?: string | TranscriptContentBlock[] };
 }
 
 /** Parses a Claude Code transcript (JSONL). Malformed lines are skipped, never thrown on. */
@@ -166,18 +173,53 @@ const ORDERING_GATES: OrderingGate[] = [
   },
 ];
 
+/** The content blocks of an entry. A human prompt stored as a bare string has none. */
+function contentBlocks(entry: TranscriptEntry): TranscriptContentBlock[] {
+  const content = entry.message?.content;
+  return Array.isArray(content) ? content : [];
+}
+
+/** The tool-use ids of every AskUserQuestion the assistant asked. */
+function askedQuestionIds(entries: TranscriptEntry[]): Set<string> {
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    for (const block of contentBlocks(entry)) {
+      const isQuestion =
+        block.type === 'tool_use' && block.name === 'AskUserQuestion';
+      if (isQuestion && block.id) ids.add(block.id);
+    }
+  }
+  return ids;
+}
+
+/** Whether an assistant block puts something to the user: text, or an AskUserQuestion. */
+function isProposal(block: TranscriptContentBlock): boolean {
+  if (block.type === 'text') return Boolean(block.text?.trim());
+  return block.type === 'tool_use' && block.name === 'AskUserQuestion';
+}
+
 /**
- * Findings for one tool-use command, given whether a proposal has been made and confirmed.
- *
- * Split out of `checkTranscriptOrdering` so the gate loop reads at one level. The caller
- * owns the propose/confirm state machine, this only judges a single command against it.
+ * Whether a `user` entry is the user answering: a human prompt, or the reply to an
+ * AskUserQuestion. Any other tool result, hook feedback, and a subagent's hand-back come
+ * from the harness, not the user. A reply marked as an error answers nothing.
  */
-function orderingFindingsFor(
-  command: string,
-  proposed: boolean,
-  confirmedSinceProposal: boolean,
-): Finding[] {
-  if (proposed && confirmedSinceProposal) return [];
+function isUserAnswer(
+  entry: TranscriptEntry,
+  questionIds: ReadonlySet<string>,
+): boolean {
+  if (isHumanPrompt(entry)) return true;
+  return contentBlocks(entry).some(
+    (block) =>
+      block.type === 'tool_result' &&
+      block.is_error !== true &&
+      block.tool_use_id !== undefined &&
+      questionIds.has(block.tool_use_id),
+  );
+}
+
+/** Findings for one Bash command, given whether the user answered a proposal before it. */
+function orderingFindingsFor(command: string, isConfirmed: boolean): Finding[] {
+  if (isConfirmed) return [];
   return ORDERING_GATES.filter((gate) => gate.matches(command)).map((gate) => ({
     rule: gate.rule,
     level: 'error' as const,
@@ -188,36 +230,39 @@ function orderingFindingsFor(
 }
 
 /**
- * h6 and h9. A gate call is a violation unless, earlier in the same transcript, an
- * assistant text block appeared AND a user message followed it before this call. That is
- * the structural shape of "propose, then confirm, then act" — a same-turn call with no
- * intervening user turn never got a chance to be approved.
+ * h6 and h9. A gated call is a violation unless the user answered after a proposal and
+ * before the call. A proposal is any assistant text, or an AskUserQuestion. An answer is a
+ * human prompt, or the reply to that question. Text written after the answer leaves it
+ * standing, because a line narrating the approved call is not a new proposal.
+ *
+ * Any text counts, so every human prompt after the first answers the text before it. In
+ * practice this flags a gated call made before the user's first answer of the session.
+ * Only calls made since the last human prompt are reported, so a violation is reported in
+ * the turn that made it, not again at every later stop.
  */
 export function checkTranscriptOrdering(entries: TranscriptEntry[]): Report {
   const report = emptyReport();
-  let proposed = false;
-  let confirmedSinceProposal = false;
+  const turnStart = entries.findLastIndex(isHumanPrompt);
+  const questionIds = askedQuestionIds(entries);
+  let hasProposal = false;
+  let isConfirmed = false;
 
-  for (const entry of entries) {
-    const blocks = entry.message?.content ?? [];
+  for (const [index, entry] of entries.entries()) {
     if (entry.type === 'user') {
-      if (proposed) confirmedSinceProposal = true;
+      if (hasProposal && isUserAnswer(entry, questionIds)) isConfirmed = true;
       continue;
     }
     if (entry.type !== 'assistant') continue;
-    for (const block of blocks) {
-      if (block.type === 'text' && block.text?.trim()) {
-        proposed = true;
-        confirmedSinceProposal = false;
-      } else if (block.type === 'tool_use' && block.input?.command) {
+    for (const block of contentBlocks(entry)) {
+      if (isProposal(block)) hasProposal = true;
+      else if (
+        block.type === 'tool_use' &&
+        block.input?.command &&
+        index > turnStart
+      )
         report.findings.push(
-          ...orderingFindingsFor(
-            block.input.command,
-            proposed,
-            confirmedSinceProposal,
-          ),
+          ...orderingFindingsFor(block.input.command, isConfirmed),
         );
-      }
     }
   }
   return report;

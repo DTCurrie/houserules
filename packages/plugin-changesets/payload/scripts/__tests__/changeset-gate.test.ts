@@ -145,6 +145,54 @@ function majorCallEntry(
   };
 }
 
+function promptEntry(text: string) {
+  return { type: 'user', message: { content: text } };
+}
+
+function askEntry(id: string) {
+  return {
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', id, name: 'AskUserQuestion' }] },
+  };
+}
+
+function bashEntry(id: string, command: string) {
+  return {
+    type: 'assistant',
+    message: {
+      content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }],
+    },
+  };
+}
+
+function toolResultEntry(toolUseId: string, isError: boolean) {
+  return {
+    type: 'user',
+    message: {
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          is_error: isError,
+          content: 'ok',
+        },
+      ],
+    },
+  };
+}
+
+function handBackEntry() {
+  return {
+    type: 'user',
+    isMeta: true,
+    origin: { kind: 'peer' },
+    message: {
+      content:
+        'Another Claude session sent a message: [Subagent hand-back] Phase 2 DONE.',
+    },
+  };
+}
+
 describe('checkTranscriptOrdering', () => {
   it('flags an --absorb call with no proposal text anywhere before it', () => {
     const report = checkTranscriptOrdering([absorbCallEntry()]);
@@ -209,6 +257,76 @@ describe('checkTranscriptOrdering', () => {
       majorCallEntry(
         'node .claude/scripts/changeset-write.mjs --pkg @fix/cityville:patch --summary "x"',
       ),
+    ]);
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('does not let a line narrating the call undo the confirmation before it', () => {
+    const report = checkTranscriptOrdering([
+      textEntry('Proposing to absorb kit-b into kit-a.'),
+      promptEntry('Go ahead.'),
+      textEntry('Absorbing kit-b now.'),
+      absorbCallEntry(),
+    ]);
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('counts the reply to an AskUserQuestion as the user confirming', () => {
+    const report = checkTranscriptOrdering([
+      textEntry('Two pending changesets describe one change.'),
+      askEntry('toolu_ask'),
+      toolResultEntry('toolu_ask', false),
+      absorbCallEntry(),
+    ]);
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('takes an AskUserQuestion as the proposal when no text comes before it', () => {
+    const report = checkTranscriptOrdering([
+      promptEntry('Condense the pending changesets.'),
+      askEntry('toolu_ask'),
+      toolResultEntry('toolu_ask', false),
+      absorbCallEntry(),
+    ]);
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it.each([
+    {
+      reply: 'a Bash tool result',
+      between: [
+        bashEntry('toolu_ls', 'ls .changeset'),
+        toolResultEntry('toolu_ls', false),
+      ],
+    },
+    {
+      reply: 'an AskUserQuestion reply marked as an error',
+      between: [askEntry('toolu_ask'), toolResultEntry('toolu_ask', true)],
+    },
+    { reply: 'a subagent hand-back', between: [handBackEntry()] },
+  ])('does not take $reply as the user confirming', ({ between }) => {
+    const report = checkTranscriptOrdering([
+      textEntry('Proposing to absorb kit-b into kit-a.'),
+      ...between,
+      absorbCallEntry(),
+    ]);
+
+    expect(report.findings.map((finding) => finding.rule)).toEqual([
+      'changeset-gate/h9-absorb-order',
+    ]);
+  });
+
+  it('does not report a call made before the last human prompt', () => {
+    const report = checkTranscriptOrdering([
+      promptEntry('Condense the pending changesets.'),
+      absorbCallEntry(),
+      textEntry('Absorbed kit-b into kit-a.'),
+      promptEntry('Now open the PR.'),
+      textEntry('Opening it.'),
     ]);
 
     expect(report.findings).toEqual([]);
