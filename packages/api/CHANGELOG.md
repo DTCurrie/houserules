@@ -1,5 +1,18 @@
 # @houserules/api
 
+## 0.8.0
+
+### Minor Changes
+
+- 60517b4: `ModuleDef.skillTriggers` lets a module contribute its own CLAUDE.md trigger bullets.
+- 34028da: Phases needing extra tools nest via `orchestrate.orchestratorTools`, or run flat without it.
+- 60517b4: `ModuleDef` can declare modules it requires or optionally uses, per module or option value.
+
+### Patch Changes
+
+- Updated dependencies [2b40197]
+  - @houserules/payload@0.5.1
+
 ## 0.7.3
 
 ### Patch Changes

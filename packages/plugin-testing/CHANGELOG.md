@@ -1,5 +1,11 @@
 # @houserules/plugin-testing
 
+## 0.3.5
+
+### Patch Changes
+
+- 60517b4: Skills, rules, and templates now say what happens when a module they mention is absent.
+
 ## 0.3.4
 
 ### Patch Changes

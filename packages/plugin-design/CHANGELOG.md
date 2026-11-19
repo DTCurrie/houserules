@@ -1,5 +1,17 @@
 # @houserules/plugin-design
 
+## 0.5.0
+
+### Minor Changes
+
+- 60517b4: `design-review`, `design-game`, and `design-tailwind` now install the `design` module they need.
+
+### Patch Changes
+
+- 60517b4: A CDP call Chrome never answers now fails after 30 seconds instead of hanging.
+- 60517b4: Skills, rules, and templates now say what happens when a module they mention is absent.
+- 60517b4: The design bullet, now written by plugin-design, points `design-tailwind` repos at their Tailwind theme.
+
 ## 0.4.3
 
 ### Patch Changes

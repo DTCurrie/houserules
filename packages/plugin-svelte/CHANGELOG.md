@@ -1,5 +1,11 @@
 # @houserules/plugin-svelte
 
+## 0.2.2
+
+### Patch Changes
+
+- 60517b4: Skills, rules, and templates now say what happens when a module they mention is absent.
+
 ## 0.2.1
 
 ### Patch Changes

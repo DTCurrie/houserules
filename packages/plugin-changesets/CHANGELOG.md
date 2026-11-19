@@ -1,5 +1,12 @@
 # @houserules/plugin-changesets
 
+## 0.4.1
+
+### Patch Changes
+
+- 60517b4: Skills, rules, and templates now say what happens when a module they mention is absent.
+- 2b40197: Changeset gate no longer flags absorbs and major bumps the user approved.
+
 ## 0.4.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.5.1
+
+### Patch Changes
+
+- 2b40197: Changeset gate no longer flags absorbs and major bumps the user approved.
+
 ## 0.5.0
 
 ### Minor Changes

@@ -1,5 +1,22 @@
 # @houserules/create
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [60517b4]
+- Updated dependencies [60517b4]
+- Updated dependencies [60517b4]
+- Updated dependencies [60517b4]
+- Updated dependencies [60517b4]
+- Updated dependencies [34028da]
+- Updated dependencies [60517b4]
+- Updated dependencies [60517b4]
+- Updated dependencies [60517b4]
+- Updated dependencies [34028da]
+- Updated dependencies [34028da]
+  - @houserules/cli@0.15.0
+
 ## 0.1.5
 
 ### Patch Changes

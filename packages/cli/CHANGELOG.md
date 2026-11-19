@@ -1,5 +1,30 @@
 # @houserules/cli
 
+## 0.15.0
+
+### Minor Changes
+
+- 60517b4: `init`, `update`, and `modules` install the modules a selected module requires.
+- 60517b4: `doctor` warns when an installed module's requirement is missing.
+- 34028da: Phases needing extra tools nest via `orchestrate.orchestratorTools`, or run flat without it.
+- 60517b4: `orchestrate` now requires `plans` and `sweep`, so selecting it installs both.
+- 34028da: Add a `live` phase signal that `/orchestrate` runs alone and `plan-lint` checks.
+
+### Patch Changes
+
+- 60517b4: `doctor` warns when the managed CLAUDE.md block names a missing `.claude/` path.
+- 60517b4: `init` and `update` previews list the managed block's added and removed lines.
+- 60517b4: Skills, rules, and templates now say what happens when a module they mention is absent.
+- 60517b4: The design bullet, now written by plugin-design, points `design-tailwind` repos at their Tailwind theme.
+- 60517b4: `update` removes dangling symlinks at installed file paths.
+- 34028da: Concurrent phase-orchestrators no longer run package-wide verifies at their barriers.
+- Updated dependencies [60517b4]
+- Updated dependencies [34028da]
+- Updated dependencies [2b40197]
+- Updated dependencies [60517b4]
+  - @houserules/api@0.8.0
+  - @houserules/payload@0.5.1
+
 ## 0.14.0
 
 ### Minor Changes
