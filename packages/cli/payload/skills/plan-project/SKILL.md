@@ -87,6 +87,14 @@ before you commit to a phase boundary, and fan out only for what the docs and gr
 the design thinking itself, plan mode and the Plan agent are available. This skill's job is to
 **persist** the result, not to replace them.
 
+**Grounding stops at the first write.** Read the inputs the request names and this skill's
+references, plus a few targeted greps, then write the files. Any fact a phase needs becomes a step
+in that phase, such as "confirm X", rather than a lookup now. The recorded excuses, and their
+answers:
+
+- "I should confirm this before cutting phases": write the phase with that check as its first step.
+- "`plan-lint` might reject the cut": run it after writing and fix what it reports.
+
 A phase whose work is answering questions rather than writing code can name the `research-spike`
 agent in its sub-plan, one spike per scoped question set, each writing one report into the plan
 workspace. A follow-up synthesis step names `research-synth` to merge those reports into one

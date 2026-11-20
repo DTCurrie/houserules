@@ -20,7 +20,8 @@ start. It is described last.
 
 ## 1. The bar
 
-List each phase you expect, with its write roots. Count hub files among them: a shared test file,
+List each phase you expect, with its write roots, from what you already know. Grounding stops at
+the first write, as `SKILL.md` section 2 says. Count hub files among them: a shared test file,
 the composition root, a shared render or report module, the spec every phase updates, the lockfile.
 Then answer four yes or no questions in order. The first no decides, and it routes to the tier it
 names.
