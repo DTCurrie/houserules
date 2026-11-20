@@ -1,5 +1,40 @@
 # @houserules/cli
 
+## 0.16.0
+
+### Minor Changes
+
+- 1ab1be5: Milestones group plans into ordered steps, and `plan-lint` checks them and prints their gates.
+- e5d8da6: `closeout.mjs` checks a plan's checklist, `Closes` lines, and report sources.
+- e5d8da6: A `closeout-worker` agent runs a plan's closeout from a new `plan-project` template.
+- e5d8da6: Plan phases can carry a `flat` signal that runs them in the dispatcher's own context.
+- eac8920: `update` refreshes stale generated scripts and templates instead of keeping them as edits.
+- eac8920: Stop fixer skips missing scripts, and opt-in `fix.passPaths` scopes fixes to changed files.
+
+### Patch Changes
+
+- 1ab1be5: `/orchestrate`, review, and verify skills wait on subagents in the foreground without stalling.
+- eac8920: The install manifest records plugins without absolute paths, and `update` keeps them.
+- eac8920: `plan-lint` checks plan paths under every top-level directory and target prefix.
+- eac8920: `report --export` carries counts describing the install's fix setup.
+- e5d8da6: `report --export` carries each session's weighted input.
+- eac8920: CLI usage errors print their message without a stack trace.
+- eac8920: `doctor` flags hooks whose `$CLAUDE_PROJECT_DIR` script is missing.
+- e5d8da6: The Bash guard allows read-only `git stash list` and `git stash show`.
+- e5d8da6: `update` exits 2 on a `houserules.config.json` the schema rejects.
+- e5d8da6: `report` names the exporting CLI version in a single import's heading.
+- e5d8da6: Workers draft under another name when a report-named `Write` is refused.
+- eac8920: The trim readout reports bytes above the cap per tool.
+- e5d8da6: The Stop fixer kills its whole process group on timeout.
+- e5d8da6: `doctor` warns when a SessionStart or Stop hook exits 1 on a missing script.
+- e5d8da6: `report` lists each timed-out Stop hook run with its date and session.
+- eac8920: `report --export` keeps guard block reasons with private paths and patterns masked.
+- eac8920: `report` prices Claude Haiku 4.5.
+- Updated dependencies [eac8920]
+- Updated dependencies [eac8920]
+  - @houserules/api@0.9.0
+  - @houserules/payload@0.6.0
+
 ## 0.15.0
 
 ### Minor Changes

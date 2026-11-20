@@ -1,5 +1,12 @@
 # @houserules/plugin-design
 
+## 0.5.1
+
+### Patch Changes
+
+- 1ab1be5: `/orchestrate`, review, and verify skills wait on subagents in the foreground without stalling.
+- eac8920: Design checks close their Chrome process and profile on exit or interrupt.
+
 ## 0.5.0
 
 ### Minor Changes

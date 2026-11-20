@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.6.0
+
+### Minor Changes
+
+- eac8920: Stop fixer skips missing scripts, and opt-in `fix.passPaths` scopes fixes to changed files.
+
 ## 0.5.1
 
 ### Patch Changes
