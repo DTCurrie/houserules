@@ -11,12 +11,14 @@
  *
  * Usage: plan-lint.mjs
  *
- * Scans every `.claude/plans/*` workspace and impact-map file in the repo. Takes no
+ * Scans every `.claude/plans/*` workspace and impact-map file in the repo. A directory holding
+ * `MILESTONE.md` is a milestone: each subdirectory of it holding `ROADMAP.md` is linted as a
+ * plan, and the milestone checks run over the members together. Takes no
  * arguments, because the object under check is the whole `.claude/plans/` tree, not a file
  * list a caller would otherwise have to enumerate itself.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 
@@ -47,6 +49,8 @@ const DECLINED = [
   'wave-owns glob overlap between slices, deferred with the candidate itself: judging whether two textually distinct globs are safe to run in parallel needs real glob-intersection, not literal string matching',
   'whether a test pinned by a `## Review Focus` item exists in the tree, which is a phase-close check in `orchestrate`, not a property of the plan file',
   "whether two disjoint `**Domain:**` roots stay disjoint at run time, which is the orchestrator's `owns` check over the files a slice actually touches",
+  "whether two milestone step items collide through a shared build graph, which the step's `Close` command catches when it runs alone",
+  "whether one milestone step item's acceptance reads another item's output, which the step's `Close` command catches when it runs alone",
 ];
 
 interface SliceTable {
@@ -247,6 +251,30 @@ export function parseSignals(markdown: string): string[] {
     .filter((signal) => signal !== '');
 }
 
+/** The `**Signals:**` values a phase may carry. `none` reads as no signal. */
+const KNOWN_SIGNALS = new Set(['wide', 'ui', 'live', 'owner']);
+
+/** Warns on each `**Signals:**` value outside `wide`, `ui`, `live`, `owner`. */
+export function checkSignals(file: string, markdown: string): Report {
+  const report = emptyReport();
+  for (const signal of parseSignals(markdown)) {
+    if (signal === 'none' || KNOWN_SIGNALS.has(signal)) continue;
+    report.findings.push({
+      rule: 'plan-lint/unknown-signal',
+      level: 'warn',
+      file,
+      line: null,
+      msg: `unknown signal \`${signal}\`, use wide, ui, live, owner, or none`,
+    });
+  }
+  return report;
+}
+
+/** True when a status cell reads DROPPED, with or without its parenthetical. */
+function isDroppedStatus(status: string | null): boolean {
+  return status !== null && /^DROPPED\b/.test(status);
+}
+
 /**
  * Checks that every ROADMAP phase line names the same status, ignoring any trailing
  * parenthetical, as the `**Status:**` header of the sub-plan it links to. A ROADMAP marked
@@ -265,7 +293,7 @@ export function checkRoadmapSync(
   const report = emptyReport();
   const lineRe = new RegExp(ROADMAP_PHASE_LINE.source, 'g');
   const baseOf = (status: string): string => {
-    const m = status.match(/^(TODO|IN PROGRESS|DONE|BLOCKED)\b/);
+    const m = status.match(/^(TODO|IN PROGRESS|DONE|DROPPED|BLOCKED)\b/);
     return m?.[1] ?? status.trim();
   };
   let match: RegExpExecArray | null;
@@ -448,6 +476,9 @@ export function checkPhaseSchedule(
 
   phases.forEach((first, index) => {
     for (const second of phases.slice(index + 1)) {
+      if (isDroppedStatus(first.status) || isDroppedStatus(second.status)) {
+        continue;
+      }
       if (inCycle(first.number) || inCycle(second.number)) continue;
       if (broken.has(first.number) || broken.has(second.number)) continue;
       if (ancestors.get(first.number)?.has(second.number)) continue;
@@ -489,6 +520,813 @@ export function checkPhaseSchedule(
       }
     }
   });
+  return report;
+}
+
+/** A row of a milestone's `## Members` table. */
+export interface MilestoneMember {
+  name: string;
+  owns: string;
+  verify: string;
+}
+
+/** A row of a milestone's `## Contracts` table. `version` is null when its cell is not an integer. */
+export interface MilestoneContract {
+  id: string;
+  path: string;
+  version: number | null;
+  /** A `<member>/<phase-slug>` reference. */
+  producer: string;
+  /** `<member>/<phase-slug>` references. */
+  consumers: string[];
+}
+
+/** One `## Gates` bullet, such as ``G1 · OPEN · decision · auth approach · blocks `sign-up` ``. */
+export interface MilestoneGate {
+  id: string;
+  /** `OPEN`, `CLOSED`, or `WAIVED`, with any parenthetical dropped. */
+  state: string;
+  kind: string;
+  subject: string;
+  /** The slug of the step the gate blocks. */
+  blocks: string;
+}
+
+/** One claim on a step's `Uses` line: an item holding a resource. */
+export interface MilestoneResourceUse {
+  item: string;
+  resource: string;
+}
+
+/** One `### Step:` section of `MILESTONE.md`. */
+export interface MilestoneStep {
+  slug: string;
+  /** The raw status cell, parenthetical included, such as `DONE (2026-11-19)`. */
+  status: string;
+  /** `<member>/<phase-slug>` references, or null for a scope line, which has no `Items` line. */
+  items: string[] | null;
+  seam: string | null;
+  close: string | null;
+  /** Gate ids from the `Needs` line, empty for `none` or no line. */
+  needs: string[];
+  uses: MilestoneResourceUse[];
+  /** The 1-based line of the `### Step:` heading. */
+  line: number;
+}
+
+/** A parsed `MILESTONE.md`. */
+export interface Milestone {
+  /** The `**Status:**` header value, or null when there is none. */
+  status: string | null;
+  members: MilestoneMember[];
+  /** Path roots with trailing slashes dropped. */
+  heldPaths: string[];
+  contracts: MilestoneContract[];
+  /** Declared resource names. */
+  resources: string[];
+  gates: MilestoneGate[];
+  /** In file order, which is execution order. */
+  steps: MilestoneStep[];
+}
+
+/** One phase of a member plan, as the milestone checks read it. */
+export interface MemberPhase {
+  number: number;
+  /** The `<slug>` of `phase-N-<slug>.md`. */
+  slug: string;
+  /** The member ROADMAP's status cell for this phase, parenthetical included. */
+  status: string;
+  /** Parsed by `parseDomain` from the sub-plan, or null when it has no `**Domain:**` line. */
+  domain: string[] | null;
+  /** Parsed by `parseSignals` from the sub-plan. */
+  signals: string[];
+}
+
+/** Each member's phases, keyed by the member name the `## Members` table uses. */
+export type MemberPlans = Record<string, MemberPhase[]>;
+
+/** Splits a markdown table row into trimmed cells, dropping the outer pipes. */
+function splitTableRow(line: string): string[] {
+  const cells = line.split('|').map((cell) => cell.trim());
+  if (cells[0] === '') cells.shift();
+  if (cells[cells.length - 1] === '') cells.pop();
+  return cells;
+}
+
+/** The data rows of the table in `lines`, past its header and separator rows. */
+function tableRows(lines: string[]): string[][] {
+  return lines
+    .filter((line) => line.trim().startsWith('|'))
+    .slice(TABLE_PREAMBLE_ROWS)
+    .map(splitTableRow);
+}
+
+const unwrapBackticks = (value: string): string =>
+  value.replace(/^`([^`]*)`$/, '$1').trim();
+
+const backtickedTokens = (value: string): string[] =>
+  [...value.matchAll(/`([^`]+)`/g)].map((match) => (match[1] ?? '').trim());
+
+/** The bullet text of each `- ` line in `lines`. */
+function bulletsOf(lines: string[]): string[] {
+  return lines
+    .map((line) => line.match(/^\s*-\s+(.*)$/)?.[1]?.trim())
+    .filter((text): text is string => text !== undefined && text !== '');
+}
+
+function parseGate(bullet: string): MilestoneGate {
+  const [id = '', stateCell = '', kind = '', subject = '', blocksCell = ''] =
+    bullet.split('·').map((part) => part.trim());
+  return {
+    id,
+    state: stateCell.match(/^[A-Z]+/)?.[0] ?? stateCell,
+    kind,
+    subject,
+    blocks: unwrapBackticks(blocksCell.replace(/^blocks\s+/, '')),
+  };
+}
+
+const STEP_FIELD_NAMES = ['Items', 'Seam', 'Close', 'Needs', 'Uses'] as const;
+
+/** The step field a `- <Name>: ...` line opens, or undefined when the line opens none. */
+function stepFieldName(line: string): string | undefined {
+  return STEP_FIELD_NAMES.find((name) =>
+    new RegExp(`^-\\s+${name}:`).test(line),
+  );
+}
+
+/** Reads the `Items`/`Seam`/`Close`/`Needs`/`Uses` lines of one step, joining indented continuations. */
+function stepFields(lines: string[]): Map<string, string> {
+  const fields = new Map<string, string>();
+  let current: string | null = null;
+  for (const line of lines) {
+    const name = stepFieldName(line);
+    if (name !== undefined) {
+      current = name;
+      fields.set(name, line.slice(line.indexOf(':') + 1).trim());
+    } else if (current !== null && /^\s+\S/.test(line)) {
+      fields.set(current, `${fields.get(current) ?? ''} ${line.trim()}`);
+    } else current = null;
+  }
+  return fields;
+}
+
+function parseStep(
+  slug: string,
+  status: string,
+  line: number,
+  body: string[],
+): MilestoneStep {
+  const fields = stepFields(body);
+  const items = fields.get('Items');
+  const needs = fields.get('Needs');
+  const close = fields.get('Close');
+  return {
+    slug,
+    status,
+    items: items === undefined ? null : backtickedTokens(items),
+    seam: fields.get('Seam') ?? null,
+    close: close === undefined ? null : unwrapBackticks(close),
+    needs:
+      needs === undefined
+        ? []
+        : needs
+            .split(',')
+            .map((id) => unwrapBackticks(id.trim()))
+            .filter((id) => id !== '' && id !== 'none'),
+    uses: [
+      ...(fields.get('Uses') ?? '').matchAll(/`([^`]+)`\s+holds\s+`([^`]+)`/g),
+    ].map((match) => ({
+      item: (match[1] ?? '').trim(),
+      resource: (match[2] ?? '').trim(),
+    })),
+    line,
+  };
+}
+
+/** One `### Step:` section before its fields are read: the heading's parts and the lines below it. */
+interface StepSection {
+  slug: string;
+  status: string;
+  line: number;
+  body: string[];
+}
+
+/** A `MILESTONE.md` split into the lines of each `## ` section and the sections of each step. */
+interface MilestoneSections {
+  sections: Map<string, string[]>;
+  steps: StepSection[];
+}
+
+const STEP_HEADING = /^### Step:\s*(.+?)\s*·\s*Status:\s*(.+?)\s*$/;
+
+/**
+ * Splits a `MILESTONE.md` into the lines under each `## ` heading and, under `## Steps`, one
+ * `StepSection` per `### Step:` heading. A `###` heading that is not a step ends the step above it.
+ */
+function scanMilestoneSections(markdown: string): MilestoneSections {
+  const sections = new Map<string, string[]>();
+  const steps: StepSection[] = [];
+  let section: string | null = null;
+  let step: StepSection | null = null;
+  markdown.split('\n').forEach((line, index) => {
+    if (/^## \S/.test(line)) {
+      step = null;
+      section = line.slice('## '.length).trim();
+      sections.set(section, []);
+      return;
+    }
+    if (section !== 'Steps') {
+      if (section !== null) sections.get(section)?.push(line);
+      return;
+    }
+    const heading = line.match(STEP_HEADING);
+    if (heading) {
+      step = {
+        slug: (heading[1] ?? '').trim(),
+        status: heading[2] ?? '',
+        line: index + 1,
+        body: [],
+      };
+      steps.push(step);
+    } else if (/^###\s/.test(line)) step = null;
+    else step?.body.push(line);
+  });
+  return { sections, steps };
+}
+
+/**
+ * Parses a `MILESTONE.md`. A missing section reads as an empty list and nothing throws, so the
+ * milestone checks report what is absent instead of this parser failing on it.
+ */
+export function parseMilestone(markdown: string): Milestone {
+  const { sections, steps } = scanMilestoneSections(markdown);
+  const lines = (name: string): string[] => sections.get(name) ?? [];
+  return {
+    status: parseStatusHeader(markdown),
+    members: tableRows(lines('Members')).map((cells) => ({
+      name: unwrapBackticks(cells[0] ?? ''),
+      owns: cells[1] ?? '',
+      verify: unwrapBackticks(cells[2] ?? ''),
+    })),
+    heldPaths: bulletsOf(lines('Held paths'))
+      .flatMap((bullet) => backtickedTokens(bullet))
+      .map((path) => path.replace(/\/+$/, '')),
+    contracts: tableRows(lines('Contracts')).map((cells) => ({
+      id: cells[0] ?? '',
+      path: unwrapBackticks(cells[1] ?? ''),
+      version: /^\d+$/.test(cells[2] ?? '') ? Number(cells[2]) : null,
+      producer: unwrapBackticks(cells[3] ?? ''),
+      consumers: backtickedTokens(cells[4] ?? ''),
+    })),
+    resources: bulletsOf(lines('Resources'))
+      .map((bullet) => bullet.match(/^`([^`]+)`\s*:/)?.[1]?.trim())
+      .filter((name): name is string => name !== undefined),
+    gates: bulletsOf(lines('Gates')).map(parseGate),
+    steps: steps.map((step) =>
+      parseStep(step.slug, step.status, step.line, step.body),
+    ),
+  };
+}
+
+/** The `**Signals:**` value for a phase that needs the owner's input once it starts, at most one per step. */
+const OWNER_SIGNAL = 'owner';
+
+/** A status cell with any trailing parenthetical dropped, so `DONE (2026-11-19)` reads `DONE`. */
+function statusBase(cell: string): string {
+  return cell.replace(/\s*\(.*\)\s*$/, '').trim();
+}
+
+/** A `<member>/<phase-slug>` reference read against the `## Members` table and each member's phases. */
+type ItemResolution =
+  | { kind: 'phase'; key: string; phase: MemberPhase }
+  | { kind: 'malformed' }
+  | { kind: 'unknown-member'; member: string }
+  | { kind: 'unknown-phase'; member: string; slug: string };
+
+/**
+ * Resolves a `<member>/<phase-slug>` reference. The member must be a row of the `## Members`
+ * table and the slug one of that member's phases, so one slug under two members is two phases.
+ * `key` is the `<member>/<phase-slug>` identity the checks compare phases by.
+ */
+function resolveItem(
+  reference: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): ItemResolution {
+  const separator = reference.indexOf('/');
+  if (separator <= 0 || separator === reference.length - 1) {
+    return { kind: 'malformed' };
+  }
+  const member = reference.slice(0, separator);
+  const slug = reference.slice(separator + 1);
+  if (!milestone.members.some((row) => row.name === member)) {
+    return { kind: 'unknown-member', member };
+  }
+  const phase = (members[member] ?? []).find(
+    (candidate) => candidate.slug === slug,
+  );
+  if (phase === undefined) return { kind: 'unknown-phase', member, slug };
+  return { kind: 'phase', key: `${member}/${slug}`, phase };
+}
+
+/** Why a reference did not resolve, as the tail of a finding message. */
+function unresolvedReason(
+  reference: string,
+  resolution: Exclude<ItemResolution, { kind: 'phase' }>,
+): string {
+  switch (resolution.kind) {
+    case 'malformed':
+      return `\`${reference}\` is not a \`<member>/<phase-slug>\` reference`;
+    case 'unknown-member':
+      return `\`${reference}\` names member \`${resolution.member}\`, which is not in the ## Members table`;
+    case 'unknown-phase':
+      return `\`${reference}\` names phase \`${resolution.slug}\`, which member \`${resolution.member}\` does not have`;
+    default: {
+      const unhandled: never = resolution;
+      return unhandled;
+    }
+  }
+}
+
+/** A step item that resolved to a member phase. */
+interface ResolvedItem {
+  key: string;
+  phase: MemberPhase;
+}
+
+/** The items of `step` that resolve to a member phase, in file order. Unresolved items are check 1's. */
+function resolvedItems(
+  step: MilestoneStep,
+  milestone: Milestone,
+  members: MemberPlans,
+): ResolvedItem[] {
+  return (step.items ?? []).flatMap((reference) => {
+    const resolution = resolveItem(reference, milestone, members);
+    return resolution.kind === 'phase'
+      ? [{ key: resolution.key, phase: resolution.phase }]
+      : [];
+  });
+}
+
+/** An error-level finding on `MILESTONE.md`. */
+function milestoneError(
+  rule: string,
+  file: string,
+  line: number | null,
+  msg: string,
+): Report['findings'][number] {
+  return { rule, level: 'error', file, line, msg };
+}
+
+/** Errors on a step item that names a member not in the `## Members` table, or a phase that member lacks. */
+export function checkMilestoneUnknownItems(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  for (const step of milestone.steps) {
+    for (const reference of step.items ?? []) {
+      const resolution = resolveItem(reference, milestone, members);
+      if (resolution.kind === 'phase') continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/unknown-item',
+          file,
+          step.line,
+          `step \`${step.slug}\` item ${unresolvedReason(reference, resolution)}`,
+        ),
+      );
+    }
+  }
+  return report;
+}
+
+/** Errors once per member per phase slug that more than one of that member's phases carries. */
+export function checkMilestoneDuplicatePhaseSlugs(
+  file: string,
+  _milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  for (const [member, phases] of Object.entries(members)) {
+    const numbersBySlug = new Map<string, number[]>();
+    for (const phase of phases) {
+      numbersBySlug.set(phase.slug, [
+        ...(numbersBySlug.get(phase.slug) ?? []),
+        phase.number,
+      ]);
+    }
+    for (const [slug, numbers] of numbersBySlug) {
+      if (numbers.length < 2) continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/duplicate-phase-slug',
+          file,
+          null,
+          `member \`${member}\` has phase slug \`${slug}\` on phases ${numbers.join(', ')}, so \`${member}/${slug}\` names more than one phase`,
+        ),
+      );
+    }
+  }
+  return report;
+}
+
+/** Errors on each step after the first that holds a member phase an earlier step already holds. */
+export function checkMilestonePhaseInTwoSteps(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  const firstStepOf = new Map<string, { index: number; slug: string }>();
+  milestone.steps.forEach((step, index) => {
+    for (const item of resolvedItems(step, milestone, members)) {
+      const first = firstStepOf.get(item.key);
+      if (first === undefined) {
+        firstStepOf.set(item.key, { index, slug: step.slug });
+        continue;
+      }
+      if (first.index === index) continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/phase-in-two-steps',
+          file,
+          step.line,
+          `\`${item.key}\` is an item of step \`${first.slug}\` and of step \`${step.slug}\``,
+        ),
+      );
+    }
+  });
+  return report;
+}
+
+/** Errors on each item of a `DONE` step whose phase is neither `DONE` nor `DROPPED`. */
+export function checkMilestoneStepDoneEarly(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  for (const step of milestone.steps) {
+    if (statusBase(step.status) !== 'DONE') continue;
+    for (const item of resolvedItems(step, milestone, members)) {
+      if (isClosedPhaseStatus(item.phase.status)) continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/step-done-early',
+          file,
+          step.line,
+          `step \`${step.slug}\` is DONE, but its item \`${item.key}\` is \`${item.phase.status}\``,
+        ),
+      );
+    }
+  }
+  return report;
+}
+
+/** Errors on each item of a `TODO` step whose phase is already `IN PROGRESS` or `DONE`. */
+export function checkMilestoneStepTodoLate(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  for (const step of milestone.steps) {
+    if (statusBase(step.status) !== 'TODO') continue;
+    for (const item of resolvedItems(step, milestone, members)) {
+      const phaseStatus = statusBase(item.phase.status);
+      if (phaseStatus !== 'IN PROGRESS' && phaseStatus !== 'DONE') continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/step-todo-late',
+          file,
+          step.line,
+          `step \`${step.slug}\` is TODO, but its item \`${item.key}\` is \`${item.phase.status}\``,
+        ),
+      );
+    }
+  }
+  return report;
+}
+
+/** Errors once, on the second open step, when more than one step is `IN PROGRESS`. */
+export function checkMilestoneOneOpenStep(
+  file: string,
+  milestone: Milestone,
+  _members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  const open = milestone.steps.filter(
+    (step) => statusBase(step.status) === 'IN PROGRESS',
+  );
+  const second = open[1];
+  if (second === undefined) return report;
+  report.findings.push(
+    milestoneError(
+      'milestone/one-open-step',
+      file,
+      second.line,
+      `${open.length} steps are IN PROGRESS (${open.map((step) => `\`${step.slug}\``).join(', ')}), and only one may be`,
+    ),
+  );
+  return report;
+}
+
+/** Errors on an `IN PROGRESS` or `DONE` step that an `OPEN` gate blocks. `CLOSED` and `WAIVED` pass. */
+export function checkMilestoneOpenGates(
+  file: string,
+  milestone: Milestone,
+  _members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  for (const step of milestone.steps) {
+    const base = statusBase(step.status);
+    if (base !== 'IN PROGRESS' && base !== 'DONE') continue;
+    for (const gate of milestone.gates) {
+      if (gate.blocks !== step.slug || gate.state !== 'OPEN') continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/open-gate',
+          file,
+          step.line,
+          `step \`${step.slug}\` is ${base}, but gate ${gate.id} blocking it is OPEN`,
+        ),
+      );
+    }
+  }
+  return report;
+}
+
+/** Each overlapping pair of roots between two root lists, as `[first, second]`. */
+function overlappingRoots(
+  firstRoots: string[],
+  secondRoots: string[],
+): Array<[string, string]> {
+  return firstRoots.flatMap((firstRoot) =>
+    secondRoots
+      .filter((secondRoot) => rootsOverlap(firstRoot, secondRoot))
+      .map((secondRoot): [string, string] => [firstRoot, secondRoot]),
+  );
+}
+
+/** One message per overlapping root pair of two items in a step, none when either has no `Domain`. */
+function itemPairDomainProblems(
+  first: ResolvedItem,
+  second: ResolvedItem,
+): string[] {
+  if (first.phase.domain === null || second.phase.domain === null) return [];
+  return overlappingRoots(first.phase.domain, second.phase.domain).map(
+    ([firstRoot, secondRoot]) =>
+      `items \`${first.key}\` and \`${second.key}\` share a step, but their Domain roots overlap: \`${firstRoot}\` and \`${secondRoot}\``,
+  );
+}
+
+/**
+ * Errors on two items of one step whose `Domain` roots overlap, on an item with no `Domain` line
+ * in a step that holds another item, and on any item `Domain` root with a glob character.
+ */
+export function checkMilestoneItemDomains(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  const fail = (line: number, msg: string): void => {
+    report.findings.push(
+      milestoneError('milestone/item-domain-overlap', file, line, msg),
+    );
+  };
+  for (const step of milestone.steps) {
+    const items = resolvedItems(step, milestone, members);
+    const holdsOthers = (step.items ?? []).length > 1;
+    for (const item of items) {
+      for (const root of item.phase.domain ?? []) {
+        if (!GLOB_CHARS.test(root)) continue;
+        fail(
+          step.line,
+          `item \`${item.key}\` Domain root \`${root}\` contains a glob character, name a directory or file path`,
+        );
+      }
+      if (holdsOthers && item.phase.domain === null) {
+        fail(
+          step.line,
+          `item \`${item.key}\` has no **Domain:** line, but step \`${step.slug}\` holds other items`,
+        );
+      }
+    }
+    items.forEach((first, index) => {
+      for (const second of items.slice(index + 1)) {
+        if (first.key === second.key) continue;
+        itemPairDomainProblems(first, second).forEach((msg) =>
+          fail(step.line, msg),
+        );
+      }
+    });
+  }
+  return report;
+}
+
+/** Paths every milestone holds without listing them: the changeset dir and the ledgers. */
+const ALWAYS_HELD_PATHS = ['.changeset', '.claude/ledgers'];
+
+/**
+ * Errors on a member phase whose `Domain` overlaps a held path, parent or child, and on a held
+ * path with a glob character. `.changeset` and `.claude/ledgers` count as held in every milestone.
+ * A `DONE` or `DROPPED` phase is skipped, as path checks skip a closed one.
+ */
+export function checkMilestoneHeldPathOverlap(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  const heldPaths = [
+    ...new Set([...milestone.heldPaths, ...ALWAYS_HELD_PATHS]),
+  ];
+  for (const heldPath of milestone.heldPaths) {
+    if (!GLOB_CHARS.test(heldPath)) continue;
+    report.findings.push(
+      milestoneError(
+        'milestone/held-path-overlap',
+        file,
+        null,
+        `held path \`${heldPath}\` contains a glob character, name a directory or file path`,
+      ),
+    );
+  }
+  for (const [member, phases] of Object.entries(members)) {
+    for (const phase of phases) {
+      if (isClosedPhaseStatus(phase.status)) continue;
+      const overlaps = overlappingRoots(phase.domain ?? [], heldPaths);
+      for (const [root, heldPath] of overlaps) {
+        report.findings.push(
+          milestoneError(
+            'milestone/held-path-overlap',
+            file,
+            null,
+            `\`${member}/${phase.slug}\` Domain root \`${root}\` overlaps held path \`${heldPath}\`, which only the milestone session writes`,
+          ),
+        );
+      }
+    }
+  }
+  return report;
+}
+
+/** Errors on an item carrying the `live` signal in a step that holds another item. */
+export function checkMilestoneLiveItems(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  for (const step of milestone.steps) {
+    if ((step.items ?? []).length < 2) continue;
+    for (const item of resolvedItems(step, milestone, members)) {
+      if (!item.phase.signals.includes(LIVE_SIGNAL)) continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/live-item-shared',
+          file,
+          step.line,
+          `item \`${item.key}\` carries the live signal, but step \`${step.slug}\` holds other items`,
+        ),
+      );
+    }
+  }
+  return report;
+}
+
+/** Errors on a `Uses` line naming a resource `## Resources` does not declare, and on two items of one step holding one resource. */
+export function checkMilestoneResources(
+  file: string,
+  milestone: Milestone,
+  _members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  for (const step of milestone.steps) {
+    const holders = new Map<string, Set<string>>();
+    for (const use of step.uses) {
+      holders.set(
+        use.resource,
+        (holders.get(use.resource) ?? new Set<string>()).add(use.item),
+      );
+      if (milestone.resources.includes(use.resource)) continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/resource-conflict',
+          file,
+          step.line,
+          `step \`${step.slug}\` Uses names resource \`${use.resource}\`, which ## Resources does not declare`,
+        ),
+      );
+    }
+    for (const [resource, items] of holders) {
+      if (items.size < 2) continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/resource-conflict',
+          file,
+          step.line,
+          `items ${[...items].map((item) => `\`${item}\``).join(', ')} all hold resource \`${resource}\` in step \`${step.slug}\``,
+        ),
+      );
+    }
+  }
+  return report;
+}
+
+/** Errors on a step holding more than one item that carries the `owner` signal. */
+export function checkMilestoneOwnerItems(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  for (const step of milestone.steps) {
+    const owners = resolvedItems(step, milestone, members).filter((item) =>
+      item.phase.signals.includes(OWNER_SIGNAL),
+    );
+    if (owners.length < 2) continue;
+    report.findings.push(
+      milestoneError(
+        'milestone/owner-items-shared',
+        file,
+        step.line,
+        `step \`${step.slug}\` holds ${owners.length} items with the owner signal (${owners.map((item) => `\`${item.key}\``).join(', ')}), and at most one may run flat`,
+      ),
+    );
+  }
+  return report;
+}
+
+/** Errors on a contract producer or consumer that does not resolve to a member phase. */
+export function checkMilestoneContracts(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  for (const contract of milestone.contracts) {
+    const roles = [
+      { role: 'producer', reference: contract.producer },
+      ...contract.consumers.map((reference) => ({
+        role: 'consumer',
+        reference,
+      })),
+    ];
+    for (const { role, reference } of roles) {
+      const resolution = resolveItem(reference, milestone, members);
+      if (resolution.kind === 'phase') continue;
+      report.findings.push(
+        milestoneError(
+          'milestone/contract-unresolved',
+          file,
+          null,
+          `contract ${contract.id} ${role} ${unresolvedReason(reference, resolution)}`,
+        ),
+      );
+    }
+  }
+  return report;
+}
+
+/**
+ * Reports each phase of a `## Members` member that is neither `DONE` nor `DROPPED` and is an item
+ * of no step, once every step has its `Items`. While the schedule is still being written, which is
+ * a milestone with no steps or with a scope line that has no `Items`, it reports nothing, because
+ * the rolling horizon gives a later member phase its ROADMAP line before its step exists.
+ */
+export function checkMilestoneUnscheduledPhases(
+  file: string,
+  milestone: Milestone,
+  members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  const isScheduleOpen =
+    milestone.steps.length === 0 ||
+    milestone.steps.some((step) => step.items === null);
+  if (isScheduleOpen) return report;
+  const scheduled = new Set(
+    milestone.steps.flatMap((step) =>
+      resolvedItems(step, milestone, members).map((item) => item.key),
+    ),
+  );
+  for (const { name } of milestone.members) {
+    for (const phase of members[name] ?? []) {
+      const key = `${name}/${phase.slug}`;
+      if (isClosedPhaseStatus(phase.status) || scheduled.has(key)) continue;
+      report.findings.push({
+        rule: 'milestone/unscheduled-phase',
+        level: 'error',
+        file,
+        line: null,
+        msg: `\`${key}\` is \`${phase.status}\` and in no step, and every step already has its Items`,
+      });
+    }
+  }
   return report;
 }
 
@@ -554,7 +1392,8 @@ const IMPACT_MAP_FILE = /^blast-radius-.*\.md$/;
 /**
  * Lists the path of every impact map under `plansDir`. `blast-radius/SKILL.md` §3 writes a
  * map into the workspace of the plan it served, and to the root only when no plan was in
- * play, so both homes are read. `workspaceDirs` is every directory directly under `plansDir`.
+ * play, so both homes are read. `workspaceDirs` is every directory directly under `plansDir`,
+ * plus each milestone member as `<milestone>/<member>`.
  */
 export function listImpactMaps(
   plansDir: string,
@@ -573,7 +1412,8 @@ export function listImpactMaps(
 
 /**
  * Flags the case `orchestrate/SKILL.md` §0 names as its own precondition: no plan workspace
- * to slice. `planWorkspaceDirs` is every directory found directly under `.claude/plans/`.
+ * to slice. `planWorkspaceDirs` is every directory found directly under `.claude/plans/`, plus
+ * each milestone member.
  */
 export function checkNoPlanWorkspace(planWorkspaceDirs: string[]): Report {
   const report = emptyReport();
@@ -767,6 +1607,11 @@ function isDoneStatus(status: string | null): boolean {
   return status !== null && /^DONE\b/.test(status);
 }
 
+/** True when a phase status is terminal, DONE or DROPPED, so its paths are no longer checked. */
+function isClosedPhaseStatus(status: string | null): boolean {
+  return isDoneStatus(status) || isDroppedStatus(status);
+}
+
 /**
  * True when a workspace `**Status:**` header reads DONE or SUPERSEDED. Only the
  * workspace-level ROADMAP header counts as archived this way, not an individual phase doc's
@@ -787,10 +1632,317 @@ function listEntries(dir: string): string[] {
   }
 }
 
+/** The subdirectory names directly inside `dir`, or none when it is missing or unreadable. */
 function listSubdirectories(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name);
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
+type Finding = Report['findings'][number];
+
+const ROADMAP_FILE = 'ROADMAP.md';
+const MILESTONE_FILE = 'MILESTONE.md';
+const PHASE_FILE = /^phase-.*\.md$/;
+/** A sub-plan filename whose `<slug>` group is the phase slug a milestone item names. */
+const PHASE_FILE_SLUG = /^phase-\d+-(.+)\.md$/;
+
+/** What a phase file's header says, as its ROADMAP checks and the milestone checks read it. */
+interface SubplanFacts {
+  status: string | null;
+  domain: string[] | null;
+  signals: string[];
+}
+
+/** One plan workspace's findings, and its ROADMAP phases in the shape the milestone checks read. */
+interface WorkspaceLint {
+  findings: Finding[];
+  phases: MemberPhase[];
+}
+
+/**
+ * Runs every per-file check over one phase file. Path checks are skipped when `shouldSkipPathChecks`
+ * is set or the phase itself is closed.
+ */
+function lintPhaseFile(
+  root: string,
+  phasePath: string,
+  shouldSkipPathChecks: boolean,
+): { findings: Finding[]; facts: SubplanFacts } {
+  const markdown = readFileSync(phasePath, 'utf8');
+  const relativeFile = relative(root, phasePath);
+  const status = parseStatusHeader(markdown);
+  const findings = [
+    ...checkSliceStatuses(relativeFile, markdown).findings,
+    ...checkSliceRowsAfterDone(relativeFile, markdown).findings,
+    ...checkFencedCodeShare(relativeFile, markdown).findings,
+    ...checkReviewFocus(relativeFile, markdown).findings,
+    ...checkSignals(relativeFile, markdown).findings,
+  ];
+  if (!shouldSkipPathChecks && !isClosedPhaseStatus(status)) {
+    findings.push(...checkPlanPaths(relativeFile, markdown, root).findings);
+  }
+  return {
+    findings,
+    facts: {
+      status,
+      domain: parseDomain(markdown),
+      signals: parseSignals(markdown),
+    },
+  };
+}
+
+/** The phase slug of a sub-plan link, the `<slug>` of `phase-N-<slug>.md`, or its bare name otherwise. */
+function phaseSlugOf(subplan: string): string {
+  const name = basename(subplan);
+  return name.match(PHASE_FILE_SLUG)?.[1] ?? name.replace(/\.md$/, '');
+}
+
+/** Each ROADMAP phase line joined to its sub-plan's header facts. */
+function memberPhasesOf(
+  roadmapMarkdown: string,
+  facts: Record<string, SubplanFacts>,
+): MemberPhase[] {
+  return parseRoadmapPhases(roadmapMarkdown).map((phase) => ({
+    number: phase.number,
+    slug: phaseSlugOf(phase.subplan),
+    status: phase.status,
+    domain: facts[phase.subplan]?.domain ?? null,
+    signals: facts[phase.subplan]?.signals ?? [],
+  }));
+}
+
+/** One field of each sub-plan's facts, keyed by sub-plan filename. */
+function factFieldBySubplan<TValue>(
+  facts: Record<string, SubplanFacts>,
+  pick: (fact: SubplanFacts) => TValue,
+): Record<string, TValue> {
+  return Object.fromEntries(
+    Object.entries(facts).map(([name, fact]) => [name, pick(fact)]),
+  );
+}
+
+/** The ROADMAP-level checks: its sync with each sub-plan, and its phase schedule. */
+function lintRoadmap(
+  root: string,
+  roadmapPath: string,
+  roadmapMarkdown: string,
+  facts: Record<string, SubplanFacts>,
+): Finding[] {
+  const relativeFile = relative(root, roadmapPath);
+  return [
+    ...checkRoadmapSync(
+      relativeFile,
+      roadmapMarkdown,
+      factFieldBySubplan(facts, (fact) => fact.status),
+    ).findings,
+    ...checkPhaseSchedule(
+      relativeFile,
+      roadmapMarkdown,
+      factFieldBySubplan(facts, (fact) => fact.domain),
+      factFieldBySubplan(facts, (fact) => fact.signals),
+    ).findings,
+  ];
+}
+
+/**
+ * Lints one plan workspace with every ordinary check. Path checks are skipped when its own
+ * ROADMAP is archived, or when `isArchivedByMilestone` says the milestone holding it is.
+ * Finding paths are relative to `root`.
+ */
+function lintPlanWorkspace(
+  root: string,
+  workspaceDir: string,
+  isArchivedByMilestone: boolean,
+): WorkspaceLint {
+  let entries: string[];
+  try {
+    entries = readdirSync(workspaceDir);
+  } catch {
+    return { findings: [], phases: [] };
+  }
+
+  const roadmapPath = join(workspaceDir, ROADMAP_FILE);
+  const roadmapMarkdown = existsSync(roadmapPath)
+    ? readFileSync(roadmapPath, 'utf8')
+    : null;
+  const shouldSkipPathChecks =
+    isArchivedByMilestone ||
+    isArchivedWorkspaceStatus(
+      roadmapMarkdown === null ? null : parseStatusHeader(roadmapMarkdown),
+    );
+
+  const findings: Finding[] = [];
+  const facts: Record<string, SubplanFacts> = {};
+  for (const name of entries.filter((entry) => PHASE_FILE.test(entry))) {
+    const linted = lintPhaseFile(
+      root,
+      join(workspaceDir, name),
+      shouldSkipPathChecks,
+    );
+    findings.push(...linted.findings);
+    facts[name] = linted.facts;
+  }
+
+  if (roadmapMarkdown === null) return { findings, phases: [] };
+  findings.push(...lintRoadmap(root, roadmapPath, roadmapMarkdown, facts));
+  return { findings, phases: memberPhasesOf(roadmapMarkdown, facts) };
+}
+
+/** A milestone directory and the names of its subdirectories that hold `ROADMAP.md`. */
+interface MilestoneLayout {
+  slug: string;
+  memberDirs: string[];
+}
+
+/** The directories directly under `.claude/plans/`, split into ordinary plans and milestones. */
+interface PlansLayout {
+  planDirs: string[];
+  milestones: MilestoneLayout[];
+}
+
+/**
+ * Reads `.claude/plans/` two levels deep. A directory holding `MILESTONE.md` is a milestone, and
+ * each of its subdirectories holding `ROADMAP.md` is a member. A member's own subdirectories are
+ * never read. Every other directory is an ordinary plan, as before milestones existed.
+ */
+function discoverPlans(plansDir: string): PlansLayout {
+  const layout: PlansLayout = { planDirs: [], milestones: [] };
+  for (const slug of listSubdirectories(plansDir)) {
+    const dir = join(plansDir, slug);
+    if (!existsSync(join(dir, MILESTONE_FILE))) {
+      layout.planDirs.push(slug);
+      continue;
+    }
+    layout.milestones.push({
+      slug,
+      memberDirs: listSubdirectories(dir).filter((name) =>
+        existsSync(join(dir, name, ROADMAP_FILE)),
+      ),
+    });
+  }
+  return layout;
+}
+
+/** Every directory a plan or an impact map may live in, relative to `.claude/plans/`. */
+function workspaceHomes(layout: PlansLayout): string[] {
+  return [
+    ...layout.planDirs,
+    ...layout.milestones.flatMap((milestone) => [
+      milestone.slug,
+      ...milestone.memberDirs.map((member) => join(milestone.slug, member)),
+    ]),
+  ];
+}
+
+/** The three discovery errors: a milestone holding `ROADMAP.md`, and a member table out of step with the directories. */
+function milestoneDiscoveryErrors(
+  root: string,
+  milestoneDir: string,
+  milestone: Milestone,
+  memberDirs: string[],
+): Finding[] {
+  const file = relative(root, join(milestoneDir, MILESTONE_FILE));
+  const findings: Finding[] = [];
+  const roadmapPath = join(milestoneDir, ROADMAP_FILE);
+  if (existsSync(roadmapPath)) {
+    findings.push(
+      milestoneError(
+        'milestone/has-roadmap',
+        relative(root, roadmapPath),
+        null,
+        'this directory holds MILESTONE.md, so it is a milestone, not a plan, and must not hold ROADMAP.md',
+      ),
+    );
+  }
+  const listed = milestone.members.map((member) => member.name);
+  for (const name of listed.filter(
+    (listedName) => !memberDirs.includes(listedName),
+  )) {
+    findings.push(
+      milestoneError(
+        'milestone/member-missing',
+        file,
+        null,
+        `member \`${name}\` is in the ## Members table, but ${relative(root, join(milestoneDir, name, ROADMAP_FILE))} does not exist`,
+      ),
+    );
+  }
+  for (const name of memberDirs.filter(
+    (memberDir) => !listed.includes(memberDir),
+  )) {
+    findings.push(
+      milestoneError(
+        'milestone/member-unlisted',
+        file,
+        null,
+        `${relative(root, join(milestoneDir, name))} holds ROADMAP.md, but \`${name}\` is not in the ## Members table`,
+      ),
+    );
+  }
+  return findings;
+}
+
+/** The fourteen per-milestone checks, in FORMAT.md order. */
+const MILESTONE_CHECKS: Array<
+  (file: string, milestone: Milestone, members: MemberPlans) => Report
+> = [
+  checkMilestoneUnknownItems,
+  checkMilestoneDuplicatePhaseSlugs,
+  checkMilestonePhaseInTwoSteps,
+  checkMilestoneStepDoneEarly,
+  checkMilestoneStepTodoLate,
+  checkMilestoneOneOpenStep,
+  checkMilestoneOpenGates,
+  checkMilestoneItemDomains,
+  checkMilestoneHeldPathOverlap,
+  checkMilestoneLiveItems,
+  checkMilestoneResources,
+  checkMilestoneOwnerItems,
+  checkMilestoneContracts,
+  checkMilestoneUnscheduledPhases,
+];
+
+/**
+ * Lints one milestone: its discovery errors, every member as a plan, then the fourteen milestone
+ * checks over the members' phases. A `DONE` milestone skips path checks for every member.
+ */
+function lintMilestone(
+  root: string,
+  plansDir: string,
+  layout: MilestoneLayout,
+): Finding[] {
+  const milestoneDir = join(plansDir, layout.slug);
+  const milestonePath = join(milestoneDir, MILESTONE_FILE);
+  const milestone = parseMilestone(readFileSync(milestonePath, 'utf8'));
+  const isArchived = isDoneStatus(milestone.status);
+  const findings = milestoneDiscoveryErrors(
+    root,
+    milestoneDir,
+    milestone,
+    layout.memberDirs,
+  );
+
+  const members: MemberPlans = {};
+  for (const member of layout.memberDirs) {
+    const linted = lintPlanWorkspace(
+      root,
+      join(milestoneDir, member),
+      isArchived,
+    );
+    findings.push(...linted.findings);
+    members[member] = linted.phases;
+  }
+
+  const file = relative(root, milestonePath);
+  for (const check of MILESTONE_CHECKS) {
+    findings.push(...check(file, milestone, members).findings);
+  }
+  return findings;
 }
 
 function main(): void {
@@ -809,73 +1961,23 @@ function main(): void {
     });
   }
 
-  const workspaceDirs = existsSync(plansDir)
-    ? listSubdirectories(plansDir)
-    : [];
-  report.findings.push(...checkNoPlanWorkspace(workspaceDirs).findings);
+  const layout = discoverPlans(plansDir);
+  const homes = workspaceHomes(layout);
+  report.findings.push(...checkNoPlanWorkspace(homes).findings);
 
   const config = loadConfigSafe();
   report.findings.push(...checkFixOnSubagentStop(config).findings);
 
-  for (const slug of workspaceDirs) {
-    const workspaceDir = join(plansDir, slug);
-    let entries: string[];
-    try {
-      entries = readdirSync(workspaceDir);
-    } catch {
-      continue;
-    }
-
-    const roadmapPath = join(workspaceDir, 'ROADMAP.md');
-    const roadmapMarkdown = existsSync(roadmapPath)
-      ? readFileSync(roadmapPath, 'utf8')
-      : null;
-    const workspaceArchived = isArchivedWorkspaceStatus(
-      roadmapMarkdown === null ? null : parseStatusHeader(roadmapMarkdown),
+  for (const slug of layout.planDirs) {
+    report.findings.push(
+      ...lintPlanWorkspace(root, join(plansDir, slug), false).findings,
     );
-
-    const phaseFiles = entries.filter((name) => /^phase-.*\.md$/.test(name));
-    const subplanStatuses: Record<string, string | null> = {};
-    const subplanDomains: Record<string, string[] | null> = {};
-    const subplanSignals: Record<string, string[]> = {};
-    for (const name of phaseFiles) {
-      const phasePath = join(workspaceDir, name);
-      const markdown = readFileSync(phasePath, 'utf8');
-      const relFile = relative(root, phasePath);
-      report.findings.push(...checkSliceStatuses(relFile, markdown).findings);
-      report.findings.push(
-        ...checkSliceRowsAfterDone(relFile, markdown).findings,
-      );
-      report.findings.push(...checkFencedCodeShare(relFile, markdown).findings);
-      report.findings.push(...checkReviewFocus(relFile, markdown).findings);
-      const phaseStatus = parseStatusHeader(markdown);
-      if (!workspaceArchived && !isDoneStatus(phaseStatus)) {
-        report.findings.push(
-          ...checkPlanPaths(relFile, markdown, root).findings,
-        );
-      }
-      subplanStatuses[name] = phaseStatus;
-      subplanDomains[name] = parseDomain(markdown);
-      subplanSignals[name] = parseSignals(markdown);
-    }
-
-    if (roadmapMarkdown !== null) {
-      const relFile = relative(root, roadmapPath);
-      report.findings.push(
-        ...checkRoadmapSync(relFile, roadmapMarkdown, subplanStatuses).findings,
-      );
-      report.findings.push(
-        ...checkPhaseSchedule(
-          relFile,
-          roadmapMarkdown,
-          subplanDomains,
-          subplanSignals,
-        ).findings,
-      );
-    }
+  }
+  for (const milestone of layout.milestones) {
+    report.findings.push(...lintMilestone(root, plansDir, milestone));
   }
 
-  for (const filePath of listImpactMaps(plansDir, workspaceDirs)) {
+  for (const filePath of listImpactMaps(plansDir, homes)) {
     report.findings.push(
       ...checkBlastRadiusShape(
         relative(root, filePath),

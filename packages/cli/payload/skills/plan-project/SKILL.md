@@ -17,19 +17,23 @@ from scrollback.
 
 ## 0. How much ceremony does this earn?
 
-There are three tiers, and the ask lands in exactly one:
+There are four tiers, and the ask lands in exactly one:
 
 - **Do it inline.** A handful of files you will finish now, with the shape already obvious. Write no
   plan at all.
 - **Plan inline, persist nothing.** Enough moving parts to be worth thinking through first, but still
   one sitting. Use plan mode or an in-context plan and scaffold no `.claude/plans/` dir.
 - **Persist a workspace.** The rest of this skill.
+- **Plan a milestone.** Two or more member plans, each with its own goal, run side by side under
+  one `MILESTONE.md`. Four ordered questions in `references/milestone.md` route an effort here, and
+  that reference covers everything a milestone adds.
 
-Name the tier out loud before doing anything, in one sentence, with the reason you picked it. The
-user can then override it in a word. Silently scaffolding is the failure this prevents, since a
-`.claude/plans/` dir for a one-sitting task is pure overhead that no one asks you to delete.
+Default to the lowest tier that passes. Name the tier out loud before doing anything, in one
+sentence, with the reason you picked it. The user can then override it in a word. Silently
+scaffolding is the failure this prevents, since a `.claude/plans/` dir for a one-sitting task is
+pure overhead that no one asks you to delete.
 
-The top tier has a bar. Scaffold **only** when at least one holds:
+The third tier has a bar. Scaffold **only** when at least one holds:
 
 - **3+ distinct phases** that can land independently and each leave the tree working.
 - Work you expect to **pause and resume** across sessions or days.
@@ -220,6 +224,13 @@ would build it and returns what that person would still have to ask. Carry each 
 handoff under the assumptions line, or say the list was empty. It costs one `plan-reviewer` run
 and catches a mis-specified slice before a worker spends a run on it. Do not edit the plan to
 answer a question. The user decides.
+
+A milestone gets one handoff for the whole milestone, never one per member. List the first step's
+items as `<member>/<phase-slug>`, and give `/orchestrate <milestone>` as the next command (needs the
+`orchestrate` module). Without that module, the next command is the user asking you to take the
+first item in-context. The execution line is `/orchestrate <milestone>`, one phase-orchestrator per
+item in the step. A milestone handoff writes no execution-mode cost comparison, so skip the mode
+bullet below. List the gates closed by a default taken, so the owner can reopen one.
 
 Report, then wait:
 

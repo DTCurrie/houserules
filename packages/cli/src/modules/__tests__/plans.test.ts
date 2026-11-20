@@ -98,6 +98,37 @@ describe('plans', () => {
       expect(agentText).toContain('**Domain:**');
     });
 
+    it('installs the milestone reference the plan-project skill defers to', () => {
+      expect(
+        existsSync(
+          join(root, '.claude/skills/plan-project/references/milestone.md'),
+        ),
+        'milestone reference installed',
+      ).toBe(true);
+    });
+
+    it('has the plan-reviewer read a milestone', () => {
+      const agentText = readFileSync(
+        join(root, '.claude/agents/plan-reviewer.md'),
+        'utf8',
+      );
+      expect(agentText).toContain('`MILESTONE.md`');
+    });
+
+    it('hands a milestone off in-context when the orchestrate module is absent', () => {
+      const text = readFileSync(
+        join(root, '.claude/skills/plan-project/SKILL.md'),
+        'utf8',
+      );
+      expect(
+        existsSync(join(root, '.claude/skills/orchestrate/SKILL.md')),
+        'orchestrate skill absent',
+      ).toBe(false);
+      expect(text).toMatch(
+        /`\/orchestrate <milestone>` as the next command \(needs the\s+`orchestrate` module\)\. Without that module, the next command is the user asking you to take the\s+first item in-context/,
+      );
+    });
+
     it('self-gitignores its plan workspace while keeping the .gitignore itself tracked', () => {
       const ignore = readFileSync(
         join(root, '.claude/plans/.gitignore'),
@@ -153,6 +184,15 @@ describe('plans', () => {
       expect(
         existsSync(join(root, '.claude/plans/.gitignore')),
         'plans workspace not created',
+      ).toBe(false);
+    });
+
+    it('installs no milestone reference', () => {
+      expect(
+        existsSync(
+          join(root, '.claude/skills/plan-project/references/milestone.md'),
+        ),
+        'milestone reference not installed',
       ).toBe(false);
     });
 

@@ -22,6 +22,7 @@ const ORCHESTRATE_REFERENCES = [
   'fixer-and-residue.md',
   'closing.md',
   'nested.md',
+  'milestone.md',
 ] as const;
 
 export const id = 'orchestrate';
@@ -49,6 +50,7 @@ export const uses: ModuleRequirement[] = [
   { id: 'lint-fix' },
   { id: 'verify-changed' },
   { id: 'backlog', package: '@houserules/plugin-backlog' },
+  { id: 'changesets', package: '@houserules/plugin-changesets' },
   { id: 'decisions', package: '@houserules/plugin-decisions' },
   { id: 'pr-description', package: '@houserules/plugin-prose' },
   { id: 'accessibility-review', package: '@houserules/plugin-accessibility' },
@@ -208,7 +210,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     })),
     {
       kind: 'advise',
-      text: 'Executing a plan: run /orchestrate [<plan-slug>] [<phase>|all] to drive a .claude/plans/<slug>/ phase. By default it hands each phase to a phase-orchestrator one layer down, which slices by file ownership, dispatches one task-worker per slice (task-worker-research for a slice that must fetch), and reports back per wave while you relay. --flat keeps the slicing at the main conversation. It stops for you between phases unless you pass --auto.',
+      text: 'Executing a plan: run /orchestrate [<plan-slug>] [<phase>|all] to drive a .claude/plans/<slug>/ phase. By default it hands each phase to a phase-orchestrator one layer down, which slices by file ownership, dispatches one task-worker per slice (task-worker-research for a slice that must fetch), and reports back per wave while you relay. /orchestrate <milestone> runs the open step of a milestone. --flat keeps the slicing at the main conversation. It stops for you between phases unless you pass --auto.',
       module: id,
     },
   ];
