@@ -1,5 +1,17 @@
 # @houserules/api
 
+## 0.9.0
+
+### Minor Changes
+
+- eac8920: The install manifest records plugins without absolute paths, and `update` keeps them.
+- eac8920: Stop fixer skips missing scripts, and opt-in `fix.passPaths` scopes fixes to changed files.
+
+### Patch Changes
+
+- Updated dependencies [eac8920]
+  - @houserules/payload@0.6.0
+
 ## 0.8.0
 
 ### Minor Changes

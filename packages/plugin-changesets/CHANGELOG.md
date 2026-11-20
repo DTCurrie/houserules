@@ -1,5 +1,11 @@
 # @houserules/plugin-changesets
 
+## 0.5.0
+
+### Minor Changes
+
+- eac8920: The changeset gate no longer blocks majors and absorbs on transcript ordering.
+
 ## 0.4.1
 
 ### Patch Changes

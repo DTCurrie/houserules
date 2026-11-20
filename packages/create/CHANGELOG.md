@@ -1,5 +1,34 @@
 # @houserules/create
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [1ab1be5]
+- Updated dependencies [1ab1be5]
+- Updated dependencies [eac8920]
+- Updated dependencies [eac8920]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [eac8920]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [eac8920]
+- Updated dependencies [eac8920]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [eac8920]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [e5d8da6]
+- Updated dependencies [eac8920]
+- Updated dependencies [eac8920]
+- Updated dependencies [eac8920]
+- Updated dependencies [eac8920]
+  - @houserules/cli@0.16.0
+
 ## 0.1.6
 
 ### Patch Changes

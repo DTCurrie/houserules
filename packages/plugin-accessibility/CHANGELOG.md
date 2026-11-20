@@ -1,5 +1,11 @@
 # @houserules/plugin-accessibility
 
+## 0.3.1
+
+### Patch Changes
+
+- 1ab1be5: `/orchestrate`, review, and verify skills wait on subagents in the foreground without stalling.
+
 ## 0.3.0
 
 ### Minor Changes
