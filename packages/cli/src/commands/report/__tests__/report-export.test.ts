@@ -1,6 +1,8 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -24,6 +26,16 @@ import {
   ingestTranscript,
   type FileUsage,
 } from '../transcript-events.js';
+
+const PAYLOAD_SCRIPTS = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  '..',
+  'payload-dist',
+  'scripts',
+);
 
 const SECRET_PATH = '/Users/someone/work/secret.ts';
 const SECRET_DIR =
@@ -160,6 +172,49 @@ describe('fix config in the export', () => {
   });
 });
 
+describe('weighted input per session', () => {
+  // 100 + (40 - 20) * 1.25 + 20 * 2 + 1000 * 0.1 = 265
+  function weightedDocument(): ReportDocument {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-weighted.jsonl',
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          id: 'm1',
+          role: 'assistant',
+          model: 'opus',
+          usage: {
+            input_tokens: 100,
+            output_tokens: 5,
+            cache_read_input_tokens: 1000,
+            cache_creation_input_tokens: 40,
+            cache_creation: { ephemeral_1h_input_tokens: 20 },
+          },
+        },
+      }),
+    );
+    return buildReportDocument(
+      corpus,
+      mkdtempSync(join(tmpdir(), 'report-export-weighted-')),
+      { label: 'work', cliVersion: '0.7.0' },
+    );
+  }
+
+  it('round-trips the field through an export file', () => {
+    const path = join(
+      mkdtempSync(join(tmpdir(), 'report-export-weighted-file-')),
+      'w.json',
+    );
+    writeExportFile(path, redactDocument(weightedDocument()));
+
+    const [imported] = readImportFiles([path]);
+
+    expect(imported?.tokens.files[0]?.weightedInput).toBe(265);
+  });
+});
+
 describe('redactDocument', () => {
   let original: ReportDocument;
   let snapshot: string;
@@ -246,6 +301,139 @@ describe('redactDocument', () => {
 
     it('leaves an absent reason absent', () => {
       expect(reasonAfterRedaction(undefined)).toBeUndefined();
+    });
+  });
+
+  describe('against the real guard output', () => {
+    const CONFIG = {
+      version: 2,
+      guard: { custom: [{ pattern: '\\bsecret-tool\\b' }] },
+      readGuard: { enabled: true, maxBytes: 1024, denyGlobs: ['*.lock'] },
+      targets: [],
+    };
+
+    function guardRepo(config: unknown): string {
+      const root = mkdtempSync(join(tmpdir(), 'report-export-guard-'));
+      spawnSync('git', ['init', '-q'], { cwd: root });
+      mkdirSync(join(root, '.claude'));
+      writeFileSync(
+        join(root, '.claude/houserules.config.json'),
+        JSON.stringify(config),
+      );
+      return root;
+    }
+
+    /** Runs a built guard and returns its first stderr line, the way a transcript records a reason. */
+    function realReason(
+      script: string,
+      toolInput: Record<string, unknown>,
+      extra: Record<string, unknown> = {},
+    ): string {
+      const root = guardRepo(CONFIG);
+      writeFileSync(join(root, 'dep.lock'), 'x');
+      writeFileSync(join(root, 'big.txt'), 'x'.repeat(3072));
+      const run = spawnSync(process.execPath, [join(PAYLOAD_SCRIPTS, script)], {
+        cwd: root,
+        input: JSON.stringify({ tool_input: toolInput, ...extra }),
+        encoding: 'utf8',
+      });
+      expect(run.status, run.stderr).toBe(2);
+      const first = run.stderr.split('\n').find((line) => line.trim()) ?? '';
+      const prefix = 'Blocked by houserules guard: ';
+      return first.startsWith(prefix) ? first.slice(prefix.length) : first;
+    }
+
+    function redacted(reason: string): string | undefined {
+      return redactDocument({
+        ...original,
+        guard: [{ session: 's', blockedCommand: 'x', reason }],
+      }).guard[0]?.reason;
+    }
+
+    const bash = (command: string) => realReason('guard-bash.mjs', { command });
+    const subagentBash = (command: string) =>
+      realReason('guard-bash.mjs', { command }, { agent_id: 'agent-1' });
+
+    it.each([
+      ['git commit', 'git commit -m x'],
+      ['git push', 'git push origin main'],
+      ['git stash', 'git stash'],
+      ['git discard', 'git checkout -- src/a.ts'],
+      ['PR create', 'gh pr create --fill'],
+    ])('keeps the %s message verbatim', (_name, command) => {
+      const reason = bash(command);
+
+      expect(reason).not.toBe('');
+      expect(redacted(reason)).toBe(reason);
+    });
+
+    it.each([
+      ['changeset', 'node .claude/scripts/changeset-write.mjs --bump patch'],
+      ['direct ledger edit', 'sed -i s/a/b/ ledgers/backlog.jsonl'],
+    ])(
+      'keeps the subagent write gate %s message verbatim',
+      (_name, command) => {
+        const reason = subagentBash(command);
+
+        expect(reason).toMatch(/^Blocked by houserules subagent write gate/);
+        expect(redacted(reason)).toBe(reason);
+      },
+    );
+
+    it('masks only the subcommand of the real ledger gate message', () => {
+      const reason = subagentBash(
+        'node .claude/scripts/backlog-log.mjs add API area "title"',
+      );
+
+      expect(redacted(reason)).toBe(
+        'Blocked by houserules subagent write gate: a subagent may not run ledger command `<subcommand>`. Describe the issue and let the caller act on it.',
+      );
+    });
+
+    it('masks only the path of the real read guard size message', () => {
+      const reason = realReason('guard-read.mjs', { file_path: 'big.txt' });
+
+      expect(redacted(reason)).toBe(
+        "houserules read guard: <path> is large (3 KB > 1 KB). Don't read it whole — grep for what you need (`grep -n '<pattern>' <path>`) then Read with offset+limit, or re-run this Read with an explicit limit if you truly need a window.",
+      );
+    });
+
+    it('masks the path and glob of the real read guard denylist message', () => {
+      const reason = realReason('guard-read.mjs', { file_path: 'dep.lock' });
+
+      expect(redacted(reason)).toBe(
+        "houserules read guard: <path> matches a generated/denylisted pattern (<pattern>). Don't read it whole — grep for what you need (`grep -n '<pattern>' <path>`) then Read with offset+limit, or re-run this Read with an explicit limit if you truly need a window.",
+      );
+    });
+
+    it('masks only the pattern of the real custom rule message', () => {
+      const reason = bash('secret-tool --dump');
+
+      expect(redacted(reason)).toBe(
+        'Blocked by houserules.config.json guard rule: <pattern>',
+      );
+    });
+
+    it('replaces the message a user wrote for a custom rule', () => {
+      const root = guardRepo({
+        version: 2,
+        guard: {
+          custom: [{ pattern: '\\bsecret-tool\\b', message: 'ask Dana' }],
+        },
+        targets: [],
+      });
+      const run = spawnSync(
+        process.execPath,
+        [join(PAYLOAD_SCRIPTS, 'guard-bash.mjs')],
+        {
+          cwd: root,
+          input: JSON.stringify({ tool_input: { command: 'secret-tool x' } }),
+          encoding: 'utf8',
+        },
+      );
+
+      expect(run.stderr).toBe('Blocked by houserules guard: ask Dana\n');
+      expect(redacted('ask Dana')).toBe('(reason redacted)');
     });
   });
 
@@ -489,6 +677,9 @@ function withNewFields(document: ReportDocument): ReportDocument {
           max: 7,
           timeouts: 1,
           slowRuns: 2,
+          timedOutRuns: [
+            { date: '2026-11-18T10:30:00.000Z', session: 'abc.jsonl' },
+          ],
         },
         {
           hook: `node /Users/${USERNAME}/work/hooks/custom.mjs`,
@@ -582,6 +773,9 @@ describe('redactDocument on the fields added after the first exports', () => {
       max: 7,
       timeouts: 1,
       slowRuns: 2,
+      timedOutRuns: [
+        { date: '2026-11-18T10:30:00.000Z', session: 'abc.jsonl' },
+      ],
     });
   });
 
@@ -602,6 +796,7 @@ describe('a document exported before the new readouts', () => {
       (key, value: unknown) =>
         key === 'cacheWrite1h' ||
         key === 'stopHooks' ||
+        key === 'weightedInput' ||
         key === 'toolResultSizes' ||
         key === 'artifacts'
           ? undefined
@@ -621,6 +816,24 @@ describe('a document exported before the new readouts', () => {
 
     expect(imported?.meta.label).toBe('work');
     expect(imported?.hooks.stopHooks).toBeUndefined();
+  });
+
+  it('imports a Stop row with no timed-out list and a session with no weighted input', () => {
+    const document = preReadoutDocument();
+    document.hooks.stopHooks = [
+      { hook: 'a.mjs', runs: 1, p50: 1, p95: 1, max: 1, timeouts: 0 },
+    ];
+    const path = join(
+      mkdtempSync(join(tmpdir(), 'report-export-old-')),
+      'older.json',
+    );
+    writeExportFile(path, document);
+
+    const [imported] = readImportFiles([path]);
+
+    expect(imported?.hooks.stopHooks?.[0]?.timedOutRuns).toBeUndefined();
+    expect(imported?.tokens.files[0]?.weightedInput).toBeUndefined();
+    expect(renderHookHealth(imported!.hooks).join('\n')).toContain('a.mjs');
   });
 
   it('renders with no Stop table, no result-size line, and no artifact section', () => {

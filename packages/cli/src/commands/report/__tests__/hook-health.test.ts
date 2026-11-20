@@ -356,11 +356,13 @@ describe('computeHookHealth from error tool_results', () => {
 function stopSummaryLine(
   version: string,
   hooks: { command?: string; statusMessage?: string; durationMs?: number }[],
+  timestamp?: string,
 ): string {
   return JSON.stringify({
     type: 'system',
     subtype: 'stop_hook_summary',
     sessionId: 'sess-stop',
+    ...(timestamp ? { timestamp } : {}),
     version,
     hookInfos: hooks,
     hookErrors: [],
@@ -377,10 +379,14 @@ describe('Stop hook timing from stop_hook_summary records', () => {
     corpus,
     'stop.jsonl',
     [
-      stopSummaryLine('2.1.322', [
-        { command: CHECK_COMMAND, durationMs: 10 },
-        { statusMessage: 'Running lint/format auto-fix', durationMs: 200000 },
-      ]),
+      stopSummaryLine(
+        '2.1.322',
+        [
+          { command: CHECK_COMMAND, durationMs: 10 },
+          { statusMessage: 'Running lint/format auto-fix', durationMs: 200000 },
+        ],
+        '2026-11-18T10:30:00.000Z',
+      ),
       stopSummaryLine('2.1.327', [
         { command: CHECK_COMMAND, durationMs: 20 },
         { statusMessage: 'Running lint:fix + format:fix', durationMs: 50 },
@@ -413,6 +419,9 @@ describe('Stop hook timing from stop_hook_summary records', () => {
         max: 200000,
         timeouts: 1,
         slowRuns: 1,
+        timedOutRuns: [
+          { date: '2026-11-18T10:30:00.000Z', session: 'stop.jsonl' },
+        ],
       },
       {
         hook: 'Some custom hook',

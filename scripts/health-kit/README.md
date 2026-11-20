@@ -12,6 +12,7 @@ tracked path, as `node scripts/health-kit/<path>` from the repo root.
 
 - `synthesis-template.md`: the `##` headings of a synthesis, in order.
 - `gather/`: the gather scripts. See `gather/README.md`.
+- `closeout/`: the closeout scripts. `metrics-table.mjs` prints the before and after table.
 
 ## Build the synthesis
 
@@ -39,3 +40,14 @@ node .claude/scripts/check-findings.mjs --destinations <a,b,...,none> \
 ```
 
 Exit 0 is clean, 1 names each defect, and 2 is a usage error such as a missing `--destinations`.
+
+## Compare doctor and report captures
+
+Pass the before and after `doctor` captures, then optionally the before and after `report`
+captures. Any value a capture lacks prints `not captured`. A wrong argument count or an unreadable
+file exits 2.
+
+```
+node scripts/health-kit/closeout/metrics-table.mjs <before-doctor> <after-doctor> \
+  [<before-report> <after-report>]
+```

@@ -258,9 +258,12 @@ export function parseSignals(markdown: string): string[] {
 }
 
 /** The `**Signals:**` values a phase may carry. `none` reads as no signal. */
-const KNOWN_SIGNALS = new Set(['wide', 'ui', 'live', 'owner']);
+const KNOWN_SIGNALS = new Set(['wide', 'ui', 'live', 'owner', 'flat']);
 
-/** Warns on each `**Signals:**` value outside `wide`, `ui`, `live`, `owner`. */
+/** The `**Signals:**` value for a phase the dispatcher runs in its own context, never beside another phase. */
+const FLAT_SIGNAL = 'flat';
+
+/** Warns on each `**Signals:**` value outside `wide`, `ui`, `live`, `owner`, `flat`. */
 export function checkSignals(file: string, markdown: string): Report {
   const report = emptyReport();
   for (const signal of parseSignals(markdown)) {
@@ -270,7 +273,7 @@ export function checkSignals(file: string, markdown: string): Report {
       level: 'warn',
       file,
       line: null,
-      msg: `unknown signal \`${signal}\`, use wide, ui, live, owner, or none`,
+      msg: `unknown signal \`${signal}\`, use wide, ui, live, owner, flat, or none`,
     });
   }
   return report;
@@ -500,6 +503,10 @@ export function checkPhaseSchedule(
         );
         continue;
       }
+      const isFlat = [first, second].some((phase) =>
+        subplanSignals[phase.subplan]?.includes(FLAT_SIGNAL),
+      );
+      if (isFlat) continue;
       const firstRoots = rootsOf(first);
       const secondRoots = rootsOf(second);
       const lacking = [
@@ -1718,6 +1725,34 @@ function isDoneStatus(status: string | null): boolean {
   return status !== null && /^DONE\b/.test(status);
 }
 
+const PLANS_ROOT = '.claude/plans';
+
+/**
+ * Warns when a sub-plan's Domain sits wholly inside the plan workspaces and the phase lacks
+ * the `flat` signal. Such a phase edits only plan files, so a phase-orchestrator costs more than it saves.
+ * The caller skips closed phases.
+ */
+export function checkWorkspacePhaseFlat(
+  file: string,
+  markdown: string,
+): Report {
+  const report = emptyReport();
+  const roots = parseDomain(markdown);
+  if (roots === null || roots.length === 0) return report;
+  if (parseSignals(markdown).includes(FLAT_SIGNAL)) return report;
+  const isInsidePlans = (root: string): boolean =>
+    root === PLANS_ROOT || root.startsWith(`${PLANS_ROOT}/`);
+  if (!roots.every(isInsidePlans)) return report;
+  report.findings.push({
+    rule: 'plan-lint/workspace-phase-not-flat',
+    level: 'warn',
+    file,
+    line: null,
+    msg: `sub-plan "${file}" has a Domain wholly inside ${PLANS_ROOT}, add the \`flat\` signal so the dispatcher runs it in its own context`,
+  });
+  return report;
+}
+
 /** True when a phase status is terminal, DONE or DROPPED, so its paths are no longer checked. */
 function isClosedPhaseStatus(status: string | null): boolean {
   return isDoneStatus(status) || isDroppedStatus(status);
@@ -1799,6 +1834,9 @@ function lintPhaseFile(
     findings.push(
       ...checkPlanPaths(relativeFile, markdown, root, roots).findings,
     );
+  }
+  if (!isClosedPhaseStatus(status)) {
+    findings.push(...checkWorkspacePhaseFlat(relativeFile, markdown).findings);
   }
   return {
     findings,

@@ -16,6 +16,7 @@ import {
   checkSignals,
   checkSliceRowsAfterDone,
   checkSliceStatuses,
+  checkWorkspacePhaseFlat,
   listImpactMaps,
   parseDomain,
   parseRoadmapPhases,
@@ -661,6 +662,38 @@ describe('checkPhaseSchedule', () => {
       roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
       { 'phase-1.md': ['a'], 'phase-2.md': ['b'] },
       { 'phase-3.md': ['live'] },
+    );
+
+    expect(findings.map((finding) => finding.msg)).toEqual([
+      'phases 2 and 3 can run concurrently, but phase 3 carries the live signal',
+    ]);
+  });
+
+  it('accepts an overlapping concurrent pair when one phase is flat', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+      { 'phase-1.md': ['a'], 'phase-2.md': ['x'], 'phase-3.md': ['x/y'] },
+      { 'phase-3.md': ['flat'] },
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('accepts a domainless flat phase concurrent with another', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+      { 'phase-1.md': ['a'], 'phase-2.md': ['b'], 'phase-3.md': null },
+      { 'phase-3.md': ['flat'] },
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('still reports the live signal on a flat, live phase', () => {
+    const findings = run(
+      roadmapOf(phaseLine(1), phaseLine(2, '1'), phaseLine(3, '1')),
+      { 'phase-1.md': ['a'], 'phase-2.md': ['b'], 'phase-3.md': ['c'] },
+      { 'phase-3.md': ['flat', 'live'] },
     );
 
     expect(findings.map((finding) => finding.msg)).toEqual([
@@ -1503,5 +1536,78 @@ describe('checkSignals', () => {
 
   it('reads none as no signal', () => {
     expect(checkSignals('p.md', '**Signals:** none\n').findings).toEqual([]);
+  });
+
+  it('accepts flat', () => {
+    expect(checkSignals('p.md', '**Signals:** flat\n').findings).toEqual([]);
+  });
+
+  it('lists flat among the valid signals in the unknown-signal message', () => {
+    const findings = checkSignals('p.md', '**Signals:** wdie\n').findings;
+    expect(findings[0]?.msg).toBe(
+      'unknown signal `wdie`, use wide, ui, live, owner, flat, or none',
+    );
+  });
+});
+
+describe('checkWorkspacePhaseFlat', () => {
+  const run = (header: string) =>
+    checkWorkspacePhaseFlat('phase-2-x.md', `# Phase\n\n${header}\n`).findings;
+
+  it.each([
+    '**Domain:** `.claude/plans/demo`',
+    '**Domain:** `.claude/plans`',
+    '**Domain:** `.claude/plans/demo/`, `.claude/plans/other (new)`',
+  ])('warns naming the sub-plan and the flat signal for %s', (header) => {
+    const findings = run(header);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.rule).toBe('plan-lint/workspace-phase-not-flat');
+    expect(findings[0]?.level).toBe('warn');
+    expect(findings[0]?.msg).toContain('phase-2-x.md');
+    expect(findings[0]?.msg).toContain('`flat`');
+  });
+
+  it.each([
+    '**Signals:** flat\n**Domain:** `.claude/plans/demo`',
+    '**Domain:** `.claude/plans/demo`, `packages/cli`',
+    '**Signals:** ui\n**Domain:** `packages/cli`',
+    '**Domain:** `.claude/plans-old/x`',
+    '# no domain here',
+    '**Domain:** no backticks',
+  ])('stays silent for %s', (header) => {
+    expect(run(header)).toEqual([]);
+  });
+
+  describe('through the script', () => {
+    const SCRIPT = '.claude/scripts/plan-lint.mjs';
+    const stage = (status: string) => {
+      const root = useInstalledRepo('pnpm-monorepo', {
+        modules: 'orchestrate',
+      });
+      const planDir = join(root, '.claude/plans/demo');
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(
+        join(planDir, 'ROADMAP.md'),
+        `# ROADMAP: demo\n\n**Status:** IN PROGRESS\n\n## Phases\n\n- [ ] **Phase 1: only** · Status: ${status} · [sub-plan](phase-1-only.md)\n`,
+      );
+      writeFileSync(
+        join(planDir, 'phase-1-only.md'),
+        `# Phase\n\n**Status:** ${status}\n**Domain:** \`.claude/plans/demo\`\n`,
+      );
+      return runScript(root, SCRIPT);
+    };
+
+    it.each(['TODO', 'IN PROGRESS'])('warns on a %s phase', (status) => {
+      expect(stage(status).stdout).toContain(
+        'plan-lint/workspace-phase-not-flat',
+      );
+    });
+
+    it.each(['DONE', 'DROPPED'])('stays silent on a %s phase', (status) => {
+      expect(stage(status).stdout).not.toContain(
+        'plan-lint/workspace-phase-not-flat',
+      );
+    });
   });
 });

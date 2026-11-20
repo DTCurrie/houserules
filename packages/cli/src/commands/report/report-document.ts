@@ -26,7 +26,11 @@ import {
   type ChangesetOutcome,
   type LedgerOutcome,
 } from './skill-outcomes.js';
-import { computeTokenUsage, type TokenUsageReport } from './token-usage.js';
+import {
+  computeTokenUsage,
+  weightedInput,
+  type TokenUsageReport,
+} from './token-usage.js';
 import type { Corpus, FileUsage, UsageSlice } from './transcript-events.js';
 
 const LEDGERS: [skill: string, ledgerFile: string][] = [
@@ -57,6 +61,8 @@ interface ReportMeta {
 interface SerializedFileUsage extends Omit<FileUsage, 'models' | 'byModel'> {
   models: string[];
   byModel: Record<string, UsageSlice>;
+  /** Cost-weighted input for the session. Absent in a document exported before it was written. */
+  weightedInput?: number;
 }
 
 export interface SerializedTokenUsage extends Omit<TokenUsageReport, 'files'> {
@@ -116,6 +122,7 @@ function serializeTokenUsage(report: TokenUsageReport): SerializedTokenUsage {
     ...report,
     files: report.files.map((file) => ({
       ...file,
+      weightedInput: weightedInput(file),
       models: [...file.models].sort(),
       byModel: Object.fromEntries(
         [...file.byModel].sort(([leftModel], [rightModel]) =>

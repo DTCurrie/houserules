@@ -1,6 +1,6 @@
 # Gather scripts
 
-Four scripts and `SCHEMA.md`, with every pass-specific path and
+Five scripts and `SCHEMA.md`, with every pass-specific path and
 label turned into a required argument. Node builtins only. Each script's header comment is its
 invocation contract. A missing required argument prints a usage line and exits 2. Keep `SCHEMA.md`
 beside the scripts, because `parse-usage-report.mjs` and `agent-ledger.mjs` read their key lists
@@ -16,6 +16,9 @@ that holds the installs:
 4. `node $K/parse-usage-report.mjs $W/imports/work-report-<date>.md $W/baseline/usage-work.json`
 5. `node $K/agent-ledger.mjs --machine local --out $W/baseline/agent-ledger-local.json $P/<repo> $P/<repo2>`
 6. `node $K/check-agent-ledger.mjs --ledger $W/baseline/agent-ledger-local.json --reports $W/baseline --projects-root $P`
+
+`extract-exports.mjs <document> <machine> <out-dir>` writes one `<machine>--<repo>.json` file per
+fenced json block of a usage document's `## Exports` section, so a pass does not hand-copy them.
 
 On a work machine, run `agent-ledger.mjs` alone with `--machine work`. It reads `~/.claude`, or
 `CLAUDE_CONFIG_DIR`, and writes only `--out`. It keeps no prompt text, file content, URL, title, or

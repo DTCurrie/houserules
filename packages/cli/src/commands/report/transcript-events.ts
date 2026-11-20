@@ -51,6 +51,10 @@ interface StopHookSummary {
   /** The record's `version` stamp, e.g. `2.1.327`. */
   version?: string | undefined;
   isSubagent: boolean;
+  /** The record's timestamp in epoch milliseconds, when it parsed. */
+  ts?: number | undefined;
+  /** The transcript file name the per-session token row carries as `file`. */
+  file: string;
 }
 
 /** One main-chain API response, counted once on the same basis as the token totals. */
@@ -447,7 +451,7 @@ export function ingestTranscript(
       sessionOf(corpus, record.sessionId ?? fallbackSession).mainRequests.push(
         counted,
       );
-    extractEvents(record, fallbackSession, corpus, isSubagent);
+    extractEvents(record, fallbackSession, corpus, isSubagent, usage.file);
   }
 }
 
@@ -611,6 +615,7 @@ function extractEvents(
   fallbackSession: string,
   corpus: Corpus,
   isSubagent: boolean,
+  file: string,
 ): void {
   const sessionId = record.sessionId ?? fallbackSession;
   const session = sessionOf(corpus, sessionId);
@@ -632,7 +637,7 @@ function extractEvents(
     return;
   }
   if (record.type === 'system' && record.subtype === 'stop_hook_summary') {
-    session.stopHookSummaries.push(stopHookSummaryOf(record, isSubagent));
+    session.stopHookSummaries.push(stopHookSummaryOf(record, isSubagent, file));
     return;
   }
   const message = record.message;
@@ -693,6 +698,7 @@ function extractEvents(
 function stopHookSummaryOf(
   record: TranscriptRecord,
   isSubagent: boolean,
+  file: string,
 ): StopHookSummary {
   const hooks: StopHookRun[] = [];
   if (Array.isArray(record.hookInfos))
@@ -721,6 +727,8 @@ function stopHookSummaryOf(
     preventedContinuation: record.preventedContinuation === true,
     version: typeof record.version === 'string' ? record.version : undefined,
     isSubagent,
+    ts: Date.parse(record.timestamp ?? '') || undefined,
+    file,
   };
 }
 

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { makeCtx } from '#test/ctx-builder';
 import { useInstalledRepo, useRepo } from '#test/repo';
 import type { Ctx } from '../../../detect.js';
-import { hookCommand, type Settings } from '@houserules/api';
+import { hookCommand, type HookFallback, type Settings } from '@houserules/api';
 import { allHookCommands } from '../settings-wiring.js';
 import { checkInstallHygiene } from '../install-hygiene.js';
 
@@ -211,5 +211,56 @@ describe('checkInstallHygiene', () => {
     expect(result.readouts).toContainEqual(
       'install hygiene: 1 hook command(s) scanned, 1 config file(s) scanned',
     );
+  });
+
+  describe('exit-1 fallback on non-blocking events', () => {
+    const SCRIPT = 'session-context.mjs';
+    const OLD_STOCK_WRAPPER = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || { echo "[houserules] ${SCRIPT} missing. Run: npx houserules update" >&2; exit 1; }`;
+    const CURRENT_GUARD_WRAPPER = hookCommand(SCRIPT, 'guard');
+
+    function eventCtx(
+      event: string,
+      fallback: HookFallback | 'old',
+    ): { root: string; ctx: Ctx } {
+      const root = useRepo('pnpm-single');
+      writeScript(root, `.claude/scripts/${SCRIPT}`);
+      const command =
+        fallback === 'old' ? OLD_STOCK_WRAPPER : hookCommand(SCRIPT, fallback);
+      const settings: Settings = {
+        hooks: { [event]: [{ hooks: [{ type: 'command', command }] }] },
+      };
+      return { root, ctx: settingsCtx(root, settings) };
+    }
+
+    it.each([
+      ['Stop', 'old'],
+      ['SessionStart', 'old'],
+      ['Stop', 'guard'],
+      ['SessionStart', 'guard'],
+    ] as const)(
+      'warns once for the exit-1 wrapper on %s (%s form), naming the event and script',
+      (event, form) => {
+        const { root, ctx } = eventCtx(event, form);
+        const warns = checkInstallHygiene(root, ctx).findings;
+        expect(warns).toHaveLength(1);
+        expect(warns[0]?.level).toBe('WARN');
+        expect(warns[0]?.msg).toContain(event);
+        expect(warns[0]?.msg).toContain(SCRIPT);
+        expect(warns[0]?.msg).toContain('npx houserules update');
+      },
+    );
+
+    it('keeps the old wrapper distinct from the current guard form', () => {
+      expect(OLD_STOCK_WRAPPER).not.toBe(CURRENT_GUARD_WRAPPER);
+    });
+
+    it.each([
+      ['PreToolUse', 'guard'],
+      ['SessionStart', 'hint'],
+      ['Stop', 'silent'],
+    ] as const)('draws nothing for the current %s form (%s)', (event, form) => {
+      const { root, ctx } = eventCtx(event, form);
+      expect(checkInstallHygiene(root, ctx).findings).toEqual([]);
+    });
   });
 });

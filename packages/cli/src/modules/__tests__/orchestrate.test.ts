@@ -283,7 +283,7 @@ describe('orchestrate', () => {
 
     it('runs a phase that carries the live signal alone', () => {
       expect(nestedText).toMatch(
-        /`live` on its `\*\*Signals:\*\*` line, runs alone/,
+        /`live`(?: or `flat`)? on its `\*\*Signals:\*\*`\s+line, runs alone/,
       );
     });
 
@@ -328,6 +328,31 @@ describe('orchestrate', () => {
       ).toBe(true);
       expect(Object.keys(manifestOf(root).files)).toContain(
         '.claude/scripts/wave-ceiling.mjs',
+      );
+    });
+
+    it('installs the closeout-worker agent and closeout.mjs', () => {
+      const text = readFileSync(
+        join(root, '.claude/agents/closeout-worker.md'),
+        'utf8',
+      );
+      const toolsLine = text.match(/^tools: .*$/m)?.[0] ?? '';
+
+      expect(text).toMatch(/^model: sonnet$/m);
+      expect(toolsLine.slice('tools: '.length).split(', ')).toEqual([
+        'Read',
+        'Edit',
+        'Write',
+        'Grep',
+        'Glob',
+        'Bash',
+      ]);
+      expect(
+        existsSync(join(root, '.claude/scripts/closeout.mjs')),
+        'closeout.mjs installed',
+      ).toBe(true);
+      expect(Object.keys(manifestOf(root).files)).toContain(
+        '.claude/scripts/closeout.mjs',
       );
     });
 

@@ -12,6 +12,7 @@ export const uses: ModuleRequirement[] = [
   { id: 'orchestrate' },
   { id: 'research' },
   { id: 'decisions', package: '@houserules/plugin-decisions' },
+  { id: 'pr-description', package: '@houserules/plugin-prose' },
 ];
 
 export function hint(): string {
@@ -46,6 +47,14 @@ export function plan(): Action[] {
       module: id,
       reason:
         'deep-dive reference the plan-project SKILL.md defers to for milestones',
+    },
+    {
+      kind: 'copy',
+      src: payloadPath('skills', 'plan-project', 'references', 'closeout.md'),
+      dest: '.claude/skills/plan-project/references/closeout.md',
+      module: id,
+      reason:
+        'deep-dive reference the plan-project SKILL.md defers to for a closeout phase',
     },
     // /blast-radius shares the .claude/plans/ home, where its dated impact maps land.
     skill(

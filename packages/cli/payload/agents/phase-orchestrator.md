@@ -1,6 +1,6 @@
 ---
 name: phase-orchestrator
-description: Drives ONE planned phase under .claude/plans/ with its own task-worker subagents, returning a fixed-format report per wave barrier and at phase close. Dispatched by /orchestrate, one per phase.
+description: Drives ONE planned phase under .claude/plans/ with task-workers, returning a fixed-format report per wave. Dispatched by /orchestrate, one per phase.
 tools: Read, Edit, Write, Grep, Glob, Bash, Agent, SendMessage, Skill
 model: opus
 effort: high

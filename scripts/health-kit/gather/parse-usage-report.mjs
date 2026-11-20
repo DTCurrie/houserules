@@ -213,6 +213,26 @@ function parseTotals(sec) {
     text,
   );
   const ph = /^\s*(\S+) .*record\(s\).*placeholder/m.exec(text);
+  const listPriceMatch =
+    /^\s*list price: \$([\d,.]+) \(fresh \$([\d,.]+), cache read \$([\d,.]+), cache write \$([\d,.]+), output \$([\d,.]+)\)\s*$/m.exec(
+      text,
+    );
+  const notPricedMatch = /^\s*not priced, no list price for: (.+?)\s*$/m.exec(
+    text,
+  );
+  const notPriced = [];
+  if (notPricedMatch) {
+    for (const part of notPricedMatch[1].split(
+      /, (?=\S+ \(\d+% of weighted input\))/,
+    )) {
+      const entryMatch = /^(\S+) \((\d+)% of weighted input\)$/.exec(part);
+      if (!entryMatch) fail(`unparsed not-priced entry: ${part.slice(0, 80)}`);
+      notPriced.push({
+        model: entryMatch[1],
+        weightedPct: Number(entryMatch[2]),
+      });
+    }
+  }
   return {
     turns: num(a[1]),
     input: num(a[2]),
@@ -225,6 +245,16 @@ function parseTotals(sec) {
     models: mod ? mod[1].split(', ').filter((s) => s.length) : [],
     sidechainPct: mod && mod[2] !== undefined ? Number(mod[2]) : null,
     placeholderRecords: ph ? num(ph[1]) : 0,
+    listPrice: listPriceMatch
+      ? {
+          total: num(listPriceMatch[1]),
+          fresh: num(listPriceMatch[2]),
+          cacheRead: num(listPriceMatch[3]),
+          cacheWrite: num(listPriceMatch[4]),
+          output: num(listPriceMatch[5]),
+        }
+      : null,
+    notPriced,
   };
 }
 
@@ -487,6 +517,139 @@ function parseResident(sec) {
   };
 }
 
+/** Lines of a top-level `## name` section, up to the next `## `. Null when the section is absent. */
+function docSection(name) {
+  const start = lines.findIndex((line) => line === `## ${name}`);
+  if (start < 0) return null;
+  const out = [];
+  for (let i = start + 1; i < lines.length && !/^## /.test(lines[i]); i++)
+    out.push(lines[i]);
+  return out;
+}
+
+/** Splits a section into `**project:**` blocks: the marker line's tail, then the lines after it. */
+function projectBlocks(sec) {
+  const blocks = new Map();
+  let cur = null;
+  for (const line of sec) {
+    const match = /^\*\*(.+?):\*\*\s*(.*)$/.exec(line);
+    if (match) {
+      cur = { head: match[2], body: [] };
+      blocks.set(match[1], cur);
+    } else if (cur) cur.body.push(line);
+  }
+  return blocks;
+}
+
+/** The lines inside the first fence of a block, or an empty list. */
+function fenced(body) {
+  const fenceStart = body.findIndex((line) => /^```/.test(line));
+  if (fenceStart < 0) return [];
+  const fenceEnd = body.findIndex(
+    (line, i) => i > fenceStart && /^```\s*$/.test(line),
+  );
+  return body.slice(fenceStart + 1, fenceEnd < 0 ? body.length : fenceEnd);
+}
+
+const MACHINE_FIELDS = {
+  'Claude Code': 'claudeCode',
+  Node: 'node',
+  OS: 'os',
+  cleanupPeriodDays: 'cleanupPeriodDays',
+  disableAllHooks: 'disableAllHooks',
+  outputStyle: 'outputStyle',
+  'Enabled plugins': 'enabledPlugins',
+  'User skills': 'userSkills',
+  'User agents': 'userAgents',
+  'User CLAUDE.md': 'userClaudeMd',
+  'houserules on PATH': 'houseRulesOnPath',
+};
+
+function parseMachine() {
+  const sec = docSection('Machine context');
+  if (sec === null) return null;
+  const machine = {};
+  for (const field of Object.values(MACHINE_FIELDS)) machine[field] = null;
+  for (const line of sec) {
+    const match = /^- \*\*(.+?):\*\*\s*(.*)$/.exec(line);
+    if (match && MACHINE_FIELDS[match[1]])
+      machine[MACHINE_FIELDS[match[1]]] = match[2];
+  }
+  return machine;
+}
+
+function parseInstallHealth() {
+  const sec = docSection('Install health');
+  const byProject = new Map();
+  if (sec === null) return byProject;
+  for (const [name, block] of projectBlocks(sec)) {
+    const match = /^`doctor` from (\S+) CLI (\S+), exit (\d+)\.\s*$/.exec(
+      block.head,
+    );
+    if (!match)
+      fail(`${name}: unparsed install health line: ${block.head.slice(0, 80)}`);
+    byProject.set(name, {
+      cliSource: match[1],
+      cliVersion: match[2],
+      exit: Number(match[3]),
+      lines: fenced(block.body).filter((line) => line.trim().length),
+    });
+  }
+  return byProject;
+}
+
+function parseGuardReasons() {
+  const sec = docSection('Guard reasons');
+  const byProject = new Map();
+  if (sec === null) return byProject;
+  for (const [name, block] of projectBlocks(sec)) {
+    const rows = [];
+    for (const line of fenced(block.body)) {
+      if (line.trim() === 'none') continue;
+      if (
+        /^\s+guard\s+reason\s+blocks\s*$/.test(line) ||
+        /^\s+-+\s+-+/.test(line)
+      )
+        continue;
+      const match = /^\s+(\S+)\s+(.*?)\s+(\d+)\s*$/.exec(line);
+      if (!match)
+        fail(`${name}: unparsed guard reason row: ${line.trim().slice(0, 80)}`);
+      rows.push({
+        guard: match[1],
+        reason: match[2],
+        blocks: Number(match[3]),
+      });
+    }
+    byProject.set(name, rows);
+  }
+  return byProject;
+}
+
+const ARTIFACT_EPISODE_CELL_COUNT = 11;
+
+function parseArtifactEpisodes(sec) {
+  const text = sec.join('\n');
+  const rows = tableRows(sec, /^\s*session\s+calls\s/).map((cells) => {
+    if (cells.length < ARTIFACT_EPISODE_CELL_COUNT)
+      fail(
+        `artifact episode row has ${cells.length} cells: ${cells.join(' ')}`,
+      );
+    return {
+      session: cells[0],
+      calls: num(cells[1]),
+      comments: num(cells[2]),
+      publishes: num(cells[3]),
+      requests: num(cells[4]),
+      wall: `${cells[5]} ${cells[6]}`,
+      output: num(cells[7]),
+      weightedIn: num(cells[8]),
+      sharePct: Number(cells[9].replace('%', '')),
+      model: cells[10],
+    };
+  });
+  return { none: /No Artifact calls were recorded/.test(text), rows };
+}
+
 function parseProject(name, sectionLines) {
   const fenceStart = sectionLines.findIndex((l) => /^```/.test(l));
   if (fenceStart < 0) fail(`${name}: no fenced report block`);
@@ -512,6 +675,9 @@ function parseProject(name, sectionLines) {
     skills: null,
     friction: null,
     resident: null,
+    artifactEpisodes: null,
+    installHealth: null,
+    guardReasons: [],
   };
 
   if (
@@ -527,7 +693,11 @@ function parseProject(name, sectionLines) {
     .map((l) => /^sessions: (\d+), from (\S+) to (\S+)\s*$/.exec(l))
     .find(Boolean);
   if (rangeMatch) project.range = { from: rangeMatch[2], to: rangeMatch[3] };
-  else project.render = '0.4.1';
+  else {
+    // A render with no range line is an older one. Label it with the CLI version it states.
+    const stated = /^(\d+\.\d+\.\d+\S*)/.exec(header.reportCli ?? '');
+    project.render = stated ? stated[1] : 'unknown';
+  }
 
   const statedIdx = body.findIndex((l) => /^\d+ session\(s\):\s*$/.test(l));
   if (statedIdx < 0) fail(`${name}: no "N session(s):" line`);
@@ -560,6 +730,10 @@ function parseProject(name, sectionLines) {
     project.skills = parseSkills(sections.get('skills'));
   if (sections.has('friction'))
     project.friction = parseFriction(sections.get('friction'));
+  if (sections.has('artifact episodes'))
+    project.artifactEpisodes = parseArtifactEpisodes(
+      sections.get('artifact episodes'),
+    );
   if (sections.has('resident context')) {
     project.resident = parseResident(sections.get('resident context'));
   }
@@ -598,10 +772,18 @@ const projects = [];
   flush();
 }
 
+const installHealth = parseInstallHealth();
+const guardReasons = parseGuardReasons();
+for (const p of projects) {
+  p.installHealth = installHealth.get(p.name) ?? null;
+  p.guardReasons = guardReasons.get(p.name) ?? [];
+}
+
 const output = {
   schema: 'usage@1',
   source: basename(docPath),
   date: h1[1],
+  machine: parseMachine(),
   summary,
   projects,
 };

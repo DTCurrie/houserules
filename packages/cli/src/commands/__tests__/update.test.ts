@@ -346,6 +346,26 @@ describe('update on a ledger .jsonl that is already untracked', () => {
   });
 });
 
+describe('update on a config the schema rejects', () => {
+  it('reports the problem, exits 2, and writes nothing', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const manifestPath = join(root, '.claude/houserules.manifest.json');
+    writeFileSync(
+      join(root, '.claude/houserules.config.json'),
+      JSON.stringify({ targets: 'not-an-array' }),
+    );
+    const before = readFileSync(manifestPath, 'utf8');
+
+    const result = runCli(['update', root]);
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(
+      'houserules.config.json: targets Invalid input: expected array, received string',
+    );
+    expect(readFileSync(manifestPath, 'utf8')).toBe(before);
+  });
+});
+
 describe('init on a fresh pnpm monorepo', () => {
   it('gitignores .claude/scripts so compiled scripts are never committed', () => {
     const root = useRepo('pnpm-monorepo');

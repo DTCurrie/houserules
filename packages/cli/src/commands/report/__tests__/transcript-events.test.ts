@@ -714,6 +714,8 @@ describe('ingestTranscript stop hook summaries', () => {
         preventedContinuation: true,
         version: '2.1.322',
         isSubagent: false,
+        ts: Date.parse('2026-11-18T10:00:00.000Z'),
+        file: 'sess-1.jsonl',
       },
     ]);
   });
@@ -736,6 +738,8 @@ describe('ingestTranscript stop hook summaries', () => {
         preventedContinuation: false,
         version: '2.1.327',
         isSubagent: false,
+        ts: Date.parse('2026-11-18T10:00:00.000Z'),
+        file: 'sess-1.jsonl',
       },
     ]);
   });
@@ -758,6 +762,8 @@ describe('ingestTranscript stop hook summaries', () => {
         preventedContinuation: false,
         version: undefined,
         isSubagent: true,
+        ts: Date.parse('2026-11-18T10:00:00.000Z'),
+        file: 'sess-1.jsonl',
       },
     ]);
   });

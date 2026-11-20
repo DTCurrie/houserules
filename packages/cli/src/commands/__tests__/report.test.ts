@@ -446,6 +446,34 @@ describe('report', () => {
       expect(r.stdout).toMatch(/metric.*work.*home/);
     });
 
+    function importHeading(cliVersion: string | undefined): string {
+      const file = join(outDir, 'versioned.json');
+      runCli(['report', root, '--export', file, '--label', 'work'], { env });
+      const document = JSON.parse(readFileSync(file, 'utf8')) as {
+        meta: { cliVersion?: string };
+      };
+      if (cliVersion === undefined) delete document.meta.cliVersion;
+      else document.meta.cliVersion = cliVersion;
+      writeFileSync(file, JSON.stringify(document));
+
+      const r = runCli(['report', '--import', file], { env });
+
+      expect(r.status, r.stderr).toBe(0);
+      return r.stdout.split('\n').find((line) => line.includes('===')) ?? '';
+    }
+
+    it('names the CLI version that wrote the document in the import heading', () => {
+      expect(importHeading('0.7.0')).toBe(
+        '=== houserules report — import work (houserules 0.7.0) ===',
+      );
+    });
+
+    it('renders the import heading without a version for a document that has none', () => {
+      expect(importHeading(undefined)).toBe(
+        '=== houserules report — import work ===',
+      );
+    });
+
     it('rejects live-only flags beside --import', () => {
       const r = runCli(
         ['report', '--import', join(outDir, 'x.json'), '--since', '2026-01-01'],

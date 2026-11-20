@@ -31,7 +31,7 @@
  * notice, and the hook still exits 0.
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -376,8 +376,8 @@ export function skipMissingScripts(
   return { steps: kept, notices };
 }
 
-// Applied per spawnSync call so a hung git or fix command fails fast. SIGKILL because a
-// hung formatter/linter may not respond to the default SIGTERM.
+// Applied to the git spawnSync call so a hung git fails fast. SIGKILL because a hung
+// process may not respond to the default SIGTERM.
 const GIT_TIMEOUT_MS = 15_000;
 
 /**
@@ -437,7 +437,7 @@ export function modifiedSince(
   });
 }
 
-/** The fields of a finished `spawnSync` result that {@link stepTimedOut} reads. */
+/** The fields of a finished step's exit that {@link stepTimedOut} reads. */
 export interface FinishedSpawn {
   status: number | null;
   signal: NodeJS.Signals | null;
@@ -451,24 +451,84 @@ export function stepTimedOut(result: FinishedSpawn): boolean {
   return result.signal !== null && result.status === null;
 }
 
+/**
+ * SIGKILLs the process group led by `pid`. Killing only the direct child leaves any
+ * grandchild alive and holding the step's stdout open. A group already gone (ESRCH) is
+ * not an error, since the hook must exit 0 on every failure path.
+ */
+export function killGroup(pid: number | undefined): void {
+  if (pid === undefined) return;
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch {
+    // The group already exited.
+  }
+}
+
+interface StepResult {
+  ok: boolean;
+  timedOut: boolean;
+  output: string;
+}
+
+/**
+ * Runs one fix step as the leader of its own process group. When `timeoutMs` runs out the
+ * whole group is killed and the pipes are dropped at once, so a grandchild still holding
+ * stdout cannot keep the hook waiting.
+ */
 function runStep(
   argv: string[],
   cwd: string,
   settings: FixSettings,
   timeoutMs: number,
-): { ok: boolean; timedOut: boolean; output: string } {
-  const r = spawnSync(settings.runner, argv, {
-    encoding: 'utf-8',
-    cwd,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: timeoutMs,
-    killSignal: 'SIGKILL',
+): Promise<StepResult> {
+  return new Promise((resolve) => {
+    let output = '';
+    let isSettled = false;
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(settings.runner, argv, {
+        cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true,
+      });
+    } catch (err) {
+      resolve({ ok: false, timedOut: false, output: String(err) });
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      killGroup(child.pid);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      finish({ ok: false, timedOut: true, output });
+    }, timeoutMs);
+    const finish = (result: StepResult): void => {
+      if (isSettled) return;
+      isSettled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+
+    for (const stream of [child.stdout, child.stderr]) {
+      stream?.setEncoding('utf-8');
+      stream?.on('data', (chunk: string) => {
+        output += chunk;
+      });
+      // A pipe destroyed at the kill may still emit an error, which must not crash the hook.
+      stream?.on('error', () => {});
+    }
+    child.on('error', (err) =>
+      finish({ ok: false, timedOut: false, output: output + String(err) }),
+    );
+    child.on('close', (status, signal) =>
+      finish({
+        ok: status === 0,
+        timedOut: stepTimedOut({ status, signal }),
+        output,
+      }),
+    );
   });
-  return {
-    ok: r.status === 0,
-    timedOut: stepTimedOut(r),
-    output: (r.stdout || '') + (r.stderr || ''),
-  };
 }
 
 /** The step that ran out the fix budget. */
@@ -496,13 +556,13 @@ export function overrunNotice(
  * that times out, or that starts with nothing left, ends the run and is reported as the
  * overrun. Failures from steps that did finish stay in `errors`.
  */
-export function runFixSteps(
+export async function runFixSteps(
   steps: FixStep[],
   cwd: string,
   settings: FixSettings,
   budgetMs: number,
   now: () => number = Date.now,
-): FixRun {
+): Promise<FixRun> {
   const startedAt = now();
   const errors: FixRun['errors'] = [];
   for (const step of steps) {
@@ -514,14 +574,14 @@ export function runFixSteps(
       process.stderr.write(
         `lint-format-fix: ${script} for ${pkg} had too many changed paths for one command line, so it ran unscoped.\n`,
       );
-    const r = runStep(argv, cwd, settings, remaining);
+    const r = await runStep(argv, cwd, settings, remaining);
     if (r.timedOut) return { errors, overrun: { pkg, step: script } };
     if (!r.ok) errors.push({ pkg, step: script, output: r.output });
   }
   return { errors, overrun: null };
 }
 
-function main(): void {
+async function main(): Promise<void> {
   // Resolved before the config load so the root is passed in rather than spawned twice.
   // `repoRoot()` falls back to the cwd instead of throwing, so this is safe here.
   const root = repoRoot();
@@ -556,7 +616,12 @@ function main(): void {
   for (const notice of notices) process.stderr.write(notice);
   if (steps.length === 0) process.exit(0);
 
-  const { errors, overrun } = runFixSteps(steps, cwd, settings, FIX_BUDGET_MS);
+  const { errors, overrun } = await runFixSteps(
+    steps,
+    cwd,
+    settings,
+    FIX_BUDGET_MS,
+  );
   if (overrun) process.stderr.write(overrunNotice(overrun, FIX_BUDGET_MS));
 
   if (errors.length > 0) {
@@ -579,5 +644,5 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
 ) {
-  main();
+  void main();
 }

@@ -84,7 +84,12 @@ function reportImports(paths: string[], flags: Flags): number {
   const labels = documents.map((document) => document.meta.label);
   const [only] = documents;
   if (documents.length === 1 && only) {
-    console.log(`\n=== houserules report — import ${only.meta.label} ===\n`);
+    const version = only.meta.cliVersion
+      ? ` (houserules ${only.meta.cliVersion})`
+      : '';
+    console.log(
+      `\n=== houserules report — import ${only.meta.label}${version} ===\n`,
+    );
     console.log(renderDocument(only).join('\n'));
   } else {
     console.log(`\n=== houserules report — ${labels.join(' vs ')} ===\n`);
