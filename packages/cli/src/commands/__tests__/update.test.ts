@@ -78,14 +78,16 @@ function plantRetiredHookAlongsideUserHook(
   return { retired, settingsPath, manifestPath };
 }
 
-describe('update without --force on a houserules script with a local edit', () => {
+const COMMITTED_SCRIPTS = { config: { scripts: { commit: true } } };
+
+describe('update without --force on a committed houserules script with a local edit', () => {
   let root: string;
   let guardPath: string;
   let edited: string;
   let result: RunResult;
 
   beforeEach(() => {
-    root = useInstalledRepo('pnpm-monorepo');
+    root = useInstalledRepo('pnpm-monorepo', COMMITTED_SCRIPTS);
     guardPath = join(root, '.claude/scripts/guard-bash.mjs');
     appendFileSync(guardPath, '// my local tweak\n');
     edited = readFileSync(guardPath, 'utf8');
@@ -101,7 +103,30 @@ describe('update without --force on a houserules script with a local edit', () =
   });
 });
 
-describe('update reporting the local edits it kept', () => {
+describe('update without --force on a self-gitignored houserules script with a local edit', () => {
+  let root: string;
+  let guardPath: string;
+  let installed: string;
+  let result: RunResult;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+    guardPath = join(root, '.claude/scripts/guard-bash.mjs');
+    installed = readFileSync(guardPath, 'utf8');
+    appendFileSync(guardPath, '// my local tweak\n');
+    result = runCli(['update', root]);
+  });
+
+  it('exits 0', () => {
+    expect(result.status, result.stderr).toBe(0);
+  });
+
+  it('overwrites it with the canonical script, since git never carries build output', () => {
+    expect(readFileSync(guardPath, 'utf8')).toBe(installed);
+  });
+});
+
+describe('update reporting the local edits it kept, in a repo that commits its scripts', () => {
   let root: string;
 
   const unwrapped = (text: string): string => text.replace(/\s+/g, ' ');
@@ -118,7 +143,7 @@ describe('update reporting the local edits it kept', () => {
   }
 
   beforeEach(() => {
-    root = useInstalledRepo('pnpm-monorepo');
+    root = useInstalledRepo('pnpm-monorepo', COMMITTED_SCRIPTS);
   });
 
   it('points at the diff doctor already computes, so --force is not the only lever', () => {
@@ -160,13 +185,13 @@ describe('update reporting the local edits it kept', () => {
   });
 });
 
-describe('update --force on a houserules script with a local edit', () => {
+describe('update --force on a committed houserules script with a local edit', () => {
   let root: string;
   let guardPath: string;
   let result: RunResult;
 
   beforeEach(() => {
-    root = useInstalledRepo('pnpm-monorepo');
+    root = useInstalledRepo('pnpm-monorepo', COMMITTED_SCRIPTS);
     guardPath = join(root, '.claude/scripts/guard-bash.mjs');
     appendFileSync(guardPath, '// my local tweak\n');
     result = runCli(['update', '--force', root]);
@@ -1501,5 +1526,102 @@ describe('update on an install recording a module whose requirement no plugin su
       'Module "unmet/needy" requires "ghost-module", which no installed plugin supplies.\nInstall it: npm install -D @acme/ghost\n',
     );
     expect(treeHash(root)).toBe(before);
+  });
+});
+
+describe('the manifest entry for a local plugin', () => {
+  const MINIMAL_PLUGIN = join(KIT_ROOT, 'test/plugin-fixture/minimal');
+  const manifestPath = (root: string): string =>
+    join(root, '.claude/houserules.manifest.json');
+  const cleanup: string[] = [];
+
+  function installLocalPlugin(): string {
+    const root = useRepo('npm-single');
+    cpSync(MINIMAL_PLUGIN, join(root, 'plugins/minimal'), { recursive: true });
+    runCli(['init', '--yes', root]);
+    editHouseConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: './plugins/minimal', alias: 'min' },
+      ];
+    });
+    const init = runCli(['init', '--yes', root]);
+    expect(init.status, init.stderr).toBe(0);
+    return root;
+  }
+
+  afterEach(() => {
+    for (const dir of cleanup.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('records no string that holds the absolute install root', () => {
+    const root = installLocalPlugin();
+
+    const manifest = manifestOf(root) as { plugins?: unknown[] };
+    expect(manifest.plugins, 'plugin recorded').toHaveLength(1);
+    expect(readFileSync(manifestPath(root), 'utf8')).not.toContain(root);
+  });
+
+  it('records an npm-installed plugin without the absolute install root', () => {
+    const root = useRepo('npm-single');
+    cpSync(
+      MINIMAL_PLUGIN,
+      join(root, 'node_modules/@houserules/plugin-fixture-minimal'),
+      { recursive: true },
+    );
+    runCli(['init', '--yes', root]);
+    editHouseConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: '@houserules/plugin-fixture-minimal', alias: 'min' },
+      ];
+    });
+    const init = runCli(['init', '--yes', root]);
+    expect(init.status, init.stderr).toBe(0);
+    const update = runCli(['update', root]);
+    expect(update.status, update.stderr).toBe(0);
+
+    expect((manifestOf(root) as { plugins?: unknown }).plugins).toEqual([
+      {
+        name: '@houserules/plugin-fixture-minimal',
+        alias: 'min',
+        version: '1.0.0',
+      },
+    ]);
+    expect(readFileSync(manifestPath(root), 'utf8')).not.toContain(root);
+  });
+
+  it('stays byte-identical when update runs from a different root', () => {
+    const root = installLocalPlugin();
+    const moved = mkdtempSync(join(tmpdir(), 'kit-moved-repo-'));
+    cleanup.push(moved);
+    cpSync(root, moved, { recursive: true });
+    const before = readFileSync(manifestPath(moved), 'utf8');
+
+    const result = runCli(['update', moved]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(manifestPath(moved), 'utf8')).toBe(before);
+  });
+
+  it('rewrites a manifest that recorded dir once, then leaves it alone', () => {
+    const root = installLocalPlugin();
+    const manifest = manifestOf(root) as unknown as {
+      plugins: Array<Record<string, unknown>>;
+    };
+    const [plugin] = manifest.plugins;
+    if (!plugin) throw new Error('init recorded no plugin entry');
+    plugin.dir = join(root, 'plugins/minimal');
+    writeManifest(root, manifest as never);
+
+    const first = runCli(['update', root]);
+    expect(first.status, first.stderr).toBe(0);
+    const rewritten = readFileSync(manifestPath(root), 'utf8');
+    expect(rewritten).not.toContain('"dir"');
+    expect(rewritten).not.toContain(root);
+
+    const second = runCli(['update', root]);
+    expect(second.status, second.stderr).toBe(0);
+    expect(readFileSync(manifestPath(root), 'utf8')).toBe(rewritten);
   });
 });

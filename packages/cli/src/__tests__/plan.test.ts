@@ -26,7 +26,9 @@ import type {
   MergeSettingsAction,
   SeedAction,
   ModuleDef,
+  WriteAction,
 } from '@houserules/api';
+import type { Effect } from '../plan.js';
 import type {
   PluginSource,
   Registry,
@@ -1370,6 +1372,70 @@ describe('computeEffects, given a merge-settings action and a malformed settings
     expect(() => computeEffects(root, [fragmentAction()])).toThrow(
       /\.claude\/settings\.json is not valid JSON/,
     );
+  });
+});
+
+describe('computeEffects, given a file whose on-disk hash differs from the manifest', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-generated-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  function writeAction(dest: string, content: string): WriteAction {
+    return { kind: 'write', module: 'core', dest, content, reason: 'test' };
+  }
+
+  const SELF_GITIGNORE = writeAction('.claude/scripts/.gitignore', '*\n');
+
+  function opForOlderCopyUnderNewerManifest(
+    dest: string,
+    actions: WriteAction[],
+  ): Effect['op'] {
+    const root = tempDir();
+    mkdirSync(dirname(join(root, dest)), { recursive: true });
+    writeFileSync(join(root, dest), 'older generated copy\n');
+    const manifest = {
+      kitVersion: '1.0.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      modules: ['core'],
+      files: { [dest]: sha256('copy the newer manifest recorded\n') },
+    };
+    const { effects } = computeEffects(
+      root,
+      [...actions, writeAction(dest, 'canonical today\n')],
+      { manifest },
+    );
+    return effects.find((e) => e.action.dest === dest)!.op;
+  }
+
+  it('refreshes a mismatched file under a self-gitignored .claude/scripts/ without --force', () => {
+    expect(
+      opForOlderCopyUnderNewerManifest('.claude/scripts/guard.mjs', [
+        SELF_GITIGNORE,
+      ]),
+    ).toBe('update');
+  });
+
+  it('keeps the same mismatch outside the self-gitignored directories as a local edit', () => {
+    expect(
+      opForOlderCopyUnderNewerManifest('.claude/agents/guard.md', [
+        SELF_GITIGNORE,
+      ]),
+    ).toBe('skip-modified');
+  });
+
+  it('keeps a mismatched script as a local edit when the plan does not self-gitignore .claude/scripts/', () => {
+    expect(
+      opForOlderCopyUnderNewerManifest('.claude/scripts/guard.mjs', []),
+    ).toBe('skip-modified');
   });
 });
 

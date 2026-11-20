@@ -11,6 +11,8 @@ export interface RunnerBlock {
   onSubagentStop?: boolean | undefined;
   /** `fix` only: per-command file extensions, e.g. {"lint:fix": ["ts","tsx"]}. */
   commandExtensions?: Record<string, string[]> | undefined;
+  /** `fix` only: append the turn's changed paths to each fix command after `--`. Off by default. */
+  passPaths?: boolean | undefined;
   /** `verify` only: branch the changed-file diff is taken against. */
   baseBranch?: string | undefined;
   /** `verify` only: per-command wall-clock cap in milliseconds. Unset means no cap. */

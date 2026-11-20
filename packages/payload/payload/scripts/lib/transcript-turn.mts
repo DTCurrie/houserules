@@ -47,7 +47,7 @@ export interface TurnRecord {
  * Stopping at one would hide the tool uses before it, such as the dispatch of the
  * background agent that just reported.
  */
-export function isHumanPrompt(record: TurnRecord): boolean {
+function isHumanPrompt(record: TurnRecord): boolean {
   if (record.type !== 'user' || record.isMeta === true) return false;
   if (record.isCompactSummary === true) return false;
   if (record.origin?.kind === 'task-notification') return false;

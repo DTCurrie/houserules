@@ -514,7 +514,11 @@ function parseProject(name, sectionLines) {
     resident: null,
   };
 
-  if (body.some((l) => /^No \.jsonl transcripts in /.test(l))) {
+  if (
+    body.some((l) =>
+      /^(No \.jsonl transcripts in |No transcripts found \(looked in )/.test(l),
+    )
+  ) {
     project.render = 'empty';
     return project;
   }

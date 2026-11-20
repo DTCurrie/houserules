@@ -103,7 +103,8 @@ Delete the instrumentation once fixed. The dir should only hold active investiga
   `run_in_background: true`, ends its turn without reporting, and reports when the completion
   notification re-invokes it, reading the output file it names. A foreground call blocks the
   subagent until Claude Code moves it to the background anyway, so starting it there saves the
-  blocked minutes and lets the subagent end its turn.
+  blocked minutes and lets the subagent end its turn. A command expected to finish inside the
+  default Bash timeout, such as a scoped test or typecheck, runs in the foreground.
 - **An unanswered question is not an answer.** If an AskUserQuestion times out or goes
   unanswered, stop the dependent work and re-ask when the user returns. Never carry
   tentative or partial selections forward.

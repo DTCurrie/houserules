@@ -10,15 +10,21 @@
  * with the model reading the plan.
  *
  * Usage: plan-lint.mjs
+ *        plan-lint.mjs --gates <milestone-dir> <step>
  *
  * Scans every `.claude/plans/*` workspace and impact-map file in the repo. A directory holding
  * `MILESTONE.md` is a milestone: each subdirectory of it holding `ROADMAP.md` is linted as a
- * plan, and the milestone checks run over the members together. Takes no
- * arguments, because the object under check is the whole `.claude/plans/` tree, not a file
+ * plan, and the milestone checks run over the members together. The lint takes
+ * no arguments, because the object under check is the whole `.claude/plans/` tree, not a file
  * list a caller would otherwise have to enumerate itself.
+ *
+ * `--gates <milestone-dir> <step>` is the one other form. It reads `<milestone-dir>/MILESTONE.md`
+ * and prints one line per gate blocking the step, as `G<n> · <state> · blocks <step>`, or
+ * `no gates block <step>`. It prints and does not judge, so an OPEN gate still exits 0. A
+ * missing MILESTONE.md or step argument exits nonzero.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, join, relative } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 
@@ -587,6 +593,8 @@ export interface Milestone {
   gates: MilestoneGate[];
   /** In file order, which is execution order. */
   steps: MilestoneStep[];
+  /** The bullet lines of `## Log`, oldest first. Empty when the section is missing. */
+  log: string[];
 }
 
 /** One phase of a member plan, as the milestone checks read it. */
@@ -786,6 +794,7 @@ export function parseMilestone(markdown: string): Milestone {
     steps: steps.map((step) =>
       parseStep(step.slug, step.status, step.line, step.body),
     ),
+    log: bulletsOf(lines('Log')),
   };
 }
 
@@ -1056,6 +1065,80 @@ export function checkMilestoneOpenGates(
       );
     }
   }
+  return report;
+}
+
+/**
+ * Errors on a step whose `Needs` line disagrees with the gates that block it, in both directions:
+ * an id that names no gate or a gate blocking another step, and a blocking gate the line omits.
+ * A scope-line step has no `Items` line and yields nothing.
+ */
+export function checkMilestoneNeedsMatchBlocks(
+  file: string,
+  milestone: Milestone,
+  _members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  const problem = (step: MilestoneStep, message: string): void => {
+    report.findings.push(
+      milestoneError('milestone/needs-blocks', file, step.line, message),
+    );
+  };
+  for (const step of milestone.steps) {
+    if (step.items === null) continue;
+    for (const id of step.needs) {
+      const gate = milestone.gates.find((candidate) => candidate.id === id);
+      if (gate === undefined) {
+        problem(
+          step,
+          `step \`${step.slug}\` needs ${id}, but no gate has that id`,
+        );
+      } else if (gate.blocks !== step.slug) {
+        problem(
+          step,
+          `step \`${step.slug}\` needs ${id}, but gate ${id} blocks \`${gate.blocks}\``,
+        );
+      }
+    }
+    for (const gate of milestone.gates) {
+      if (gate.blocks !== step.slug || step.needs.includes(gate.id)) continue;
+      problem(
+        step,
+        `gate ${gate.id} blocks step \`${step.slug}\`, but its Needs line omits ${gate.id}`,
+      );
+    }
+  }
+  return report;
+}
+
+const BAR_PLACEHOLDER = '<the verdict sentence>';
+
+/**
+ * Errors when the first `## Log` bullet has no `Bar:` clause with a real verdict. The empty text
+ * and the template placeholder both count as missing. A `DONE` milestone is exempt.
+ */
+export function checkMilestoneBarRecorded(
+  file: string,
+  milestone: Milestone,
+  _members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  if (isDoneStatus(milestone.status)) return report;
+  const verdict = (milestone.log[0] ?? '')
+    .match(/\bBar:\s*(.*)$/)?.[1]
+    ?.replace(/\.\s*$/, '')
+    .trim();
+  if (verdict !== undefined && verdict !== '' && verdict !== BAR_PLACEHOLDER) {
+    return report;
+  }
+  report.findings.push(
+    milestoneError(
+      'milestone/bar-unrecorded',
+      file,
+      null,
+      'the first ## Log line has no `Bar:` clause recording the verdict',
+    ),
+  );
   return report;
 }
 
@@ -1536,15 +1619,43 @@ export function checkReviewFocus(file: string, markdown: string): Report {
   return report;
 }
 
-const PATH_CHECK_PREFIXES = ['packages/', '.claude/', 'scripts/'];
-const PATH_EXEMPT_CHARS = /[*?<>{}|$]/;
+const PATH_ROOT_FLOOR = ['packages/', '.claude/', 'scripts/'];
+const PATH_ROOT_EXCLUDED = new Set(['node_modules', '.git', 'dist']);
+const PATH_EXEMPT_CHARS = /[*?<>{}|$…]/;
 /** A trailing `:36`, `:193-198`, or `:19,43` line annotation on a `path:line` reference. */
 const LINE_SUFFIX_RE = /:\d+(-\d+)?(,\d+(-\d+)?)*$/;
 
 /**
+ * The path roots `checkPlanPaths` checks under, each ending in `/`: the top-level directories
+ * of `root` less `node_modules`, `.git`, and `dist`, each configured target's `pathPrefix`,
+ * and `packages/`, `.claude/`, and `scripts/` as a floor. Derive once per run.
+ */
+export function derivePathRoots(
+  root: string,
+  config: HouseConfig | null | undefined,
+): string[] {
+  const roots = new Set(PATH_ROOT_FLOOR);
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || PATH_ROOT_EXCLUDED.has(entry.name)) continue;
+      roots.add(`${entry.name}/`);
+    }
+  } catch {
+    // An unreadable root leaves the floor.
+  }
+  for (const target of config?.targets ?? []) {
+    const prefix = target.pathPrefix;
+    if (prefix === undefined || prefix === '') continue;
+    roots.add(prefix.endsWith('/') ? prefix : `${prefix}/`);
+  }
+  return [...roots];
+}
+
+/**
  * Checks backtick-quoted paths in a phase doc against the filesystem, relative to `root`.
- * A token is checked when it starts with `packages/`, `.claude/`, or `scripts/`, contains a
- * `/`, and has no whitespace or glob metacharacters. This is the check that catches a plan
+ * A token is checked when it starts with one of `roots` (see `derivePathRoots`), contains a
+ * `/`, and has no whitespace or glob metacharacters. A token whose first segment is a
+ * top-level file, not a directory, is never a root. This is the check that catches a plan
  * naming a file that was renamed, moved, or never existed, such as a `tsconfig.build.json`
  * a package never shipped.
  */
@@ -1552,6 +1663,7 @@ export function checkPlanPaths(
   file: string,
   markdown: string,
   root: string,
+  roots: string[],
 ): Report {
   const report = emptyReport();
   const lines = markdown.split('\n');
@@ -1567,8 +1679,7 @@ export function checkPlanPaths(
     let match: RegExpExecArray | null;
     while ((match = tokenRe.exec(line))) {
       const token = match[1] ?? '';
-      if (!PATH_CHECK_PREFIXES.some((prefix) => token.startsWith(prefix)))
-        continue;
+      if (!roots.some((prefix) => token.startsWith(prefix))) continue;
       if (!token.includes('/')) continue;
       if (/\s/.test(token)) continue;
       if (PATH_EXEMPT_CHARS.test(token)) continue;
@@ -1672,6 +1783,7 @@ function lintPhaseFile(
   root: string,
   phasePath: string,
   shouldSkipPathChecks: boolean,
+  roots: string[],
 ): { findings: Finding[]; facts: SubplanFacts } {
   const markdown = readFileSync(phasePath, 'utf8');
   const relativeFile = relative(root, phasePath);
@@ -1684,7 +1796,9 @@ function lintPhaseFile(
     ...checkSignals(relativeFile, markdown).findings,
   ];
   if (!shouldSkipPathChecks && !isClosedPhaseStatus(status)) {
-    findings.push(...checkPlanPaths(relativeFile, markdown, root).findings);
+    findings.push(
+      ...checkPlanPaths(relativeFile, markdown, root, roots).findings,
+    );
   }
   return {
     findings,
@@ -1758,6 +1872,7 @@ function lintPlanWorkspace(
   root: string,
   workspaceDir: string,
   isArchivedByMilestone: boolean,
+  roots: string[],
 ): WorkspaceLint {
   let entries: string[];
   try {
@@ -1783,6 +1898,7 @@ function lintPlanWorkspace(
       root,
       join(workspaceDir, name),
       shouldSkipPathChecks,
+      roots,
     );
     findings.push(...linted.findings);
     facts[name] = linted.facts;
@@ -1887,7 +2003,7 @@ function milestoneDiscoveryErrors(
   return findings;
 }
 
-/** The fourteen per-milestone checks, in FORMAT.md order. */
+/** The sixteen per-milestone checks, in check order. */
 const MILESTONE_CHECKS: Array<
   (file: string, milestone: Milestone, members: MemberPlans) => Report
 > = [
@@ -1898,6 +2014,8 @@ const MILESTONE_CHECKS: Array<
   checkMilestoneStepTodoLate,
   checkMilestoneOneOpenStep,
   checkMilestoneOpenGates,
+  checkMilestoneNeedsMatchBlocks,
+  checkMilestoneBarRecorded,
   checkMilestoneItemDomains,
   checkMilestoneHeldPathOverlap,
   checkMilestoneLiveItems,
@@ -1908,13 +2026,14 @@ const MILESTONE_CHECKS: Array<
 ];
 
 /**
- * Lints one milestone: its discovery errors, every member as a plan, then the fourteen milestone
+ * Lints one milestone: its discovery errors, every member as a plan, then the sixteen milestone
  * checks over the members' phases. A `DONE` milestone skips path checks for every member.
  */
 function lintMilestone(
   root: string,
   plansDir: string,
   layout: MilestoneLayout,
+  roots: string[],
 ): Finding[] {
   const milestoneDir = join(plansDir, layout.slug);
   const milestonePath = join(milestoneDir, MILESTONE_FILE);
@@ -1933,6 +2052,7 @@ function lintMilestone(
       root,
       join(milestoneDir, member),
       isArchived,
+      roots,
     );
     findings.push(...linted.findings);
     members[member] = linted.phases;
@@ -1945,19 +2065,55 @@ function lintMilestone(
   return findings;
 }
 
+/**
+ * One line per gate blocking `step`, as `G<n> · <state> · blocks <step>` in gate order, or a
+ * single `no gates block <step>` line when none does.
+ */
+export function formatGateLines(milestone: Milestone, step: string): string[] {
+  const lines = milestone.gates
+    .filter((gate) => gate.blocks === step)
+    .map((gate) => `${gate.id} · ${gate.state} · blocks ${step}`);
+  return lines.length > 0 ? lines : [`no gates block ${step}`];
+}
+
+/** Exit code for a malformed `--gates` call or an unreadable milestone, apart from lint's 0 and 1. */
+const USAGE_ERROR_EXIT_CODE = 2;
+
+/** The `--gates <milestone-dir> <step>` mode: prints the gate lines and exits. */
+function runGates(args: string[]): never {
+  const [milestoneDir, step] = args;
+  if (milestoneDir === undefined || step === undefined) {
+    process.stderr.write('usage: plan-lint --gates <milestone-dir> <step>\n');
+    process.exit(USAGE_ERROR_EXIT_CODE);
+  }
+  const milestonePath = join(resolve(milestoneDir), MILESTONE_FILE);
+  let markdown: string;
+  try {
+    markdown = readFileSync(milestonePath, 'utf8');
+  } catch {
+    process.stderr.write(`plan-lint: cannot read ${milestonePath}\n`);
+    process.exit(USAGE_ERROR_EXIT_CODE);
+  }
+  const lines = formatGateLines(parseMilestone(markdown), step);
+  process.stdout.write(`${lines.join('\n')}\n`);
+  process.exit(0);
+}
+
 function main(): void {
+  const args = process.argv.slice(2);
+  if (args[0] === '--gates') runGates(args.slice(1));
   const root = repoRootSafe() ?? process.cwd();
   const plansDir = join(root, '.claude/plans');
   const report = emptyReport();
   report.declined.push(...DECLINED);
 
-  for (const arg of process.argv.slice(2)) {
+  for (const arg of args) {
     report.findings.push({
       rule: 'checker/unexpected-argument',
       level: 'error',
       file: arg,
       line: null,
-      msg: 'plan-lint takes no arguments and scans .claude/plans/ itself, so this path was not read',
+      msg: 'plan-lint takes no arguments except `--gates <milestone-dir> <step>` and scans .claude/plans/ itself, so this path was not read',
     });
   }
 
@@ -1967,14 +2123,15 @@ function main(): void {
 
   const config = loadConfigSafe();
   report.findings.push(...checkFixOnSubagentStop(config).findings);
+  const roots = derivePathRoots(root, config);
 
   for (const slug of layout.planDirs) {
     report.findings.push(
-      ...lintPlanWorkspace(root, join(plansDir, slug), false).findings,
+      ...lintPlanWorkspace(root, join(plansDir, slug), false, roots).findings,
     );
   }
   for (const milestone of layout.milestones) {
-    report.findings.push(...lintMilestone(root, plansDir, milestone));
+    report.findings.push(...lintMilestone(root, plansDir, milestone, roots));
   }
 
   for (const filePath of listImpactMaps(plansDir, homes)) {

@@ -52,6 +52,10 @@
             "type": "array",
             "items": { "type": "string" }
           }
+        },
+        "passPaths": {
+          "description": "Append the paths the turn changed to each fix command, after `--`, filtered by commandExtensions. Package-relative per target, root-relative for a root command. Off by default: a script such as `eslint . --fix` widens or errors on trailing paths.",
+          "type": "boolean"
         }
       },
       "required": ["runner", "filterFlag", "runScriptPrefix", "commands"],

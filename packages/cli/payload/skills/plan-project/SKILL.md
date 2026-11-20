@@ -198,7 +198,7 @@ names no test path. Omit the section when every case the spec implies already ha
 The optional `**Signals:**` line is read by `/orchestrate` where that skill is installed: `wide`
 turns on its pre-slicing `/blast-radius` map and `ui` its close-of-phase accessibility and design
 reviews. `live` marks a phase whose checks read a running process, such as a dev server, that
-another phase's edits would disturb mid-reading. It runs alone, and `plan-lint` errors unless
+another phase's edits would disturb mid-reading. It runs alone, and the main conversation starts that process before the spawn and stops it after `DONE`, as `/orchestrate` specifies. `plan-lint` errors unless
 `After` orders it against every other phase. Omit the line when none applies. Name an MCP tool a
 step needs by its callable name, `mcp__<server>__<tool>`, so `/orchestrate` can check it against
 its agents' `tools:` lines before it spawns.

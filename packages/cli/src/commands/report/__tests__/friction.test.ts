@@ -490,9 +490,29 @@ describe('computeFriction toolResultSizes', () => {
 
     expect(sizes).toEqual({
       capBytes: 16384,
-      read: { results: 2, bytes: 20002 + 6, overCap: 1 },
-      bash: { results: 1, bytes: 7, overCap: 0 },
+      read: {
+        results: 2,
+        bytes: 20002 + 6,
+        overCap: 1,
+        excessBytes: 20002 - 16384,
+      },
+      bash: { results: 1, bytes: 7, overCap: 0, excessBytes: 0 },
     });
+  });
+
+  it('sums bytes past the cap over the over-cap results only', () => {
+    const corpus = corpusFrom(
+      [
+        // The measured size is the text plus two bytes, so these are 20,000 and 10,000.
+        ...useAndResult('r1', 'Read', 'a'.repeat(19998)),
+        ...useAndResult('r2', 'Read', 'a'.repeat(9998)),
+      ].join('\n'),
+    );
+
+    const read = computeFriction(corpus).toolResultSizes?.read;
+
+    expect(read?.overCap).toBe(1);
+    expect(read?.excessBytes).toBe(3616);
   });
 
   it('counts a result with no matching tool_use for neither tool', () => {

@@ -20,6 +20,10 @@ describe('lookupModelPrice', () => {
       price: { input: 2, output: 10, cacheRead: 0.1 },
     },
     {
+      id: 'claude-haiku-4-5-20251001',
+      price: { input: 1, output: 5, cacheRead: 0.1 },
+    },
+    {
       id: 'claude-fable-5-2[1m]',
       price: { input: 8, output: 40, cacheRead: 0.2 },
     },

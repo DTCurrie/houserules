@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyCorpus, ingestTranscript } from '../transcript-events.js';
+import { buildReportDocument } from '../report-document.js';
+import { redactDocument } from '../report-export.js';
 import { computeGuardBlocks, renderGuardEfficacy } from '../guard-efficacy.js';
 
 describe('computeGuardBlocks', () => {
@@ -271,6 +273,36 @@ describe('renderGuardEfficacy', () => {
     ]);
 
     expect(lines[4]).toBe('  (unknown guard)  (no reason recorded)  1     ');
+  });
+
+  it('renders an exported reason as redacted, not as an absent one', () => {
+    const document = redactDocument({
+      ...buildReportDocument(emptyCorpus(['slug']), '/nonexistent-root', {
+        label: 'work',
+        cliVersion: '0.7.0',
+        now: new Date('2026-10-16T00:00:00Z'),
+      }),
+      guard: [
+        {
+          session: 'abc12345',
+          blockedCommand: 'x',
+          guard: 'g',
+          reason: 'private /Users/someone/thing',
+        },
+      ],
+    });
+
+    const lines = renderGuardEfficacy(document.guard);
+
+    expect(lines[4]).toBe('  g      (reason redacted)  1     ');
+  });
+
+  it('renders an old export block with no reason field as no reason recorded', () => {
+    const lines = renderGuardEfficacy([
+      { session: 'abc12345', blockedCommand: 'x', guard: 'g' },
+    ]);
+
+    expect(lines[4]).toBe('  g      (no reason recorded)  1     ');
   });
 
   it('truncates a command over 80 characters to exactly 80 ending in an ellipsis and leaves shorter ones whole', () => {

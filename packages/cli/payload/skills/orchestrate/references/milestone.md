@@ -18,14 +18,9 @@ the ones the subagent guard refuses.
 Run these in order, one step at a time:
 
 1. **Lint.** Run `node .claude/scripts/plan-lint.mjs`. Stop on any error and show it.
-2. **Gates.** For each gate in `## Gates` whose `blocks` names this step, print one line, copied
-   from the gate:
-
-   ```
-   G<n> · <state> · blocks <step>
-   ```
-
-   When no gate blocks the step, print `no gates block <step>`. Then stop on any `OPEN` gate and
+2. **Gates.** Run `node .claude/scripts/plan-lint.mjs --gates .claude/plans/<milestone> <step>`
+   and print its output. It is one line per gate blocking the step, as
+   `G<n> · <state> · blocks <step>`, or `no gates block <step>`. Then stop on any `OPEN` gate and
    name it. The owner closes or waives it, and you write the line. Print the lines before the
    seam, because they are the owner's only sign that the step checked the gates it was told about.
    A line such as "running the step's preflight" names no gate and does not count.

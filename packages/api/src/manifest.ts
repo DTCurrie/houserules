@@ -1,5 +1,4 @@
 import type { SettingsSignature } from './merge-settings.js';
-import type { PluginSource } from './plugin-source.js';
 
 export const MANIFEST_PATH = '.claude/houserules.manifest.json';
 
@@ -12,6 +11,16 @@ export const MANIFEST_PATH = '.claude/houserules.manifest.json';
 export interface BodyHashes {
   body: string;
   frontmatter: string;
+}
+
+/**
+ * A plugin as the manifest records it. The resolved directory is left out on purpose: it is an
+ * absolute path, so recording it would tie the committed manifest to one machine.
+ */
+interface ManifestPlugin {
+  name: string;
+  alias: string;
+  version: string;
 }
 
 /** The receipt `.claude/houserules.manifest.json`: what houserules installed and at what hash. */
@@ -34,7 +43,7 @@ export interface HouseManifest {
    * config declares none. `update` compares a recorded entry's `version` against what
    * resolves now to tell a plugin upgrade from a local edit to the plugin's own files.
    */
-  plugins?: PluginSource[];
+  plugins?: ManifestPlugin[];
 }
 
 /**

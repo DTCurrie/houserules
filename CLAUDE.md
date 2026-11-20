@@ -54,7 +54,8 @@ Fuller templates live in `.claude/templates/`.
   `run_in_background: true`, ends its turn without reporting, and reports when the completion
   notification re-invokes it, reading the output file it names. A foreground call blocks the
   subagent until Claude Code moves it to the background anyway, so starting it there saves the
-  blocked minutes and lets the subagent end its turn.
+  blocked minutes and lets the subagent end its turn. A command expected to finish inside the
+  default Bash timeout, such as a scoped test or typecheck, runs in the foreground.
 - On AskUserQuestion timeout, stop and re-ask later. Never carry tentative selections forward.
 - Read the repo's own docs + targeted greps before fanning out Explore/Plan agents.
 
@@ -76,15 +77,13 @@ CLAUDE.md (`cli`, `api`, `payload`, `test`), loaded when you touch that package.
 
 - `packages/cli` is `@houserules/cli`, the installer. It ships the binary **`houserules`**.
 - `packages/create` is `@houserules/create`, the initializer `npm create @houserules`
-  resolves. One bin that installs the cli into the repo and runs `init`, one dependency on the
-  cli. No source, no tests. The bare name `houserules` is unpublishable, npm holds it too close
+  resolves. No source, no tests. The bare name `houserules` is unpublishable, npm holds it too close
   to `house-rules`.
 - `packages/api` is `@houserules/api`, the plugin contract package: action types, module
   definitions, and the `houserules.config.json` schema plugin authors build against.
-- `packages/payload` is `@houserules/payload`, the twelve shared payload libs, imported by
-  package name.
+- `packages/payload` is `@houserules/payload`, the shared payload libs.
 - Twelve first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved
-  out of the core (`src/retired-modules.ts` in the cli maps ids to packages).
+  out of the core.
 - `packages/test` is `@houserules/test`, the shared testing modules, imported via `#test/*`.
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
   workflows, `CLAUDE.md`, and the gitignored `.claude/`.
@@ -105,10 +104,8 @@ Read before the occasion, not after:
 
 ## Commands
 
-Every `build`, `check`, and `test` script runs through wireit, which owns the dependency
-graph. A script whose inputs are unchanged is **skipped**, so full runs are cheap, and a
-`files` glob that misses a real input fails **silently**, so add the glob the same day you
-add the input (`docs/package-checks.md`).
+Every `build`, `check`, and `test` script runs through wireit. Its skip and `files` glob
+rules are in `docs/package-checks.md`.
 
 - `pnpm build`: `tsc` → `dist/`, assemble `payload-dist/`, regenerate the JSON Schema.
   Required before any `dist/` probe.
@@ -119,17 +116,13 @@ add the input (`docs/package-checks.md`).
 - `pnpm lint` / `pnpm lint:fix`: run from the workspace root only. No package defines its
   own `lint` script.
 - `pnpm change`: record a changeset. Required for any user-visible change, and dogfooded.
-- `pnpm dogfood`: run the real installer over this repo. Details and the
-  scripts-are-copies caveat: `packages/cli/CLAUDE.md`.
-- `pnpm dogfood:watch`: recompiles payload edits live. Deleting a script is not covered,
-  so re-run `pnpm dogfood`.
+- `pnpm dogfood` / `pnpm dogfood:watch`: run the real installer over this repo, once or
+  live. Caveats: `packages/cli/CLAUDE.md`.
 - `node packages/cli/dist/cli.js init --yes --dry-run <repo>`: safe manual probe against
   any repo.
 
 Gates, in order: `pnpm format`, `pnpm lint:fix`, `pnpm check`, `pnpm test`. Scope with
-`pnpm --filter <pkg>`, which under wireit also pulls in that package's upstream builds, so
-the scoped run is complete rather than merely narrow. Prefer the full run when you are
-unsure what you touched.
+`pnpm --filter <pkg>`. Prefer the full run when you are unsure what you touched.
 
 ## Release
 

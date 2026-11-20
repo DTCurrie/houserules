@@ -312,6 +312,49 @@ describe('checkConfigValidity, when fix.filterFlag is empty', () => {
   });
 });
 
+describe('checkConfigValidity, when no targets are configured', () => {
+  const ROOT_FIX = {
+    runner: 'pnpm',
+    filterFlag: '',
+    runScriptPrefix: ['run'],
+    commands: ['fix'],
+  };
+
+  it('warns about each global fix command missing from the root package.json', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(root, {
+      version: 2,
+      fix: {
+        runner: 'pnpm',
+        filterFlag: '--filter',
+        runScriptPrefix: ['run'],
+        commands: ['lint:fix', 'format:fix'],
+      },
+      targets: [],
+    });
+
+    const fixFindings = messages(root, ctx).filter((m) =>
+      m.startsWith('fix script'),
+    );
+    expect(fixFindings).toEqual([
+      'fix script "lint:fix" not in the root package.json — no targets are configured, so fix.commands is checked against the root',
+      'fix script "format:fix" not in the root package.json — no targets are configured, so fix.commands is checked against the root',
+    ]);
+  });
+
+  it('raises no schema finding for fix.passPaths: true', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(root, {
+      version: 2,
+      fix: { ...ROOT_FIX, passPaths: true },
+      targets: [STUDIO_TARGET, CITYVILLE_TARGET],
+    });
+
+    const result = checkConfigValidity(root, ctx);
+    expect(result.configProblems).toEqual([]);
+  });
+});
+
 describe('checkConfigValidity, verify commands', () => {
   it('ignores a missing verify script while verify-changed is not installed', () => {
     const root = useRepo('pnpm-monorepo');

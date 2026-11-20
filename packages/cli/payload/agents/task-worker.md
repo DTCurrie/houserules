@@ -61,6 +61,10 @@ before you implement, or make the breaking edit and reverse it the same way.
 directory, writes to a remote, or rewrites config belongs to the orchestrator, who runs it once when
 the tree is quiet and can read the diff. Your slice edits source.
 
+**Never start a long-lived process, such as a dev server or a watcher.** If the slice needs one
+running and your brief gives no address for it, return `NEEDS_CONTEXT` naming the process you need.
+The main conversation starts it before the spawn and stops it after `DONE`.
+
 **Run the acceptance yourself.** A slice reported without its acceptance output is sent back
 unreviewed, every time. Run the command from your brief and include its tail. If it fails inside your
 owned paths and you can't fix it there, report the failure honestly under `Blocked`. A truthful

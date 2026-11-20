@@ -6,6 +6,7 @@ import { Command, CommanderError } from 'commander';
 import { HouseConfigError } from '@houserules/api/internal';
 import type { Flags } from './cli-contract.js';
 import { EXIT } from './cli-contract.js';
+import { HouseError } from './house-error.js';
 
 const require = createRequire(import.meta.url);
 const { version: KIT_VERSION } = require('../package.json') as {
@@ -287,6 +288,10 @@ try {
   if (error instanceof HouseConfigError) {
     console.error(error.message);
     process.exit(EXIT.badConfig);
+  }
+  if (error instanceof HouseError) {
+    console.error(error.message);
+    process.exit(EXIT.error);
   }
   console.error(
     error instanceof Error ? (error.stack ?? error.message) : String(error),
