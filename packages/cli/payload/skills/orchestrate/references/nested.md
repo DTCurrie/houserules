@@ -53,9 +53,8 @@ Every later message to this orchestrator goes to that id with `SendMessage`.
 **Relay.** Print `Status table` verbatim, with no prose over it. Put one line under it for anything
 the columns cannot carry. Then act on the first line of the report:
 
-- `WAVE_CLOSED`: wait for the notice that the orchestrator `finished`, then send `continue` with
-  `SendMessage`. A resume sent while its keepalive still runs appears to stay inside the result
-  that already reported, and the next hand-back is refused. The same wait holds for a `Ruling:`.
+- `WAVE_CLOSED`: send `continue` with `SendMessage` once the orchestrator's `finished` notice has
+  arrived. Waiting for `finished`, below, says how to wait.
 - `DONE`: run `/backlog-add` for each `Backlogged` entry, then `/decide` and `/pr-description` at
   this layer, from `Decide candidates`, with `/pr-description` after the last phase only. Under `all`, spawn the recomputed ready set
   (see Several orchestrators), one fresh brief each, in one message. Check-in mode stops for the user first. The fresh spawn doubles as the
@@ -65,7 +64,24 @@ the columns cannot carry. Then act on the first line of the report:
 - `BLOCKED`: surface the report to the user. Never reword the cause. The one exception is a missing
   tool, routed as a phase that cannot nest, below.
 
-**The ruling round trip.** Relay `Ruling needed` verbatim through `AskUserQuestion`, with the
+**Waiting for `finished`.** Every `SendMessage` to an orchestrator that has handed back waits for
+its `finished` notice. That covers a `continue`, a `Ruling:`, a changed seam path, and residue
+after `DONE`. A message sent before the notice appears to stay inside the result that already
+reported, and the orchestrator's next hand-back is refused. Send each message once per hand-back,
+and fold a seam note into the `continue` it travels with.
+
+A notice that lands while none of your tool calls is running does not wake you once the turn ends.
+So never end a turn while such a message is owed. Run `sleep 20` in the foreground instead,
+because a notice that lands during it arrives with its result. After three of those, start
+`sleep 270` with `run_in_background: true` as the turn's last tool call, and end the turn. Every
+wake checks each orchestrator that is owed a message, and a wake with none owed does nothing.
+After 30 minutes with a message still owed, stop waiting and tell the user which orchestrator
+reported and never finished. The excuse is "the notice will wake me". The answer is that one did
+not, and an `--auto` run sat idle until the user typed.
+
+**The ruling round trip.** Before you open `AskUserQuestion`, send each message already owed to
+another orchestrator whose `finished` notice has arrived, because the question blocks you until the
+user answers. Relay `Ruling needed` verbatim through `AskUserQuestion`, with the
 recommendation first. Never summarize it, because the orchestrator wrote the options with context
 you do not have. Send the answer back as a `Ruling:` line with `SendMessage` to the same agent id.
 Never respawn for a ruling, because the same id keeps its context.
@@ -111,7 +127,9 @@ in flight, and nothing else spawns until it returns. A `live` phase reads a runn
 as a dev server, that a sibling's edits would disturb. After each `DONE` report the dispatcher recomputes
 the ready set. `Domain:` is copied from the phase header, and `Siblings:` from the other spawns'
 `Domain` headers. `Siblings:` keeps its meaning, the domains of the other live orchestrators, in
-this plan or another. It needs no plan slug, because domains are paths. A comma list, `2,3`, is an
+this plan or another. Inside one plan it needs no plan slug, because domains are paths. A milestone
+step labels each entry with its item, as `web/signup-form (apps/web)`, so a finding there names the
+plan that owns it (`references/milestone.md`). A comma list, `2,3`, is an
 explicit set. The dispatcher refuses it before any spawn when a domain is missing or two overlap,
 and names the overlap. A `live` phase in the list is held out and spawned alone once the rest have
 returned.

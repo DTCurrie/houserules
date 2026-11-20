@@ -137,6 +137,18 @@ describe('orchestrate', () => {
       ).toBe(true);
     });
 
+    it('installs the milestone reference and points a milestone slug at it', () => {
+      expect(
+        existsSync(
+          join(root, '.claude/skills/orchestrate/references/milestone.md'),
+        ),
+        'milestone.md installed',
+      ).toBe(true);
+      expect(skillText).toMatch(
+        /milestone[^]*routes to `references\/milestone\.md`/,
+      );
+    });
+
     it('lists --flat in the invocation table as the run that stays at this layer', () => {
       expect(skillText).toMatch(/^\| `… --flat` .*here/m);
     });
@@ -588,6 +600,15 @@ describe('orchestrate plan(), phase-orchestrator', () => {
     expect(advice.join('\n')).toMatch(
       /By default it hands each phase to a phase-orchestrator[^]*--flat keeps the slicing/,
     );
+  });
+
+  it('advises the milestone form', () => {
+    const answers = { ...baseAnswers(), moduleIds: ['orchestrate', 'plans'] };
+    const advice = plan({} as Ctx, answers).flatMap((action) =>
+      action.kind === 'advise' ? [action.text] : [],
+    );
+
+    expect(advice.join('\n')).toContain('/orchestrate <milestone>');
   });
 
   it('hints the one-layer-down default', () => {

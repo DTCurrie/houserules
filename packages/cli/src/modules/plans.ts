@@ -1,4 +1,5 @@
 import type { Action, ModuleGroup, ModuleRequirement } from '@houserules/api';
+import { payloadPath } from '../paths.js';
 import { agent, selfGitignoreAction, skill } from './copy-actions.js';
 
 export const id = 'plans';
@@ -38,6 +39,14 @@ export function plan(): Action[] {
       'plan-project',
       'the /plan-project scaffold + status-in-place ROADMAP discipline',
     ),
+    {
+      kind: 'copy',
+      src: payloadPath('skills', 'plan-project', 'references', 'milestone.md'),
+      dest: '.claude/skills/plan-project/references/milestone.md',
+      module: id,
+      reason:
+        'deep-dive reference the plan-project SKILL.md defers to for milestones',
+    },
     // /blast-radius shares the .claude/plans/ home, where its dated impact maps land.
     skill(
       id,
@@ -69,7 +78,7 @@ export function plan(): Action[] {
     ),
     {
       kind: 'advise',
-      text: 'Planning: run /plan-project "<what to build>" for a large/multi-phase implementation. It scaffolds .claude/plans/<name>/, tracks ROADMAP status in place so resuming is a grep, and then stops. Implementing a phase is a separate step. Run /blast-radius "<change>" to archive a dated impact map (also under .claude/plans/) before a wide change.',
+      text: 'Planning: run /plan-project "<what to build>" for a large/multi-phase implementation. It scaffolds .claude/plans/<name>/, tracks ROADMAP status in place so resuming is a grep, and then stops. A milestone (.claude/plans/<milestone>/MILESTONE.md) groups several member plans under one schedule. Implementing a phase is a separate step. Run /blast-radius "<change>" to archive a dated impact map (also under .claude/plans/) before a wide change.',
       module: id,
     },
   ];

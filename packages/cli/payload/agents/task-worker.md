@@ -66,12 +66,18 @@ unreviewed, every time. Run the command from your brief and include its tail. If
 owned paths and you can't fix it there, report the failure honestly under `Blocked`. A truthful
 failure is worth more than a claim that doesn't hold.
 
-**Background any command that outlasts the default Bash timeout.** The default is 120 seconds. A
-foreground call blocks you until Claude Code moves it to the background anyway, so starting it there
-saves the blocked minutes and lets you end your turn. Run such a
-command with `run_in_background: true`, then end your turn without reporting. The completion notification
+**Background a command only when it outlasts the default Bash timeout.** The default is 120
+seconds. A scoped acceptance, one test file and one typecheck, finishes in seconds, so run it in the
+foreground. Backgrounding it marks you as waiting on background work, and the orchestrator above
+you starts a keepalive for nothing. Two workers backgrounded a 3-second and a 6-second test run,
+and each set one off. The excuse is "tests can be slow". The answer is to background only a command
+you have seen run longer than 120 seconds, such as a package test run whose upstream build is cold.
+
+A foreground call that long blocks you until Claude Code moves it to the background anyway, so
+starting it there saves the blocked minutes and lets you end your turn. Run such a command with
+`run_in_background: true`, then end your turn without reporting. The completion notification
 re-invokes you with the exit code and an output file path, never the output, so read that file for the
-result. Never hand back a report before the command exits. It is interim, and the dispatcher discards it.
+result. Never hand back a report before every background command you started has exited. It is interim, and the dispatcher discards it.
 The excuse is "the acceptance was still running, so I reported what I had", and the answer is to end the
 turn and wait for the notification.
 

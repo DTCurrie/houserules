@@ -11,6 +11,7 @@ import {
   checkPlanPaths,
   checkReviewFocus,
   checkRoadmapSync,
+  checkSignals,
   checkSliceRowsAfterDone,
   checkSliceStatuses,
   listImpactMaps,
@@ -1088,5 +1089,336 @@ Owns \`packages/cli/src/does-not-exist.ts\`.
       expect(result.status, result.stdout).toBe(0);
       expect(result.stdout).not.toContain('plan-lint/phase-schedule');
     });
+  });
+
+  describe('milestones', () => {
+    const milestoneFile = (
+      status: string,
+      memberRows: string,
+    ) => `# MILESTONE: launch
+
+**Status:** ${status} · **Started:** 2026-11-01 · **Updated:** 2026-11-19
+
+## Members
+
+| Member | Owns | Verify |
+| --- | --- | --- |
+${memberRows}
+
+## Held paths
+
+- \`pnpm-lock.yaml\`
+
+## Steps
+
+### Step: first · Status: TODO
+
+Both surfaces render.
+
+- Items: \`api/routes\`,
+  \`web/pages\`
+- Close: \`pnpm check\`
+- Needs: none
+`;
+    const API_ROW = '| `api` | the API | `pnpm --filter api check` |';
+    const WEB_ROW = '|`web`|the web app|`pnpm --filter web check`|';
+
+    const memberRoadmap = (slug: string, phaseStatus: string) =>
+      `# ROADMAP: ${slug}\n\n**Status:** IN PROGRESS\n\n## Phases\n\n- [ ] **Phase 1: ${slug}** · Status: ${phaseStatus} · [sub-plan](phase-1-${slug}.md)\n`;
+    const memberPhase = (status: string, domain: string, body: string) =>
+      `# Phase 1\n\n**Status:** ${status}\n**Domain:** \`${domain}\`\n**Signals:** none\n\n${body}\n`;
+
+    const cleanMilestone = (): Record<string, string> => ({
+      'launch/MILESTONE.md': milestoneFile(
+        'IN PROGRESS',
+        `${API_ROW}\n${WEB_ROW}`,
+      ),
+      'launch/api/ROADMAP.md': memberRoadmap('routes', 'TODO'),
+      'launch/api/phase-1-routes.md': memberPhase('TODO', 'lib/api', ''),
+      'launch/web/ROADMAP.md': memberRoadmap('pages', 'TODO'),
+      'launch/web/phase-1-pages.md': memberPhase('TODO', 'lib/web/', ''),
+    });
+    const BAD_SLICE_PHASE = `# Phase 1\n\n**Status:** TODO\n\n${SLICE_TABLE('In Progress')}`;
+
+    const runOver = (files: Record<string, string>, args: string[] = []) => {
+      const root = useInstalledRepo('pnpm-monorepo', {
+        modules: 'orchestrate',
+      });
+      for (const [path, content] of Object.entries(files)) {
+        const filePath = join(root, '.claude/plans', path);
+        mkdirSync(dirname(filePath), { recursive: true });
+        writeFileSync(filePath, content);
+      }
+      return runScript(root, SCRIPT, { args });
+    };
+
+    it('exits 0 with no milestone finding on two members in one step with disjoint domains', () => {
+      const result = runOver(cleanMilestone());
+
+      expect(result.status, result.stdout).toBe(0);
+      expect(result.stdout).not.toContain('[milestone/');
+    });
+
+    it('reports a nested member whose ROADMAP and sub-plan disagree, by its repo-relative path', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/web/phase-1-pages.md': memberPhase(
+          'IN PROGRESS',
+          'lib/web',
+          '',
+        ),
+      });
+
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain(
+        '.claude/plans/launch/web/ROADMAP.md  ERROR  [plan-lint/roadmap-subplan-sync]',
+      );
+    });
+
+    it('exits 1 naming MILESTONE.md when two items in one step share a Domain root', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/web/phase-1-pages.md': memberPhase('TODO', 'lib/api/pages', ''),
+      });
+
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain(
+        '.claude/plans/launch/MILESTONE.md:18  ERROR  [milestone/item-domain-overlap]',
+      );
+    });
+
+    it('errors on a milestone directory that also holds ROADMAP.md', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/ROADMAP.md': memberRoadmap('stray', 'TODO'),
+      });
+
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain(
+        '.claude/plans/launch/ROADMAP.md  ERROR  [milestone/has-roadmap]',
+      );
+    });
+
+    it('never lints the milestone directory itself as a plan', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/ROADMAP.md': memberRoadmap('stray', 'TODO'),
+        'launch/phase-1-stray.md': BAD_SLICE_PHASE,
+      });
+
+      expect(result.stdout).not.toContain('plan-lint/slice-status-vocabulary');
+    });
+
+    it('errors on a table member with no directory, naming the ROADMAP it expected', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/MILESTONE.md': milestoneFile(
+          'IN PROGRESS',
+          `${API_ROW}\n${WEB_ROW}\n|  \`mobile\`  |  the app  |  \`pnpm test\`  |`,
+        ),
+      });
+
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain(
+        '[milestone/member-missing]  member `mobile` is in the ## Members table, but .claude/plans/launch/mobile/ROADMAP.md does not exist',
+      );
+    });
+
+    it('errors on a member directory missing from the table', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/MILESTONE.md': milestoneFile('IN PROGRESS', API_ROW),
+      });
+
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain(
+        '[milestone/member-unlisted]  .claude/plans/launch/web holds ROADMAP.md',
+      );
+    });
+
+    it('still lints a member directory missing from the table as a plan', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/docs/ROADMAP.md': memberRoadmap('guide', 'TODO'),
+        'launch/docs/phase-1-guide.md': BAD_SLICE_PHASE,
+      });
+
+      expect(result.stdout).toMatch(
+        /\.claude\/plans\/launch\/docs\/phase-1-guide\.md\S*\s+ERROR\s+\[plan-lint\/slice-status-vocabulary\]/,
+      );
+    });
+
+    it('skips a milestone subdirectory with no ROADMAP.md', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/research/SYNTHESIS.md': '# Synthesis\n',
+        'launch/research/phase-1-notes.md': BAD_SLICE_PHASE,
+      });
+
+      expect(result.status, result.stdout).toBe(0);
+      expect(result.stdout).not.toContain('research');
+    });
+
+    it("never reads a member's own subdirectories", () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/api/old/ROADMAP.md': memberRoadmap('legacy', 'DONE'),
+        'launch/api/old/phase-1-legacy.md': BAD_SLICE_PHASE,
+      });
+
+      expect(result.status, result.stdout).toBe(0);
+      expect(result.stdout).not.toContain('launch/api/old');
+    });
+
+    it('checks member paths while the milestone is IN PROGRESS', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/api/phase-1-routes.md': memberPhase(
+          'TODO',
+          'lib/api',
+          'Owns `packages/cli/src/does-not-exist.ts`.',
+        ),
+      });
+
+      expect(result.stdout).toContain(
+        '.claude/plans/launch/api/phase-1-routes.md:7  WARN  [plan-path/missing-file]',
+      );
+    });
+
+    it('skips member path checks once the milestone is DONE', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/MILESTONE.md': milestoneFile(
+          'DONE (2026-11-19)',
+          `${API_ROW}\n${WEB_ROW}`,
+        ),
+        'launch/api/phase-1-routes.md': memberPhase(
+          'TODO',
+          'lib/api',
+          'Owns `packages/cli/src/does-not-exist.ts`.',
+        ),
+      });
+
+      expect(result.stdout).not.toContain('plan-path/missing-file');
+    });
+
+    it('reads an impact map in a member directory', () => {
+      const result = runOver({
+        ...cleanMilestone(),
+        'launch/api/blast-radius-auth-2026-11-19.md':
+          '# Blast radius: auth\n\n## Surface\n\nx\n',
+      });
+
+      expect(result.stdout).toContain(
+        '.claude/plans/launch/api/blast-radius-auth-2026-11-19.md',
+      );
+    });
+
+    it('refuses an argument with a clean milestone present', () => {
+      const result = runOver(cleanMilestone(), ['launch/MILESTONE.md']);
+
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stdout).toContain(
+        'launch/MILESTONE.md  ERROR  [checker/unexpected-argument]',
+      );
+    });
+  });
+});
+
+describe('DROPPED phases', () => {
+  const droppedPhaseLine = (phaseNumber: number, afterTarget: string | null) =>
+    `- [-] **Phase ${phaseNumber}: part ${phaseNumber}** · Status: DROPPED (2026-11-19, moved to phase 3) · [sub-plan](phase-${phaseNumber}.md)${afterTarget === null ? '' : ` · After: ${afterTarget}`}`;
+  const run = (markdown: string, domains: Record<string, string[] | null>) =>
+    checkPhaseSchedule('ROADMAP.md', markdown, domains, {}).findings;
+
+  it('parses a [-] line with its DROPPED status', () => {
+    expect(
+      parseRoadmapPhases(
+        '- [-] **Phase 2: x** · Status: DROPPED (2026-11-19, moved to phase 3) · [sub-plan](phase-2-x.md)\n',
+      ),
+    ).toEqual([
+      {
+        number: 2,
+        status: 'DROPPED (2026-11-19, moved to phase 3)',
+        subplan: 'phase-2-x.md',
+        after: 'chain',
+      },
+    ]);
+  });
+
+  it('accepts DROPPED on both sides of the roadmap sync', () => {
+    const roadmap = `${droppedPhaseLine(2, null)}\n`;
+    expect(
+      checkRoadmapSync('ROADMAP.md', roadmap, {
+        'phase-2.md': 'DROPPED (2026-11-19, cut)',
+      }).findings,
+    ).toEqual([]);
+    expect(
+      checkRoadmapSync('ROADMAP.md', roadmap, { 'phase-2.md': 'TODO' })
+        .findings,
+    ).toHaveLength(1);
+  });
+
+  it('reports no pair error for a dropped phase with no Domain', () => {
+    const markdown = roadmapOf(
+      phaseLine(1),
+      droppedPhaseLine(2, '1'),
+      phaseLine(3, '1'),
+    );
+    expect(run(markdown, { 'phase-1.md': ['a'], 'phase-3.md': ['c'] })).toEqual(
+      [],
+    );
+  });
+
+  it('still reports the pair when that phase is TODO', () => {
+    const markdown = roadmapOf(
+      phaseLine(1),
+      phaseLine(2, '1'),
+      phaseLine(3, '1'),
+    );
+    expect(
+      run(markdown, { 'phase-1.md': ['a'], 'phase-3.md': ['c'] }).map(
+        (finding) => finding.msg,
+      ),
+    ).toEqual([
+      'phases 2 and 3 can run concurrently, but phase 2 has no **Domain:** line',
+    ]);
+  });
+
+  it('keeps a dropped phase a valid After target with ancestry through it', () => {
+    const markdown = roadmapOf(
+      phaseLine(1),
+      droppedPhaseLine(2, '1'),
+      phaseLine(3, '2'),
+      phaseLine(4, '1'),
+    );
+    const findings = run(markdown, {
+      'phase-1.md': ['a'],
+      'phase-3.md': ['x'],
+      'phase-4.md': ['x'],
+    });
+    expect(findings.map((finding) => finding.msg)).toEqual([
+      expect.stringContaining('phases 3 and 4 can run concurrently'),
+    ]);
+  });
+});
+
+describe('checkSignals', () => {
+  it('accepts owner and the other known signals', () => {
+    expect(
+      checkSignals('p.md', '**Signals:** owner, `ui`, wide, live\n').findings,
+    ).toEqual([]);
+  });
+
+  it('warns once on an unknown signal and names it', () => {
+    const findings = checkSignals('p.md', '**Signals:** wdie, ui\n').findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.rule).toBe('plan-lint/unknown-signal');
+    expect(findings[0]?.level).toBe('warn');
+    expect(findings[0]?.msg).toContain('wdie');
+  });
+
+  it('reads none as no signal', () => {
+    expect(checkSignals('p.md', '**Signals:** none\n').findings).toEqual([]);
   });
 });
