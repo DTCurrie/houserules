@@ -2,4 +2,4 @@
 '@houserules/cli': minor
 ---
 
-Milestones group several plans and run their phases together in ordered steps.
+Milestones group plans into ordered steps, and `plan-lint` checks them and prints their gates.

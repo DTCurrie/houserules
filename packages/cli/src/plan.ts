@@ -334,8 +334,14 @@ function checkPayloadMissing(
  * its recorded hash is one only houserules has written, so a content change means houserules
  * moved on and the refresh is safe and silent.
  *
+ * The one exception is a `generated` file, build output under a self-gitignored directory.
+ * Git never carries it, so a checkout that pulls a newer manifest holds an older copy whose
+ * mismatch is not an edit, and it refreshes like any file houserules alone has written.
+ *
  * @param recordedHash From the manifest. `undefined` means houserules never wrote this path,
  *   so there is nothing to have diverged from and the file is refreshable.
+ * @param isGenerated The dest sits under a self-gitignored generated directory this plan
+ *   writes the `.gitignore` for. See {@link SELF_GITIGNORED_GENERATED_DIRS}.
  */
 export function classifyWrite(args: {
   exists: boolean;
@@ -343,14 +349,48 @@ export function classifyWrite(args: {
   canonical: Buffer;
   recordedHash: string | undefined;
   force: boolean;
+  isGenerated?: boolean;
 }): 'create' | 'skip-identical' | 'skip-modified' | 'update' {
-  const { exists, onDisk, canonical, recordedHash, force } = args;
+  const { exists, onDisk, canonical, recordedHash, force, isGenerated } = args;
   if (!exists || onDisk === null) return 'create';
   if (onDisk.equals(canonical)) return 'skip-identical';
   const locallyModified =
     recordedHash !== undefined && sha256(onDisk) !== recordedHash;
-  if (locallyModified && !force) return 'skip-modified';
+  if (locallyModified && !force && !isGenerated) return 'skip-modified';
   return 'update';
+}
+
+/**
+ * The kit-owned directories whose contents are build output, self-gitignored by the
+ * `.gitignore` writes in `modules/core.ts`. That list is built inline there, not exported,
+ * so this names the two again. A directory counts only when the plan also writes its
+ * `.gitignore`, so `scripts.commit: true`, which drops the scripts one, keeps committed
+ * scripts under the edit rule. The ledger directory self-gitignores too but holds local
+ * records, not generated copies, so it is left out.
+ */
+const SELF_GITIGNORED_GENERATED_DIRS = [
+  '.claude/scripts',
+  '.claude/templates',
+] as const;
+
+/** The generated directories this plan self-gitignores, from its own `.gitignore` writes. */
+function generatedDirsIn(actions: Action[]): string[] {
+  return SELF_GITIGNORED_GENERATED_DIRS.filter((dir) =>
+    actions.some(
+      (action) =>
+        action.kind === 'write' && action.dest === `${dir}/.gitignore`,
+    ),
+  );
+}
+
+/**
+ * Whether a dest is build output git never carries. The `.gitignore` itself is excluded:
+ * its `!.gitignore` line keeps it tracked, so a mismatch there is a real edit.
+ */
+function isGeneratedDest(dest: string, generatedDirs: string[]): boolean {
+  return generatedDirs.some(
+    (dir) => dest.startsWith(`${dir}/`) && dest !== `${dir}/.gitignore`,
+  );
 }
 
 /**
@@ -534,6 +574,7 @@ function effectForCopyOrWrite(
   broken: Map<string, string[]>,
   brokenDests: Set<string>,
   seenCopySrc: Map<string, string>,
+  generatedDirs: string[],
 ): Effect | null {
   // dest → src of the copy already planned there. Core hand-lists every shared lib
   // unconditionally (modules/core.ts), and a plugin's sidecar independently derives a copy
@@ -554,6 +595,7 @@ function effectForCopyOrWrite(
     canonical: content,
     recordedHash: wholeFileHash(manifest, action.dest),
     force,
+    isGenerated: isGeneratedDest(action.dest, generatedDirs),
   });
   return { action, op, content, hash };
 }
@@ -622,6 +664,7 @@ export function computeEffects(
   const broken = new Map<string, string[]>();
   const brokenDests = new Set<string>();
   const seenCopySrc = new Map<string, string>();
+  const generatedDirs = generatedDirsIn(actions);
 
   for (const action of actions) {
     if (action.kind === 'advise') {
@@ -671,6 +714,7 @@ export function computeEffects(
         broken,
         brokenDests,
         seenCopySrc,
+        generatedDirs,
       );
     }
     if (effect) effects.push(effect);

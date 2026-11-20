@@ -68,6 +68,7 @@
     }
   ],
   "_notes": {
+    "fix.passPaths": "optional, default false. When true the Stop fixer appends the turn's changed paths after `--`, so turn it on only when every fix script accepts file arguments.",
     "targets[].fixCommands": "optional per-target override of fix.commands — real repos diverge (root `fix` vs package `lint:fix`).",
     "targets[].changelogPath / logPath": "only used when ledger.enabled; default to .claude/changelogs/<name>.md|.log so they never collide with changesets' CHANGELOG.md.",
     "singlePackage": "for a non-monorepo use one target with pathPrefix \"\" and sourcePath \"src\", plus fix.filterFlag \"\"."

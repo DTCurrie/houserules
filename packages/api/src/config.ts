@@ -133,6 +133,14 @@ const HouseConfigSchema = z.strictObject({
         .describe(
           'Per-fix-command file extensions, e.g. {"lint:fix": ["ts","tsx"]}. Narrows which changed files trigger which fixer.',
         ),
+      // Read by lint-format-fix.mts. Off by default, because a script such as
+      // `eslint . --fix` widens or errors on trailing paths.
+      passPaths: z
+        .boolean()
+        .optional()
+        .describe(
+          'Append the paths the turn changed to each fix command, after `--`, filtered by commandExtensions. Package-relative per target, root-relative for a root command. Off by default: a script such as `eslint . --fix` widens or errors on trailing paths.',
+        ),
     })
     .optional(),
   verify: runnerBlock

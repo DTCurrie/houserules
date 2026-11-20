@@ -126,6 +126,7 @@ export function apply(
 
   // Keep the manifest byte-stable when nothing changed, so a re-run is a true
   // no-op (idempotency is asserted as a tree hash in tests).
+  const manifestPlugins = (plugins ?? []).map(toManifestPlugin);
   const stable =
     previousManifest &&
     !written.length &&
@@ -139,7 +140,7 @@ export function apply(
     // plugins" as a change on every run and rewrite the manifest for a new `installedAt`,
     // which is the one thing that makes a repeated `init` non-idempotent.
     JSON.stringify(previousManifest.plugins ?? []) ===
-      JSON.stringify(plugins ?? []);
+      JSON.stringify(manifestPlugins);
   const manifest: HouseManifest = stable
     ? previousManifest
     : {
@@ -148,11 +149,22 @@ export function apply(
         modules: moduleIds,
         files,
         ...(signature ? { settings: signature } : {}),
-        ...(plugins && plugins.length ? { plugins } : {}),
+        ...(manifestPlugins.length ? { plugins: manifestPlugins } : {}),
       };
   if (!stable) {
     repo.write(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
   }
 
   return { written, manifest };
+}
+
+type ManifestPlugin = NonNullable<HouseManifest['plugins']>[number];
+
+/** Drops the absolute `dir`, so the committed manifest is the same on every machine. */
+function toManifestPlugin({
+  name,
+  alias,
+  version,
+}: PluginSource): ManifestPlugin {
+  return { name, alias, version };
 }

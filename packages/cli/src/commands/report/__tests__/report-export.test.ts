@@ -107,6 +107,59 @@ function buildFixture(): ReportDocument {
   });
 }
 
+describe('fix config in the export', () => {
+  function emptyDocument(root: string): ReportDocument {
+    return buildReportDocument(emptyCorpus(['slug']), root, {
+      label: 'work',
+      cliVersion: '0.7.0',
+    });
+  }
+
+  it('exports counts and booleans, never a command name', () => {
+    const root = mkdtempSync(join(tmpdir(), 'report-export-fix-'));
+    mkdirSync(join(root, '.claude'));
+    writeFileSync(
+      join(root, '.claude', 'houserules.config.json'),
+      JSON.stringify({
+        version: 2,
+        packageManager: 'pnpm',
+        fix: {
+          runner: 'pnpm',
+          filterFlag: '',
+          runScriptPrefix: ['run'],
+          commands: ['zzformat-secret', 'zzlint-secret'],
+        },
+        targets: [],
+      }),
+    );
+
+    const exported = redactDocument(emptyDocument(root));
+
+    expect(exported.fix).toEqual({
+      runsAtRoot: true,
+      commandCount: 2,
+      hasFilterFlag: false,
+      passPaths: false,
+      targetsWithFixCommands: 0,
+    });
+    const text = JSON.stringify(exported);
+    expect(text).not.toContain('zzformat-secret');
+    expect(text).not.toContain('zzlint-secret');
+  });
+
+  it('omits the block with no config, and an older export without it still imports', () => {
+    const root = mkdtempSync(join(tmpdir(), 'report-export-nofix-'));
+    const document = emptyDocument(root);
+    expect(document.fix).toBeUndefined();
+
+    const path = join(root, 'old.json');
+    writeExportFile(path, document);
+    const [imported] = readImportFiles([path]);
+
+    expect(imported?.fix).toBeUndefined();
+  });
+});
+
 describe('redactDocument', () => {
   let original: ReportDocument;
   let snapshot: string;
@@ -129,6 +182,73 @@ describe('redactDocument', () => {
     expect(original.hooks.crashSignatures.length).toBeGreaterThan(0);
   });
 
+  describe('guard reasons', () => {
+    function reasonAfterRedaction(reason: string | undefined): unknown {
+      const out = redactDocument({
+        ...original,
+        guard: [
+          {
+            session: 's',
+            blockedCommand: 'x',
+            ...(reason === undefined ? {} : { reason }),
+          },
+        ],
+      });
+      return out.guard[0]?.reason;
+    }
+    const readTail =
+      ". Don't read it whole — grep for what you need (`grep -n '<pattern>' PATH`) then Read with offset+limit, or re-run this Read with an explicit limit if you truly need a window.";
+
+    it('masks the path of a read-guard reason, both occurrences', () => {
+      const raw = `houserules read guard: packages/secret/dist/out.js is large (900 KB > 256 KB)${readTail.replace('PATH', 'packages/secret/dist/out.js')}`;
+
+      expect(reasonAfterRedaction(raw)).toBe(
+        `houserules read guard: <path> is large (900 KB > 256 KB)${readTail.replace('PATH', '<path>')}`,
+      );
+    });
+
+    it('masks the matched glob of a read-guard reason', () => {
+      const raw = `houserules read guard: a/b.lock matches a generated/denylisted pattern (*.lock)${readTail.replace('PATH', 'a/b.lock')}`;
+
+      expect(reasonAfterRedaction(raw)).toBe(
+        `houserules read guard: <path> matches a generated/denylisted pattern (<pattern>)${readTail.replace('PATH', '<path>')}`,
+      );
+    });
+
+    it('masks the ledger subcommand of a write-gate reason', () => {
+      const raw =
+        'Blocked by houserules subagent write gate: a subagent may not run ledger command `backlog-add.mjs --title private`. Describe the issue and let the caller act on it.';
+
+      expect(reasonAfterRedaction(raw)).toBe(
+        'Blocked by houserules subagent write gate: a subagent may not run ledger command `<subcommand>`. Describe the issue and let the caller act on it.',
+      );
+    });
+
+    it('passes a fixed git guard message through verbatim', () => {
+      expect(reasonAfterRedaction("git push is the user's to run.")).toBe(
+        "git push is the user's to run.",
+      );
+    });
+
+    it('masks the pattern of a config guard rule', () => {
+      expect(
+        reasonAfterRedaction(
+          'Blocked by houserules.config.json guard rule: \\bsecret-tool\\b',
+        ),
+      ).toBe('Blocked by houserules.config.json guard rule: <pattern>');
+    });
+
+    it('replaces an unknown reason with a placeholder', () => {
+      expect(reasonAfterRedaction(`see ${SECRET_PATH}`)).toBe(
+        '(reason redacted)',
+      );
+    });
+
+    it('leaves an absent reason absent', () => {
+      expect(reasonAfterRedaction(undefined)).toBeUndefined();
+    });
+  });
+
   it('removes paths, file names, and command arguments', () => {
     const text = JSON.stringify(redacted);
 
@@ -145,12 +265,13 @@ describe('redactDocument', () => {
         session: 'sess-abc',
         blockedCommand: 'git push',
         guard: 'PreToolUse:Bash',
+        reason: '(reason redacted)',
       },
     ]);
     expect(redacted.friction.retryRuns[0]?.command).toBe('git push');
   });
 
-  it('drops a guard reason and reduces a raw-command guard name to its family', () => {
+  it('redacts a guard reason and reduces a raw-command guard name to its family', () => {
     const document = buildFixture();
     document.guard = [
       {
@@ -170,10 +291,19 @@ describe('redactDocument', () => {
     const exported = redactDocument(document);
 
     expect(exported.guard).toEqual([
-      { session: 'sess-abc', blockedCommand: 'git push', guard: 'node' },
-      { session: 'sess-abc', blockedCommand: 'ls', guard: 'PreToolUse:Bash' },
+      {
+        session: 'sess-abc',
+        blockedCommand: 'git push',
+        guard: 'node',
+        reason: '(reason redacted)',
+      },
+      {
+        session: 'sess-abc',
+        blockedCommand: 'ls',
+        guard: 'PreToolUse:Bash',
+        reason: '(reason redacted)',
+      },
     ]);
-    expect(exported.guard.some((block) => 'reason' in block)).toBe(false);
   });
 
   it('reduces a non-git command to its first token', () => {

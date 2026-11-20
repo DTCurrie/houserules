@@ -117,6 +117,24 @@ describe('checkInstallHygiene', () => {
     ]);
   });
 
+  it('warns once about a kit-wired hook whose $CLAUDE_PROJECT_DIR script is absent', () => {
+    const root = useRepo('pnpm-single');
+    const ctx = settingsCtx(root, wiring(hookCommand('absent.mjs')));
+
+    const result = checkInstallHygiene(root, ctx);
+
+    expect(
+      result.findings.filter((finding) =>
+        finding.msg.includes('references missing script'),
+      ),
+    ).toEqual([
+      {
+        level: 'WARN',
+        msg: 'hook command references missing script ".claude/scripts/absent.mjs" — fix the path or remove the hook',
+      },
+    ]);
+  });
+
   it('does not warn about a bare script basename inside a fallback message string', () => {
     const root = useRepo('pnpm-single');
     const ctx = settingsCtx(

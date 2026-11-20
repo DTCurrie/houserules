@@ -49,7 +49,7 @@ document, in document order.
 Three renders exist. `current` is the 0.12.x report. `0.4.1` has no `sessions: N, from` line, no
 per-session `main`/`subagents` line or per-model line, a `dead skills` label in place of
 `unused here`, and no resident context section. `empty` is a fence holding only
-`No .jsonl transcripts in ...`, and every section below `sessionsStated` is null or empty.
+`No .jsonl transcripts in ...` or `No transcripts found (looked in ...)`, and every section below `sessionsStated` is null or empty.
 
 The built-in check, which exits non-zero on a mismatch: per project, `sessions.length` equals
 `sessionsStated`, equals the `Sessions` cell of that project's `summary[]` row, and the sum of

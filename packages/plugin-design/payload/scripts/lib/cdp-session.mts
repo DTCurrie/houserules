@@ -286,6 +286,43 @@ function removeProfileDir(profileDir: string): void {
   }
 }
 
+/** Every Chrome this process spawned and has not yet closed, with the profile it owns. */
+const liveChromes = new Map<ChildProcess, string>();
+let hasRegisteredExitHandlers = false;
+
+/**
+ * Kills each surviving Chrome and deletes its profile. Synchronous because an `exit` handler
+ * cannot await. SIGKILL, since there is no time to wait on a graceful shutdown.
+ */
+function reapLiveChromes(): void {
+  for (const [chrome, profileDir] of liveChromes) {
+    chrome.kill('SIGKILL');
+    removeProfileDir(profileDir);
+  }
+  liveChromes.clear();
+}
+
+/**
+ * Reaps on a signal, then lets the process die by it. A listener suppresses the default action,
+ * so once ours is removed the signal is re-raised. A host that has its own listener is left to
+ * decide for itself.
+ */
+function reapThenTerminate(signal: 'SIGINT' | 'SIGTERM'): void {
+  reapLiveChromes();
+  const hasHostListener = process.listenerCount(signal) > 1;
+  if (hasHostListener) return;
+  process.removeListener(signal, reapThenTerminate);
+  process.kill(process.pid, signal);
+}
+
+function registerExitHandlersOnce(): void {
+  if (hasRegisteredExitHandlers) return;
+  hasRegisteredExitHandlers = true;
+  process.on('exit', reapLiveChromes);
+  process.on('SIGINT', reapThenTerminate);
+  process.on('SIGTERM', reapThenTerminate);
+}
+
 /** Everything a launched session needs to tear down, held together so `close` is total. */
 interface Launched {
   chrome: ChildProcess;
@@ -358,6 +395,7 @@ function buildSession(launched: Launched): RenderSession {
     async close() {
       if (closed) return;
       closed = true;
+      liveChromes.delete(chrome);
       try {
         connection.close();
       } catch {
@@ -412,6 +450,9 @@ export async function launchSession(
     { stdio: ['ignore', 'ignore', 'pipe'] },
   );
 
+  registerExitHandlersOnce();
+  liveChromes.set(chrome, profileDir);
+
   let chromeStderr = '';
   chrome.stderr?.on('data', (chunk: Buffer) => {
     chromeStderr += chunk.toString();
@@ -434,6 +475,7 @@ export async function launchSession(
     // Read the exit state BEFORE killing, or the kill below writes it and every launch reads as
     // having exited on its own. Died-by-itself versus never-came-up is the whole diagnosis.
     const exitedOnItsOwn = exit;
+    liveChromes.delete(chrome);
     chrome.kill();
     await processExited(chrome);
     removeProfileDir(profileDir);

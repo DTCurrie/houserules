@@ -482,6 +482,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       // migration on every update and leave the manifest disagreeing with the registry forever.
       moduleIds: updateModuleIds,
       previousManifest: manifest,
+      plugins: registry.plugins,
     },
   );
   ui.written(written);

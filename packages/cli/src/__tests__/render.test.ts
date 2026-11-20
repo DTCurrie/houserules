@@ -570,6 +570,14 @@ describe('renderClaudeMd', () => {
     );
   });
 
+  it('tells a subagent to run a command that finishes inside the default Bash timeout in the foreground', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+
+    expect(body).toContain(
+      'A command expected to finish inside the\n  default Bash timeout, such as a scoped test or typecheck, runs in the foreground.',
+    );
+  });
+
   it('gives the backgrounding reason without claiming the harness aborts the subagent', () => {
     const body = renderClaudeAdditions(makeCtx(), makeAnswers());
     expect(body).not.toMatch(/aborted|CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS/);

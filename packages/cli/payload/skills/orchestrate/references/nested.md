@@ -71,13 +71,13 @@ reported, and the orchestrator's next hand-back is refused. Send each message on
 and fold a seam note into the `continue` it travels with.
 
 A notice that lands while none of your tool calls is running does not wake you once the turn ends.
-So never end a turn while such a message is owed. Run `sleep 20` in the foreground instead,
-because a notice that lands during it arrives with its result. After three of those, start
-`sleep 270` with `run_in_background: true` as the turn's last tool call, and end the turn. Every
-wake checks each orchestrator that is owed a message, and a wake with none owed does nothing.
-After 30 minutes with a message still owed, stop waiting and tell the user which orchestrator
-reported and never finished. The excuse is "the notice will wake me". The answer is that one did
-not, and an `--auto` run sat idle until the user typed.
+So never end a turn while such a message is owed. Wait with foreground `sleep 20` calls instead,
+because a notice that lands during one arrives with its result. Claude Code refuses a long
+standalone foreground sleep, so the wait is short calls repeated. After each one, check every
+orchestrator that is owed a message. After 30 minutes with a
+message still owed, stop waiting and tell the user which orchestrator reported and never
+finished. The excuse is "the notice will wake me". The answer is that one did not, and an
+`--auto` run sat idle until the user typed.
 
 **The ruling round trip.** Before you open `AskUserQuestion`, send each message already owed to
 another orchestrator whose `finished` notice has arrived, because the question blocks you until the
@@ -124,7 +124,9 @@ leaves it. A domain is a set of source paths. The plan workspace is never part o
 `none` means no wait. It spawns the whole ready set in one message. A phase with no `**Domain:**`
 line, or with `live` on its `**Signals:**` line, runs alone. It starts only when no other phase is
 in flight, and nothing else spawns until it returns. A `live` phase reads a running process, such
-as a dev server, that a sibling's edits would disturb. After each `DONE` report the dispatcher recomputes
+as a dev server, that a sibling's edits would disturb. The main conversation starts that process
+before the spawn, names its address in the brief, and stops it after `DONE`. A subagent never
+starts it. After each `DONE` report the dispatcher recomputes
 the ready set. `Domain:` is copied from the phase header, and `Siblings:` from the other spawns'
 `Domain` headers. `Siblings:` keeps its meaning, the domains of the other live orchestrators, in
 this plan or another. Inside one plan it needs no plan slug, because domains are paths. A milestone

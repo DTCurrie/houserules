@@ -111,7 +111,36 @@ function checkTargetScripts(
       }
   }
 
+  findings.push(
+    ...checkUntargetedFixCommands(config, root, fixAtRoot, rootFixCommands),
+  );
   return { findings, rootFixCommands, rootVerifyCommands, anyVerifyCommand };
+}
+
+/**
+ * With no targets the per-target loop never runs, so the global `fix.commands` are checked
+ * against the root `package.json` here. Under an empty `filterFlag` they join
+ * `rootFixCommands` for {@link checkRootScripts} instead.
+ */
+function checkUntargetedFixCommands(
+  config: HouseConfig,
+  root: string,
+  fixAtRoot: boolean,
+  rootFixCommands: Set<string>,
+): Finding[] {
+  if ((config.targets ?? []).length) return [];
+  const commands = config.fix?.commands ?? [];
+  if (fixAtRoot) {
+    for (const cmd of commands) rootFixCommands.add(cmd);
+    return [];
+  }
+  const rootScripts = readJson(join(root, 'package.json'))?.scripts ?? {};
+  return commands
+    .filter((cmd) => !rootScripts[cmd])
+    .map((cmd): Finding => ({
+      level: 'WARN',
+      msg: `fix script "${cmd}" not in the root package.json — no targets are configured, so fix.commands is checked against the root`,
+    }));
 }
 
 /** The commands the repo-root shape runs, checked once against the root `package.json`. */

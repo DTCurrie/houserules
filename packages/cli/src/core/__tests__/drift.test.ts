@@ -2,9 +2,12 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -28,7 +31,9 @@ import type {
   FileAction,
   RegionAction,
   RegionSpec,
+  WriteAction,
 } from '@houserules/api';
+import { computeEffects } from '../../plan.js';
 import type { Effect } from '../../plan.js';
 
 function copyAction(overrides: Partial<CopyAction> = {}): CopyAction {
@@ -336,6 +341,54 @@ describe('classifyEffect', () => {
   });
 });
 
+describe('classifyEffect, given an older generated script under a newer manifest', () => {
+  const SCRIPT = '.claude/scripts/guard.mjs';
+  const RECORDED = sha256('copy the newer manifest recorded\n');
+
+  function generatedScriptEffect(): Effect {
+    const root = mkdtempSync(join(tmpdir(), 'kit-drift-generated-'));
+    mkdirSync(join(root, '.claude/scripts'), { recursive: true });
+    writeFileSync(join(root, SCRIPT), 'older generated copy\n');
+    const actions: WriteAction[] = [
+      {
+        kind: 'write',
+        module: 'core',
+        dest: '.claude/scripts/.gitignore',
+        content: '*\n',
+        reason: 'self-gitignore',
+      },
+      {
+        kind: 'write',
+        module: 'core',
+        dest: SCRIPT,
+        content: 'canonical today\n',
+        reason: 'core script',
+      },
+    ];
+    const { effects } = computeEffects(root, actions, {
+      manifest: {
+        kitVersion: '1.0.0',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        modules: ['core'],
+        files: { [SCRIPT]: RECORDED },
+      },
+    });
+    rmSync(root, { recursive: true, force: true });
+    return effects.find((e) => e.action.dest === SCRIPT)!;
+  }
+
+  it('reports it "stale" for `update` to refresh, not "yours"', () => {
+    const result = classifyEffect(
+      generatedScriptEffect(),
+      () => 'older generated copy\n',
+      RECORDED,
+    );
+
+    expect(result.status).toBe('stale');
+    expect(result.yours, 'not marked as your edit').toBe(false);
+  });
+});
+
 describe('classifyEffect, the "defaultMoved" annotation on a body action', () => {
   const HOST = '---\npaths: ["custom/**"]\n---\nshared body\n';
   const HOST_FRONTMATTER = '---\npaths: ["custom/**"]\n---\n';
@@ -515,21 +568,20 @@ describe('doctor on a clean install', () => {
   });
 });
 
+const EDITED_SKILL = '.claude/skills/ready/SKILL.md';
+
 describe('a file edited locally (`yours`)', () => {
   let root: string;
-  let guard: string;
+  let skill: string;
 
   beforeEach(() => {
-    root = useInstalledRepo('npm-single');
-    guard = join(root, '.claude/scripts/guard-bash.mjs');
-    appendFileSync(guard, '// my tweak\n');
+    root = useInstalledRepo('npm-single', { modules: 'ready' });
+    skill = join(root, EDITED_SKILL);
+    appendFileSync(skill, '// my tweak\n');
   });
 
   it('is reported with status `yours`', () => {
-    const entry = driftFor(
-      runDoctorJson(root),
-      '.claude/scripts/guard-bash.mjs',
-    );
+    const entry = driftFor(runDoctorJson(root), EDITED_SKILL);
     expect(entry?.status).toBe('yours');
     expect(entry?.yours, 'marked as your edit').toBe(true);
   });
@@ -549,26 +601,17 @@ describe('a file edited locally that houserules has since changed (`conflict`)',
   let root: string;
 
   beforeEach(() => {
-    root = useInstalledRepo('npm-single');
-    simulateEditOnTopOfAnOlderKitVersion(
-      root,
-      '.claude/scripts/guard-bash.mjs',
-    );
+    root = useInstalledRepo('npm-single', { modules: 'ready' });
+    simulateEditOnTopOfAnOlderKitVersion(root, EDITED_SKILL);
   });
 
   it('is reported with status `conflict`', () => {
-    const entry = driftFor(
-      runDoctorJson(root),
-      '.claude/scripts/guard-bash.mjs',
-    );
+    const entry = driftFor(runDoctorJson(root), EDITED_SKILL);
     expect(entry?.status).toBe('conflict');
   });
 
   it('is still marked as your edit', () => {
-    const entry = driftFor(
-      runDoctorJson(root),
-      '.claude/scripts/guard-bash.mjs',
-    );
+    const entry = driftFor(runDoctorJson(root), EDITED_SKILL);
     expect(entry?.yours, 'marked as your edit').toBe(true);
   });
 
@@ -583,21 +626,19 @@ describe('a file edited locally that houserules has since changed (`conflict`)',
   });
 
   it('is left alone by --fix without --force', () => {
-    const before = readFileSync(join(root, '.claude/scripts/guard-bash.mjs'));
+    const before = readFileSync(join(root, EDITED_SKILL));
 
     runCli(['doctor', root, '--fix']);
 
-    expect(readFileSync(join(root, '.claude/scripts/guard-bash.mjs'))).toEqual(
-      before,
-    );
+    expect(readFileSync(join(root, EDITED_SKILL))).toEqual(before);
   });
 
   it('is reconciled to canonical by --fix --force', () => {
     runCli(['doctor', root, '--fix', '--force']);
 
-    expect(
-      readFileSync(join(root, '.claude/scripts/guard-bash.mjs'), 'utf8'),
-    ).not.toMatch(/my tweak/);
+    expect(readFileSync(join(root, EDITED_SKILL), 'utf8')).not.toMatch(
+      /my tweak/,
+    );
   });
 });
 

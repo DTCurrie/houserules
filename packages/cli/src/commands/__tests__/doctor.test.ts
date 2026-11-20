@@ -136,11 +136,13 @@ describe('blockingDrift', () => {
   );
 });
 
+const EDITED_SKILL = '.claude/skills/ready/SKILL.md';
+
 describe('doctor on a freshly initialized pnpm monorepo', () => {
   let root: string;
 
   beforeEach(() => {
-    root = useInstalledRepo('pnpm-monorepo');
+    root = useInstalledRepo('pnpm-monorepo', { modules: 'ready' });
   });
 
   it('exits 0 and reports healthy', () => {
@@ -150,26 +152,25 @@ describe('doctor on a freshly initialized pnpm monorepo', () => {
   });
 
   it('exits 0 and names a locally edited houserules file in a readout, since nothing can acknowledge the edit', () => {
-    const guard = join(root, '.claude/scripts/guard-bash.mjs');
-    appendFileSync(guard, '// tweak\n');
+    appendFileSync(join(root, EDITED_SKILL), '<!-- tweak -->\n');
 
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).toMatch(
-      /your edits on 1 houserules file\(s\), kept as-is: \.claude\/scripts\/guard-bash\.mjs/,
+      /your edits on 1 houserules file\(s\), kept as-is: \.claude\/skills\/ready\/SKILL\.md/,
     );
   });
 
   it('prints no warning and no diff for a locally edited houserules file houserules has not changed since', () => {
-    appendFileSync(join(root, '.claude/scripts/guard-bash.mjs'), '// tweak\n');
+    appendFileSync(join(root, EDITED_SKILL), '<!-- tweak -->\n');
 
     const r = runCli(['doctor', root]);
     expect(r.stdout).not.toMatch(/WARN/);
-    expect(r.stdout).not.toMatch(/-\/\/ tweak/);
+    expect(r.stdout).not.toMatch(/-<!-- tweak -->/);
   });
 
   it('does not offer --fix when the only drift is a local edit that --fix would not touch', () => {
-    appendFileSync(join(root, '.claude/scripts/guard-bash.mjs'), '// tweak\n');
+    appendFileSync(join(root, EDITED_SKILL), '<!-- tweak -->\n');
 
     expect(runCli(['doctor', root]).stdout).not.toMatch(/to reconcile/);
   });
@@ -638,39 +639,39 @@ describe('doctor on a manifest listing a module houserules no longer defines', (
 
 describe('doctor --fix', () => {
   let root: string;
-  let guard: string;
+  let skill: string;
 
   beforeEach(() => {
-    root = useInstalledRepo('npm-single');
-    guard = join(root, '.claude/scripts/guard-bash.mjs');
+    root = useInstalledRepo('npm-single', { modules: 'ready' });
+    skill = join(root, EDITED_SKILL);
   });
 
   it('restores a stale file but leaves a `yours` edit alone', () => {
-    const canonical = readFileSync(guard, 'utf8');
-    appendFileSync(guard, '// my tweak\n');
+    const canonical = readFileSync(skill, 'utf8');
+    appendFileSync(skill, '// my tweak\n');
 
     expect(runCli(['doctor', root, '--fix']).status).toBe(0);
 
-    expect(readFileSync(guard, 'utf8')).toMatch(/my tweak/);
-    expect(readFileSync(guard, 'utf8')).not.toBe(canonical);
+    expect(readFileSync(skill, 'utf8')).toMatch(/my tweak/);
+    expect(readFileSync(skill, 'utf8')).not.toBe(canonical);
   });
 
   it('reconciles a `yours` file back to canonical with --force', () => {
-    const canonical = readFileSync(guard, 'utf8');
-    appendFileSync(guard, '// my tweak\n');
+    const canonical = readFileSync(skill, 'utf8');
+    appendFileSync(skill, '// my tweak\n');
 
     expect(runCli(['doctor', root, '--fix', '--force']).status).toBe(0);
 
-    expect(readFileSync(guard, 'utf8')).toBe(canonical);
+    expect(readFileSync(skill, 'utf8')).toBe(canonical);
     expect(runDoctorJson(root).counts.drifted).toBe(0);
   });
 
   it('recreates a missing file', () => {
-    rmSync(guard);
+    rmSync(skill);
     expect(runDoctorJson(root).exitCode).toBe(1);
 
     expect(runCli(['doctor', root, '--fix']).status).toBe(0);
-    expect(existsSync(guard), 'missing file recreated').toBe(true);
+    expect(existsSync(skill), 'missing file recreated').toBe(true);
   });
 });
 
@@ -725,18 +726,20 @@ describe('doctor and a body-owned rule frontmatter', () => {
 describe('doctor, the suspected-formatter-mangle hint', () => {
   let root: string;
 
+  const KIT_SKILLS = [
+    '.claude/skills/orchestrate/SKILL.md',
+    '.claude/skills/plan-project/SKILL.md',
+    '.claude/skills/sweep/SKILL.md',
+  ];
+
   function editThreeKitFiles(): void {
-    for (const rel of [
-      '.claude/scripts/guard-bash.mjs',
-      '.claude/scripts/session-context.mjs',
-      '.claude/scripts/lint-format-fix.mjs',
-    ]) {
-      appendFileSync(join(root, rel), '// tweak\n');
+    for (const rel of KIT_SKILLS) {
+      appendFileSync(join(root, rel), '<!-- tweak -->\n');
     }
   }
 
   beforeEach(() => {
-    root = useInstalledRepo('pnpm-monorepo');
+    root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
   });
 
   it('warns with the recovery command when several houserules files read as edited and no .prettierignore block exists', () => {
@@ -767,11 +770,8 @@ describe('doctor, the suspected-formatter-mangle hint', () => {
   });
 
   it('stays silent when only a couple of houserules files read as edited', () => {
-    appendFileSync(join(root, '.claude/scripts/guard-bash.mjs'), '// tweak\n');
-    appendFileSync(
-      join(root, '.claude/scripts/session-context.mjs'),
-      '// tweak\n',
-    );
+    appendFileSync(join(root, KIT_SKILLS[0]!), '<!-- tweak -->\n');
+    appendFileSync(join(root, KIT_SKILLS[1]!), '<!-- tweak -->\n');
 
     const r = runCli(['doctor', root]);
 

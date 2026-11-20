@@ -58,24 +58,31 @@ every worker in the wave has reported. A notification saying a worker awaits its
 work is interim and not its report. The excuse is "the wave was mostly done, so I reported what I
 had", and the answer is to end the turn and wait.
 
-When every live worker is itself waiting on background work, the harness sees no live child and
-nudges you to hand back (`handback-send-enforce`). Do not. A hand back ends your run with the wave
-open. Start a keepalive instead, with `run_in_background: true` and `<sub-plan>` replaced by your
+When every agent you dispatched and have not heard back from is itself waiting on background work,
+the harness sees no live child and nudges you to hand back (`handback-send-enforce`). Do not. A hand
+back ends your run with the work open. That covers task workers, blast-radius mappers, and
+close-of-phase reviewers alike. A mapper or reviewer has no slice, so add a row for each to your
+sub-plan's `## Slices` table when you send it. Its id column names it, such as `mapper-1` or
+`review-security`, its owns column holds `none`, and its status is `DISPATCHED` until it reports,
+then `DONE`. Start a keepalive with `run_in_background: true` and `<sub-plan>` replaced by your
 sub-plan's path:
 
 ```sh
 i=0; while [ "$i" -lt 54 ] && grep -qE '\|[[:space:]]*(DISPATCHED|REVISING)[[:space:]]*\|' <sub-plan>; do sleep 5; i=$((i+1)); done
 ```
 
-It runs 270 seconds, or until no slice in your table is `DISPATCHED` or `REVISING`. The table write
-that records a wave's last report stops it within 5 seconds, with no stop step of yours. End the
-turn, and start another each time it wakes you with a slice still `DISPATCHED` or `REVISING`. A
-wake inside 300 seconds re-reads your cached context, and a later one rewrites all of it. After
-seven keepalive wakes in one wait, about 30 minutes, raise `54` to `360`, because by then the short
-wakes have cost about one rewrite. The worker's report arrives as a message and wakes you too.
+It runs 270 seconds, or until no row in your table is `DISPATCHED` or `REVISING`. The table write
+that records the last report stops it within 5 seconds, with no stop step of yours. End the turn,
+and start another each time it wakes you with a row still `DISPATCHED` or `REVISING`. A wake inside
+300 seconds re-reads your cached context, and a later one rewrites all of it, so no wake exceeds 270
+seconds, however long the wait runs. The agent's report arrives as a message and wakes you too.
 
 Never use a plain `sleep 270` as the keepalive, because it cannot end early. One outlived its wave
 and held back the `finished` notice for 85 seconds after the report. The next wave waited with it.
+
+Never start a long-lived process, such as a dev server or a watcher. If a slice needs one running,
+its address arrives in your brief. When it is missing, return `NEEDS_RULING` asking for it. The main
+conversation starts it before the spawn and stops it after `DONE`.
 
 ## Skills and state
 

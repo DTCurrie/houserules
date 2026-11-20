@@ -8,6 +8,7 @@ import type { CheckResult, Finding } from '@houserules/api';
 import { allHookCommands } from './settings-wiring.js';
 
 const KIT_SCRIPT_RE = /(\.claude\/scripts\/[^\s'"]+\.mjs)/;
+const PROJECT_DIR_PREFIX = '$CLAUDE_PROJECT_DIR/';
 const HOOK_TOKEN_RE = /^[^$\s]*\/[^$\s]+\.(?:mjs|js|sh)$/;
 const SECRET_PREFIXES = ['sk-', 'ghp_', 'github_pat_', 'AKIA', 'xoxb-'];
 const CONFIG_SURFACE_FILES = [
@@ -40,10 +41,15 @@ function findMissingScriptFindings(
   commands: string[],
 ): Finding[] {
   const findings: Finding[] = [];
+  const reported = new Set<string>();
   for (const command of commands) {
     for (const rawToken of command.split(/\s+/)) {
-      const token = stripQuotes(rawToken);
-      if (!HOOK_TOKEN_RE.test(token)) continue;
+      const unquoted = stripQuotes(rawToken);
+      const token = unquoted.startsWith(PROJECT_DIR_PREFIX)
+        ? unquoted.slice(PROJECT_DIR_PREFIX.length)
+        : unquoted;
+      if (!HOOK_TOKEN_RE.test(token) || reported.has(token)) continue;
+      reported.add(token);
       if (!existsSync(join(root, token))) {
         findings.push({
           level: 'WARN',

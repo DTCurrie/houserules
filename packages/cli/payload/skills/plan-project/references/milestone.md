@@ -180,7 +180,7 @@ Fill each section from the ask and the code, in this order:
   `Uses` line.
 - **Gates.** Find them in the unknowns of the ask. A choice the owner makes is a `decision`. A
   question research answers is a `spike`. An act only a person does, such as issuing a credential or
-  buying a device, is `human`. Each gate names the step it blocks. A default you took without the owner is a closed decision
+  buying a device, is `human`. Each gate names the step it blocks, and that step lists the gate on its `Needs` line. `plan-lint` checks the two agree. A default you took without the owner is a closed decision
   gate, `CLOSED (<date>, default taken)`. It has no other home, so write no `## Defaults taken`
   section.
 - **Steps.** In execution order. Each has a stable slug, a one-line increment, its `Items` as
@@ -189,7 +189,8 @@ Fill each section from the ask and the code, in this order:
   item holds a resource. A seam too long for its line goes in `seam-<step-slug>.md` beside `MILESTONE.md`, linked from the
   `Seam` line. Reference a phase by its slug, never its number, since numbers shift when a
   phase is inserted.
-- **Log.** One dated line for the scaffold.
+- **Log.** One dated line for the scaffold, ending in a `Bar:` clause that records the verdict
+  said in section 1. `plan-lint` checks the first Log line holds a real verdict, not the placeholder.
 
 Phase status lives only in member ROADMAPs, and step status only in `MILESTONE.md`. Never copy one
 into the other. Three more rules hold for every line of `MILESTONE.md`:

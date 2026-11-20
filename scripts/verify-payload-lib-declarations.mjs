@@ -19,7 +19,8 @@
  * `import()` whose sole argument is one quoted or no-substitution backtick literal. Left out:
  * a computed `import(expr)`, a parent-relative `../x.mjs`, and `require()`.
  *
- * Falsifies the declared-lib-imports decision across every package at once, rather than the
+ * Falsifies the invariant that every relative lib import in `payload-dist/scripts/` has a
+ * declaration, across every package at once, rather than the
  * one package `packages/plugin-design/src/__tests__/payload-lib-imports.test.ts` covers.
  *
  * Usage: `node scripts/verify-payload-lib-declarations.mjs`

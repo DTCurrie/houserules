@@ -25,10 +25,14 @@
  *   generatedFilePattern                          files written by tooling, skipped
  *   fix.runner / fix.filterFlag / fix.runScriptPrefix / fix.commands
  *   fix.onSubagentStop                            opt back into per-subagent fixes
+ *   fix.passPaths                                 append `-- <the turn's changed paths>` to each step
+ *
+ * A step whose script the target's package.json does not define is skipped with one stderr
+ * notice, and the hook still exits 0.
  */
 
 import { spawnSync } from 'node:child_process';
-import { realpathSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -62,6 +66,7 @@ export interface FixSettings {
   runPrefix: string[];
   commandExtensions: Record<string, string[]>;
   onSubagentStop: boolean;
+  passPaths: boolean;
   packageByPath: { prefix: string; name: string; commands: string[] }[];
 }
 
@@ -121,6 +126,7 @@ export function resolveFixSettings(config: HouseConfig): FixSettings {
     runPrefix,
     commandExtensions,
     onSubagentStop: fix.onSubagentStop === true,
+    passPaths: fix.passPaths === true,
     packageByPath,
   };
 }
@@ -199,23 +205,84 @@ export function plannedSteps(
   ]);
 }
 
+/** A planned fix step. `paths` is set only when `fix.passPaths` is on. */
+export type FixStep = [pkg: string, script: string, paths?: string[]];
+
 /**
- * The fully resolved list of `[pkg, script]` steps to run for `paths`, given `settings`:
- * lintable and non-generated files mapped to their package's commands, root-level commands
- * collapsed, and each step's extension gate applied.
+ * The changed paths one step should be handed, as the runner will see them: package-relative
+ * in the filtered shape, root-relative in the root shape, narrowed to the step's own
+ * `commandExtensions` when it has any.
+ */
+function pathsForStep(
+  pkg: string,
+  script: string,
+  paths: string[],
+  settings: FixSettings,
+): string[] {
+  const allowed = settings.commandExtensions[script]?.map((extension) =>
+    String(extension).replace(/^\./, '').toLowerCase(),
+  );
+  const out: string[] = [];
+  for (const path of paths) {
+    if (!settings.lintableExtRe.test(path)) continue;
+    if (settings.generatedFileRe.test('/' + path)) continue;
+    const match = settings.packageByPath.find((target) =>
+      path.startsWith(target.prefix),
+    );
+    if (!match || !stepOwnsPackage(match, pkg, script, settings)) continue;
+    const extension = (path.split('.').pop() ?? '').toLowerCase();
+    if (allowed?.length && !allowed.includes(extension)) continue;
+    out.push(settings.runsAtRoot ? path : path.slice(match.prefix.length));
+  }
+  return out;
+}
+
+/**
+ * Whether a step covers a path in `match`'s package: in the root shape, when the package
+ * carries the step's script, otherwise when the step runs in that package.
+ */
+function stepOwnsPackage(
+  match: FixSettings['packageByPath'][number],
+  pkg: string,
+  script: string,
+  settings: FixSettings,
+): boolean {
+  return settings.runsAtRoot
+    ? match.commands.includes(script)
+    : match.name === pkg;
+}
+
+/**
+ * The fully resolved list of steps to run for `paths`, given `settings`: lintable and
+ * non-generated files mapped to their package's commands, root-level commands collapsed, and
+ * each step's extension gate applied. With `fix.passPaths` on, each step also carries the
+ * paths it should be scoped to.
  */
 export function planFixSteps(
   paths: string[],
   settings: FixSettings,
-): [pkg: string, script: string][] {
+): FixStep[] {
   const pkgs = affectedPackages(paths, settings);
   const steps = plannedSteps(pkgs, settings.runsAtRoot);
   return steps
     .filter(([, script, exts]) =>
       gatePasses(script, exts, settings.commandExtensions),
     )
-    .map(([pkg, script]) => [pkg, script]);
+    .map(([pkg, script]): FixStep =>
+      settings.passPaths
+        ? [pkg, script, pathsForStep(pkg, script, paths, settings)]
+        : [pkg, script],
+    );
 }
+
+/**
+ * Bytes of path arguments a step may carry. Windows caps a command line near 32,000
+ * characters, the tightest limit among the platforms this runs on, so this stays under it.
+ */
+export const ARGV_PATH_BYTE_BUDGET = 30_000;
+
+/** The separator each path argument adds to the command line. */
+const ARGV_SEPARATOR_BYTES = 1;
 
 // Monorepo: <runner> <filterFlag> <pkg> <script>. Single-package: <runner> <runScriptPrefix...> <script>.
 export function fixArgs(
@@ -223,9 +290,90 @@ export function fixArgs(
   script: string,
   filterFlag: string,
   runPrefix: string[],
+  paths: string[],
 ): string[] {
-  if (filterFlag) return [filterFlag, pkg, script];
-  return [...runPrefix, script];
+  const base = filterFlag ? [filterFlag, pkg, script] : [...runPrefix, script];
+  return paths.length > 0 ? [...base, '--', ...paths] : base;
+}
+
+/**
+ * The argv for one step. A path list over {@link ARGV_PATH_BYTE_BUDGET} falls back to the
+ * unscoped argv, and `isUnscoped` says so.
+ */
+export function stepArgv(
+  [pkg, script, paths = []]: FixStep,
+  settings: FixSettings,
+): { argv: string[]; isUnscoped: boolean } {
+  const bytes = paths.reduce(
+    (sum, path) => sum + Buffer.byteLength(path) + ARGV_SEPARATOR_BYTES,
+    0,
+  );
+  const isUnscoped = bytes > ARGV_PATH_BYTE_BUDGET;
+  return {
+    argv: fixArgs(
+      pkg,
+      script,
+      settings.filterFlag,
+      settings.runPrefix,
+      isUnscoped ? [] : paths,
+    ),
+    isUnscoped,
+  };
+}
+
+/** `paths` whose file still exists, so a path deleted during the turn is never passed. */
+export function existingPaths(paths: string[], cwd: string): string[] {
+  return paths.filter((path) => {
+    try {
+      statSync(join(cwd, path));
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** The scripts of the `package.json` at `file`, or null when it cannot be read. */
+function readScripts(file: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(file, 'utf-8'));
+    const scripts = (parsed as { scripts?: unknown } | null)?.scripts;
+    return scripts && typeof scripts === 'object'
+      ? (scripts as Record<string, unknown>)
+      : {};
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Splits `steps` into those whose script the step's `package.json` defines and one notice
+ * per skipped step. The package dir in the filtered shape, the root in the root shape. A
+ * `package.json` that cannot be read skips nothing, since absence there proves nothing.
+ */
+export function skipMissingScripts(
+  steps: FixStep[],
+  cwd: string,
+  settings: FixSettings,
+): { steps: FixStep[]; notices: string[] } {
+  const kept: FixStep[] = [];
+  const notices: string[] = [];
+  for (const step of steps) {
+    const [pkg, script] = step;
+    const prefix = settings.runsAtRoot
+      ? ''
+      : (settings.packageByPath.find((t) => t.name === pkg)?.prefix ?? '');
+    const file = join(cwd, prefix, 'package.json');
+    const scripts = readScripts(file);
+    if (scripts && !(script in scripts)) {
+      notices.push(
+        `lint-format-fix: skipped "${script}", no such script in ${join(prefix, 'package.json')}.\n`,
+      );
+      continue;
+    }
+    kept.push(step);
+  }
+  return { steps: kept, notices };
 }
 
 // Applied per spawnSync call so a hung git or fix command fails fast. SIGKILL because a
@@ -304,23 +452,18 @@ export function stepTimedOut(result: FinishedSpawn): boolean {
 }
 
 function runStep(
-  pkg: string,
-  script: string,
+  argv: string[],
   cwd: string,
   settings: FixSettings,
   timeoutMs: number,
 ): { ok: boolean; timedOut: boolean; output: string } {
-  const r = spawnSync(
-    settings.runner,
-    fixArgs(pkg, script, settings.filterFlag, settings.runPrefix),
-    {
-      encoding: 'utf-8',
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: timeoutMs,
-      killSignal: 'SIGKILL',
-    },
-  );
+  const r = spawnSync(settings.runner, argv, {
+    encoding: 'utf-8',
+    cwd,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: timeoutMs,
+    killSignal: 'SIGKILL',
+  });
   return {
     ok: r.status === 0,
     timedOut: stepTimedOut(r),
@@ -354,7 +497,7 @@ export function overrunNotice(
  * overrun. Failures from steps that did finish stay in `errors`.
  */
 export function runFixSteps(
-  steps: [pkg: string, script: string][],
+  steps: FixStep[],
   cwd: string,
   settings: FixSettings,
   budgetMs: number,
@@ -362,10 +505,16 @@ export function runFixSteps(
 ): FixRun {
   const startedAt = now();
   const errors: FixRun['errors'] = [];
-  for (const [pkg, script] of steps) {
+  for (const step of steps) {
+    const [pkg, script] = step;
     const remaining = budgetMs - (now() - startedAt);
     if (remaining <= 0) return { errors, overrun: { pkg, step: script } };
-    const r = runStep(pkg, script, cwd, settings, remaining);
+    const { argv, isUnscoped } = stepArgv(step, settings);
+    if (isUnscoped)
+      process.stderr.write(
+        `lint-format-fix: ${script} for ${pkg} had too many changed paths for one command line, so it ran unscoped.\n`,
+      );
+    const r = runStep(argv, cwd, settings, remaining);
     if (r.timedOut) return { errors, overrun: { pkg, step: script } };
     if (!r.ok) errors.push({ pkg, step: script, output: r.output });
   }
@@ -399,7 +548,12 @@ function main(): void {
   const changed = changedPaths(cwd);
   const paths =
     startedAt === undefined ? changed : modifiedSince(changed, cwd, startedAt);
-  const steps = planFixSteps(paths, settings);
+  const planned = planFixSteps(
+    settings.passPaths ? existingPaths(paths, cwd) : paths,
+    settings,
+  );
+  const { steps, notices } = skipMissingScripts(planned, cwd, settings);
+  for (const notice of notices) process.stderr.write(notice);
   if (steps.length === 0) process.exit(0);
 
   const { errors, overrun } = runFixSteps(steps, cwd, settings, FIX_BUDGET_MS);

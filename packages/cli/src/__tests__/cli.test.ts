@@ -171,3 +171,24 @@ describe('doctor', () => {
     });
   });
 });
+
+describe('houserules report with flags that do not apply to an import', () => {
+  const r = runCli([
+    'report',
+    '--import',
+    'export.json',
+    '--since',
+    '2026-11-18',
+  ]);
+
+  it('exits 1', () => {
+    expect(r.status).toBe(1);
+  });
+
+  it('prints the message without a stack trace', () => {
+    expect(r.stderr).toContain(
+      '--since, --export, and --slug do not apply to an import.',
+    );
+    expect(r.stderr).not.toMatch(/^ {4}at /m);
+  });
+});

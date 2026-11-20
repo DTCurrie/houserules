@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import {
@@ -9,6 +10,7 @@ import {
   checkNoPlanWorkspace,
   checkPhaseSchedule,
   checkPlanPaths,
+  derivePathRoots,
   checkReviewFocus,
   checkRoadmapSync,
   checkSignals,
@@ -401,12 +403,62 @@ describe('checkReviewFocus', () => {
 
 describe('checkPlanPaths', () => {
   const root = repoRootSafe() ?? process.cwd();
+  const repoRoots = derivePathRoots(root, null);
+
+  describe('derived roots', () => {
+    const tempRoot = () => {
+      const dir = mkdtempSync(join(tmpdir(), 'plan-paths-'));
+      mkdirSync(join(dir, 'apps/web'), { recursive: true });
+      writeFileSync(join(dir, 'apps/web/real.ts'), '');
+      writeFileSync(join(dir, 'package.json'), '{}');
+      return dir;
+    };
+    const run = (dir: string, token: string) =>
+      checkPlanPaths(
+        'p.md',
+        `Owns \`${token}\`.\n`,
+        dir,
+        derivePathRoots(dir, null),
+      ).findings;
+
+    it('warns on a missing file under a top-level directory outside the old prefixes', () => {
+      const findings = run(tempRoot(), 'apps/web/missing.ts');
+      expect(findings.map((finding) => finding.rule)).toEqual([
+        'plan-path/missing-file',
+      ]);
+    });
+
+    it('stays quiet on an existing file under that directory', () => {
+      expect(run(tempRoot(), 'apps/web/real.ts')).toEqual([]);
+    });
+
+    it('stays quiet when the first segment is no top-level directory', () => {
+      expect(run(tempRoot(), 'nowhere/web/missing.ts')).toEqual([]);
+    });
+
+    it('stays quiet when the first segment is a top-level file', () => {
+      expect(run(tempRoot(), 'package.json/x')).toEqual([]);
+    });
+
+    it('stays quiet on a placeholder token with an ellipsis', () => {
+      expect(run(tempRoot(), 'apps/…')).toEqual([]);
+    });
+
+    it('adds a configured pathPrefix to the roots', () => {
+      expect(
+        derivePathRoots(tempRoot(), {
+          targets: [{ name: 'x', pathPrefix: 'ext' }],
+        }),
+      ).toContain('ext/');
+    });
+  });
 
   it('reports nothing for an existing repo path', () => {
     const report = checkPlanPaths(
       'phase-1.md',
       'Owns `packages/cli/payload/scripts/plan-lint.mts`.\n',
       root,
+      repoRoots,
     );
     expect(report.findings).toEqual([]);
   });
@@ -414,7 +466,7 @@ describe('checkPlanPaths', () => {
   it('flags a path that does not exist in the repo, at its line number', () => {
     const markdown =
       '# Phase 1\n\nOwns `packages/cli/src/does-not-exist.ts`.\n';
-    const report = checkPlanPaths('phase-1.md', markdown, root);
+    const report = checkPlanPaths('phase-1.md', markdown, root, repoRoots);
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0]?.rule).toBe('plan-path/missing-file');
     expect(report.findings[0]?.line).toBe(3);
@@ -425,26 +477,26 @@ describe('checkPlanPaths', () => {
 
   it('flags a path absent from the repo since the historical failure it was written for', () => {
     const markdown = 'Owns `packages/payload/tsconfig.build.json`.\n';
-    const report = checkPlanPaths('phase-1.md', markdown, root);
+    const report = checkPlanPaths('phase-1.md', markdown, root, repoRoots);
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0]?.rule).toBe('plan-path/missing-file');
   });
 
   it('does not flag a missing path marked "(new)"', () => {
     const markdown = 'Adds `packages/cli/src/does-not-exist.ts` (new).\n';
-    const report = checkPlanPaths('phase-1.md', markdown, root);
+    const report = checkPlanPaths('phase-1.md', markdown, root, repoRoots);
     expect(report.findings).toEqual([]);
   });
 
   it('does not flag a glob', () => {
     const markdown = 'Owns `packages/*/payload`.\n';
-    const report = checkPlanPaths('phase-1.md', markdown, root);
+    const report = checkPlanPaths('phase-1.md', markdown, root, repoRoots);
     expect(report.findings).toEqual([]);
   });
 
   it('does not flag a missing path inside a fenced code block', () => {
     const markdown = '```\nOwns `packages/cli/src/does-not-exist.ts`.\n```\n';
-    const report = checkPlanPaths('phase-1.md', markdown, root);
+    const report = checkPlanPaths('phase-1.md', markdown, root, repoRoots);
     expect(report.findings).toEqual([]);
   });
 
@@ -452,14 +504,14 @@ describe('checkPlanPaths', () => {
     'reports nothing for an existing path with a %s line suffix',
     (suffix) => {
       const markdown = `Owns \`packages/cli/payload/scripts/plan-lint.mts${suffix}\`.\n`;
-      const report = checkPlanPaths('phase-1.md', markdown, root);
+      const report = checkPlanPaths('phase-1.md', markdown, root, repoRoots);
       expect(report.findings).toEqual([]);
     },
   );
 
   it('still flags a missing path carrying a line suffix', () => {
     const markdown = 'Owns `packages/cli/src/does-not-exist.ts:36`.\n';
-    const report = checkPlanPaths('phase-1.md', markdown, root);
+    const report = checkPlanPaths('phase-1.md', markdown, root, repoRoots);
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0]?.rule).toBe('plan-path/missing-file');
   });
@@ -830,12 +882,13 @@ describe('plan-lint.mjs (installed)', () => {
     expect(result.stdout).toContain('no plan workspace');
   });
 
-  it('exits 1 naming an argument, since it takes none', () => {
+  it('exits 1 naming an argument, since it takes only --gates', () => {
     const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
     const result = runScript(root, SCRIPT, { args: ['no-such-file-xyz.md'] });
     expect(result.status, result.stderr).toBe(1);
     expect(result.stdout).toContain('no-such-file-xyz.md');
     expect(result.stdout).toContain('checker/unexpected-argument');
+    expect(result.stdout).toContain('--gates <milestone-dir> <step>');
   });
 
   it('exits 1 on a slice status outside the fixed vocabulary', () => {
@@ -1119,6 +1172,10 @@ Both surfaces render.
   \`web/pages\`
 - Close: \`pnpm check\`
 - Needs: none
+
+## Log
+
+- 2026-11-19: scaffolded. Bar: two members share a contract.
 `;
     const API_ROW = '| `api` | the API | `pnpm --filter api check` |';
     const WEB_ROW = '|`web`|the web app|`pnpm --filter web check`|';
@@ -1321,6 +1378,32 @@ Both surfaces render.
       expect(result.stdout).toContain(
         'launch/MILESTONE.md  ERROR  [checker/unexpected-argument]',
       );
+      expect(result.stdout).toContain('--gates <milestone-dir> <step>');
+    });
+
+    it('prints the gate line blocking a step with --gates', () => {
+      const withGate = milestoneFile(
+        'IN PROGRESS',
+        `${API_ROW}\n${WEB_ROW}`,
+      ).replace(
+        '## Steps',
+        '## Gates\n\n- G1 · OPEN · decision · auth · blocks `first`\n\n## Steps',
+      );
+      const result = runOver({ 'launch/MILESTONE.md': withGate }, [
+        '--gates',
+        '.claude/plans/launch',
+        'first',
+      ]);
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toBe('G1 · OPEN · blocks first\n');
+    });
+
+    it('exits nonzero naming the path when --gates finds no milestone', () => {
+      const result = runOver({}, ['--gates', '.claude/plans/nope', 'first']);
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('.claude/plans/nope/MILESTONE.md');
     });
   });
 });

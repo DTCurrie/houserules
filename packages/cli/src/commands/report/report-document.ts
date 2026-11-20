@@ -9,6 +9,7 @@ import {
   readTrimInstalled,
   type FrictionReport,
 } from './friction.js';
+import { detect } from '../../detect.js';
 import { computeGuardBlocks, type GuardBlock } from './guard-efficacy.js';
 import { computeHookHealth, type HookHealthReport } from './hook-health.js';
 import {
@@ -63,6 +64,27 @@ export interface SerializedTokenUsage extends Omit<TokenUsageReport, 'files'> {
 }
 
 /**
+ * The fixer's configuration as counts and booleans, so an export shows how the fixer is
+ * wired without carrying a command string, script name, or path.
+ */
+export interface FixConfigSummary {
+  /**
+   * True when `fix.commands` run once at the repo root: `filterFlag` is set to the empty
+   * string, so the runner drops the package name. An absent `filterFlag` means the default
+   * `--filter`, which scopes the commands per package.
+   */
+  runsAtRoot: boolean;
+  /** Length of `fix.commands`. */
+  commandCount: number;
+  /** Whether `fix.filterFlag` is a non-empty string. */
+  hasFilterFlag: boolean;
+  /** Whether `fix.passPaths` is on. */
+  passPaths: boolean;
+  /** Targets carrying their own `fixCommands` list. */
+  targetsWithFixCommands: number;
+}
+
+/**
  * Every section `houserules report` renders, as data. `--json` prints it, `--export` writes
  * it redacted, `--import` renders it back. Each section is the shape its compute function
  * returns, except tokens, whose model sets are serialized.
@@ -78,6 +100,8 @@ export interface ReportDocument {
   residentContext: ResidentContextReport;
   /** Absent in a document exported before the section existed, and rendered as absent, not zero. */
   artifacts?: ArtifactReport;
+  /** Absent in a document exported before the block existed, or from a repo with no config. */
+  fix?: FixConfigSummary;
 }
 
 export interface BuildOptions {
@@ -135,12 +159,37 @@ function withTrimInstalled(
   };
 }
 
+// The runner's filter flag when the config names none, matching the payload config lib.
+const DEFAULT_FILTER_FLAG = '--filter';
+
+/** Summarizes the install's `fix` config at `top`. Undefined when no config can be read. */
+function summarizeFixConfig(top: string): FixConfigSummary | undefined {
+  let config;
+  try {
+    config = detect(top).claude.houseConfig;
+  } catch {
+    return undefined;
+  }
+  if (!config) return undefined;
+  const filterFlag = config.fix?.filterFlag ?? DEFAULT_FILTER_FLAG;
+  return {
+    runsAtRoot: filterFlag === '',
+    commandCount: config.fix?.commands.length ?? 0,
+    hasFilterFlag: filterFlag !== '',
+    passPaths: config.fix?.passPaths === true,
+    targetsWithFixCommands: (config.targets ?? []).filter(
+      (target) => target.fixCommands != null,
+    ).length,
+  };
+}
+
 /** Computes every section once over the corpus. `top` is the repo root the ledgers live in. */
 export function buildReportDocument(
   corpus: Corpus,
   top: string,
   options: BuildOptions,
 ): ReportDocument {
+  const fix = summarizeFixConfig(top);
   return {
     meta: {
       label: options.label,
@@ -165,5 +214,6 @@ export function buildReportDocument(
     friction: withTrimInstalled(computeFriction(corpus), top),
     residentContext: computeResidentContext(corpus, top),
     artifacts: computeArtifactEpisodes(corpus),
+    ...(fix ? { fix } : {}),
   };
 }

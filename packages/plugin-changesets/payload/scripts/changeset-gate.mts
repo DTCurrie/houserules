@@ -1,36 +1,18 @@
 #!/usr/bin/env node
 /**
- * Stop hook. Structural gates over the changesets houserules itself writes.
+ * Stop hook. A structural gate over the changesets houserules itself writes.
  *
- * Three checks, each covering one MECHANICAL clause from the `changeset` skill and its
- * condense section that survived the determinism audit:
+ * h5 flags a newly-written pending changeset whose declared package set has drifted from
+ * what the current diff actually touches ("the package set grew").
  *
- *   h5 — a newly-written pending changeset's declared package set has drifted from what
- *        the current diff actually touches ("the package set grew").
- *   h6 — a major bump was written without a proposal, then a user turn, before the write
- *        call ("Confirm with the user before recording a major").
- *   h9 — `changeset-write.mjs --absorb` ran without a proposal, then a user turn, before
- *        the call ("Propose, then confirm... Wait for approval").
- *
- * h6 and h9 read `transcript_path` off the Stop hook payload and are silent when it is
- * absent, since ordering has nothing to check without a transcript. They judge only the
- * calls made since the last human prompt.
- *
- * Exit 2 with the report on stderr when a gate is violated. Every failure path exits 0,
+ * Exit 2 with the report on stderr when the gate is violated. Every failure path exits 0,
  * because a nudge hook must never break a session. A turn whose transcript shows only
  * read-only tool uses exits 0 before any git call, and a missing or unreadable transcript
- * runs every gate as usual. While the Stop payload's background_tasks is non-empty, h5 is
- * skipped, since background agents are still changing the diff it compares against. h6 and
- * h9 read only the transcript and still run.
+ * runs the gate as usual. While the Stop payload's background_tasks is non-empty, h5 is
+ * skipped, since background agents are still changing the diff it compares against.
  */
 
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  statSync,
-} from 'node:fs';
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -38,10 +20,8 @@ import { loadConfigSafe } from '@houserules/payload/config';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { git, readStdinJson, repoRoot } from '@houserules/payload/proc';
 import {
-  isHumanPrompt,
   turnStartedAt,
   turnTouchedFiles,
-  type TurnRecord,
 } from '@houserules/payload/transcript-turn';
 import {
   emptyReport,
@@ -55,8 +35,6 @@ import { createGatedOwnerResolver } from './lib/changeset-owner.mjs';
 const DECLINED = [
   'whether two changesets describe the same feature — feature identity is a reading-comprehension judgment the changeset skill keeps',
   'whether a major/minor/patch level is the RIGHT level for a change — semver judgment stays in the skill',
-  'the accuracy of a proposal message shown before an absorb or a major bump — only that a proposal and a user turn happened before the call, never whether the proposal was correct',
-  'whether assistant text written after the user answered narrates the approved call or proposes something new, so text never undoes an answer',
 ];
 
 const CHANGESET_MD = /\.changeset\/[^/]+\.md$/;
@@ -120,151 +98,6 @@ export function checkPackageDrift(
     line: null,
     msg: `No pending changeset declares ${missing.join(', ')}, which the current diff touches. Amend the changeset covering this feature, or add one.`,
   });
-  return report;
-}
-
-interface TranscriptContentBlock {
-  type?: string;
-  text?: string;
-  id?: string;
-  name?: string;
-  tool_use_id?: string;
-  is_error?: boolean;
-  input?: { command?: string };
-}
-
-interface TranscriptEntry extends TurnRecord {
-  message?: { content?: string | TranscriptContentBlock[] };
-}
-
-/** Parses a Claude Code transcript (JSONL). Malformed lines are skipped, never thrown on. */
-export function parseTranscript(raw: string): TranscriptEntry[] {
-  const entries: TranscriptEntry[] = [];
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue;
-    try {
-      entries.push(JSON.parse(line) as TranscriptEntry);
-    } catch {
-      continue;
-    }
-  }
-  return entries;
-}
-
-interface OrderingGate {
-  rule: string;
-  msg: string;
-  matches: (bashCommand: string) => boolean;
-}
-
-const ORDERING_GATES: OrderingGate[] = [
-  {
-    rule: 'changeset-gate/h6-major-confirm',
-    msg: 'changeset-write ran a major bump with no proposal followed by a user turn before the call.',
-    matches: (cmd) =>
-      /changeset-write(\.mjs)?\b/.test(cmd) &&
-      (/:major\b/.test(cmd) || /--level[= ]major\b/.test(cmd)),
-  },
-  {
-    rule: 'changeset-gate/h9-absorb-order',
-    msg: 'changeset-write --absorb ran with no proposal followed by a user turn before the call.',
-    matches: (cmd) =>
-      /changeset-write(\.mjs)?\b/.test(cmd) && /--absorb\b/.test(cmd),
-  },
-];
-
-/** The content blocks of an entry. A human prompt stored as a bare string has none. */
-function contentBlocks(entry: TranscriptEntry): TranscriptContentBlock[] {
-  const content = entry.message?.content;
-  return Array.isArray(content) ? content : [];
-}
-
-/** The tool-use ids of every AskUserQuestion the assistant asked. */
-function askedQuestionIds(entries: TranscriptEntry[]): Set<string> {
-  const ids = new Set<string>();
-  for (const entry of entries) {
-    for (const block of contentBlocks(entry)) {
-      const isQuestion =
-        block.type === 'tool_use' && block.name === 'AskUserQuestion';
-      if (isQuestion && block.id) ids.add(block.id);
-    }
-  }
-  return ids;
-}
-
-/** Whether an assistant block puts something to the user: text, or an AskUserQuestion. */
-function isProposal(block: TranscriptContentBlock): boolean {
-  if (block.type === 'text') return Boolean(block.text?.trim());
-  return block.type === 'tool_use' && block.name === 'AskUserQuestion';
-}
-
-/**
- * Whether a `user` entry is the user answering: a human prompt, or the reply to an
- * AskUserQuestion. Any other tool result, hook feedback, and a subagent's hand-back come
- * from the harness, not the user. A reply marked as an error answers nothing.
- */
-function isUserAnswer(
-  entry: TranscriptEntry,
-  questionIds: ReadonlySet<string>,
-): boolean {
-  if (isHumanPrompt(entry)) return true;
-  return contentBlocks(entry).some(
-    (block) =>
-      block.type === 'tool_result' &&
-      block.is_error !== true &&
-      block.tool_use_id !== undefined &&
-      questionIds.has(block.tool_use_id),
-  );
-}
-
-/** Findings for one Bash command, given whether the user answered a proposal before it. */
-function orderingFindingsFor(command: string, isConfirmed: boolean): Finding[] {
-  if (isConfirmed) return [];
-  return ORDERING_GATES.filter((gate) => gate.matches(command)).map((gate) => ({
-    rule: gate.rule,
-    level: 'error' as const,
-    file: 'transcript',
-    line: null,
-    msg: gate.msg,
-  }));
-}
-
-/**
- * h6 and h9. A gated call is a violation unless the user answered after a proposal and
- * before the call. A proposal is any assistant text, or an AskUserQuestion. An answer is a
- * human prompt, or the reply to that question. Text written after the answer leaves it
- * standing, because a line narrating the approved call is not a new proposal.
- *
- * Any text counts, so every human prompt after the first answers the text before it. In
- * practice this flags a gated call made before the user's first answer of the session.
- * Only calls made since the last human prompt are reported, so a violation is reported in
- * the turn that made it, not again at every later stop.
- */
-export function checkTranscriptOrdering(entries: TranscriptEntry[]): Report {
-  const report = emptyReport();
-  const turnStart = entries.findLastIndex(isHumanPrompt);
-  const questionIds = askedQuestionIds(entries);
-  let hasProposal = false;
-  let isConfirmed = false;
-
-  for (const [index, entry] of entries.entries()) {
-    if (entry.type === 'user') {
-      if (hasProposal && isUserAnswer(entry, questionIds)) isConfirmed = true;
-      continue;
-    }
-    if (entry.type !== 'assistant') continue;
-    for (const block of contentBlocks(entry)) {
-      if (isProposal(block)) hasProposal = true;
-      else if (
-        block.type === 'tool_use' &&
-        block.input?.command &&
-        index > turnStart
-      )
-        report.findings.push(
-          ...orderingFindingsFor(block.input.command, isConfirmed),
-        );
-    }
-  }
   return report;
 }
 
@@ -446,7 +279,7 @@ function main(): void {
     const report = emptyReport();
     report.declined.push(...DECLINED);
 
-    // Only h5 reads the diff, which background agents are still changing. h6 and h9 read the transcript.
+    // h5 reads the diff, which background agents are still changing.
     const isTreeMoving =
       Array.isArray(input.background_tasks) &&
       input.background_tasks.length > 0;
@@ -454,13 +287,6 @@ function main(): void {
       report.findings.push(
         ...packageDriftFindings(root, input.transcript_path),
       );
-
-    if (input.transcript_path && existsSync(input.transcript_path)) {
-      const transcript = parseTranscript(
-        readFileSync(input.transcript_path, 'utf8'),
-      );
-      report.findings.push(...checkTranscriptOrdering(transcript).findings);
-    }
 
     if (!hasErrors(report)) process.exit(0);
     process.stderr.write(`${renderReport(report)}\n`);

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  checkMilestoneBarRecorded,
   checkMilestoneContracts,
   checkMilestoneDuplicatePhaseSlugs,
   checkMilestoneHeldPathOverlap,
   checkMilestoneItemDomains,
   checkMilestoneLiveItems,
+  checkMilestoneNeedsMatchBlocks,
   checkMilestoneOneOpenStep,
   checkMilestoneOpenGates,
   checkMilestoneOwnerItems,
@@ -15,6 +17,7 @@ import {
   checkMilestoneStepTodoLate,
   checkMilestoneUnknownItems,
   checkMilestoneUnscheduledPhases,
+  formatGateLines,
   parseMilestone,
   type MemberPhase,
   type MemberPlans,
@@ -211,7 +214,15 @@ describe('parseMilestone', () => {
       resources: [],
       gates: [],
       steps: [],
+      log: [],
     });
+  });
+
+  it('reads the Log bullets', () => {
+    expect(parseMilestone('## Log\n\n- one\n- two. Bar: x.\n').log).toEqual([
+      'one',
+      'two. Bar: x.',
+    ]);
   });
 });
 
@@ -903,6 +914,119 @@ Items are written when this step is next.
   });
 });
 
+describe('checkMilestoneNeedsMatchBlocks', () => {
+  const step = (
+    slug: string,
+    needs: string,
+  ) => `### Step: ${slug} · Status: TODO
+
+Increment.
+
+- Items: \`backend/${slug}\`
+- Close: \`pnpm check\`
+- Needs: ${needs}
+`;
+  const gates = `## Gates
+
+- G1 · OPEN · decision · auth approach · blocks \`sign-up\`
+- G2·CLOSED (2026-11-19, default taken)·spike·latency· blocks \`sign-up\`
+- G3 · OPEN · human · device · blocks \`provision\`
+
+`;
+
+  it('passes a step whose Needs ids are exactly its blocking gates', () => {
+    const milestone = milestoneOf(
+      `${gates}## Steps\n\n${step('sign-up', 'G1, G2')}\n${step('provision', 'G3')}\n${step('skeleton', 'none')}`,
+    );
+    expect(rulesOf(checkMilestoneNeedsMatchBlocks, milestone, {})).toEqual([]);
+  });
+
+  it('errors on a Needs id whose gate blocks another step', () => {
+    const milestone = milestoneOf(
+      `${gates}## Steps\n\n${step('sign-up', 'G1,G2,G3')}\n${step('provision', 'G3')}`,
+    );
+    const { findings } = checkMilestoneNeedsMatchBlocks(FILE, milestone, {});
+    expect(findings.map((finding) => finding.rule)).toEqual([
+      'milestone/needs-blocks',
+    ]);
+    expect(findings[0]?.msg).toContain('G3 blocks `provision`');
+  });
+
+  it('errors once on a Needs id that no gate defines', () => {
+    const milestone = milestoneOf(
+      `${gates}## Steps\n\n${step('sign-up', 'G1, G2, G9')}\n${step('provision', 'G3')}`,
+    );
+    const plans: MemberPlans = {
+      backend: [phase(1, 'sign-up', {}), phase(2, 'provision', {})],
+    };
+    const everyCheck = [
+      checkMilestoneUnknownItems,
+      checkMilestoneOpenGates,
+      checkMilestoneNeedsMatchBlocks,
+    ].flatMap((check) => check(FILE, milestone, plans).findings);
+    expect(everyCheck).toHaveLength(1);
+    expect(everyCheck[0]?.msg).toContain('no gate has that id');
+  });
+
+  it('errors on a blocking gate the Needs line omits', () => {
+    const milestone = milestoneOf(
+      `${gates}## Steps\n\n${step('sign-up', 'G1')}\n${step('provision', 'none')}`,
+    );
+    const { findings } = checkMilestoneNeedsMatchBlocks(FILE, milestone, {});
+    expect(findings.map((finding) => finding.msg)).toEqual([
+      expect.stringContaining('gate G2 blocks step `sign-up`'),
+      expect.stringContaining('gate G3 blocks step `provision`'),
+    ]);
+  });
+
+  it('skips a scope-line step even when a gate blocks it', () => {
+    const milestone = milestoneOf(
+      `${gates}## Steps\n\n### Step: sign-up · Status: TODO\n\nA user signs up.\n\n### Step: provision · Status: TODO\n\nA user claims a device.\n`,
+    );
+    expect(rulesOf(checkMilestoneNeedsMatchBlocks, milestone, {})).toEqual([]);
+  });
+});
+
+describe('checkMilestoneBarRecorded', () => {
+  const withLog = (log: string, status = 'IN PROGRESS'): Milestone =>
+    parseMilestone(`${MEMBERS_TABLE.replace('IN PROGRESS', status)}\n${log}`);
+
+  it.each([
+    ['no Log section', ''],
+    ['an empty Log section', '## Log\n\n'],
+    [
+      'a first line with no Bar clause',
+      '## Log\n\n- 2026-11-19: scaffolded.\n',
+    ],
+    [
+      'the template placeholder',
+      '## Log\n\n- 2026-11-19: scaffolded. Bar: <the verdict sentence>.\n',
+    ],
+    ['an empty clause', '## Log\n\n- 2026-11-19: scaffolded. Bar:\n'],
+    [
+      'a Bar clause only on a later line',
+      '## Log\n\n- 2026-11-19: scaffolded.\n- 2026-11-20: Bar: one phase.\n',
+    ],
+  ])('errors on %s', (_case, log) => {
+    expect(rulesOf(checkMilestoneBarRecorded, withLog(log), {})).toEqual([
+      ['milestone/bar-unrecorded', 'error'],
+    ]);
+  });
+
+  it.each([
+    '## Log\n\n- 2026-11-19: scaffolded. Bar: two members, shared contract, so a milestone.\n',
+    '## Log\n\n- 2026-11-19: scaffolded. Bar:one plan would do.',
+  ])('passes a real verdict', (log) => {
+    expect(rulesOf(checkMilestoneBarRecorded, withLog(log), {})).toEqual([]);
+  });
+
+  it('exempts a DONE milestone with no clause', () => {
+    expect(
+      rulesOf(checkMilestoneBarRecorded, withLog('', 'DONE (2026-11-20)'), {}),
+    ).toEqual([]);
+  });
+});
+
 describe('the milestone checks over a milestone with nothing runnable', () => {
   const ALL_CHECKS: MilestoneCheck[] = [
     checkMilestoneUnknownItems,
@@ -912,6 +1036,8 @@ describe('the milestone checks over a milestone with nothing runnable', () => {
     checkMilestoneStepTodoLate,
     checkMilestoneOneOpenStep,
     checkMilestoneOpenGates,
+    checkMilestoneNeedsMatchBlocks,
+    checkMilestoneBarRecorded,
     checkMilestoneItemDomains,
     checkMilestoneHeldPathOverlap,
     checkMilestoneLiveItems,
@@ -935,7 +1061,9 @@ A user signs up.
 `,
     ],
   ])('finds nothing on a milestone with %s', (_case, steps) => {
-    const milestone = milestoneOf(steps);
+    const milestone = milestoneOf(
+      `${steps}\n## Log\n\n- 2026-11-19: scaffolded. Bar: two members share a contract.\n`,
+    );
 
     const findings = ALL_CHECKS.flatMap(
       (check) => check(FILE, milestone, SHARED_SLUG_PLANS).findings,
@@ -944,5 +1072,29 @@ A user signs up.
     expect(findings.map((finding) => [finding.rule, finding.level])).toEqual(
       [],
     );
+  });
+});
+
+describe('formatGateLines', () => {
+  const milestone = parseMilestone(`## Gates
+
+- G1 · CLOSED (2026-11-19) · decision · auth approach · blocks \`sign-up\`
+- G2 · OPEN · decision · billing · blocks \`checkout\`
+
+## Steps
+
+### Step: sign-up · Status: TODO
+`);
+
+  it('prints one line per gate blocking the step, with the state as parsed', () => {
+    expect(formatGateLines(milestone, 'sign-up')).toEqual([
+      'G1 · CLOSED · blocks sign-up',
+    ]);
+  });
+
+  it('says so when no gate blocks the step', () => {
+    expect(formatGateLines(milestone, 'launch')).toEqual([
+      'no gates block launch',
+    ]);
   });
 });

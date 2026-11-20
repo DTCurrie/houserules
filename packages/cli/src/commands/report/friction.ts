@@ -33,6 +33,11 @@ interface ResultSizeTally {
   bytes: number;
   /** Results above {@link ToolResultSizes.capBytes}. */
   overCap: number;
+  /**
+   * Bytes past the cap, summed as `bytes - capBytes` over each over-cap result. Absent in an
+   * export from before the field existed.
+   */
+  excessBytes?: number;
 }
 
 /** `Read` and `Bash` result sizes against the `tool-output-trim` cap. */
@@ -93,8 +98,8 @@ export function isReadOnlyGitCheck(command: string): boolean {
 export function computeFriction(corpus: Corpus): FrictionReport {
   const sizes: ToolResultSizes = {
     capBytes: TRIM_CAP_BYTES,
-    read: { results: 0, bytes: 0, overCap: 0 },
-    bash: { results: 0, bytes: 0, overCap: 0 },
+    read: { results: 0, bytes: 0, overCap: 0, excessBytes: 0 },
+    bash: { results: 0, bytes: 0, overCap: 0, excessBytes: 0 },
   };
   const compactedSessions: string[] = [];
   const bulkByTool = new Map<string, ToolBulk>();
@@ -173,7 +178,10 @@ function tallyResultSize(
   if (!tally) return;
   tally.results += 1;
   tally.bytes += bytes;
-  if (bytes > sizes.capBytes) tally.overCap += 1;
+  if (bytes > sizes.capBytes) {
+    tally.overCap += 1;
+    tally.excessBytes = (tally.excessBytes ?? 0) + bytes - sizes.capBytes;
+  }
 }
 
 /**
