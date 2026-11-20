@@ -258,7 +258,8 @@
         "scripts/__tests__/*.test.mjs",
         "scripts/verify-payload-lib-declarations.mjs",
         "scripts/verify-module-references.mjs",
-        "scripts/health-kit/gather/*.mjs"
+        "scripts/health-kit/gather/*.mjs",
+        "scripts/health-kit/closeout/*.mjs"
       ],
       "output": []
     },

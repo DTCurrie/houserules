@@ -32,6 +32,12 @@ interface StopHookRow {
    * exported before it was counted, and rendered as absent, not zero.
    */
   slowRuns?: number;
+  /**
+   * Each run counted in {@link timeouts}, with its ISO timestamp and the session's `file` key
+   * the token rows carry. Absent in a document exported before it was recorded. A run whose
+   * record had no timestamp has no `date`.
+   */
+  timedOutRuns?: { date?: string; session: string }[];
 }
 
 export interface HookHealthReport {
@@ -74,7 +80,11 @@ function stopHookName(command: string): string {
   return SCRIPT_BASENAME.exec(command)?.[1] ?? command;
 }
 
-function stopRow(hook: string, durations: number[]): StopHookRow {
+function stopRow(
+  hook: string,
+  durations: number[],
+  timedOutRuns: { date?: string; session: string }[],
+): StopHookRow {
   const sorted = [...durations].sort((a, b) => a - b);
   return {
     hook,
@@ -84,6 +94,7 @@ function stopRow(hook: string, durations: number[]): StopHookRow {
     max: sorted.at(-1) ?? 0,
     timeouts: sorted.filter((ms) => ms >= STOP_HOOK_TIMEOUT_MS).length,
     slowRuns: sorted.filter((ms) => ms > SLOW_STOP_MS).length,
+    ...(timedOutRuns.length ? { timedOutRuns } : {}),
   };
 }
 
@@ -96,6 +107,7 @@ export function formatTailShare(row: StopHookRow): string {
 
 function computeStopHooks(corpus: Corpus): StopHookRow[] {
   const byHook = new Map<string, number[]>();
+  const timedOut = new Map<string, { date?: string; session: string }[]>();
   const totals: number[] = [];
   for (const session of corpus.sessions.values())
     for (const summary of session.stopHookSummaries) {
@@ -107,14 +119,26 @@ function computeStopHooks(corpus: Corpus): StopHookRow[] {
         list.push(ms);
         byHook.set(name, list);
         total += ms;
+        if (ms >= STOP_HOOK_TIMEOUT_MS) {
+          const runs = timedOut.get(name) ?? [];
+          runs.push({
+            ...(summary.ts === undefined
+              ? {}
+              : { date: new Date(summary.ts).toISOString() }),
+            session: summary.file,
+          });
+          timedOut.set(name, runs);
+        }
       }
       totals.push(total);
     }
   if (!totals.length) return [];
   const rows = [...byHook.entries()]
-    .map(([hook, durations]) => stopRow(hook, durations))
+    .map(([hook, durations]) =>
+      stopRow(hook, durations, timedOut.get(hook) ?? []),
+    )
     .sort((a, b) => b.runs - a.runs || a.hook.localeCompare(b.hook));
-  return [...rows, stopRow(STOP_TOTAL_LABEL, totals)];
+  return [...rows, stopRow(STOP_TOTAL_LABEL, totals, [])];
 }
 
 function percentile(sorted: number[], p: number): number {

@@ -32,6 +32,7 @@ import {
   skipMissingScripts,
   stepArgv,
   stepTimedOut,
+  killGroup,
   type FixSettings,
 } from '../lint-format-fix.mjs';
 import { useInstalledRepo } from '#test/repo';
@@ -721,6 +722,21 @@ describe('stepTimedOut', () => {
   });
 });
 
+describe('killGroup', () => {
+  it('does not throw when the group it targets has already exited', () => {
+    const gone = spawnSync('sh', ['-c', 'echo $$'], { encoding: 'utf-8' });
+    const pid = Number(gone.stdout.trim());
+    expect(pid).toBeGreaterThan(0);
+    expect(() => process.kill(-pid, 'SIGKILL'), 'the group is gone').toThrow();
+
+    expect(() => killGroup(pid)).not.toThrow();
+  });
+
+  it('does nothing for a step that never got a pid', () => {
+    expect(() => killGroup(undefined)).not.toThrow();
+  });
+});
+
 describe('runFixSteps against the fix budget', () => {
   let root: string;
   const settings = resolveFixSettings(baseConfig());
@@ -745,12 +761,33 @@ describe('runFixSteps against the fix budget', () => {
     return () => readings[Math.min(call++, readings.length - 1)] ?? first;
   }
 
+  const PID_POLL_ATTEMPTS = 20;
+  const PID_POLL_INTERVAL_MS = 50;
+
+  /** Whether `pid` stops answering signal 0 within a second, allowing its reaper a moment. */
+  async function pidGone(pid: number): Promise<boolean> {
+    for (let attempt = 0; attempt < PID_POLL_ATTEMPTS; attempt++) {
+      try {
+        process.kill(pid, 0);
+      } catch {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, PID_POLL_INTERVAL_MS));
+    }
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+    return false;
+  }
+
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
   });
 
-  it('reports the step that outlasts the budget and skips the rest', () => {
-    const run = runFixSteps(steps, root, sleepingRunner(root, 30), 3000);
+  it('reports the step that outlasts the budget and skips the rest', async () => {
+    const run = await runFixSteps(steps, root, sleepingRunner(root, 30), 3000);
 
     expect(run.overrun).toEqual({ pkg: '@fix/cityville', step: 'lint:fix' });
     expect(run.errors).toEqual([]);
@@ -759,10 +796,10 @@ describe('runFixSteps against the fix budget', () => {
     ]);
   });
 
-  it('reports the first step as the overrun when the budget is spent before it starts', () => {
+  it('reports the first step as the overrun when the budget is spent before it starts', async () => {
     let tick = 0;
     stubRunner(root);
-    const run = runFixSteps(
+    const run = await runFixSteps(
       steps,
       root,
       { ...settings, runner: join(root, 'stub-runner.sh') },
@@ -776,9 +813,9 @@ describe('runFixSteps against the fix budget', () => {
     );
   });
 
-  it('counts elapsed time equal to the budget as nothing left, so the step is never started', () => {
+  it('counts elapsed time equal to the budget as nothing left, so the step is never started', async () => {
     stubRunner(root);
-    const run = runFixSteps(
+    const run = await runFixSteps(
       steps,
       root,
       { ...settings, runner: join(root, 'stub-runner.sh') },
@@ -793,9 +830,9 @@ describe('runFixSteps against the fix budget', () => {
     ).toBe(false);
   });
 
-  it('ends the run at a later step that starts with exactly the budget elapsed, keeping the earlier step', () => {
+  it('ends the run at a later step that starts with exactly the budget elapsed, keeping the earlier step', async () => {
     stubRunner(root);
-    const run = runFixSteps(
+    const run = await runFixSteps(
       steps,
       root,
       { ...settings, runner: join(root, 'stub-runner.sh') },
@@ -810,9 +847,9 @@ describe('runFixSteps against the fix budget', () => {
     ]);
   });
 
-  it('keeps residue from finished steps and reports no overrun when the budget holds', () => {
+  it('keeps residue from finished steps and reports no overrun when the budget holds', async () => {
     stubRunner(root, { fail: true });
-    const run = runFixSteps(
+    const run = await runFixSteps(
       steps,
       root,
       { ...settings, runner: join(root, 'stub-runner.sh') },
@@ -821,6 +858,37 @@ describe('runFixSteps against the fix budget', () => {
 
     expect(run.overrun).toBe(null);
     expect(run.errors.map((e) => e.step)).toEqual(['lint:fix', 'format:fix']);
+  });
+
+  it('kills the whole process group of a step that leaves a grandchild holding stdout, within the budget plus 2 seconds', async () => {
+    const path = join(root, 'forking-runner.sh');
+    writeFileSync(
+      path,
+      `#!/bin/sh\nsleep 30 &\necho $! > grandchild.pid\necho started\nsleep 30\n`,
+    );
+    chmodSync(path, 0o755);
+
+    const startedAt = Date.now();
+    const run = await runFixSteps(
+      steps,
+      root,
+      { ...settings, runner: path },
+      1000,
+    );
+    const elapsed = Date.now() - startedAt;
+
+    expect(run.overrun).toEqual({ pkg: '@fix/cityville', step: 'lint:fix' });
+    expect(elapsed, 'returned within the budget plus 2 seconds').toBeLessThan(
+      3000,
+    );
+    const grandchild = Number(
+      readFileSync(join(root, 'grandchild.pid'), 'utf-8').trim(),
+    );
+    expect(grandchild).toBeGreaterThan(0);
+    expect(
+      await pidGone(grandchild),
+      `grandchild ${grandchild} still alive`,
+    ).toBe(true);
   });
 
   it('names the step and the budget on one line', () => {

@@ -150,8 +150,9 @@ function phaseOrchestratorAgent(extraTools: string[]): Action {
  * slice in waves, and reviews the returned report rather than the diff. Cost is
  * O(slices x report), and no worker accumulates another slice's context.
  *
- * Script-free, because the value is the slice, seam, wave, and review discipline rather
- * than tooling. It requires `plans`, which scaffolds the workspaces it drives.
+ * Its scripts only read: `plan-lint.mjs` checks a workspace, `wave-ceiling.mjs` sizes a wave,
+ * and `closeout.mjs` prints a closeout's checklist and `Closes` lines and checks a report's
+ * `Source:` paths. It requires `plans`, which scaffolds the workspaces it drives.
  */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
   const chosenVariants = (answers.moduleOptions[id] ?? []).filter(
@@ -200,6 +201,16 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       id,
       'wave-ceiling.mjs',
       'print the most workers one /orchestrate wave dispatches at once, from the CPU count, the load average, and orchestrate.maxWorkers',
+    ),
+    agent(
+      id,
+      'closeout-worker',
+      'the agent /orchestrate dispatches for a closeout phase: one ordered job, fixed report sections',
+    ),
+    script(
+      id,
+      'closeout.mjs',
+      "print a closeout phase's acceptance checklist and Closes lines, and check a report's Source: paths",
     ),
     ...chosenVariants.map((variant): Action => ({
       kind: 'write',

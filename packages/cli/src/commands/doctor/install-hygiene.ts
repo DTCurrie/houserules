@@ -3,11 +3,15 @@ import { join } from 'node:path';
 
 import type { Ctx } from '../../detect.js';
 import { isGuardedHookCommand } from '@houserules/api';
-import type { CheckResult, Finding } from '@houserules/api';
+import type { CheckResult, Finding, Settings } from '@houserules/api';
+import { isKitStockCommand } from '@houserules/api/internal';
 
 import { allHookCommands } from './settings-wiring.js';
 
 const KIT_SCRIPT_RE = /(\.claude\/scripts\/[^\s'"]+\.mjs)/;
+const KIT_SCRIPT_BASENAME_RE = /([\w-]+\.mjs)/;
+const EXIT_ONE_FALLBACK_RE = /exit 1; \}$/;
+const NON_BLOCKING_EVENTS = ['SessionStart', 'Stop'];
 const PROJECT_DIR_PREFIX = '$CLAUDE_PROJECT_DIR/';
 const HOOK_TOKEN_RE = /^[^$\s]*\/[^$\s]+\.(?:mjs|js|sh)$/;
 const SECRET_PREFIXES = ['sk-', 'ghp_', 'github_pat_', 'AKIA', 'xoxb-'];
@@ -54,6 +58,26 @@ function findMissingScriptFindings(
         findings.push({
           level: 'WARN',
           msg: `hook command references missing script "${token}" — fix the path or remove the hook`,
+        });
+      }
+    }
+  }
+  return findings;
+}
+
+function findExitOneFallbackFindings(settings: Settings): Finding[] {
+  const findings: Finding[] = [];
+  for (const event of NON_BLOCKING_EVENTS) {
+    for (const group of settings.hooks?.[event] ?? []) {
+      for (const hook of group.hooks ?? []) {
+        const command = hook.command?.trim();
+        const script = command?.match(KIT_SCRIPT_BASENAME_RE)?.[1];
+        if (!command || !script) continue;
+        if (!isKitStockCommand(command, script)) continue;
+        if (!EXIT_ONE_FALLBACK_RE.test(command)) continue;
+        findings.push({
+          level: 'WARN',
+          msg: `${event} hook for ${script} exits 1 when the script is missing, so a fresh clone shows a hook error on every ${event} — run: npx houserules update`,
         });
       }
     }
@@ -115,6 +139,8 @@ export function checkInstallHygiene(root: string, ctx: Ctx): CheckResult {
   }
 
   findings.push(...findMissingScriptFindings(root, commands));
+  if (ctx.claude.settingsExists && ctx.claude.settings)
+    findings.push(...findExitOneFallbackFindings(ctx.claude.settings));
 
   const { findings: secretFindings, filesScanned } =
     findSecretShapedFindings(root);

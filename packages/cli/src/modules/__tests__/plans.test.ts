@@ -107,6 +107,15 @@ describe('plans', () => {
       ).toBe(true);
     });
 
+    it('installs the closeout reference the plan-project skill defers to', () => {
+      expect(
+        existsSync(
+          join(root, '.claude/skills/plan-project/references/closeout.md'),
+        ),
+        'closeout reference installed',
+      ).toBe(true);
+    });
+
     it('has the plan-reviewer read a milestone', () => {
       const agentText = readFileSync(
         join(root, '.claude/agents/plan-reviewer.md'),

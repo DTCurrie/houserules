@@ -60,6 +60,18 @@ sessions and a null `totals` when its `summary[]` row reads 0 and 0.
 schema                                       string        "usage@1"
 source                                       string        the input document's file name, no directory
 date                                         string        YYYY-MM-DD from the document's H1
+machine                                      object|null   the `## Machine context` bullets, null when the section is absent
+machine.claudeCode                           string|null   Claude Code bullet, verbatim
+machine.node                                 string|null   Node bullet, verbatim
+machine.os                                   string|null   OS bullet, verbatim
+machine.cleanupPeriodDays                    string|null   cleanupPeriodDays bullet, verbatim
+machine.disableAllHooks                      string|null   disableAllHooks bullet, verbatim ("unset" when unset)
+machine.outputStyle                          string|null   outputStyle bullet, verbatim
+machine.enabledPlugins                       string|null   Enabled plugins bullet, verbatim
+machine.userSkills                           string|null   User skills bullet, verbatim
+machine.userAgents                           string|null   User agents bullet, verbatim
+machine.userClaudeMd                         string|null   User CLAUDE.md bullet, verbatim
+machine.houseRulesOnPath                     string|null   houserules on PATH bullet, verbatim
 summary[]                                    object        one per row of the document's Summary table
 summary[].project                            string        Project cell
 summary[].kitVersion                         string        Kit version cell
@@ -70,7 +82,7 @@ summary[].turns                              number        Turns cell
 summary[].modules                            number|null   Modules cell, null when the column is absent
 projects[]                                   object        one per `###` project section
 projects[].name                              string        the `###` heading text
-projects[].render                            string        "current" | "0.4.1" | "empty"
+projects[].render                            string        "current" | "empty" | the CLI version the project's Report produced by CLI bullet states, for a render with no range line | "unknown" when that bullet is absent or states no version
 projects[].header                            object        the section's header bullets
 projects[].header.path                       string|null   Path bullet, verbatim, backticks stripped
 projects[].header.kitVersion                 string|null   Kit version bullet, the version only
@@ -120,6 +132,15 @@ projects[].totals.weightedIn                 number        `cost-weighted input-
 projects[].totals.models[]                   string        the `models:` list, in printed order
 projects[].totals.sidechainPct               number|null   percent, from `sidechain turns:`
 projects[].totals.placeholderRecords         number        from the placeholder-usage line, 0 when absent
+projects[].totals.listPrice                  object|null   the `list price:` line, null when absent. Dollars, not integers
+projects[].totals.listPrice.total            number        dollars
+projects[].totals.listPrice.fresh            number        dollars
+projects[].totals.listPrice.cacheRead        number        dollars
+projects[].totals.listPrice.cacheWrite       number        dollars
+projects[].totals.listPrice.output           number        dollars
+projects[].totals.notPriced[]                object        one per model on the `not priced` line, empty when absent
+projects[].totals.notPriced[].model          string        model id as printed, `<synthetic>` included
+projects[].totals.notPriced[].weightedPct    number        percent of weighted input, the integer printed
 projects[].hookHealth[]                      object        one per row of the hook health table
 projects[].hookHealth[].hook                 string        hook column, verbatim
 projects[].hookHealth[].fires                number
@@ -174,6 +195,28 @@ projects[].friction.denials.interrupted      number
 projects[].friction.denials.samples[]        object        one per listed denial line
 projects[].friction.denials.samples[].tool   string
 projects[].friction.denials.samples[].command string|null  the redacted command, null when the line names a tool only
+projects[].artifactEpisodes                  object|null   the `-- artifact episodes --` block, null when absent
+projects[].artifactEpisodes.none             boolean       true when the block reads "No Artifact calls were recorded."
+projects[].artifactEpisodes.rows[]           object        one per row of the episode table
+projects[].artifactEpisodes.rows[].session   string        session id prefix
+projects[].artifactEpisodes.rows[].calls     number
+projects[].artifactEpisodes.rows[].comments  number
+projects[].artifactEpisodes.rows[].publishes number
+projects[].artifactEpisodes.rows[].requests  number
+projects[].artifactEpisodes.rows[].wall      string        the wall cell verbatim, for example "113.1 min"
+projects[].artifactEpisodes.rows[].output    number
+projects[].artifactEpisodes.rows[].weightedIn number       the `weighted-in` cell
+projects[].artifactEpisodes.rows[].sharePct  number        percent, the share-of-session cell without the sign
+projects[].artifactEpisodes.rows[].model     string
+projects[].installHealth                     object|null   this project's entry under `## Install health`, null when absent
+projects[].installHealth.cliSource           string        "local" | "temporary", the word before "CLI" on the entry's first line
+projects[].installHealth.cliVersion          string        the CLI version `doctor` ran from
+projects[].installHealth.exit                number        the doctor exit code
+projects[].installHealth.lines[]             string        the fenced doctor output, blank lines dropped, verbatim
+projects[].guardReasons[]                    object        this project's rows under `## Guard reasons`, empty when it lists none
+projects[].guardReasons[].guard              string        guard column, for example "PreToolUse:Bash"
+projects[].guardReasons[].reason             string        reason column, verbatim
+projects[].guardReasons[].blocks             number
 projects[].resident                          object|null   the resident context section, null when absent
 projects[].resident.recorded                 number        from "recorded A of T session(s)"
 projects[].resident.total                    number

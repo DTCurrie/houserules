@@ -1,4 +1,4 @@
-import { existsSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import {
@@ -31,10 +31,12 @@ import {
   reconcileSettings,
   removeHooksByScript,
   renderSettings,
+  validateHouseConfig,
 } from '@houserules/api/internal';
 import { apply } from '../apply.js';
 import { formatterMangleHint } from '../modules/formatter-mangle.js';
 import * as ui from '../ui.js';
+import { EXIT } from '../cli-contract.js';
 import type { Flags } from '../cli-contract.js';
 import type { Answers } from '@houserules/api';
 import type { PlanResult, PruneResult } from '../plan.js';
@@ -333,6 +335,17 @@ function foldReconciledSettings(
 export async function update(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);
   const ctx = detect(root);
+  const configPath = join(root, '.claude', 'houserules.config.json');
+  if (existsSync(configPath)) {
+    // A config the schema rejects cannot be trusted to plan from, so nothing is computed.
+    const configProblems = validateHouseConfig(
+      readFileSync(configPath, 'utf8'),
+    );
+    for (const problem of configProblems) {
+      console.error(`houserules.config.json: ${problem}`);
+    }
+    if (configProblems.length) return EXIT.badConfig;
+  }
   const registry = buildRegistry(root, ctx.claude.houseConfig, MODULES);
   const manifest = ctx.claude.manifest;
   if (!manifest) {

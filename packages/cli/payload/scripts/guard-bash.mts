@@ -67,6 +67,10 @@ const GIT_FLAGS = String.raw`(?:-[A-Za-z]\s+\S+\s+|--?\S+\s+)*`;
 // named flag, matched within the one command and bounded so `-f` never matches `feature-flag`.
 const GIT_DISCARD = String.raw`(?:checkout\b|restore\b|clean\b|reset\b[^\n;&|]*\s--(?:hard|merge)(?![\w-])|switch\b[^\n;&|]*\s(?:-f|--force|--discard-changes)(?![\w-]))`;
 
+// Only the stash subcommands that change state. Bare `stash` and `stash -u` are a push, so a
+// flag or a separator after the word counts. `list` and `show` read only and pass.
+const STASH_MUTATING = String.raw`stash(?=\s*(?:$|[\n;&|])|\s+-|\s+(?:push|save|pop|apply|drop|clear|branch|create|store)\b)`;
+
 export function gitDenyRules(guard: {
   gitCommit: boolean;
   gitPush: boolean;
@@ -95,7 +99,7 @@ export function gitDenyRules(guard: {
   if (guard.gitStash) {
     deny.push(
       gitRule(
-        'stash',
+        STASH_MUTATING,
         'git stash dumps the full untracked-file list into context. Use `git diff --name-only`, `git show HEAD:<path>`, or inspect the one file you changed.',
       ),
     );

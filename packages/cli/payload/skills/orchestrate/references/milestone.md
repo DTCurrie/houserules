@@ -101,7 +101,8 @@ members are mid-edit, so a package-wide run tests their half-finished work. You 
 `ROADMAP.md` line and sub-plan header as the flat layer does.
 
 An item that cannot nest, per nested.md "A phase that cannot nest", runs flat after every other
-item has returned, before the barrier.
+item has returned, before the barrier. That covers an item whose phase carries `flat`. It counts
+zero in the "Workers" division, as an `owner` item does.
 
 ## The barrier
 

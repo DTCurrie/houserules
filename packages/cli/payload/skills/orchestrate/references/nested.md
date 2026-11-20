@@ -96,15 +96,21 @@ the messages that arrived before you judge the phase still running.
 withheld `Agent` from the orchestrator. Set the variable and spawn fresh with the same brief. A
 re-brief changes nothing.
 
-**A phase that cannot nest.** A phase whose steps need a tool missing from the `tools:` line of
-`.claude/agents/phase-orchestrator.md`, such as an MCP server's, cannot run one layer down. Before
-any spawn, grep each sub-plan for `mcp__` and compare each name against that line. Hold that phase
-out of the spawn, and name it and the tool. Run the rest nested. When the last of them returns, run the
-held phase flat here, §1 to §8 as `--flat` does, before spawning anything else. That keeps its tool
-output out of this context while relays are live, and its checks away from siblings' edits. A
-`BLOCKED` report naming a missing tool is the same case found late, and takes the same route
-instead of stopping the run. `orchestrate.orchestratorTools` in `.claude/houserules.config.json`
-lets such a phase nest after `npx houserules update`.
+**A phase that cannot nest.** Two causes put a phase here. Its sub-plan carries `flat` on the
+`**Signals:**` line, or its steps need a tool missing from the `tools:` line of
+`.claude/agents/phase-orchestrator.md`, such as an MCP server's. Before any spawn, read each
+sub-plan's `**Signals:**` line for `flat`. Grep the sub-plan for `mcp__` and compare each name
+against that line. Hold that phase out of the spawn, and name it and the cause. Run the rest
+nested. When the last orchestrator in flight returns, run the held phase flat here, §1 to §8 as
+`--flat` does, before spawning anything else. That keeps its tool output out of this context while
+relays are live, and its checks away from siblings' edits. A `BLOCKED` report naming a missing tool
+is the same case found late, and takes the same route instead of stopping the run.
+`orchestrate.orchestratorTools` in `.claude/houserules.config.json` lets a phase held for a missing tool nest after `npx houserules update`.
+
+The `flat` cause holds these rules. Two flat phases run one at a time. A comma list holds a flat
+phase out as it does a `live` one. `/orchestrate <slug> <n>` on a flat phase runs it here with no
+spawn. `--flat` makes the signal moot. A `flat, live` phase has the main conversation start its
+process before §1 and stop it after `DONE`.
 
 ## Several orchestrators
 
@@ -122,8 +128,8 @@ leaves it. A domain is a set of source paths. The plan workspace is never part o
 **The ready set.** Under `all`, the dispatcher parses the `ROADMAP.md` phase lines and takes every
 `TODO` phase whose `After` phases are all `DONE`. Absent `After` means the previous line, and
 `none` means no wait. It spawns the whole ready set in one message. A phase with no `**Domain:**`
-line, or with `live` on its `**Signals:**` line, runs alone. It starts only when no other phase is
-in flight, and nothing else spawns until it returns. A `live` phase reads a running process, such
+line, or with `live` or `flat` on its `**Signals:**` line, runs alone. It starts only when no other
+phase is in flight, and nothing else spawns until it returns. A `live` phase reads a running process, such
 as a dev server, that a sibling's edits would disturb. The main conversation starts that process
 before the spawn, names its address in the brief, and stops it after `DONE`. A subagent never
 starts it. After each `DONE` report the dispatcher recomputes
@@ -145,7 +151,7 @@ the `DONE` flip on each report, the `## Log` line, the `**Updated:**` bump, and 
 run after each. The pre-spawn pass sets the sub-plan header `IN PROGRESS` too, so the checker is
 clean before the orchestrator exists. Reports arrive one at a time, so those runs are serial.
 Each sub-plan is its orchestrator's from the spawn on, header included, whatever `Domain:` says.
-Under `--flat` the single layer writes
+Under `--flat`, and for a `flat` phase, the single layer writes
 both files as `/plan-project` §5 says.
 
 **The cross-domain seam.** Before dispatching either orchestrator, write what both domains depend

@@ -122,6 +122,27 @@ describe('guardRefusalFor', () => {
   });
 
   it.each([
+    'git stash list',
+    'git stash show -p stash@{1}',
+    'git -C /repo stash list',
+  ])('allows the read-only stash command "%s"', (cmd) => {
+    expect(guardRefusalFor(cmd)).toBeNull();
+  });
+
+  it.each([
+    'git stash',
+    'git stash push -m x',
+    'git stash pop',
+    'git -C /repo stash drop',
+    'git stash -u',
+    'git stash && git pull',
+  ])('refuses the state-changing stash command "%s"', (cmd) => {
+    expect(guardRefusalFor(cmd)).toMatch(
+      /Blocked by houserules guard: git stash/,
+    );
+  });
+
+  it.each([
     'git checkout -- src/isaac_module/models/world.py',
     'git checkout HEAD -- src/world.py',
     'git checkout .',
