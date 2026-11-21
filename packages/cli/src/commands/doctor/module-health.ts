@@ -1,3 +1,4 @@
+import { installedModuleIds } from '../../installed-modules.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -22,7 +23,8 @@ export function checkModuleHealth(
   const readouts: string[] = [];
   const manifest = ctx.claude.manifest;
   const config = ctx.claude.houseConfig;
-  const installed = (id: string) => Boolean(manifest?.modules?.includes(id));
+  const installed = (id: string) =>
+    Boolean(installedModuleIds(config, manifest)?.includes(id));
 
   // Null on a repo with no houserules installed, which is also a repo with no module to check.
   for (const module of registry?.modules ?? []) {

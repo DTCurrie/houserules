@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +14,7 @@ import {
 } from '../guard-bash.mjs';
 import { GUARD_DEFAULTS } from '@houserules/payload/config';
 import { useInstalledRepo, useRepo } from '#test/repo';
-import { runScript } from '#test/run';
+import { runIn, runScript } from '#test/run';
 
 const SCRIPT = '.claude/scripts/guard-bash.mjs';
 const KIT_ROOT = join(
@@ -32,6 +32,31 @@ function withConfig(root: string, guard: Record<string, unknown>): void {
     join(root, '.claude/houserules.config.json'),
     JSON.stringify({ version: 2, guard, targets: [] }),
   );
+}
+
+function useThrowawayFixture(): string {
+  const fixture = mkdtempSync(join(tmpdir(), 'guard-fixture-'));
+  onTestFinished(() => rmSync(fixture, { recursive: true, force: true }));
+  runIn(fixture, 'git', ['init', '-q']);
+  return fixture;
+}
+
+function guardStatusIn(
+  root: string,
+  cwd: string,
+  command: string,
+  projectDir: string | undefined,
+): number | null {
+  const env = { ...process.env };
+  delete env.NODE_PATH;
+  delete env.CLAUDE_PROJECT_DIR;
+  if (projectDir !== undefined) env.CLAUDE_PROJECT_DIR = projectDir;
+  return spawnSync(process.execPath, [join(root, SCRIPT)], {
+    cwd,
+    input: payload(command),
+    encoding: 'utf8',
+    env,
+  }).status;
 }
 
 function sidechainTurn(): TranscriptRecord {
@@ -315,6 +340,46 @@ describe('guard-bash.mjs', () => {
     expect(
       runScript(root, SCRIPT, { input: payload('git stash') }).status,
     ).toBe(2);
+  });
+
+  it('resolves the config root from a subdirectory with CLAUDE_PROJECT_DIR unset or set, and refuses a commit in the project either way', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    withConfig(root, { gitStash: false });
+    const subdirectory = join(root, 'packages', 'nested');
+    mkdirSync(subdirectory, { recursive: true });
+
+    const statuses = [undefined, root].map((projectDir) => ({
+      projectDir: projectDir === undefined ? 'unset' : 'fixture root',
+      stash: guardStatusIn(root, subdirectory, 'git stash', projectDir),
+      commit: guardStatusIn(root, subdirectory, 'git commit -m x', projectDir),
+      commitByC: guardStatusIn(
+        root,
+        subdirectory,
+        `git -C ${root} commit -m x`,
+        projectDir,
+      ),
+    }));
+
+    expect(statuses).toEqual([
+      { projectDir: 'unset', stash: 0, commit: 2, commitByC: 2 },
+      { projectDir: 'fixture root', stash: 0, commit: 2, commitByC: 2 },
+    ]);
+  });
+
+  it('allows a throwaway fixture commit when CLAUDE_PROJECT_DIR names another repo, and refuses it when CLAUDE_PROJECT_DIR names the fixture', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const fixture = useThrowawayFixture();
+    const command = `git -C ${fixture} -c user.name= -c user.email= commit -m x`;
+
+    const statuses = {
+      projectIsAnotherRepo: guardStatusIn(root, root, command, root),
+      projectIsTheFixture: guardStatusIn(root, root, command, fixture),
+    };
+
+    expect(statuses).toEqual({
+      projectIsAnotherRepo: 0,
+      projectIsTheFixture: 2,
+    });
   });
 
   it('blocks a command matching a custom rule and reports its message', () => {

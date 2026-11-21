@@ -20,6 +20,34 @@ describe('parseHouseConfig', () => {
     expect(() => parseHouseConfig(raw)).toThrow(HouseConfigError);
   });
 
+  it('accepts modules and payload.commit', () => {
+    const config = {
+      ...minimalConfig,
+      modules: ['guard-bash', 'changesets'],
+      payload: { commit: true },
+    };
+    expect(parseHouseConfig(JSON.stringify(config))).toEqual(config);
+  });
+
+  it('rejects an unknown key inside payload', () => {
+    const raw = JSON.stringify({
+      ...minimalConfig,
+      payload: { unknown: true },
+    });
+    expect(() => parseHouseConfig(raw)).toThrow(
+      'payload.unknown is not a known payload setting',
+    );
+  });
+
+  it('rejects modules that is not an array of strings', () => {
+    expect(() =>
+      parseHouseConfig(JSON.stringify({ ...minimalConfig, modules: 'a' })),
+    ).toThrow(HouseConfigError);
+    expect(() =>
+      parseHouseConfig(JSON.stringify({ ...minimalConfig, modules: [1] })),
+    ).toThrow(HouseConfigError);
+  });
+
   it('accepts design.themeEntry as a top-level design key', () => {
     const config = {
       ...minimalConfig,

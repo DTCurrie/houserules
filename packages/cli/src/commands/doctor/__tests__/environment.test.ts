@@ -26,19 +26,19 @@ function withNodeMajor<T>(major: number, run: () => T): T {
 describe('checkEnvironment', () => {
   it('errors when the running node major is below the minimum', () => {
     const findings = withNodeMajor(
-      18,
+      21,
       () => checkEnvironment(makeCtx(), { claudeVersion: '2.1.320' }).findings,
     );
 
     expect(findings).toContainEqual({
       level: 'ERROR',
-      msg: 'node 18.0.0 < 20',
+      msg: 'node 21.0.0 < 22',
     });
   });
 
   it('does not error when the running node major meets the minimum', () => {
     const findings = withNodeMajor(
-      20,
+      22,
       () => checkEnvironment(makeCtx(), { claudeVersion: '2.1.320' }).findings,
     );
 
@@ -235,5 +235,23 @@ describe('checkEnvironment, the Fable 5.2 gate', () => {
     const { readouts } = checkEnvironment(ctx, { claudeVersion: '2.1.320' });
 
     expect(readouts).toEqual(['claude 2.1.320 (floor 2.1.314)']);
+  });
+});
+
+describe('checkEnvironment, given a config naming modules and no manifest', () => {
+  it('reads the config without throwing, as a fresh clone carries no manifest', () => {
+    const base = makeCtx();
+    const ctx: Ctx = {
+      ...base,
+      claude: {
+        ...base.claude,
+        manifest: null,
+        houseConfig: { version: 2, modules: ['core', 'orchestrate'] } as never,
+      },
+    };
+
+    expect(
+      checkEnvironment(ctx, { claudeVersion: '2.1.320' }).findings,
+    ).toEqual([]);
   });
 });

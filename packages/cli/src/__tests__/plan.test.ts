@@ -20,10 +20,12 @@ import {
   resolveModuleIds,
 } from '../plan.js';
 import { HouseError } from '../house-error.js';
+import { payloadGitignoreActions } from '../modules/payload-gitignore.js';
 import type {
   BodyAction,
   CopyAction,
   MergeSettingsAction,
+  RegionAction,
   SeedAction,
   ModuleDef,
   WriteAction,
@@ -180,29 +182,30 @@ describe('defaultModuleIds', () => {
 });
 
 describe('buildPlan, given a registry with a plugin-contributed module', () => {
+  const pluginDef: ModuleDef = {
+    id: 'extra',
+    title: 'Extra',
+    group: 'optional',
+    hint: () => 'extra',
+    defaultEnabled: () => false,
+    plan: () => [
+      {
+        kind: 'write',
+        module: 'extra',
+        dest: '.claude/plugin-extra.md',
+        content: 'from the plugin\n',
+        reason: 'plugin-contributed file',
+      },
+    ],
+  };
+  const source: RegisteredModule['source'] = {
+    name: 'demo-plugin',
+    alias: 'demo',
+    version: '1.0.0',
+    dir: '/plugins/demo',
+  };
+
   it('selects the plugin module by its namespaced id and skips built-ins not requested', () => {
-    const pluginDef: ModuleDef = {
-      id: 'extra',
-      title: 'Extra',
-      group: 'optional',
-      hint: () => 'extra',
-      defaultEnabled: () => false,
-      plan: () => [
-        {
-          kind: 'write',
-          module: 'extra',
-          dest: '.claude/plugin-extra.md',
-          content: 'from the plugin\n',
-          reason: 'plugin-contributed file',
-        },
-      ],
-    };
-    const source: RegisteredModule['source'] = {
-      name: 'demo-plugin',
-      alias: 'demo',
-      version: '1.0.0',
-      dir: '/plugins/demo',
-    };
     const withPlugin = makeRegistry(MODULES, [
       { id: 'demo/extra', def: pluginDef, source },
     ]);
@@ -215,10 +218,30 @@ describe('buildPlan, given a registry with a plugin-contributed module', () => {
       expect.objectContaining({ dest: '.claude/plugin-extra.md' }),
     );
   });
+
+  it('lists the plugin-contributed .claude/ dest in the .claude/.gitignore block', () => {
+    const withPlugin = makeRegistry(MODULES, [
+      { id: 'demo/extra', def: pluginDef, source },
+    ]);
+
+    const actions = buildPlan(
+      makeCtx(),
+      makeAnswers({ moduleIds: ['core', 'demo/extra'] }),
+      withPlugin,
+    );
+
+    const block = single(
+      actions.filter(
+        (a): a is RegionAction =>
+          a.kind === 'region' && a.dest === '.claude/.gitignore',
+      ),
+    );
+    expect(block.body.split('\n')).toContain('/plugin-extra.md');
+  });
 });
 
 describe('SHARED_HOST_FILES', () => {
-  it('contains exactly the five user-owned, region-managed paths', () => {
+  it('contains exactly the six user-owned, region-managed paths', () => {
     expect(SHARED_HOST_FILES).toEqual(
       new Set([
         '.claude/settings.json',
@@ -226,6 +249,7 @@ describe('SHARED_HOST_FILES', () => {
         'AGENTS.md',
         '.gitignore',
         '.prettierignore',
+        '.claude/.gitignore',
       ]),
     );
   });
@@ -1430,6 +1454,21 @@ describe('computeEffects, given a file whose on-disk hash differs from the manif
         SELF_GITIGNORE,
       ]),
     ).toBe('skip-modified');
+  });
+
+  it('keeps a mismatch on a dest the .claude/.gitignore block lists as a local edit', () => {
+    const dest = '.claude/rules/guard.md';
+    const block = single(
+      payloadGitignoreActions(makeCtx(), [
+        SELF_GITIGNORE,
+        writeAction(dest, 'canonical today\n'),
+      ]),
+    ) as RegionAction;
+    expect(block.body.split('\n')).toContain('/rules/guard.md');
+
+    expect(opForOlderCopyUnderNewerManifest(dest, [SELF_GITIGNORE])).toBe(
+      'skip-modified',
+    );
   });
 
   it('keeps a mismatched script as a local edit when the plan does not self-gitignore .claude/scripts/', () => {

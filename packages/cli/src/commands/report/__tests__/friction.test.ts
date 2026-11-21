@@ -631,4 +631,14 @@ describe('readTrimInstalled', () => {
   it('is undefined when nothing is installed', () => {
     expect(readTrimInstalled(installWith(null))).toBeUndefined();
   });
+
+  it('reads the config modules over a disagreeing manifest', () => {
+    const root = installWith(['core']);
+    writeFileSync(
+      join(root, '.claude', 'houserules.config.json'),
+      JSON.stringify({ version: 2, modules: ['core', 'tool-output-trim'] }),
+    );
+
+    expect(readTrimInstalled(root)).toBe(true);
+  });
 });

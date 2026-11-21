@@ -306,6 +306,24 @@ const HouseConfigSchema = z.strictObject({
     })
     .optional(),
 
+  payload: z
+    .strictObject({
+      commit: z
+        .boolean()
+        .optional()
+        .describe(
+          'Keep the installed payload (skills, rules, agents, reference, output styles, and the manifest) committed instead of listed in .claude/.gitignore. Off by default: the payload is rebuilt from this config by `npx houserules update`.',
+        ),
+    })
+    .optional(),
+
+  modules: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'The enabled module ids, as the manifest records them. Tracked here so a clone with no manifest can rebuild the install. Written by `init` and `modules`.',
+    ),
+
   plugins: z
     .array(pluginEntrySchema)
     .optional()
@@ -352,6 +370,7 @@ const UNKNOWN_KEY_NOUNS: Record<string, string> = {
   changesets: 'changesets setting',
   readGuard: 'read-guard setting',
   scripts: 'scripts setting',
+  payload: 'payload setting',
 };
 
 function problemsFrom(error: z.ZodError): string[] {

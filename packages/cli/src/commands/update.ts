@@ -14,6 +14,7 @@ import { backupDestFor, ensureBackupDir } from '../core/fs-target.js';
 import { ledgerDirFor } from '../core/ledger-dir.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import { assertOptionsRecorded } from '../module-options.js';
+import { installedModuleIds } from '../installed-modules.js';
 import {
   assertNoRetiredModules,
   resolveRecordedModuleIds,
@@ -216,7 +217,7 @@ function resolveUpdatePlan(
   root: string,
   ctx: Ctx,
   registry: ReturnType<typeof buildRegistry>,
-  manifest: NonNullable<Ctx['claude']['manifest']>,
+  manifest: Ctx['claude']['manifest'],
   targets: Ctx['targets'],
   flags: Flags,
 ): {
@@ -224,7 +225,10 @@ function resolveUpdatePlan(
   updateModuleIds: string[];
   closure: RequirementClosure;
 } {
-  const recordedModuleIds = manifest.modules ?? ['core'];
+  const recordedModuleIds = installedModuleIds(
+    ctx.claude.houseConfig,
+    manifest,
+  ) ?? ['core'];
   // Resolution runs first. A pre-split manifest records bare ids that the registry no longer
   // answers to, and buildPlan matches on the registered id, so leaving them bare would drop
   // every plugin module's actions and prune its files. The gate runs on the resolved ids, and
@@ -301,7 +305,7 @@ function foldRemovedHooksSettings(
 function foldReconciledSettings(
   planResult: PlanResult,
   ctx: Ctx,
-  manifest: NonNullable<Ctx['claude']['manifest']>,
+  manifest: Ctx['claude']['manifest'],
 ): void {
   const base = planResult.settingsPlan
     ? parseSettingsText(planResult.settingsPlan.text!)
@@ -309,7 +313,7 @@ function foldReconciledSettings(
   const { merged, dropped } = reconcileSettings(
     base,
     planResult.fragments,
-    manifest.settings,
+    manifest?.settings,
   );
   if (!dropped.length) return;
   planResult.settingsPlan ??= {
@@ -348,7 +352,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   }
   const registry = buildRegistry(root, ctx.claude.houseConfig, MODULES);
   const manifest = ctx.claude.manifest;
-  if (!manifest) {
+  if (!manifest && !installedModuleIds(ctx.claude.houseConfig, null)) {
     console.error(
       'No .claude/houserules.manifest.json — this repo has no houserules install to update. Run: npx houserules init',
     );
@@ -360,8 +364,11 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     return 1;
   }
 
+  const installedLabel = manifest
+    ? `v${manifest.kitVersion}`
+    : 'unknown, no manifest';
   ui.intro(
-    `houserules ${flags.kitVersion} — update (installed: v${manifest.kitVersion})`,
+    `houserules ${flags.kitVersion} — update (installed: ${installedLabel})`,
   );
 
   // Targets come from the user-edited houserules.config.json when present: config is

@@ -101,6 +101,14 @@ export function checkPackageDrift(
   return report;
 }
 
+/** The text after the frontmatter fences of a changeset file. */
+function summaryOf(content: string): string {
+  const lines = content.split('\n');
+  if (lines[0]?.trim() !== '---') return content;
+  const close = lines.findIndex((line, i) => i > 0 && line.trim() === '---');
+  return close === -1 ? '' : lines.slice(close + 1).join('\n');
+}
+
 function readPendingChangesets(root: string): Map<string, string> {
   const dir = join(root, '.changeset');
   const byId = new Map<string, string>();
@@ -238,11 +246,13 @@ function touchedPackages(root: string): string[] {
 }
 
 /** h5 over the changesets written this turn, with the branch's earlier ones counted as coverage. */
-function packageDriftFindings(
+async function packageDriftFindings(
   root: string,
   transcriptPath: string | undefined,
-): Finding[] {
+): Promise<Finding[]> {
   const pendingFiles = readPendingChangesets(root);
+  // No changeset file means nothing to judge, so no git call is worth its cost.
+  if (pendingFiles.size === 0) return [];
   const branchIds = newChangesetIds(root);
   const turnStart = turnStartedAt(transcriptPath);
   // A changeset last written before the prompt belongs to an earlier turn.
@@ -262,10 +272,41 @@ function packageDriftFindings(
   const settled = [...branchIds]
     .filter((id) => !newIds.has(id) && pendingFiles.has(id))
     .map(toPending);
-  return checkPackageDrift(pending, touchedPackages(root), settled).findings;
+  const findings = checkPackageDrift(
+    pending,
+    pending.length > 0 ? touchedPackages(root) : [],
+    settled,
+  ).findings;
+  if (pending.length > 0) {
+    findings.push(...(await summaryWordCapFindings(pending, pendingFiles)));
+  }
+  return findings;
 }
 
-function main(): void {
+/** One finding per new changeset whose summary runs past the word cap `changeset-write` enforces. */
+async function summaryWordCapFindings(
+  pending: PendingChangeset[],
+  pendingFiles: Map<string, string>,
+): Promise<Finding[]> {
+  // Loaded only when a new changeset exists, so the clean-tree path pays nothing for it.
+  const { SUMMARY_WORD_LIMIT, countSummaryWords } =
+    await import('./lib/changeset-summary.mjs');
+  const findings: Finding[] = [];
+  for (const changeset of pending) {
+    const count = countSummaryWords(summaryOf(pendingFiles.get(changeset.id)!));
+    if (count > SUMMARY_WORD_LIMIT)
+      findings.push({
+        rule: 'changeset-gate/summary-word-cap',
+        level: 'error',
+        file: `.changeset/${changeset.id}.md`,
+        line: null,
+        msg: `The summary is ${count} words, over the limit of ${SUMMARY_WORD_LIMIT}. State the one change in ${SUMMARY_WORD_LIMIT} words or fewer.`,
+      });
+  }
+  return findings;
+}
+
+async function main(): Promise<void> {
   const input = readStdinJson<{
     stop_hook_active?: boolean;
     transcript_path?: string;
@@ -285,7 +326,7 @@ function main(): void {
       input.background_tasks.length > 0;
     if (!isTreeMoving)
       report.findings.push(
-        ...packageDriftFindings(root, input.transcript_path),
+        ...(await packageDriftFindings(root, input.transcript_path)),
       );
 
     if (!hasErrors(report)) process.exit(0);
@@ -305,5 +346,5 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
 ) {
-  main();
+  await main();
 }

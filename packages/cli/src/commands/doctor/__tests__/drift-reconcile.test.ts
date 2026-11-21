@@ -36,6 +36,13 @@ describe('reconcileDrift, given a manifest naming a retired built-in module', ()
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     manifest.modules = ['backlog'];
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    // init may record modules in the config too, and the config is read first.
+    const configPath = join(root, '.claude', 'houserules.config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    if (config.modules) {
+      config.modules = ['backlog'];
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+    }
 
     expect(messages(root)).toEqual([
       expect.stringContaining(
@@ -123,5 +130,21 @@ describe('reconcileDrift, given a manifest entry that is a dangling symlink', ()
     expect(found).not.toContainEqual(
       expect.stringContaining('manifest lists it but the file is gone'),
     );
+  });
+});
+
+describe('reconcileDrift, given a config and a manifest that disagree on modules', () => {
+  it('reads the config modules, so a retired module there is reported', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const configPath = join(root, '.claude', 'houserules.config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.modules = ['backlog'];
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+    expect(messages(root)).toEqual([
+      expect.stringContaining(
+        'install uses a module that moved into a plugin:',
+      ),
+    ]);
   });
 });

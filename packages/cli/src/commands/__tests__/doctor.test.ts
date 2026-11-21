@@ -628,6 +628,13 @@ describe('doctor on a manifest listing a module houserules no longer defines', (
     const manifest = readJson<HouseManifestShape>(manifestPath);
     manifest.modules = [...manifest.modules, 'ghost-module'];
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    // init may record modules in the config too, and the config is read first.
+    const configPath = join(root, '.claude/houserules.config.json');
+    const config = readJson<{ modules?: string[] }>(configPath);
+    if (config.modules) {
+      config.modules = [...config.modules, 'ghost-module'];
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+    }
 
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);

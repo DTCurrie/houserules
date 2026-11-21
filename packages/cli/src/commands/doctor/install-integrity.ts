@@ -1,3 +1,4 @@
+import { installedModuleIds } from '../../installed-modules.js';
 import { execFileSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -209,7 +210,7 @@ export function checkInstallIntegrity(
   const knownModuleIds = new Set(
     registry ? registry.modules.map((m) => m.id) : MODULES.map((m) => m.id),
   );
-  for (const id of manifest.modules ?? []) {
+  for (const id of installedModuleIds(ctx.claude.houseConfig, manifest) ?? []) {
     if (!knownModuleIds.has(id))
       findings.push({
         level: 'WARN',

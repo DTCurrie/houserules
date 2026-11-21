@@ -84,13 +84,16 @@ another orchestrator whose `finished` notice has arrived, because the question b
 user answers. Relay `Ruling needed` verbatim through `AskUserQuestion`, with the
 recommendation first. Never summarize it, because the orchestrator wrote the options with context
 you do not have. Send the answer back as a `Ruling:` line with `SendMessage` to the same agent id.
+Send the `Ruling:` in the turn the answer arrives, before any other tool call, once the
+orchestrator's `finished` notice has appeared.
 Never respawn for a ruling, because the same id keeps its context.
 
 **Interim notifications.** A notification saying the orchestrator awaits its own background work is
 interim. Wait for its final report, because reviewing the interim one judges a phase that has not
 finished. An interim notice after a delivered report may hide the next one. An orchestrator whose
 hand-back answers that nothing was sent sends the same report with `SendMessage` instead, so read
-the messages that arrived before you judge the phase still running.
+the messages that arrived before you judge the phase still running. An interim notice needs no reply. When no message is owed to any orchestrator, end the turn with no
+text and no tool call.
 
 **Preflight.** A `BLOCKED` report naming `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` means the depth limit
 withheld `Agent` from the orchestrator. Set the variable and spawn fresh with the same brief. A

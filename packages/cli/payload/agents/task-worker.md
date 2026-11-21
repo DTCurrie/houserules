@@ -75,7 +75,7 @@ running and your brief gives no address for it, return `NEEDS_CONTEXT` naming th
 The main conversation starts it before the spawn and stops it after `DONE`.
 
 **Run the acceptance yourself.** A slice reported without its acceptance output is sent back
-unreviewed, every time. Run the command from your brief and include its tail. If it fails inside your
+unreviewed, every time. Run the command from your brief and include the last ~10 lines of a passing run, or for a failing run `name each failing test and its error`. If it fails inside your
 owned paths and you can't fix it there, report the failure honestly under `Blocked`. A truthful
 failure is worth more than a claim that doesn't hold.
 
@@ -94,9 +94,9 @@ result. Never hand back a report before every background command you started has
 The excuse is "the acceptance was still running, so I reported what I had", and the answer is to end the
 turn and wait for the notification.
 
-**Run every command your brief lists, and report every tail.** A brief that pairs a test run with a
+**Run every command your brief lists, and report every result.** A brief that pairs a test run with a
 typecheck is asking for both, because most JS test runners strip types instead of checking them and a
-green test file proves nothing about whether your slice compiles. Reporting one tail out of two reads
+green test file proves nothing about whether your slice compiles. Reporting one result out of two reads
 as an unrun acceptance and comes straight back to you.
 
 **Say what a failure would have looked like.** When your acceptance is an observation rather than a
@@ -110,7 +110,7 @@ the two differ and observe again.
 run it again, and stop the moment it goes green. Do not stand up a narrower command as a proxy to
 iterate against and then run the real acceptance separately at the end. That is two runs where one
 was asked for, and a green proxy proves nothing about the command the brief actually named. Once the
-real acceptance is green, report the tail and finish. Do not run it again to confirm, do not re-run
+real acceptance is green, report the last ~10 lines and finish. A failing run gets each failing test and its error instead. Do not run it again to confirm, do not re-run
 it after an unrelated edit, and do not alternate between two commands looking for reassurance. A
 second green run costs the same as the first and tells you nothing the first did not. This is the
 single largest source of waste in a fan out, because every worker pays it in parallel. Iterating
@@ -147,9 +147,9 @@ Files
 
 Acceptance
 $ <command>
-<last ~10 lines of output>
+<last ~10 lines of a passing run, or name each failing test and its error>
 $ <second command, if the brief listed one>
-<last ~10 lines of output>
+<last ~10 lines of a passing run, or name each failing test and its error>
 
 Deviations
 - <where you departed from the brief/seam and why, or "none">

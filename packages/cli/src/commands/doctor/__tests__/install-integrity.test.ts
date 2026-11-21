@@ -358,3 +358,32 @@ describe('checkInstallIntegrity, plugin-aware retired-script check', () => {
     ]);
   });
 });
+
+describe('checkInstallIntegrity, given a config and a manifest that disagree on modules', () => {
+  it('flags the unknown module the config names, not the manifest ones', () => {
+    const ctx = ctxWithFixturePlugin(['fixture/fixture-core']);
+    const disagreeing: Ctx = {
+      ...ctx,
+      claude: {
+        ...ctx.claude,
+        houseConfig: {
+          ...ctx.claude.houseConfig,
+          modules: ['config-only-ghost'],
+        } as unknown as HouseConfig,
+      },
+    };
+
+    const result = checkInstallIntegrity(
+      '/repo',
+      disagreeing,
+      '1.0.0',
+      registryFor(disagreeing),
+    );
+
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({
+        msg: expect.stringContaining('"config-only-ghost"'),
+      }),
+    );
+  });
+});

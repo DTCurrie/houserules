@@ -1,3 +1,4 @@
+import { installedModuleIds } from '../../installed-modules.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -50,7 +51,7 @@ export function checkSettingsWiring(root: string, ctx: Ctx): CheckResult {
     const lintFixWired = (config?.targets ?? []).some(
       (t) => t.fixCommands?.length,
     );
-    for (const moduleId of manifest.modules ?? []) {
+    for (const moduleId of installedModuleIds(config, manifest) ?? []) {
       // lint-fix deliberately leaves its Stop hooks unwired when no target has a fix
       // command (dfdc87). That gap is intentional.
       if (moduleId === 'lint-fix' && !lintFixWired) continue;

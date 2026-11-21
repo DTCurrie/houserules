@@ -243,6 +243,21 @@
       },
       "additionalProperties": false
     },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "commit": {
+          "description": "Keep the installed payload (skills, rules, agents, reference, output styles, and the manifest) committed instead of listed in .claude/.gitignore. Off by default: the payload is rebuilt from this config by `npx houserules update`.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "modules": {
+      "description": "The enabled module ids, as the manifest records them. Tracked here so a clone with no manifest can rebuild the install. Written by `init` and `modules`.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "plugins": {
       "description": "Plugins contributing extra modules, resolved in this order.",
       "type": "array",

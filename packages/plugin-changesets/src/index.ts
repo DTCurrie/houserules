@@ -91,6 +91,7 @@ function changesetsModule(api: PluginApi): ModuleDef {
           'Stop hook: package-set drift, major-bump confirmation, absorb ordering',
         ),
         api.payload.lib(id, 'changeset-owner.mjs'),
+        api.payload.lib(id, 'changeset-summary.mjs'),
         // Installed here rather than written lazily by the hook, so the state directory
         // never surfaces as untracked in the user's `git status`.
         {

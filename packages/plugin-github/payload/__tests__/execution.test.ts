@@ -108,26 +108,26 @@ describe('projects-sync-hook.mjs, whose own header says it always exits 0', () =
 });
 
 describe('adopt-lint.mjs invoked with no arguments in a non-git directory', () => {
-  it('exits 1 from an uncaught git failure, since repoRoot() has no safe fallback outside a work tree', () => {
+  it('exits 1 from the uncaught error repoRoot() throws, since it has no safe fallback outside a work tree', () => {
     const r = runStaged('adopt-lint.mjs');
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/Command failed: git rev-parse --show-toplevel/);
+    expect(r.stderr).toMatch(/houserules: .+ is not inside a git work tree/);
   });
 
-  it('does not fail to find a module, so the crash is git, not a broken import', () => {
+  it('does not fail to find a module, so the crash is the root error, not a broken import', () => {
     const r = runStaged('adopt-lint.mjs');
     expect(r.stderr).not.toMatch(/Cannot find (module|package)/);
   });
 });
 
 describe('projects-sync.mjs invoked with no arguments in a non-git directory', () => {
-  it('exits 1 from an uncaught git failure, since repoRoot() has no safe fallback outside a work tree', () => {
+  it('exits 1 from the uncaught error repoRoot() throws, since it has no safe fallback outside a work tree', () => {
     const r = runStaged('projects-sync.mjs');
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/Command failed: git rev-parse --show-toplevel/);
+    expect(r.stderr).toMatch(/houserules: .+ is not inside a git work tree/);
   });
 
-  it('does not fail to find a module, so the crash is git, not a broken import', () => {
+  it('does not fail to find a module, so the crash is the root error, not a broken import', () => {
     const r = runStaged('projects-sync.mjs');
     expect(r.stderr).not.toMatch(/Cannot find (module|package)/);
   });

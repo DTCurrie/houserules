@@ -1,3 +1,4 @@
+import { installedModuleIds } from '../../installed-modules.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -6,7 +7,7 @@ import type { Ctx } from '../../detect.js';
 import type { CheckResult, Finding } from '@houserules/api';
 import { compareSemver, parseSemver } from './semver.js';
 
-const MIN_NODE_MAJOR = 20;
+export const MIN_NODE_MAJOR = 22;
 
 const SERVER_LEVEL_TOOL = /^mcp__[^_]+(__\*)?$/;
 
@@ -27,7 +28,9 @@ const GATES: readonly ClaudeGate[] = [
     version: '2.1.292',
     reason: 'the orchestrate skill passes the Agent tool effort parameter',
     applies: (ctx) =>
-      ctx.claude.manifest?.modules.includes('orchestrate') ?? false,
+      installedModuleIds(ctx.claude.houseConfig, ctx.claude.manifest)?.includes(
+        'orchestrate',
+      ) ?? false,
   },
   {
     version: '2.1.295',

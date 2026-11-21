@@ -24,7 +24,7 @@
  * missing MILESTONE.md or step argument exits nonzero.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 
@@ -1793,6 +1793,7 @@ type Finding = Report['findings'][number];
 
 const ROADMAP_FILE = 'ROADMAP.md';
 const MILESTONE_FILE = 'MILESTONE.md';
+const PLAN_FILE = 'PLAN.md';
 const PHASE_FILE = /^phase-.*\.md$/;
 /** A sub-plan filename whose `<slug>` group is the phase slug a milestone item names. */
 const PHASE_FILE_SLUG = /^phase-\d+-(.+)\.md$/;
@@ -2137,7 +2138,98 @@ function runGates(args: string[]): never {
   process.exit(0);
 }
 
-function main(): void {
+/** The signature of `prose-lint`'s `checkProse`, the checker `plan-lint` runs over plan prose. */
+export type ProseChecker = (file: string, markdown: string) => Report;
+
+/**
+ * Imports `prose-lint.mjs` from `scriptsDir` and returns its `checkProse`. Returns `null` when
+ * the file is missing, fails to import, or exports no `checkProse` function, so a repo without
+ * the prose plugin loses only this check.
+ */
+export async function loadProseChecker(
+  scriptsDir: string,
+): Promise<ProseChecker | null> {
+  const path = join(scriptsDir, 'prose-lint.mjs');
+  if (!existsSync(path)) return null;
+  try {
+    const loaded: unknown = await import(pathToFileURL(path).href);
+    const checkProse = (loaded as { checkProse?: unknown }).checkProse;
+    return typeof checkProse === 'function'
+      ? (checkProse as ProseChecker)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The plan files of one workspace that carry prose still being written: PLAN, ROADMAP, and open phases. */
+function openWorkspaceProseFiles(workspaceDir: string): string[] {
+  const roadmapPath = join(workspaceDir, ROADMAP_FILE);
+  if (existsSync(roadmapPath)) {
+    const status = parseStatusHeader(readFileSync(roadmapPath, 'utf8'));
+    if (isArchivedWorkspaceStatus(status)) return [];
+  }
+  const files: string[] = [];
+  for (const name of [PLAN_FILE, ROADMAP_FILE]) {
+    if (existsSync(join(workspaceDir, name)))
+      files.push(join(workspaceDir, name));
+  }
+  for (const name of listEntries(workspaceDir).filter((entry) =>
+    PHASE_FILE.test(entry),
+  )) {
+    const path = join(workspaceDir, name);
+    if (!isClosedPhaseStatus(parseStatusHeader(readFileSync(path, 'utf8')))) {
+      files.push(path);
+    }
+  }
+  return files;
+}
+
+/**
+ * The sorted absolute paths `plan-lint` runs the prose checker over: `PLAN.md`, `ROADMAP.md`,
+ * and each non-closed phase file of every workspace whose ROADMAP is not archived, plus the
+ * `MILESTONE.md` of each milestone not `DONE`. Every member of a `DONE` milestone is skipped.
+ * Nothing below a workspace's own directory is read, so `imports/` and `reports/` stay out.
+ */
+export function proseLintFiles(plansDir: string): string[] {
+  const layout = discoverPlans(plansDir);
+  const files = layout.planDirs.flatMap((slug) =>
+    openWorkspaceProseFiles(join(plansDir, slug)),
+  );
+  for (const milestone of layout.milestones) {
+    const milestoneDir = join(plansDir, milestone.slug);
+    const milestonePath = join(milestoneDir, MILESTONE_FILE);
+    if (isDoneStatus(parseStatusHeader(readFileSync(milestonePath, 'utf8')))) {
+      continue;
+    }
+    files.push(milestonePath);
+    for (const member of milestone.memberDirs) {
+      files.push(...openWorkspaceProseFiles(join(milestoneDir, member)));
+    }
+  }
+  return files.sort();
+}
+
+/**
+ * Runs `checkProse` over each of `files`, passing the path relative to `root`, and keeps only
+ * the findings at `error` level, unchanged, so each keeps its own rule id.
+ */
+export function checkPlanProse(
+  root: string,
+  files: string[],
+  checkProse: ProseChecker,
+): Report {
+  const report = emptyReport();
+  for (const file of files) {
+    const found = checkProse(relative(root, file), readFileSync(file, 'utf8'));
+    report.findings.push(
+      ...found.findings.filter((finding) => finding.level === 'error'),
+    );
+  }
+  return report;
+}
+
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args[0] === '--gates') runGates(args.slice(1));
   const root = repoRootSafe() ?? process.cwd();
@@ -2172,6 +2264,15 @@ function main(): void {
     report.findings.push(...lintMilestone(root, plansDir, milestone, roots));
   }
 
+  const checkProse = await loadProseChecker(
+    dirname(realpathSync(process.argv[1] ?? '')),
+  );
+  if (checkProse !== null) {
+    report.findings.push(
+      ...checkPlanProse(root, proseLintFiles(plansDir), checkProse).findings,
+    );
+  }
+
   for (const filePath of listImpactMaps(plansDir, homes)) {
     report.findings.push(
       ...checkBlastRadiusShape(
@@ -2189,5 +2290,5 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
 ) {
-  main();
+  void main();
 }

@@ -1,3 +1,4 @@
+import { installedModuleIds } from '../../installed-modules.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -262,7 +263,7 @@ export function checkConfigValidity(root: string, ctx: Ctx): ConfigValidity {
   const workspacePackages = listWorkspacePackages(root);
   const workspaceNames = new Set(workspacePackages.map((p) => p.name));
   const verifyInstalled = Boolean(
-    manifest?.modules?.includes('verify-changed'),
+    installedModuleIds(config, manifest)?.includes('verify-changed'),
   );
 
   const targetResult = checkTargetScripts(

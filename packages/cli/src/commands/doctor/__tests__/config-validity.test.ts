@@ -551,3 +551,22 @@ describe('checkConfigValidity, workspace coverage', () => {
     expect(messages(root, ctx)).toEqual([]);
   });
 });
+
+describe('checkConfigValidity, given a config and a manifest that disagree on modules', () => {
+  it('reads verify-changed from the config modules', () => {
+    const root = useRepo('pnpm-monorepo');
+    const ctx = stageConfig(
+      root,
+      {
+        version: 2,
+        modules: ['core', 'verify-changed'],
+        targets: [STUDIO_TARGET, CITYVILLE_TARGET],
+      },
+      ['core'],
+    );
+
+    expect(messages(root, ctx)).toEqual([
+      'verify-changed is installed but no verify command is configured — add a "verify" block to .claude/houserules.config.json, or "verifyCommands" to each target. Without one --run has nothing to run.',
+    ]);
+  });
+});

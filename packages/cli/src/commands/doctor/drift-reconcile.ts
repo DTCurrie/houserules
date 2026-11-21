@@ -1,3 +1,4 @@
+import { installedModuleIds } from '../../installed-modules.js';
 import { join } from 'node:path';
 
 import { readJson } from '@houserules/payload/workspaces';
@@ -60,7 +61,9 @@ export function reconcileDrift(
   const targets = ctx.claude.houseConfig?.targets?.length
     ? ctx.claude.houseConfig.targets
     : ctx.targets;
-  const moduleIds = manifest.modules ?? ['core'];
+  const moduleIds = installedModuleIds(ctx.claude.houseConfig, manifest) ?? [
+    'core',
+  ];
   const retired = findRetired(moduleIds, registry);
   if (retired.length)
     return {

@@ -278,7 +278,9 @@ write, per `references/nested.md`.
 If `.claude/scripts/plan-lint.mjs` is installed, run `node .claude/scripts/plan-lint.mjs` after
 the edit. It checks every phase's status cell against the fixed vocabulary and cross-checks each
 ROADMAP line against the sub-plan header it links to, so a pass that missed one half of the
-update does not sit undetected until the next resume.
+update does not sit undetected until the next resume. When `.claude/scripts/prose-lint.mjs` is
+installed beside it, `plan-lint` also runs `prose-lint` over the open workspace's plan files and
+reports each error as a plan defect.
 
 Before the workspace is discarded, re-read the phase's `## Notes & decisions` and offer to promote
 anything durable with `/decide`. It proposes, it does not bulk-write. Most notes are not decisions,

@@ -295,4 +295,14 @@ describe('validateHouseConfig', () => {
       'changesets.baseBranchh is not a known changesets setting',
     );
   });
+
+  it('reports a misspelled key inside payload, using the payload noun', () => {
+    const raw = JSON.stringify({
+      ...minimalConfig,
+      payload: { unknown: true },
+    });
+    expect(validateHouseConfig(raw)).toContain(
+      'payload.unknown is not a known payload setting',
+    );
+  });
 });

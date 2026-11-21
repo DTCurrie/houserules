@@ -514,6 +514,40 @@ describe('update on a repo with no prior houserules install', () => {
   });
 });
 
+describe('update with a config from before `modules` was recorded', () => {
+  it('validates and updates from the manifest', () => {
+    const root = useInstalledRepo('npm-single');
+    editHouseConfig(root, (config) => {
+      delete config.modules;
+    });
+    const modulesBefore = manifestOf(root).modules;
+
+    const result = runCli(['update', root]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(manifestOf(root).modules).toEqual(modulesBefore);
+  });
+});
+
+describe('update on an installed rule whose body was edited', () => {
+  it('keeps the edit and reports the file as modified', () => {
+    const root = useInstalledRepo('npm-single', {
+      modules: 'code-cleanliness',
+    });
+    const dest = '.claude/rules/code-cleanliness.md';
+    appendFileSync(join(root, dest), '\nuser-added line\n');
+    const edited = readFileSync(join(root, dest), 'utf8');
+
+    const result = runCli(['update', root]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(join(root, dest), 'utf8')).toBe(edited);
+    expect(result.stdout.replace(/[\s│]+/g, ' ')).toContain(
+      'differ from what houserules last wrote',
+    );
+  });
+});
+
 describe('update on a CLAUDE.md edited outside the markers', () => {
   it('preserves prose added above and below the block byte-for-byte', () => {
     const root = useInstalledRepo('npm-single');
@@ -921,6 +955,9 @@ describe('update on an install whose manifest names a retired module', () => {
     manifest.modules = [...manifest.modules, 'backlog'];
     manifest.files['.claude/scripts/backlog-log.mjs'] = sha256(content);
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    editHouseConfig(root, (config) => {
+      config.modules = manifest.modules;
+    });
 
     result = runCli(['update', root]);
   });
@@ -1408,6 +1445,9 @@ describe('update on an install whose manifest records a module without its requi
       rmSync(join(root, dest), { force: true });
     }
     writeManifest(root, manifest);
+    editHouseConfig(root, (config) => {
+      config.modules = manifest.modules;
+    });
     filesBefore = Object.keys(manifest.files);
   });
 
@@ -1465,6 +1505,9 @@ describe('update on an install that predates both of orchestrate requirements', 
       rmSync(join(root, dest), { force: true });
     }
     writeManifest(root, manifest);
+    editHouseConfig(root, (config) => {
+      config.modules = manifest.modules;
+    });
     appendFileSync(join(root, EDITED), '\nuser-added line\n');
     editedBytes = readFileSync(join(root, EDITED), 'utf8');
   });
@@ -1537,6 +1580,9 @@ describe('update on an install recording a module whose requirement no plugin su
     const manifest = manifestOf(root);
     manifest.modules.push('unmet/needy');
     writeManifest(root, manifest);
+    editHouseConfig(root, (config) => {
+      config.modules = manifest.modules;
+    });
     const before = treeHash(root);
 
     const result = runCli(['update', root]);

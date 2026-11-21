@@ -1,0 +1,9 @@
+import '../bench/__tests__/stats.test.mjs';
+import '../bench/__tests__/machine.test.mjs';
+import '../bench/__tests__/timing.test.mjs';
+import '../bench/__tests__/build.test.mjs';
+import '../bench/__tests__/hooks-suite.test.mjs';
+import '../bench/__tests__/cli-suite.test.mjs';
+import '../bench/__tests__/scripts-suite.test.mjs';
+import '../bench/__tests__/run.test.mjs';
+import '../bench/__tests__/profile.test.mjs';

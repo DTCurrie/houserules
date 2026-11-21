@@ -165,3 +165,27 @@ describe('checkModuleHealth, plugin-contributed checks', () => {
     );
   });
 });
+
+describe('checkModuleHealth, given a config and a manifest that disagree on modules', () => {
+  it('checks the module the config names, not the manifest one', () => {
+    const ctx = ctxWith(['core'], {
+      typescript: true,
+      rootPkg: { name: 'root' },
+    });
+    const disagreeing: Ctx = {
+      ...ctx,
+      claude: {
+        ...ctx.claude,
+        houseConfig: { version: 2, modules: ['rename'] } as never,
+      },
+    };
+
+    expect(
+      checkModuleHealth('/repo', disagreeing, BUILT_INS).findings,
+    ).toContainEqual(
+      expect.objectContaining({
+        msg: expect.stringContaining('rename.mjs will fail'),
+      }),
+    );
+  });
+});

@@ -85,7 +85,10 @@ describe('every lib module loads on bare node', () => {
     }
 
     it('has lib files to check', () => {
-      expect(libFiles).toEqual(['changeset-owner.mjs']);
+      expect(libFiles).toEqual([
+        'changeset-owner.mjs',
+        'changeset-summary.mjs',
+      ]);
     });
 
     it.each(libFiles)('%s imports and exits 0', (file) => {
@@ -138,13 +141,13 @@ describe('changeset-write.mjs invoked with no arguments in a non-git directory',
 });
 
 describe('package-changelog.mjs invoked with no arguments in a non-git directory', () => {
-  it('exits 1 from an uncaught git failure, since repoRoot() has no safe fallback outside a work tree', () => {
+  it('exits 1 from the uncaught error repoRoot() throws, since it has no safe fallback outside a work tree', () => {
     const r = runStaged('package-changelog.mjs');
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/Command failed: git rev-parse --show-toplevel/);
+    expect(r.stderr).toMatch(/houserules: .+ is not inside a git work tree/);
   });
 
-  it('does not fail to find a module, so the crash is git, not a broken import', () => {
+  it('does not fail to find a module, so the crash is the root error, not a broken import', () => {
     const r = runStaged('package-changelog.mjs');
     expect(r.stderr).not.toMatch(/Cannot find (module|package)/);
   });

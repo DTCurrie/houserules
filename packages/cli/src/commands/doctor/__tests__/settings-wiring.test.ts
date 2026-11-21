@@ -268,3 +268,22 @@ describe('KIT_HOOK_SCRIPT_RE', () => {
     },
   );
 });
+
+describe('checkSettingsWiring, given a config and a manifest that disagree on modules', () => {
+  it('checks the module the config names, not the manifest one', () => {
+    const ctx = installedCtx({ modules: ['lint-fix'] });
+    const disagreeing: Ctx = {
+      ...ctx,
+      claude: {
+        ...ctx.claude,
+        houseConfig: { version: 2, modules: ['core'] } as never,
+      },
+    };
+
+    expect(checkSettingsWiring('/repo', disagreeing).findings).toContainEqual(
+      expect.objectContaining({
+        msg: 'module "core": hook script guard-bash.mjs not wired in .claude/settings.json',
+      }),
+    );
+  });
+});

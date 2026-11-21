@@ -75,7 +75,7 @@ It runs 270 seconds, or until no row in your table is `DISPATCHED` or `REVISING`
 that records the last report stops it within 5 seconds, with no stop step of yours. End the turn,
 and start another each time it wakes you with a row still `DISPATCHED` or `REVISING`. A wake inside
 300 seconds re-reads your cached context, and a later one rewrites all of it, so no wake exceeds 270
-seconds, however long the wait runs. The agent's report arrives as a message and wakes you too.
+seconds, however long the wait runs. The agent's report arrives as a message and wakes you too. Start a keepalive only when none from this turn chain is still running.
 
 Never use a plain `sleep 270` as the keepalive, because it cannot end early. One outlived its wave
 and held back the `finished` notice for 85 seconds after the report. The next wave waited with it.

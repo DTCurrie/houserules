@@ -33,6 +33,10 @@ function linkChangesetsCli(root: string): void {
   symlinkSync(cliDir, join(root, 'node_modules/@changesets/cli'));
 }
 
+function words(n: number): string {
+  return Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
+}
+
 function newChangesets(root: string, before: Set<string>): string[] {
   return readdirSync(join(root, '.changeset')).filter(
     (f) => f.endsWith('.md') && !before.has(f),
@@ -136,6 +140,42 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/CITYVILLE-0d9e8f/);
     expect(readFileSync(join(root, first), 'utf8')).toBe(pending);
+  });
+
+  it('refuses a 16-word summary, naming the count and the limit and writing no file', () => {
+    const before = new Set(readdirSync(join(root, '.changeset')));
+    const r = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/cityville', '--summary', words(16)],
+    });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/16 words/);
+    expect(r.stderr).toMatch(/15/);
+    expect(newChangesets(root, before)).toEqual([]);
+  });
+
+  it('refuses a 16-word --amend summary, leaving the pending changeset unchanged', () => {
+    const first = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/cityville', '--summary', 'Add road planning.'],
+    }).stdout.trim();
+    const pending = readFileSync(join(root, first), 'utf8');
+
+    const r = runScript(root, SCRIPT, {
+      args: ['--amend', first, '--summary', words(16)],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/16 words/);
+    expect(r.stderr).toMatch(/15/);
+    expect(readFileSync(join(root, first), 'utf8')).toBe(pending);
+  });
+
+  it('writes a summary of exactly 15 words', () => {
+    const before = new Set(readdirSync(join(root, '.changeset')));
+    const r = runScript(root, SCRIPT, {
+      args: ['--pkg', '@fix/cityville', '--summary', words(15)],
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(newChangesets(root, before)).toHaveLength(1);
   });
 
   it('accepts a summary whose id-like tokens do not match the ledger shape', () => {

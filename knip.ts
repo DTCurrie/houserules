@@ -13,6 +13,9 @@ const config: KnipConfig = {
         // by hand as `node scripts/health-kit/<script>.mjs`. Nothing in the workspace
         // imports it.
         'scripts/health-kit/**/*.mjs',
+        // The benchmark harness, documented in scripts/bench/README.md and invoked by hand as
+        // `node scripts/bench/run.mjs`. Nothing in the workspace imports it.
+        'scripts/bench/run.mjs',
       ],
     },
     'packages/cli': {

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { makeAnswers, makeCtx } from '#test/ctx-builder';
-import type { HouseConfig } from '@houserules/api';
+import { makeAnswers, makeCtx, makeRegistry } from '#test/ctx-builder';
+import type { HouseConfig, RegionAction } from '@houserules/api';
+import { upsertRegion } from '@houserules/api/internal';
 import { plan } from '../core.js';
+import { buildPlan, MODULES } from '../../plan.js';
 
 describe('core plan, the merged Bash gate', () => {
   it('ships no separate subagent-write-gate.mjs script or hook, its checks live in guard-bash.mjs', () => {
@@ -142,5 +144,48 @@ describe('core plan, the ledger directory .gitignore', () => {
             'the ledger directory is a local push queue. GitHub Projects is the durable record',
       ),
     ).toEqual([]);
+  });
+});
+
+describe('core plan, the .claude/.gitignore block over a file the user already owns', () => {
+  const USER_ABOVE = '# my own ignores\n/local-notes.md\n\n';
+  const USER_BELOW = '\n\n/scratch/\n!keep.me\n';
+
+  function plannedBlock(): RegionAction {
+    const blocks = buildPlan(
+      makeCtx(),
+      makeAnswers({ moduleIds: ['core'] }),
+      makeRegistry(MODULES),
+    ).filter(
+      (a): a is RegionAction =>
+        a.kind === 'region' && a.dest === '.claude/.gitignore',
+    );
+    expect(blocks).toHaveLength(1);
+    return blocks[0]!;
+  }
+
+  it('keeps the user lines above and below the markers byte for byte when the block is replaced', () => {
+    const block = plannedBlock();
+    const staleBlock = `${block.region.start}\n/stale-entry.md\n${block.region.end}`;
+    const onDisk = `${USER_ABOVE}${staleBlock}${USER_BELOW}`;
+
+    const { content, status } = upsertRegion(onDisk, block.body, block.region);
+
+    expect(status).toBe('replaced');
+    expect(content.startsWith(USER_ABOVE)).toBe(true);
+    expect(content.endsWith(USER_BELOW)).toBe(true);
+    expect(content).not.toContain('/stale-entry.md');
+    expect(content).toContain('/houserules.manifest.json');
+  });
+
+  it('appends the block after the user lines when the file has no markers yet', () => {
+    const block = plannedBlock();
+    const onDisk = '/local-notes.md\n/scratch/\n';
+
+    const { content, status } = upsertRegion(onDisk, block.body, block.region);
+
+    expect(status).toBe('inserted');
+    expect(content.startsWith(onDisk)).toBe(true);
+    expect(content).toContain(block.region.start);
   });
 });

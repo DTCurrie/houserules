@@ -13,6 +13,7 @@ export const uses: ModuleRequirement[] = [
   { id: 'research' },
   { id: 'decisions', package: '@houserules/plugin-decisions' },
   { id: 'pr-description', package: '@houserules/plugin-prose' },
+  { id: 'prose-voice', package: '@houserules/plugin-prose' },
 ];
 
 export function hint(): string {

@@ -129,8 +129,8 @@ Append to the phase sub-plan, so a dead session resumes by grepping instead of r
 
 | id  | owns                     | depends | wave | status |
 | --- | ------------------------ | ------- | ---- | ------ |
-| 1a  | `src/auth/session*.ts`   | —       | 1    | TODO   |
-| 1b  | `src/auth/tokens.ts`     | —       | 1    | TODO   |
+| 1a  | `src/auth/session*.ts`   | none    | 1    | TODO   |
+| 1b  | `src/auth/tokens.ts`     | none    | 1    | TODO   |
 | 2a  | `src/api/routes/auth.ts` | 1a,1b   | 2    | TODO   |
 ```
 
@@ -170,8 +170,8 @@ prohibition (below).
 > Reference: `<the plan doc(s) this slice's output is judged against, by path, or "none">`.
 > Steps: `<the ≤8 steps>`.
 > Acceptance: `<command(s), scoped to your owned paths>` is your iteration loop. Run it, fix what is
-> red, run it again, and stop the moment it goes green. Include the last ~10 lines of each in your
-> report.
+> red, run it again, and stop the moment it goes green. Report the last ~10 lines of each passing
+> run, or name each failing test and its error.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
 
 Hand a worker its slice, seam, and constraints, not the plan.

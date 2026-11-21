@@ -77,7 +77,10 @@ Claude Code 2.1.314 or later is the floor. `doctor` warns when the running versi
 3. **Previews** the full plan: every file it would create, the exact `settings.json` diff,
    and what it skips because it's yours. Only then does it write.
 4. **Records** a receipt (`.claude/houserules.manifest.json`, file hashes) so `update` can refresh
-   houserules files without clobbering your edits, and `doctor` can tell drift from damage.
+   houserules files without clobbering your edits, and `doctor` can tell drift from damage. It
+   also writes your chosen modules into `modules` in the config, and a managed block in
+   `.claude/.gitignore` that ignores the manifest and the installed files. The config, `settings.json`,
+   and the `.gitignore` stay tracked. See [the installed payload](#the-installed-payload-is-generated-not-source).
 
 Non-destructive guarantees: it never runs package-manager installs, never touches
 `settings.local.json`, never rewrites unparseable JSON, backs up `settings.json` once before
@@ -91,7 +94,8 @@ not touch the file at all.
 
 houserules writes that block into the file your repo already has: `CLAUDE.md`, else `AGENTS.md`,
 else it seeds `CLAUDE.md`. Set `"instructionsFile": "AGENTS.md"` or `"CLAUDE.md"` in
-`.claude/houserules.config.json` to force one. `claudeMd.managed` keeps its name and covers either
+`.claude/houserules.config.json` to force one. The key goes into the config `init` seeds, or into a
+complete config written by hand. `claudeMd.managed` keeps its name and covers either
 file. Claude Code reads `AGENTS.md` natively from v2.1.277, but only when no `CLAUDE.md` is on the
 path, so a `CLAUDE.md` silences the block in `AGENTS.md`. `doctor` warns when that happens. You have
 two ways out. Add an `@AGENTS.md` line to the `CLAUDE.md`, or set the following in
@@ -236,19 +240,31 @@ error rather than a silent no-op.
 | 1    | error, or `doctor` found a problem / actionable drift        |
 | 2    | `.claude/houserules.config.json` does not satisfy the schema |
 
-### `.claude/scripts/` is generated, not source
+### The installed payload is generated, not source
 
-The hook scripts are build output, so houserules self-gitignores them. `.claude/scripts/.gitignore`
-and `.claude/state/.gitignore` are the only files there that git tracks. Your `settings.json`,
-`houserules.config.json`, skills, agents and rules are all still committed. Only the generated `.mjs`
-stays out of your diffs, so a houserules upgrade doesn't show up as a wall of machine-written churn.
+The files houserules installs are build output, so it ignores them. `init` and `update` write a
+managed block into `.claude/.gitignore`, between `# houserules:gitignore start` and
+`# houserules:gitignore end`. The block lists the manifest and every installed skill, agent, rule,
+and hook file under `.claude/` by path. A skill of your own beside houserules' skills stays
+tracked, because only the installed paths are listed. A houserules upgrade no longer shows up as
+a wall of machine-written churn.
 
-If a repo already committed its scripts, `update` migrates it for you. The paths are
-`git rm --cached`'d, which is **staged only**. Files stay on disk, and houserules never commits.
-`doctor` reports the state until you do.
+`.claude/scripts/` and `.claude/templates/` ignore themselves with a `*` rule, so the block skips
+them. Seeds and ledger records are never listed. Git still tracks these:
 
-Because the scripts can be absent on a fresh clone while `settings.json` is committed, every hook
-command is guarded. A missing script prints
+- `.claude/houserules.config.json`
+- `.claude/settings.json`
+- `.claude/.gitignore`
+- the marked block in your instructions file
+- seeds
+- the per-directory `.gitignore` files
+
+A fresh clone has `settings.json` but not the ignored files. The config's `modules` list records
+what to install, so `update` rebuilds the payload from it when the manifest is missing. Run
+`npx houserules update` after cloning.
+
+Because the hook scripts can be absent on a fresh clone while `settings.json` is committed, every
+hook command is guarded. A missing script prints
 
 ```
 [houserules] changeset-check.mjs missing — run: npx houserules update
@@ -256,8 +272,12 @@ command is guarded. A missing script prints
 
 instead of a Node stack trace, and the hook exits cleanly rather than failing your turn.
 
-Want the old behavior? Set `scripts.commit: true` in `.claude/houserules.config.json`. houserules then
-skips the gitignore and the migration entirely.
+If you edit an ignored file, `update` keeps your edit and reports the file as `yours`. The edit
+stays on your machine, since git does not see the file.
+
+Want the committed layout? Set `payload.commit: true` in `.claude/houserules.config.json`.
+houserules then drops the block, and the payload is committed as before. For the hook scripts
+alone, `scripts.commit: true` skips their gitignore and the migration that untracks them.
 
 ### Drift: `stale` vs `yours`
 
@@ -316,6 +336,7 @@ that depends on `@houserules/cli` gets the local
 `../node_modules/@houserules/cli/schema/houserules.config.schema.json`. One that only ever runs
 `npx @houserules/cli` without installing it has no local copy, so it gets the published URL instead. `doctor` reports
 any problem per field (`changesets.baseBranchh is not a known changesets setting`) and exits 2.
+`init` and `update` also refuse a schema-invalid config with exit 2, printing each problem and writing nothing.
 
 ## Ledgers: what is committed and what is generated
 
@@ -620,7 +641,11 @@ so you review it like any other change. Only a path the ledger itself records is
 
 ## Support matrix & port hazards
 
-- **git required.** Every script resolves paths from `git rev-parse --show-toplevel`.
+- **git required.** Every script finds the repo root by walking up from the current
+  directory to the nearest valid `.git` entry, without starting a git process. It runs
+  `git rev-parse --show-toplevel` instead whenever git's own discovery could answer
+  differently, such as when `GIT_DIR` is set or the entry belongs to a bare repo. The scripts
+  still need git for their other work.
 - **Package managers.** pnpm and npm are first-class, yarn-classic workspaces are best-effort,
   and npm-monorepo per-package filtering is not modeled (set `fix.filterFlag: ""` and use a root
   fix script). Workspace globs support the common shapes (`packages/*`). Exotic globs won't

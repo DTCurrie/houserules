@@ -37,6 +37,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   unlinkSync,
 } from 'node:fs';
@@ -48,6 +49,11 @@ import { parseArgs } from 'node:util';
 
 import { BACKLOG_ID } from '@houserules/payload/backlog-id';
 import { listPublishablePackageNames } from '@houserules/payload/workspaces';
+
+import {
+  SUMMARY_WORD_LIMIT,
+  countSummaryWords,
+} from './lib/changeset-summary.mjs';
 
 const LEVELS = new Set(['patch', 'minor', 'major']);
 const OUTCOME_RECORD = '.claude/state/changesets.jsonl';
@@ -185,195 +191,218 @@ function mergeReleases(existing: Release[], incoming: Release[]): Release[] {
   return [...byName.values()];
 }
 
-let values: {
-  pkg?: string[];
-  summary?: string;
-  level?: string;
-  empty?: boolean;
-  amend?: string;
-  absorb?: string[];
-  chat?: string;
-};
-try {
-  ({ values } = parseArgs({
-    args: process.argv.slice(2),
-    options: {
-      pkg: { type: 'string', multiple: true },
-      summary: { type: 'string' },
-      level: { type: 'string' },
-      empty: { type: 'boolean' },
-      amend: { type: 'string' },
-      absorb: { type: 'string', multiple: true },
-      chat: { type: 'string' },
-    },
-    allowPositionals: false,
-  }));
-} catch (e) {
-  const message = (e as Error).message;
-  const bad = message.match(/'(-[^']*)'/)?.[1] ?? message;
-  usage(`Unknown argument "${bad}".`);
-}
-
-const pkgArgs = values.pkg ?? [];
-const summaryArg = values.summary;
-const defaultLevel = values.level ?? 'patch';
-const empty = values.empty ?? false;
-if (!LEVELS.has(defaultLevel))
-  usage(`Invalid --level "${defaultLevel}" (patch|minor|major).`);
-
-let root: string;
-try {
-  root = execSync('git rev-parse --show-toplevel', {
-    stdio: ['ignore', 'pipe', 'ignore'],
-  })
-    .toString()
-    .trim();
-} catch {
-  console.error('Not inside a git work tree.');
-  process.exit(1);
-}
-
-let summary = summaryArg;
-if (summary === undefined && !process.stdin.isTTY) {
+async function main(): Promise<void> {
+  let values: {
+    pkg?: string[];
+    summary?: string;
+    level?: string;
+    empty?: boolean;
+    amend?: string;
+    absorb?: string[];
+    chat?: string;
+  };
   try {
-    summary = readFileSync(0, 'utf8');
-  } catch {
-    summary = '';
+    ({ values } = parseArgs({
+      args: process.argv.slice(2),
+      options: {
+        pkg: { type: 'string', multiple: true },
+        summary: { type: 'string' },
+        level: { type: 'string' },
+        empty: { type: 'boolean' },
+        amend: { type: 'string' },
+        absorb: { type: 'string', multiple: true },
+        chat: { type: 'string' },
+      },
+      allowPositionals: false,
+    }));
+  } catch (e) {
+    const message = (e as Error).message;
+    const bad = message.match(/'(-[^']*)'/)?.[1] ?? message;
+    usage(`Unknown argument "${bad}".`);
   }
-}
-summary = (summary ?? '').trim();
-if (!summary)
-  usage(
-    'A non-empty --summary (or piped stdin) is required — it becomes the changelog entry.',
-  );
 
-// A summary is published in the CHANGELOG, and a ledger id resolves only against this
-// repo's local ledger. One id already reached a published CHANGELOG this way.
-const leakedIds = [...new Set(summary.match(BACKLOG_ID) ?? [])];
-if (leakedIds.length) {
-  console.error(
-    `Summary carries ledger id(s) ${leakedIds.join(', ')}. A changeset is published text, and ids resolve only against the local ledger. Reword the summary to state the context itself.`,
-  );
-  process.exit(1);
-}
+  const pkgArgs = values.pkg ?? [];
+  const summaryArg = values.summary;
+  const defaultLevel = values.level ?? 'patch';
+  const empty = values.empty ?? false;
+  if (!LEVELS.has(defaultLevel))
+    usage(`Invalid --level "${defaultLevel}" (patch|minor|major).`);
 
-const dir = join(root, '.changeset');
-mkdirSync(dir, { recursive: true });
-if (!existsSync(join(dir, 'config.json'))) {
-  console.error(
-    'note: .changeset/config.json is missing — run `npx @changesets/cli init` before release time.',
-  );
-}
-
-const amendTarget = values.amend
-  ? resolveAmendTarget(dir, values.amend)
-  : undefined;
-
-const absorbArgs = values.absorb ?? [];
-if (absorbArgs.length && !amendTarget)
-  usage('--absorb requires --amend <id> to name the changeset that survives.');
-if (absorbArgs.length && empty)
-  usage(
-    '--empty cannot be combined with --absorb. The absorbed bumps would be discarded.',
-  );
-
-const absorbTargets: string[] = [];
-for (const raw of absorbArgs) {
-  const file = resolveAmendTarget(dir, raw);
-  if (file === amendTarget) {
-    console.error(`Cannot absorb "${raw}" into itself.`);
+  let root: string;
+  try {
+    root = execSync('git rev-parse --show-toplevel', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+  } catch {
+    console.error('Not inside a git work tree.');
     process.exit(1);
   }
-  absorbTargets.push(file);
-}
 
-let entries: Release[] = [];
-if (!empty) {
-  const valid = listPublishablePackageNames(root);
-  if (!valid.length) {
+  let summary = summaryArg;
+  if (summary === undefined && !process.stdin.isTTY) {
+    try {
+      summary = readFileSync(0, 'utf8');
+    } catch {
+      summary = '';
+    }
+  }
+  summary = (summary ?? '').trim();
+  if (!summary)
+    usage(
+      'A non-empty --summary (or piped stdin) is required — it becomes the changelog entry.',
+    );
+
+  // A summary is published in the CHANGELOG, and a ledger id resolves only against this
+  // repo's local ledger. One id already reached a published CHANGELOG this way.
+  const leakedIds = [...new Set(summary.match(BACKLOG_ID) ?? [])];
+  if (leakedIds.length) {
     console.error(
-      'No packages found (no workspace members and no named root package.json).',
+      `Summary carries ledger id(s) ${leakedIds.join(', ')}. A changeset is published text, and ids resolve only against the local ledger. Reword the summary to state the context itself.`,
     );
     process.exit(1);
   }
-  entries = pkgArgs.map((raw) => {
-    if (!raw) usage('--pkg needs a value.');
-    const at = raw.lastIndexOf(':');
-    const hasLevel = at > 0 && LEVELS.has(raw.slice(at + 1));
-    const name = hasLevel ? raw.slice(0, at) : raw;
-    const level = hasLevel ? raw.slice(at + 1) : defaultLevel;
-    return { name, level };
-  });
-  if (amendTarget) {
-    let merged = readReleases(amendTarget);
-    for (const file of absorbTargets)
-      merged = mergeReleases(merged, readReleases(file));
-    entries = mergeReleases(merged, entries);
+
+  const wordCount = countSummaryWords(summary);
+  if (wordCount > SUMMARY_WORD_LIMIT) {
+    console.error(
+      `Summary is ${wordCount} words, over the limit of ${SUMMARY_WORD_LIMIT}. State the one change in ${SUMMARY_WORD_LIMIT} words or fewer.`,
+    );
+    process.exit(1);
   }
-  if (!entries.length) {
-    if (amendTarget) {
-      if (!absorbTargets.length)
-        usage(
-          'The amended changeset declares no packages. Pass --pkg, or --empty to keep it release-free.',
-        );
-    } else if (valid.length === 1)
-      // valid.length === 1 guarantees valid[0] is present.
-      entries = [{ name: valid[0]!, level: defaultLevel }];
-    else usage(`Specify --pkg. Valid packages: ${valid.join(', ')}`);
+
+  const dir = join(root, '.changeset');
+  mkdirSync(dir, { recursive: true });
+  if (!existsSync(join(dir, 'config.json'))) {
+    console.error(
+      'note: .changeset/config.json is missing — run `npx @changesets/cli init` before release time.',
+    );
   }
-  for (const entry of entries) {
-    if (!valid.includes(entry.name)) {
+
+  const amendTarget = values.amend
+    ? resolveAmendTarget(dir, values.amend)
+    : undefined;
+
+  const absorbArgs = values.absorb ?? [];
+  if (absorbArgs.length && !amendTarget)
+    usage(
+      '--absorb requires --amend <id> to name the changeset that survives.',
+    );
+  if (absorbArgs.length && empty)
+    usage(
+      '--empty cannot be combined with --absorb. The absorbed bumps would be discarded.',
+    );
+
+  const absorbTargets: string[] = [];
+  for (const raw of absorbArgs) {
+    const file = resolveAmendTarget(dir, raw);
+    if (file === amendTarget) {
+      console.error(`Cannot absorb "${raw}" into itself.`);
+      process.exit(1);
+    }
+    absorbTargets.push(file);
+  }
+
+  let entries: Release[] = [];
+  if (!empty) {
+    const valid = listPublishablePackageNames(root);
+    if (!valid.length) {
       console.error(
-        `Unknown package "${entry.name}". Valid packages: ${valid.join(', ')}`,
+        'No packages found (no workspace members and no named root package.json).',
       );
       process.exit(1);
     }
+    entries = pkgArgs.map((raw) => {
+      if (!raw) usage('--pkg needs a value.');
+      const at = raw.lastIndexOf(':');
+      const hasLevel = at > 0 && LEVELS.has(raw.slice(at + 1));
+      const name = hasLevel ? raw.slice(0, at) : raw;
+      const level = hasLevel ? raw.slice(at + 1) : defaultLevel;
+      return { name, level };
+    });
+    if (amendTarget) {
+      let merged = readReleases(amendTarget);
+      for (const file of absorbTargets)
+        merged = mergeReleases(merged, readReleases(file));
+      entries = mergeReleases(merged, entries);
+    }
+    if (!entries.length) {
+      if (amendTarget) {
+        if (!absorbTargets.length)
+          usage(
+            'The amended changeset declares no packages. Pass --pkg, or --empty to keep it release-free.',
+          );
+      } else if (valid.length === 1)
+        // valid.length === 1 guarantees valid[0] is present.
+        entries = [{ name: valid[0]!, level: defaultLevel }];
+      else usage(`Specify --pkg. Valid packages: ${valid.join(', ')}`);
+    }
+    for (const entry of entries) {
+      if (!valid.includes(entry.name)) {
+        console.error(
+          `Unknown package "${entry.name}". Valid packages: ${valid.join(', ')}`,
+        );
+        process.exit(1);
+      }
+    }
   }
-}
 
-const officialWrite = await loadOfficialWrite(root);
-if (!officialWrite) {
-  console.error(
-    [
-      'Cannot author a changeset: @changesets/write is not resolvable from this repo.',
-      'houserules writes changesets only with the official changesets library — no fallback.',
-      'Fix: install the CLI as a root devDependency, then rerun:',
-      '  pnpm add -D -w @changesets/cli   # npm: npm install -D @changesets/cli',
-      'Notes: a pnpx/npx-only root script is not enough (nothing is resolvable from',
-      'the repo root); pnpm catalogMode strict needs a catalog entry for it first.',
-    ].join('\n'),
-  );
-  process.exit(1);
-}
+  const officialWrite = await loadOfficialWrite(root);
+  if (!officialWrite) {
+    console.error(
+      [
+        'Cannot author a changeset: @changesets/write is not resolvable from this repo.',
+        'houserules writes changesets only with the official changesets library — no fallback.',
+        'Fix: install the CLI as a root devDependency, then rerun:',
+        '  pnpm add -D -w @changesets/cli   # npm: npm install -D @changesets/cli',
+        'Notes: a pnpx/npx-only root script is not enough (nothing is resolvable from',
+        'the repo root); pnpm catalogMode strict needs a catalog entry for it first.',
+      ].join('\n'),
+    );
+    process.exit(1);
+  }
 
-let id: string;
-try {
-  id = await officialWrite(
-    {
-      summary,
-      releases: entries.map((e) => ({ name: e.name, type: e.level })),
-    },
+  let id: string;
+  try {
+    id = await officialWrite(
+      {
+        summary,
+        releases: entries.map((entry) => ({
+          name: entry.name,
+          type: entry.level,
+        })),
+      },
+      root,
+    );
+  } catch (e) {
+    console.error(`@changesets/write failed: ${(e as Error)?.message ?? e}`);
+    process.exit(1);
+  }
+
+  // The official writer always mints its own human-id filename. Amending moves that output
+  // onto the pending file, so the feature keeps one changeset at one stable path and the
+  // rewrite reads as a modification rather than an add plus a delete.
+  if (amendTarget) {
+    renameSync(join(dir, `${id}.md`), amendTarget);
+    for (const file of absorbTargets) unlinkSync(file);
+    console.log(`.changeset/${basename(amendTarget)}`);
+  } else {
+    console.log(`.changeset/${id}.md`);
+  }
+
+  recordOutcome(
     root,
+    amendTarget ? basename(amendTarget) : `${id}.md`,
+    values.chat,
+    amendTarget ? 'amend' : 'add',
   );
-} catch (e) {
-  console.error(`@changesets/write failed: ${(e as Error)?.message ?? e}`);
-  process.exit(1);
 }
 
-// The official writer always mints its own human-id filename. Amending moves that output
-// onto the pending file, so the feature keeps one changeset at one stable path and the
-// rewrite reads as a modification rather than an add plus a delete.
-if (amendTarget) {
-  renameSync(join(dir, `${id}.md`), amendTarget);
-  for (const file of absorbTargets) unlinkSync(file);
-  console.log(`.changeset/${basename(amendTarget)}`);
-} else {
-  console.log(`.changeset/${id}.md`);
+// Guarded so the gate can import the count and the limit without running the author.
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+) {
+  await main();
 }
-
-recordOutcome(
-  root,
-  amendTarget ? basename(amendTarget) : `${id}.md`,
-  values.chat,
-  amendTarget ? 'amend' : 'add',
-);

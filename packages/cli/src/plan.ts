@@ -37,6 +37,7 @@ import * as codeCleanliness from './modules/code-cleanliness.js';
 import * as ciSettings from './modules/ci-settings.js';
 
 import { prettierGuardActions } from './modules/prettier-guard.js';
+import { payloadGitignoreActions } from './modules/payload-gitignore.js';
 
 import type {
   Action,
@@ -197,6 +198,7 @@ export const SHARED_HOST_FILES: ReadonlySet<string> = new Set([
   'AGENTS.md',
   '.gitignore',
   '.prettierignore',
+  '.claude/.gitignore',
 ]);
 
 export function defaultModuleIds(ctx: Ctx, registry: Registry): string[] {
@@ -257,7 +259,12 @@ export function buildPlan(
   // Last, and deliberately outside the loop. The prettier guard derives its block from the
   // dests the plan actually writes, so it has to see every module's actions. Inside core's
   // plan() it saw only core's, which is how `.claude/output-styles/` went unprotected.
-  actions.push(...prettierGuardActions(ctx, actions));
+  // Both derive from the module actions alone, so neither block lists the other's region.
+  const derived = [
+    ...prettierGuardActions(ctx, actions),
+    ...payloadGitignoreActions(ctx, actions),
+  ];
+  actions.push(...derived);
   return actions;
 }
 

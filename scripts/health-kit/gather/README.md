@@ -1,7 +1,10 @@
 # Gather scripts
 
-Five scripts and `SCHEMA.md`, with every pass-specific path and
-label turned into a required argument. Node builtins only. Each script's header comment is its
+Eight scripts and `SCHEMA.md`, with every pass-specific path and label turned into an argument.
+Node builtins only, except `waste-audit.mjs`, which imports the report command's price table from
+`packages/cli/dist/` and so needs `pnpm build` first. `compaction.mjs` and `keepalive.mjs` hold the
+record tests `waste-audit.mjs` and `wait-timeline.mjs` share, and neither runs on its own. Each
+script's header comment is its
 invocation contract. A missing required argument prints a usage line and exits 2. Keep `SCHEMA.md`
 beside the scripts, because `parse-usage-report.mjs` and `agent-ledger.mjs` read their key lists
 from it.
@@ -16,6 +19,14 @@ that holds the installs:
 4. `node $K/parse-usage-report.mjs $W/imports/work-report-<date>.md $W/baseline/usage-work.json`
 5. `node $K/agent-ledger.mjs --machine local --out $W/baseline/agent-ledger-local.json $P/<repo> $P/<repo2>`
 6. `node $K/check-agent-ledger.mjs --ledger $W/baseline/agent-ledger-local.json --reports $W/baseline --projects-root $P`
+7. `node $K/waste-audit.mjs --sessions $W/baseline/sessions.txt > $W/baseline/waste-audit.json`
+8. `node $K/wait-timeline.mjs --sessions $W/baseline/sessions.txt --json $W/baseline/wait-timeline.json`
+9. `node $K/doc-conformance.mjs --repo <root> --issues $W/baseline/issues.json --before <capture-start> --json $W/baseline/doc-conformance.json`
+
+Steps 7 to 9 need none of the earlier steps. `sessions.txt` lists one transcript per line as
+`path<TAB>bytes<TAB>last-write`, with an optional fourth note field and `#` lines as comments.
+`issues.json` is `gh issue list --json body,labels,number,title` output. `--before` takes the
+capture's start time, so changesets committed during the pass stay out of the history count.
 
 `extract-exports.mjs <document> <machine> <out-dir>` writes one `<machine>--<repo>.json` file per
 fenced json block of a usage document's `## Exports` section, so a pass does not hand-copy them.

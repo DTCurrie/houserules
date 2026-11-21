@@ -1,7 +1,8 @@
-import { realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import { detect } from '../detect.js';
+import { installedModuleIds } from '../installed-modules.js';
 import { KIT_ROOT } from '../paths.js';
 import {
   parseModuleOptionFlags,
@@ -23,9 +24,12 @@ import {
 } from '../plan.js';
 import { HouseError } from '../house-error.js';
 import { buildRegistry } from '../plugin-resolver.js';
+import { validateHouseConfig } from '@houserules/api/internal';
 import { apply } from '../apply.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import * as ui from '../ui.js';
+import { EXIT } from '../cli-contract.js';
+import { MIN_NODE_MAJOR } from './doctor/environment.js';
 import type { Flags } from '../cli-contract.js';
 import type { Ctx } from '../detect.js';
 import type { Answers } from '@houserules/api';
@@ -44,9 +48,9 @@ function samePath(a: string, b: string): boolean {
 
 function preflight(root: string, ctx: Ctx): void {
   const major = process.versions.node.split('.').map(Number)[0];
-  if (major === undefined || major < 20)
+  if (major === undefined || major < MIN_NODE_MAJOR)
     throw new HouseError(
-      `Node ${process.versions.node} is too old — houserules needs >= 20.`,
+      `Node ${process.versions.node} is too old — houserules needs >= ${MIN_NODE_MAJOR}.`,
     );
   if (!ctx.git.isRepo) {
     throw new HouseError(
@@ -70,6 +74,20 @@ function preflight(root: string, ctx: Ctx): void {
   if (settingsError) throw new HouseError(settingsError);
 }
 
+/** Prints the schema problems of an existing config, with a recovery hint, and returns their count. */
+function reportConfigProblems(root: string): number {
+  const configPath = join(root, '.claude', 'houserules.config.json');
+  if (!existsSync(configPath)) return 0;
+  const problems = validateHouseConfig(readFileSync(configPath, 'utf8'));
+  for (const problem of problems)
+    console.error(`houserules.config.json: ${problem}`);
+  if (problems.length)
+    console.error(
+      'Fix the fields named above, or delete the file and re-run init to seed a fresh one.',
+    );
+  return problems.length;
+}
+
 /** Runs the full install: detect, choose, plan, preview, apply. */
 export async function init(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);
@@ -78,6 +96,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   try {
     ctx = detect(root);
     preflight(root, ctx);
+    if (reportConfigProblems(root) > 0) return EXIT.badConfig;
     registry = buildRegistry(root, ctx.claude.houseConfig, MODULES);
   } catch (e) {
     if (e instanceof HouseError) {
@@ -112,11 +131,12 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   let moduleIds: string[];
   let closure: RequirementClosure;
   try {
-    moduleIds = installed?.modules?.length
+    const installedIds = installedModuleIds(ctx.claude.houseConfig, installed);
+    moduleIds = installedIds?.length
       ? resolveModuleIds(
           ctx,
           registry,
-          flags.modules ? flags.modules : installed.modules.join(','),
+          flags.modules ? flags.modules : installedIds.join(','),
         )
       : resolveModuleIds(ctx, registry, flags.modules);
     closure = closeOver(moduleIds).closure;

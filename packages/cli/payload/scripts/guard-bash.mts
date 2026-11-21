@@ -11,6 +11,20 @@
  * forms (`-- <path>`, `.`, `<ref> <path>`) cannot be told from a branch switch without a
  * shell parser, and `git switch` covers the switch.
  *
+ * Throwaway exemption: a commit or a discard is allowed in a throwaway fixture repo, and in
+ * nothing else. The command must name its target as one absolute `-C <path>` on every git
+ * call, or as one leading `cd <absolute path> &&`. That target's work tree, git dir, and
+ * common dir must sit under the system temp dir or `/tmp`, outside `CLAUDE_PROJECT_DIR`,
+ * with a common dir that differs from the project's. No fetch or push URL of any remote may
+ * name the project's path, its common dir, or one of its remote URLs. Local remotes are
+ * followed to their own remotes for a fixed number of hops. A form the resolver does not
+ * recognize refuses: a relative or variable path, a second `cd`, `$(...)`, a backtick, any
+ * `GIT_` text, `--git-dir`, `--work-tree`, or a `-c` key other than `user.name`,
+ * `user.email`, and `commit.gpgsign`. A git failure refuses, and so does an unset
+ * `CLAUDE_PROJECT_DIR`. A bare `git commit` names no target, so it always refuses. The
+ * exemption never reaches `push`, `stash`, `gh`, or a custom rule, and it runs git only
+ * after a commit or discard rule has matched.
+ *
  * Exit 2 with stderr blocks the tool call and feeds the reason back to Claude. Exit 0
  * allows. Wire it as a PreToolUse hook with matcher "Bash".
  *
@@ -39,8 +53,11 @@
  * It says nothing about what the hook decided at the time.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import { tmpdir } from 'node:os';
+import { resolve, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { GUARD_DEFAULTS, loadConfigSafe } from '@houserules/payload/config';
 import { readStdinJson } from '@houserules/payload/proc';
@@ -55,6 +72,12 @@ interface BashPayload {
 export interface TranscriptRecord {
   type?: string;
   isSidechain?: boolean;
+}
+
+/** Where a commit or discard may count as throwaway: never in the project, only under a temp root. */
+export interface ThrowawayContext {
+  projectDir: string | undefined;
+  tempRoots: string[];
 }
 
 // Matches only in COMMAND position, so the guard never fires on the same words inside
@@ -78,29 +101,32 @@ export function gitDenyRules(guard: {
   gitDiscard: boolean;
   prCreate: boolean;
   custom?: { pattern: string; message?: string }[];
-}): { re: RegExp; msg: string }[] {
-  const gitRule = (sub: string, msg: string) => ({
+}): { re: RegExp; msg: string; exemptable: boolean }[] {
+  const gitRule = (sub: string, msg: string, exemptable: boolean) => ({
     re: new RegExp(`${CMD_START}git\\s+${GIT_FLAGS}${sub}\\b`),
     msg,
+    exemptable,
   });
 
-  const deny: { re: RegExp; msg: string }[] = [];
+  const deny: { re: RegExp; msg: string; exemptable: boolean }[] = [];
   if (guard.gitCommit) {
     deny.push(
       gitRule(
         'commit',
         "git commit is the user's to run. Describe what's staged and stop.",
+        true,
       ),
     );
   }
   if (guard.gitPush) {
-    deny.push(gitRule('push', "git push is the user's to run."));
+    deny.push(gitRule('push', "git push is the user's to run.", false));
   }
   if (guard.gitStash) {
     deny.push(
       gitRule(
         STASH_MUTATING,
         'git stash dumps the full untracked-file list into context. Use `git diff --name-only`, `git show HEAD:<path>`, or inspect the one file you changed.',
+        false,
       ),
     );
   }
@@ -108,12 +134,14 @@ export function gitDenyRules(guard: {
     deny.push({
       re: new RegExp(`${CMD_START}git\\s+${GIT_FLAGS}${GIT_DISCARD}`),
       msg: 'git checkout/restore/reset --hard/clean/switch -f discard uncommitted work, and a file reverted to HEAD loses every uncommitted edit in it, not only yours. Undo your own edit by applying its inverse with Edit. Switch branches with `git switch`. List untracked files with `git status --short`.',
+      exemptable: true,
     });
   }
   if (guard.prCreate) {
     deny.push({
       re: new RegExp(`${CMD_START}gh\\s+${GIT_FLAGS}(?:pr|issue)\\s+create\\b`),
       msg: "Opening PRs/issues is the user's call. Describe what's ready and stop.",
+      exemptable: false,
     });
   }
   for (const rule of guard.custom ?? []) {
@@ -123,6 +151,7 @@ export function gitDenyRules(guard: {
         msg:
           rule.message ??
           `Blocked by houserules.config.json guard rule: ${rule.pattern}`,
+        exemptable: false,
       });
     } catch {
       // Invalid user regex: skip the rule rather than break every Bash call.
@@ -134,15 +163,270 @@ export function gitDenyRules(guard: {
 /**
  * The stderr message refusing `cmd` under the git/gh guard config, or null when nothing
  * matches.
+ *
+ * @param throwaway When given, a matched commit or discard rule is skipped for a command
+ * whose one named target is a throwaway fixture repo. Omitted, every match refuses.
  */
-export function guardRefusalFor(cmd: string): string | null {
+export function guardRefusalFor(
+  cmd: string,
+  throwaway?: ThrowawayContext,
+): string | null {
   const guard = { ...GUARD_DEFAULTS, ...(loadConfigSafe().guard ?? {}) };
+  let isExempt: boolean | undefined;
   for (const rule of gitDenyRules(guard)) {
-    if (rule.re.test(cmd)) {
-      return `Blocked by houserules guard: ${rule.msg}\n`;
+    if (!rule.re.test(cmd)) continue;
+    if (rule.exemptable && throwaway) {
+      isExempt ??= isThrowawayCommand(cmd, throwaway);
+      if (isExempt) continue;
     }
+    return `Blocked by houserules guard: ${rule.msg}\n`;
   }
   return null;
+}
+
+// How many local-path remotes the resolver follows from the target before it refuses.
+const HOP_LIMIT = 4;
+const GIT_TIMEOUT_MS = 5000;
+const ALLOWED_CONFIG_KEYS = new Set([
+  'user.name',
+  'user.email',
+  'commit.gpgsign',
+]);
+const UNRECOGNIZED_TEXT_RE = /\$\(|`|GIT_|--git-dir|--work-tree/;
+const LEADING_CD_RE = /^\s*cd\s+(\S+)\s*&&([\s\S]*)$/;
+const DIRECTORY_CHANGE_RE =
+  /(?:^|[\s;&|(){}"'])(?:cd|pushd|popd)(?=$|[\s;&|(){}"'])/;
+// No quotes, `$`, `~`, globs, or backslashes, so the shell cannot expand it into another path.
+const PLAIN_ABSOLUTE_PATH_RE = /^\/[\w./@+,%=:-]*$/;
+const SUBCOMMAND_RE = /^[a-z][a-z-]*$/;
+const SEGMENT_SEPARATOR_RE = /[\n;&|]+/;
+const SEGMENT_PREFIX_RE = /^[\s({!"']+/;
+
+interface ProjectIdentity {
+  dir: string;
+  commonDir: string;
+  remoteUrls: Set<string>;
+}
+
+/** Whether `cmd` names exactly one target and that target is a throwaway fixture repo. */
+function isThrowawayCommand(cmd: string, context: ThrowawayContext): boolean {
+  const target = targetOf(cmd);
+  if (!target || !context.projectDir) return false;
+  try {
+    return isThrowawayRepo(target, context.projectDir, context.tempRoots);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The one directory every git call in `cmd` runs in, from a leading `cd <path> &&` or from
+ * the same `-C <path>` on every git call. Null for any form the resolver does not recognize.
+ */
+function targetOf(cmd: string): string | null {
+  if (UNRECOGNIZED_TEXT_RE.test(cmd)) return null;
+  const leadingCd = LEADING_CD_RE.exec(cmd);
+  const cdTarget = leadingCd?.[1];
+  const rest = leadingCd ? (leadingCd[2] ?? '') : cmd;
+  if (cdTarget !== undefined && !PLAIN_ABSOLUTE_PATH_RE.test(cdTarget)) {
+    return null;
+  }
+  if (DIRECTORY_CHANGE_RE.test(rest)) return null;
+
+  const cTargets = new Set<string>();
+  for (const segment of rest.split(SEGMENT_SEPARATOR_RE)) {
+    const words = segment.replace(SEGMENT_PREFIX_RE, '').split(/\s+/);
+    if (words[0] !== 'git') continue;
+    const invocation = gitInvocationOf(words);
+    if (!invocation) return null;
+    const hasDashCTarget = invocation.cTarget !== undefined;
+    if (hasDashCTarget === (cdTarget !== undefined)) return null;
+    if (invocation.cTarget) cTargets.add(invocation.cTarget);
+  }
+  if (cdTarget !== undefined) return cdTarget;
+  return cTargets.size === 1 ? ([...cTargets][0] ?? null) : null;
+}
+
+/**
+ * A git call's `-C` target, read from its global options. Null when an option is anything
+ * but one plain absolute `-C` or an allowlisted `-c`, or when no plain subcommand follows.
+ */
+function gitInvocationOf(
+  words: string[],
+): { cTarget: string | undefined } | null {
+  let cTarget: string | undefined;
+  let index = 1;
+  for (; words[index]?.startsWith('-'); index += 2) {
+    const value = words[index + 1];
+    if (value === undefined) return null;
+    if (words[index] === '-C') {
+      if (cTarget !== undefined || !PLAIN_ABSOLUTE_PATH_RE.test(value)) {
+        return null;
+      }
+      cTarget = value;
+    } else if (words[index] === '-c') {
+      const key = value.split('=')[0]?.toLowerCase() ?? '';
+      if (!value.includes('=') || /["'\\]/.test(value)) return null;
+      if (!ALLOWED_CONFIG_KEYS.has(key)) return null;
+    } else {
+      return null;
+    }
+  }
+  const subcommand = words[index];
+  if (subcommand === undefined || !SUBCOMMAND_RE.test(subcommand)) return null;
+  return { cTarget };
+}
+
+/**
+ * Whether the repo at `target` is a throwaway fixture: under a temp root, outside the
+ * project, and with no remote that leads back to the project. Throws on any git failure.
+ */
+function isThrowawayRepo(
+  target: string,
+  projectDir: string,
+  tempRoots: string[],
+): boolean {
+  const roots = tempRoots.flatMap((root) => {
+    try {
+      return [realpathSync(root)];
+    } catch {
+      return [];
+    }
+  });
+  const project = projectIdentity(realpathSync(projectDir));
+  const paths = runGit(realpathSync(target), [
+    'rev-parse',
+    '--path-format=absolute',
+    '--show-toplevel',
+    '--git-dir',
+    '--git-common-dir',
+  ]).split('\n');
+  if (paths.length !== 3) return false;
+  const [topLevel, gitDir, commonDir] = paths.map((path) => realpathSync(path));
+  if (!topLevel || !gitDir || !commonDir) return false;
+
+  for (const path of [topLevel, gitDir, commonDir]) {
+    if (!roots.some((root) => path.startsWith(root + sep))) return false;
+    if (isWithin(path, project.dir)) return false;
+  }
+  if (isWithin(project.dir, topLevel)) return false;
+  if (commonDir === project.commonDir) return false;
+  return areRemotesForeign(topLevel, project, 0, new Set([commonDir]));
+}
+
+function projectIdentity(dir: string): ProjectIdentity {
+  const commonDir = realpathSync(
+    runGit(dir, ['rev-parse', '--path-format=absolute', '--git-common-dir']),
+  );
+  const remoteUrls = new Set(remoteUrlsOf(dir).map(normalizeRemoteUrl));
+  return { dir, commonDir, remoteUrls };
+}
+
+/**
+ * Whether no remote of the repo at `repoDir` leads to the project, following local-path
+ * remotes up to {@link HOP_LIMIT} hops. `depth` is the hop count of `repoDir` itself.
+ */
+function areRemotesForeign(
+  repoDir: string,
+  project: ProjectIdentity,
+  depth: number,
+  visited: Set<string>,
+): boolean {
+  for (const url of remoteUrlsOf(repoDir)) {
+    const localPath = localPathOf(url, repoDir);
+    if (localPath === null) {
+      if (project.remoteUrls.has(normalizeRemoteUrl(url))) return false;
+      continue;
+    }
+    const resolved = realpathSync(localPath);
+    if (isWithin(resolved, project.dir)) return false;
+    if (isWithin(resolved, project.commonDir)) return false;
+    if (depth + 1 > HOP_LIMIT) return false;
+    if (!isHopForeign(resolved, project, depth + 1, visited)) return false;
+  }
+  return true;
+}
+
+/** Whether a repo reached through a local remote is neither the project nor leads to it. */
+function isHopForeign(
+  dir: string,
+  project: ProjectIdentity,
+  depth: number,
+  visited: Set<string>,
+): boolean {
+  const commonDir = realpathSync(
+    runGit(dir, ['rev-parse', '--path-format=absolute', '--git-common-dir']),
+  );
+  if (commonDir === project.commonDir) return false;
+  if (visited.has(commonDir)) return true;
+  visited.add(commonDir);
+  const isBare = runGit(dir, ['rev-parse', '--is-bare-repository']) === 'true';
+  const base = isBare
+    ? commonDir
+    : realpathSync(runGit(dir, ['rev-parse', '--show-toplevel']));
+  if (isWithin(base, project.dir)) return false;
+  return areRemotesForeign(base, project, depth, visited);
+}
+
+function remoteUrlsOf(repoDir: string): string[] {
+  const names = runGit(repoDir, ['remote']).split('\n').filter(Boolean);
+  return names.flatMap((name) => [
+    ...runGit(repoDir, ['remote', 'get-url', '--all', name]).split('\n'),
+    ...runGit(repoDir, ['remote', 'get-url', '--push', '--all', name]).split(
+      '\n',
+    ),
+  ]);
+}
+
+/**
+ * The filesystem path a remote URL names, resolved against the repo that holds it, or null
+ * for a network URL in `scheme://` or scp-like `host:path` form.
+ */
+function localPathOf(url: string, repoDir: string): string | null {
+  if (/^file:\/\//i.test(url)) return fileURLToPath(url);
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) return null;
+  if (/^[^/]*:/.test(url)) return null;
+  return resolve(repoDir, url);
+}
+
+/**
+ * A network remote URL reduced to `host/path`, so the `https`, `ssh://`, and scp-like forms
+ * of one repo compare equal, ignoring case, user, port, a trailing slash, and `.git`.
+ */
+function normalizeRemoteUrl(url: string): string {
+  let normalized = url.trim().toLowerCase();
+  const scheme = /^[a-z][a-z0-9+.-]*:\/\//.exec(normalized);
+  if (scheme) {
+    normalized = normalized.slice(scheme[0].length);
+  } else {
+    normalized = normalized.replace(/^([^/:]+):/, '$1/');
+  }
+  return normalized
+    .replace(/^[^@/]*@/, '')
+    .replace(/^([^/:]+):\d*(?=\/)/, '$1')
+    .replace(/\/+$/, '')
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '');
+}
+
+function isWithin(path: string, root: string): boolean {
+  return (
+    path === root || path.startsWith(root.endsWith(sep) ? root : root + sep)
+  );
+}
+
+/** Runs git in `dir` with every `GIT_` variable stripped, so the hook's env cannot redirect it. */
+function runGit(dir: string, args: string[]): string {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('GIT_')) delete env[key];
+  }
+  return execFileSync('git', ['-C', dir, ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env,
+    timeout: GIT_TIMEOUT_MS,
+  }).trim();
 }
 
 const BACKLOG_MUTATING = ['add', 'remove', 'update', 'move', 'render'];
@@ -281,7 +565,10 @@ function main(): void {
   const cmd = input?.tool_input?.command ?? '';
   if (!cmd) process.exit(0);
 
-  const guardRefusal = guardRefusalFor(cmd);
+  const guardRefusal = guardRefusalFor(cmd, {
+    projectDir: process.env.CLAUDE_PROJECT_DIR,
+    tempRoots: [tmpdir(), '/tmp'],
+  });
   if (guardRefusal) {
     process.stderr.write(guardRefusal);
     process.exit(2);

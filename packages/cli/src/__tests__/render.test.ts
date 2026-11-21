@@ -83,6 +83,16 @@ describe('renderHouseConfig', () => {
     expect(config.packageManager).toBe('npm');
   });
 
+  it('records the selected module ids', () => {
+    const config = JSON.parse(
+      renderHouseConfig(
+        makeCtx(),
+        makeAnswers({ moduleIds: ['core', 'read-guard'] }),
+      ),
+    );
+    expect(config.modules).toEqual(['core', 'read-guard']);
+  });
+
   it('reports the detected package manager', () => {
     const ctx = makeCtx({
       packageManager: { name: 'pnpm', source: 'lockfile' },
@@ -581,6 +591,22 @@ describe('renderClaudeMd', () => {
   it('gives the backgrounding reason without claiming the harness aborts the subagent', () => {
     const body = renderClaudeAdditions(makeCtx(), makeAnswers());
     expect(body).not.toMatch(/aborted|CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS/);
+  });
+
+  it('caps checks before a requested file', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+    expect(body.split('first version').length - 1).toBe(1);
+  });
+
+  it('tells the agent to call command grep for ignored paths', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+    expect(body.split('command grep').length - 1).toBe(1);
+  });
+
+  it('names the ignored-directory example outside inline code, so doctor reads no path reference', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+    expect(body).toContain('such as .claude/plans.');
+    expect(body).not.toContain('`.claude/plans`');
   });
 
   it('embeds the same additions body between the markers', () => {

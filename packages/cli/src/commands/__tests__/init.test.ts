@@ -131,6 +131,11 @@ describe('init --yes on a pnpm monorepo', () => {
     ]);
   });
 
+  it('records the manifest module set in the config', () => {
+    const config = readJson<{ modules: string[] }>(houseConfigPath(root));
+    expect(config.modules).toEqual(manifestOf(root).modules);
+  });
+
   it('hashes manifest-tracked files with a sha256 digest', () => {
     const manifest = manifestOf(root);
     expect(manifest.files['.claude/scripts/guard-bash.mjs']).toMatch(
@@ -221,6 +226,40 @@ describe('init --yes on a pnpm monorepo, run repeatedly', () => {
     const r = runCli(['init', '--yes', '--dry-run', root]);
     expect(r.status).toBe(0);
     expect(treeHash(root)).toBe(before);
+  });
+});
+
+describe('init --yes over a config with no modules key', () => {
+  it('splices modules in and keeps the user’s other keys', () => {
+    const root = useRepo('npm-single');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(
+      houseConfigPath(root),
+      JSON.stringify(
+        {
+          version: 2,
+          packageManager: 'npm',
+          targets: [
+            {
+              name: 'single-app',
+              prefix: 'SINGLEAPP',
+              packageName: 'single-app',
+              pathPrefix: '',
+              sourcePath: 'src',
+              label: 'Single App',
+            },
+          ],
+          _help: 'keep me',
+        },
+        null,
+        2,
+      ),
+    );
+    const r = runCli(['init', '--yes', root]);
+    expect(r.status, r.stderr).toBe(0);
+    const config = readJson<Record<string, unknown>>(houseConfigPath(root));
+    expect(config.modules).toEqual(manifestOf(root).modules);
+    expect(config._help).toBe('keep me');
   });
 });
 
@@ -408,7 +447,21 @@ describe('init on a repo with AGENTS.md and no CLAUDE.md', () => {
     mkdirSync(join(root, '.claude'), { recursive: true });
     writeFileSync(
       houseConfigPath(root),
-      `${JSON.stringify({ instructionsFile: 'AGENTS.md' })}\n`,
+      `${JSON.stringify({
+        version: 2,
+        packageManager: 'npm',
+        targets: [
+          {
+            name: 'single-app',
+            prefix: 'SINGLEAPP',
+            packageName: 'single-app',
+            pathPrefix: '',
+            sourcePath: 'src',
+            label: 'Single App',
+          },
+        ],
+        instructionsFile: 'AGENTS.md',
+      })}\n`,
     );
 
     expect(runCli(['init', '--yes', root]).status).toBe(0);

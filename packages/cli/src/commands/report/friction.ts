@@ -1,3 +1,4 @@
+import { installedModuleIds } from '../../installed-modules.js';
 import { detect } from '../../detect.js';
 import type { Corpus } from './transcript-events.js';
 import { renderTable } from './render-table.js';
@@ -190,7 +191,8 @@ function tallyResultSize(
  */
 export function readTrimInstalled(top: string): boolean | undefined {
   try {
-    const modules = detect(top).claude.manifest?.modules;
+    const { claude } = detect(top);
+    const modules = installedModuleIds(claude.houseConfig, claude.manifest);
     return modules ? modules.includes('tool-output-trim') : undefined;
   } catch {
     return undefined;

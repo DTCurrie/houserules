@@ -14,7 +14,7 @@ Log a deferred work item without bloating the current diff. Arguments: $ARGUMENT
    summary is long, pipe it on stdin.
 2. Capture the printed `<PREFIX>-<hex>` ID.
 3. Spawn the `backlog-reviewer` subagent on the new entry to validate format, dedupe, and
-   gut-check whether it's worth tracking. Reconcile its verdict before continuing.
+   gut-check whether it's worth tracking. Reconcile its verdict before continuing. When one turn adds several entries, spawn one reviewer after the last add and pass it every new id.
 
 Do not start working the item. This only records it. Keep doing what you were doing.
 

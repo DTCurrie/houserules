@@ -1,3 +1,4 @@
+import { installedModuleIds } from '../../installed-modules.js';
 import type { Ctx } from '../../detect.js';
 import { requirementsOf } from '../../module-requires.js';
 import { resolveModuleOptions } from '../../module-options.js';
@@ -14,7 +15,10 @@ export function checkModuleRequirements(
   registry: Registry | null,
 ): CheckResult {
   const findings: Finding[] = [];
-  const installedIds = ctx.claude.manifest?.modules;
+  const installedIds = installedModuleIds(
+    ctx.claude.houseConfig,
+    ctx.claude.manifest,
+  );
   if (!registry || !installedIds) return { findings, readouts: [] };
 
   const options = resolveModuleOptions(

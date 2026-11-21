@@ -186,3 +186,23 @@ describe('checkModuleRequirements', () => {
     });
   });
 });
+
+describe('checkModuleRequirements, given a config and a manifest that disagree on modules', () => {
+  it('checks the modules the config names, not the manifest ones', () => {
+    const ctx = ctxWith(['core']);
+    const disagreeing: Ctx = {
+      ...ctx,
+      claude: {
+        ...ctx.claude,
+        houseConfig: {
+          version: 2,
+          modules: ['core', 'orchestrate', 'plans'],
+        } as never,
+      },
+    };
+
+    expect(
+      checkModuleRequirements(disagreeing, BUILT_INS).findings,
+    ).toContainEqual(expect.objectContaining({ level: 'WARN' }));
+  });
+});

@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 
 import { detect } from '../detect.js';
+import { installedModuleIds } from '../installed-modules.js';
 import {
   parseModuleOptionFlags,
   resolveModuleOptions,
@@ -435,7 +436,9 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
 
   ui.intro(`houserules ${flags.kitVersion} — modules`);
 
-  const installed = new Set(manifest.modules ?? ['core']);
+  const installed = new Set(
+    installedModuleIds(ctx.claude.houseConfig, manifest) ?? ['core'],
+  );
 
   let optionOverrides: Record<string, string[]>;
   try {

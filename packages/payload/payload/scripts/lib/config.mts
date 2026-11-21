@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { execSync } from 'node:child_process';
+
+import { findRepoRoot } from './proc.mjs';
 
 export interface RunnerBlock {
   runner?: string | undefined;
@@ -110,31 +111,26 @@ export function runsAtRepoRoot(block: RunnerBlock | undefined): boolean {
   return !(block?.filterFlag ?? DEFAULT_FILTER_FLAG);
 }
 
-const rootByCwd = new Map<string, string>();
-
 /**
- * The work tree root, throwing outside one. Memoized per process, keyed by the cwd it was
- * resolved from.
+ * The work tree root, throwing outside one. Resolved through `findRepoRoot()` in
+ * `proc.mts`, which walks up from the cwd to the first valid `.git` entry and spawns
+ * `git rev-parse --show-toplevel` only on the edges it lists, such as a `GIT_DIR` in the
+ * environment or a cwd inside `.git`.
  *
- * The memo is the point. `loadConfigSafe()` resolves the root internally and the hook
- * calling it usually resolved the root too, so a hook invocation spawned
- * `git rev-parse --show-toplevel` twice. A hook is a one-shot process, so the answer cannot
- * go stale within one.
+ * That resolver memoizes a successful answer per cwd, shared with `proc.mts`'s own
+ * `repoRoot()`, so a hook that resolves the root and then calls `loadConfigSafe()` resolves
+ * it once. A null answer is never memoized, so a throw stays a throw and `repoRootSafe()`
+ * keeps reporting null outside a work tree.
  *
- * The key is the cwd because the answer depends on it, and a long-lived caller such as a
- * test can chdir between calls. Only a successful resolution is memoized, so a throw stays
- * a throw and `repoRootSafe()` keeps reporting null outside a work tree.
+ * @throws Error naming the cwd when it is outside every work tree or git cannot answer.
  */
 export function repoRoot(): string {
-  const cwd = process.cwd();
-  const cached = rootByCwd.get(cwd);
-  if (cached !== undefined) return cached;
-  const root = execSync('git rev-parse --show-toplevel', {
-    stdio: ['ignore', 'pipe', 'ignore'],
-  })
-    .toString()
-    .trim();
-  rootByCwd.set(cwd, root);
+  const root = findRepoRoot();
+  if (root === null) {
+    throw new Error(
+      `houserules: ${process.cwd()} is not inside a git work tree`,
+    );
+  }
   return root;
 }
 
@@ -235,9 +231,8 @@ export function loadConfig(
  * in the worst case. A hook that crashes on a missing or broken config is noise on every
  * single tool call.
  *
- * @param root Pass the root when the caller already resolved one, which skips the git
- * spawn entirely. `proc.mts` holds its own root memo, so a script that resolved the root
- * through that one would otherwise still pay a second spawn here.
+ * @param root Pass the root when the caller already resolved one, which skips resolving
+ * it again here.
  */
 export function loadConfigSafe(root?: string): HouseConfig {
   try {

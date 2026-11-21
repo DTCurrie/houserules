@@ -56,6 +56,8 @@ Fuller templates live in `.claude/templates/`.
   subagent until Claude Code moves it to the background anyway, so starting it there saves the
   blocked minutes and lets the subagent end its turn. A command expected to finish inside the
   default Bash timeout, such as a scoped test or typecheck, runs in the foreground.
+- Before writing a file or document the user asked for, read only what the ask names, write a
+  first version, then check it once.
 - On AskUserQuestion timeout, stop and re-ask later. Never carry tentative selections forward.
 - Read the repo's own docs + targeted greps before fanning out Explore/Plan agents.
 
@@ -64,6 +66,9 @@ Fuller templates live in `.claude/templates/`.
 - `grep -n` to locate, then `Read` with `offset`/`limit`. Grep output is location data, not
   content: never judge text against a grep listing of it.
 - Pipe long command output through `grep`, and batch related greps into one call.
+- The Bash tool's `grep` skips gitignored files when a recursive search starts at or above an
+  ignored directory such as .claude/plans. Root the search inside that directory, name the
+  files, or call `command grep`.
 
 <!-- houserules:claude-md end -->
 

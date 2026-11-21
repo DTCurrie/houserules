@@ -57,6 +57,12 @@ const lockedModule = (id: string): RegisteredModule => ({
   source: null,
 });
 
+function configModules(root: string): string[] {
+  return JSON.parse(
+    readFileSync(join(root, '.claude/houserules.config.json'), 'utf8'),
+  ).modules;
+}
+
 function registryOf(modules: RegisteredModule[]): Registry {
   return {
     modules,
@@ -200,6 +206,7 @@ describe('modules command on an initialized pnpm monorepo', () => {
     ).toBe(true);
     const manifest = manifestOf(root);
     expect(manifest.modules).toContain('read-guard');
+    expect(configModules(root)).toEqual(manifest.modules);
   });
 
   it('leaves doctor green after enabling a module', () => {
@@ -333,6 +340,8 @@ describe('modules --disable', () => {
   it('drops the module from the manifest', () => {
     runCli(['modules', root, '--yes', '--disable', 'read-guard']);
     expect(manifestOf(root).modules).not.toContain('read-guard');
+    expect(configModules(root)).toEqual(manifestOf(root).modules);
+    expect(configModules(root)).not.toContain('read-guard');
   });
 
   describe('other things a disable must not touch', () => {

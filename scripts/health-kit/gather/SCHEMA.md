@@ -371,3 +371,25 @@ rows[].series.markers[][].intent string|null artifact marker only
 rows[].series.markers[][].edits boolean|null artifact marker only, true when the call carried `edits`
 rows[].series.markers[][].typed boolean|null artifact marker only, true when the call named a type
 ```
+
+## Audit script outputs
+
+Three gather scripts write JSON whose shape lives in the script, not in a key list here. None of
+them reads this file at run time, and nothing checks their output against it. Each script's header
+comment states its shape, and a change to that shape bumps the version string in the script.
+
+- `waste-audit@2`, printed on stdout by `waste-audit.mjs`. `unpricedModels` lists each model the
+  report command's price table does not know. Requests from those models count as zero cost, so a
+  non-empty list means the cost totals are understated. A request's span starts at the latest
+  `api-request` record after its latest user record, or at that user record when none follows it.
+  The `small-agent` entry, and no other, carries `agentTypes`, one
+  `{ agentType, count, calls, wallSeconds, costUsd }` row per agent type. Version 2 also changed
+  the `KIND_RULES` text of `ask-to-act-gap`, `reread-unchanged`, `rerun-unchanged`,
+  `acceptance-rerun-after-report`, and `small-agent`.
+- `doc-conformance@1`, written to `--json` by `doc-conformance.mjs`.
+- `wait-timeline@2`, written to `--json` by `wait-timeline.mjs`. Each `waits[]` element keeps
+  `endedBy`, the event that ended the wait, beside `awaited`, the event the waiter was blocked on.
+  The two differ only when the waiter's own timer ended a wait while it was still owed something.
+  `charge` is `runtime` when `endedBy` is an `interim` label and `wait` otherwise. A keepalive is a
+  command `keepalive.mjs` accepts, a bare `sleep` or the bounded wait loop. Run in the background,
+  it ends a wait as `keepalive <task>`, and run in the foreground, as `sleep`.
