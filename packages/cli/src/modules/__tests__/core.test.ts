@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { makeAnswers, makeCtx, makeRegistry } from '#test/ctx-builder';
+import { hookCommand } from '@houserules/api';
 import type { HouseConfig, RegionAction } from '@houserules/api';
 import { upsertRegion } from '@houserules/api/internal';
 import { plan } from '../core.js';
@@ -50,6 +51,28 @@ describe('core plan, hook failure mode', () => {
     const hook = hookFor('ledger-inject.mjs');
     expect(hook).toBeDefined();
     expect('onFailure' in hook!).toBe(false);
+  });
+});
+
+describe('core plan, the payload-sync hook', () => {
+  it('wires payload-sync.mjs on SessionStart with the bootstrap command', () => {
+    const commands = plan(makeCtx(), makeAnswers())
+      .filter(
+        (a): a is Extract<typeof a, { kind: 'merge-settings' }> =>
+          a.kind === 'merge-settings',
+      )
+      .flatMap((a) => a.fragment.hooks?.SessionStart ?? [])
+      .flatMap((group) => group.hooks.map((h) => h.command));
+
+    expect(commands).toContain(hookCommand('payload-sync.mjs', 'bootstrap'));
+  });
+
+  it('copies payload-sync.mjs into the install', () => {
+    const copied = plan(makeCtx(), makeAnswers()).filter(
+      (a) => a.kind === 'copy' && a.dest.endsWith('scripts/payload-sync.mjs'),
+    );
+
+    expect(copied).toHaveLength(1);
   });
 });
 

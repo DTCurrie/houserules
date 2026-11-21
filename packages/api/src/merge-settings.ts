@@ -97,6 +97,12 @@ const KIT_STOCK_FORMATS: ((basename: string) => string)[] = [
   // The guard wrapper from before its notice said the call is blocked.
   (name) =>
     `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || { echo "[houserules] ${name} missing. Run: npx houserules update" >&2; exit 1; }`,
+  // The hint and guard wrappers from before their notices named the dependency install
+  // instead of `npx houserules update`.
+  (name) =>
+    `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || { echo "[houserules] ${name} missing. Run: npx houserules update"; exit 0; }`,
+  (name) =>
+    `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${name}" || { echo "[houserules] ${name} is missing, so this call is blocked. Restore it from your terminal: npx houserules update" >&2; exit 1; }`,
 ];
 
 // A placeholder basename, standing in for hookCommand's own scriptName parameter so the shape
@@ -108,7 +114,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const HOOK_FALLBACKS: HookFallback[] = ['guard', 'hint', 'silent'];
+const HOOK_FALLBACKS: HookFallback[] = ['guard', 'hint', 'silent', 'bootstrap'];
 
 function stockShapePatterns(): RegExp[] {
   return HOOK_FALLBACKS.map((fallback) => {

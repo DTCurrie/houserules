@@ -1,3 +1,4 @@
+import { renderPrepareScriptPlan } from '../render.js';
 import { existsSync, readFileSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -269,6 +270,7 @@ function resolveUpdatePlan(
     manifest,
     force: flags.force,
     plugins: registry.plugins,
+    shouldPlanPrepare: !flags.sync,
   });
   return { planResult, updateModuleIds, closure };
 }
@@ -330,14 +332,110 @@ function foldReconciledSettings(
   );
 }
 
+/** What one update run did, for `--sync` to fold into its single line. */
+interface UpdateOutcome {
+  code: number;
+  /** Files written or deleted, the manifest included. A dry run counts what it would write. */
+  written: number;
+  /** Locally edited files left as they were, refreshed and retired ones alike. */
+  kept: number;
+  /** The first line of the message that failed the run, when it failed. */
+  failure?: string;
+}
+
+function failed(code: number, message: string): UpdateOutcome {
+  console.error(message);
+  return {
+    code,
+    written: 0,
+    kept: 0,
+    failure: message.split('\n').find((line) => line.trim()) ?? message,
+  };
+}
+
 /**
  * Refreshes kit-owned files to houserules version. Local edits are honored, so a manifest
  * hash mismatch skips the file unless `--force`. Files and hooks the current houserules no
  * longer ships are pruned when they are kit-owned and unmodified. Genuinely-new default
  * modules are advertised, never auto-enabled.
+ *
+ * With `flags.sync` the run is unattended: see {@link syncUpdate}.
  */
 export async function update(dir: string, flags: Flags): Promise<number> {
-  const root = resolve(dir);
+  if (flags.sync) return syncUpdate(dir, flags);
+  return (await runUpdate(resolve(dir), flags)).code;
+}
+
+const SYNC_PREFIX = '[houserules]';
+
+/**
+ * `update --sync`, run from a hook or the `prepare` script where nobody is watching. It
+ * plans, writes, and prunes as a plain update does, but answers no prompt, never touches the
+ * git index, and prints at most one line on stdout. Every path, a thrown error included,
+ * exits 0, because a non-zero exit there would fail a dependency install or a session start.
+ */
+async function syncUpdate(dir: string, flags: Flags): Promise<number> {
+  if (flags.force) {
+    writeSyncLine(
+      `${SYNC_PREFIX} --sync never overwrites local edits, so it refuses --force. Nothing was written. Run \`houserules update --force\` by hand instead.`,
+    );
+    return EXIT.ok;
+  }
+  const line = await withOutputSilenced(async () => {
+    try {
+      return syncLine(
+        await runUpdate(resolve(dir), { ...flags, yes: true }),
+        flags,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return `${SYNC_PREFIX} sync failed: ${message.split('\n')[0]}`;
+    }
+  });
+  if (line) writeSyncLine(line);
+  return EXIT.ok;
+}
+
+/** The one line a sync run prints, or null when it changed nothing and nothing failed. */
+function syncLine(outcome: UpdateOutcome, flags: Flags): string | null {
+  if (outcome.failure !== undefined)
+    return `${SYNC_PREFIX} sync failed: ${outcome.failure}`;
+  if (!outcome.written) return null;
+  const counts = `${outcome.written} ${flags.dryRun ? 'to write' : 'written'}, ${outcome.kept} kept (edited)`;
+  return flags.dryRun
+    ? `${SYNC_PREFIX} dry run, would sync to ${flags.kitVersion}: ${counts}`
+    : `${SYNC_PREFIX} synced to ${flags.kitVersion}: ${counts}`;
+}
+
+function writeSyncLine(line: string): void {
+  process.stdout.write(`${line}\n`);
+}
+
+/**
+ * Runs `body` with every write to stdout and stderr dropped, clack's included, since a hook's
+ * output lands in the user's session. Restores both streams on every path.
+ */
+async function withOutputSilenced<TResult>(
+  body: () => Promise<TResult>,
+): Promise<TResult> {
+  const stdoutWrite = process.stdout.write;
+  const stderrWrite = process.stderr.write;
+  const drop = ((...args: unknown[]): boolean => {
+    const callback = args.find((arg) => typeof arg === 'function');
+    if (callback) (callback as () => void)();
+    return true;
+  }) as typeof process.stdout.write;
+  process.stdout.write = drop;
+  process.stderr.write = drop;
+  try {
+    return await body();
+  } finally {
+    process.stdout.write = stdoutWrite;
+    process.stderr.write = stderrWrite;
+  }
+}
+
+async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
   const ctx = detect(root);
   const configPath = join(root, '.claude', 'houserules.config.json');
   if (existsSync(configPath)) {
@@ -345,24 +443,25 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     const configProblems = validateHouseConfig(
       readFileSync(configPath, 'utf8'),
     );
-    for (const problem of configProblems) {
-      console.error(`houserules.config.json: ${problem}`);
+    if (configProblems.length) {
+      return failed(
+        EXIT.badConfig,
+        configProblems
+          .map((problem) => `houserules.config.json: ${problem}`)
+          .join('\n'),
+      );
     }
-    if (configProblems.length) return EXIT.badConfig;
   }
   const registry = buildRegistry(root, ctx.claude.houseConfig, MODULES);
   const manifest = ctx.claude.manifest;
   if (!manifest && !installedModuleIds(ctx.claude.houseConfig, null)) {
-    console.error(
+    return failed(
+      EXIT.error,
       'No .claude/houserules.manifest.json — this repo has no houserules install to update. Run: npx houserules init',
     );
-    return 1;
   }
   const settingsError = settingsParseErrorMessage(ctx);
-  if (settingsError) {
-    console.error(settingsError);
-    return 1;
-  }
+  if (settingsError) return failed(EXIT.error, settingsError);
 
   const installedLabel = manifest
     ? `v${manifest.kitVersion}`
@@ -390,10 +489,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       flags,
     ));
   } catch (e) {
-    if (e instanceof HouseError) {
-      console.error(e.message);
-      return 1;
-    }
+    if (e instanceof HouseError) return failed(EXIT.error, e.message);
     throw e;
   }
 
@@ -402,6 +498,7 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   // broken plugin's files were not refreshed.
   for (const problem of planResult.brokenPlugins) ui.message(problem.message);
   const hasBrokenPlugins = planResult.brokenPlugins.length > 0;
+  const brokenFailure = planResult.brokenPlugins[0]?.message.split('\n')[0];
 
   // The hook removal folds into the same settings write the additive merge produces, so
   // settings.json is written once and never clobbers a user hook.
@@ -433,7 +530,12 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   if (requiredNote !== null) ui.message(requiredNote);
 
   ui.note(
-    ui.renderPreview(planResult),
+    [
+      ui.renderPreview(planResult),
+      ...renderPrepareScriptPlan(planResult.prepareScript),
+    ]
+      .filter(Boolean)
+      .join('\n'),
     flags.dryRun ? 'Update plan (dry run)' : 'Update plan',
   );
 
@@ -488,12 +590,17 @@ export async function update(dir: string, flags: Flags): Promise<number> {
     showLegacyLedgerHint(root);
     showNextSteps(planResult.advisories, flags);
     ui.outro('Dry run — nothing written.');
-    return hasBrokenPlugins ? 1 : 0;
+    return {
+      code: hasBrokenPlugins ? EXIT.error : EXIT.ok,
+      written: countPendingWrites(planResult, prune),
+      kept: skipped.length + prune.kept.length,
+      ...(brokenFailure !== undefined && { failure: brokenFailure }),
+    };
   }
 
   migrateLegacyBackups(root, backupMoves);
 
-  const { written } = apply(
+  const { written, manifest: recorded } = apply(
     root,
     { ...planResult, prune },
     {
@@ -507,21 +614,30 @@ export async function update(dir: string, flags: Flags): Promise<number> {
   );
   ui.written(written);
 
-  untrackAndReport(root, strayTemplates, 'templates', 'reference template(s)');
-  untrackAndReport(root, strayScripts, 'scripts', 'hook script(s)');
-  untrackAndReport(
-    root,
-    strayLedgerSurfaces(root, ctx),
-    'ledgers',
-    'rendered file(s)',
-  );
-  untrackAndReport(
-    root,
-    strayLedgerLogs(root, ctx),
-    'ledgers',
-    'ledger log(s)',
-    ' The record now lives in the GitHub Project once `projects-sync.mjs push` has run.',
-  );
+  // A sync runs unattended, often inside a dependency install, so it must never stage a
+  // removal behind the user's back. The next plain update performs the migration.
+  if (!flags.sync) {
+    untrackAndReport(
+      root,
+      strayTemplates,
+      'templates',
+      'reference template(s)',
+    );
+    untrackAndReport(root, strayScripts, 'scripts', 'hook script(s)');
+    untrackAndReport(
+      root,
+      strayLedgerSurfaces(root, ctx),
+      'ledgers',
+      'rendered file(s)',
+    );
+    untrackAndReport(
+      root,
+      strayLedgerLogs(root, ctx),
+      'ledgers',
+      'ledger log(s)',
+      ' The record now lives in the GitHub Project once `projects-sync.mjs push` has run.',
+    );
+  }
 
   showLegacyLedgerHint(root);
   showNextSteps(planResult.advisories, flags);
@@ -537,5 +653,32 @@ export async function update(dir: string, flags: Flags): Promise<number> {
       .filter(Boolean)
       .join('; ') || 'Done.',
   );
-  return hasBrokenPlugins ? 1 : 0;
+  // apply() hands back the previous manifest object itself when it left the file as it was.
+  const manifestWritten = recorded !== manifest;
+  return {
+    code: hasBrokenPlugins ? EXIT.error : EXIT.ok,
+    written: written.length + (manifestWritten ? 1 : 0),
+    kept: skipped.length + prune.kept.length,
+    ...(brokenFailure !== undefined && { failure: brokenFailure }),
+  };
+}
+
+/** The writes and deletes a real run of this plan would make, the manifest left out. */
+function countPendingWrites(
+  planResult: PlanResult,
+  prune: PruneResult,
+): number {
+  const fileWrites = planResult.effects.filter(
+    (effect) => !effect.op.startsWith('skip-') && effect.content !== null,
+  ).length;
+  const settingsWrite =
+    planResult.settingsPlan?.changes.length && planResult.settingsPlan.text
+      ? 1
+      : 0;
+  const prepareWrite =
+    planResult.prepareScript?.kind === 'add' ||
+    planResult.prepareScript?.kind === 'append'
+      ? 1
+      : 0;
+  return fileWrites + prune.deletes.length + settingsWrite + prepareWrite;
 }

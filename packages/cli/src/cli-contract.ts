@@ -4,6 +4,12 @@ export interface Flags {
   yes: boolean;
   modules: string;
   force: boolean;
+  /**
+   * `update` only: an unattended run from a hook or the `prepare` script. No prompts, no git
+   * index writes, at most one `[houserules]` output line, and exit 0 on every path. Rejects
+   * `--force`.
+   */
+  sync?: boolean;
   nextSteps: boolean;
   /** `modules` only: comma-separated ids to withdraw from the install. */
   disable: string;

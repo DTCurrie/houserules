@@ -2,7 +2,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { useRepo } from '#test/repo';
+import { treeHash, useInstalledRepo, useRepo } from '#test/repo';
+import { manifestOf, writeManifest } from '#test/installed-tree';
 import { runCli, type RunResult } from '#test/run';
 
 describe('houserules with no subcommand', () => {
@@ -58,6 +59,48 @@ describe('flags are scoped per subcommand, the point of the commander rewrite ov
     const r = runCli(args);
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/unknown option/i);
+  });
+});
+
+describe('update --sync', () => {
+  it('is accepted by update, where an unknown option is rejected', () => {
+    const root = useInstalledRepo('npm-single');
+
+    const r = runCli(['update', '--sync', root]);
+
+    expect({ status: r.status, stderr: r.stderr }).toEqual({
+      status: 0,
+      stderr: '',
+    });
+  });
+
+  describe('with --force', () => {
+    let root: string;
+    let before: string;
+    let result: RunResult;
+
+    beforeEach(() => {
+      root = useInstalledRepo('npm-single');
+      const manifest = manifestOf(root);
+      manifest.kitVersion = '0.0.1';
+      writeManifest(root, manifest);
+      before = treeHash(root);
+      result = runCli(['update', '--sync', '--force', root]);
+    });
+
+    it('exits 0', () => {
+      expect(result.status, result.stderr).toBe(0);
+    });
+
+    it('prints one [houserules] line naming the conflict', () => {
+      expect(result.stdout).toMatch(
+        /^\[houserules\] --sync [^\n]*refuses --force[^\n]*\n$/,
+      );
+    });
+
+    it('writes nothing, though the stale manifest would otherwise be rewritten', () => {
+      expect(treeHash(root)).toBe(before);
+    });
   });
 });
 

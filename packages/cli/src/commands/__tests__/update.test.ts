@@ -11,6 +11,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -1689,5 +1690,251 @@ describe('the manifest entry for a local plugin', () => {
     const second = runCli(['update', root]);
     expect(second.status, second.stderr).toBe(0);
     expect(readFileSync(manifestPath(root), 'utf8')).toBe(rewritten);
+  });
+});
+
+const KIT_VERSION = readJson<{ version: string }>(
+  join(KIT_ROOT, 'package.json'),
+).version;
+const LINT_SCRIPT = '.claude/scripts/lint-format-fix.mjs';
+
+function makeLintScriptStale(root: string): void {
+  writeFileSync(join(root, LINT_SCRIPT), '// OLD KIT VERSION\n');
+  const manifest = manifestOf(root);
+  manifest.files[LINT_SCRIPT] = sha256('// OLD KIT VERSION\n');
+  writeManifest(root, manifest);
+}
+
+function runCliConcurrently(args: string[]): Promise<RunResult> {
+  const env = { ...process.env };
+  delete env.NODE_PATH;
+  return new Promise((settle) => {
+    const child = spawn(
+      process.execPath,
+      [join(KIT_ROOT, 'bin/houserules.mjs'), ...args],
+      { env },
+    );
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+    child.on('close', (status) => settle({ status, stdout, stderr }));
+  });
+}
+
+describe('update --sync', () => {
+  describe('on a current install', () => {
+    let root: string;
+    let before: string;
+    let result: RunResult;
+
+    beforeEach(() => {
+      root = useInstalledRepo('pnpm-monorepo');
+      before = treeHash(root);
+      result = runCli(['update', '--sync', root]);
+    });
+
+    it('exits 0', () => {
+      expect(result.status, result.stderr).toBe(0);
+    });
+
+    it('prints nothing on stdout or stderr', () => {
+      expect({ stdout: result.stdout, stderr: result.stderr }).toEqual({
+        stdout: '',
+        stderr: '',
+      });
+    });
+
+    it('leaves the bytes of every file unchanged', () => {
+      expect(treeHash(root)).toBe(before);
+    });
+  });
+
+  describe('on a stale install', () => {
+    let root: string;
+    let result: RunResult;
+
+    beforeEach(() => {
+      root = useInstalledRepo('pnpm-monorepo');
+      makeLintScriptStale(root);
+      result = runCli(['update', '--sync', root]);
+    });
+
+    it('prints exactly the one synced line, counting the refreshed script and the manifest', () => {
+      expect({ stdout: result.stdout, stderr: result.stderr }).toEqual({
+        stdout: `[houserules] synced to ${KIT_VERSION}: 2 written, 0 kept (edited)\n`,
+        stderr: '',
+      });
+    });
+
+    it('refreshes the stale file, as a plain update does', () => {
+      expect(readFileSync(join(root, LINT_SCRIPT), 'utf8')).toContain(
+        'loadConfigSafe',
+      );
+    });
+  });
+
+  describe('on a stale install with a locally edited committed script', () => {
+    let root: string;
+    let guardPath: string;
+    let edited: string;
+    let result: RunResult;
+
+    beforeEach(() => {
+      root = useInstalledRepo('pnpm-monorepo', COMMITTED_SCRIPTS);
+      makeLintScriptStale(root);
+      guardPath = join(root, '.claude/scripts/guard-bash.mjs');
+      appendFileSync(guardPath, '// my local tweak\n');
+      edited = readFileSync(guardPath, 'utf8');
+      result = runCli(['update', '--sync', root]);
+    });
+
+    it('counts the edited file as kept', () => {
+      expect(
+        result.stdout,
+        'written counts the stale script, the manifest, and the pruned scripts/.gitignore that scripts.commit retires',
+      ).toBe(
+        `[houserules] synced to ${KIT_VERSION}: 3 written, 1 kept (edited)\n`,
+      );
+    });
+
+    it('leaves the edit in place', () => {
+      expect(readFileSync(guardPath, 'utf8')).toBe(edited);
+    });
+  });
+
+  describe('on scripts committed before they were gitignored', () => {
+    let root: string;
+    let indexBefore: string;
+    let result: RunResult;
+
+    beforeEach(() => {
+      root = useInstalledRepo('pnpm-monorepo');
+      runIn(root, 'git', ['add', '-f', '.claude/scripts']);
+      runIn(root, 'git', ['commit', '-qm', 'committed scripts']);
+      makeLintScriptStale(root);
+      indexBefore = runIn(root, 'git', ['ls-files', '--stage']);
+      result = runCli(['update', '--sync', root]);
+    });
+
+    it('exits 0', () => {
+      expect(result.status, result.stderr).toBe(0);
+    });
+
+    it('leaves the git index exactly as it was, where a plain update would untrack the scripts', () => {
+      expect(runIn(root, 'git', ['ls-files', '--stage'])).toBe(indexBefore);
+    });
+  });
+
+  describe('on an install whose settings.json does not parse', () => {
+    let result: RunResult;
+
+    beforeEach(() => {
+      const root = useInstalledRepo('pnpm-monorepo');
+      writeFileSync(join(root, '.claude/settings.json'), '{ not json');
+      result = runCli(['update', '--sync', root]);
+    });
+
+    it('exits 0, where a plain update exits 1', () => {
+      expect(result.status, result.stderr).toBe(0);
+    });
+
+    it('prints one [houserules] line naming settings.json, and nothing on stderr', () => {
+      expect(result.stdout).toMatch(
+        /^\[houserules\] sync failed: \.claude\/settings\.json is not valid JSON[^\n]*\n$/,
+      );
+      expect(result.stderr).toBe('');
+    });
+  });
+
+  describe('with --dry-run on a stale install', () => {
+    let root: string;
+    let before: string;
+    let result: RunResult;
+
+    beforeEach(() => {
+      root = useInstalledRepo('pnpm-monorepo');
+      makeLintScriptStale(root);
+      before = treeHash(root);
+      result = runCli(['--dry-run', 'update', '--sync', root]);
+    });
+
+    it('prints one line naming what it would write, the manifest left out', () => {
+      expect({ stdout: result.stdout, stderr: result.stderr }).toEqual({
+        stdout: `[houserules] dry run, would sync to ${KIT_VERSION}: 1 to write, 0 kept (edited)\n`,
+        stderr: '',
+      });
+    });
+
+    it('writes nothing', () => {
+      expect(treeHash(root)).toBe(before);
+    });
+  });
+
+  describe('run twice at once in one checkout', () => {
+    let root: string;
+    let results: RunResult[];
+
+    beforeEach(async () => {
+      root = useInstalledRepo('pnpm-monorepo');
+      makeLintScriptStale(root);
+      const manifest = manifestOf(root);
+      manifest.kitVersion = '0.0.1';
+      writeManifest(root, manifest);
+      results = await Promise.all([
+        runCliConcurrently(['update', '--sync', root]),
+        runCliConcurrently(['update', '--sync', root]),
+      ]);
+    });
+
+    it('exits 0 from both runs', () => {
+      expect(results.map((r) => r.status)).toEqual([0, 0]);
+    });
+
+    it('leaves every manifest dest on disk and the manifest parsing at the running version', () => {
+      const manifest = JSON.parse(
+        readFileSync(join(root, '.claude/houserules.manifest.json'), 'utf8'),
+      ) as HouseManifestShape;
+
+      expect(manifest.kitVersion).toBe(KIT_VERSION);
+      expect(
+        Object.keys(manifest.files).filter(
+          (dest) => !existsSync(join(root, dest)),
+        ),
+        'manifest dests missing from disk',
+      ).toEqual([]);
+    });
+  });
+
+  describe('on a manifest recorded by a newer CLI than the one running', () => {
+    let root: string;
+    let first: RunResult;
+
+    beforeEach(() => {
+      root = useInstalledRepo('pnpm-monorepo');
+      const manifest = manifestOf(root);
+      manifest.kitVersion = '99.0.0';
+      writeManifest(root, manifest);
+      first = runCli(['update', '--sync', root]);
+    });
+
+    it('reports rewriting only the manifest', () => {
+      expect(first.stdout).toBe(
+        `[houserules] synced to ${KIT_VERSION}: 1 written, 0 kept (edited)\n`,
+      );
+    });
+
+    it('records the running version, not the newer one', () => {
+      expect(manifestOf(root).kitVersion).toBe(KIT_VERSION);
+    });
+
+    it('prints nothing on the next sync, so a version check cannot loop', () => {
+      const second = runCli(['update', '--sync', root]);
+
+      expect({ stdout: second.stdout, stderr: second.stderr }).toEqual({
+        stdout: '',
+        stderr: '',
+      });
+    });
   });
 });

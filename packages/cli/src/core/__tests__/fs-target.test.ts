@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  chmodSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -74,6 +78,58 @@ describe('TargetRepo.write, given a destination that is a symlink', () => {
       lstatSync(join(root, 'rules/example.md')).isSymbolicLink(),
       'link left in place',
     ).toBe(true);
+  });
+});
+
+describe('TargetRepo.write, given a destination that already exists as a regular file', () => {
+  function existingDest(mode: number): { repo: TargetRepo; root: string } {
+    const root = tempDir();
+    writeFileSync(join(root, 'manifest.json'), '{"old":true}\n');
+    chmodSync(join(root, 'manifest.json'), mode);
+    return { repo: new TargetRepo(root, false), root };
+  }
+
+  it('replaces the file by rename, so a reader holding the old file never sees new bytes land in it', () => {
+    const { repo, root } = existingDest(0o644);
+    linkSync(join(root, 'manifest.json'), join(root, 'reader-view.json'));
+
+    repo.write('manifest.json', '{"new":true}\n');
+
+    expect(
+      readFileSync(join(root, 'reader-view.json'), 'utf8'),
+      'an in-place write would have changed the bytes behind this hard link',
+    ).toBe('{"old":true}\n');
+    expect(readFileSync(join(root, 'manifest.json'), 'utf8')).toBe(
+      '{"new":true}\n',
+    );
+  });
+
+  it('leaves no temp file behind in the destination directory', () => {
+    const { repo, root } = existingDest(0o644);
+
+    repo.write('manifest.json', '{"new":true}\n');
+
+    expect(readdirSync(root)).toEqual(['manifest.json']);
+  });
+
+  it('keeps the existing mode when the caller names none', () => {
+    const { repo, root } = existingDest(0o755);
+
+    repo.write('manifest.json', '{"new":true}\n');
+
+    expect(
+      (statSync(join(root, 'manifest.json')).mode & 0o777).toString(8),
+    ).toBe('755');
+  });
+
+  it('applies the mode the caller names', () => {
+    const { repo, root } = existingDest(0o644);
+
+    repo.write('manifest.json', '{"new":true}\n', 0o755);
+
+    expect(
+      (statSync(join(root, 'manifest.json')).mode & 0o777).toString(8),
+    ).toBe('755');
   });
 });
 

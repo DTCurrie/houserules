@@ -14,6 +14,8 @@ const SCRIPT = 'guard-bash.mjs';
 const HISTORICAL_COMMAND = `node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}"`;
 const EM_DASH_COMMAND = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || echo "[houserules] ${SCRIPT} missing — run: npx houserules update"`;
 const PREVIOUS_GUARD_COMMAND = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || { echo "[houserules] ${SCRIPT} missing. Run: npx houserules update" >&2; exit 1; }`;
+const PRE_REWORD_HINT_COMMAND = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || { echo "[houserules] ${SCRIPT} missing. Run: npx houserules update"; exit 0; }`;
+const PRE_REWORD_GUARD_COMMAND = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || { echo "[houserules] ${SCRIPT} is missing, so this call is blocked. Restore it from your terminal: npx houserules update" >&2; exit 1; }`;
 const USER_EDITED_COMMAND = `${hookCommand(SCRIPT)} --strict`;
 
 function fragmentFor(
@@ -63,6 +65,8 @@ describe('isKitStockCommand', () => {
   it.each([
     ['em-dash wrapper', EM_DASH_COMMAND],
     ['previous guard wrapper', PREVIOUS_GUARD_COMMAND],
+    ['pre-reword hint wrapper', PRE_REWORD_HINT_COMMAND],
+    ['pre-reword guard wrapper', PRE_REWORD_GUARD_COMMAND],
   ])('is true for the %s', (_label, command) => {
     expect(
       isKitStockCommand(command, SCRIPT),
@@ -135,6 +139,8 @@ describe('mergeSettings hook upgrade', () => {
   it.each([
     ['em-dash wrapper', EM_DASH_COMMAND],
     ['previous guard wrapper', PREVIOUS_GUARD_COMMAND],
+    ['pre-reword hint wrapper', PRE_REWORD_HINT_COMMAND],
+    ['pre-reword guard wrapper', PRE_REWORD_GUARD_COMMAND],
   ])('upgrades the %s to the current form', (_label, command) => {
     const existing: Settings = {
       hooks: {

@@ -88,6 +88,13 @@ function libActions(): Action[] {
       'UserPromptSubmit: inject a referenced backlog or decision entry from the log',
     ),
   );
+  actions.push(
+    script(
+      id,
+      'payload-sync.mjs',
+      'SessionStart: sync a stale or incomplete install with the installed CLI',
+    ),
+  );
   return actions;
 }
 
@@ -250,6 +257,17 @@ function settingsActions(): Action[] {
       kind: 'merge-settings',
       module: id,
       fragment: hookFragment('UserPromptSubmit', null, 'ledger-inject.mjs'),
+    },
+    {
+      kind: 'merge-settings',
+      module: id,
+      fragment: hookFragment(
+        'SessionStart',
+        null,
+        'payload-sync.mjs',
+        undefined,
+        { fallback: 'bootstrap' },
+      ),
     },
   ];
 }

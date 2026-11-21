@@ -25,12 +25,28 @@ export function hookCommand(
   fallback: HookFallback = 'guard',
 ): string {
   const path = `"$CLAUDE_PROJECT_DIR/.claude/scripts/${scriptName}"`;
-  const hintNotice = `[houserules] ${scriptName} missing. Run: npx houserules update`;
-  const guardNotice = `[houserules] ${scriptName} is missing, so this call is blocked. Restore it from your terminal: npx houserules update`;
+  const unsynced = `this install's generated files are not synced yet. Run your dependency install (npm install, pnpm install, or yarn), or houserules update for a global CLI`;
+  const hintNotice = `[houserules] ${scriptName}: ${unsynced}.`;
+  const guardNotice = `[houserules] ${scriptName}: ${unsynced}. This call is blocked until then.`;
   const head = `[ -f ${path} ] && exec node ${path}`;
   if (fallback === 'silent') return `${head} || exit 0`;
   if (fallback === 'hint')
     return `${head} || { echo "${hintNotice}"; exit 0; }`;
+  if (fallback === 'bootstrap') {
+    const localBinary = '"$CLAUDE_PROJECT_DIR/node_modules/.bin/houserules"';
+    const sync = 'update --sync "$CLAUDE_PROJECT_DIR"';
+    // `update --sync` exits 0 on every path, so its one output line is the only signal of
+    // whether it wrote. The restart line follows a `synced` line and nothing else.
+    return [
+      `${head} || {`,
+      `if [ -x ${localBinary} ]; then out=$(${localBinary} ${sync});`,
+      `elif command -v houserules >/dev/null 2>&1; then out=$(houserules ${sync});`,
+      `else echo "[houserules] ${scriptName} is not synced yet. Run your dependency install (npm install, pnpm install, or yarn) to sync this install.";`,
+      `fi;`,
+      `case "$out" in "[houserules] synced"*) echo "$out"; echo "[houserules] Restart the session so the synced skills, rules, and agents load.";; ?*) echo "$out";; esac;`,
+      `exit 0; }`,
+    ].join(' ');
+  }
   return `${head} || { echo "${guardNotice}" >&2; exit 1; }`;
 }
 
@@ -39,9 +55,12 @@ export function hookCommand(
  * and exits 1. The guard hooks carry `onFailure: 'block'`, so the call is blocked until the
  * script is restored. `hint` prints the notice to stdout and exits 0, so a SessionStart hook
  * hands Claude the notice as context, since the stderr notice of a fresh clone is never read.
- * `silent` prints nothing and exits 0.
+ * `silent` prints nothing and exits 0. `bootstrap` is the `payload-sync` hook's alone: with its
+ * script absent it runs the installed CLI's `update --sync` (the local `node_modules/.bin` binary,
+ * else a `houserules` on PATH), prints the install hint when neither exists, never calls `npx`,
+ * and always exits 0.
  */
-export type HookFallback = 'guard' | 'hint' | 'silent';
+export type HookFallback = 'guard' | 'hint' | 'silent' | 'bootstrap';
 
 /** The fallback each event gets: PreToolUse guards, SessionStart hints, the rest stay silent. */
 export function fallbackForEvent(event: string): HookFallback {
@@ -70,6 +89,11 @@ export interface HookFragmentOptions {
    * action instead of letting it through. Only the guard hooks set it.
    */
   onFailure?: 'block';
+  /**
+   * Overrides the fallback {@link fallbackForEvent} picks for the event. Only the
+   * `payload-sync` hook passes one, `'bootstrap'`.
+   */
+  fallback?: HookFallback;
 }
 
 /** One settings fragment carrying a single hook entry. */
@@ -82,7 +106,10 @@ export function hookFragment(
 ): SettingsFragment {
   const hook: HookEntry = {
     type: 'command',
-    command: hookCommand(scriptName, fallbackForEvent(event)),
+    command: hookCommand(
+      scriptName,
+      options?.fallback ?? fallbackForEvent(event),
+    ),
   };
   if (statusMessage) hook.statusMessage = statusMessage;
   if (options?.if !== undefined) hook.if = options.if;

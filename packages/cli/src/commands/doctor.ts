@@ -20,6 +20,7 @@ import { checkInstructionsFile } from './doctor/instructions-file.js';
 import { checkLaunchRoot } from './doctor/launch-root.js';
 import { checkModuleHealth } from './doctor/module-health.js';
 import { checkModuleRequirements } from './doctor/module-requirements.js';
+import { checkPrepareScript } from './doctor/prepare-script.js';
 import { checkPluginRegistration } from './doctor/plugin-registration.js';
 import { checkReferenceReachability } from './doctor/reference-reachability.js';
 import { checkResidentSurface } from './doctor/resident-surface.js';
@@ -110,6 +111,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     checkPluginRegistration(root, ctx),
     checkLaunchRoot(root, ctx),
     checkTranscriptRetention(ctx),
+    checkPrepareScript(root, flags),
   ];
   // Non-null past the gate above: a null registry only accompanies a config problem,
   // and that path already returned.

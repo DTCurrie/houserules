@@ -1,3 +1,4 @@
+import { planPrepareScript, type PrepareScriptPlan } from './prepare-script.js';
 import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -119,6 +120,8 @@ export interface ComputeEffectsOptions {
    * there is no way to tell a plugin's file from houserules' own.
    */
   plugins?: PluginSource[];
+  /** Plan the `prepare` script edit. `init` and a non-sync `update` set it. */
+  shouldPlanPrepare?: boolean;
 }
 
 /**
@@ -136,6 +139,11 @@ interface BrokenPluginProblem {
 export interface PlanResult {
   effects: Effect[];
   settingsPlan: SettingsPlan | null;
+  /**
+   * The root `package.json` `prepare` edit. Present only when the caller asked for it with
+   * {@link ComputeEffectsOptions.shouldPlanPrepare}, so `modules` and `doctor` never carry it.
+   */
+  prepareScript?: PrepareScriptPlan;
   advisories: AdviseAction[];
   signature: SettingsSignature;
   /**
@@ -657,7 +665,12 @@ function computeSettingsPlan(
 export function computeEffects(
   root: string,
   actions: Action[],
-  { manifest = null, force = false, plugins }: ComputeEffectsOptions = {},
+  {
+    manifest = null,
+    force = false,
+    plugins,
+    shouldPlanPrepare = false,
+  }: ComputeEffectsOptions = {},
 ): PlanResult {
   const effects: Effect[] = [];
   const advisories: AdviseAction[] = [];
@@ -755,6 +768,7 @@ export function computeEffects(
   return {
     effects,
     settingsPlan,
+    ...(shouldPlanPrepare && { prepareScript: planPrepareScript(root) }),
     advisories,
     signature,
     fragments,

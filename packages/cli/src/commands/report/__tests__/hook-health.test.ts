@@ -312,7 +312,7 @@ describe('computeHookHealth from error tool_results', () => {
     });
   }
 
-  it('counts crashes under both notices and a real refusal as a block', () => {
+  it('counts crashes under all three notices and a real refusal as a block', () => {
     const corpus = emptyCorpus(['slug']);
     ingestTranscript(
       corpus,
@@ -327,6 +327,10 @@ describe('computeHookHealth from error tool_results', () => {
           '[houserules] guard-bash.mjs is missing, so this call is blocked. Restore it from your terminal: npx houserules update',
         ),
         errorLine(
+          'd',
+          "[houserules] guard-bash.mjs: this install's generated files are not synced yet. Run your dependency install (npm install, pnpm install, or yarn), or houserules update for a global CLI. This call is blocked until then.",
+        ),
+        errorLine(
           'c',
           'Blocked by houserules guard: git stash dumps the list.',
         ),
@@ -338,9 +342,9 @@ describe('computeHookHealth from error tool_results', () => {
     expect(report.rows).toEqual([
       {
         hook: 'PreToolUse:Bash',
-        fires: 3,
-        nonZero: 3,
-        crashes: 2,
+        fires: 4,
+        nonZero: 4,
+        crashes: 3,
         blocks: 1,
         p50: 0,
         p95: 0,
@@ -348,7 +352,7 @@ describe('computeHookHealth from error tool_results', () => {
       },
     ]);
     expect(report.crashSignatures).toEqual([
-      { signature: 'missing script: guard-bash.mjs', count: 2 },
+      { signature: 'missing script: guard-bash.mjs', count: 3 },
     ]);
   });
 });

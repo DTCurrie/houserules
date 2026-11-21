@@ -27,6 +27,7 @@ interface CommandOptions {
   fix?: boolean;
   prune?: boolean;
   force?: boolean;
+  sync?: boolean;
   nextSteps?: boolean;
   json?: boolean;
   slug?: string[];
@@ -64,6 +65,7 @@ function flagsFrom(options: CommandOptions, command: Command): Flags {
     fix: options.fix ?? false,
     prune: options.prune ?? false,
     force: options.force ?? false,
+    ...(options.sync !== undefined && { sync: options.sync }),
     nextSteps: options.nextSteps ?? false,
     json: options.json ?? false,
     ...(options.slug !== undefined && { slug: options.slug }),
@@ -160,6 +162,10 @@ program
   )
   .argument('[dir]', 'target repo root (default: current directory)')
   .option('--force', 'overwrite houserules files that have local edits')
+  .option(
+    '--sync',
+    'unattended run for hooks and prepare: no prompts, no git index writes, one line, exit 0',
+  )
   .option(
     '--next-steps',
     'print the full post-install to-do list (summarized by default)',

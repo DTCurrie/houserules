@@ -5,11 +5,13 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   rmdirSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { basename, dirname, join } from 'node:path';
 
 /**
  * The one filesystem seam for a target repo. `apply.ts` writes through it and the drift
@@ -76,6 +78,10 @@ export class TargetRepo {
   /**
    * Returns false when the file already holds exactly this content. Mtimes stay
    * put, and a dry run reports only the paths a real run would change.
+   *
+   * The bytes land in a sibling temp file that is then renamed over the destination, so a
+   * concurrent reader, such as a second `update --sync` reading the manifest, sees the old
+   * file or the new one and never a partial write.
    */
   write(
     relativePath: string,
@@ -90,13 +96,25 @@ export class TargetRepo {
     if (this.dryRun) return true;
     const absolute = this.path(relativePath);
     mkdirSync(dirname(absolute), { recursive: true });
-    // Replace a symlink, never write through it. writeFileSync follows the link, landing
-    // bytes on its target outside our tree, usually the payload source. Only git shows the damage.
-    if (lstatSync(absolute, { throwIfNoEntry: false })?.isSymbolicLink()) {
-      rmSync(absolute);
+    // A rename replaces a symlink rather than writing through it to its target, usually the
+    // payload source. A regular file keeps its mode unless the caller names one, as an
+    // in-place write would.
+    const existing = lstatSync(absolute, { throwIfNoEntry: false });
+    const keptMode =
+      mode ??
+      (existing?.isFile() ? existing.mode & PERMISSION_BITS : undefined);
+    const temp = join(
+      dirname(absolute),
+      `.${basename(absolute)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`,
+    );
+    try {
+      writeFileSync(temp, next);
+      if (keptMode !== undefined) chmodSync(temp, keptMode);
+      renameSync(temp, absolute);
+    } catch (error) {
+      rmSync(temp, { force: true });
+      throw error;
     }
-    writeFileSync(absolute, next);
-    if (mode !== undefined) chmodSync(absolute, mode);
     return true;
   }
 
@@ -135,6 +153,9 @@ export class TargetRepo {
     copyFileSync(source, backup);
   }
 }
+
+/** The permission and special bits of `st_mode`, without the file-type bits. */
+const PERMISSION_BITS = 0o7777;
 
 /** Creates {@link BACKUP_DIR} and its self-gitignore under `rootAbsolute` when missing. */
 export function ensureBackupDir(rootAbsolute: string): void {

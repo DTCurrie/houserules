@@ -1,9 +1,17 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   hookCommand,
@@ -86,7 +94,7 @@ describe('hookFragment fallback by event', () => {
 
   it('writes the stderr notice and exit 1 for PreToolUse', () => {
     expect(commandFor('PreToolUse')).toMatch(
-      / \|\| \{ echo "\[houserules\] x\.mjs is missing, so this call is blocked\. Restore it from your terminal: npx houserules update" >&2; exit 1; \}$/,
+      / \|\| \{ echo "\[houserules\] x\.mjs: this install's generated files are not synced yet\. Run your dependency install \(npm install, pnpm install, or yarn\), or houserules update for a global CLI\. This call is blocked until then\." >&2; exit 1; \}$/,
     );
   });
 
@@ -99,7 +107,7 @@ describe('hookFragment fallback by event', () => {
       });
       expect(result.status).toBe(1);
       expect(result.stderr).toBe(
-        '[houserules] x.mjs is missing, so this call is blocked. Restore it from your terminal: npx houserules update\n',
+        "[houserules] x.mjs: this install's generated files are not synced yet. Run your dependency install (npm install, pnpm install, or yarn), or houserules update for a global CLI. This call is blocked until then.\n",
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -109,7 +117,7 @@ describe('hookFragment fallback by event', () => {
   it('writes the stdout notice then exit 0 for SessionStart', () => {
     const command = commandFor('SessionStart');
     expect(command).toMatch(
-      / \|\| \{ echo "\[houserules\] x\.mjs missing\. Run: npx houserules update"; exit 0; \}$/,
+      / \|\| \{ echo "\[houserules\] x\.mjs: this install's generated files are not synced yet\. Run your dependency install \(npm install, pnpm install, or yarn\), or houserules update for a global CLI\."; exit 0; \}$/,
     );
     expect(command).not.toContain('>&2');
   });
@@ -120,7 +128,7 @@ describe('hookFragment fallback by event', () => {
 });
 
 describe('isGuardedHookCommand', () => {
-  it.each(['guard', 'hint', 'silent'] as const)(
+  it.each(['guard', 'hint', 'silent', 'bootstrap'] as const)(
     'is true for the %s form',
     (fallback) => {
       expect(isGuardedHookCommand(hookCommand('x.mjs', fallback))).toBe(true);
@@ -129,5 +137,136 @@ describe('isGuardedHookCommand', () => {
 
   it('is false for a bare node invocation', () => {
     expect(isGuardedHookCommand('node .claude/scripts/x.mjs')).toBe(false);
+  });
+});
+
+describe('hookCommand bootstrap fallback in a real shell', () => {
+  const SYNCED_LINE =
+    '[houserules] synced to 9.9.9: 3 written, 0 kept (edited)';
+  const SYNCED_NOTICE = `${SYNCED_LINE}\n[houserules] Restart the session so the synced skills, rules, and agents load.\n`;
+  const INSTALL_NOTICE =
+    '[houserules] x.mjs is not synced yet. Run your dependency install (npm install, pnpm install, or yarn) to sync this install.\n';
+  let project: string;
+  let toolDir: string;
+
+  beforeEach(() => {
+    project = mkdtempSync(join(tmpdir(), 'bootstrap-project-'));
+    toolDir = mkdtempSync(join(tmpdir(), 'bootstrap-tools-'));
+    symlinkSync(process.execPath, join(toolDir, 'node'));
+  });
+
+  afterEach(() => {
+    rmSync(project, { recursive: true, force: true });
+    rmSync(toolDir, { recursive: true, force: true });
+  });
+
+  function writeStub(
+    path: string,
+    exitCode: number,
+    output: string = SYNCED_LINE,
+  ): string {
+    const argvFile = join(project, `argv-${exitCode}.txt`);
+    mkdirSync(join(path, '..'), { recursive: true });
+    const echo = output ? `echo '${output}'\n` : '';
+    writeFileSync(
+      path,
+      `#!/bin/sh\necho "$@" > "${argvFile}"\n${echo}exit ${exitCode}\n`,
+    );
+    chmodSync(path, 0o755);
+    return argvFile;
+  }
+
+  function runBootstrap() {
+    return spawnSync('sh', ['-c', hookCommand('x.mjs', 'bootstrap')], {
+      env: {
+        PATH: `${toolDir}:/bin:/usr/bin`,
+        CLAUDE_PROJECT_DIR: project,
+      },
+      encoding: 'utf8',
+    });
+  }
+
+  it('runs the script and passes its exit code through when it is present', () => {
+    const scriptDir = join(project, '.claude', 'scripts');
+    mkdirSync(scriptDir, { recursive: true });
+    writeFileSync(
+      join(scriptDir, 'x.mjs'),
+      'console.log("ran"); process.exit(2);\n',
+    );
+
+    const result = runBootstrap();
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe('ran\n');
+  });
+
+  it('syncs through the project-local binary when the script is absent', () => {
+    const argvFile = writeStub(
+      join(project, 'node_modules', '.bin', 'houserules'),
+      0,
+    );
+
+    const result = runBootstrap();
+
+    expect(result.status).toBe(0);
+    expect(readFileSync(argvFile, 'utf8')).toBe(`update --sync ${project}\n`);
+    expect(result.stdout).toBe(SYNCED_NOTICE);
+  });
+
+  it('syncs through a PATH binary when there is no local one', () => {
+    const argvFile = writeStub(join(toolDir, 'houserules'), 0);
+
+    const result = runBootstrap();
+
+    expect(result.status).toBe(0);
+    expect(readFileSync(argvFile, 'utf8')).toBe(`update --sync ${project}\n`);
+    expect(result.stdout).toBe(SYNCED_NOTICE);
+  });
+
+  it('passes a failure line through without the restart line', () => {
+    const failure = '[houserules] sync failed: settings.json is not valid JSON';
+    writeStub(join(project, 'node_modules', '.bin', 'houserules'), 0, failure);
+
+    const result = runBootstrap();
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe(`${failure}\n`);
+  });
+
+  it('prints nothing when the sync wrote nothing', () => {
+    writeStub(join(project, 'node_modules', '.bin', 'houserules'), 0, '');
+
+    const result = runBootstrap();
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('');
+  });
+
+  it('exits 0 when the sync binary exits 1', () => {
+    writeStub(join(project, 'node_modules', '.bin', 'houserules'), 1);
+
+    const result = runBootstrap();
+
+    expect(result.status).toBe(0);
+  });
+
+  it('prints the install hint and exits 0 when no binary exists', () => {
+    const result = runBootstrap();
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe(INSTALL_NOTICE);
+  });
+
+  it('never mentions npx in any output', () => {
+    writeStub(join(project, 'node_modules', '.bin', 'houserules'), 1);
+    const withBinary = runBootstrap();
+    rmSync(join(project, 'node_modules'), { recursive: true });
+    const withoutBinary = runBootstrap();
+
+    const output = [withBinary, withoutBinary]
+      .map((result) => result.stdout + result.stderr)
+      .join('');
+
+    expect(output).not.toContain('npx');
   });
 });

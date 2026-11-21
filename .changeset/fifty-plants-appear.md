@@ -7,4 +7,4 @@
 '@houserules/plugin-changesets': patch
 ---
 
-Payload gitignored by default, `init` validates config, and changeset summaries cap at 15 words.
+Payload gitignored and self-syncing, `init` validates config, and changeset summaries cap at 15 words.

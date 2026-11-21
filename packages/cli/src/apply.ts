@@ -1,3 +1,4 @@
+import { PACKAGE_JSON } from './prepare-script.js';
 import type { Except } from 'type-fest';
 
 import { TargetRepo } from './core/fs-target.js';
@@ -56,7 +57,13 @@ export interface ApplyResult {
  */
 export function apply(
   root: string,
-  { effects, settingsPlan, signature = null, prune = null }: ApplyInput,
+  {
+    effects,
+    settingsPlan,
+    prepareScript,
+    signature = null,
+    prune = null,
+  }: ApplyInput,
   {
     kitVersion,
     moduleIds,
@@ -122,6 +129,15 @@ export function apply(
       dest: settingsPlan.dest,
       op: settingsPlan.existedBefore ? 'merge' : 'create',
     });
+  }
+
+  // package.json stays user-owned: written, but never recorded in the manifest.
+  if (
+    (prepareScript?.kind === 'add' || prepareScript?.kind === 'append') &&
+    wanted(PACKAGE_JSON)
+  ) {
+    repo.write(PACKAGE_JSON, prepareScript.text);
+    written.push({ dest: PACKAGE_JSON, op: 'merge' });
   }
 
   // Keep the manifest byte-stable when nothing changed, so a re-run is a true

@@ -1,3 +1,4 @@
+import { renderPrepareScriptPlan } from '../render.js';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -207,6 +208,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
     planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
       manifest: installed,
       plugins: registry.plugins,
+      shouldPlanPrepare: true,
     });
   } catch (e) {
     if (e instanceof HouseError) {
@@ -227,7 +229,12 @@ export async function init(dir: string, flags: Flags): Promise<number> {
   }
 
   ui.note(
-    ui.renderPreview(planResult),
+    [
+      ui.renderPreview(planResult),
+      ...renderPrepareScriptPlan(planResult.prepareScript),
+    ]
+      .filter(Boolean)
+      .join('\n'),
     flags.dryRun ? 'Plan (dry run)' : 'Plan',
   );
 

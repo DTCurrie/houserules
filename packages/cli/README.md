@@ -21,6 +21,7 @@ uses, and previews every write before making it.
 - [Milestones](#milestones)
 - [Plugins](#plugins)
 - [After install](#after-install)
+- [Staying current](#staying-current)
 - [Ledgers: what is committed and what is generated](#ledgers-what-is-committed-and-what-is-generated)
 - [Changesets are the canonical changelog](#changesets-are-the-canonical-changelog)
 - [Token spend and response style](#token-spend-and-response-style)
@@ -178,6 +179,7 @@ default: most default off, so you enable them individually with `--modules` or t
 npx houserules doctor    # validate: config vs repo reality, hooks wired, files intact
                          # --json for a machine-readable report (CI-stable shape)
 npx houserules update    # refresh houserules files after a new houserules release (your edits are kept, --force overrides)
+                         # --sync is the unattended form the install hooks run: one line, exit 0
                          # add --next-steps to reprint the post-install to-do list
 npx houserules modules   # list installed vs available modules, and enable more after init
                          # --disable=<ids> withdraws a module: prunes its files (your edits
@@ -260,17 +262,18 @@ them. Seeds and ledger records are never listed. Git still tracks these:
 - the per-directory `.gitignore` files
 
 A fresh clone has `settings.json` but not the ignored files. The config's `modules` list records
-what to install, so `update` rebuilds the payload from it when the manifest is missing. Run
-`npx houserules update` after cloning.
+what to install, and [Staying current](#staying-current) describes how a clone gets them without
+anyone running a command.
 
 Because the hook scripts can be absent on a fresh clone while `settings.json` is committed, every
-hook command is guarded. A missing script prints
+hook command is guarded. A missing script on a blocking hook prints
 
 ```
-[houserules] changeset-check.mjs missing — run: npx houserules update
+[houserules] changeset-check.mjs: this install's generated files are not synced yet. Run your dependency install (npm install, pnpm install, or yarn), or houserules update for a global CLI. This call is blocked until then.
 ```
 
-instead of a Node stack trace, and the hook exits cleanly rather than failing your turn.
+instead of a Node stack trace. A SessionStart hook prints the same notice without the last sentence
+and exits 0, so Claude reads it as context and your turn does not fail.
 
 If you edit an ignored file, `update` keeps your edit and reports the file as `yours`. The edit
 stays on your machine, since git does not see the file.
@@ -337,6 +340,34 @@ that depends on `@houserules/cli` gets the local
 `npx @houserules/cli` without installing it has no local copy, so it gets the published URL instead. `doctor` reports
 any problem per field (`changesets.baseBranchh is not a known changesets setting`) and exits 2.
 `init` and `update` also refuse a schema-invalid config with exit 2, printing each problem and writing nothing.
+
+## Staying current
+
+The version pinned in your lockfile is the version of record. The installed files follow it, and
+nobody has to remember to run `update`.
+
+- **The `prepare` script.** `init` and `update` add `houserules update --sync` to the `prepare`
+  script in your root `package.json`. An existing `prepare` script keeps its command and gains
+  ` && houserules update --sync` after it. Every dependency install then syncs the payload, so a
+  fresh clone, a new worktree, or a bumped pin has its files before any session starts. The script
+  is skipped when `@houserules/cli` is not a dependency of the root `package.json`, because the
+  command would fail for any teammate without a global binary.
+- **`update --sync`.** The unattended form of `update`. It prints one line, always exits 0, and
+  never overwrites a file you edited. It refuses `--force`.
+- **The SessionStart hook.** `payload-sync` is the backstop for installs the `prepare` script did
+  not cover. It compares the manifest with the installed CLI and plugin versions and checks for
+  missing files. On a mismatch it runs the sync, then asks you to restart the session. Skills,
+  rules, and agents written mid-session do not load until the next one.
+- **After pulling a version bump.** A teammate runs their usual dependency install, and `prepare`
+  syncs. If they skip it, the first session's hook syncs and asks for a restart.
+- **A global CLI with no dependency.** There is no `prepare` script in this case. The hook runs
+  the `houserules` on your `PATH`, or prints the install hint when there is none.
+- **Local edits.** A generated file you edited is kept and reported as `yours`, the same as under
+  a manual `update`.
+- **Worktrees.** A new `git worktree` is a fresh checkout without the ignored files, so it takes
+  the fresh-clone path: dependency install, then the hook as the backstop.
+
+`doctor` reports a missing `prepare` script, and `doctor --fix` restores it.
 
 ## Ledgers: what is committed and what is generated
 

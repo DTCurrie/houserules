@@ -1,3 +1,4 @@
+import { PACKAGE_JSON, type PrepareScriptPlan } from './prepare-script.js';
 import { claudeMdRegion } from './core/claude-md-region.js';
 import { upsertRegion } from '@houserules/api/internal';
 import { hasModule } from './plugin-registry.js';
@@ -461,4 +462,40 @@ export function renderChangesetConfig(ctx: Ctx): string {
     null,
     2,
   )}\n`;
+}
+
+/**
+ * Plan lines for the root `package.json` `prepare` edit, in the style of the settings.json
+ * change. `absent` and `wired` print nothing.
+ */
+export function renderPrepareScriptPlan(
+  plan: PrepareScriptPlan | undefined,
+): string[] {
+  if (!plan) return [];
+  switch (plan.kind) {
+    case 'add':
+      return [
+        `± ${PACKAGE_JSON} (add a prepare script)`,
+        `    + scripts.prepare: ${JSON.stringify(plan.after)} (was: none)`,
+      ];
+    case 'append':
+      return [
+        `± ${PACKAGE_JSON} (append to the prepare script)`,
+        `    - scripts.prepare: ${JSON.stringify(plan.before)}`,
+        `    + scripts.prepare: ${JSON.stringify(plan.after)}`,
+      ];
+    case 'no-dependency':
+      return [
+        `= ${PACKAGE_JSON}: no prepare script written, because @houserules/cli is not a dependency`,
+      ];
+    case 'unparseable':
+      return [`! ${PACKAGE_JSON} does not parse (${plan.message}), left alone`];
+    case 'absent':
+    case 'wired':
+      return [];
+    default: {
+      const unreachable: never = plan;
+      return unreachable;
+    }
+  }
 }

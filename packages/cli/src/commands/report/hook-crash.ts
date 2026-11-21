@@ -16,6 +16,7 @@ const CRASH_SIGNS = [
   'throw err',
   'missing. Run: npx houserules update',
   'is missing, so this call is blocked. Restore it from your terminal: npx houserules update',
+  "this install's generated files are not synced yet",
 ];
 
 /** Whether a non-zero hook exit was the hook crashing rather than blocking. */
@@ -33,9 +34,13 @@ export function crashSignature(
   const text = `${fire.stderr}\n${fire.content ?? ''}`;
   const match = text.match(/Cannot find module '([^']+)'/);
   if (match) return `Cannot find module '${match[1]}'`;
-  const missing = text.match(
-    /\[houserules] (\S+) (?:missing\. Run: npx houserules update|is missing, so this call is blocked\. Restore it from your terminal: npx houserules update)/,
-  );
+  const missing =
+    text.match(
+      /\[houserules] (\S+) (?:missing\. Run: npx houserules update|is missing, so this call is blocked\. Restore it from your terminal: npx houserules update)/,
+    ) ??
+    text.match(
+      /\[houserules] (\S+): this install's generated files are not synced yet/,
+    );
   if (missing) return `missing script: ${missing[1]}`;
   const firstLine = fire.stderr.split('\n').find((l) => l.trim());
   return firstLine?.trim().slice(0, 100) ?? '(empty stderr)';
