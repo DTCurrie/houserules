@@ -223,6 +223,23 @@ describe('orchestrate', () => {
       expect(nestedText).toContain(gate);
     });
 
+    it('treats a wireit hit on declared inputs a verify passed as the pass, in the orchestrator and the milestone reference', () => {
+      const sentence =
+        'A wireit cache hit on declared inputs that a verify this session passed is the pass,';
+      const unwrapped = (text: string): string => text.replace(/\s+/g, ' ');
+      const milestone = unwrapped(
+        readFileSync(
+          join(root, '.claude/skills/orchestrate/references/milestone.md'),
+          'utf8',
+        ),
+      );
+      expect(unwrapped(orchestratorText)).toContain(sentence);
+      expect(milestone).toContain(sentence);
+      expect(milestone).toContain(
+        "Delete wireit state only at the milestone's final step, or after a change to any block's `files` or `dependencies`",
+      );
+    });
+
     it('merges several orchestrators into one table with the Phase column first', () => {
       expect(nestedText).toMatch(
         /^\| Phase +\| Slice +\| Owns +\| State +\|$/m,

@@ -135,6 +135,10 @@ Run it when every item is `DONE` or `DROPPED`, in this order:
 5. Set the step `DONE (<date>)` with its `## Log` line and lint.
 6. Stop, as "Step boundary and `--auto`" says.
 
+A wireit cache hit on declared inputs that a verify this session passed is the pass, for each
+member's `Verify` and for `Close`. Delete wireit state only at the milestone's final step, or after
+a change to any block's `files` or `dependencies`, and that run is the one cold run.
+
 After any fix, rerun the barrier from its first check, because a fix in one member can break
 another member's `Verify`.
 

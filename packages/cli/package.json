@@ -122,7 +122,8 @@
         "!test/**/node_modules/**",
         "payload/**/__tests__/**/*.ts",
         "tsconfig.json",
-        "tsconfig.build.json"
+        "tsconfig.build.json",
+        "vitest.config.ts"
       ],
       "output": []
     },
@@ -131,7 +132,12 @@
       "dependencies": [
         "build:ts",
         "build:payload",
-        "../test:build"
+        "../test:build",
+        "schema",
+        "../plugin-accessibility:build",
+        "../plugin-testing:build",
+        "../plugin-design:build",
+        "../plugin-prose:build"
       ],
       "files": [
         "src/**/*.ts",
@@ -139,7 +145,10 @@
         "!test/**/node_modules/**",
         "payload/**",
         "vitest.config.ts",
-        "houserules.config.example.json"
+        "houserules.config.example.json",
+        "package.json",
+        "bin/**",
+        "../*/payload/skills/*/SKILL.md"
       ],
       "output": []
     },

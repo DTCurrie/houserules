@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
@@ -250,5 +251,63 @@ describe('projects-sync pull and status, closed upstream', () => {
       true,
     );
     expect(readBacklogIndex(root).entries).toHaveLength(4);
+  });
+});
+
+describe('projects-sync pull, concurrent index writes', () => {
+  let stubDir: string;
+  let originalPath: string | undefined;
+
+  beforeEach(() => {
+    stubDir = mkdtempSync(join(tmpdir(), 'gh-stub-'));
+    const ghPath = join(stubDir, 'gh');
+    writeFileSync(ghPath, BOARD_STUB);
+    chmodSync(ghPath, 0o755);
+    writeFileSync(
+      join(stubDir, 'board.json'),
+      JSON.stringify([
+        boardItem('a', issueContent(1, 'OPEN', 'HOUSERULES-aaaaaa')),
+        boardItem('b', issueContent(2, 'CLOSED', 'HOUSERULES-bbbbbb')),
+      ]),
+    );
+    process.env.GH_STUB_BOARD = join(stubDir, 'board.json');
+    originalPath = process.env.PATH;
+    process.env.PATH = `${stubDir}${process.env.PATH ? `:${process.env.PATH}` : ''}`;
+  });
+
+  afterEach(() => {
+    process.env.PATH = originalPath;
+    delete process.env.GH_STUB_BOARD;
+    rmSync(stubDir, { recursive: true, force: true });
+  });
+
+  it('leaves one complete index and no ENOENT when four pulls write at once', async () => {
+    const root = stage();
+    const env = { ...process.env };
+    delete env.NODE_PATH;
+    const pull = () =>
+      new Promise<{ status: number | null; stderr: string }>((done) => {
+        const child = spawn(process.execPath, [join(root, SCRIPT), 'pull'], {
+          cwd: root,
+          env,
+        });
+        let stderr = '';
+        child.stderr.on('data', (chunk: Buffer) => (stderr += chunk));
+        child.on('close', (status) => done({ status, stderr }));
+      });
+
+    const results = await Promise.all([pull(), pull(), pull(), pull()]);
+
+    for (const result of results) {
+      expect(result.stderr).not.toContain('ENOENT');
+      expect(result.status).toBe(0);
+    }
+    const index = JSON.parse(
+      readFileSync(join(root, '.claude/ledgers/backlog.index.json'), 'utf8'),
+    ) as { entries: { id: string }[] };
+    expect(index.entries.map((entry) => entry.id)).toEqual([
+      'HOUSERULES-aaaaaa',
+      'HOUSERULES-bbbbbb',
+    ]);
   });
 });

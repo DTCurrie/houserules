@@ -142,37 +142,37 @@ describe('changeset-write.mjs on a pnpm monorepo', () => {
     expect(readFileSync(join(root, first), 'utf8')).toBe(pending);
   });
 
-  it('refuses a 16-word summary, naming the count and the limit and writing no file', () => {
+  it('refuses a 21-word summary, naming the count and the limit and writing no file', () => {
     const before = new Set(readdirSync(join(root, '.changeset')));
     const r = runScript(root, SCRIPT, {
-      args: ['--pkg', '@fix/cityville', '--summary', words(16)],
+      args: ['--pkg', '@fix/cityville', '--summary', words(21)],
     });
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/16 words/);
-    expect(r.stderr).toMatch(/15/);
+    expect(r.stderr).toMatch(/21 words/);
+    expect(r.stderr).toMatch(/20/);
     expect(newChangesets(root, before)).toEqual([]);
   });
 
-  it('refuses a 16-word --amend summary, leaving the pending changeset unchanged', () => {
+  it('refuses a 21-word --amend summary, leaving the pending changeset unchanged', () => {
     const first = runScript(root, SCRIPT, {
       args: ['--pkg', '@fix/cityville', '--summary', 'Add road planning.'],
     }).stdout.trim();
     const pending = readFileSync(join(root, first), 'utf8');
 
     const r = runScript(root, SCRIPT, {
-      args: ['--amend', first, '--summary', words(16)],
+      args: ['--amend', first, '--summary', words(21)],
     });
 
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/16 words/);
-    expect(r.stderr).toMatch(/15/);
+    expect(r.stderr).toMatch(/21 words/);
+    expect(r.stderr).toMatch(/20/);
     expect(readFileSync(join(root, first), 'utf8')).toBe(pending);
   });
 
-  it('writes a summary of exactly 15 words', () => {
+  it('writes a summary of exactly 20 words', () => {
     const before = new Set(readdirSync(join(root, '.changeset')));
     const r = runScript(root, SCRIPT, {
-      args: ['--pkg', '@fix/cityville', '--summary', words(15)],
+      args: ['--pkg', '@fix/cityville', '--summary', words(20)],
     });
     expect(r.status, r.stderr).toBe(0);
     expect(newChangesets(root, before)).toHaveLength(1);

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { createBashCallCollector, type SessionBashCall } from './bash-wall.js';
+
 /** Stored head of a Bash command. Similarity and denial rendering compare heads only. */
 const COMMAND_PREVIEW_LENGTH = 200;
 
@@ -208,6 +210,8 @@ export interface Corpus {
   kitVersions: Map<string, string>;
   /** Every `version` stamp seen on a record, so a report can say which CLI wrote it. */
   claudeVersions: Set<string>;
+  /** Every Bash call in every transcript, a subagent's under its parent session. */
+  bashCalls: SessionBashCall[];
   /** Earliest and latest timestamped record across the corpus, epoch ms. */
   firstTs?: number;
   lastTs?: number;
@@ -308,6 +312,7 @@ export function emptyCorpus(slugs: string[]): Corpus {
     residentCaptures: new Map(),
     kitVersions: new Map(),
     claudeVersions: new Set(),
+    bashCalls: [],
   };
 }
 
@@ -437,6 +442,7 @@ export function ingestTranscript(
   const isSubagent = into !== undefined && into.file !== file;
   const origin = isSubagent ? 'subagent' : 'main';
   const seenResponses = new Set<string>();
+  const bashCollector = createBashCallCollector({ isSubagent });
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     corpus.lines += 1;
@@ -448,6 +454,7 @@ export function ingestTranscript(
       usage.skippedLines += 1;
       continue;
     }
+    bashCollector.add(record);
     trackRecordStamps(record, corpus, usage);
     const counted = aggregateUsage(record, usage, origin, seenResponses);
     if (counted && !isSubagent)
@@ -456,6 +463,8 @@ export function ingestTranscript(
       );
     extractEvents(record, fallbackSession, corpus, isSubagent, usage.file);
   }
+  for (const call of bashCollector.finish())
+    corpus.bashCalls.push({ ...call, session: fallbackSession });
 }
 
 /** Every skill invocation: model Skill tool calls plus user-typed slash commands. */

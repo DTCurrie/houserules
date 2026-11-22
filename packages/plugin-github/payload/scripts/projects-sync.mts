@@ -28,10 +28,14 @@
  */
 
 import {
+  closeSync,
   existsSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
+  statSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
@@ -1659,7 +1663,119 @@ function countPending(): PendingCounts {
   };
 }
 
+/**
+ * The lock a live push holds, so a burst of `SessionEnd` hooks drains the queue once instead of
+ * once per hook. The hook reads the same file, so its path and the stale bound are repeated in
+ * `projects-sync-hook.mts`.
+ */
+const PUSH_LOCK_PATH = resolve(REPO_ROOT, '.claude/state/projects-sync.lock');
+
+/**
+ * A lock older than this is taken over even when its pid is alive, which covers a recycled pid.
+ * The bound comes from `.claude/state/projects-sync.log`. The slowest push it records ran from
+ * 16:50:30 to 16:50:58 on 2026-11-22, about 28 seconds, so five minutes is over ten times that
+ * and under the ten minute cap.
+ */
+const PUSH_LOCK_STALE_MS = 5 * 60 * 1000;
+
+interface PushLockOwner {
+  pid: number;
+  startedAt: number;
+}
+
+function readLockOwner(): PushLockOwner | null {
+  try {
+    const parsed = JSON.parse(
+      readFileSync(PUSH_LOCK_PATH, 'utf8'),
+    ) as Partial<PushLockOwner>;
+    if (typeof parsed.pid === 'number' && typeof parsed.startedAt === 'number')
+      return { pid: parsed.pid, startedAt: parsed.startedAt };
+  } catch {
+    // A missing or half written lock falls through to the file's own age.
+  }
+  return null;
+}
+
+function pidIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+function pushLockIsStale(): boolean {
+  const owner = readLockOwner();
+  if (owner) {
+    return (
+      !pidIsAlive(owner.pid) ||
+      Date.now() - owner.startedAt > PUSH_LOCK_STALE_MS
+    );
+  }
+  try {
+    return Date.now() - statSync(PUSH_LOCK_PATH).mtimeMs > PUSH_LOCK_STALE_MS;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Takes the exclusive push lock and arranges its release on every exit path. Returns false
+ * when a live, fresh lock is held. The `wx` open is the atomic step. A stale lock is removed
+ * and the open retried once, and two runs taking over the same stale lock at once can still
+ * race, which the unique `wx` create settles for all but one of them.
+ */
+// One create, then one more after removing a stale lock.
+const LOCK_TAKE_ATTEMPTS = 2;
+
+function takePushLock(): boolean {
+  mkdirSync(resolve(PUSH_LOCK_PATH, '..'), { recursive: true });
+  for (let attempt = 0; attempt < LOCK_TAKE_ATTEMPTS; attempt++) {
+    try {
+      const fd = openSync(PUSH_LOCK_PATH, 'wx');
+      try {
+        const owner: PushLockOwner = {
+          pid: process.pid,
+          startedAt: Date.now(),
+        };
+        writeFileSync(fd, JSON.stringify(owner));
+      } finally {
+        closeSync(fd);
+      }
+      process.on('exit', releasePushLock);
+      for (const signal of ['SIGINT', 'SIGTERM'] as const)
+        process.on(signal, () => process.exit(1));
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (!pushLockIsStale()) return false;
+      try {
+        unlinkSync(PUSH_LOCK_PATH);
+      } catch {
+        // Another run already took it over.
+      }
+    }
+  }
+  return false;
+}
+
+function releasePushLock(): void {
+  if (readLockOwner()?.pid !== process.pid) return;
+  try {
+    unlinkSync(PUSH_LOCK_PATH);
+  } catch {
+    // Already gone.
+  }
+}
+
 function runPush(dryRun: boolean): void {
+  // Before the outcome line is registered, so a skipped run leaves the last real outcome as
+  // the one doctor reads. A held lock loses nothing, since the queue stays on disk.
+  if (!dryRun && !takePushLock()) {
+    console.log('Another push holds the lock, skipping this run.');
+    process.exit(0);
+  }
   // Registered before preflight, since a missing scope or token is the failure doctor most
   // needs to see, and preflight is where it exits.
   if (!dryRun) recordPushOutcomeOnExit(countPending);
@@ -1847,7 +1963,7 @@ function boardsForKind(
  */
 function writeIndex(kind: LedgerKind, index: LedgerIndex): void {
   const path = resolve(LEDGER_DIRECTORY, indexBasename(kind));
-  const temporary = `${path}.pulling`;
+  const temporary = `${path}.${process.pid}.pulling`;
   mkdirSync(LEDGER_DIRECTORY, { recursive: true });
   writeFileSync(temporary, serializeIndex(index));
   renameSync(temporary, path);

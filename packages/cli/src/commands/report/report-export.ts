@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 
 import { HouseError } from '../../house-error.js';
+import type { BashWallReport } from './bash-wall.js';
 import { STOP_TOTAL_LABEL } from './hook-health.js';
 import type { FixConfigSummary, ReportDocument } from './report-document.js';
 
@@ -142,6 +143,17 @@ function redactStopHooks(
 }
 
 /** Rebuilds the fix block from its named fields only, so a stray key never leaves the export. */
+/** Keeps the slowest calls' timing and cuts each command to its family. */
+function maskBashWall(bashWall: BashWallReport): BashWallReport {
+  return {
+    ...bashWall,
+    slowest: bashWall.slowest.map((call) => ({
+      ...call,
+      command: commandFamily(call.command),
+    })),
+  };
+}
+
 function maskFix(fix: FixConfigSummary): FixConfigSummary {
   return {
     runsAtRoot: fix.runsAtRoot === true,
@@ -159,10 +171,11 @@ function maskFix(fix: FixConfigSummary): FixConfigSummary {
  */
 export function redactDocument(document: ReportDocument): ReportDocument {
   const { stopHooks } = document.hooks;
-  const { fix, ...rest } = document;
+  const { fix, bashWall, ...rest } = document;
   return {
     ...rest,
     ...(fix ? { fix: maskFix(fix) } : {}),
+    ...(bashWall ? { bashWall: maskBashWall(bashWall) } : {}),
     hooks: {
       ...document.hooks,
       crashSignatures: redactSignatures(document.hooks.crashSignatures),

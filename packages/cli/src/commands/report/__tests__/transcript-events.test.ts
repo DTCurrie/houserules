@@ -804,3 +804,69 @@ describe('ingestTranscript Artifact actions', () => {
     ).toEqual(['update', undefined, undefined, undefined]);
   });
 });
+
+describe('Bash calls across a main and a subagent transcript', () => {
+  function bashPair(
+    id: string,
+    command: string,
+    startedAt: string,
+    answeredAt: string,
+  ): string {
+    return [
+      line({
+        type: 'assistant',
+        timestamp: startedAt,
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }],
+        },
+      }),
+      line({
+        type: 'user',
+        timestamp: answeredAt,
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }],
+        },
+      }),
+    ].join('\n');
+  }
+
+  it('tags the subagent call with its parent session and keeps both', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'parent.jsonl',
+      bashPair(
+        'm1',
+        'pnpm test',
+        '2026-10-01T10:00:00.000Z',
+        '2026-10-01T10:00:04.500Z',
+      ),
+    );
+    const usage = corpus.files[0];
+    ingestTranscript(
+      corpus,
+      'agent-1.jsonl',
+      bashPair(
+        's1',
+        'git status',
+        '2026-10-01T10:01:00.000Z',
+        '2026-10-01T10:01:01.250Z',
+      ),
+      usage,
+    );
+
+    expect(
+      corpus.bashCalls.map((call) => [
+        call.command,
+        call.seconds,
+        call.isSubagent,
+        call.session,
+      ]),
+    ).toEqual([
+      ['pnpm test', 4.5, false, 'parent'],
+      ['git status', 1.25, true, 'parent'],
+    ]);
+  });
+});

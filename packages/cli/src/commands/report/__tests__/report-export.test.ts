@@ -864,3 +864,64 @@ describe('a document exported before the new readouts', () => {
     expect(tokens).not.toContain('cache_write split: 1-hour 0');
   });
 });
+
+describe('bash wall time in the export', () => {
+  function bashWallDocument(): ReportDocument {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'sess-wall.jsonl',
+      [
+        {
+          type: 'assistant',
+          timestamp: '2026-10-01T10:00:00.000Z',
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'w1',
+                name: 'Bash',
+                input: { command: `FOO=1 git push ${SECRET_PATH}` },
+              },
+            ],
+          },
+        },
+        {
+          type: 'user',
+          timestamp: '2026-10-01T10:00:03.000Z',
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'w1', content: '' }],
+          },
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join('\n'),
+    );
+    return buildReportDocument(
+      corpus,
+      mkdtempSync(join(tmpdir(), 'report-export-wall-')),
+      { label: 'work', cliVersion: '0.7.0' },
+    );
+  }
+
+  it('reduces each slowest command to its family and keeps the seconds', () => {
+    const document = bashWallDocument();
+    expect(document.bashWall?.slowest[0]?.command).toContain(SECRET_PATH);
+
+    const exported = redactDocument(document);
+
+    expect(exported.bashWall?.slowest[0]?.command).toBe('git push');
+    expect(exported.bashWall?.slowest[0]?.seconds).toBe(3);
+    expect(JSON.stringify(exported)).not.toContain(SECRET_PATH);
+  });
+
+  it('leaves bashWall absent on a document that never had it', () => {
+    const { bashWall: _bashWall, ...older } = bashWallDocument();
+
+    const exported = redactDocument(older as ReportDocument);
+
+    expect('bashWall' in exported).toBe(false);
+  });
+});

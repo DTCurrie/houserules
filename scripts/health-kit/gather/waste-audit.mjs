@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Classifies the tool calls in Claude Code transcripts into seven waste kinds and prints one
- * `waste-audit@3` JSON object on stdout.
+ * `waste-audit@4` JSON object on stdout.
  *
  * Usage: node waste-audit.mjs [--ablate] [--sessions <sessions.txt>] [<transcript.jsonl> ...]
  *
@@ -20,6 +20,9 @@
  * `{ agentType, count, calls, wallSeconds, costUsd }` per distinct agent type, `null` apart,
  * ranked by cost. The type is the `agentType` of the `.meta.json` beside each transcript whose
  * path has a `subagents` segment.
+ * The top-level `bashWall` key is built from every Bash call outside the waste kinds, by the
+ * same extractor as the report's "Bash wall time" section: per-family seconds and the slowest
+ * calls, a subagent's calls under its parent session. `--ablate` leaves it unchanged.
  * `--ablate` adds the `ablation` key: one `{ rule, kinds }` entry per correction rule, in the
  * order `compaction-ask`, `span-clock`, `terminal-handback`, `reread-reset`,
  * `rerun-classifier-blocked`, `rerun-keepalive`, `acceptance-claims`, and `all`, which turns
@@ -28,16 +31,20 @@
  *
  * Exit codes: 0 printed, 2 no input. Reads the named files and each subagent transcript's
  * `.meta.json` sibling only, and writes stdout only.
- * Node builtins, `packages/cli/dist/`, and the sibling `compaction.mjs` and `keepalive.mjs` only.
+ * Node builtins, `packages/cli/dist/` bash-wall and model-prices, and the sibling `compaction.mjs` and `keepalive.mjs` only.
  */
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  createBashCallCollector,
+  summarizeBashWall,
+} from '../../../packages/cli/dist/commands/report/bash-wall.js';
 import { lookupModelPrice } from '../../../packages/cli/dist/commands/report/model-prices.js';
 import { isCompactionRecord } from './compaction.mjs';
 import { isKeepaliveCommand } from './keepalive.mjs';
 
-const SCHEMA_VERSION = 'waste-audit@3';
+const SCHEMA_VERSION = 'waste-audit@4';
 
 const CACHE_WRITE_5M_MULTIPLE = 1.25;
 const CACHE_WRITE_1H_MULTIPLE = 2;
@@ -157,8 +164,11 @@ function requestCost(usage, model, unpriced) {
   };
 }
 
-/** Reads one transcript into a call list, a request map, and an ordered event list. */
-function parseTranscript(text, off) {
+/**
+ * Reads one transcript into a call list, a request map, and an ordered event list. Every parsed
+ * record also goes to `bashCollector`.
+ */
+function parseTranscript(text, off, bashCollector) {
   const isClockOn = !off.has('span-clock');
   const isAskResetOn = !off.has('compaction-ask');
   const readsCompaction = isAskResetOn || !off.has('reread-reset');
@@ -181,6 +191,7 @@ function parseTranscript(text, off) {
     } catch {
       continue;
     }
+    bashCollector.add(record);
     const lineNumber = lineIndex + 1;
     const timestampMs = Date.parse(record.timestamp ?? '');
     const message = record.message;
@@ -583,6 +594,13 @@ const FINDERS = {
   'plan-read-before-write': findPlanReadBeforeWrite,
 };
 
+/** The session a transcript belongs to: a subagent's parent directory, else the file's own id. */
+function parentSessionId(fileName, isSubagent) {
+  const parts = fileName.split(/[\\/]/);
+  if (isSubagent) return parts[parts.lastIndexOf('subagents') - 1];
+  return parts.at(-1).replace(/\.jsonl$/, '');
+}
+
 /**
  * Classifies one transcript.
  *
@@ -602,7 +620,13 @@ export function classify(
 ) {
   const off = disabledRules.has(ALL_RULES) ? new Set(RULE_IDS) : disabledRules;
   const unpriced = new Set();
-  const parsed = parseTranscript(text, off);
+  const isSubagent = SUBAGENT_PATH.test(fileName);
+  const bashCollector = createBashCallCollector({ isSubagent });
+  const parsed = parseTranscript(text, off, bashCollector);
+  const session = parentSessionId(fileName, isSubagent);
+  const bashCalls = bashCollector
+    .finish()
+    .map((bashCall) => ({ ...bashCall, session }));
   attribute(parsed, unpriced);
   const totals = { calls: parsed.calls.length, wallSeconds: 0, costUsd: 0 };
   for (const call of parsed.calls) {
@@ -657,7 +681,7 @@ export function classify(
       };
     });
   }
-  return { fileName, totals, kinds, unpriced: [...unpriced] };
+  return { fileName, totals, kinds, unpriced: [...unpriced], bashCalls };
 }
 
 const round = (value, decimals) => {
@@ -693,7 +717,7 @@ function agentTypeShares(episodes) {
 }
 
 /**
- * Folds per-file classifications into the `waste-audit@3` document. The `small-agent` kind
+ * Folds per-file classifications into the `waste-audit@4` document. The `small-agent` kind
  * entry, and no other, carries `agentTypes`, one `{ agentType, count, calls, wallSeconds,
  * costUsd }` per distinct agent type with `null` as its own element, sorted by cost descending.
  */
@@ -743,6 +767,9 @@ export function summarize(fileResults) {
       costUsd: round(totals.costUsd, COST_DECIMALS),
     },
     unpricedModels: [...unpriced].sort(),
+    bashWall: summarizeBashWall(
+      fileResults.flatMap((result) => result.bashCalls),
+    ),
     kinds: KIND_NAMES.map((kind) => {
       const accumulator = accumulators.get(kind);
       return {

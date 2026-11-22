@@ -54,7 +54,10 @@
       ],
       "files": [
         "payload/**",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "../*/payload/rules/**/*.md",
+        "../*/payload/skills/**/*.md",
+        "../*/payload/agents/**/*.md"
       ],
       "output": []
     }

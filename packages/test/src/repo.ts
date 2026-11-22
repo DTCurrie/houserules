@@ -190,6 +190,23 @@ function pluginFixtureFacts(shape: RepoShape):
   };
 }
 
+const REMOVE_RETRIES = 5;
+const REMOVE_RETRY_DELAY_MS = 100;
+
+/**
+ * Removes a fixture repo. Retries, because a test whose subject spawns a detached process, such
+ * as a hook's background push, can still be writing under the root when the test ends, and a
+ * single pass then fails with `ENOTEMPTY`.
+ */
+function removeRepo(root: string): void {
+  rmSync(root, {
+    recursive: true,
+    force: true,
+    maxRetries: REMOVE_RETRIES,
+    retryDelay: REMOVE_RETRY_DELAY_MS,
+  });
+}
+
 /**
  * A bare synthetic repo with no houserules installed, removed after the current test.
  *
@@ -200,7 +217,7 @@ function pluginFixtureFacts(shape: RepoShape):
  */
 export function useRepo(shape: RepoShape): string {
   const root = buildRepo(shape);
-  onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+  onTestFinished(() => removeRepo(root));
   return root;
 }
 
@@ -246,7 +263,7 @@ export function useInstalledRepo(
 
   const root = mkdtempSync(join(tmpdir(), `kit-${shape}-`));
   cpSync(snapshot, root, { recursive: true });
-  onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+  onTestFinished(() => removeRepo(root));
   return root;
 }
 
@@ -635,10 +652,64 @@ function buildNonJs(root: string): void {
   write(root, 'README.md', '# not a js repo\n');
 }
 
-/** Writes one shape into a fresh mkdtemp directory. Callers own the cleanup. */
+/**
+ * A fresh, independent, committed repo of one shape in a new mkdtemp directory. Callers own
+ * the cleanup.
+ *
+ * Under vitest global setup the repo is a recursive copy, `.git` included, of a template
+ * committed once per run under `KIT_TEST_SNAPSHOT_ROOT`, which saves five git processes per
+ * call. Without that variable every call runs its own `git init`.
+ */
 function buildRepo(shape: RepoShape): string {
-  const root = mkdtempSync(join(tmpdir(), `kit-${shape}-`));
+  const templateRoot = process.env.KIT_TEST_SNAPSHOT_ROOT;
+  if (!templateRoot) return buildCommittedRepo(shape);
 
+  const template = join(templateRoot, `repo-${shape}`);
+  if (!existsSync(template)) publishRepoTemplate(shape, templateRoot, template);
+  const root = mkdtempSync(join(tmpdir(), `kit-${shape}-`));
+  cpSync(template, root, { recursive: true });
+  return root;
+}
+
+/**
+ * Builds and commits one shape's template in a private directory, then renames it into place.
+ * A rename is atomic, so a template path that exists is complete. Several workers can miss the
+ * same shape at once, and the first rename wins.
+ */
+function publishRepoTemplate(
+  shape: RepoShape,
+  templateRoot: string,
+  template: string,
+): void {
+  mkdirSync(templateRoot, { recursive: true });
+  const pending = mkdtempSync(join(templateRoot, `repo-${shape}.pending-`));
+  writeShape(shape, pending);
+  gitInit(pending);
+  try {
+    renameSync(pending, template);
+  } catch (renameError) {
+    rmSync(pending, { recursive: true, force: true });
+    // A loser's rename fails once the winner's template exists, which is success. Any other
+    // failure means no template was published.
+    if (!existsSync(template)) {
+      throw new Error(
+        `buildRepo(${shape}): could not publish template: ${(renameError as Error).message}`,
+        { cause: renameError },
+      );
+    }
+  }
+}
+
+/** Writes and commits one shape into a fresh mkdtemp directory with its own `git init`. */
+function buildCommittedRepo(shape: RepoShape): string {
+  const root = mkdtempSync(join(tmpdir(), `kit-${shape}-`));
+  writeShape(shape, root);
+  gitInit(root);
+  return root;
+}
+
+/** Writes one shape's files into `root`, without git. */
+function writeShape(shape: RepoShape, root: string): void {
   switch (shape) {
     case 'pnpm-monorepo':
       buildPnpmMonorepo(root);
@@ -666,9 +737,6 @@ function buildRepo(shape: RepoShape): string {
       throw new Error(`unknown repo shape: ${exhaustive}`);
     }
   }
-
-  gitInit(root);
-  return root;
 }
 
 /** Content hash of a whole tree, ignoring `.git`. Asserts a dry run wrote nothing. */

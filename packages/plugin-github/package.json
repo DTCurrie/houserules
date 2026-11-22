@@ -69,7 +69,8 @@
       "command": "vitest run",
       "dependencies": [
         "build",
-        "../test:build"
+        "../test:build",
+        "../plugin-backlog:build"
       ],
       "files": [
         "src/**/*.ts",

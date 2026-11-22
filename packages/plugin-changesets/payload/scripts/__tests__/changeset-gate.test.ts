@@ -148,32 +148,32 @@ describe('changeset-gate.mjs', () => {
     expect(r.stderr).toBe('');
   });
 
-  it('reports a new changeset whose summary is 16 words, naming the file, the count, and the limit', () => {
+  it('reports a new changeset whose summary is 21 words, naming the file, the count, and the limit', () => {
     const root = installChangesets();
     writeFileSync(
       join(root, '.changeset/kit-long.md'),
-      `---\n"@fix/cityville": patch\n---\n\n${words(16)}\n`,
+      `---\n"@fix/cityville": patch\n---\n\n${words(21)}\n`,
     );
 
     const r = runScript(root, SCRIPT, { input: '{}' });
 
     expect(r.status, r.stderr).toBe(2);
     expect(r.stderr).toMatch(/kit-long\.md/);
-    expect(r.stderr).toMatch(/16 words/);
-    expect(r.stderr).toMatch(/15/);
+    expect(r.stderr).toMatch(/21 words/);
+    expect(r.stderr).toMatch(/20/);
   });
 
-  it('raises no word-cap finding for a new 15-word changeset or a committed 16-word one', () => {
+  it('raises no word-cap finding for a new 20-word changeset or a committed 21-word one', () => {
     const root = installChangesets();
     writeFileSync(
       join(root, '.changeset/kit-old.md'),
-      `---\n"@fix/cityville": patch\n---\n\n${words(16)}\n`,
+      `---\n"@fix/cityville": patch\n---\n\n${words(21)}\n`,
     );
     runIn(root, 'git', ['add', '-A']);
     runIn(root, 'git', ['commit', '-qm', 'feat: cityville, with changeset']);
     writeFileSync(
       join(root, '.changeset/kit-new.md'),
-      `---\n"@fix/cityville": patch\n---\n\n${words(15)}\n`,
+      `---\n"@fix/cityville": patch\n---\n\n${words(20)}\n`,
     );
 
     const r = runScript(root, SCRIPT, { input: '{}' });

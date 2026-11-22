@@ -19,7 +19,8 @@
     "check": "wireit",
     "check:types": "wireit",
     "verify": "wireit",
-    "test": "wireit",
+    "test": "node scripts/capped-wireit.mjs test:all",
+    "test:all": "wireit",
     "lint": "wireit",
     "lint:fix": "eslint . --fix",
     "lint:fix:paths": "eslint --fix",
@@ -43,7 +44,8 @@
     "verify:payload-prose": "wireit",
     "verify:knip": "wireit",
     "test:scripts": "wireit",
-    "verify:knip:audit": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles --include-entry-exports"
+    "verify:knip:audit": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles --include-entry-exports",
+    "time-gate": "node scripts/time-gate.mjs"
   },
   "wireit": {
     "lint": {
@@ -60,6 +62,8 @@
         "scripts/**/*.mjs",
         "*.ts",
         "*.mjs",
+        "packages/*/bin/**/*.mjs",
+        "packages/*/test/**/*.cjs",
         "!**/node_modules/**"
       ],
       "output": []
@@ -178,6 +182,13 @@
         "packages/*/payload/**/*.template",
         "packages/*/src/**/*.ts",
         "packages/*/package.json",
+        "package.json",
+        "pnpm-workspace.yaml",
+        ".changeset/config.json",
+        ".prettierrc.json",
+        ".claude/houserules.config.json",
+        ".claude/settings.json",
+        "CLAUDE.md",
         "!**/node_modules/**"
       ],
       "output": []
@@ -246,7 +257,7 @@
         "./packages/test:check"
       ]
     },
-    "test": {
+    "test:all": {
       "//": "Sixteen entries: fifteen packages plus the root scripts suite, not seventeen. @houserules/test ships no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
       "dependencies": [
         "./packages/api:test",
@@ -268,7 +279,12 @@
       ]
     },
     "test:scripts": {
-      "command": "node --test scripts/__tests__/*.test.mjs",
+      "command": "node --test scripts/__tests__/*.test.mjs scripts/bench/__tests__/*.test.mjs scripts/eval/__tests__/*.test.mjs",
+      "dependencies": [
+        "./packages/cli:build",
+        "./packages/plugin-prose:build",
+        "./packages/plugin-changesets:build"
+      ],
       "files": [
         "scripts/__tests__/*.test.mjs",
         "scripts/verify-package-manifests.mjs",
@@ -278,7 +294,15 @@
         "scripts/health-kit/gather/*.mjs",
         "scripts/health-kit/closeout/*.mjs",
         "scripts/bench/**/*.mjs",
-        "scripts/eval/**/*.mjs"
+        "scripts/eval/**/*.mjs",
+        "scripts/time-gate.mjs",
+        "scripts/health-kit/gather/SCHEMA.md",
+        "scripts/bench/fixtures/**",
+        "scripts/eval/fixtures/**",
+        "packages/cli/payload/agents/phase-orchestrator.md",
+        "packages/cli/src/commands/report/model-prices.ts",
+        ".claude/scripts/**",
+        ".claude/settings.json"
       ],
       "output": []
     },

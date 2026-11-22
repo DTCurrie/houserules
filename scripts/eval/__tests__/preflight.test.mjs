@@ -1,4 +1,3 @@
-// Cases for one eval slice. `scripts/__tests__/eval.test.mjs` imports this file.
 import assert from 'node:assert/strict';
 import {
   chmodSync,

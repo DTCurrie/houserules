@@ -32,7 +32,12 @@ any package's tsconfig, wireit block, or scripts.
   by path, replacing `pnpm -r`. The three lists differ on purpose: `build` names all
   seventeen packages, the per-package typecheck behind `check` sixteen, and `test` fifteen. The thin `houserules` package has
   no source, so it carries only `build`, and `@houserules/test` ships no `test` script. Naming
-  a script that does not exist is a wireit error rather than the no-op `pnpm -r` gave you. Root `lint` is also
+  a script that does not exist is a wireit error rather than the no-op `pnpm -r` gave you.
+  Root `test` is the one exception to "the command is `wireit`". It runs
+  `scripts/capped-wireit.mjs`, which sets `WIREIT_PARALLEL` to a quarter of the cores, never
+  under 2, and then runs the `test:all` aggregator. Wireit's default of twice the cores starts
+  every package's vitest pool at once, and tests then time out. Set `WIREIT_PARALLEL` yourself
+  to override the cap. Root `lint` is also
   wireit, and `lint:fix`, `format`, and `format:check` stay plain scripts. A fixer mutates
   its own inputs, so caching it is wrong, and a repo-wide formatter's input set is
   `.prettierignore`, which should not be restated in `package.json` where the two would

@@ -802,7 +802,7 @@ describe('runFixSteps against the fix budget', () => {
   });
 
   it('reports the step that outlasts the budget and skips the rest', async () => {
-    const run = await runFixSteps(steps, root, sleepingRunner(root, 30), 3000);
+    const run = await runFixSteps(steps, root, sleepingRunner(root, 10), 1000);
 
     expect(run.overrun).toEqual({ pkg: '@fix/cityville', step: 'lint:fix' });
     expect(run.errors).toEqual([]);

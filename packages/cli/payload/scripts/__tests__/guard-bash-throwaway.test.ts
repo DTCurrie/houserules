@@ -1,4 +1,11 @@
-import { describe, expect, it, onTestFinished } from 'vitest';
+import {
+  beforeAll,
+  afterAll,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+} from 'vitest';
 import { execFileSync } from 'node:child_process';
 import {
   mkdirSync,
@@ -112,11 +119,23 @@ function expectRefused(scenario: Case): void {
 }
 
 describe('guardRefusalFor with a throwaway context', () => {
+  let sharedBase: string;
+  let sharedProject: string;
+
+  beforeAll(() => {
+    sharedBase = mkdtempSync(join(tmpdir(), 'guard-throwaway-shared-'));
+    sharedProject = makeProject(sharedBase);
+  });
+
+  afterAll(() => {
+    rmSync(sharedBase, { recursive: true, force: true });
+  });
+
   it.each(FIXTURE_COMMANDS)(
     'allows %s in a fresh repo with no remote under a temp root',
     (_, command) => {
       const base = useBase();
-      const project = makeProject(base);
+      const project = sharedProject;
       const fixture = initRepo(join(base, 'fixture'));
       expect(guardRefusalFor(command(fixture), throwaway(project))).toBeNull();
     },
@@ -124,7 +143,7 @@ describe('guardRefusalFor with a throwaway context', () => {
 
   it('allows an add and a commit chained on the same -C target', () => {
     const base = useBase();
-    const project = makeProject(base);
+    const project = sharedProject;
     const fixture = initRepo(join(base, 'fixture'));
     expect(
       guardRefusalFor(
@@ -136,7 +155,7 @@ describe('guardRefusalFor with a throwaway context', () => {
 
   it('allows a chain of local clones exactly at the hop limit', () => {
     const base = useBase();
-    const project = makeProject(base);
+    const project = sharedProject;
     const fixture = localChain(base, HOP_LIMIT);
     expect(guardRefusalFor(commitByC(fixture), throwaway(project))).toBeNull();
   });
@@ -162,29 +181,29 @@ describe('guardRefusalFor with a throwaway context', () => {
   it.each<[string, (base: string) => Case]>([
     [
       'a commit in the project repo by -C',
-      (base) => {
-        const project = makeProject(base);
+      () => {
+        const project = sharedProject;
         return { cmd: commitByC(project), context: throwaway(project) };
       },
     ],
     [
       'a commit in the project repo by a leading cd',
-      (base) => {
-        const project = makeProject(base);
+      () => {
+        const project = sharedProject;
         return { cmd: commitByCd(project), context: throwaway(project) };
       },
     ],
     [
       'a discard in the project repo by -C',
-      (base) => {
-        const project = makeProject(base);
+      () => {
+        const project = sharedProject;
         return { cmd: checkoutByC(project), context: throwaway(project) };
       },
     ],
     [
       'a clone whose remote is the project by plain path',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const clone = withRemote(initRepo(join(base, 'clone')), project);
         return { cmd: commitByC(clone), context: throwaway(project) };
       },
@@ -192,7 +211,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a clone made by git clone of the project',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         git(base, 'clone', '-q', project, join(base, 'clone'));
         return {
           cmd: commitByC(join(base, 'clone')),
@@ -214,7 +233,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a clone whose remote is the project by file:// URL',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const clone = withRemote(
           initRepo(join(base, 'clone')),
           `file://${project}`,
@@ -237,7 +256,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       "a clone whose remote is the project's .git dir",
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const clone = withRemote(
           initRepo(join(base, 'clone')),
           join(project, '.git'),
@@ -248,7 +267,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a clone of a clone of the project',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const first = withRemote(initRepo(join(base, 'first')), project);
         const second = withRemote(initRepo(join(base, 'second')), first);
         return { cmd: commitByC(second), context: throwaway(project) };
@@ -257,7 +276,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a chain of local clones one hop longer than the hop limit',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         return {
           cmd: commitByC(localChain(base, HOP_LIMIT + 1)),
           context: throwaway(project),
@@ -267,7 +286,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a temp repo whose core.worktree names the project dir',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const fixture = initRepo(join(base, 'fixture'));
         git(fixture, 'config', 'core.worktree', project);
         return { cmd: commitByC(fixture), context: throwaway(project) };
@@ -315,7 +334,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a repo outside the temp roots',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const fixture = initRepo(join(base, 'fixture'));
         const otherRoot = useBase();
         return {
@@ -327,7 +346,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a git push in an exempt fixture',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const fixture = initRepo(join(base, 'fixture'));
         return {
           cmd: `git -C ${fixture} push`,
@@ -338,7 +357,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a git stash in an exempt fixture',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const fixture = initRepo(join(base, 'fixture'));
         return {
           cmd: `git -C ${fixture} stash`,
@@ -349,7 +368,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a command that commits in a fixture by -C and then in the project',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const fixture = initRepo(join(base, 'fixture'));
         return {
           cmd: `${commitByC(fixture)} && ${commitByC(project)}`,
@@ -360,7 +379,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     [
       'a command that commits in a fixture by cd and then in the project',
       (base) => {
-        const project = makeProject(base);
+        const project = sharedProject;
         const fixture = initRepo(join(base, 'fixture'));
         return {
           cmd: `${commitByCd(fixture)} && ${commitByC(project)}`,
@@ -370,8 +389,8 @@ describe('guardRefusalFor with a throwaway context', () => {
     ],
     [
       'a bare commit that names no target',
-      (base) => {
-        const project = makeProject(base);
+      () => {
+        const project = sharedProject;
         return { cmd: 'git commit -m x', context: throwaway(project) };
       },
     ],
@@ -391,7 +410,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     'https://github.com/acme/widget.git/',
   ])("refuses a repo whose remote is the project's own remote as %s", (url) => {
     const base = useBase();
-    const project = makeProject(base);
+    const project = sharedProject;
     const onOrigin = withRemote(initRepo(join(base, 'origin-form')), url);
     const onSecond = withRemote(
       withRemote(
@@ -407,7 +426,7 @@ describe('guardRefusalFor with a throwaway context', () => {
 
   it("refuses a repo whose push URL alone is the project's remote", () => {
     const base = useBase();
-    const project = makeProject(base);
+    const project = sharedProject;
     const fixture = withRemote(
       initRepo(join(base, 'fixture')),
       'https://github.com/other/thing.git',
@@ -461,7 +480,7 @@ describe('guardRefusalFor with a throwaway context', () => {
     ],
   ])('refuses the unrecognized form %s', (_, build) => {
     const base = useBase();
-    const project = makeProject(base);
+    const project = sharedProject;
     const fixture = initRepo(join(base, 'fixture'));
     expectRefused({
       cmd: build(fixture, project),

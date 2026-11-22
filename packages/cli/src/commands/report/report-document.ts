@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 
+import { summarizeBashWall, type BashWallReport } from './bash-wall.js';
 import {
   computeArtifactEpisodes,
   type ArtifactReport,
@@ -111,6 +112,8 @@ export interface ReportDocument {
   kitVersions?: KitVersionsReport;
   /** Absent in a document exported before the block existed, or from a repo with no config. */
   fix?: FixConfigSummary;
+  /** Absent in a document exported before the section existed. */
+  bashWall?: BashWallReport;
 }
 
 export interface BuildOptions {
@@ -225,6 +228,7 @@ export function buildReportDocument(
     residentContext: computeResidentContext(corpus, top),
     artifacts: computeArtifactEpisodes(corpus),
     kitVersions: computeKitVersions(corpus, options.cliVersion),
+    bashWall: summarizeBashWall(corpus.bashCalls),
     ...(fix ? { fix } : {}),
   };
 }

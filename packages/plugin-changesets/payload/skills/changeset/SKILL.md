@@ -39,7 +39,7 @@ feature is one bullet there, however many commits it took.
    - `major`: breaking change. **Propose a major and get the user's answer before writing it.**
 4. **Write the summary.** This is the canonical spec, and the `changeset-writer` agent follows it
    too.
-   - **One short sentence**, 15 words or fewer, in changelog voice, naming what changed as the
+   - **One short sentence**, 20 words or fewer, in changelog voice, naming what changed as the
      package's users read it.
    - Describe the change, not its mechanism, its rationale, or what stayed the same.
    - When amending, write the sentence for the whole feature as it now stands, not for the part
@@ -129,7 +129,7 @@ bullet announces something no user ever saw.
 4. **Write the summary for the feature as it now stands.** Not for the survivor alone, and not the
    old summaries concatenated. Every summary in the group is replaced, so the new one has to cover
    all of them.
-   - **A one-sentence survivor stays one sentence.** 15 words or fewer, under the rules in step 4
+   - **A one-sentence survivor stays one sentence.** 20 words or fewer, under the rules in step 4
      above.
    - **A long-form survivor keeps its shape.** Some changesets are a multi-paragraph release note.
      `--amend` replaces the whole body, so pass the full rewritten note and edit only the part the

@@ -178,6 +178,7 @@ describe('report', () => {
     const document = JSON.parse(r.stdout) as Record<string, unknown>;
     expect(Object.keys(document).sort()).toEqual([
       'artifacts',
+      'bashWall',
       'friction',
       'guard',
       'hooks',

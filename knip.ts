@@ -23,6 +23,10 @@ const config: KnipConfig = {
         // The paid behavioral check, documented in scripts/eval/README.md and invoked by hand as
         // `node scripts/eval/run.mjs`. Nothing in the workspace imports it.
         'scripts/eval/run.mjs',
+        // The bench and eval suites, run by `test:scripts` as files of their own. Its command
+        // names three globs, and knip reads only the first as test entries.
+        'scripts/bench/__tests__/*.test.mjs',
+        'scripts/eval/__tests__/*.test.mjs',
       ],
       // The eval's fixture repo, copied into a scratch directory for each paid session and never
       // imported from this workspace.

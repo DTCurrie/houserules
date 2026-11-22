@@ -175,18 +175,18 @@ All times are milliseconds, unrounded.
 
 ## Modules
 
-| File                   | Exports                                                             |
-| ---------------------- | ------------------------------------------------------------------- |
-| `run.mjs`              | the command above                                                   |
-| `build.mjs`            | `ensureBuild`, `findBuild`, `defaultCacheDir`, `BUILD_STEPS`        |
-| `stats.mjs`            | `GATE`, `summarize`, `gateVerdict`                                  |
-| `machine.mjs`          | `machineFacts`                                                      |
-| `timing.mjs`           | `measureCase`, `CaseError`                                          |
-| `profile.mjs`          | `profileCase`, `mergeProfiles`, `selfTimeByFrame`                   |
-| `suites/index.mjs`     | `SUITES`, a map from suite name to a lazy import                    |
-| `suites/<name>.mjs`    | `cases`                                                             |
-| `fixtures/<name>/`     | static fixture files for that suite only                            |
-| `__tests__/*.test.mjs` | one test file per module, run by `scripts/__tests__/bench.test.mjs` |
+| File                   | Exports                                                      |
+| ---------------------- | ------------------------------------------------------------ |
+| `run.mjs`              | the command above                                            |
+| `build.mjs`            | `ensureBuild`, `findBuild`, `defaultCacheDir`, `BUILD_STEPS` |
+| `stats.mjs`            | `GATE`, `summarize`, `gateVerdict`                           |
+| `machine.mjs`          | `machineFacts`                                               |
+| `timing.mjs`           | `measureCase`, `CaseError`                                   |
+| `profile.mjs`          | `profileCase`, `mergeProfiles`, `selfTimeByFrame`            |
+| `suites/index.mjs`     | `SUITES`, a map from suite name to a lazy import             |
+| `suites/<name>.mjs`    | `cases`                                                      |
+| `fixtures/<name>/`     | static fixture files for that suite only                     |
+| `__tests__/*.test.mjs` | one test file per module, run by `test:scripts`              |
 
 ### `build.mjs`
 

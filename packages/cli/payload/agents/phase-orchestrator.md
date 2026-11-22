@@ -96,6 +96,10 @@ logs it.
 When `Siblings:` is `none`, §7 step 3 reruns each slice's acceptance and typechecks the packages
 the wave touched, and `/verify-changed` runs once, at §8.
 
+A wireit cache hit on declared inputs that a verify this session passed is the pass, so do not clear
+wireit state to force a rerun. A hit as the only evidence for a slice whose changed files may sit
+outside the block's declared inputs still proves nothing.
+
 When `Siblings:` is not `none`, the §7 fixer and `/tidy` take your `Domain:` paths, and §7 step 3
 reruns each slice's acceptance command with no typecheck. Never run the bare fix scripts, a
 package typecheck, `/verify-changed`, or a `--filter` over your packages then, at §7 or §8.

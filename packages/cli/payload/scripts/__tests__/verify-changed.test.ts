@@ -406,11 +406,11 @@ describe('verify-changed.mjs --run', () => {
   });
 
   it('reports a step that outlives verify.timeoutMs as timed out, keeps its output, and exits 2', () => {
-    useStubVerifyRunner(root, { hangMs: 30_000, timeoutMs: 3000 });
+    useStubVerifyRunner(root, { hangMs: 10_000, timeoutMs: 1000 });
     const r = runScript(root, SCRIPT, { args: ['--run'] });
     expect(r.status).toBe(2);
     expect(r.stdout).toMatch(
-      /@fix\/cityville: FAIL \(verify, timed out after 3s\)/,
+      /@fix\/cityville: FAIL \(verify, timed out after 1s\)/,
     );
     expect(r.stderr).toMatch(/started-before-cap/);
     expect(readFileSync(join(root, 'runner-calls.txt'), 'utf8')).toMatch(

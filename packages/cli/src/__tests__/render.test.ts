@@ -587,7 +587,9 @@ describe('renderClaudeMd', () => {
         '  or never ran, with its output. The recorded evasions, and what each one means:',
         '  - "The edits are in, so it is done": done is the checks passing, with output you read.',
         '  - "I know this fact from memory": state it only after running the command that could falsify it.',
-        '  - "It passed earlier": a stale or cached pass is not this change\'s pass. Re-run on current bytes.',
+        '  - "It passed earlier": a pass is stale only when a file it covers changed after it ran. A',
+        '    content-hash skip on unchanged inputs is a pass. It proves nothing about a file outside the',
+        "    script's declared inputs.",
         '  - "The subagent reported success": the tree is the evidence, not the report.',
       ].join('\n'),
     );

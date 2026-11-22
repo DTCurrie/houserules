@@ -1237,7 +1237,7 @@ describe('classify with rules off', () => {
 });
 
 describe('cli', () => {
-  it('prints waste-audit@3 with every kind, and exits 2 with no input', () => {
+  it('prints waste-audit@4 with every kind, and exits 2 with no input', () => {
     const dir = mkdtempSync(join(tmpdir(), 'waste-audit-'));
     const file = join(dir, 'session.jsonl');
     writeFileSync(
@@ -1260,7 +1260,7 @@ describe('cli', () => {
     });
     assert.equal(run.status, 0);
     const parsed = JSON.parse(run.stdout);
-    assert.equal(parsed.schema, 'waste-audit@3');
+    assert.equal(parsed.schema, 'waste-audit@4');
     assert.equal(parsed.sessions, 1);
     assert.deepEqual(
       parsed.kinds.map((entry) => entry.kind),
@@ -1280,6 +1280,78 @@ describe('cli', () => {
       encoding: 'utf8',
     });
     assert.equal(onlyJournal.status, 2);
+  });
+
+  it('lists a slow Bash call no kind claims in bashWall', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'waste-audit-'));
+    const file = join(dir, 'abc-session.jsonl');
+    const use = {
+      type: 'tool_use',
+      id: 'toolu_slow',
+      name: 'Bash',
+      input: { command: 'cd /r && pnpm --filter @x/y run build' },
+    };
+    const records = [
+      userRecord(0, 'hi'),
+      assistantRecord(1, 'msg_slow', [use], USAGE),
+      userRecord(121, [
+        { type: 'tool_result', tool_use_id: 'toolu_slow', content: 'ok' },
+      ]),
+    ];
+    writeFileSync(
+      file,
+      records.map((record) => JSON.stringify(record)).join('\n') + '\n',
+    );
+
+    const run = spawnSync(process.execPath, [SCRIPT, file], {
+      encoding: 'utf8',
+    });
+
+    assert.equal(run.status, 0, run.stderr);
+    const parsed = JSON.parse(run.stdout);
+    assert.deepEqual(
+      parsed.kinds.map((entry) => entry.count),
+      [0, 0, 0, 0, 0, 0, 0],
+    );
+    assert.deepEqual(parsed.bashWall.families[0], {
+      family: 'pnpm build',
+      calls: 1,
+      subagentCalls: 0,
+      seconds: 120,
+      medianSeconds: 120,
+      p90Seconds: 120,
+    });
+    assert.deepEqual(parsed.bashWall.slowest[0], {
+      family: 'pnpm build',
+      command: 'cd /r && pnpm --filter @x/y run build',
+      seconds: 120,
+      session: 'abc-session',
+      startedAt: '2026-11-20T00:00:01.000Z',
+      isSubagent: false,
+    });
+  });
+
+  it('tags a subagent call with its parent session in bashWall', () => {
+    const subagents = join(
+      mkdtempSync(join(tmpdir(), 'waste-audit-')),
+      'parent-1',
+      'subagents',
+    );
+    mkdirSync(subagents, { recursive: true });
+    const file = join(subagents, 'agent-a1.jsonl');
+    writeFileSync(
+      file,
+      transcript('go', [step(call('Bash', { command: 'ls' }))]),
+    );
+
+    const run = spawnSync(process.execPath, [SCRIPT, file], {
+      encoding: 'utf8',
+    });
+
+    const wall = JSON.parse(run.stdout).bashWall;
+    assert.equal(wall.slowest[0].session, 'parent-1');
+    assert.equal(wall.slowest[0].isSubagent, true);
+    assert.equal(wall.includesSubagents, true);
   });
 
   it('prints the agent type read beside a subagent transcript on the small-agent entry', () => {
@@ -1344,6 +1416,7 @@ describe('cli', () => {
         'sessions',
         'totals',
         'unpricedModels',
+        'bashWall',
         'kinds',
       ]);
     });

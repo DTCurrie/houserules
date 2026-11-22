@@ -37,7 +37,7 @@ changeset". Your job ends at a recommendation. The thread that spawned you runs 
 4. **Pick the bump per package.** `patch` for fixes and internal changes (the default), `minor`
    for backward-compatible features, `major` for breaking changes. **Never recommend a major as
    settled: flag it and say it needs the user's confirmation before the caller records it.**
-5. **Draft the summary.** One short sentence, 15 words or fewer, in changelog voice, naming what
+5. **Draft the summary.** One short sentence, 20 words or fewer, in changelog voice, naming what
    changed for the package's users. No semicolons and no second clause. Use exact names and
    numbers from the diff. Never include a ledger id. The summary ships in the public CHANGELOG,
    and the id resolves only against the local ledger. When recommending an amend, the sentence

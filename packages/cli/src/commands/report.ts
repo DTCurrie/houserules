@@ -12,6 +12,7 @@ import {
 import { HouseError } from '../house-error.js';
 import { json } from './log.js';
 import { renderArtifactEpisodes } from './report/artifact-episodes.js';
+import { renderBashWall } from './report/bash-wall.js';
 import { renderFriction } from './report/friction.js';
 import { renderGuardEfficacy } from './report/guard-efficacy.js';
 import { renderHookHealth } from './report/hook-health.js';
@@ -60,6 +61,7 @@ function renderDocument(document: ReportDocument): string[] {
       document.outcomes.ledgers,
     ),
     renderFriction(document.friction),
+    renderBashWall(document.bashWall),
     renderArtifactEpisodes(document.artifacts),
     renderResidentContext(document.residentContext),
     renderKitVersions(document.kitVersions),
