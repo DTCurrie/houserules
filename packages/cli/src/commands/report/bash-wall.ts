@@ -43,6 +43,8 @@ interface FamilyWall {
   calls: number;
   /** Timed calls that ran in a subagent. */
   subagentCalls: number;
+  /** Timed calls whose first real command is a package runner with no scope flag, see {@link isUnscopedRunnerCall}. */
+  unscopedCalls: number;
   /** Sum of `seconds`, to 3 decimals. */
   seconds: number;
   /** Mean of the two middle values when `calls` is even. */
@@ -101,14 +103,7 @@ const SLOW_COMMAND_MAX_CHARS = 120;
  * the subcommand, with `git -C <dir>` dropped. Anything else gives its first word.
  */
 export function bashFamily(command: string): string {
-  const segments = splitChain(command).map(tokenize).map(commandWords);
-  // A bare assignment statement, `S=/tmp/x; ls $S`, is an env prefix too, so it never names the family.
-  const firstReal = segments.find((tokens) => {
-    const [head] = tokens;
-    return head !== undefined && head !== 'cd';
-  });
-  const tokens = firstReal ?? segments[0] ?? [];
-  const [first, ...args] = tokens;
+  const [first, ...args] = firstCommandWords(command);
   if (first === undefined) return '';
   if (PACKAGE_RUNNERS.has(first)) return runnerFamily(first, args);
   if (first === 'node') return nodeFamily(args);
@@ -116,6 +111,33 @@ export function bashFamily(command: string): string {
     return `git ${subcommandAfter(args, GIT_VALUE_FLAGS)}`.trim();
   if (first === 'gh') return `gh ${subcommandAfter(args, [])}`.trim();
   return first;
+}
+
+/** The words of the first real command in a chain, the one {@link bashFamily} reads. */
+function firstCommandWords(command: string): string[] {
+  const segments = splitChain(command).map(tokenize).map(commandWords);
+  // A bare assignment statement, `S=/tmp/x; ls $S`, is an env prefix too, so it never names the family.
+  const firstReal = segments.find((tokens) => {
+    const [head] = tokens;
+    return head !== undefined && head !== 'cd';
+  });
+  return firstReal ?? segments[0] ?? [];
+}
+
+/**
+ * Whether the command's first real command is a package runner with no scope flag:
+ * `--filter`, `-F`, `--dir`, or `-C`, spaced or `=`-joined. A `cd` is not a scope flag.
+ * Any other command is not unscoped.
+ */
+export function isUnscopedRunnerCall(command: string): boolean {
+  const [first, ...args] = firstCommandWords(command);
+  if (first === undefined || !PACKAGE_RUNNERS.has(first)) return false;
+  return !args.some((arg) =>
+    RUNNER_VALUE_FLAGS.some(
+      (flag) =>
+        arg === flag || (flag.startsWith('--') && arg.startsWith(`${flag}=`)),
+    ),
+  );
 }
 
 const PACKAGE_RUNNERS = new Set(['pnpm', 'npm', 'yarn', 'bun', 'npx']);
@@ -405,6 +427,8 @@ function familyWall(family: string, group: SessionBashCall[]): FamilyWall {
     family,
     calls: sorted.length,
     subagentCalls: group.filter((call) => call.isSubagent).length,
+    unscopedCalls: group.filter((call) => isUnscopedRunnerCall(call.command))
+      .length,
     seconds: roundMillis(sorted.reduce((sum, value) => sum + value, 0)),
     medianSeconds: roundMillis(median),
     p90Seconds: sorted[Math.ceil(P90_QUANTILE * sorted.length) - 1] ?? 0,
@@ -414,7 +438,8 @@ function familyWall(family: string, group: SessionBashCall[]): FamilyWall {
 /**
  * The "Bash wall time" report section. Its first line under the heading says that parallel
  * calls overlap, so family totals can exceed a session's wall, and whether subagent
- * transcripts are counted. Then the per-family table, then the slowest calls with session
+ * transcripts are counted. Then the per-family table, whose last column counts package-runner
+ * calls with no scope flag, then the slowest calls with session
  * and timestamp. An empty report renders no lines.
  */
 export function renderBashWall(report: BashWallReport | undefined): string[] {
@@ -428,7 +453,15 @@ export function renderBashWall(report: BashWallReport | undefined): string[] {
     `  calls ${report.calls}, timed ${report.timed}, background ${report.background}, unanswered ${report.unanswered}`,
     '',
     ...renderTable(
-      ['family', 'calls', 'total s', 'median s', 'p90 s', 'subagent calls'],
+      [
+        'family',
+        'calls',
+        'total s',
+        'median s',
+        'p90 s',
+        'subagent calls',
+        'unscoped calls',
+      ],
       report.families.map((row) => [
         row.family,
         row.calls,
@@ -436,6 +469,7 @@ export function renderBashWall(report: BashWallReport | undefined): string[] {
         row.medianSeconds.toFixed(2),
         row.p90Seconds.toFixed(2),
         row.subagentCalls,
+        row.unscopedCalls,
       ]),
     ),
     '',

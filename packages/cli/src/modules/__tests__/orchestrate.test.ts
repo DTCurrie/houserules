@@ -331,6 +331,54 @@ describe('orchestrate', () => {
       );
     });
 
+    describe('a phase close and the milestone step barrier', () => {
+      const unwrapped = (text: string): string => text.replace(/\s+/g, ' ');
+      let phaseClose: string;
+      let milestone: string;
+
+      beforeEach(() => {
+        phaseClose = unwrapped(
+          skillText.slice(
+            skillText.indexOf('## 8.'),
+            skillText.indexOf('## 9.'),
+          ),
+        );
+        milestone = unwrapped(
+          readFileSync(
+            join(root, '.claude/skills/orchestrate/references/milestone.md'),
+            'utf8',
+          ),
+        );
+      });
+
+      it('skips /verify-changed at a milestone item close whatever its Siblings line reads', () => {
+        expect(phaseClose).toContain(
+          'A milestone item skips it, per `references/milestone.md`.',
+        );
+        expect(unwrapped(orchestratorText)).toContain(
+          'Its §8 runs no `/verify-changed`, whatever its `Siblings:` line reads,',
+        );
+        expect(milestone).toContain(
+          "An item's §8 runs no `/verify-changed`, whatever its `Siblings:` line reads, nested or flat.",
+        );
+      });
+
+      it('keeps /verify-changed at §8 for a phase outside a milestone whose Siblings is none', () => {
+        expect(phaseClose).toContain(
+          'All waves done → run `/verify-changed` if installed',
+        );
+        expect(unwrapped(orchestratorText)).toContain(
+          '`/verify-changed` runs once, at §8, unless you run a milestone item.',
+        );
+      });
+
+      it('names the Close as the step barrier’s one full-suite run and scopes each member Verify', () => {
+        expect(milestone).toContain(
+          "The step's `Close` is its one full-suite run, and each member's `Verify` is scoped to that member's packages.",
+        );
+      });
+    });
+
     it('lets a verify already running finish rather than killing it', () => {
       expect(orchestratorText).toMatch(/never try to kill it/);
     });

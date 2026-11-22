@@ -394,9 +394,11 @@ comment states its shape, and a change to that shape bumps the version string in
   holds `calls`, `timed`, `background`, `unanswered`, `includesSubagents`, `families[]` and
   `slowest[]`. A call's seconds run from its `tool_use` record to its `tool_result`. A
   background call has no such span and is counted, not timed. `families[]` holds at most 15
-  `{ family, calls, subagentCalls, seconds, medianSeconds, p90Seconds }` rows, and `slowest[]` at
+  `{ family, calls, subagentCalls, unscopedCalls, seconds, medianSeconds, p90Seconds }` rows, and `slowest[]` at
   most 10 `{ family, command, seconds, session, startedAt, isSubagent }` rows, with `command` cut
-  to 120 characters. A subagent's call carries its parent's session id.
+  to 120 characters. A subagent's call carries its parent's session id. `unscopedCalls` counts
+  the timed calls whose first real command is a package runner with no `--filter`, `-F`, `--dir`
+  or `-C`.
 - `doc-conformance@1`, written to `--json` by `doc-conformance.mjs`.
 - `wait-timeline@2`, written to `--json` by `wait-timeline.mjs`. Each `waits[]` element keeps
   `endedBy`, the event that ended the wait, beside `awaited`, the event the waiter was blocked on.

@@ -69,6 +69,7 @@ function libActions(): Action[] {
     'ledger-index.mjs',
     'workspaces.mjs',
     'proc.mjs',
+    'resource-budget.mjs',
     'findings.mjs',
     'transcript-turn.mjs',
     'checker-input.mjs',

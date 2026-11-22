@@ -37,6 +37,12 @@ identifies the fix. If everything passed, say the change verifies clean and is r
 commit. If anything failed, fix it or hand the specific residue back, then re-run this skill. Never
 wave a red verdict through.
 
+If a FAIL timed out, either as a test timeout or as `timed out after <n>s`, and the run overlapped
+other runs such as a wave's workers or another gate, treat it as a load timeout. Rerun the failing
+package alone, once nothing else is running, under its share of the script budget, and read that
+result as the verdict. Never raise a test timeout or `verify.timeoutMs` to make it pass, because the
+timeout measured the load and not the test.
+
 ## Notes
 
 - Scope math and command selection live in `verify-changed.mjs`, configured by the `verify` block and

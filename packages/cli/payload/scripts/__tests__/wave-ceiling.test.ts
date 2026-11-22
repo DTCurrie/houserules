@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { ceilingFor } from '../wave-ceiling.mjs';
+import { ceilingFor, waveFigures } from '../wave-ceiling.mjs';
 
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
@@ -26,6 +26,35 @@ describe('ceilingFor', () => {
   });
 });
 
+describe('waveFigures', () => {
+  it('divides the budget by the ceiling when no workers are given', () => {
+    expect(waveFigures({ ncpu: 18, load1: 3 })).toEqual({
+      ceiling: 9,
+      ncpu: 18,
+      load1: 3,
+      source: 'cpu',
+      budget: 72,
+      share: 8,
+    });
+  });
+
+  it('divides the budget by the workers when given', () => {
+    expect(waveFigures({ ncpu: 18, load1: 3, workers: 4 }).share).toBe(18);
+  });
+
+  it('halves the budget and ceiling at full load', () => {
+    const figures = waveFigures({ ncpu: 18, load1: 18 });
+
+    expect([figures.ceiling, figures.budget, figures.share]).toEqual([
+      4, 36, 9,
+    ]);
+  });
+
+  it('falls back to the ceiling for a zero workers count', () => {
+    expect(waveFigures({ ncpu: 18, load1: 3, workers: 0 }).share).toBe(8);
+  });
+});
+
 describe('wave-ceiling.mjs (installed)', () => {
   const SCRIPT = '.claude/scripts/wave-ceiling.mjs';
   const SOURCES = ['maxWorkers', 'cpu', 'maxWorkers+load', 'cpu+load'];
@@ -42,6 +71,37 @@ describe('wave-ceiling.mjs (installed)', () => {
     expect(parsed.ncpu).toBeGreaterThanOrEqual(1);
     expect(SOURCES).toContain(parsed.source);
     expect(parsed.source).not.toMatch(/^maxWorkers/);
+  });
+
+  it('prints an integer budget and a share within it on a bare run', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+
+    const result = runScript(root, SCRIPT);
+
+    expect(result.status, result.stderr).toBe(0);
+    const parsed = JSON.parse(result.stdout.trim());
+    expect(Number.isInteger(parsed.budget)).toBe(true);
+    expect(Number.isInteger(parsed.share)).toBe(true);
+    expect(parsed.share).toBeLessThanOrEqual(parsed.budget);
+  });
+
+  it('gives the whole budget as the share for one worker', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+
+    const result = runScript(root, SCRIPT, { args: ['--workers', '1'] });
+
+    expect(result.status, result.stderr).toBe(0);
+    const parsed = JSON.parse(result.stdout.trim());
+    expect(parsed.share).toBe(parsed.budget);
+  });
+
+  it('ignores a non-numeric workers value and exits 0', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
+
+    const result = runScript(root, SCRIPT, { args: ['--workers', 'abc'] });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout.trim()).share).toBeGreaterThanOrEqual(1);
   });
 
   it('honors orchestrate.maxWorkers from the config', () => {

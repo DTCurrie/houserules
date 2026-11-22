@@ -295,13 +295,15 @@ does not override this.
 
 ## 8. Close the phase
 
-All waves done → run `/verify-changed` if installed (the changed packages plus dependents,
-off-context), otherwise the repo's verify on the touched packages. A failure is §7 residue. Then
-check the phase's own acceptance from the sub-plan, and update **both** the sub-plan header and the
-`ROADMAP.md` line to `DONE (<date>)` in one pass, with a `## Log` entry.
+All waves done → run `/verify-changed` if installed (changed packages plus dependents,
+off-context), otherwise the repo's verify on the touched packages. A milestone item skips it, per
+`references/milestone.md`. A failure is §7 residue. Then check the phase's own acceptance from the
+sub-plan, and update **both** the sub-plan header and the `ROADMAP.md` line to `DONE (<date>)` in
+one pass, with a `## Log` entry.
 
-Run `node .claude/scripts/plan-lint.mjs` if installed, to confirm the update landed on both files. Under nested mode the ROADMAP flip and that run belong to the dispatcher (see
-`references/nested.md`), and under `--flat` this layer writes both files as before.
+Run `node .claude/scripts/plan-lint.mjs` if installed, to confirm both files updated. Nested, the
+ROADMAP flip and that run belong to the dispatcher (`references/nested.md`). Under `--flat` this
+layer writes both files.
 
 **A phase that touched UI surfaces gets its reviews now.** When the diff reached UI code, or the
 sub-plan carries a `ui` signal, run `/accessibility-review` and `/design-review`, each skipped
@@ -328,7 +330,7 @@ and print the resume commands unless `--ignore-gates context-size` is set. `refe
 says why `/clear` beats `/compact`.
 
 At the end of the last phase, flip the ROADMAP header to `**Status:** DONE` and hand over the
-per-phase acceptance checklist. `/ready` gives you that roll-up if it's installed.
+per-phase acceptance checklist. `/ready` gives that roll-up, if installed.
 
 ## 9. Resume discipline
 

@@ -94,7 +94,13 @@ under `Backlogged` with its area, a one-line problem, and where it lives, and th
 logs it.
 
 When `Siblings:` is `none`, §7 step 3 reruns each slice's acceptance and typechecks the packages
-the wave touched, and `/verify-changed` runs once, at §8.
+the wave touched, and `/verify-changed` runs once, at §8, unless you run a milestone item.
+
+A milestone item is a spawn whose `Constraint:` line names a milestone step. Its §8 runs no
+`/verify-changed`, whatever its `Siblings:` line reads, because the step barrier runs each
+member's `Verify` and the step's `Close` over the same bytes. Check each phase acceptance
+criterion by its narrowest command, and list one that needs a package-wide run under `Verify`
+for the barrier.
 
 A wireit cache hit on declared inputs that a verify this session passed is the pass, so do not clear
 wireit state to force a rerun. A hit as the only evidence for a slice whose changed files may sit

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bashFamily,
   extractBashCalls,
+  isUnscopedRunnerCall,
   renderBashWall,
   summarizeBashWall,
 } from '../bash-wall.js';
@@ -75,6 +76,23 @@ describe('bashFamily', () => {
     { command: 'pnpm', family: 'pnpm' },
   ])('maps $command to $family', ({ command, family }) => {
     expect(bashFamily(command)).toBe(family);
+  });
+});
+
+describe('isUnscopedRunnerCall', () => {
+  it.each([
+    { command: 'pnpm test', unscoped: true },
+    { command: 'CI=1 pnpm test', unscoped: true },
+    { command: 'cd pkg && pnpm test', unscoped: true },
+    { command: 'pnpm --filter x test', unscoped: false },
+    { command: 'pnpm --filter=x test', unscoped: false },
+    { command: 'pnpm -F x test', unscoped: false },
+    { command: 'pnpm --dir d test', unscoped: false },
+    { command: 'pnpm --dir=d test', unscoped: false },
+    { command: 'pnpm -C d test', unscoped: false },
+    { command: 'git status', unscoped: false },
+  ])('reads "$command" as unscoped $unscoped', ({ command, unscoped }) => {
+    expect(isUnscopedRunnerCall(command)).toBe(unscoped);
   });
 });
 
@@ -266,6 +284,19 @@ describe('summarizeBashWall', () => {
     expect(report.families[0]).toMatchObject({ calls: 2, subagentCalls: 1 });
   });
 
+  it('counts only the unscoped runner calls of a family', () => {
+    const report = summarizeBashWall([
+      timedCall({ seconds: 1 }),
+      timedCall({ seconds: 1, command: 'pnpm --filter x test' }),
+      timedCall({ seconds: 1, command: 'pnpm --filter y test' }),
+    ]);
+
+    expect(report.families[0]).toMatchObject({
+      calls: 3,
+      unscopedCalls: 1,
+    });
+  });
+
   it('orders families by total seconds then name and keeps the limit', () => {
     const report = summarizeBashWall(
       [
@@ -316,6 +347,7 @@ describe('renderBashWall', () => {
         family: 'pnpm test',
         calls: 2,
         subagentCalls: 0,
+        unscopedCalls: 1,
         seconds: 12.5,
         medianSeconds: 6.25,
         p90Seconds: 10,
@@ -355,9 +387,11 @@ describe('renderBashWall', () => {
 
     expect(lines[2]).toBe('  calls 3, timed 2, background 1, unanswered 0');
     expect(lines[4]).toMatch(
-      /^ {2}family +calls +total s +median s +p90 s +subagent calls$/,
+      /^ {2}family +calls +total s +median s +p90 s +subagent calls +unscoped calls$/,
     );
-    expect(lines[6]).toMatch(/^ {2}pnpm test +2 +12\.50 +6\.25 +10\.00 +0 *$/);
+    expect(lines[6]).toMatch(
+      /^ {2}pnpm test +2 +12\.50 +6\.25 +10\.00 +0 +1 *$/,
+    );
     expect(lines.at(-1)).toBe(
       '    10.00s  pnpm test  abcdef12  2026-11-22T10:00:00.000Z  pnpm test',
     );

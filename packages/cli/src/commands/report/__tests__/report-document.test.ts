@@ -51,6 +51,7 @@ describe('buildReportDocument bashWall', () => {
       family: 'pnpm test',
       calls: 1,
       subagentCalls: 0,
+      unscopedCalls: 0,
       seconds: 7.5,
       medianSeconds: 7.5,
       p90Seconds: 7.5,

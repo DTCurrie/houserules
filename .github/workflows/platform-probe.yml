@@ -1,0 +1,93 @@
+name: Platform probe
+
+# A manual measurement, never a check. It reads the signals the resource budget is computed
+# from on hosted runners, and times the full suite at two wireit fan-outs on one Linux runner.
+# Nothing here gates a merge, and a failing test inside a timed run is recorded, not fatal.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signals:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # The seven values the budget lib reads or could read. One JSON line, so the log line
+      # copies into the report unchanged.
+      - name: Print signals
+        shell: bash
+        run: |
+          node -e '
+            const os = require("node:os");
+            console.log(JSON.stringify({
+              platform: process.platform,
+              availableParallelism: os.availableParallelism(),
+              cpus: os.cpus().length,
+              loadavg: os.loadavg(),
+              freemem: os.freemem(),
+              totalmem: os.totalmem(),
+              availableMemory: process.availableMemory(),
+              constrainedMemory: process.constrainedMemory(),
+            }));
+          '
+
+  fan-out:
+    # Both arms run in one job, so they share one machine and its neighbors.
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      # No wireit cache action. A restored fingerprint would let a timed run skip its work.
+      - run: pnpm install --frozen-lockfile
+      - name: Untimed build
+        run: pnpm build
+      # Ten runs, interleaved 2, 5, 2, 5. Each run appends a fresh comment to one source file
+      # that every package depends on, rebuilds untimed, and then times `pnpm test:all` alone,
+      # so no run is answered from a fresh fingerprint. `test:all` is called directly because
+      # `pnpm test` goes through capped-wireit, which this job is measuring against.
+      - name: Timed runs
+        shell: bash
+        env:
+          # Same opt-out as CI's test job: ubuntu-24.04 denies Chrome's sandbox.
+          CHROME_NO_SANDBOX: '1'
+        run: |
+          mkdir -p probe-logs
+          echo "| run | fan-out | wall s | exit | start load | failing lines |" > probe-logs/table.md
+          echo "| --- | --- | --- | --- | --- | --- |" >> probe-logs/table.md
+          for run in 1 2 3 4 5; do
+            for fanout in 2 5; do
+              echo "// platform-probe run $run fan-out $fanout" >> packages/api/src/regions.ts
+              pnpm build > "probe-logs/build-$run-$fanout.log" 2>&1
+              load=$(cut -d' ' -f1 /proc/loadavg)
+              start=$(date +%s.%N)
+              status=0
+              WIREIT_PARALLEL=$fanout pnpm test:all > "probe-logs/test-$run-$fanout.log" 2>&1 || status=$?
+              end=$(date +%s.%N)
+              wall=$(node -e 'console.log((process.argv[2] - process.argv[1]).toFixed(1))' "$start" "$end")
+              failing=$(grep -cE '^[[:space:]]*(FAIL|×|✗|not ok) ' "probe-logs/test-$run-$fanout.log" || true)
+              echo "| $run | $fanout | $wall | $status | $load | $failing |" | tee -a probe-logs/table.md
+            done
+          done
+          cat probe-logs/table.md >> "$GITHUB_STEP_SUMMARY"
+      # The per-run logs name each failing test and its error, which the table only counts.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: platform-probe-logs
+          path: probe-logs/
+          retention-days: 14

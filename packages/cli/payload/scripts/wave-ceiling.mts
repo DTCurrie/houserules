@@ -2,17 +2,24 @@
 /**
  * Prints the most task-workers one `orchestrate` wave should dispatch at once.
  *
- * Usage: wave-ceiling.mjs
+ * Usage: wave-ceiling.mjs [--workers <n>]
  *
- * Takes no arguments. Prints one JSON line, `{"ceiling":…,"ncpu":…,"load1":…,"source":…}`,
- * and exits 0. The ceiling is a number the orchestrator reads, not a limit this script
- * enforces. A missing or broken config never fails the run.
+ * Prints one JSON line,
+ * `{"ceiling":…,"ncpu":…,"load1":…,"source":…,"budget":…,"share":…}`, and exits 0.
+ * `budget` is the script budget and `share` is one run's slice of it. `share` divides
+ * the budget by `--workers <n>` when given, else by the ceiling. A missing or invalid
+ * `--workers` value is ignored. The ceiling is a number the orchestrator reads, not a
+ * limit this script enforces. A missing or broken config never fails the run.
  */
 import { realpathSync } from 'node:fs';
-import { availableParallelism, loadavg } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 import { loadConfigSafe } from '@houserules/payload/config';
+import {
+  budgetFor,
+  readSignals,
+  shareFor,
+} from '@houserules/payload/resource-budget';
 
 type CeilingSource = 'maxWorkers' | 'cpu' | 'maxWorkers+load' | 'cpu+load';
 
@@ -53,12 +60,47 @@ export function ceilingFor({ ncpu, load1, maxWorkers }: CeilingInput): {
   return { ceiling: base, source: baseSource };
 }
 
-function main(): void {
-  const ncpu = availableParallelism();
-  const load1 = loadavg()[0] ?? 0;
-  const maxWorkers = loadConfigSafe().orchestrate?.maxWorkers;
+interface FiguresInput extends CeilingInput {
+  workers?: number | undefined;
+}
+
+/**
+ * The ceiling figures plus the script budget and one run's share. The share divides
+ * by `workers` when it is a positive integer, else by the ceiling.
+ */
+export function waveFigures({
+  ncpu,
+  load1,
+  maxWorkers,
+  workers,
+}: FiguresInput): {
+  ceiling: number;
+  ncpu: number;
+  load1: number;
+  source: CeilingSource;
+  budget: number;
+  share: number;
+} {
   const { ceiling, source } = ceilingFor({ ncpu, load1, maxWorkers });
-  process.stdout.write(`${JSON.stringify({ ceiling, ncpu, load1, source })}\n`);
+  const budget = budgetFor({ ncpu, load1 });
+  const hasWorkers =
+    workers !== undefined && Number.isInteger(workers) && workers > 0;
+  const share = shareFor(budget, hasWorkers ? workers : ceiling);
+  return { ceiling, ncpu, load1, source, budget, share };
+}
+
+function workersFlag(argv: string[]): number | undefined {
+  const index = argv.indexOf('--workers');
+  if (index === -1) return undefined;
+  return Number(argv[index + 1]);
+}
+
+function main(): void {
+  const { ncpu, load1 } = readSignals();
+  const maxWorkers = loadConfigSafe().orchestrate?.maxWorkers;
+  const workers = workersFlag(process.argv.slice(2));
+  const figures = waveFigures({ ncpu, load1, maxWorkers, workers });
+  process.stdout.write(`${JSON.stringify(figures)}\n`);
   process.exit(0);
 }
 

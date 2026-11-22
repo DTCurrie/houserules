@@ -1317,6 +1317,7 @@ describe('cli', () => {
       family: 'pnpm build',
       calls: 1,
       subagentCalls: 0,
+      unscopedCalls: 0,
       seconds: 120,
       medianSeconds: 120,
       p90Seconds: 120,

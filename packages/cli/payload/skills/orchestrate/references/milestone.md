@@ -90,11 +90,19 @@ nested.md "The brief, going down", with these lines set per item:
 - `Siblings:` every other item in the step, whatever member it belongs to, in the labeled form
   nested.md "The ready set" defines. An `owner` item is listed too, since you edit its domain.
 - `Seam:` the paths step 3 wrote.
-- Constraint: with the lockfile held, the item edits no dependency field in a member manifest. It
-  lists the need under `Requests`.
+- Constraint: opens with milestone step `<step-slug>`, which marks the spawn as a step item. With
+  the lockfile held, the item edits no dependency field in a member manifest. It lists the need
+  under `Requests`.
 
 For an item `web/signup-form` in a step with `backend/signup-api`, the brief reads
 `Plan: <milestone>/web` and `Siblings: backend/signup-api (<its Domain roots>)`.
+
+## An item's close
+
+An item's §8 runs no `/verify-changed`, whatever its `Siblings:` line reads, nested or flat. It
+checks each phase acceptance criterion by its narrowest command and lists one that needs a
+package-wide run under `Verify`. The barrier's member `Verify` and `Close` carry that check, so a
+step with one item runs its suite once, not three times.
 
 ## Workers
 
@@ -120,14 +128,15 @@ zero in the "Workers" division, as an `owner` item does.
 
 ## The barrier
 
-Run it when every item is `DONE` or `DROPPED`, in this order:
+Run it when every item is `DONE` or `DROPPED`. The step's `Close` is its one full-suite run, and
+each member's `Verify` is scoped to that member's packages. Run them in this order:
 
 1. Run the repo-wide fixer once, per nested.md "The barrier, split". When an item requested a held
    write that the barrier's own checks need, such as a root `lint:fix` script, write it before this
    first check and log it as requested. Then run the barrier in full. All other held writes stay
    after `Close`. Snapshot the barrier per `closing.md`, which sets the path and label.
 2. Run each member's `Verify` command from the `## Members` table, one member at a time. These
-   stand in for nested.md's `/verify-changed` run.
+   stand in for nested.md's `/verify-changed` run and for each item's §8 verify.
 3. Run the step's `Close` alone. Alone means no phase-orchestrator is live, none owes a report
    after a residue message, and no background task of this session is running.
 4. Write the held paths: the lockfile and other listed paths the step's `Requests` named, the
@@ -163,16 +172,18 @@ in this step, and does it still hold that agent id?
 ## Changesets and ledgers
 
 Skip the changeset when `.claude/scripts/changeset-write.mjs` is absent, which means the
-`changesets` plugin is not installed. Otherwise the milestone has one changeset, written through
-`/changeset`. The first barrier creates it, naming every package any member touched so far, and
-records its id in that barrier's `## Log` line. Each later barrier amends it:
+`changesets` plugin is not installed. Otherwise the milestone has one changeset per feature, each
+written through `/changeset`. A feature is one change a user of the package would name, and a step
+often lands several. Each barrier writes one changeset for each feature the step landed, naming
+only the packages that feature touched, and records the ids in that barrier's `## Log` line. A
+step that extends a feature an earlier barrier already recorded amends that feature's changeset:
 
 ```
 node .claude/scripts/changeset-write.mjs --amend <id> --summary "<rewritten summary>" [--pkg <name>:<level> ...]
 ```
 
-The summary describes the milestone as it now stands, and `--pkg` adds each package touched since
-the last barrier.
+Never fold a step's features into one changeset for the milestone. Its summary grows a clause at
+every barrier until no clause says what changed.
 
 Ledger entries wait for the barrier too, since the ledgers are held. Copy each report's
 `Backlogged` and `Decide candidates` into the `## Log` line of its `DONE` flip, then run
@@ -195,6 +206,6 @@ re-derive state from the transcript.
 - Respawn only the items whose line is not `DONE` or `DROPPED`, each with the same brief, rebuilt
   from the step's `Items` and `Seam` lines and each phase's `Domain` header. A respawned
   orchestrator resumes from its sub-plan.
-- When every item is `DONE` or `DROPPED`, run the barrier from its first check. The changeset id
-  is in `## Log`, so a rerun amends instead of creating a second file.
+- When every item is `DONE` or `DROPPED`, run the barrier from its first check. The changeset ids
+  are in `## Log`, so a rerun amends them instead of writing each feature a second file.
 - No agent id survives `/clear`, so every barrier failure after a resume takes the "No" branch.

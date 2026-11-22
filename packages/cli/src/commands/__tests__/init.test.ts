@@ -93,6 +93,7 @@ describe('init --yes on a pnpm monorepo', () => {
       '.claude/scripts/session-context.mjs',
       '.claude/scripts/rename.mjs',
       '.claude/scripts/lib/workspaces.mjs',
+      '.claude/scripts/lib/resource-budget.mjs',
       '.claude/templates/CLAUDE.md.template',
     ];
 

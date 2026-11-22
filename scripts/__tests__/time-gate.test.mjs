@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { attributeScriptSeconds } from '../time-gate.mjs';
+import {
+  attributeScriptSeconds,
+  pnpmSpawnOptions,
+  table,
+  withShares,
+} from '../time-gate.mjs';
 
 const SCRIPT = fileURLToPath(new URL('../time-gate.mjs', import.meta.url));
 
@@ -55,6 +60,61 @@ describe('attributeScriptSeconds', () => {
   });
 });
 
+const THREE_ROWS = [
+  { script: 'a', outcome: 'ran', seconds: 5 },
+  { script: 'b', outcome: 'ran', seconds: 2 },
+  { script: 'c', outcome: 'fresh', seconds: 0.5 },
+];
+
+describe('withShares', () => {
+  it('gives each script its share of the wall and its gap to the next-longest', () => {
+    const rows = withShares(THREE_ROWS, 8);
+
+    assert.deepEqual(
+      rows.map(({ share, gapSeconds }) => ({ share, gapSeconds })),
+      [
+        { share: 0.625, gapSeconds: 3 },
+        { share: 0.25, gapSeconds: 1.5 },
+        { share: 0.063, gapSeconds: null },
+      ],
+    );
+  });
+
+  it('gives a share of 0 when the wall is 0', () => {
+    const [row] = withShares([{ script: 'a', outcome: 'ran', seconds: 0 }], 0);
+
+    assert.equal(row.share, 0);
+  });
+});
+
+describe('table', () => {
+  it('prints share and gap columns and ends with a total row holding the wall', () => {
+    const text = table(withShares(THREE_ROWS, 8), 8);
+
+    assert.equal(
+      text,
+      [
+        'script  outcome     seconds  share  gap s',
+        'a       ran            5.00  62.5%  3.00',
+        'b       ran            2.00  25.0%  1.50',
+        'c       fresh          0.50   6.3%  -',
+        'total                  8.00',
+        '',
+      ].join('\n'),
+    );
+  });
+});
+
+describe('pnpmSpawnOptions', () => {
+  it('starts pnpm through a shell on win32', () => {
+    assert.equal(pnpmSpawnOptions('win32').shell, true);
+  });
+
+  it('starts pnpm without a shell on darwin', () => {
+    assert.equal(pnpmSpawnOptions('darwin').shell, false);
+  });
+});
+
 describe('--out', () => {
   it('writes one jsonl row per script and exits with pnpm status', () => {
     const dir = mkdtempSync(join(tmpdir(), 'time-gate-'));
@@ -83,6 +143,11 @@ describe('--out', () => {
       .split('\n')
       .map((line) => JSON.parse(line));
     assert.equal(rows.length, 2);
+    assert.equal(rows[1].gapSeconds, null);
+    assert.equal(rows[1].share, 0);
+    assert.ok(rows[0].wallSeconds >= 0.9 && rows[0].wallSeconds < 5);
+    assert.equal(rows[0].wallSeconds, rows[1].wallSeconds);
+    assert.equal(rows[0].gapSeconds, rows[0].seconds);
     assert.equal(rows[0].gate, 'check');
     assert.equal(rows[0].script, 's:one');
     assert.equal(rows[0].outcome, 'ran');
@@ -90,5 +155,6 @@ describe('--out', () => {
     assert.equal(rows[1].script, 's:two');
     assert.equal(rows[1].seconds, 0);
     assert.match(result.stdout, /s:one\s+ran\s+1\./);
+    assert.match(result.stdout, /\ntotal\s+1\.\d\d\n/);
   });
 });
