@@ -74,6 +74,19 @@ describe('core plan, the payload-sync hook', () => {
 
     expect(copied).toHaveLength(1);
   });
+
+  it('copies version-check.mjs without wiring a hook for it', () => {
+    const actions = plan(makeCtx(), makeAnswers());
+    const copied = actions.filter(
+      (a) => a.kind === 'copy' && a.dest.endsWith('scripts/version-check.mjs'),
+    );
+    const commands = JSON.stringify(
+      actions.filter((a) => a.kind === 'merge-settings'),
+    );
+
+    expect(copied).toHaveLength(1);
+    expect(commands).not.toContain('version-check');
+  });
 });
 
 describe('core plan, the ledger directory .gitignore', () => {
@@ -199,6 +212,7 @@ describe('core plan, the .claude/.gitignore block over a file the user already o
     expect(content.endsWith(USER_BELOW)).toBe(true);
     expect(content).not.toContain('/stale-entry.md');
     expect(content).toContain('/houserules.manifest.json');
+    expect(content).toContain('/state/version-check.json');
   });
 
   it('appends the block after the user lines when the file has no markers yet', () => {

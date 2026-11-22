@@ -90,7 +90,10 @@ describe('payloadGitignoreActions, the region it plans', () => {
 
 describe('payloadGitignoreActions, the paths it lists', () => {
   it('lists the manifest even when no module writes under .claude/', () => {
-    expect(listedPaths([])).toEqual(['/houserules.manifest.json']);
+    expect(listedPaths([])).toEqual([
+      '/houserules.manifest.json',
+      '/state/version-check.json',
+    ]);
   });
 
   it('lists each copy, write and body dest relative to .claude/ with a leading slash, sorted and deduplicated', () => {
@@ -114,6 +117,7 @@ describe('payloadGitignoreActions, the paths it lists', () => {
       '/houserules.manifest.json',
       '/rules/b.md',
       '/skills/zeta/SKILL.md',
+      '/state/version-check.json',
     ]);
   });
 
@@ -142,7 +146,10 @@ describe('payloadGitignoreActions, the paths it lists', () => {
       } as unknown as Action,
     ];
 
-    expect(listedPaths(actions)).toEqual(['/houserules.manifest.json']);
+    expect(listedPaths(actions)).toEqual([
+      '/houserules.manifest.json',
+      '/state/version-check.json',
+    ]);
   });
 
   it('leaves out each ejected dest and still lists every other dest', () => {
@@ -164,13 +171,14 @@ describe('payloadGitignoreActions, the paths it lists', () => {
       '/houserules.manifest.json',
       '/rules/b.md',
       '/skills/other/SKILL.md',
+      '/state/version-check.json',
     ]);
   });
 
   it('leaves out dests outside .claude/', () => {
     expect(
       listedPaths([write('docs/guide.md'), write('.github/x.yml')]),
-    ).toEqual(['/houserules.manifest.json']);
+    ).toEqual(['/houserules.manifest.json', '/state/version-check.json']);
   });
 
   it('leaves out every dest under a directory the plan self-ignores with a `*` line, including that .gitignore', () => {
@@ -180,7 +188,11 @@ describe('payloadGitignoreActions, the paths it lists', () => {
         write('.claude/plans/README.md'),
         write('.claude/plansbook.md'),
       ]),
-    ).toEqual(['/houserules.manifest.json', '/plansbook.md']);
+    ).toEqual([
+      '/houserules.manifest.json',
+      '/plansbook.md',
+      '/state/version-check.json',
+    ]);
   });
 
   it('keeps dests under a directory whose .gitignore has no `*` line', () => {
@@ -193,6 +205,7 @@ describe('payloadGitignoreActions, the paths it lists', () => {
       '/houserules.manifest.json',
       '/rules/.gitignore',
       '/rules/a.md',
+      '/state/version-check.json',
     ]);
   });
 
@@ -210,7 +223,11 @@ describe('payloadGitignoreActions, the paths it lists', () => {
         [write('.claude/scripts/guard.mjs'), write('.claude/rules/a.md')],
         ctx,
       ),
-    ).toEqual(['/houserules.manifest.json', '/rules/a.md']);
+    ).toEqual([
+      '/houserules.manifest.json',
+      '/rules/a.md',
+      '/state/version-check.json',
+    ]);
   });
 
   it('escapes glob characters so a line matches only the file it names', () => {

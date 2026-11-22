@@ -38,6 +38,12 @@ export {
 export { bodyHashes, MANIFEST_PATH, wholeFileHash } from './manifest.js';
 export type { BodyHashes, HouseManifest } from './manifest.js';
 
+export {
+  VERSION_CHECK_CACHE_PATH,
+  VERSION_CHECK_TTL_MS,
+} from './version-check.js';
+export type { VersionCheckCache } from './version-check.js';
+
 export type { PluginSource } from './plugin-source.js';
 
 export type {

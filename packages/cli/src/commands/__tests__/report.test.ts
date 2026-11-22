@@ -181,6 +181,7 @@ describe('report', () => {
       'friction',
       'guard',
       'hooks',
+      'kitVersions',
       'meta',
       'outcomes',
       'residentContext',

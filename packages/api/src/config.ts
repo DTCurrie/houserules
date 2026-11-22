@@ -317,6 +317,13 @@ const HouseConfigSchema = z.strictObject({
     })
     .optional(),
 
+  versionCheck: z
+    .boolean()
+    .optional()
+    .describe(
+      'Check the npm registry once a day for a newer @houserules/cli or @houserules plugin, and print one line at session start when one exists. On by default. The request carries only the package name. Also off when NO_UPDATE_NOTIFIER is set, NODE_ENV is test, or CI is detected.',
+    ),
+
   ejected: z
     .array(z.string())
     .optional()

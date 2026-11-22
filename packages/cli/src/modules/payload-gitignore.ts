@@ -7,6 +7,7 @@ import type {
   RegionSpec,
   WriteAction,
 } from '@houserules/api';
+import { VERSION_CHECK_CACHE_PATH } from '@houserules/api/internal';
 import type { Ctx } from '../detect.js';
 
 /**
@@ -103,9 +104,13 @@ export function ejectableDests(ctx: Ctx, actions: Action[]): Set<string> {
  */
 function ignoredPaths(ctx: Ctx, actions: Action[]): string[] {
   const ejected = new Set(ctx.claude.houseConfig?.ejected ?? []);
-  const dests = [KIT_MANIFEST, ...ejectableDests(ctx, actions)].filter(
-    (dest) => !ejected.has(dest),
-  );
+  // The cache is written by the checker, never by an action, so it is never ejectable.
+  const dests = [
+    ...[KIT_MANIFEST, ...ejectableDests(ctx, actions)].filter(
+      (dest) => !ejected.has(dest),
+    ),
+    VERSION_CHECK_CACHE_PATH,
+  ];
 
   return dests
     .map((dest) => `/${gitignoreLiteral(dest.slice('.claude/'.length))}`)

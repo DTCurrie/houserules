@@ -122,13 +122,29 @@ function ctxWithInstalledVersion(
   return { ...base, claude: { ...base.claude, manifest } };
 }
 
+const NOW = Date.parse('2026-11-22T12:00:00.000Z');
+const HOUR_MS = 60 * 60 * 1000;
+
+function cacheCheckedAgo(
+  ageMs: number,
+  latest: Record<string, string>,
+): string {
+  return JSON.stringify({
+    checkedAt: new Date(NOW - ageMs).toISOString(),
+    latest,
+  });
+}
+
 function publishedAs(
   latest: string | null,
   env: NodeJS.ProcessEnv = {},
+  cacheText: string | null = null,
 ): PublishedVersionLookup & { calls: number } {
   const lookup = {
     env,
     calls: 0,
+    now: () => NOW,
+    readCache: () => cacheText,
     latestVersion: () => {
       lookup.calls += 1;
       return latest;
@@ -461,5 +477,121 @@ describe('checkInstallIntegrity, given a tracked manifest', () => {
     rmSync(join(root, '.git'), { recursive: true, force: true });
 
     expect(manifestTrackedFindings(root, '1.0.0')).toEqual([]);
+  });
+});
+
+describe('checkInstallIntegrity, version-check cache', () => {
+  const BEHIND =
+    'installed houserules v0.4.1, latest published is v0.12.2. Update the CLI, then the install: npm install -D @houserules/cli@latest && npx houserules update';
+
+  it.each([
+    { age: '25 hours', ageMs: 25 * HOUR_MS },
+    { age: 'exactly 24 hours', ageMs: 24 * HOUR_MS },
+  ])(
+    'asks the registry and keeps the findings when the cache is $age old',
+    ({ ageMs }) => {
+      const ctx = ctxWithInstalledVersion('0.4.1');
+      const lookup = publishedAs(
+        '0.12.2',
+        {},
+        cacheCheckedAgo(ageMs, { '@houserules/cli': '0.4.1' }),
+      );
+
+      const result = checkInstallIntegrity('/repo', ctx, '0.4.1', null, lookup);
+
+      expect({
+        readouts: result.readouts,
+        findings: result.findings,
+        calls: lookup.calls,
+      }).toEqual({ readouts: [BEHIND], findings: [], calls: 1 });
+    },
+  );
+
+  it.each([
+    { age: '23 hours', ageMs: 23 * HOUR_MS },
+    { age: 'a minute', ageMs: 60 * 1000 },
+  ])(
+    'prints the readout from a cache $age old naming a newer version, with no live call',
+    ({ ageMs }) => {
+      const ctx = ctxWithInstalledVersion('0.4.1');
+      const lookup = publishedAs(
+        '9.9.9',
+        {},
+        cacheCheckedAgo(ageMs, { '@houserules/cli': '0.12.2' }),
+      );
+
+      const result = checkInstallIntegrity('/repo', ctx, '0.4.1', null, lookup);
+
+      expect({ readouts: result.readouts, calls: lookup.calls }).toEqual({
+        readouts: [BEHIND],
+        calls: 0,
+      });
+    },
+  );
+
+  it('prints nothing from a fresh cache naming the current version, with no live call', () => {
+    const ctx = ctxWithInstalledVersion('0.4.1');
+    const lookup = publishedAs(
+      '9.9.9',
+      {},
+      cacheCheckedAgo(HOUR_MS, { '@houserules/cli': '0.4.1' }),
+    );
+
+    const result = checkInstallIntegrity('/repo', ctx, '0.4.1', null, lookup);
+
+    expect({ readouts: result.readouts, calls: lookup.calls }).toEqual({
+      readouts: [],
+      calls: 0,
+    });
+  });
+
+  it('makes no live call when a fresh cache lacks the CLI entry', () => {
+    const ctx = ctxWithInstalledVersion('0.4.1');
+    const lookup = publishedAs('9.9.9', {}, cacheCheckedAgo(HOUR_MS, {}));
+
+    const result = checkInstallIntegrity('/repo', ctx, '0.4.1', null, lookup);
+
+    expect({ readouts: result.readouts, calls: lookup.calls }).toEqual({
+      readouts: [],
+      calls: 0,
+    });
+  });
+
+  it('falls back to the live lookup when the cache is corrupt', () => {
+    const ctx = ctxWithInstalledVersion('0.4.1');
+    const lookup = publishedAs('0.12.2', {}, '{not json');
+
+    const result = checkInstallIntegrity('/repo', ctx, '0.4.1', null, lookup);
+
+    expect({ readouts: result.readouts, calls: lookup.calls }).toEqual({
+      readouts: [BEHIND],
+      calls: 1,
+    });
+  });
+
+  it('makes no call and prints nothing when the config sets versionCheck to false', () => {
+    const base = ctxWithInstalledVersion('0.4.1');
+    const ctx: Ctx = {
+      ...base,
+      claude: {
+        ...base.claude,
+        houseConfig: {
+          ...base.claude.houseConfig,
+          versionCheck: false,
+        } as unknown as HouseConfig,
+      },
+    };
+    const lookup = publishedAs(
+      '0.12.2',
+      {},
+      cacheCheckedAgo(HOUR_MS, { '@houserules/cli': '0.12.2' }),
+    );
+
+    const result = checkInstallIntegrity('/repo', ctx, '0.4.1', null, lookup);
+
+    expect({ readouts: result.readouts, calls: lookup.calls }).toEqual({
+      readouts: [],
+      calls: 0,
+    });
   });
 });

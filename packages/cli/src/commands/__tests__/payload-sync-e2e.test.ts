@@ -48,6 +48,7 @@ const FRESH_SYNCED_LINE = new RegExp(
 );
 const RESTART_LINE =
   '[houserules] Restart the session so the synced skills, rules, and agents load.';
+const KIT_LINE = `[houserules] kit ${CLI_VERSION}`;
 
 function scratchDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -111,6 +112,7 @@ function runSyncHook(root: string, extraPathDirs: string[] = []) {
       PATH: [...extraPathDirs, nodeOnlyBin(), '/bin', '/usr/bin'].join(':'),
       HOME: scratchDir('hr-home-'),
       CLAUDE_PROJECT_DIR: root,
+      NO_UPDATE_NOTIFIER: '1',
     },
   });
   return {
@@ -182,7 +184,7 @@ describe('payload-sync SessionStart hook on a fresh clone with a local CLI', () 
 });
 
 describe('payload-sync SessionStart hook on an install older than the local CLI', () => {
-  it('refreshes the install, keeps the local edit, and is silent on the next run', () => {
+  it('refreshes the install, keeps the local edit, and prints only the kit line on the next run', () => {
     const root = installedFixture();
     installLocalCli(root);
     ageManifest(root);
@@ -191,9 +193,10 @@ describe('payload-sync SessionStart hook on an install older than the local CLI'
     const first = runSyncHook(root);
 
     expect(first.status, first.stderr).toBe(0);
-    expect(first.lines).toHaveLength(2);
+    expect(first.lines).toHaveLength(3);
     expect(first.lines[0]).toMatch(SYNCED_LINE);
     expect(first.lines[1]).toBe(RESTART_LINE);
+    expect(first.lines[2]).toBe(KIT_LINE);
     expect(readFileSync(join(root, EDITED_RULE))).toEqual(edited);
     expect(manifestOf(root).kitVersion).toBe(CLI_VERSION);
     expect(missingDests(root)).toEqual([]);
@@ -202,7 +205,7 @@ describe('payload-sync SessionStart hook on an install older than the local CLI'
     const second = runSyncHook(root);
 
     expect(second.status, second.stderr).toBe(0);
-    expect(second.lines).toEqual([]);
+    expect(second.lines).toEqual([KIT_LINE]);
     expect(readTree(root)).toEqual(synced);
   });
 });
@@ -220,12 +223,13 @@ describe('payload-sync SessionStart hook with only a global CLI on PATH', () => 
     expect(result.status, result.stderr).toBe(0);
     expect(result.lines[0]).toMatch(SYNCED_LINE);
     expect(result.lines[1]).toBe(RESTART_LINE);
+    expect(result.lines[2]).toBe(KIT_LINE);
     expect(readFileSync(join(root, EDITED_RULE))).toEqual(edited);
     expect(manifestOf(root).kitVersion).toBe(CLI_VERSION);
     expect(missingDests(root)).toEqual([]);
   });
 
-  it('prints nothing and changes no byte on a current install', () => {
+  it('prints only the kit line and changes no byte on a current install', () => {
     const root = installedFixture();
     const globalBin = installGlobalCli();
     const before = readTree(root);
@@ -233,7 +237,7 @@ describe('payload-sync SessionStart hook with only a global CLI on PATH', () => 
     const result = runSyncHook(root, [globalBin]);
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.lines).toEqual([]);
+    expect(result.lines).toEqual([KIT_LINE]);
     expect(readTree(root)).toEqual(before);
   });
 });

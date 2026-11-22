@@ -28,6 +28,7 @@ const UNEDITED_SKILL = '.claude/skills/ready/SKILL.md';
 const RULE = '.claude/rules/code-cleanliness.md';
 const RULE_ID = 'code-cleanliness';
 const MANIFEST = '.claude/houserules.manifest.json';
+const VERSION_CHECK_CACHE = '.claude/state/version-check.json';
 const CONFIG = '.claude/houserules.config.json';
 const GITIGNORE = '.claude/.gitignore';
 const SETTINGS = '.claude/settings.json';
@@ -102,7 +103,10 @@ function editedCommittedInstall(config: Record<string, unknown> = {}): {
   const editedSkill = read(root, EDITED_SKILL);
   const trimmedFrontmatter = trimRulePaths(root);
   const classified = blockDests(root).filter(
-    (dest) => dest !== MANIFEST && dest !== EDITED_SKILL,
+    (dest) =>
+      dest !== MANIFEST &&
+      dest !== EDITED_SKILL &&
+      dest !== VERSION_CHECK_CACHE,
   );
   commitInstall(root);
   return { root, editedSkill, trimmedFrontmatter, classified };

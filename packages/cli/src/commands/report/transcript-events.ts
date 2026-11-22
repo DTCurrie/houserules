@@ -204,6 +204,8 @@ export interface Corpus {
   seenCommandUuids: Set<string>;
   /** Keyed by session id. Start-of-session fields take the first attachment seen. */
   residentCaptures: Map<string, ResidentCapture>;
+  /** Keyed by session id. The first `[houserules] kit <version>` line a SessionStart hook printed. */
+  kitVersions: Map<string, string>;
   /** Every `version` stamp seen on a record, so a report can say which CLI wrote it. */
   claudeVersions: Set<string>;
   /** Earliest and latest timestamped record across the corpus, epoch ms. */
@@ -304,6 +306,7 @@ export function emptyCorpus(slugs: string[]): Corpus {
     sessions: new Map(),
     seenCommandUuids: new Set(),
     residentCaptures: new Map(),
+    kitVersions: new Map(),
     claudeVersions: new Set(),
   };
 }
@@ -625,6 +628,7 @@ function extractEvents(
     return;
   }
   if (record.type === 'attachment' && attachment?.hookName) {
+    recordKitVersion(attachment, sessionId, corpus);
     session.hookFires.push({
       hookName: attachment.hookName,
       exitCode: attachment.exitCode,
@@ -693,6 +697,24 @@ function extractEvents(
       isSidechain: record.isSidechain === true,
     });
   }
+}
+
+const KIT_VERSION_PATTERN = /^\[houserules\] kit (\S+)\s*$/m;
+
+// A resumed session replays its first banner, so the first one seen stays.
+function recordKitVersion(
+  attachment: HookAttachment,
+  sessionId: string,
+  corpus: Corpus,
+): void {
+  if (
+    !attachment.hookName?.startsWith('SessionStart') ||
+    typeof attachment.content !== 'string' ||
+    corpus.kitVersions.has(sessionId)
+  )
+    return;
+  const version = KIT_VERSION_PATTERN.exec(attachment.content)?.[1];
+  if (version) corpus.kitVersions.set(sessionId, version);
 }
 
 function stopHookSummaryOf(

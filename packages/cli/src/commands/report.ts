@@ -26,6 +26,7 @@ import {
   redactDocument,
   writeExportFile,
 } from './report/report-export.js';
+import { renderKitVersions } from './report/kit-versions.js';
 import { renderResidentContext } from './report/resident-context.js';
 import { renderSkillAdoption } from './report/skill-adoption.js';
 import { renderSkillOutcomes } from './report/skill-outcomes.js';
@@ -61,6 +62,7 @@ function renderDocument(document: ReportDocument): string[] {
     renderFriction(document.friction),
     renderArtifactEpisodes(document.artifacts),
     renderResidentContext(document.residentContext),
+    renderKitVersions(document.kitVersions),
   ];
   return sections
     .filter((section) => section.length > 0)

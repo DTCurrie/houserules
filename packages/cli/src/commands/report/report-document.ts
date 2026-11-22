@@ -12,6 +12,7 @@ import {
 import { detect } from '../../detect.js';
 import { computeGuardBlocks, type GuardBlock } from './guard-efficacy.js';
 import { computeHookHealth, type HookHealthReport } from './hook-health.js';
+import { computeKitVersions, type KitVersionsReport } from './kit-versions.js';
 import {
   computeResidentContext,
   type ResidentContextReport,
@@ -106,6 +107,8 @@ export interface ReportDocument {
   residentContext: ResidentContextReport;
   /** Absent in a document exported before the section existed, and rendered as absent, not zero. */
   artifacts?: ArtifactReport;
+  /** Absent in a document exported before the section existed. */
+  kitVersions?: KitVersionsReport;
   /** Absent in a document exported before the block existed, or from a repo with no config. */
   fix?: FixConfigSummary;
 }
@@ -221,6 +224,7 @@ export function buildReportDocument(
     friction: withTrimInstalled(computeFriction(corpus), top),
     residentContext: computeResidentContext(corpus, top),
     artifacts: computeArtifactEpisodes(corpus),
+    kitVersions: computeKitVersions(corpus, options.cliVersion),
     ...(fix ? { fix } : {}),
   };
 }

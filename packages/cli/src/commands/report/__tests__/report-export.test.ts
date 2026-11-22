@@ -1,3 +1,4 @@
+import { renderKitVersions } from '../kit-versions.js';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -798,7 +799,8 @@ describe('a document exported before the new readouts', () => {
         key === 'stopHooks' ||
         key === 'weightedInput' ||
         key === 'toolResultSizes' ||
-        key === 'artifacts'
+        key === 'artifacts' ||
+        key === 'kitVersions'
           ? undefined
           : value,
     ) as ReportDocument;
@@ -845,6 +847,8 @@ describe('a document exported before the new readouts', () => {
     expect(hooks).not.toContain('Stop hooks');
     expect(friction).not.toContain('result size');
     expect(renderArtifactEpisodes(document.artifacts)).toEqual([]);
+    expect(document.kitVersions).toBeUndefined();
+    expect(renderKitVersions(document.kitVersions)).toEqual([]);
   });
 
   it('prints the cache-write split as not recorded, not as zero', () => {

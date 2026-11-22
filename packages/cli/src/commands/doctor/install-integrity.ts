@@ -4,7 +4,12 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ledgerDirFor } from '../../core/ledger-dir.js';
-import { MANIFEST_PATH } from '@houserules/api/internal';
+import {
+  MANIFEST_PATH,
+  VERSION_CHECK_CACHE_PATH,
+  VERSION_CHECK_TTL_MS,
+} from '@houserules/api/internal';
+import type { VersionCheckCache } from '@houserules/api/internal';
 import {
   trackedAmong,
   trackedLedgerLogs,
@@ -47,6 +52,10 @@ export interface PublishedVersionLookup {
   env: NodeJS.ProcessEnv;
   /** The registry's `latest` for `@houserules/cli`, or null when it cannot be known. */
   latestVersion: () => string | null;
+  /** The clock, in epoch milliseconds, that the cache's age is measured against. */
+  now: () => number;
+  /** The raw text of the version-check cache under `root`, or null when it cannot be read. */
+  readCache: (root: string) => string | null;
 }
 
 const CLI_PACKAGE = '@houserules/cli';
@@ -72,10 +81,44 @@ function npmLatestVersion(): string | null {
   }
 }
 
+function readVersionCacheFile(root: string): string | null {
+  try {
+    return readFileSync(join(root, VERSION_CHECK_CACHE_PATH), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULT_LOOKUP: PublishedVersionLookup = {
   env: process.env,
   latestVersion: npmLatestVersion,
+  now: Date.now,
+  readCache: readVersionCacheFile,
 };
+
+/**
+ * The cache's answer when it is fresh: `{ latest }` is the CLI entry, null when the entry is
+ * absent. Undefined when the cache is missing, unparseable, or older than the TTL.
+ */
+function freshCachedLatest(
+  root: string,
+  lookup: PublishedVersionLookup,
+): { latest: string | null } | undefined {
+  const raw = lookup.readCache(root);
+  if (raw === null) return undefined;
+  let cache: Partial<VersionCheckCache>;
+  try {
+    cache = JSON.parse(raw) as Partial<VersionCheckCache>;
+  } catch {
+    return undefined;
+  }
+  const checkedAt =
+    typeof cache?.checkedAt === 'string' ? Date.parse(cache.checkedAt) : NaN;
+  if (Number.isNaN(checkedAt)) return undefined;
+  if (lookup.now() - checkedAt >= VERSION_CHECK_TTL_MS) return undefined;
+  const entry = cache.latest?.[CLI_PACKAGE];
+  return { latest: typeof entry === 'string' ? entry : null };
+}
 
 /**
  * update-notifier's skip conditions: `NO_UPDATE_NOTIFIER` set to anything, `NODE_ENV=test`,
@@ -105,9 +148,11 @@ function cliUpgradeCommand(ctx: Ctx): string {
  * A readout when the install AND the running CLI are both behind the published `latest`. The
  * running-CLI comparison cannot see this, since a repo's own devDependency CLI is as old as its
  * install. When the running CLI is already at `latest`, that comparison's `update` advice is
- * the whole fix, so this stays silent. Also silent when skipped or when the lookup fails.
+ * the whole fix, so this stays silent. Also silent when skipped or when the lookup fails. A cache
+ * younger than one day answers without a live lookup, even when it lacks the CLI entry.
  */
 function publishedVersionReadout(
+  root: string,
   ctx: Ctx,
   installed: string,
   runningCli: string,
@@ -115,9 +160,11 @@ function publishedVersionReadout(
 ): string[] {
   const installedSemver = parseSemver(installed);
   const runningSemver = parseSemver(runningCli);
-  if (!installedSemver || !runningSemver || isUpdateCheckSkipped(lookup.env))
-    return [];
-  const latest = lookup.latestVersion();
+  if (!installedSemver || !runningSemver) return [];
+  if (ctx.claude.houseConfig?.versionCheck === false) return [];
+  if (isUpdateCheckSkipped(lookup.env)) return [];
+  const cached = freshCachedLatest(root, lookup);
+  const latest = cached ? cached.latest : lookup.latestVersion();
   const latestSemver = latest ? parseSemver(latest) : null;
   if (!latestSemver) return [];
   if (compareSemver(installedSemver, latestSemver) >= 0) return [];
@@ -269,6 +316,7 @@ export function checkInstallIntegrity(
   return {
     findings,
     readouts: publishedVersionReadout(
+      root,
       ctx,
       manifest.kitVersion,
       kitVersion,

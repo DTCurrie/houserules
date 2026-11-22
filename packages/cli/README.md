@@ -449,6 +449,26 @@ nobody has to remember to run `update`.
 
 `doctor` reports a missing `prepare` script, and `doctor --fix` restores it.
 
+### The daily version check
+
+**What it does.** The `payload-sync` hook prints `[houserules] kit <version>` at every session
+start. When the registry has a newer `@houserules/cli` or `@houserules/*` plugin than the one
+installed, it adds one line naming the newer version and the upgrade command. A line for a given
+version prints at most once a day. A global CLI gets a global upgrade command, and a dependency
+gets one for the project's package manager.
+
+**What it sends.** One GET per package to the registry in `npm_config_registry`, or to
+registry.npmjs.org when that is unset. The request carries the package name and the client name
+`houserules`. It carries nothing about you or the repo.
+
+**Where it caches.** `.claude/state/version-check.json`, which is ignored by git. The hook checks
+again only when that file is missing or a day old, so an offline machine tries once a day.
+`doctor` reads the same cache and makes its own lookup only when the cache is missing or stale.
+
+**How to turn it off.** Set `"versionCheck": false` in `.claude/houserules.config.json`, or set
+`NO_UPDATE_NOTIFIER` in your environment. The check also skips itself in CI and when
+`NODE_ENV=test`.
+
 ## Ledgers: what is committed and what is generated
 
 The backlog and decision modules keep an append-only ledger at

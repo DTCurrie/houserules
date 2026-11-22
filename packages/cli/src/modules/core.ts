@@ -94,6 +94,11 @@ function libActions(): Action[] {
       'payload-sync.mjs',
       'SessionStart: sync a stale or incomplete install with the installed CLI',
     ),
+    script(
+      id,
+      'version-check.mjs',
+      'spawned by payload-sync for the daily registry check, so a newer CLI is noticed',
+    ),
   );
   return actions;
 }
