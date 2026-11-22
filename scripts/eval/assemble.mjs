@@ -87,7 +87,7 @@ export function buildCli(options) {
  * @param {string} cwd
  * @param {string[]} args
  */
-function git(cwd, args) {
+export function git(cwd, args) {
   const result = spawnSync('git', [...GIT_ARGS, ...args], {
     cwd,
     encoding: 'utf8',
@@ -128,7 +128,7 @@ function cleanEnv() {
  * @param {string} file
  * @returns {string}
  */
-function sha256(file) {
+export function sha256(file) {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
 }
 

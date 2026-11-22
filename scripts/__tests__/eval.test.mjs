@@ -6,3 +6,4 @@ import '../eval/__tests__/meter.cases.mjs';
 import '../eval/__tests__/preflight.cases.mjs';
 import '../eval/__tests__/predicates.cases.mjs';
 import '../eval/__tests__/run.cases.mjs';
+import '../eval/__tests__/fixture-arm.cases.mjs';

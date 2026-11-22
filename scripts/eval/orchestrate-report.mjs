@@ -156,9 +156,12 @@ function countByType(event, type) {
 
 /**
  * @param {SampleArtifacts} sample
+ * @param {string} [requiredAgent] The subagent type `subagent_stats.by_type` must count at
+ *   least once. A fixture names its own, and the orchestrate-report check needs
+ *   `phase-orchestrator`.
  * @returns {{ valid: boolean, line: string }}
  */
-export function judgeValidity(sample) {
+export function judgeValidity(sample, requiredAgent = PHASE_ORCHESTRATOR) {
   const voided = (cause) => ({
     valid: false,
     line: `${sample.label}: void, ${cause}`,
@@ -171,8 +174,8 @@ export function judgeValidity(sample) {
     return voided(`result subtype ${result.subtype}`);
   if (result.is_error !== false)
     return voided(`result is_error ${result.is_error}`);
-  if (countByType(result, PHASE_ORCHESTRATOR) < 1)
-    return voided(`no ${PHASE_ORCHESTRATOR} spawned`);
+  if (countByType(result, requiredAgent) < 1)
+    return voided(`no ${requiredAgent} spawned`);
   return { valid: true, line: `${sample.label}: valid` };
 }
 

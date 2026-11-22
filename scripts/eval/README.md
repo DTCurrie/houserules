@@ -39,21 +39,51 @@ higher `--per-run`.
 
 ## Flags
 
-| Flag             | Default                                     | Meaning                                                                                                |
-| ---------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `--paid`         | off                                         | Start real sessions. Needs `--api-key-file`, `--budget`, `--per-run`, `--margin`, `--out`.             |
-| `--preflight`    | off                                         | With `--paid`, run the two haiku probes in place of samples. Refused unless `--per-run` is `0.02`.     |
-| `--verdict-only` | off                                         | Judge the sessions already in `--out`. Refused with `--work`, `--paid`, `--preflight`, or `--no-slug`. |
-| `--samples`      | 0                                           | Valid named-plan samples `--out` should hold. Only the missing ones start. Needs `--paid`.             |
-| `--no-slug`      | off                                         | Also start the no-slug session, unless the ledger holds one. Needs `--paid`.                           |
-| `--budget`       | required with `--paid`                      | Dollars the ledger may reach.                                                                          |
-| `--per-run`      | required with `--paid`                      | Dollar cap per session, passed to the child as `--max-budget-usd`.                                     |
-| `--margin`       | required with `--paid`                      | Overshoot ratio the meter adds to each cap.                                                            |
-| `--work`         | `houserules-eval` in the OS temp directory  | Where samples are assembled. A `scratchpad` or `.artifact-work` segment is refused.                    |
-| `--out`          | required with `--paid` and `--verdict-only` | Where session artifacts, `spend.jsonl`, and `verdict.json` go.                                         |
-| `--rev`          | `HEAD`                                      | Revision whose CLI installs into each sample.                                                          |
-| `--timeout-min`  | 20                                          | Minutes before a session's process group is killed.                                                    |
-| `--api-key-file` | required with `--paid`                      | File holding the API key each paid session bills.                                                      |
+| Flag             | Default                                     | Meaning                                                                                                                            |
+| ---------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `--paid`         | off                                         | Start real sessions. Needs `--api-key-file`, `--budget`, `--per-run`, `--margin`, `--out`.                                         |
+| `--preflight`    | off                                         | With `--paid`, run the two haiku probes in place of samples. Refused unless `--per-run` is `0.02`.                                 |
+| `--verdict-only` | off                                         | Judge the sessions already in `--out`. Refused with `--work`, `--paid`, `--preflight`, or `--no-slug`.                             |
+| `--samples`      | 0                                           | Valid named-plan samples `--out` should hold. Only the missing ones start. Needs `--paid`.                                         |
+| `--no-slug`      | off                                         | Also start the no-slug session, unless the ledger holds one. Needs `--paid`.                                                       |
+| `--budget`       | required with `--paid`                      | Dollars the ledger may reach.                                                                                                      |
+| `--per-run`      | required with `--paid`                      | Dollar cap per session, passed to the child as `--max-budget-usd`.                                                                 |
+| `--margin`       | required with `--paid`                      | Overshoot ratio the meter adds to each cap.                                                                                        |
+| `--work`         | `houserules-eval` in the OS temp directory  | Where samples are assembled. A `scratchpad` or `.artifact-work` segment is refused.                                                |
+| `--out`          | required with `--paid` and `--verdict-only` | Where session artifacts, `spend.jsonl`, and `verdict.json` go.                                                                     |
+| `--rev`          | `HEAD`                                      | Revision whose CLI installs into each sample.                                                                                      |
+| `--timeout-min`  | 20                                          | Minutes before a session's process group is killed.                                                                                |
+| `--api-key-file` | required with `--paid`                      | File holding the API key each paid session bills.                                                                                  |
+| `--fixture`      | none                                        | Fixture directory holding `eval.json` and `repo/`. Requires `--arm`. Refused with `--preflight`, `--no-slug`, or `--verdict-only`. |
+| `--arm`          | none                                        | The `eval.json` arm to run. Artifacts go to `<out>/<arm>/sample-<k>/`. Requires `--fixture`.                                       |
+
+## Fixtures and arms
+
+`--fixture <dir> --arm <name>` runs one arm of a fixture in place of the orchestrate-report
+samples. `<dir>/eval.json` names the `init --yes --modules` list, the `plugins` as
+`{ path, alias }` with `path` relative to the built `--rev` root, the child's `model`, the
+`validityAgent`, the `collect` paths, and `arms.<name>` as `{ prompt, overlay, model? }`, paths
+relative to `<dir>`.
+
+Each sample is a copy of `<dir>/repo/`. With plugins, a first `init --yes --modules core` seeds
+the config, the runner adds each plugin as `{ "name": "<absolute path>", "alias": "<alias>" }`,
+and a second `init` installs the full list. The arm's overlay mirrors paths under `.claude/` and
+is copied over the install before the install commit. An overlay path the manifest does not
+track stops the run. The arm's prompt file is the `-p` text, and its `model`, when set, replaces
+the fixture's. Under `HOUSERULES_EVAL_CLI`, plugin paths resolve against the checkout that
+`cli.js` sits in.
+
+A sample is valid when its result is a success whose `subagent_stats.by_type` counts the
+`validityAgent`, and every overlaid file still holds the overlay's bytes at exit. `run.json`
+records `arm`, `model`, `validityAgent`, and `overlays` as
+`{ path, initSha256, overlaySha256, exitSha256 }`. After the session exits, each `collect` path
+that exists is copied into `<out>/<arm>/sample-<k>/tree/`. Ledger lines read
+`{ arm, sample, sessionId, costUsd }`.
+
+`--samples` counts only the arm's valid samples, while the meter sums the whole `--out` ledger,
+so every arm and the probes spend against one `--budget`. A fixture run skips `plan-lint` and
+`verdict.json`, and exits 0 when every session it started finished, or 2 when the meter refused
+one. The free run assembles one sample and prints the child command on one line.
 
 ## Billing
 

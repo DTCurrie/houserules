@@ -9,6 +9,7 @@
  *     --margin <ratio> --out <dir> (--preflight | [--samples <n>] [--no-slug])
  *     [--work <dir>] [--rev <rev>] [--timeout-min <minutes>]
  *   node scripts/eval/run.mjs --verdict-only --out <dir>
+ *   node scripts/eval/run.mjs --fixture <dir> --arm <name> [--paid ... --samples <n>]
  *
  * Options:
  *   --paid          Start real sessions. Without it the run is free: it builds the CLI,
@@ -31,17 +32,25 @@
  *   --timeout-min   Minutes before a session's process group is killed (default 20).
  *   --api-key-file  File holding the API key each paid session bills. Required with `--paid`.
  *                   Refused when missing, empty, or readable by group or others.
+ *   --fixture       A fixture directory holding `eval.json` and `repo/`. Samples are built from
+ *                   `repo/` with the modules, plugins, and model `eval.json` names, and judged
+ *                   by its `validityAgent`. Requires `--arm`. Refused with `--preflight`,
+ *                   `--no-slug`, or `--verdict-only`. Skips plan-lint and `verdict.json`.
+ *   --arm           The `eval.json` arm to run: its prompt, its overlay over `.claude/`, and its
+ *                   `model` when set. Artifacts go to `<out>/<arm>/sample-<k>/`, and `--samples`
+ *                   counts only that arm's valid samples. Requires `--fixture`.
  *
  * Environment:
  *   HOUSERULES_EVAL_CLI  A prebuilt `cli.js` to install with in place of building `--rev`. The
  *                        run then records no commit.
  *
  * Exit codes:
- *   0  the free dry run passed, the preflight passed, or every claim reads PASS.
+ *   0  the free dry run passed, the preflight passed, every claim reads PASS, or under
+ *      `--fixture` every session the run started finished.
  *   1  `plan-lint` failed, a preflight check failed, or a claim reads FAIL.
  *   2  the verdict is incomplete, or the run could not start: a bad flag, a refused path or key
- *      file, a held lock, a failed build, a session that could not spawn, or a preflight probe
- *      the meter refused.
+ *      file, a held lock, a failed build, a session that could not spawn, a preflight probe
+ *      the meter refused, or under `--fixture` an arm sample the meter refused.
  */
 import {
   existsSync,
@@ -62,6 +71,13 @@ import {
   refuseWorkPath,
   runPlanLint,
 } from './assemble.mjs';
+import {
+  assembleArmSample,
+  copyCollect,
+  exitOverlayHashes,
+  judgeArmValidity,
+  loadArmFixture,
+} from './fixture-arm.mjs';
 import { childArgv, childEnv, claudeVersion, runSession } from './child.mjs';
 import {
   CLAIM_IDS,
@@ -72,6 +88,7 @@ import {
   STREAM,
   TRANSCRIPTS,
   VERDICT,
+  armSessionDir,
   sessionDir,
   sessionDirName,
 } from './layout.mjs';
@@ -118,6 +135,8 @@ const ALL_MODE_BITS = 0o777;
 const OCTAL = 8;
 const SAMPLE_DIR = /^sample-(\d+)$/;
 const SHELL_SAFE = /^[\w@%+=:,./-]+$/;
+/** Characters a double-quoted shell word cannot hold on one line, so `$'...'` quoting carries them. */
+const LINE_BREAKING = /[\n\r\t]/;
 const REPO_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** A flag or file that stops the run before any build or session. */
@@ -179,6 +198,8 @@ function parseOptions(argv) {
       rev: { type: 'string', default: DEFAULT_REV },
       'timeout-min': { type: 'string' },
       'api-key-file': { type: 'string' },
+      fixture: { type: 'string' },
+      arm: { type: 'string' },
     },
     strict: true,
     allowPositionals: false,
@@ -197,6 +218,8 @@ function parseOptions(argv) {
     rev: values.rev,
     timeoutMinutes: parseTimeoutMinutes(values['timeout-min']),
     apiKeyFile: values['api-key-file'],
+    fixture: values.fixture,
+    arm: values.arm,
   };
 }
 
@@ -228,12 +251,34 @@ function readApiKey(path) {
 }
 
 /**
+ * Refuses `--arm` without `--fixture`, and `--fixture` without `--arm` or beside a flag only the
+ * orchestrate-report check takes.
+ *
+ * @param {ReturnType<typeof parseOptions>} options
+ */
+function refuseFixtureFlags(options) {
+  if (options.fixture === undefined) {
+    if (options.arm !== undefined)
+      throw new UsageError('--arm requires --fixture');
+    return;
+  }
+  if (options.isPreflight || options.hasNoSlug || options.isVerdictOnly) {
+    throw new UsageError(
+      '--fixture takes no --preflight, --no-slug, or --verdict-only',
+    );
+  }
+  if (options.arm === undefined)
+    throw new UsageError('--fixture requires --arm');
+}
+
+/**
  * Checks every flag combination and file the run needs, before any build or session.
  *
  * @param {ReturnType<typeof parseOptions>} options
- * @returns {{ work: string, apiKey: string | null }}
+ * @returns {{ work: string, apiKey: string | null, fixture: import('./fixture-arm.mjs').ArmFixture | null }}
  */
 function refuseBeforeStart(options) {
+  refuseFixtureFlags(options);
   if (options.isVerdictOnly) {
     if (options.work !== undefined)
       throw new UsageError('--verdict-only takes no --work');
@@ -244,17 +289,21 @@ function refuseBeforeStart(options) {
     }
     if (options.out === undefined)
       throw new UsageError('--verdict-only requires --out');
-    return { work: '', apiKey: null };
+    return { work: '', apiKey: null, fixture: null };
   }
   const work = resolve(options.work ?? join(tmpdir(), 'houserules-eval'));
   refuseWorkPath(work);
+  const fixture =
+    options.fixture === undefined
+      ? null
+      : loadArmFixture(options.fixture, options.arm);
   if (!options.isPaid) {
     if (options.isPreflight || options.hasNoSlug || options.samples > 0) {
       throw new UsageError(
         '--preflight, --samples, and --no-slug require --paid',
       );
     }
-    return { work, apiKey: null };
+    return { work, apiKey: null, fixture };
   }
   requirePaidFlags(options);
   if (options.isPreflight && options.perRun !== PROBE_CAP_USD) {
@@ -264,7 +313,7 @@ function refuseBeforeStart(options) {
   }
   const apiKey = readApiKey(options.apiKeyFile);
   if (options.out === undefined) throw new UsageError('--paid requires --out');
-  return { work, apiKey };
+  return { work, apiKey, fixture };
 }
 
 /**
@@ -297,6 +346,14 @@ function resolveCli(rev) {
 /** @param {string} arg */
 function shellQuote(arg) {
   if (SHELL_SAFE.test(arg)) return arg;
+  if (LINE_BREAKING.test(arg)) {
+    const escaped = arg
+      .replace(/[\\']/g, (char) => `\\${char}`)
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
+    return `$'${escaped}'`;
+  }
   return `"${arg.replace(/[\\"$`]/g, (char) => `\\${char}`)}"`;
 }
 
@@ -325,6 +382,34 @@ function dryRun(options, work) {
   const argv = childArgv({
     prompt: SAMPLE_PROMPT,
     model: SAMPLE_MODEL,
+    perRun: options.perRun ?? DRY_RUN_PER_RUN,
+  });
+  console.log(`sample root ${root}`);
+  console.log(['claude', ...argv].map(shellQuote).join(' '));
+  return EXIT_OK;
+}
+
+/**
+ * The free default under `--fixture`: assemble the arm's `sample-1` and print the child
+ * command. It runs no plan-lint, since a fixture carries no plan.
+ *
+ * @param {ReturnType<typeof parseOptions>} options
+ * @param {string} work
+ * @param {import('./fixture-arm.mjs').ArmFixture} fixture
+ * @returns {number}
+ */
+function fixtureDryRun(options, work, fixture) {
+  const { cliPath } = resolveCli(options.rev);
+  const { root } = assembleArmSample({
+    fixture,
+    cliPath,
+    work,
+    stamp: makeStamp(),
+    sample: 1,
+  });
+  const argv = childArgv({
+    prompt: fixture.prompt,
+    model: fixture.model,
     perRun: options.perRun ?? DRY_RUN_PER_RUN,
   });
   console.log(`sample root ${root}`);
@@ -367,6 +452,7 @@ function readApiKeySource(streamPath) {
  * @property {string} cliPath
  * @property {string} version
  * @property {NodeJS.ProcessEnv} env The child environment, API key included.
+ * @property {import('./fixture-arm.mjs').ArmFixture | null} fixture
  */
 
 /**
@@ -666,6 +752,98 @@ async function sampleLoop(context) {
 }
 
 /**
+ * Runs one arm sample: assemble it with the overlay, run the child, hash the overlay at exit,
+ * copy the `collect` paths into `tree/`, and write `run.json`.
+ *
+ * @param {PaidContext & { fixture: import('./fixture-arm.mjs').ArmFixture }} context
+ * @param {import('./layout.mjs').ArmKey} key
+ */
+async function runArmSession(context, key) {
+  const { fixture } = context;
+  const assembled = assembleArmSample({
+    fixture,
+    cliPath: context.cliPath,
+    work: context.work,
+    stamp: context.stamp,
+    sample: key.sample,
+  });
+  const outDir = armSessionDir(context.out, key);
+  const session = await runSession({
+    cwd: assembled.root,
+    outDir,
+    argv: childArgv({
+      prompt: fixture.prompt,
+      model: fixture.model,
+      perRun: context.options.perRun,
+    }),
+    env: context.env,
+    timeoutMinutes: context.options.timeoutMinutes,
+    home: process.env.HOME ?? homedir(),
+  });
+  const overlays = exitOverlayHashes(assembled.root, assembled.overlays);
+  copyCollect(assembled.root, fixture.collect, outDir);
+  /** @type {import('./layout.mjs').ArmRunRecord} */
+  const record = {
+    arm: key.arm,
+    sample: key.sample,
+    claudeVersion: context.version,
+    commit: context.commit,
+    stamp: context.stamp,
+    root: assembled.root,
+    prompt: fixture.prompt,
+    model: fixture.model,
+    validityAgent: fixture.validityAgent,
+    exitCode: session.exitCode,
+    timedOut: session.timedOut,
+    sessionId: session.sessionId,
+    apiKeySource: readApiKeySource(join(outDir, STREAM)),
+    overlays,
+  };
+  writeFileSync(join(outDir, RUN_JSON), `${JSON.stringify(record, null, 2)}\n`);
+  return { sessionId: session.sessionId, resultEvent: session.resultEvent };
+}
+
+/**
+ * Starts the arm samples `--samples` still needs, numbered after the arm's highest, under the
+ * meter of the whole `--out` ledger. Prints each refused sample and every sample's validity.
+ *
+ * @param {PaidContext & { fixture: import('./fixture-arm.mjs').ArmFixture }} context
+ * @returns {Promise<number>} 0 when every job started, 2 when the meter refused one.
+ */
+async function armLoop(context) {
+  const { fixture, options } = context;
+  const armOut = join(context.out, fixture.arm);
+  const judge = (dir) =>
+    judgeArmValidity(loadSample(dir), fixture.validityAgent);
+  const existing = sampleDirs(armOut);
+  const validCount = existing.filter(({ dir }) => judge(dir).valid).length;
+  const highest = existing.at(-1)?.number ?? 0;
+  const missing = Math.max(options.samples - validCount, 0);
+  /** @type {import('./layout.mjs').ArmKey[]} */
+  const jobs = Array.from({ length: missing }, (_, index) => ({
+    arm: fixture.arm,
+    sample: highest + index + 1,
+  }));
+  const { refused } = await runMetered({
+    out: context.out,
+    budget: options.budget,
+    perRun: options.perRun,
+    margin: options.margin,
+    jobs,
+    start: (key) => runArmSession(context, key),
+  });
+  if (refused) {
+    for (const key of jobs.slice(jobs.indexOf(refused))) {
+      console.log(`meter refused ${key.arm}/sample-${key.sample}`);
+    }
+  }
+  for (const { dir } of sampleDirs(armOut)) {
+    console.log(`${fixture.arm}/${judge(dir).line}`);
+  }
+  return refused ? EXIT_NOT_STARTED : EXIT_OK;
+}
+
+/**
  * Judges every session in `out`, writes `verdict.json`, and prints one line per claim.
  *
  * @param {string} out
@@ -705,7 +883,9 @@ async function paidRun(options, started) {
       cliPath,
       version: claudeVersion(process.env),
       env,
+      fixture: started.fixture,
     };
+    if (context.fixture) return armLoop(context);
     return options.isPreflight ? preflight(context) : sampleLoop(context);
   });
 }
@@ -723,7 +903,11 @@ async function main(argv) {
       if (!existsSync(out)) throw new UsageError(`--out ${out} does not exist`);
       return writeVerdict(out);
     }
-    if (!options.isPaid) return dryRun(options, started.work);
+    if (!options.isPaid) {
+      return started.fixture
+        ? fixtureDryRun(options, started.work, started.fixture)
+        : dryRun(options, started.work);
+    }
     return await paidRun(options, started);
   } catch (error) {
     console.error(`eval: ${error.message}`);

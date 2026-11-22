@@ -155,6 +155,10 @@ const SCOPE_CASE_NAMES = [
   'stop-lint-format-fix-scope-on',
   'stop-lint-format-fix-scope-on-dot',
 ];
+const SCOPE_REFORMAT_CASE_NAMES = [
+  'stop-lint-format-fix-scope-on',
+  'stop-lint-format-fix-scope-on-dot',
+];
 const SCOPE_BUILD = findBuild('HEAD', { repoDir: REPO });
 const SCOPE_SKIP = SCOPE_BUILD
   ? false
@@ -385,18 +389,42 @@ describe('scope cases', () => {
     ]);
   });
 
-  for (const name of SCOPE_CASE_NAMES) {
+  const armCase = async (name) => {
+    if (!armSuite) {
+      armWorkDir = mkdtempSync(join(tmpdir(), 'bench-scope-arm-test-'));
+      armSuite = await cases({
+        root: SCOPE_BUILD.root,
+        repoDir: REPO,
+        workDir: armWorkDir,
+      });
+    }
+    const benchCase = armSuite.find((candidate) => candidate.name === name);
+    assert.ok(benchCase, `no case ${name}`);
+    return benchCase;
+  };
+
+  it(
+    'stop-lint-format-fix-scope-off leaves the edit as written',
+    { skip: SCOPE_SKIP },
+    async () => {
+      const benchCase = await armCase('stop-lint-format-fix-scope-off');
+
+      const result = runCase(benchCase);
+      const [edited] = changedPaths(benchCase.cwd);
+      const source = readFileSync(join(benchCase.cwd, edited), 'utf8');
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(
+        source,
+        /^export const {3}benchScope {2}= {2}1 ;$/m,
+        'a Stop with fix.passPaths off runs no fix step, so the dirty edit survives',
+      );
+    },
+  );
+
+  for (const name of SCOPE_REFORMAT_CASE_NAMES) {
     it(`${name} reformats the edit`, { skip: SCOPE_SKIP }, async () => {
-      if (!armSuite) {
-        armWorkDir = mkdtempSync(join(tmpdir(), 'bench-scope-arm-test-'));
-        armSuite = await cases({
-          root: SCOPE_BUILD.root,
-          repoDir: REPO,
-          workDir: armWorkDir,
-        });
-      }
-      const benchCase = armSuite.find((candidate) => candidate.name === name);
-      assert.ok(benchCase, `no case ${name}`);
+      const benchCase = await armCase(name);
 
       const result = runCase(benchCase);
       const [edited] = changedPaths(benchCase.cwd);

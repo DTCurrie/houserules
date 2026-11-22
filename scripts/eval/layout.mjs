@@ -38,7 +38,42 @@ export const VERDICT = 'verdict.json';
  * Which session a ledger line, a `run.json`, or a session directory belongs to. Exactly one
  * field is set.
  *
- * @typedef {{ sample: number } | { probe: 'a' | 'b' } | { noSlug: true }} SessionKey
+ * @typedef {{ sample: number } | { probe: 'a' | 'b' } | { noSlug: true } | ArmKey} SessionKey
+ */
+
+/**
+ * One arm sample under `--fixture`: the arm's name, then its sample number. Its artifacts sit at
+ * `<out>/<arm>/sample-<k>/`, and its ledger line carries both fields.
+ *
+ * @typedef {{ arm: string, sample: number }} ArmKey
+ */
+
+/**
+ * One overlaid file in an arm's `run.json` `overlays`. `path` is relative to the sample's
+ * `.claude/`. `exitSha256` is null when the session deleted the file. A sample whose
+ * `exitSha256` differs from its `overlaySha256` is void.
+ *
+ * @typedef {{ path: string, initSha256: string, overlaySha256: string, exitSha256: string | null }} OverlayRecord
+ */
+
+/**
+ * `<out>/<arm>/sample-<k>/run.json`, written after an arm session exits. It carries no left-tree
+ * fields, and `prompt` is the full `-p` text.
+ *
+ * @typedef {ArmKey & {
+ *   claudeVersion: string,
+ *   commit: string,
+ *   stamp: string,
+ *   root: string,
+ *   prompt: string,
+ *   model: string,
+ *   validityAgent: string,
+ *   exitCode: number | null,
+ *   timedOut: boolean,
+ *   sessionId: string | null,
+ *   apiKeySource: string | null,
+ *   overlays: OverlayRecord[],
+ * }} ArmRunRecord
  */
 
 /**
@@ -96,4 +131,15 @@ export function sessionDirName(key) {
  */
 export function sessionDir(out, key) {
   return join(out, sessionDirName(key));
+}
+
+/**
+ * The directory an arm sample's artifacts sit in: `<out>/<arm>/sample-<k>/`.
+ *
+ * @param {string} out
+ * @param {ArmKey} key
+ * @returns {string}
+ */
+export function armSessionDir(out, key) {
+  return join(out, key.arm, sessionDirName({ sample: key.sample }));
 }
