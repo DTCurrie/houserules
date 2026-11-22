@@ -54,10 +54,10 @@ describe('decisions', () => {
       );
     });
 
-    it('points CLAUDE.md at the decide skill', () => {
-      expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).toContain(
-        'Record it with `/decide`',
-      );
+    it('points the imported houserules sections at the decide skill', () => {
+      expect(
+        readFileSync(join(root, '.claude/houserules.md'), 'utf8'),
+      ).toContain('Record it with `/decide`');
     });
   });
 });

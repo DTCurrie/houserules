@@ -38,6 +38,7 @@ const CLI_VERSION = CLI_PACKAGE.version;
 const OLDER_VERSION = '0.0.1';
 const MANIFEST = '.claude/houserules.manifest.json';
 const SYNC_SCRIPT = '.claude/scripts/payload-sync.mjs';
+const IMPORT_TARGET = '.claude/houserules.md';
 const EDITED_RULE = '.claude/rules/code-cleanliness.md';
 const LOCAL_EDIT = '\nA line this repo added by hand.\n';
 const SYNCED_LINE = new RegExp(
@@ -180,6 +181,38 @@ describe('payload-sync SessionStart hook on a fresh clone with a local CLI', () 
     expect(result.lines[1]).toBe(RESTART_LINE);
     expect(Object.keys(manifestOf(root).files).sort()).toEqual(recordedDests);
     expect(missingDests(root)).toEqual([]);
+  });
+});
+
+describe('payload-sync SessionStart hook when the import target is missing', () => {
+  it('restores .claude/houserules.md at the current kit version and prints the restart line once', () => {
+    const root = installedFixture();
+    installLocalCli(root);
+    const original = readFileSync(join(root, IMPORT_TARGET), 'utf8');
+    rmSync(join(root, IMPORT_TARGET));
+    expect(manifestOf(root).kitVersion).toBe(CLI_VERSION);
+
+    const result = runSyncHook(root);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.lines).toHaveLength(3);
+    expect(result.lines[0]).toMatch(FRESH_SYNCED_LINE);
+    expect(result.lines[1]).toBe(RESTART_LINE);
+    expect(result.lines[2]).toBe(KIT_LINE);
+    expect(readFileSync(join(root, IMPORT_TARGET), 'utf8')).toBe(original);
+    expect(original).toContain('### houserules sections');
+  });
+
+  it('syncs nothing and prints no restart line when the target is present and the version matches', () => {
+    const root = installedFixture();
+    installLocalCli(root);
+    const before = readTree(root);
+
+    const result = runSyncHook(root);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.lines).toEqual([KIT_LINE]);
+    expect(readTree(root)).toEqual(before);
   });
 });
 

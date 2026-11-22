@@ -609,15 +609,27 @@ describe('renderClaudeMd', () => {
     expect(body).not.toContain('`.claude/plans`');
   });
 
-  it('embeds the same additions body between the markers', () => {
-    const ctx = makeCtx();
+  it('embeds only the import line between the markers of a seeded CLAUDE.md', () => {
+    const answers = makeAnswers({ moduleIds: ['core', 'changesets'] });
+    const md = renderClaudeMd(makeCtx(), answers);
+    const start = md.indexOf('<!-- houserules:claude-md start -->');
+    const end = md.indexOf('<!-- houserules:claude-md end -->');
+    const between = md.slice(start, end);
+    expect(between).toContain('@.claude/houserules.md');
+    expect(between).not.toContain('### houserules sections');
+  });
+
+  it('embeds the full additions body between the markers of a seeded AGENTS.md', () => {
+    const base = makeCtx();
+    const ctx = makeCtx({
+      claude: { ...base.claude, instructionsFile: 'AGENTS.md' },
+    });
     const answers = makeAnswers({ moduleIds: ['core', 'changesets'] });
     const md = renderClaudeMd(ctx, answers);
     const additions = renderClaudeAdditions(ctx, answers).trimEnd();
     const start = md.indexOf('<!-- houserules:claude-md start -->');
     const end = md.indexOf('<!-- houserules:claude-md end -->');
-    const between = md.slice(start, end);
-    expect(between).toContain(additions);
+    expect(md.slice(start, end)).toContain(additions);
   });
 });
 

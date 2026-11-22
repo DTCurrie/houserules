@@ -356,9 +356,14 @@ describe('orchestrate', () => {
       );
     });
 
-    it('adds the /orchestrate carve-out against implementation subagents to CLAUDE.md', () => {
+    it('adds the /orchestrate carve-out against implementation subagents to the file CLAUDE.md imports', () => {
       const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
-      expect(claudeMd).toMatch(/\/orchestrate/);
+      const sections = readFileSync(
+        join(root, '.claude/houserules.md'),
+        'utf8',
+      );
+      expect(claudeMd).toMatch(/^@\.claude\/houserules\.md$/m);
+      expect(sections).toMatch(/\/orchestrate/);
     });
 
     it('passes doctor', () => {

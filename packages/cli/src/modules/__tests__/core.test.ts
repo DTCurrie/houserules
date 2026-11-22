@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { makeAnswers, makeCtx, makeRegistry } from '#test/ctx-builder';
 import { hookCommand } from '@houserules/api';
-import type { HouseConfig, RegionAction } from '@houserules/api';
+import type { Action, HouseConfig, RegionAction } from '@houserules/api';
+import { renderClaudeAdditions } from '../../render.js';
 import { upsertRegion } from '@houserules/api/internal';
 import { plan } from '../core.js';
 import { buildPlan, MODULES } from '../../plan.js';
@@ -224,5 +225,100 @@ describe('core plan, the .claude/.gitignore block over a file the user already o
     expect(status).toBe('inserted');
     expect(content.startsWith(onDisk)).toBe(true);
     expect(content).toContain(block.region.start);
+  });
+});
+
+describe('core plan, the instructions-file region imports the sections', () => {
+  const HOST = '# my-repo\n\nMy own notes.\n';
+  const IMPORT_BODY = '@.claude/houserules.md\n';
+
+  function claudeFor(
+    instructionsFile: 'CLAUDE.md' | 'AGENTS.md',
+    houseConfig: HouseConfig | null = null,
+  ) {
+    const base = makeCtx();
+    return makeCtx({
+      claude: { ...base.claude, instructionsFile, houseConfig },
+    });
+  }
+
+  function regionFor(actions: Action[]): RegionAction {
+    const found = actions.filter(
+      (a): a is RegionAction =>
+        a.kind === 'region' && a.region.id === 'claude-md',
+    );
+    expect(found).toHaveLength(1);
+    return found[0]!;
+  }
+
+  function targetWrites(actions: Action[]) {
+    return actions.filter(
+      (a) => a.kind === 'write' && a.dest === '.claude/houserules.md',
+    );
+  }
+
+  it('leaves CLAUDE.md byte-identical for two section sets while the target content differs', () => {
+    const ctx = claudeFor('CLAUDE.md');
+    const few = plan(ctx, makeAnswers({ moduleIds: ['core'] }));
+    const many = plan(ctx, makeAnswers({ moduleIds: ['core', 'backlog'] }));
+
+    const fewRegion = regionFor(few);
+    const manyRegion = regionFor(many);
+    expect(fewRegion.body).toBe(IMPORT_BODY);
+    expect(manyRegion.body).toBe(IMPORT_BODY);
+    expect(upsertRegion(HOST, fewRegion.body, fewRegion.region).content).toBe(
+      upsertRegion(HOST, manyRegion.body, manyRegion.region).content,
+    );
+
+    const fewWrite = targetWrites(few);
+    const manyWrite = targetWrites(many);
+    expect(fewWrite).toHaveLength(1);
+    expect(manyWrite).toHaveLength(1);
+    expect(fewWrite[0]).toMatchObject({ kind: 'write', module: 'core' });
+    expect((fewWrite[0] as { content: string }).content).not.toBe(
+      (manyWrite[0] as { content: string }).content,
+    );
+    expect((manyWrite[0] as { content: string }).content).toContain(
+      '`/backlog-add`',
+    );
+  });
+
+  it('lists the target in the .claude/.gitignore block and the .prettierignore block', () => {
+    const actions = buildPlan(
+      makeCtx({ prettier: true }),
+      makeAnswers({ moduleIds: ['core'] }),
+      makeRegistry(MODULES),
+    );
+    const bodyFor = (dest: string) =>
+      actions.find(
+        (a): a is RegionAction => a.kind === 'region' && a.dest === dest,
+      )?.body;
+
+    expect(bodyFor('.claude/.gitignore')?.split('\n')).toContain(
+      '/houserules.md',
+    );
+    expect(bodyFor('.prettierignore')?.split('\n')).toContain(
+      '.claude/houserules.md',
+    );
+  });
+
+  it('keeps the full sections in the AGENTS.md region and writes no target', () => {
+    const ctx = claudeFor('AGENTS.md');
+    const actions = plan(ctx, makeAnswers({ moduleIds: ['core'] }));
+
+    const body = regionFor(actions).body;
+    expect(body).toBe(renderClaudeAdditions(ctx, makeAnswers()));
+    expect(body.startsWith('### houserules sections\n')).toBe(true);
+    expect(targetWrites(actions)).toHaveLength(0);
+  });
+
+  it('plans no region and no target when claudeMd.managed is false', () => {
+    const ctx = claudeFor('CLAUDE.md', {
+      claudeMd: { managed: false },
+    } as HouseConfig);
+    const actions = plan(ctx, makeAnswers());
+
+    expect(actions.filter((a) => a.kind === 'region')).toHaveLength(0);
+    expect(targetWrites(actions)).toHaveLength(0);
   });
 });

@@ -60,10 +60,10 @@ describe('backlog', () => {
       expect(existsSync(scriptPath), `${scriptPath} absent`).toBe(false);
     });
 
-    it('points CLAUDE.md at the backlog-add skill', () => {
-      expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8')).toContain(
-        '`/backlog-add`',
-      );
+    it('points the imported houserules sections at the backlog-add skill', () => {
+      expect(
+        readFileSync(join(root, '.claude/houserules.md'), 'utf8'),
+      ).toContain('`/backlog-add`');
     });
   });
 });

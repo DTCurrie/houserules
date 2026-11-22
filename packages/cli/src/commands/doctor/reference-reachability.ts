@@ -1,8 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import { extractBody } from '@houserules/api/internal';
 import type { Ctx } from '../../detect.js';
+import { parseImports } from './resident-surface.js';
 import { claudeMdRegion } from '../../core/claude-md-region.js';
 import type { CheckResult, Finding } from '@houserules/api';
 
@@ -67,8 +68,20 @@ function managedRegionPathFindings(root: string): Finding[] {
   }
   if (body === null) return [];
   const seen = new Set<string>();
+  return [
+    ...inlinePathFindings(root, body, seen),
+    ...importedTargetFindings(root, body, seen),
+  ];
+}
+
+/** A WARN for each unseen `.claude/` path in inline code in `text` that is absent on disk. */
+function inlinePathFindings(
+  root: string,
+  text: string,
+  seen: Set<string>,
+): Finding[] {
   const findings: Finding[] = [];
-  for (const span of body.matchAll(/`([^`\n]+)`/g)) {
+  for (const span of text.matchAll(/`([^`\n]+)`/g)) {
     for (const hit of span[1]!.matchAll(/\.claude\/[^\s`]*/g)) {
       const path = hit[0];
       if (/[<*{]/.test(path) || seen.has(path)) continue;
@@ -79,6 +92,40 @@ function managedRegionPathFindings(root: string): Finding[] {
         msg: `CLAUDE.md: the managed region points at ${path}, which does not exist.`,
       });
     }
+  }
+  return findings;
+}
+
+/**
+ * For each `@` import in the region that resolves under `.claude/`: a WARN when the target is
+ * absent, otherwise the target's own inline-path findings.
+ */
+function importedTargetFindings(
+  root: string,
+  body: string,
+  seen: Set<string>,
+): Finding[] {
+  const findings: Finding[] = [];
+  for (const spec of parseImports(body)) {
+    const target = resolve(root, spec);
+    const underClaude = relative(join(root, '.claude'), target);
+    const isUnderClaude =
+      underClaude !== '' &&
+      !underClaude.startsWith('..') &&
+      !isAbsolute(underClaude);
+    if (!isUnderClaude || seen.has(spec)) continue;
+    seen.add(spec);
+    let text: string;
+    try {
+      text = readFileSync(target, 'utf8');
+    } catch {
+      findings.push({
+        level: 'WARN',
+        msg: `CLAUDE.md: the managed region imports ${spec}, which does not exist. Run \`houserules update\` to write it.`,
+      });
+      continue;
+    }
+    findings.push(...inlinePathFindings(root, text, seen));
   }
   return findings;
 }

@@ -91,7 +91,22 @@ In your `CLAUDE.md` houserules maintains a **marked block**, everything between
 `<!-- houserules:claude-md start -->` and `<!-- houserules:claude-md end -->`. It rewrites
 only what is inside those markers. Every byte outside them is yours and is never modified.
 Opt out with `"claudeMd": { "managed": false }` in `.claude/houserules.config.json` and houserules will
-not touch the file at all.
+not touch the file at all. That opt-out also skips `.claude/houserules.md`.
+
+In `CLAUDE.md` the block holds one line, `@.claude/houserules.md`. The houserules sections live in
+that file, which houserules writes and refreshes. The managed `.claude/.gitignore` block lists it,
+so git does not track it. A release that changes the sections rewrites only that ignored file, and
+`CLAUDE.md` does not change. With `"instructionsFile": "AGENTS.md"` the block keeps the full
+sections, because tools other than Claude Code read `AGENTS.md` without resolving `@` imports.
+
+`update` converts an existing block of full sections to the import line when the block is as
+houserules wrote it. A block you edited is left alone and reported as yours.
+
+On a fresh clone `.claude/houserules.md` is missing until the sync runs. Claude Code loads nothing
+for a missing import and says nothing about it. The SessionStart sync writes the file and prints its
+restart line. [Staying current](#staying-current) describes that sync. To hand-edit the sections,
+run `houserules eject .claude/houserules.md`, as for any other payload file. See
+[Editing an installed file](#editing-an-installed-file).
 
 houserules writes that block into the file your repo already has: `CLAUDE.md`, else `AGENTS.md`,
 else it seeds `CLAUDE.md`. Set `"instructionsFile": "AGENTS.md"` or `"CLAUDE.md"` in

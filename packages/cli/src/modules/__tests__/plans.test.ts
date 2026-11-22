@@ -147,10 +147,15 @@ describe('plans', () => {
       expect(ignore).toMatch(/^!\.gitignore$/m);
     });
 
-    it('adds a CLAUDE.md trigger routing oversized work to /plan-project', () => {
+    it('adds a trigger routing oversized work to /plan-project in the file CLAUDE.md imports', () => {
       const claudeMd = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
-      expect(claudeMd).toMatch(/\/plan-project\b/);
-      expect(claudeMd).toMatch(/too big to hold in one plan/);
+      const sections = readFileSync(
+        join(root, '.claude/houserules.md'),
+        'utf8',
+      );
+      expect(claudeMd).toMatch(/^@\.claude\/houserules\.md$/m);
+      expect(sections).toMatch(/\/plan-project\b/);
+      expect(sections).toMatch(/too big to hold in one plan/);
     });
 
     it('does not add a nested plans/CLAUDE.md, since that would never auto-load', () => {

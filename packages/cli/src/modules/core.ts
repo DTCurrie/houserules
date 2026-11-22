@@ -1,13 +1,18 @@
 import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-import { claudeMdRegion } from '../core/claude-md-region.js';
+import {
+  CLAUDE_MD_IMPORT_TARGET,
+  claudeMdRegion,
+  regionImportsSections,
+} from '../core/claude-md-region.js';
 import { ledgerConsumersPresent, ledgerDirFor } from '../core/ledger-dir.js';
 import { payloadPath } from '../paths.js';
 import {
   renderClaudeAdditions,
   renderClaudeMd,
   renderHouseConfig,
+  renderRegionBody,
 } from '../render.js';
 import type {
   Action,
@@ -224,10 +229,19 @@ function instructionsFileActions(ctx: Ctx, answers: Answers): Action[] {
       module: id,
     });
   } else {
+    if (regionImportsSections(instructionsFile)) {
+      actions.push({
+        kind: 'write',
+        dest: CLAUDE_MD_IMPORT_TARGET,
+        content: renderClaudeAdditions(ctx, answers),
+        module: id,
+        reason: `houserules sections, imported by the ${instructionsFile} region`,
+      });
+    }
     actions.push({
       kind: 'region',
       dest: instructionsFile,
-      body: renderClaudeAdditions(ctx, answers),
+      body: renderRegionBody(ctx, answers),
       region: claudeMdRegion,
       module: id,
       reason:

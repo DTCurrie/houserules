@@ -277,7 +277,7 @@ describe('doctor resident-context — rules and .claude/CLAUDE.md', () => {
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).toMatch(
-      /resident context \(CLAUDE\.md \+ \.claude\/rules\/always\.md\)/,
+      /resident context \(CLAUDE\.md \+ \.claude\/rules\/always\.md \+ 1 @-import\(s\)\)/,
     );
     expect(r.stdout).toMatch(/loaded on EVERY turn.*always\.md/);
   });
@@ -320,7 +320,9 @@ describe('doctor resident skill/agent description budget', () => {
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
     expect(r.stdout).not.toMatch(/resident skill\/agent descriptions/);
-    expect(r.stdout).toMatch(/resident context \(CLAUDE\.md\)/);
+    expect(r.stdout).toMatch(
+      /resident context \(CLAUDE\.md \+ 1 @-import\(s\)\)/,
+    );
   });
 
   it('reports a combined resident total that is strictly larger with skills/agents installed than without', () => {
@@ -333,12 +335,14 @@ describe('doctor resident skill/agent description budget', () => {
     const withoutR = runCli(['doctor', withoutSkills]);
     const withTokens = Number(lineRe.exec(withR.stdout)![3]);
     const claudeMdOnly = Number(
-      /resident context \(CLAUDE\.md\): ~(\d+) tokens/.exec(
+      /resident context \(CLAUDE\.md \+ 1 @-import\(s\)\): ~(\d+) tokens/.exec(
         withoutR.stdout,
       )![1],
     );
     const claudeMdWithSkills = Number(
-      /resident context \(CLAUDE\.md\): ~(\d+) tokens/.exec(withR.stdout)![1],
+      /resident context \(CLAUDE\.md \+ 1 @-import\(s\)\): ~(\d+) tokens/.exec(
+        withR.stdout,
+      )![1],
     );
     expect(claudeMdWithSkills + withTokens).toBeGreaterThan(claudeMdOnly);
   });

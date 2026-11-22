@@ -1,5 +1,9 @@
 import { PACKAGE_JSON, type PrepareScriptPlan } from './prepare-script.js';
-import { claudeMdRegion } from './core/claude-md-region.js';
+import {
+  CLAUDE_MD_IMPORT_BODY,
+  claudeMdRegion,
+  regionImportsSections,
+} from './core/claude-md-region.js';
 import { upsertRegion } from '@houserules/api/internal';
 import { hasModule } from './plugin-registry.js';
 import { passPathsDefault } from './path-taking-scripts.js';
@@ -294,6 +298,16 @@ function subagentExceptionLine(
   ];
 }
 
+/**
+ * The body the managed region carries: the one import line for CLAUDE.md, the full sections
+ * for any instructions file that cannot resolve `@` imports.
+ */
+export function renderRegionBody(ctx: Ctx, answers: Answers): string {
+  return regionImportsSections(ctx.claude.instructionsFile)
+    ? CLAUDE_MD_IMPORT_BODY
+    : renderClaudeAdditions(ctx, answers);
+}
+
 /** Seeds a whole instructions file (the one `ctx.claude.instructionsFile` names), markers included, for a repo that has none. */
 export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   const name = ctx.rootPkg?.name ?? 'this repo';
@@ -321,7 +335,7 @@ export function renderClaudeMd(ctx: Ctx, answers: Answers): string {
   // this seed writes is always the shape that action finds, rather than a second one.
   const { content: block } = upsertRegion(
     null,
-    renderClaudeAdditions(ctx, answers),
+    renderRegionBody(ctx, answers),
     claudeMdRegion,
   );
   lines.push(block.trimEnd(), '');

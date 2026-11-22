@@ -285,6 +285,56 @@ describe('checkReferenceReachability', () => {
       expect(messages(root, makeCtx())).toEqual([]);
     });
 
+    it('warns once when the imported target is missing, naming the fix', () => {
+      const root = useRepo('pnpm-monorepo');
+      write(root, 'CLAUDE.md', region('@.claude/houserules.md'));
+
+      expect(messages(root, makeCtx())).toEqual([
+        'CLAUDE.md: the managed region imports .claude/houserules.md, which does not exist. Run `houserules update` to write it.',
+      ]);
+    });
+
+    it('warns for a dangling .claude path inside the imported target', () => {
+      const root = useRepo('pnpm-monorepo');
+      write(root, 'CLAUDE.md', region('@.claude/houserules.md'));
+      write(
+        root,
+        '.claude/houserules.md',
+        'Use `.claude/design/tokens.json` and `.claude/plans/<slug>/`.\n',
+      );
+
+      expect(messages(root, makeCtx())).toEqual([
+        'CLAUDE.md: the managed region points at .claude/design/tokens.json, which does not exist.',
+      ]);
+    });
+
+    it('is silent when the imported target is present and every path in it exists', () => {
+      const root = useRepo('pnpm-monorepo');
+      write(root, 'CLAUDE.md', region('@.claude/houserules.md'));
+      write(root, '.claude/design/tokens.json', '{}');
+      write(
+        root,
+        '.claude/houserules.md',
+        'Use `.claude/design/tokens.json`.\n',
+      );
+
+      expect(messages(root, makeCtx())).toEqual([]);
+    });
+
+    it('reports a path once when the region and the target both name it', () => {
+      const root = useRepo('pnpm-monorepo');
+      write(
+        root,
+        'CLAUDE.md',
+        region('@.claude/houserules.md\n\nSee `.claude/gone.md`.'),
+      );
+      write(root, '.claude/houserules.md', 'Also `.claude/gone.md`.\n');
+
+      expect(messages(root, makeCtx())).toEqual([
+        'CLAUDE.md: the managed region points at .claude/gone.md, which does not exist.',
+      ]);
+    });
+
     it('skips a placeholder path', () => {
       const root = useRepo('pnpm-monorepo');
       write(
