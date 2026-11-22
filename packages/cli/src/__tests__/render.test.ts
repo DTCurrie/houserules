@@ -284,6 +284,8 @@ describe('renderClaudeAdditions', () => {
     });
   };
   const opening = '- **The user always handles';
+  const ownershipLineOf = (body: string) =>
+    body.split('\n').find((line) => line.startsWith('Maintained by'));
 
   it('keeps the full commit rule when there is no guard config', () => {
     const body = renderClaudeAdditions(makeCtx(), makeAnswers());
@@ -452,6 +454,27 @@ describe('renderClaudeAdditions', () => {
     );
     expect(body).toContain(
       '- Exception, a planned phase under `/orchestrate`: dispatch as that skill says. Never pull a\n  worker’s diff into the main context.',
+    );
+  });
+
+  it('names the CLAUDE.md markers as the boundary in the import target, which has none of its own', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+
+    expect(ownershipLineOf(body)).toBe(
+      'Maintained by `npx houserules update`, which rewrites this whole file. `CLAUDE.md` imports it between the houserules markers, and text outside those markers is yours and never touched.',
+    );
+  });
+
+  it('keeps the marker sentence in an AGENTS.md region', () => {
+    const base = makeCtx();
+    const ctx = makeCtx({
+      claude: { ...base.claude, instructionsFile: 'AGENTS.md' },
+    });
+
+    const body = renderClaudeAdditions(ctx, makeAnswers());
+
+    expect(ownershipLineOf(body)).toBe(
+      'Maintained by `npx houserules update`. Text outside the markers is yours and never touched.',
     );
   });
 

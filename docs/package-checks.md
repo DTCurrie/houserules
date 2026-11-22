@@ -15,9 +15,16 @@ any package's tsconfig, wireit block, or scripts.
   builds in on its own. And a `files` glob that misses a real input fails **silently**, by
   skipping work that should have run, so add the glob the same day you add the input.
 - Root `check` is `check:types` plus `verify`. `check:types` is the per-package typecheck
-  aggregator. `verify` is the one list of post-build assertions CI runs, and it depends on
-  `build`, so a cold `pnpm check` builds first. CI's `lint` job runs `check:types` alone and
-  its `packages` job runs `verify`. The list itself lives in the root `package.json`, not here.
+  aggregator. `verify` is the list of post-build assertions `pnpm check` and CI share, and it
+  depends on `build`, so a cold `pnpm check` builds first. CI's `lint` job runs `check:types`
+  alone and its `packages` job runs `verify`. The list itself lives in the root
+  `package.json`, not here.
+- `verify:tarballs` stays out of `verify`. It runs `npm pack` once per publishable package, in
+  series, and what it checks moves only with a `files` array, a test exclude, or the build
+  layout. CI's `packages` job runs it after `verify`. The `package.json` field check it used to
+  carry is `verify:package-manifests`, a plain JSON read inside `verify`. `pnpm release` runs
+  both scripts with plain `node` before `changeset publish`, so a wireit cache hit can never
+  skip them on the way to npm.
 - Wireit's declared `output` plus its default `clean: true` is what guarantees a deleted
   source ships no orphan, replacing the old `rm -rf` prefixes. The CLI's `build` also runs
   `publint` after assembling `payload-dist/`.
@@ -37,8 +44,8 @@ any package's tsconfig, wireit block, or scripts.
   `tsconfig.build.json` excludes `src/**/__tests__/**` and `tsconfig.payload.json` excludes
   `payload/**/__tests__/**`, since `dist/` and `payload-dist/` are both `files` entries. A
   shipped test would carry a `vitest` import into a user's install. `tsconfig.json` clears
-  the inherited exclude so `pnpm check` still typechecks them. Verify with a real
-  `pnpm pack` and grep the tarball, not with `find` over `dist/`.
+  the inherited exclude so `pnpm check` still typechecks them. Verify with
+  `pnpm verify:tarballs`, which packs real tarballs, not with `find` over `dist/`.
 - **Most packages use that same two-tsconfig split, and where both jobs exist one tsconfig
   may never do both.** Two are exceptions, and they are exceptions for a reason rather than
   by drift. `packages/payload` has no `src/` at all, so it has no `tsconfig.build.json`, and

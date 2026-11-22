@@ -115,7 +115,7 @@ test-ownership and carry-the-spec-by-path rules, lanes, multi-plan waves, and dr
 barrel/export files, shared type modules, migrations, config. You edit those (§2). Workers that need a
 change there **request it in their report**. They don't reach for it.
 
-## 2. Write the seam yourself — before any fan-out
+## 2. Write the seam yourself, before any fan-out
 
 Before dispatching a wave, **you** write the shared surface it depends on (interfaces, signatures,
 stubs, config keys, migrations) to disk, so workers implement **against a fixed seam**. If slices
@@ -144,7 +144,7 @@ Run `node .claude/scripts/plan-lint.mjs`, if installed, after writing or updatin
 checks the status vocabulary and the ROADMAP cross-link, so a typo'd status does not silently break
 the resume grep in §9.
 
-## 4. Dispatch a wave — one message, one worker per slice
+## 4. Dispatch a wave: one message, one worker per slice
 
 By default, §1 through §8 run one layer down, one `phase-orchestrator` spawn per phase.
 `references/nested.md` carries the brief, the relay, the `all` loop, and the context-size gate.
@@ -177,7 +177,7 @@ prohibition (below).
 
 Hand a worker its slice, seam, and constraints, not the plan.
 
-### The status table — the one shape you print between waves
+### The status table: the one shape you print between waves
 
 The slice table (§3) is state on disk. This is its user-facing projection. Emit it **once when the
 wave goes out and once when it closes**, and nowhere else. Same three columns, every run:
@@ -276,10 +276,10 @@ where the tree is quiet enough to touch globally:
    `.claude/houserules.config.json`) across the packages the wave touched, in one pass over a tree
    that is finally consistent.
 2. **Tidy once.** Run `/tidy` over the wave's diff, if that skill is installed, after the fixer
-   and before verify so its edits are proven by the same verification. Never inside a worker, for
-   the same reason as the fixer.
-3. **Verify what actually changed.** Run `/verify-changed` if installed (it scopes to the changed
-   packages plus dependents, off-context), otherwise the repo's verify on the touched packages.
+   and before step 3, so step 3 proves its edits. Never inside a worker, for the same reason as
+   the fixer.
+3. **Recheck the wave.** Rerun each slice's acceptance, then typecheck the packages the wave
+   touched. The full verify runs once, at §8, never per wave.
 4. **Update the slice table** in place, then print the status table (§4), the wave-close printing.
 5. **Snapshot the state nothing can regenerate**: the plan workspace and anything else gitignored that
    no command can rebuild. `references/closing.md` says what to copy and where.
@@ -288,19 +288,19 @@ where the tree is quiet enough to touch globally:
 
 **Residue** is what auto-fix couldn't fix, and it's yours by default. Never send it back to the slice
 workers, whose briefs are spent. `references/fixer-and-residue.md` has the routing table for when it
-is genuinely bulk work.
+is bulk work.
 
 A `BLOCKED` slice stops the phase. Record why in the sub-plan and surface it to the user. `--auto`
 does not override this.
 
 ## 8. Close the phase
 
-All waves done → check the phase's own acceptance from the sub-plan, then update **both** the sub-plan
-header and the `ROADMAP.md` line to `DONE (<date>)` in one pass, with a `## Log` entry. This is
-`/plan-project`'s status-in-place discipline, and orchestration doesn't get to skip it.
+All waves done → run `/verify-changed` if installed (the changed packages plus dependents,
+off-context), otherwise the repo's verify on the touched packages. A failure is §7 residue. Then
+check the phase's own acceptance from the sub-plan, and update **both** the sub-plan header and the
+`ROADMAP.md` line to `DONE (<date>)` in one pass, with a `## Log` entry.
 
-Run `node .claude/scripts/plan-lint.mjs` if installed, to confirm the update actually landed on
-both files. Under nested mode the ROADMAP flip and that run belong to the dispatcher (see
+Run `node .claude/scripts/plan-lint.mjs` if installed, to confirm the update landed on both files. Under nested mode the ROADMAP flip and that run belong to the dispatcher (see
 `references/nested.md`), and under `--flat` this layer writes both files as before.
 
 **A phase that touched UI surfaces gets its reviews now.** When the diff reached UI code, or the

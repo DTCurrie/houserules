@@ -93,10 +93,13 @@ either, because the subagent write gate refuses every ledger write. List each ou
 under `Backlogged` with its area, a one-line problem, and where it lives, and the main conversation
 logs it.
 
+When `Siblings:` is `none`, §7 step 3 reruns each slice's acceptance and typechecks the packages
+the wave touched, and `/verify-changed` runs once, at §8.
+
 When `Siblings:` is not `none`, the §7 fixer and `/tidy` take your `Domain:` paths, and §7 step 3
-reruns each slice's acceptance command in place of a verify. Never run the bare fix scripts,
-`/verify-changed`, or a `--filter` over your packages then. The fix scripts and `/verify-changed`
-reach into siblings' files. Two domains can also hold disjoint directories of one package, so a
+reruns each slice's acceptance command with no typecheck. Never run the bare fix scripts, a
+package typecheck, `/verify-changed`, or a `--filter` over your packages then, at §7 or §8.
+The fix scripts and `/verify-changed` reach into siblings' files. Two domains can also hold disjoint directories of one package, so a
 package-wide run tests a sibling's half-finished edits. At §8, check each phase acceptance
 criterion by its narrowest command. List one that needs a package-wide run under `Verify`, and the
 main conversation's whole-tree verify after every `DONE` covers it. `plan-lint.mjs` scans every

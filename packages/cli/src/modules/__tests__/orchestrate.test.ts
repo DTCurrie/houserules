@@ -289,9 +289,29 @@ describe('orchestrate', () => {
 
     it("closes a sibling orchestrator's barrier on slice acceptances, with no package-wide verify", () => {
       expect(orchestratorText).toMatch(
-        /reruns each slice's acceptance command in place of a verify/,
+        /reruns each slice's acceptance command with no typecheck/,
       );
       expect(nestedText).toMatch(/It runs no package-wide\s+verify/);
+    });
+
+    it('rechecks a wave on its acceptances and a typecheck, leaving the full verify to phase close', () => {
+      const waveClose = skillText.slice(
+        skillText.indexOf('## 7.'),
+        skillText.indexOf('## 8.'),
+      );
+      const phaseClose = skillText.slice(
+        skillText.indexOf('## 8.'),
+        skillText.indexOf('## 9.'),
+      );
+
+      expect(waveClose).toMatch(
+        /Rerun each slice's acceptance, then typecheck the packages the wave\s+touched/,
+      );
+      expect(waveClose).not.toMatch(/\/verify-changed/);
+      expect(phaseClose).toMatch(/run `\/verify-changed` if installed/);
+      expect(orchestratorText).toMatch(
+        /`Siblings:` is `none`, §7 step 3 reruns each slice's acceptance and typechecks/,
+      );
     });
 
     it('lets a verify already running finish rather than killing it', () => {

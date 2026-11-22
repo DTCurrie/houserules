@@ -73,7 +73,7 @@ jobs:
 
   # What actually reaches npm. `check` and `test` both run against the working tree, so neither
   # can see a `files` array that omits something or a test that leaked into dist/. Only a real
-  # tarball shows that, which is what this job's `pnpm verify` checks.
+  # tarball shows that, which is what this job's `pnpm verify:tarballs` checks.
   packages:
     # Same skip as `test`: a Version Packages PR re-runs nothing.
     if: github.head_ref != 'changeset-release/main'
@@ -90,7 +90,11 @@ jobs:
       - uses: google/wireit@9d7c2e5346f8ef1b1ab6014c4e96c74e234f7ed5 # setup-github-actions-caching/v2
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      # publint runs inside each package's build. attw, the tarball assertions, knip, and the
-      # payload prose gate do not. The root `verify` wireit block lists them once, and local
-      # `pnpm check` depends on the same block, so the two lists cannot drift.
+      # publint runs inside each package's build. attw, knip, and the payload prose gate do not.
+      # The root `verify` wireit block lists them once, and local `pnpm check` depends on the
+      # same block, so the two lists cannot drift.
       - run: pnpm verify
+      # The tarball assertions run `npm pack` once per package, in series, and what they check
+      # moves only with a `files` array, a test exclude, or the build layout. So they run here
+      # and before `changeset publish`, and never in local `pnpm check`.
+      - run: pnpm verify:tarballs

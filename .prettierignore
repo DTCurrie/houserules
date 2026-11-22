@@ -18,6 +18,7 @@ packages/plugin-accessibility/payload/reference/wcag22.md
 .claude/agents/
 .claude/houserules.config.json
 .claude/houserules.manifest.json
+.claude/houserules.md
 .claude/ledgers/
 .claude/output-styles/
 .claude/plans/

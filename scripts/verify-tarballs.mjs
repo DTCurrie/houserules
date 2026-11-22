@@ -3,8 +3,10 @@
  * Dev-only tool, never published. Packs every publishable package into a real tarball with
  * `npm pack` and asserts what must and must not be inside it, catching the drift a green
  * build cannot: a leaked `__tests__` dir, a `vitest` import, or a missing README or LICENSE.
+ * It runs `npm pack` once per publishable package, in series, so it stays out of `pnpm check`.
+ * CI's `packages` job runs it on every pull request, and `pnpm release` runs it before publishing.
  *
- * Usage: `node scripts/verify-packages.mjs`
+ * Usage: `node scripts/verify-tarballs.mjs`
  *
  * Requires a prior build (`pnpm build` at the workspace root), since it packs `dist/` and
  * `payload-dist/` as they exist on disk. Exits 1 if any package fails any assertion.
@@ -15,17 +17,10 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const repoRoot = join(import.meta.dirname, '..');
-const packagesDir = join(repoRoot, 'packages');
-
-const REQUIRED_PACKAGE_JSON_FIELDS = [
-  'name',
-  'version',
-  'license',
-  'author',
-  'description',
-  'repository',
-];
+import {
+  findPublishablePackageDirs,
+  readManifest,
+} from './lib/publishable-packages.mjs';
 
 const TARBALL_ENTRIES_TO_SCAN_FOR_VITEST = new Set(['.js', '.mjs', '.d.ts']);
 
@@ -35,18 +30,6 @@ const TARBALL_ENTRIES_TO_SCAN_FOR_VITEST = new Set(['.js', '.mjs', '.d.ts']);
 // the only place an actual import can appear.
 const VITEST_IMPORT_SPECIFIER =
   /(?:\bfrom|\bimport|\brequire)\s*\(?\s*['"]vitest(?:\/[^'"]*)?['"]/;
-
-function findPublishablePackageDirs() {
-  return readdirSync(packagesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(packagesDir, entry.name))
-    .filter((packageDir) => {
-      const manifest = JSON.parse(
-        readFileSync(join(packageDir, 'package.json'), 'utf8'),
-      );
-      return manifest.private !== true;
-    });
-}
 
 function packTarball(packageDir, destinationDir) {
   // A package's own `prepack` lifecycle script (e.g. a rebuild through wireit) writes its own
@@ -115,31 +98,13 @@ function assertReadmeAndLicensePresent(entries, failures) {
   if (!hasLicense) failures.push('missing a LICENSE in the tarball root');
 }
 
-function assertPackageJsonFields(packageDir, failures) {
-  const manifest = JSON.parse(
-    readFileSync(join(packageDir, 'package.json'), 'utf8'),
-  );
-  for (const field of REQUIRED_PACKAGE_JSON_FIELDS) {
-    if (manifest[field] === undefined) {
-      failures.push(`package.json is missing "${field}"`);
-    }
-  }
-  if (manifest.publishConfig?.access === undefined) {
-    failures.push('package.json is missing "publishConfig.access"');
-  }
-}
-
 function verifyPackage(packageDir, workDir) {
   const packDestination = mkdtempSync(join(workDir, 'pack-'));
   const extractDestination = mkdtempSync(join(workDir, 'extract-'));
   const failures = [];
 
-  const manifest = JSON.parse(
-    readFileSync(join(packageDir, 'package.json'), 'utf8'),
-  );
   const declaresVitestPeerDependency =
-    manifest.peerDependencies?.vitest !== undefined;
-  assertPackageJsonFields(packageDir, failures);
+    readManifest(packageDir).peerDependencies?.vitest !== undefined;
 
   const tarballPath = packTarball(packageDir, packDestination);
   const entries = listTarballEntries(tarballPath);
@@ -169,16 +134,13 @@ function reportPackage(packageName, failures) {
 }
 
 function main() {
-  const workDir = mkdtempSync(join(tmpdir(), 'verify-packages-'));
+  const workDir = mkdtempSync(join(tmpdir(), 'verify-tarballs-'));
   const results = new Map();
 
   try {
     for (const packageDir of findPublishablePackageDirs()) {
-      const manifest = JSON.parse(
-        readFileSync(join(packageDir, 'package.json'), 'utf8'),
-      );
       const failures = verifyPackage(packageDir, workDir);
-      results.set(manifest.name, failures);
+      results.set(readManifest(packageDir).name, failures);
     }
   } finally {
     rmSync(workDir, { recursive: true, force: true });

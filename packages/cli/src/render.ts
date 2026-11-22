@@ -365,12 +365,26 @@ function userHandlesLine(ctx: Ctx): string[] {
   ];
 }
 
-/** The managed-region body spliced into the instructions file the user already has. */
+/**
+ * The sentence that says who owns what. The import target has no markers of its own, so it
+ * names the instructions file's markers as the boundary. A full region names its own.
+ */
+function ownershipLine(ctx: Ctx): string {
+  const { instructionsFile } = ctx.claude;
+  return regionImportsSections(instructionsFile)
+    ? `Maintained by \`npx houserules update\`, which rewrites this whole file. \`${instructionsFile}\` imports it between the houserules markers, and text outside those markers is yours and never touched.`
+    : 'Maintained by `npx houserules update`. Text outside the markers is yours and never touched.';
+}
+
+/**
+ * The houserules sections: the whole import target when the instructions file imports them,
+ * otherwise the region body spliced into the instructions file.
+ */
 export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
   const body = [
     '### houserules sections',
     '',
-    'Maintained by `npx houserules update`. Text outside the markers is yours and never touched.',
+    ownershipLine(ctx),
     'Fuller templates live in `.claude/templates/`.',
     '',
     ...skillTriggersSection(answers),

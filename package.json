@@ -29,11 +29,12 @@
     "format:check": "prettier --cache --check .",
     "change": "changeset",
     "version-packages": "changeset version",
-    "release": "changeset publish",
+    "release": "pnpm build && node scripts/verify-package-manifests.mjs && node scripts/verify-tarballs.mjs && changeset publish",
     "dogfood": "pnpm --filter @houserules/cli dogfood",
     "dogfood:watch": "pnpm --filter @houserules/cli dogfood:watch",
     "attw": "wireit",
-    "verify:packages": "wireit",
+    "verify:package-manifests": "wireit",
+    "verify:tarballs": "wireit",
     "verify:payload-copy-set": "wireit",
     "verify:payload-test-coverage": "wireit",
     "verify:payload-lib-declarations": "wireit",
@@ -92,10 +93,10 @@
       ]
     },
     "verify": {
-      "//": "Every post-build assertion CI runs, listed once. CI runs `pnpm verify`, and `pnpm check` depends on it.",
+      "//": "Every post-build assertion `pnpm check` and CI share, listed once. CI runs `pnpm verify`, and `pnpm check` depends on it. `verify:tarballs` stays out, since it packs every package, and CI's packages job and `pnpm release` run it.",
       "dependencies": [
         "attw",
-        "verify:packages",
+        "verify:package-manifests",
         "verify:payload-copy-set",
         "verify:payload-test-coverage",
         "verify:payload-lib-declarations",
@@ -105,14 +106,26 @@
         "verify:knip"
       ]
     },
-    "verify:packages": {
-      "command": "node scripts/verify-packages.mjs",
+    "verify:package-manifests": {
+      "command": "node scripts/verify-package-manifests.mjs",
+      "files": [
+        "scripts/verify-package-manifests.mjs",
+        "scripts/lib/publishable-packages.mjs",
+        "packages/*/package.json"
+      ],
+      "output": []
+    },
+    "verify:tarballs": {
+      "command": "node scripts/verify-tarballs.mjs",
       "dependencies": [
         "build"
       ],
       "files": [
-        "scripts/verify-packages.mjs",
-        "packages/*/package.json"
+        "scripts/verify-tarballs.mjs",
+        "scripts/lib/publishable-packages.mjs",
+        "packages/*/package.json",
+        "packages/*/README.md",
+        "packages/*/LICENSE"
       ],
       "output": []
     },
@@ -258,6 +271,8 @@
       "command": "node --test scripts/__tests__/*.test.mjs",
       "files": [
         "scripts/__tests__/*.test.mjs",
+        "scripts/verify-package-manifests.mjs",
+        "scripts/lib/publishable-packages.mjs",
         "scripts/verify-payload-lib-declarations.mjs",
         "scripts/verify-module-references.mjs",
         "scripts/health-kit/gather/*.mjs",

@@ -7,4 +7,4 @@
 '@houserules/plugin-changesets': patch
 ---
 
-Payload gitignored, synced, ejectable, migrated, update-notified, CLAUDE.md-imported, config validated, `fix.passPaths` detected, summaries capped, reports exact.
+Payload gitignored, synced, ejectable, migrated, update-notified, CLAUDE.md-imported, config validated, `fix.passPaths` detected, summaries capped, waves lighter.
