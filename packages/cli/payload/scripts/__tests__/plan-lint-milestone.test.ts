@@ -5,6 +5,7 @@ import {
   checkMilestoneContracts,
   checkMilestoneDuplicatePhaseSlugs,
   checkMilestoneHeldPathOverlap,
+  checkMilestoneHorizonWritten,
   checkMilestoneItemDomains,
   checkMilestoneLiveItems,
   checkMilestoneNeedsMatchBlocks,
@@ -468,6 +469,80 @@ describe('checkMilestoneStepTodoLate', () => {
     };
 
     expect(rulesOf(checkMilestoneStepTodoLate, todoStep, plans)).toEqual([]);
+  });
+});
+
+describe('checkMilestoneHorizonWritten', () => {
+  function horizonSlugs(steps: string): string[] {
+    return checkMilestoneHorizonWritten(
+      FILE,
+      milestoneOf(`## Steps\n\n${steps}`),
+      {},
+    ).findings.map((finding) => finding.msg.split('`')[1] ?? '');
+  }
+
+  it('errors on each of the first two steps not DONE that has no Items line', () => {
+    const slugs = horizonSlugs(`### Step: one · Status: DONE (2026-11-18)
+
+A user signs up.
+
+### Step: two · Status: TODO
+
+A user signs in.
+
+### Step: three · Status: TODO
+
+A user resets a password.
+
+### Step: four · Status: TODO
+
+A user deletes the account.
+`);
+
+    expect(slugs).toEqual(['two', 'three']);
+  });
+
+  it('passes when the open step and the next are written and later steps are scope lines', () => {
+    const slugs = horizonSlugs(`### Step: one · Status: IN PROGRESS
+
+- Items: \`backend/signup\`
+
+### Step: two · Status: TODO
+
+- Items: \`web/signup\`
+
+### Step: three · Status: TODO
+
+A user resets a password.
+`);
+
+    expect(slugs).toEqual([]);
+  });
+
+  it('errors on the step two ahead alone when the open step is written', () => {
+    const slugs = horizonSlugs(`### Step: one · Status: IN PROGRESS
+
+- Items: \`backend/signup\`
+
+### Step: two · Status: TODO
+
+A user signs in.
+`);
+
+    expect(slugs).toEqual(['two']);
+  });
+
+  it('passes a DONE scope line and a lone last step written in full', () => {
+    const slugs = horizonSlugs(`### Step: one · Status: DONE (2026-11-18)
+
+A user signs up.
+
+### Step: two · Status: TODO
+
+- Items: \`backend/signup\`
+`);
+
+    expect(slugs).toEqual([]);
   });
 });
 
@@ -1045,10 +1120,12 @@ describe('the milestone checks over a milestone with nothing runnable', () => {
     checkMilestoneOwnerItems,
     checkMilestoneContracts,
     checkMilestoneUnscheduledPhases,
+    checkMilestoneHorizonWritten,
   ];
+  const HORIZON_ERROR = ['milestone/horizon-unwritten', 'error'];
 
   it.each([
-    ['zero steps', '## Steps\n'],
+    ['zero steps', '## Steps\n', []],
     [
       'only scope lines',
       `## Steps
@@ -1059,20 +1136,24 @@ A user signs up.
 
 ### Step: two · Status: TODO
 `,
+      [HORIZON_ERROR, HORIZON_ERROR],
     ],
-  ])('finds nothing on a milestone with %s', (_case, steps) => {
-    const milestone = milestoneOf(
-      `${steps}\n## Log\n\n- 2026-11-19: scaffolded. Bar: two members share a contract.\n`,
-    );
+  ])(
+    'finds only the horizon errors on a milestone with %s',
+    (_case, steps, expected) => {
+      const milestone = milestoneOf(
+        `${steps}\n## Log\n\n- 2026-11-19: scaffolded. Bar: two members share a contract.\n`,
+      );
 
-    const findings = ALL_CHECKS.flatMap(
-      (check) => check(FILE, milestone, SHARED_SLUG_PLANS).findings,
-    );
+      const findings = ALL_CHECKS.flatMap(
+        (check) => check(FILE, milestone, SHARED_SLUG_PLANS).findings,
+      );
 
-    expect(findings.map((finding) => [finding.rule, finding.level])).toEqual(
-      [],
-    );
-  });
+      expect(findings.map((finding) => [finding.rule, finding.level])).toEqual(
+        expected,
+      );
+    },
+  );
 });
 
 describe('formatGateLines', () => {

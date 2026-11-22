@@ -1027,6 +1027,37 @@ export function checkMilestoneStepTodoLate(
   return report;
 }
 
+/** The rolling horizon's width: the open step and the next one are written in full. */
+const HORIZON_STEP_COUNT = 2;
+
+/**
+ * Errors on a scope line inside the rolling horizon, which is the first two steps not `DONE`. The
+ * milestone session writes the step two ahead at each step's flip, and without this check a missed
+ * write surfaces only when an `--auto` run reaches that step and stops.
+ */
+export function checkMilestoneHorizonWritten(
+  file: string,
+  milestone: Milestone,
+  _members: MemberPlans,
+): Report {
+  const report = emptyReport();
+  const horizon = milestone.steps
+    .filter((step) => statusBase(step.status) !== 'DONE')
+    .slice(0, HORIZON_STEP_COUNT);
+  for (const step of horizon) {
+    if (step.items !== null) continue;
+    report.findings.push(
+      milestoneError(
+        'milestone/horizon-unwritten',
+        file,
+        step.line,
+        `step \`${step.slug}\` is one of the next ${HORIZON_STEP_COUNT} steps but has no Items line. Write its Items, Seam, Close, Needs, and Uses lines`,
+      ),
+    );
+  }
+  return report;
+}
+
 /** Errors once, on the second open step, when more than one step is `IN PROGRESS`. */
 export function checkMilestoneOneOpenStep(
   file: string,
@@ -2062,10 +2093,11 @@ const MILESTONE_CHECKS: Array<
   checkMilestoneOwnerItems,
   checkMilestoneContracts,
   checkMilestoneUnscheduledPhases,
+  checkMilestoneHorizonWritten,
 ];
 
 /**
- * Lints one milestone: its discovery errors, every member as a plan, then the sixteen milestone
+ * Lints one milestone: its discovery errors, every member as a plan, then the seventeen milestone
  * checks over the members' phases. A `DONE` milestone skips path checks for every member.
  */
 function lintMilestone(

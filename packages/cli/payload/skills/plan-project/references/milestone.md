@@ -220,7 +220,9 @@ Write only as far as the next two steps, because steps further out were replanne
   increment, with no `Items` line.
 
 When a step closes, write the step two ahead in full: its `Items`, `Seam`, and `Close`, and the
-sub-plans of its phases.
+sub-plans of its phases. The milestone session does this as the step's last write, which is step 9
+of "The step" in `.claude/skills/orchestrate/references/milestone.md`. `plan-lint` errors while
+the open step or the next one is a scope line.
 
 Run `node .claude/scripts/plan-lint.mjs` from the repo root when the scaffold is written, if it is
 installed, and fix every error before the handoff.

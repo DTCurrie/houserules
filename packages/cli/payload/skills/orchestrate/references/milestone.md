@@ -37,11 +37,22 @@ Run these in order, one step at a time:
 6. **Barrier.** When every item's `ROADMAP.md` line reads `DONE` or `DROPPED`, run the barrier
    below.
 7. **Held writes.** Write the held paths the step owes.
-8. **Flip and stop.** Set the step `Status: DONE (<date>)` and stop.
+8. **Flip.** Set the step `Status: DONE (<date>)`.
+9. **Write ahead, then stop.** Keep the rolling horizon written. A step with no `Items` line is a
+   scope line. Each scope line among the first two steps not `DONE` gets written in full, as
+   section 4 of `.claude/skills/plan-project/references/milestone.md` says: its `Items`, `Seam`,
+   `Close`, `Needs`, and `Uses` lines, and a full sub-plan for each item that has only a
+   `ROADMAP.md` line. Record it in the flip's `## Log` line. Under `--auto` it is a ruling, listed
+   with its cost if wrong. Run `plan-lint`, which errors on a scope line inside the horizon, and
+   stop.
 
-A step with no `Items` line is a scope line. Opening one stops before step 1 and asks the owner to
-write its items. After the last step flips, set the `MILESTONE.md` header `DONE` and run
-`/pr-description` if installed.
+   Stop for the owner without writing only when the scope line names work that no member
+   `ROADMAP.md` lists, or needs a gate that no `## Gates` line names. Name which, and what the
+   owner must supply.
+
+Opening a scope line means a step-9 write was missed. Do that write first, then start at step 1,
+unless one of step 9's stop conditions holds. After the last step flips, set the `MILESTONE.md`
+header `DONE` and run `/pr-description` if installed.
 
 ## Writes and when
 
@@ -53,7 +64,8 @@ nested.md "Ownership" holds per member: the `ROADMAP.md` line and the sub-plan h
   `IN PROGRESS`. Lint rejects a member phase `IN PROGRESS` under a `TODO` step, so the step flips
   first.
 - **Per report:** the member's `ROADMAP.md` line only.
-- **At the barrier:** held paths, then the step's `DONE` with a `## Log` line in `MILESTONE.md`.
+- **At the barrier:** held paths, then the step's `DONE` with a `## Log` line in `MILESTONE.md`,
+  then the step-9 write.
 
 Held paths are the `## Held paths` list, plus `.changeset` and the ledgers in every milestone.
 
@@ -166,10 +178,10 @@ into a member's sub-plan.
 
 ## Step boundary and `--auto`
 
-Check-in mode stops after the flip for the owner's commit, and that commit is the resume point.
-`--auto` opens the next step instead. It still stops at a next step with an `OPEN` gate, at a next
-step with no `Items` line, and after the flip of any step whose barrier failed a check, so the
-owner reads the fix before committing.
+Check-in mode stops after step 9 for the owner's commit, and that commit is the resume point.
+`--auto` opens the next step instead. It still stops at a next step with an `OPEN` gate, at a
+step-9 write that stopped for the owner, and after the flip of any step whose barrier failed a
+check, so the owner reads the fix before committing.
 
 ## Resume after `/clear`
 
