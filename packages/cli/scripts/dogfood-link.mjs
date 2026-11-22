@@ -288,14 +288,15 @@ const MODULE_OPTIONS = {
 const houseConfig = {
   version: 2,
   packageManager: 'pnpm',
-  // This repo's lint/format fixers live only at the workspace root (`lint:fix`, `format`),
-  // never per package, so `filterFlag` stays empty: the fixer runs once over the whole tree
-  // rather than being scoped with `--filter <pkg>`.
+  // This repo's fixers live only at the workspace root, so `filterFlag` stays empty. A Stop
+  // fixes the turn's changed files through the path-taking scripts. The whole-tree `lint:fix`
+  // and `format` stay for `/ready` and the orchestrator's barrier.
   fix: {
     runner: 'pnpm',
     filterFlag: '',
     runScriptPrefix: ['run'],
-    commands: ['lint:fix', 'format'],
+    commands: ['lint:fix:paths', 'format:paths'],
+    passPaths: true,
   },
   // Fixed seam (brief step 5): `verify-changed.mjs` scopes this per changed package with
   // `--filter`, unlike the fixer above, since every package (bar the two named in
@@ -313,6 +314,8 @@ const houseConfig = {
     'jsx',
     'mjs',
     'cjs',
+    'mts',
+    'cts',
     'svelte',
     'md',
     'json',

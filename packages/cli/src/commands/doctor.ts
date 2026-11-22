@@ -14,6 +14,7 @@ import {
   printTextReport,
   type DoctorReport,
 } from './doctor/findings-report.js';
+import { checkFixPassPaths } from './doctor/fix-pass-paths.js';
 import { checkInstallHygiene } from './doctor/install-hygiene.js';
 import { checkInstallIntegrity } from './doctor/install-integrity.js';
 import { checkInstructionsFile } from './doctor/instructions-file.js';
@@ -108,6 +109,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     checkInstallHygiene(root, ctx),
     checkModuleHealth(root, ctx, config.registry),
     checkModuleRequirements(ctx, config.registry),
+    checkFixPassPaths(ctx),
     checkPluginRegistration(root, ctx),
     checkLaunchRoot(root, ctx),
     checkTranscriptRetention(ctx),

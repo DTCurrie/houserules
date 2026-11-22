@@ -75,9 +75,27 @@ running and your brief gives no address for it, return `NEEDS_CONTEXT` naming th
 The main conversation starts it before the spawn and stops it after `DONE`.
 
 **Run the acceptance yourself.** A slice reported without its acceptance output is sent back
-unreviewed, every time. Run the command from your brief and include the last ~10 lines of a passing run, or for a failing run `name each failing test and its error`. If it fails inside your
-owned paths and you can't fix it there, report the failure honestly under `Blocked`. A truthful
-failure is worth more than a claim that doesn't hold.
+unreviewed, every time. Run each command exactly as your brief gives it, whole, in one Bash call
+of its own. A brief command that holds `&&` or `|` runs that way, and its `$` line is that string.
+A brief command that spans several lines runs that way, and the report gives it line for line: its
+first line after `$ `, each later line as it ran with nothing added before it, then its output.
+The ban covers only what you add yourself: a pipe, a tail, a redirect, or a chained second
+command. A command that must run from another directory takes a `cd <dir> && ` prefix and nothing
+else, and its `$` line keeps the prefix. The `$` line of your report is that call's command string,
+byte for byte. The lines under it come from the untailed output the call returned: the last ~10
+lines of a passing run, or each failing test and its error. If it fails inside your owned paths
+and you can't fix it there, report the failure honestly under `Blocked`. A truthful failure is
+worth more than a claim that doesn't hold.
+
+**Never run the acceptance in a call that does anything else.** Write your files with `Write` or
+`Edit`, or in a Bash call of their own. Then run the acceptance in a new Bash call that holds only
+that command, with the directory prefix above when it needs one. A heredoc, a file write, or a
+`cd` joined by `;` in the same call makes your `$` line a command you never ran. Two workers did
+this. One ended a heredoc call with `cd ../..; node --test ... 2>&1 | tail -12` and reported
+`$ node --test ...`. The other added no tail. It wrote four files by heredoc in one call that ended
+`cd ../..; node --test ...`, and reported the same `$` line. The excuse is "the write and the run
+fit in one call, and a second call is a second run". The answer is that the run moves to its own
+call, so it is still one run, and only that call's string can be your `$` line.
 
 **Background a command only when it outlasts the default Bash timeout.** The default is 120
 seconds. A scoped acceptance, one test file and one typecheck, finishes in seconds, so run it in the
@@ -110,7 +128,7 @@ the two differ and observe again.
 run it again, and stop the moment it goes green. Do not stand up a narrower command as a proxy to
 iterate against and then run the real acceptance separately at the end. That is two runs where one
 was asked for, and a green proxy proves nothing about the command the brief actually named. Once the
-real acceptance is green, report the last ~10 lines and finish. A failing run gets each failing test and its error instead. Do not run it again to confirm, do not re-run
+real acceptance is green, report the last ~10 lines of that untailed run and finish. A failing run gets each failing test and its error instead. Do not run it again to confirm, do not re-run
 it after an unrelated edit, and do not alternate between two commands looking for reassurance. A
 second green run costs the same as the first and tells you nothing the first did not. This is the
 single largest source of waste in a fan out, because every worker pays it in parallel. Iterating
@@ -146,9 +164,9 @@ Files
 - <path> — <one line: what changed there>
 
 Acceptance
-$ <command>
+$ <the command exactly as the Bash call ran it, untailed>
 <last ~10 lines of a passing run, or name each failing test and its error>
-$ <second command, if the brief listed one>
+$ <second command exactly as its Bash call ran it, untailed, if the brief listed one>
 <last ~10 lines of a passing run, or name each failing test and its error>
 
 Deviations

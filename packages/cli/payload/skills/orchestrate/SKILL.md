@@ -60,8 +60,9 @@ No slug given? In order:
 4. **Otherwise ask.** Guessing between half-finished plans is expensive. List the
    slugs with their status lines and let the user pick.
 
-Never infer a plan from mtime or sort order. State the resolved plan and phase before you slice
-anything, so the user can stop you cheaply if you picked wrong.
+Never infer a plan from mtime or sort order. Before the first spawn or slice, state in one line the
+plan slug and its ROADMAP `phase <N>`, such as `auth-rework phase 2`, never `phase-<N>`. A
+milestone's form is in `references/milestone.md`. The user can stop a wrong pick cheaply only then.
 
 **Default is check-in.** After each phase closes, report what landed and stop for the user. `--auto`
 suppresses only that pause.
@@ -170,8 +171,8 @@ prohibition (below).
 > Reference: `<the plan doc(s) this slice's output is judged against, by path, or "none">`.
 > Steps: `<the ≤8 steps>`.
 > Acceptance: `<command(s), scoped to your owned paths>` is your iteration loop. Run it, fix what is
-> red, run it again, and stop the moment it goes green. Report the last ~10 lines of each passing
-> run, or name each failing test and its error.
+> red, run it again, and stop the moment it goes green. Run each command in its own Bash call,
+> untailed, report it as run, and name each failing test and its error.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
 
 Hand a worker its slice, seam, and constraints, not the plan.

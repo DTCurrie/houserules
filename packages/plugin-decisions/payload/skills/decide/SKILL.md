@@ -148,4 +148,4 @@ to `.claude/ledgers/studio.DECISIONS.md`. For a repo-wide decision, pass `DECISI
    Revisit field, and a revisit trigger that names a path not yet in `--scope`. It cannot tell a
    genuine field from an invented one, so a clean run is not a substitute for the bar in step 1.
    Fix anything it finds with `rescope` or `amend` before moving on.
-6. Spawn the `decision-reviewer` subagent on the new entry to check it against the bar. When one turn adds several entries, spawn one reviewer after the last add and pass it every new id.
+6. Spawn the `decision-reviewer` subagent with `run_in_background: true` on the new entry to check it against the bar. Reconcile its verdict before your final reply. When one turn adds several entries, spawn one reviewer after the last add and pass it every new id.

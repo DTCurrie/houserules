@@ -620,3 +620,213 @@ describe('renderClaudeMd', () => {
     expect(between).toContain(additions);
   });
 });
+
+describe('passPaths default: today', () => {
+  const pnpm: PackageManagerInfo = { name: 'pnpm', source: 'lockfile' };
+  const detected = ['lint:fix', 'format'];
+  const answers = (fixCommands?: string[]) =>
+    makeAnswers({
+      moduleIds: ['core', 'lint-fix'],
+      targets: [makeTarget(fixCommands ? { fixCommands } : {})],
+    });
+  const seededFix = {
+    runner: 'pnpm',
+    filterFlag: '',
+    runScriptPrefix: ['run'],
+    commands: ['lint:fix', 'format:fix'],
+    onSubagentStop: false,
+  };
+
+  it('seeds the fix block without passPaths for whole-tree scripts in a single-package pnpm repo', () => {
+    const ctx = makeCtx({
+      packageManager: pnpm,
+      rootPkg: {
+        name: 'my-repo',
+        scripts: { 'lint:fix': 'eslint . --fix', format: 'prettier --write .' },
+      },
+    });
+    const config = JSON.parse(renderHouseConfig(ctx, answers(detected)));
+    expect(config.fix).toEqual(seededFix);
+  });
+
+  it('seeds the same fix block when only lint:fix is path-taking', () => {
+    const ctx = makeCtx({
+      packageManager: pnpm,
+      rootPkg: {
+        name: 'my-repo',
+        scripts: { 'lint:fix': 'eslint --fix', format: 'prettier --write .' },
+      },
+    });
+    const config = JSON.parse(renderHouseConfig(ctx, answers(detected)));
+    expect(config.fix).toEqual(seededFix);
+  });
+
+  it('seeds the same fix block when the target has no fixCommands', () => {
+    const ctx = makeCtx({ packageManager: pnpm });
+    const config = JSON.parse(renderHouseConfig(ctx, answers()));
+    expect(config.fix).toEqual(seededFix);
+  });
+
+  it('writes no passPaths key when lint-fix is not selected', () => {
+    const ctx = makeCtx({
+      packageManager: pnpm,
+      rootPkg: {
+        name: 'my-repo',
+        scripts: { 'lint:fix': 'eslint --fix', format: 'prettier --write' },
+      },
+    });
+    const config = JSON.parse(
+      renderHouseConfig(ctx, makeAnswers({ moduleIds: ['core'] })),
+    );
+    expect('passPaths' in config.fix).toBe(false);
+  });
+
+  it('writes no passPaths key for an npm monorepo and seeds an empty filterFlag', () => {
+    const pkgScripts = {
+      'lint:fix': 'eslint --fix',
+      format: 'prettier --write',
+    };
+    const ctx = makeCtx({
+      isMonorepo: true,
+      rootPkg: {
+        name: 'my-repo',
+        scripts: { 'lint:fix': 'eslint . --fix', format: 'prettier --write .' },
+      },
+      packages: [
+        {
+          name: 'a',
+          dir: '/repo/packages/a',
+          relDir: 'packages/a',
+          pkg: { name: 'a', scripts: pkgScripts },
+        },
+        {
+          name: 'b',
+          dir: '/repo/packages/b',
+          relDir: 'packages/b',
+          pkg: { name: 'b', scripts: pkgScripts },
+        },
+      ],
+    });
+    const config = JSON.parse(
+      renderHouseConfig(
+        ctx,
+        makeAnswers({
+          moduleIds: ['core', 'lint-fix'],
+          targets: [
+            makeTarget({
+              name: 'a',
+              packageName: 'a',
+              pathPrefix: 'packages/a/',
+              fixCommands: ['lint:fix', 'format'],
+            }),
+            makeTarget({
+              name: 'b',
+              packageName: 'b',
+              pathPrefix: 'packages/b/',
+              fixCommands: ['lint:fix', 'format'],
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(config.fix.filterFlag).toBe('');
+    expect('passPaths' in config.fix).toBe(false);
+  });
+});
+
+describe('passPaths default: the change', () => {
+  const answers = (names: string[]) =>
+    makeAnswers({
+      moduleIds: ['core', 'lint-fix'],
+      targets: names.map((n) =>
+        makeTarget({
+          name: n,
+          packageName: n,
+          pathPrefix: n === 'core' ? '' : `packages/${n}/`,
+          fixCommands: ['lint:fix', 'format'],
+        }),
+      ),
+    });
+
+  it('seeds fix.passPaths true for path-taking scripts in a single-package repo', () => {
+    const ctx = makeCtx({
+      packageManager: { name: 'pnpm', source: 'lockfile' },
+      rootPkg: {
+        name: 'my-repo',
+        scripts: { 'lint:fix': 'eslint --fix', format: 'prettier --write' },
+      },
+    });
+    const config = JSON.parse(renderHouseConfig(ctx, answers(['core'])));
+    expect(config.fix.passPaths).toBe(true);
+  });
+
+  it('seeds fix.passPaths true for a pnpm monorepo whose packages take paths, with filterFlag --filter', () => {
+    const pkgScripts = {
+      'lint:fix': 'eslint --fix',
+      format: 'prettier --write',
+    };
+    const ctx = makeCtx({
+      packageManager: { name: 'pnpm', source: 'lockfile' },
+      isMonorepo: true,
+      rootPkg: {
+        name: 'my-repo',
+        scripts: { 'lint:fix': 'eslint . --fix', format: 'prettier --write .' },
+      },
+      packages: ['a', 'b'].map((n) => ({
+        name: n,
+        dir: `/repo/packages/${n}`,
+        relDir: `packages/${n}`,
+        pkg: { name: n, scripts: pkgScripts },
+      })),
+    });
+    const config = JSON.parse(renderHouseConfig(ctx, answers(['a', 'b'])));
+    expect(config.fix.filterFlag).toBe('--filter');
+    expect(config.fix.passPaths).toBe(true);
+  });
+});
+
+describe('lintable extensions: today', () => {
+  it('seeds each of the 11 extensions the default list carries', () => {
+    const config = JSON.parse(
+      renderHouseConfig(makeCtx(), makeAnswers({ targets: [makeTarget()] })),
+    );
+    expect(config.lintableExtensions).toEqual(
+      expect.arrayContaining([
+        'ts',
+        'tsx',
+        'js',
+        'jsx',
+        'mjs',
+        'cjs',
+        'svelte',
+        'md',
+        'json',
+        'css',
+        'html',
+      ]),
+    );
+  });
+});
+
+describe('lintable extensions: the change', () => {
+  it('seeds mts and cts after cjs', () => {
+    const config = JSON.parse(
+      renderHouseConfig(makeCtx(), makeAnswers({ targets: [makeTarget()] })),
+    );
+    expect(config.lintableExtensions).toEqual([
+      'ts',
+      'tsx',
+      'js',
+      'jsx',
+      'mjs',
+      'cjs',
+      'mts',
+      'cts',
+      'svelte',
+      'md',
+      'json',
+      'css',
+      'html',
+    ]);
+  });
+});

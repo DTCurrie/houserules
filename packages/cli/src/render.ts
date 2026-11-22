@@ -2,6 +2,7 @@ import { PACKAGE_JSON, type PrepareScriptPlan } from './prepare-script.js';
 import { claudeMdRegion } from './core/claude-md-region.js';
 import { upsertRegion } from '@houserules/api/internal';
 import { hasModule } from './plugin-registry.js';
+import { passPathsDefault } from './path-taking-scripts.js';
 import type { Ctx, PackageManagerInfo, Target } from './detect.js';
 import type { Answers } from '@houserules/api';
 
@@ -19,6 +20,8 @@ const DEFAULT_LINTABLE = [
   'jsx',
   'mjs',
   'cjs',
+  'mts',
+  'cts',
   'svelte',
   'md',
   'json',
@@ -26,7 +29,7 @@ const DEFAULT_LINTABLE = [
   'html',
 ];
 
-function fixDefaultsFor(
+export function fixDefaultsFor(
   pm: PackageManagerInfo | null | undefined,
   isMonorepo = true,
 ): FixDefaults {
@@ -106,11 +109,12 @@ export function schemaRefFor(ctx: Ctx): string {
  */
 export function renderHouseConfig(ctx: Ctx, answers: Answers): string {
   const has = (id: string) => hasModule(answers.moduleIds, id);
+  const seededFix = fixDefaultsFor(ctx.packageManager, ctx.isMonorepo);
   const config: {
     $schema: string;
     version: number;
     packageManager: string;
-    fix: FixDefaults & { onSubagentStop: boolean };
+    fix: FixDefaults & { onSubagentStop: boolean; passPaths?: true };
     verify?: FixDefaults;
     lintableExtensions: string[];
     generatedFilePattern: string;
@@ -142,8 +146,12 @@ export function renderHouseConfig(ctx: Ctx, answers: Answers): string {
     // onSubagentStop stays false: parallel subagents would each fix every changed
     // package at once, clobbering siblings mid-edit. The parent Stop hook covers it.
     fix: {
-      ...fixDefaultsFor(ctx.packageManager, ctx.isMonorepo),
+      ...seededFix,
       onSubagentStop: false,
+      ...(has('lint-fix') &&
+      passPathsDefault(ctx, answers.targets, seededFix).isOn
+        ? { passPaths: true as const }
+        : {}),
     },
     ...(has('verify-changed')
       ? { verify: verifyDefaultsFor(ctx.packageManager, ctx.isMonorepo) }

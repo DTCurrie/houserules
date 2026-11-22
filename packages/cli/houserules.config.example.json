@@ -22,6 +22,8 @@
     "jsx",
     "mjs",
     "cjs",
+    "mts",
+    "cts",
     "svelte",
     "md",
     "json",

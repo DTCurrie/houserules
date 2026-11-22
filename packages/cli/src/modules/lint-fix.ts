@@ -1,8 +1,10 @@
 import { runsAtRepoRoot } from '@houserules/payload/config';
 import type { Action, Answers, ModuleGroup } from '@houserules/api';
-import type { Ctx } from '../detect.js';
+import type { Ctx, Target } from '../detect.js';
 import { script } from './copy-actions.js';
 import { hookFragment } from '@houserules/api';
+import { fixDefaultsFor } from '../render.js';
+import { passPathsDefault } from '../path-taking-scripts.js';
 
 export const id = 'lint-fix';
 export const title = 'Lint/format auto-fix on Stop';
@@ -20,6 +22,31 @@ function rootFixCommands(ctx: Ctx): string[] {
   if (!fix?.commands?.length || !runsAtRepoRoot(fix)) return [];
   const scripts = ctx.rootPkg?.scripts ?? {};
   return fix.commands.filter((cmd) => typeof scripts[cmd] === 'string');
+}
+
+/**
+ * On a new install, the next step that names the path-taking form when `init` leaves
+ * `fix.passPaths` off because a fix script does not take paths. An existing install keeps its
+ * config, so it gets none.
+ */
+function advisePassPathsOff(ctx: Ctx, targets: readonly Target[]): Action[] {
+  const isNewInstall = !ctx.claude.houseConfig;
+  if (!isNewInstall) return [];
+  const { rejectedScripts } = passPathsDefault(
+    ctx,
+    targets,
+    fixDefaultsFor(ctx.packageManager, ctx.isMonorepo),
+  );
+  if (rejectedScripts.length === 0) return [];
+  const names = rejectedScripts.map((name) => `"${name}"`).join(', ');
+  const verb = rejectedScripts.length === 1 ? 'does' : 'do';
+  return [
+    {
+      kind: 'advise',
+      text: `fix.passPaths stays off, so a Stop fixes nothing. ${names} ${verb} not take paths. Add scripts that take paths, such as eslint --fix and prettier --write, name them in fixCommands, and set passPaths to true in the fix block of .claude/houserules.config.json.`,
+      module: id,
+    },
+  ];
 }
 
 export function hint(ctx: Ctx): string {
@@ -81,6 +108,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
           { timeout: 120 },
         ),
       });
+    actions.push(...advisePassPathsOff(ctx, targets));
   } else {
     actions.push({
       kind: 'advise',

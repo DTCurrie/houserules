@@ -595,6 +595,60 @@ describe('predicates: agent-059', () => {
       );
     });
   }
+
+  const MULTI_LINE_CALL =
+    "cd src/text\ncat > index.js <<'EOF'\nexport const x = 1;\nEOF\ncd ../..; node --test";
+  const lineForLine = (output) =>
+    WORKER_REPLY.replace(
+      '$ node --test test/add.test.js\n# pass 2\n# fail 0\n',
+      `$ cd src/text\ncat > index.js <<'EOF'\nexport const x = 1;\nEOF\ncd ../..; node --test\n${output}`,
+    );
+
+  test('a multi-line command reported line for line with output passes', () => {
+    const text = lineForLine('# pass 2\n# fail 0\n');
+    assert.equal(
+      judge(
+        'agent-059',
+        sample({ workers: [worker('w1', text, [MULTI_LINE_CALL])] }),
+      ),
+      'pass',
+    );
+  });
+
+  test('a multi-line command reported line for line with no output fails', () => {
+    const result = PREDICATES['agent-059'](
+      sample({
+        workers: [worker('w1', lineForLine(''), [MULTI_LINE_CALL])],
+      }),
+    );
+    assert.equal(result.result, 'fail');
+    assert.match(result.line, /has no output line/);
+  });
+
+  test('a multi-line command reported line for line against a call with a tail appended fails', () => {
+    const text = lineForLine('# pass 2\n# fail 0\n');
+    const ran = `${MULTI_LINE_CALL} 2>&1 | tail -12`;
+    assert.equal(
+      judge('agent-059', sample({ workers: [worker('w1', text, [ran])] })),
+      'fail',
+    );
+  });
+
+  test('a one-line command whose first output line starts with > passes', () => {
+    const text = WORKER_REPLY.replace(
+      '# pass 2\n',
+      '> test output\n# pass 2\n',
+    );
+    assert.equal(
+      judge(
+        'agent-059',
+        sample({
+          workers: [worker('w1', text, ['node --test test/add.test.js'])],
+        }),
+      ),
+      'pass',
+    );
+  });
 });
 
 describe('predicates: no task-worker reply', () => {

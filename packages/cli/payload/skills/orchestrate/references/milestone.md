@@ -8,7 +8,9 @@ because every rule there holds per item, and this file states only where a step 
 ## When this applies
 
 `/orchestrate <milestone>` runs the step marked `IN PROGRESS`, or opens the first `TODO` step in
-file order when none is. `/orchestrate <milestone>/<member> <phase>` runs one member phase the
+file order when none is. Before step 3's seam writes anything, state the pick in one line: the
+milestone slug, the step slug, and each item as `<member>/<phase-slug>`, the form the step's
+`Items` line uses. `/orchestrate <milestone>/<member> <phase>` runs one member phase the
 ordinary way, as a plan with no step barrier, and needs nothing from this file. The milestone
 session is the main conversation. No agent type is added for it, because the barrier's writes are
 the ones the subagent guard refuses.

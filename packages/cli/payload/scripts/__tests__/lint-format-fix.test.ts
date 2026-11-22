@@ -1172,3 +1172,41 @@ describe('fixer timeouts: the fix', () => {
     ).toBe(null);
   });
 });
+
+describe('lintable extensions: today', () => {
+  it('matches a path ending in each of the 11 extensions the fallback lists', () => {
+    const { lintableExtRe } = resolveFixSettings(baseConfig());
+    for (const ext of [
+      'ts',
+      'tsx',
+      'js',
+      'jsx',
+      'mjs',
+      'cjs',
+      'svelte',
+      'md',
+      'json',
+      'css',
+      'html',
+    ])
+      expect(lintableExtRe.test(`src/a.${ext}`), ext).toBe(true);
+  });
+
+  it('lets an explicit list replace the fallback', () => {
+    const { lintableExtRe } = resolveFixSettings(
+      baseConfig({ lintableExtensions: ['ts'] }),
+    );
+    expect(lintableExtRe.test('src/a.mts')).toBe(false);
+    expect(lintableExtRe.test('src/a.cts')).toBe(false);
+  });
+});
+
+describe('lintable extensions: the change', () => {
+  it('matches a .mts and a .cts path through the fallback', () => {
+    const { lintableExtRe } = resolveFixSettings(baseConfig());
+    expect(
+      lintableExtRe.test('packages/cli/payload/scripts/lint-format-fix.mts'),
+    ).toBe(true);
+    expect(lintableExtRe.test('src/config.cts')).toBe(true);
+  });
+});

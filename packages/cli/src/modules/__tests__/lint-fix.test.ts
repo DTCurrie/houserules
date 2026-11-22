@@ -7,6 +7,7 @@ import { runCli, runIn, runScript } from '#test/run';
 import {
   editHouseConfig,
   hookCommandsFor,
+  houseConfigPath,
   readJson,
   settingsOf,
 } from '#test/installed-tree';
@@ -304,5 +305,162 @@ describe('the per-extension fix-command gate', () => {
       '--filter @fix/cityville format:fix -- src/game.ts',
       '--filter @fix/cityville lint:fix -- src/game.ts',
     ]);
+  });
+});
+
+describe('passPaths default: today', () => {
+  function newInstall(
+    scripts: Record<string, string>,
+    hasExistingConfig = false,
+  ) {
+    const ctx = makeCtx({
+      packageManager: { name: 'pnpm', source: 'lockfile' },
+      rootPkg: { name: 'my-repo', scripts },
+      targets: [
+        {
+          name: 'core',
+          prefix: 'CORE',
+          packageName: 'my-repo',
+          pathPrefix: '',
+          sourcePath: 'src',
+          label: 'Core',
+          fixCommands: ['lint:fix', 'format'],
+        },
+      ],
+    });
+    if (hasExistingConfig)
+      ctx.claude.houseConfig = {
+        version: 2,
+        packageManager: 'pnpm',
+        targets: [],
+        fix: {
+          runner: 'pnpm',
+          filterFlag: '',
+          runScriptPrefix: ['run'],
+          commands: ['lint:fix', 'format'],
+        },
+      };
+    return plan(ctx, makeAnswers({ targets: ctx.targets }));
+  }
+  const pathScripts = {
+    'lint:fix': 'eslint --fix',
+    format: 'prettier --write',
+  };
+  const wholeTree = {
+    'lint:fix': 'eslint . --fix',
+    format: 'prettier --write .',
+  };
+  const passPathsAdvises = (actions: ReturnType<typeof plan>) =>
+    actions.filter(
+      (a) => a.kind === 'advise' && a.text.includes('fix.passPaths'),
+    );
+
+  it('advises nothing about fix.passPaths on a new install whose scripts take paths', () => {
+    expect(passPathsAdvises(newInstall(pathScripts))).toEqual([]);
+  });
+
+  it('advises nothing about fix.passPaths on an existing install with whole-tree scripts', () => {
+    expect(passPathsAdvises(newInstall(wholeTree, true))).toEqual([]);
+  });
+
+  it('wires Stop once on a new install with whole-tree scripts', () => {
+    expect(hookScripts(newInstall(wholeTree), 'Stop')).toHaveLength(1);
+  });
+
+  it('seeds fixCommands and wires Stop on the pnpm-single fixture', () => {
+    const root = useRepo('pnpm-single');
+    const result = runCli(['init', '--yes', '--modules=lint-fix', root]);
+    expect(result.status, result.stderr).toBe(0);
+    expect(
+      hookCommandsFor(settingsOf(root), 'Stop').some((c) =>
+        c.includes('lint-format-fix.mjs'),
+      ),
+    ).toBe(true);
+    const config = readJson<{ targets: { fixCommands?: string[] }[] }>(
+      houseConfigPath(root),
+    );
+    expect(config.targets[0]?.fixCommands).toEqual(['lint:fix', 'format']);
+  });
+});
+
+describe('passPaths default: the change', () => {
+  function newInstallAdvises(scripts: Record<string, string>) {
+    const ctx = makeCtx({
+      packageManager: { name: 'pnpm', source: 'lockfile' },
+      rootPkg: { name: 'my-repo', scripts },
+      targets: [
+        {
+          name: 'core',
+          prefix: 'CORE',
+          packageName: 'my-repo',
+          pathPrefix: '',
+          sourcePath: 'src',
+          label: 'Core',
+          fixCommands: ['lint:fix', 'format'],
+        },
+      ],
+    });
+    return plan(ctx, makeAnswers({ targets: ctx.targets })).filter(
+      (a): a is Extract<typeof a, { kind: 'advise' }> => a.kind === 'advise',
+    );
+  }
+
+  function rewriteScripts(root: string): void {
+    const pkgPath = join(root, 'package.json');
+    const pkg = readJson<{ scripts: Record<string, string> }>(pkgPath);
+    pkg.scripts['lint:fix'] = 'eslint --fix';
+    pkg.scripts.format = 'prettier --write';
+    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+    runIn(root, 'git', ['add', '-A']);
+    runIn(root, 'git', ['commit', '-qm', 'path-taking scripts']);
+  }
+
+  it('advises once, naming fix.passPaths and both scripts, for whole-tree scripts', () => {
+    const advises = newInstallAdvises({
+      'lint:fix': 'eslint . --fix',
+      format: 'prettier --write .',
+    });
+    expect(advises).toHaveLength(1);
+    for (const token of [
+      'fix.passPaths',
+      '"lint:fix"',
+      '"format"',
+      'eslint --fix',
+      'prettier --write',
+    ])
+      expect(advises[0]?.text).toContain(token);
+  });
+
+  it('advises once, naming only format, for mixed scripts', () => {
+    const advises = newInstallAdvises({
+      'lint:fix': 'eslint --fix',
+      format: 'prettier --write .',
+    });
+    expect(advises).toHaveLength(1);
+    expect(advises[0]?.text).toContain('"format"');
+    expect(advises[0]?.text).not.toContain('"lint:fix"');
+  });
+
+  it('seeds fix.passPaths true and does not advise when the pnpm-single scripts take paths', () => {
+    const root = useRepo('pnpm-single');
+    rewriteScripts(root);
+    const result = runCli(['init', '--yes', '--modules=lint-fix', root]);
+    expect(result.status, result.stderr).toBe(0);
+    const config = readJson<{ fix: { passPaths?: boolean } }>(
+      houseConfigPath(root),
+    );
+    expect(config.fix.passPaths).toBe(true);
+    expect(result.stdout).not.toContain('fix.passPaths');
+  });
+
+  it('seeds no passPaths key and advises when the pnpm-single scripts are whole-tree', () => {
+    const root = useRepo('pnpm-single');
+    const result = runCli(['init', '--yes', '--modules=lint-fix', root]);
+    expect(result.status, result.stderr).toBe(0);
+    const config = readJson<{ fix: Record<string, unknown> }>(
+      houseConfigPath(root),
+    );
+    expect('passPaths' in config.fix).toBe(false);
+    expect(result.stdout).toContain('fix.passPaths');
   });
 });

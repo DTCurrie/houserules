@@ -482,20 +482,77 @@ function orch071(sample) {
 }
 
 /**
- * The `$ command` lines of an Acceptance section, each with a count of the output lines under it.
+ * The `$ command` entries of an Acceptance section, each with a count of the output lines under it.
+ *
+ * A command is the longest run of lines that starts at its `$` line with the `$ ` dropped and
+ * stops before the next line starting `$ `. Joined with newlines and trimmed, the run must match
+ * one of the worker's Bash calls through `commandMatches`. When no run of two or more lines
+ * matches, the command is the `$` line alone. Each non-blank line after the command, up to the
+ * next `$ ` line, is output. A line starting `$ ` always opens a new entry. The transcript marks
+ * where the command ends because the report format reserves no continuation line form.
  *
  * @param {string[]} body
+ * @param {string[]} ranCommands
  * @returns {Array<{ command: string, outputLineCount: number }>}
  */
-function acceptanceEntries(body) {
+function acceptanceEntries(body, ranCommands) {
   const entries = [];
-  for (const line of body) {
-    if (line.startsWith('$ '))
-      entries.push({ command: line.slice(2).trim(), outputLineCount: 0 });
-    else if (line.trim() !== '' && entries.length > 0)
-      entries.at(-1).outputLineCount += 1;
+  let index = 0;
+  while (index < body.length) {
+    const line = body[index];
+    if (!line.startsWith('$ ')) {
+      if (line.trim() !== '' && entries.length > 0)
+        entries.at(-1).outputLineCount += 1;
+      index += 1;
+      continue;
+    }
+    const length = commandLineCount(body, index, ranCommands);
+    entries.push({
+      command: joinCommandLines(body, index, length),
+      outputLineCount: 0,
+    });
+    index += length;
   }
   return entries;
+}
+
+/** The fewest report lines a multi-line command spans. */
+const MIN_MULTI_LINE_COMMAND_LINES = 2;
+
+/**
+ * The command a `$` entry spans, as `length` lines from `start` with the `$ ` dropped.
+ *
+ * @param {string[]} body
+ * @param {number} start
+ * @param {number} length
+ */
+function joinCommandLines(body, start, length) {
+  return [body[start].slice(2), ...body.slice(start + 1, start + length)]
+    .join('\n')
+    .trim();
+}
+
+/**
+ * How many lines the `$` entry at `start` spans: the longest run that matches a ran command,
+ * or 1 when no multi-line run does.
+ *
+ * @param {string[]} body
+ * @param {number} start
+ * @param {string[]} ranCommands
+ */
+function commandLineCount(body, start, ranCommands) {
+  let runEnd = start + 1;
+  while (runEnd < body.length && !body[runEnd].startsWith('$ ')) runEnd += 1;
+  for (
+    let candidate = runEnd - start;
+    candidate >= MIN_MULTI_LINE_COMMAND_LINES;
+    candidate -= 1
+  ) {
+    const joined = joinCommandLines(body, start, candidate);
+    if (ranCommands.some((ran) => commandMatches(joined, ran)))
+      return candidate;
+  }
+  return 1;
 }
 
 /** @param {SampleArtifacts} sample */
@@ -505,7 +562,7 @@ function agent059(sample) {
   for (const { agentId, reply, commands } of workers) {
     const body = sectionLines(reply, 'Acceptance', WORKER_SECTIONS);
     if (!body) return fail(`worker ${agentId} reply has no Acceptance section`);
-    const entries = acceptanceEntries(body);
+    const entries = acceptanceEntries(body, commands);
     if (entries.length === 0)
       return fail(`worker ${agentId} Acceptance holds no $ command`);
     for (const { command, outputLineCount } of entries) {

@@ -87,6 +87,8 @@ export function resolveFixSettings(config: HouseConfig): FixSettings {
       'jsx',
       'mjs',
       'cjs',
+      'mts',
+      'cts',
       'svelte',
       'md',
       'json',
@@ -582,8 +584,8 @@ async function main(): Promise<void> {
   // Resolved before the config load so the root is passed in rather than spawned twice.
   // `repoRoot()` falls back to the cwd instead of throwing, so this is safe here.
   const root = repoRoot();
-  // A Stop hook must never crash on a missing/broken config — it would fire on
-  // every stop. No config or no targets → nothing to do.
+  // A Stop hook must never crash on a missing/broken config, since it would fire
+  // on every stop. No config or no targets → nothing to do.
   const config = loadConfigSafe(root);
   const settings = resolveFixSettings(config);
 

@@ -7,4 +7,4 @@
 '@houserules/plugin-changesets': patch
 ---
 
-Payload gitignored and synced, `init` validates config, Stop fixes need `fix.passPaths`, changeset summaries capped.
+Payload gitignored and synced, `init` validates config, `fix.passPaths` auto-detected, changeset summaries capped, exact worker reports.
