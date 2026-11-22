@@ -20,7 +20,13 @@ import {
   assertNoRetiredModules,
   resolveRecordedModuleIds,
 } from '../retired-modules.js';
-import { MODULES, buildPlan, computeEffects, computePrune } from '../plan.js';
+import {
+  MODULES,
+  buildPlan,
+  computeEffects,
+  computePrune,
+  configOwnership,
+} from '../plan.js';
 import { HouseError } from '../house-error.js';
 import {
   closeSelection,
@@ -37,6 +43,10 @@ import {
 } from '@houserules/api/internal';
 import { apply } from '../apply.js';
 import { formatterMangleHint } from '../modules/formatter-mangle.js';
+import {
+  ignoredUnejectedDests,
+  localEditHints,
+} from '../core/local-edit-hints.js';
 import * as ui from '../ui.js';
 import { EXIT } from '../cli-contract.js';
 import type { Flags } from '../cli-contract.js';
@@ -192,14 +202,21 @@ function untrackAndReport(
  * accusation. Without the diff the user cannot tell a formatter rewrite from a real edit,
  * which leaves `--force` as the only lever and no reason to trust it.
  */
-function showLocalEdits(root: string, dests: string[]): void {
+function showLocalEdits(
+  root: string,
+  dests: string[],
+  ignored: ReadonlySet<string>,
+  ejected: ReadonlySet<string>,
+): void {
   if (!dests.length) return;
   ui.message(
     `${dests.length} file(s) differ from what houserules last wrote, so they were kept. See what changed: npx houserules doctor --json, where every drift entry carries a diff.`,
   );
+  const hints = localEditHints(dests, ignored, 'npx houserules');
+  if (hints.length) ui.message(hints.join('\n'));
   const hint = formatterMangleHint(
     root,
-    dests,
+    dests.filter((dest) => !ejected.has(dest)),
     'Run `npx houserules update --force` to restore them',
   );
   if (hint) ui.message(hint);
@@ -271,6 +288,7 @@ function resolveUpdatePlan(
     force: flags.force,
     plugins: registry.plugins,
     shouldPlanPrepare: !flags.sync,
+    ...configOwnership(ctx.claude.houseConfig),
   });
   return { planResult, updateModuleIds, closure };
 }
@@ -339,6 +357,8 @@ interface UpdateOutcome {
   written: number;
   /** Locally edited files left as they were, refreshed and retired ones alike. */
   kept: number;
+  /** How many of the kept files are ignored and not ejected, so `eject` could keep them. */
+  keptIgnored?: number;
   /** The first line of the message that failed the run, when it failed. */
   failure?: string;
 }
@@ -402,9 +422,10 @@ function syncLine(outcome: UpdateOutcome, flags: Flags): string | null {
     return `${SYNC_PREFIX} sync failed: ${outcome.failure}`;
   if (!outcome.written) return null;
   const counts = `${outcome.written} ${flags.dryRun ? 'to write' : 'written'}, ${outcome.kept} kept (edited)`;
+  const hint = outcome.keptIgnored ? ', run houserules doctor' : '';
   return flags.dryRun
-    ? `${SYNC_PREFIX} dry run, would sync to ${flags.kitVersion}: ${counts}`
-    : `${SYNC_PREFIX} synced to ${flags.kitVersion}: ${counts}`;
+    ? `${SYNC_PREFIX} dry run, would sync to ${flags.kitVersion}: ${counts}${hint}`
+    : `${SYNC_PREFIX} synced to ${flags.kitVersion}: ${counts}${hint}`;
 }
 
 function writeSyncLine(line: string): void {
@@ -506,6 +527,7 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
     manifest,
     plannedDests: planResult.plannedDests,
     force: flags.force,
+    ejected: configOwnership(ctx.claude.houseConfig).ejected,
   });
   if (prune.removedScripts.length) {
     foldRemovedHooksSettings(planResult, ctx, prune.removedScripts);
@@ -542,9 +564,17 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
   const skipped = planResult.effects
     .filter((e) => e.op === 'skip-modified')
     .map((e) => e.action.dest);
-  showLocalEdits(root, skipped);
+  const ejectedDests = configOwnership(ctx.claude.houseConfig).ejected;
+  const ignoredDests = ignoredUnejectedDests(
+    ctx,
+    planResult.effects,
+    ejectedDests,
+  );
+  const keptIgnored = skipped.filter((dest) => ignoredDests.has(dest)).length;
+  const skippedUnejected = skipped.filter((dest) => !ejectedDests.has(dest));
+  showLocalEdits(root, skipped, ignoredDests, ejectedDests);
 
-  if (prune.deletes.length || prune.kept.length) {
+  if (prune.deletes.length || prune.kept.length || prune.ejected.length) {
     const lines: string[] = [];
     for (const d of prune.deletes)
       lines.push(
@@ -553,6 +583,10 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
     for (const k of prune.kept)
       lines.push(
         `! ${k} — retired, but locally edited: kept (--force to remove)`,
+      );
+    for (const ejectedDest of prune.ejected)
+      lines.push(
+        `! ${ejectedDest} — ejected, and no enabled module ships it: kept`,
       );
     ui.note(lines.join('\n'), 'Prune (retired by houserules version)');
   }
@@ -594,6 +628,7 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
       code: hasBrokenPlugins ? EXIT.error : EXIT.ok,
       written: countPendingWrites(planResult, prune),
       kept: skipped.length + prune.kept.length,
+      keptIgnored,
       ...(brokenFailure !== undefined && { failure: brokenFailure }),
     };
   }
@@ -646,8 +681,8 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
   ui.outro(
     [
       pruned ? `pruned ${pruned} retired file(s)` : '',
-      skipped.length
-        ? `${skipped.length} locally-edited file(s) kept as-is (--force to overwrite)`
+      skippedUnejected.length
+        ? `${skippedUnejected.length} locally-edited file(s) kept as-is (--force to overwrite)`
         : '',
     ]
       .filter(Boolean)
@@ -659,6 +694,7 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
     code: hasBrokenPlugins ? EXIT.error : EXIT.ok,
     written: written.length + (manifestWritten ? 1 : 0),
     kept: skipped.length + prune.kept.length,
+    keptIgnored,
     ...(brokenFailure !== undefined && { failure: brokenFailure }),
   };
 }

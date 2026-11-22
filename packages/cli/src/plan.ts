@@ -16,7 +16,11 @@ import {
 } from '@houserules/api/internal';
 import { HouseError } from './house-error.js';
 import { mergeManagedKeys } from './merge-config-keys.js';
-import { classifyFrontmatter, splitFrontmatter } from './core/frontmatter.js';
+import {
+  classifyFrontmatter,
+  renderFrontmatterPaths,
+  splitFrontmatter,
+} from './core/frontmatter.js';
 
 import * as core from './modules/core.js';
 import * as lintFix from './modules/lint-fix.js';
@@ -50,6 +54,7 @@ import type {
   SeedAction,
   WriteAction,
   Answers,
+  HouseConfig,
   ModuleDef,
   Settings,
   SettingsFragment,
@@ -108,9 +113,44 @@ export interface Effect {
    * plan, so a preview can show what changes. Absent on every other effect.
    */
   previousBody?: string;
+  /**
+   * An ejected dest that exists with no recorded hash: the canonical hash this plan judged
+   * it against in place of the missing record, the body half's for a `body` action.
+   * `apply()` records it for a `skip-modified` dest the previous manifest lacks, so a clone's
+   * first sync keeps the teammate's edit and a later kit bump reads `conflict`.
+   */
+  substitutedHash?: string;
 }
 
-export interface ComputeEffectsOptions {
+/**
+ * The ownership choices the config records past the module set, read by every plan and
+ * prune so `update`, `doctor`, `modules`, and `init` judge a file the same way.
+ */
+export interface ConfigOwnership {
+  /**
+   * Repo-relative dests the config's `ejected` lists. Planned as a committed file is, an
+   * edit is never overwritten, not even under `force`, and the file is never pruned.
+   */
+  ejected?: ReadonlySet<string>;
+  /**
+   * Rule id → the `paths:` the config's `rules` sets for it. A rule id is the file name
+   * under `.claude/rules/` without `.md`. Rendered into that rule's frontmatter.
+   */
+  rulePaths?: Readonly<Record<string, readonly string[]>>;
+}
+
+/** The {@link ConfigOwnership} a config records. A missing config owns nothing. */
+export function configOwnership(
+  config: HouseConfig | null | undefined,
+): Required<ConfigOwnership> {
+  const rulePaths: Record<string, readonly string[]> = {};
+  for (const [ruleId, settings] of Object.entries(config?.rules ?? {})) {
+    if (settings.paths !== undefined) rulePaths[ruleId] = settings.paths;
+  }
+  return { ejected: new Set(config?.ejected ?? []), rulePaths };
+}
+
+export interface ComputeEffectsOptions extends ConfigOwnership {
   manifest?: HouseManifest | null;
   force?: boolean;
   /**
@@ -170,6 +210,12 @@ export interface PruneResult {
   deletes: PruneDelete[];
   /** Retired but locally edited, so kept. */
   kept: string[];
+  /**
+   * Ejected dests on disk that no current module plans, kept whatever their bytes, under
+   * `force` too. Read from the config's `ejected` list as well as the manifest, so a clone
+   * with no manifest still finds them.
+   */
+  ejected: string[];
   /** Basenames of retired hook scripts, so the caller can unwire them. */
   removedScripts: string[];
 }
@@ -466,11 +512,25 @@ function effectForRegion(
   };
 }
 
+/** The `paths:` the config sets for the rule installed at `dest`, or undefined for none. */
+function configPathsFor(
+  dest: string,
+  rulePaths: Readonly<Record<string, readonly string[]>>,
+): readonly string[] | undefined {
+  const ruleId = /^\.claude\/rules\/(.+)\.md$/.exec(dest)?.[1];
+  if (ruleId === undefined || !Object.hasOwn(rulePaths, ruleId))
+    return undefined;
+  return rulePaths[ruleId];
+}
+
 /**
  * houserules owns everything below the closing `---` in a `body`-owned file. Splits
  * frontmatter (which may be user-trimmed) from the body (fully kit-owned) and judges
  * each half against its own recorded hash.
  *
+ * @param configPaths The `paths:` the config sets for this rule. When present the config
+ *   owns the frontmatter, so it is the shipped one with `paths:` rendered in, written on a
+ *   create and a refresh alike. The recorded default stays the shipped frontmatter's hash.
  * @returns Null when the action's payload file is missing, meaning the caller should skip it.
  */
 function effectForBody(
@@ -479,6 +539,8 @@ function effectForBody(
   exists: boolean,
   manifest: HouseManifest | null,
   force: boolean,
+  isEjected: boolean,
+  configPaths: readonly string[] | undefined,
   plugins: PluginSource[] | undefined,
   broken: Map<string, string[]>,
   brokenDests: Set<string>,
@@ -492,12 +554,19 @@ function effectForBody(
   const canonicalBody = payloadBody + (action.appendBody ?? '');
   const hash = sha256(canonicalBody);
   const frontmatterHash = sha256(shippedFrontmatter);
+  const renderedFrontmatter =
+    configPaths === undefined
+      ? undefined
+      : renderFrontmatterPaths(shippedFrontmatter, configPaths);
 
   if (!exists) {
     return {
       action,
       op: 'create',
-      content: Buffer.from(shippedFrontmatter + canonicalBody, 'utf8'),
+      content: Buffer.from(
+        (renderedFrontmatter ?? shippedFrontmatter) + canonicalBody,
+        'utf8',
+      ),
       hash,
       frontmatterHash,
     };
@@ -512,7 +581,8 @@ function effectForBody(
     shippedDefault: frontmatterHash,
   });
   const resolvedFrontmatter =
-    frontmatterState === 'default' ? shippedFrontmatter : diskFrontmatter;
+    renderedFrontmatter ??
+    (frontmatterState === 'default' ? shippedFrontmatter : diskFrontmatter);
   const content = Buffer.from(resolvedFrontmatter + canonicalBody, 'utf8');
 
   if (resolvedFrontmatter + canonicalBody === diskText) {
@@ -521,6 +591,12 @@ function effectForBody(
 
   const recordedBody = bodyHashes(manifest, action.dest);
   const recordedWholeFile = wholeFileHash(manifest, action.dest);
+  // A clone has no manifest, and a body with no record would read as unmodified, so an
+  // ejected one is judged against the canonical body instead and a teammate's edit is kept.
+  const substitutedHash =
+    isEjected && recordedBody === undefined && recordedWholeFile === undefined
+      ? hash
+      : undefined;
   let locallyModified: boolean;
   if (recordedBody !== undefined) {
     locallyModified = sha256(diskBody) !== recordedBody.body;
@@ -530,11 +606,19 @@ function effectForBody(
     // must adopt cleanly rather than read as modified on its first body-owned update.
     locallyModified = sha256(diskText) !== recordedWholeFile;
   } else {
-    locallyModified = false;
+    locallyModified = substitutedHash !== undefined;
   }
 
+  const substitution = substitutedHash === undefined ? {} : { substitutedHash };
   if (locallyModified && !force) {
-    return { action, op: 'skip-modified', content, hash, frontmatterHash };
+    return {
+      action,
+      op: 'skip-modified',
+      content,
+      hash,
+      frontmatterHash,
+      ...substitution,
+    };
   }
   return { action, op: 'update', content, hash, frontmatterHash };
 }
@@ -585,6 +669,7 @@ function effectForCopyOrWrite(
   exists: boolean,
   manifest: HouseManifest | null,
   force: boolean,
+  isEjected: boolean,
   plugins: PluginSource[] | undefined,
   broken: Map<string, string[]>,
   brokenDests: Set<string>,
@@ -604,14 +689,22 @@ function effectForCopyOrWrite(
   }
   const content = readAction(action);
   const hash = sha256(content);
+  const recordedHash = wholeFileHash(manifest, action.dest);
+  // `classifyWrite` refreshes a file with no record, which on a clone with no manifest
+  // would overwrite a teammate's ejected edit, so the canonical hash stands in for it.
+  const substitutedHash =
+    isEjected && exists && recordedHash === undefined ? hash : undefined;
   const op = classifyWrite({
     exists,
     onDisk: exists ? readFileSync(destAbs) : null,
     canonical: content,
-    recordedHash: wholeFileHash(manifest, action.dest),
+    recordedHash: recordedHash ?? substitutedHash,
     force,
     isGenerated: isGeneratedDest(action.dest, generatedDirs),
   });
+  if (op === 'skip-modified' && substitutedHash !== undefined) {
+    return { action, op, content, hash, substitutedHash };
+  }
   return { action, op, content, hash };
 }
 
@@ -670,6 +763,8 @@ export function computeEffects(
     force = false,
     plugins,
     shouldPlanPrepare = false,
+    ejected = new Set<string>(),
+    rulePaths = {},
   }: ComputeEffectsOptions = {},
 ): PlanResult {
   const effects: Effect[] = [];
@@ -698,6 +793,9 @@ export function computeEffects(
 
     const destAbs = join(root, action.dest);
     const exists = existsSync(destAbs);
+    const isEjected = ejected.has(action.dest);
+    // `force` never writes an ejected file: it is planned as it is without the flag.
+    const effectiveForce = force && !isEjected;
 
     let effect: Effect | null;
     if (action.kind === 'region') {
@@ -706,7 +804,7 @@ export function computeEffects(
         destAbs,
         exists,
         manifest,
-        force,
+        effectiveForce,
         pendingContent,
       );
     } else if (action.kind === 'body') {
@@ -715,7 +813,9 @@ export function computeEffects(
         destAbs,
         exists,
         manifest,
-        force,
+        effectiveForce,
+        isEjected,
+        configPathsFor(action.dest, rulePaths),
         plugins,
         broken,
         brokenDests,
@@ -729,7 +829,8 @@ export function computeEffects(
         destAbs,
         exists,
         manifest,
-        force,
+        effectiveForce,
+        isEjected,
         plugins,
         broken,
         brokenDests,
@@ -813,12 +914,13 @@ function judgeRetiredEntry(
  * kit-owned but the current plan no longer produces is retired. Only kit-owned,
  * hash-unmodified files are deleted. A locally edited one is kept and warned about
  * unless `force`. A file already gone is just dropped from the manifest. A symlink is
- * judged as itself, see `judgeRetiredEntry`.
+ * judged as itself, see `judgeRetiredEntry`. An ejected file is never deleted, not even
+ * under `force`.
  *
  * Pure computation. Only `apply()` writes, and dry-run renders exactly this.
  *
- * @returns The deletions, the retired-but-kept files, and the basenames of retired hook
- * scripts so the caller can unwire them.
+ * @returns The deletions, the retired-but-kept files, the retired ejected files, and the
+ * basenames of retired hook scripts so the caller can unwire them.
  */
 export function computePrune(
   root: string,
@@ -826,14 +928,18 @@ export function computePrune(
     manifest,
     plannedDests,
     force = false,
+    ejected = new Set<string>(),
   }: {
     manifest?: HouseManifest | null;
     plannedDests: Set<string>;
     force?: boolean;
+    /** See {@link ConfigOwnership.ejected}. An ejected dest is never deleted. */
+    ejected?: ReadonlySet<string>;
   },
 ): PruneResult {
   const deletes: PruneDelete[] = [];
   const kept: string[] = [];
+  const keptEjected: string[] = [];
   for (const [dest, hash] of Object.entries(manifest?.files ?? {})) {
     if (plannedDests.has(dest)) continue; // still produced by a current module
     // A stale manifest entry here would propose deleting the user's CLAUDE.md outright.
@@ -841,8 +947,17 @@ export function computePrune(
     if (SHARED_HOST_FILES.has(dest)) continue;
     const verdict = judgeRetiredEntry(join(root, dest), hash, force);
     if (verdict.kind === 'gone') deletes.push({ dest, gone: true });
+    else if (ejected.has(dest)) keptEjected.push(dest);
     else if (verdict.kind === 'keep') kept.push(dest);
     else deletes.push({ dest, modified: verdict.modified });
+  }
+  // The config, not the manifest, is the record on a clone, which has no manifest until
+  // its first sync, so an ejected dest the manifest never listed is found here.
+  for (const dest of ejected) {
+    if (plannedDests.has(dest) || manifest?.files[dest] !== undefined) continue;
+    if (lstatSync(join(root, dest), { throwIfNoEntry: false }) === undefined)
+      continue;
+    keptEjected.push(dest);
   }
 
   // Retired scripts (that a hook might still reference). Surfaced for unwiring.
@@ -851,5 +966,5 @@ export function computePrune(
     .map((d) => d.dest.split('/').pop())
     .filter((name): name is string => name !== undefined);
 
-  return { deletes, kept, removedScripts };
+  return { deletes, kept, ejected: keptEjected, removedScripts };
 }

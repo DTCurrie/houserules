@@ -11,7 +11,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -512,6 +512,28 @@ describe('update on a repo with no prior houserules install', () => {
     const r = runCli(['update', root]);
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/houserules.manifest\.json/);
+  });
+});
+
+function checkIgnoreStatus(root: string, dest: string): number | null {
+  return spawnSync('git', ['check-ignore', '-q', dest], { cwd: root }).status;
+}
+
+describe('update on an ejected dest', () => {
+  it('leaves the ejected dest out of the gitignore block and keeps the rest ignored', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    const ejected = '.claude/rules/code-cleanliness.md';
+    const ignored = '.claude/houserules.manifest.json';
+    editHouseConfig(root, (config) => {
+      config.ejected = [ejected];
+    });
+
+    const result = runCli(['update', root]);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(runIn(root, 'git', ['ls-files', ejected, ignored]).trim()).toBe('');
+    expect(checkIgnoreStatus(root, ejected)).toBe(1);
+    expect(checkIgnoreStatus(root, ignored)).toBe(0);
   });
 });
 
@@ -1935,6 +1957,107 @@ describe('update --sync', () => {
         stdout: '',
         stderr: '',
       });
+    });
+  });
+});
+
+describe('update on an edited, ignored houserules file', () => {
+  const unwrapped = (text: string): string => text.replace(/\s+/g, ' ');
+
+  function skillDests(root: string): string[] {
+    return Object.keys(manifestOf(root).files).filter((dest) =>
+      dest.startsWith('.claude/skills/'),
+    );
+  }
+
+  function editFile(root: string, dest: string): void {
+    appendFileSync(join(root, dest), '\n<!-- my tweak -->\n');
+  }
+
+  it('offers eject to keep the edit and a delete-then-update to discard it, never --force', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'ready,sweep' });
+    const [dest] = skillDests(root);
+    editFile(root, dest!);
+
+    const out = unwrapped(runCli(['update', root]).stdout);
+
+    expect(out).toContain(`npx houserules eject ${dest}`);
+    expect(out).toContain(
+      `${dest}: to discard your edit, delete the file and run \`npx houserules update\`, which recreates it`,
+    );
+    expect(out).not.toContain('doctor --fix --force');
+  });
+
+  it('offers neither line for an edited ejected file', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'ready,sweep' });
+    const [dest] = skillDests(root);
+    editHouseConfig(root, (config) => {
+      config.ejected = [dest];
+    });
+    editFile(root, dest!);
+
+    const out = unwrapped(runCli(['update', root]).stdout);
+
+    expect(out).not.toContain(`houserules eject ${dest}`);
+    expect(out).not.toContain('to discard your edit');
+  });
+
+  it('offers neither line for an edited committed script', () => {
+    const root = useInstalledRepo('pnpm-monorepo', COMMITTED_SCRIPTS);
+    appendFileSync(join(root, '.claude/scripts/guard-bash.mjs'), '// tweak\n');
+
+    const out = unwrapped(runCli(['update', root]).stdout);
+
+    expect(out).toContain('differ from what houserules last wrote');
+    expect(out).not.toContain('houserules eject');
+    expect(out).not.toContain('to discard your edit');
+  });
+
+  it('counts only the un-ejected edit in the outro', () => {
+    const root = useInstalledRepo('pnpm-monorepo', { modules: 'ready,sweep' });
+    const [ejectedDest, keptDest] = skillDests(root);
+    editHouseConfig(root, (config) => {
+      config.ejected = [ejectedDest];
+    });
+    editFile(root, ejectedDest!);
+    editFile(root, keptDest!);
+
+    const out = unwrapped(runCli(['update', root]).stdout);
+
+    expect(out).toContain(
+      '1 locally-edited file(s) kept as-is (--force to overwrite)',
+    );
+  });
+
+  describe('with --sync on a stale install', () => {
+    it('appends the doctor hint when the kept file is ignored and not ejected', () => {
+      const root = useInstalledRepo('pnpm-monorepo', {
+        modules: 'ready,sweep',
+      });
+      makeLintScriptStale(root);
+      editFile(root, skillDests(root)[0]!);
+
+      const result = runCli(['update', '--sync', root]);
+
+      expect(result.stdout).toBe(
+        `[houserules] synced to ${KIT_VERSION}: 2 written, 1 kept (edited), run houserules doctor\n`,
+      );
+    });
+
+    it('adds no hint when the kept file is ejected', () => {
+      const root = useInstalledRepo('pnpm-monorepo', {
+        modules: 'ready,sweep',
+      });
+      makeLintScriptStale(root);
+      const [dest] = skillDests(root);
+      editHouseConfig(root, (config) => {
+        config.ejected = [dest];
+      });
+      editFile(root, dest!);
+
+      const result = runCli(['update', '--sync', root]);
+
+      expect(result.stdout).not.toContain('run houserules doctor');
     });
   });
 });

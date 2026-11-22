@@ -317,6 +317,30 @@ const HouseConfigSchema = z.strictObject({
     })
     .optional(),
 
+  ejected: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Installed files you took ownership of with `npx houserules eject`, as repo-relative paths such as `.claude/skills/tidy/SKILL.md`. Each is left out of the .claude/.gitignore block so it can be committed, and `update` never overwrites a local edit to it. Written by `eject`.',
+    ),
+
+  rules: z
+    .record(
+      z.string(),
+      z.strictObject({
+        paths: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "The globs written to the rule's `paths:` frontmatter in place of the shipped ones, so the rule file itself can stay ignored.",
+          ),
+      }),
+    )
+    .optional()
+    .describe(
+      'Per-rule settings, keyed by rule id: the file name under .claude/rules/ without `.md`.',
+    ),
+
   modules: z
     .array(z.string())
     .optional()

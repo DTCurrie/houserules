@@ -275,8 +275,9 @@ hook command is guarded. A missing script on a blocking hook prints
 instead of a Node stack trace. A SessionStart hook prints the same notice without the last sentence
 and exits 0, so Claude reads it as context and your turn does not fail.
 
-If you edit an ignored file, `update` keeps your edit and reports the file as `yours`. The edit
-stays on your machine, since git does not see the file.
+If you edit an ignored file, `update` keeps your edit and `doctor` reports the file as `yours`.
+The edit stays on your machine, since git does not see the file. To share it with your team, see
+[Editing an installed file](#editing-an-installed-file).
 
 Want the committed layout? Set `payload.commit: true` in `.claude/houserules.config.json`.
 houserules then drops the block, and the payload is committed as before. For the hook scripts
@@ -310,11 +311,76 @@ npx houserules doctor --fix --prune    # also delete orphans
 
 A rule's `paths:` globs decide when Claude Code loads it, and only your repo knows which
 suffixes it actually uses. So a rule file is split down the middle. Everything below the
-closing `---` is houserules' and stays refreshable forever. The frontmatter above it is yours.
+closing `---` is houserules' and stays refreshable forever.
 
-Trim `paths:` to your repo and nothing breaks. It is not drift, it is not a warning, and the
-rule body still updates. The only time houserules says anything is when it ships a new default
-`paths:` and yours differ, and then it tells you once and keeps your version.
+To set a rule's globs, put them in `.claude/houserules.config.json`, keyed by rule id. The id
+is the file's name under `.claude/rules/` without `.md`.
+
+```json
+{ "rules": { "testing": { "paths": ["src/**/*.ts"] } } }
+```
+
+`update` renders that value into the rule's frontmatter, every other key unchanged, on a create
+as well as a refresh. The config is committed, so a fresh clone gets the trimmed rule while the
+rule file itself stays ignored. `doctor` reports a `rules` key that names no installed rule.
+
+A config `paths` value replaces a hand-trimmed frontmatter for that rule, so the config wins
+over what the file says. A hand trim is kept only when no `rules` value is set for the rule.
+Then, under `payload.commit: true`, trim `paths:` in the file and nothing breaks. It is not
+drift, it is not a warning, and the rule body still updates. The only time houserules says
+anything is when it ships a new default `paths:` and yours differ, and then it tells you once and
+keeps your version.
+
+### Editing an installed file
+
+Ignored files are not shared, so a hand edit to one stays on your machine. To share an edit,
+eject the file:
+
+```
+npx houserules eject .claude/skills/<name>/SKILL.md
+```
+
+`eject` adds the file to `ejected` in `.claude/houserules.config.json` and rewrites the ignore
+block so git sees the file. It then prints `Ejected <file>. houserules now leaves it alone.` and
+a line of the form `Share it with: git add <file> .claude/houserules.config.json .claude/.gitignore`.
+Run that line and commit. A teammate's sync keeps the edit only when the config lists the file.
+Ejecting a file that is already ejected prints `Already ejected. Nothing changed.`
+
+`eject` refuses these paths, prints `Nothing changed.`, and exits 1:
+
+- a path houserules does not own
+- anything under `.claude/scripts/` or `.claude/templates/`, which houserules rewrites on every
+  sync
+- the manifest and `.claude/settings.json`
+- any file when `payload.commit` is true, since git already tracks every installed file
+- a file `.claude/.gitignore` does not list
+- a file git already tracks
+
+Given a directory, `eject` opens a picker over the files it accepts under that directory. A bare
+`eject` opens the picker over every file it accepts. The picker needs a terminal on both stdin and
+stdout. Without one, such as in CI or with piped input, and under `--yes`, `eject` never prompts.
+It refuses and lists the files instead. A run over several files writes nothing unless every one
+succeeds. `--dry-run` prints `Dry run. Would eject: <files>` and writes nothing.
+
+```
+npx houserules eject --undo .claude/skills/<name>/SKILL.md
+```
+
+`--undo` removes the entry and rewrites the block, and the file's bytes stay as they are. It
+prints `<file> is ignored again.` for each file. When git tracks the file, `--undo` stages the
+removal, and `Commit the staged removal to finish.` tells you to commit it. A file that is not
+ejected is refused with `this file is not ejected.` `--undo` takes a directory or no path and
+opens the same picker over the ejected files, and `--yes` refuses and lists them instead.
+
+When you edit an ignored file you did not eject, `update` and `doctor` print two lines beside it:
+
+```
+<file>: to keep your edit, run `npx houserules eject <file>`
+<file>: to discard your edit, delete the file and run `npx houserules update`, which recreates it
+```
+
+Deleting the file and running `update` recreates it from the current payload. A committed file
+gets neither line, and neither does a file you already ejected.
 
 ### The formatter
 
@@ -353,7 +419,8 @@ nobody has to remember to run `update`.
   is skipped when `@houserules/cli` is not a dependency of the root `package.json`, because the
   command would fail for any teammate without a global binary.
 - **`update --sync`.** The unattended form of `update`. It prints one line, always exits 0, and
-  never overwrites a file you edited. It refuses `--force`.
+  never overwrites a file you edited. It refuses `--force`. When it keeps an edited ignored file,
+  its line ends with `, run houserules doctor`.
 - **The SessionStart hook.** `payload-sync` is the backstop for installs the `prepare` script did
   not cover. It compares the manifest with the installed CLI and plugin versions and checks for
   missing files. On a mismatch it runs the sync, then asks you to restart the session. Skills,
@@ -362,8 +429,9 @@ nobody has to remember to run `update`.
   syncs. If they skip it, the first session's hook syncs and asks for a restart.
 - **A global CLI with no dependency.** There is no `prepare` script in this case. The hook runs
   the `houserules` on your `PATH`, or prints the install hint when there is none.
-- **Local edits.** A generated file you edited is kept and reported as `yours`, the same as under
-  a manual `update`.
+- **Local edits.** A generated file you edited is kept, and `doctor` reports it as `yours`, the
+  same as after a manual `update`. `eject` is how you share one. If you edit an ejected file and
+  houserules ships a newer version, `doctor` reports `you edited it and houserules shipped a newer version since. It is ejected, so merge by hand`.
 - **Worktrees.** A new `git worktree` is a fresh checkout without the ignored files, so it takes
   the fresh-clone path: dependency install, then the hook as the backstop.
 

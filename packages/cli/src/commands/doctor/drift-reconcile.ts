@@ -14,18 +14,31 @@ import {
 import { MANIFEST_PATH, type HouseManifest } from '@houserules/api/internal';
 import type { Ctx } from '../../detect.js';
 import { formatterMangleHint } from '../../modules/formatter-mangle.js';
+import {
+  ignoredUnejectedDests,
+  localEditHints,
+} from '../../core/local-edit-hints.js';
 import { resolveModuleOptions } from '../../module-options.js';
-import { buildPlan, computeEffects, computePrune } from '../../plan.js';
+import {
+  buildPlan,
+  computeEffects,
+  computePrune,
+  configOwnership,
+} from '../../plan.js';
 import type { PlanResult } from '../../plan.js';
 import type { Registry } from '../../plugin-registry.js';
 import { findRetired, retiredModuleAdvice } from '../../retired-modules.js';
 import type { CheckResult, Finding } from '@houserules/api';
 
+const CONFLICT_WITH_FORCE =
+  'you edited it and houserules shipped a newer version since. Merge by hand, or `--fix --force` to take houserules copy';
+const CONFLICT_EJECTED =
+  'you edited it and houserules shipped a newer version since. It is ejected, so merge by hand';
+
 const DRIFT_EXPLANATIONS: Record<string, string> = {
   missing: 'missing. `doctor --fix` recreates it',
   stale: 'stale. houserules has a newer version, and `update` refreshes it',
-  conflict:
-    'you edited it and houserules shipped a newer version since. Merge by hand, or `--fix --force` to take houserules copy',
+  conflict: CONFLICT_WITH_FORCE,
   'no-marker': 'managed markers removed. `doctor --fix` re-inserts the block',
   orphaned:
     'orphaned. No enabled module produces it, and `--fix --prune` removes it',
@@ -55,6 +68,7 @@ export function reconcileDrift(
   const findings: Finding[] = [];
   const manifest = ctx.claude.manifest;
   let drift: DriftReport = { files: [] };
+  let ignored: ReadonlySet<string> = new Set();
 
   if (!manifest) return { drift, findings, readouts: [] };
 
@@ -83,6 +97,7 @@ export function reconcileDrift(
     moduleIds,
     ctx.claude.houseConfig?.moduleOptions,
   );
+  const ownership = configOwnership(ctx.claude.houseConfig);
   const planAgainst = (against: HouseManifest | null, force: boolean) =>
     computeEffects(
       root,
@@ -91,7 +106,12 @@ export function reconcileDrift(
         { moduleIds, targets, seedChangesetConfig: false, moduleOptions },
         registry,
       ),
-      { manifest: against, force, plugins: registry.plugins },
+      {
+        manifest: against,
+        force,
+        plugins: registry.plugins,
+        ...ownership,
+      },
     );
 
   try {
@@ -102,7 +122,8 @@ export function reconcileDrift(
     // folded into `plannedDests` and so appear in neither the drift set nor the prune set.
     for (const problem of planResult.brokenPlugins)
       findings.push({ level: 'ERROR', msg: problem.message });
-    drift = driftReportFor(root, planResult, manifest);
+    drift = driftReportFor(root, planResult, manifest, ownership.ejected);
+    ignored = ignoredUnejectedDests(ctx, planResult.effects, ownership.ejected);
 
     let settledManifest: HouseManifest | null = manifest;
     let settledPlanResult = planResult;
@@ -116,16 +137,27 @@ export function reconcileDrift(
         manifest,
         moduleIds,
         registry,
+        ownership.ejected,
       );
       // Re-derive against the reconciled tree so the report reflects reality.
       const reconciled = readJson<HouseManifest>(join(root, MANIFEST_PATH));
       settledManifest = reconciled;
       settledPlanResult = planAgainst(reconciled, false);
-      drift = driftReportFor(root, settledPlanResult, reconciled);
+      drift = driftReportFor(
+        root,
+        settledPlanResult,
+        reconciled,
+        ownership.ejected,
+      );
     }
 
     findings.push(
-      ...staleManifestFindings(root, settledManifest, settledPlanResult),
+      ...staleManifestFindings(
+        root,
+        settledManifest,
+        settledPlanResult,
+        ownership.ejected,
+      ),
     );
   } catch (e) {
     findings.push({
@@ -134,9 +166,21 @@ export function reconcileDrift(
     });
   }
 
-  const settled = classifyDriftFindings(root, drift, findings);
+  const { settled, retiredEjected } = classifyDriftFindings(
+    root,
+    drift,
+    findings,
+    ownership.ejected,
+  );
 
-  return { drift, findings, readouts: settledReadout(settled) };
+  return {
+    drift,
+    findings,
+    readouts: [
+      ...settledReadout(settled, ignored),
+      ...retiredEjectedReadout(retiredEjected),
+    ],
+  };
 }
 
 /** The drift report for one plan result, prune included, against `manifest`. */
@@ -144,12 +188,14 @@ function driftReportFor(
   root: string,
   planResult: PlanResult,
   manifest: HouseManifest | null,
+  ejected: ReadonlySet<string>,
 ): DriftReport {
   return computeDrift(root, planResult.effects, {
     manifest,
     prune: computePrune(root, {
       manifest,
       plannedDests: planResult.plannedDests,
+      ejected,
     }),
   });
 }
@@ -164,8 +210,13 @@ function staleManifestFindings(
   root: string,
   manifest: HouseManifest | null,
   planResult: PlanResult,
+  ejected: ReadonlySet<string>,
 ): Finding[] {
-  return computePrune(root, { manifest, plannedDests: planResult.plannedDests })
+  return computePrune(root, {
+    manifest,
+    plannedDests: planResult.plannedDests,
+    ejected,
+  })
     .deletes.filter((entry) => entry.gone)
     .map((entry) => ({
       level: 'WARN',
@@ -189,6 +240,7 @@ function applyFixableChanges(
   manifest: HouseManifest,
   moduleIds: string[],
   registry: Registry,
+  ejected: ReadonlySet<string>,
 ): void {
   const fixable = new Set(
     driftedFiles(drift)
@@ -201,12 +253,14 @@ function applyFixableChanges(
   );
   // `force: true` here matches the removal pass this replaces, which pruned every
   // orphaned dest unconditionally. Whether a locally-edited orphan should survive
-  // `--prune` without `--force` is a separate question, deliberately left open.
+  // `--prune` without `--force` is a separate question, deliberately left open. An
+  // ejected file is never pruned, so `computePrune` keeps it even here.
   const prune = flags.prune
     ? computePrune(root, {
         manifest,
         plannedDests: planResult.plannedDests,
         force: true,
+        ejected,
       })
     : null;
   if (fixable.size || prune?.deletes.length) {
@@ -224,26 +278,43 @@ function applyFixableChanges(
   }
 }
 
+function driftExplanation(
+  status: string,
+  path: string,
+  ejected: ReadonlySet<string>,
+): string {
+  if (status === 'conflict' && ejected.has(path)) return CONFLICT_EJECTED;
+  return DRIFT_EXPLANATIONS[status] ?? status;
+}
+
 /**
- * Classifies every drifted file into a finding, except a settled local edit, and appends a
- * formatter-mangle hint when the settled count crosses that check's own threshold.
+ * Classifies every drifted file into a finding, except a settled local edit and an ejected
+ * file no enabled module ships, and appends a formatter-mangle hint when the settled count
+ * crosses that check's own threshold.
  *
- * @returns The settled paths, so the caller can build the "context, not a warning" readout.
+ * @returns The settled paths and the retired ejected paths, so the caller can build the
+ *   "context, not a warning" readouts.
  */
 function classifyDriftFindings(
   root: string,
   drift: DriftReport,
   findings: Finding[],
-): string[] {
+  ejected: ReadonlySet<string>,
+): { settled: string[]; retiredEjected: string[] } {
   const settled: string[] = [];
+  const retiredEjected: string[] = [];
   for (const file of driftedFiles(drift)) {
     if (file.status === 'yours') {
       settled.push(file.path);
       continue;
     }
+    if (file.status === 'orphaned' && ejected.has(file.path)) {
+      retiredEjected.push(file.path);
+      continue;
+    }
     findings.push({
       level: file.status === 'missing' ? 'ERROR' : 'WARN',
-      msg: `${file.path}: ${DRIFT_EXPLANATIONS[file.status] ?? file.status}`,
+      msg: `${file.path}: ${driftExplanation(file.status, file.path, ejected)}`,
     });
   }
   for (const file of drift.files) {
@@ -252,18 +323,18 @@ function classifyDriftFindings(
       level: 'WARN',
       msg:
         `${file.path}: houserules shipped a new default \`paths:\` for this rule, but ` +
-        `your customized \`paths:\` were kept. Check houserules' CHANGELOG for what changed`,
+        `the \`paths:\` you set, in the file or in the config's \`rules\`, were kept. Check houserules' CHANGELOG for what changed`,
     });
   }
 
   const mangleHint = formatterMangleHint(
     root,
-    settled,
+    settled.filter((path) => !ejected.has(path)),
     'Run `npx houserules doctor --fix --force` to restore them',
   );
   if (mangleHint) findings.push({ level: 'WARN', msg: mangleHint });
 
-  return settled;
+  return { settled, retiredEjected };
 }
 
 /**
@@ -271,9 +342,24 @@ function classifyDriftFindings(
  * tells you to edit some of what it installs, so warning about the result would leave
  * doctor permanently yellow and bury the drift that does need a decision.
  */
-function settledReadout(settled: string[]): string[] {
+function settledReadout(
+  settled: string[],
+  ignored: ReadonlySet<string>,
+): string[] {
   if (!settled.length) return [];
   return [
     `your edits on ${settled.length} houserules file(s), kept as-is: ${settled.join(', ')}`,
+    ...localEditHints(settled, ignored, 'npx houserules'),
+  ];
+}
+
+/**
+ * An ejected file whose module is no longer enabled is kept on purpose, so it is context,
+ * and no prune is offered: `computePrune` never deletes an ejected file.
+ */
+function retiredEjectedReadout(retiredEjected: string[]): string[] {
+  if (!retiredEjected.length) return [];
+  return [
+    `ejected file(s) no enabled module ships, kept as yours: ${retiredEjected.join(', ')}`,
   ];
 }

@@ -71,15 +71,20 @@ function gitignoreLiteral(path: string): string {
 }
 
 /**
- * The `.claude/` paths the block lists, relative to `.claude/` with a leading `/` so each
- * line is anchored to one file, sorted and deduplicated.
+ * The repo-relative dests the block would list before any eject, the manifest aside: every
+ * whole file the plan writes under `.claude/` that no self-gitignored directory already
+ * covers. This is the set `eject` accepts, read from the config's modules rather than the
+ * manifest, which a fresh clone lacks. Empty under `payload.commit: true`, where no block is
+ * written and every payload file is already tracked.
  */
-function ignoredPaths(ctx: Ctx, actions: Action[]): string[] {
+export function ejectableDests(ctx: Ctx, actions: Action[]): Set<string> {
+  const dests = new Set<string>();
+  if (ctx.claude.houseConfig?.payload?.commit === true) return dests;
+
   const skipDirs = selfIgnoredDirs(actions);
   if (ctx.claude.houseConfig?.scripts?.commit === true)
     skipDirs.push(SCRIPTS_DIR);
 
-  const dests = new Set<string>([KIT_MANIFEST]);
   for (const action of actions) {
     if (!isListedKind(action)) continue;
     const { dest } = action;
@@ -88,8 +93,21 @@ function ignoredPaths(ctx: Ctx, actions: Action[]): string[] {
     if (skipDirs.some((dir) => isUnder(dest, dir))) continue;
     dests.add(dest);
   }
+  return dests;
+}
 
-  return [...dests]
+/**
+ * The `.claude/` paths the block lists, relative to `.claude/` with a leading `/` so each
+ * line is anchored to one file, sorted and deduplicated. An ejected dest is left out, so git
+ * sees it as untracked and the team can commit it.
+ */
+function ignoredPaths(ctx: Ctx, actions: Action[]): string[] {
+  const ejected = new Set(ctx.claude.houseConfig?.ejected ?? []);
+  const dests = [KIT_MANIFEST, ...ejectableDests(ctx, actions)].filter(
+    (dest) => !ejected.has(dest),
+  );
+
+  return dests
     .map((dest) => `/${gitignoreLiteral(dest.slice('.claude/'.length))}`)
     .sort();
 }

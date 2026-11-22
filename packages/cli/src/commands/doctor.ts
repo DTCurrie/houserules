@@ -25,6 +25,7 @@ import { checkPrepareScript } from './doctor/prepare-script.js';
 import { checkPluginRegistration } from './doctor/plugin-registration.js';
 import { checkReferenceReachability } from './doctor/reference-reachability.js';
 import { checkResidentSurface } from './doctor/resident-surface.js';
+import { checkRuleConfig } from './doctor/rule-config.js';
 import { checkScriptImports } from './doctor/script-imports.js';
 import { checkTranscriptRetention } from './doctor/transcript-retention.js';
 import { checkSkillBodySize } from './doctor/skill-body-size.js';
@@ -109,6 +110,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
     checkInstallHygiene(root, ctx),
     checkModuleHealth(root, ctx, config.registry),
     checkModuleRequirements(ctx, config.registry),
+    checkRuleConfig(ctx, config.registry),
     checkFixPassPaths(ctx),
     checkPluginRegistration(root, ctx),
     checkLaunchRoot(root, ctx),

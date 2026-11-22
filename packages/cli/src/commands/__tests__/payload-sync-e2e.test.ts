@@ -41,7 +41,7 @@ const SYNC_SCRIPT = '.claude/scripts/payload-sync.mjs';
 const EDITED_RULE = '.claude/rules/code-cleanliness.md';
 const LOCAL_EDIT = '\nA line this repo added by hand.\n';
 const SYNCED_LINE = new RegExp(
-  `^\\[houserules\\] synced to ${CLI_VERSION.replace(/\./g, '\\.')}: \\d+ written, 1 kept \\(edited\\)$`,
+  `^\\[houserules\\] synced to ${CLI_VERSION.replace(/\./g, '\\.')}: \\d+ written, 1 kept \\(edited\\), run houserules doctor$`,
 );
 const FRESH_SYNCED_LINE = new RegExp(
   `^\\[houserules\\] synced to ${CLI_VERSION.replace(/\./g, '\\.')}: [1-9]\\d* written, 0 kept \\(edited\\)$`,

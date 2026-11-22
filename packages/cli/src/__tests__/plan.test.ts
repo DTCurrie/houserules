@@ -1596,3 +1596,408 @@ describe('computePrune, given a manifest destination that is a symlink', () => {
     expect(kept).toEqual([]);
   });
 });
+
+describe('computeEffects, given an ejected dest', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-ejected-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  function writeFile(root: string, rel: string, content: string): string {
+    const abs = join(root, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, content);
+    return abs;
+  }
+
+  const DEST = '.claude/skills/tidy/SKILL.md';
+  const CANONICAL = 'canonical skill\n';
+  const EDITED = 'my edited skill\n';
+
+  function writeAction(dest: string): WriteAction {
+    return {
+      kind: 'write',
+      module: 'core',
+      dest,
+      content: CANONICAL,
+      reason: 'test',
+    };
+  }
+
+  function manifestWith(files: Record<string, string>) {
+    return {
+      kitVersion: '1.0.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      modules: ['core'],
+      files,
+    };
+  }
+
+  it('keeps an edit with no recorded hash, judging it against the canonical hash', () => {
+    const root = tempDir();
+    writeFile(root, DEST, EDITED);
+
+    const effect = single(
+      computeEffects(root, [writeAction(DEST)], { ejected: new Set([DEST]) })
+        .effects,
+    );
+
+    expect(effect.op).toBe('skip-modified');
+    expect(effect.substitutedHash).toBe(sha256(CANONICAL));
+  });
+
+  it('refreshes the same edit with no recorded hash when the dest is not ejected', () => {
+    const root = tempDir();
+    writeFile(root, DEST, EDITED);
+
+    const effect = single(computeEffects(root, [writeAction(DEST)]).effects);
+
+    expect(effect.op).toBe('update');
+    expect(effect.substitutedHash).toBeUndefined();
+  });
+
+  it('substitutes nothing when the manifest records the dest', () => {
+    const root = tempDir();
+    writeFile(root, DEST, EDITED);
+
+    const effect = single(
+      computeEffects(root, [writeAction(DEST)], {
+        manifest: manifestWith({ [DEST]: sha256('an older canonical\n') }),
+        ejected: new Set([DEST]),
+      }).effects,
+    );
+
+    expect(effect.op).toBe('skip-modified');
+    expect(effect.substitutedHash).toBeUndefined();
+  });
+
+  it('keeps an edit under force, which never writes an ejected file', () => {
+    const root = tempDir();
+    writeFile(root, DEST, EDITED);
+
+    const effect = single(
+      computeEffects(root, [writeAction(DEST)], {
+        manifest: manifestWith({ [DEST]: sha256('an older canonical\n') }),
+        force: true,
+        ejected: new Set([DEST]),
+      }).effects,
+    );
+
+    expect(effect.op).toBe('skip-modified');
+  });
+
+  it('keeps an edited body with no recorded hash, judging it against the canonical body', () => {
+    const payloadDir = tempDir();
+    const root = tempDir();
+    const dest = '.claude/rules/example.md';
+    const frontmatter = '---\npaths:\n  - "*.ts"\n---\n';
+    const src = writeFile(
+      payloadDir,
+      'example.md',
+      `${frontmatter}Shipped body.\n`,
+    );
+    writeFile(root, dest, `${frontmatter}My body.\n`);
+    const action: BodyAction = {
+      kind: 'body',
+      module: 'test',
+      src,
+      dest,
+      reason: 'test',
+    };
+
+    const effect = single(
+      computeEffects(root, [action], { ejected: new Set([dest]) }).effects,
+    );
+
+    expect(effect.op).toBe('skip-modified');
+    expect(effect.substitutedHash).toBe(sha256('Shipped body.\n'));
+  });
+});
+
+describe('computePrune, given an ejected dest no current module plans', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-prune-ejected-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  const DEST = '.claude/skills/tidy/SKILL.md';
+  const CONTENT = 'unedited skill\n';
+
+  function rootWithDest(): string {
+    const root = tempDir();
+    mkdirSync(dirname(join(root, DEST)), { recursive: true });
+    writeFileSync(join(root, DEST), CONTENT);
+    return root;
+  }
+
+  it('keeps an unedited one the manifest records, even under force', () => {
+    const root = rootWithDest();
+
+    const prune = computePrune(root, {
+      manifest: {
+        kitVersion: '1.0.0',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        modules: [],
+        files: { [DEST]: sha256(CONTENT) },
+      },
+      plannedDests: new Set(),
+      force: true,
+      ejected: new Set([DEST]),
+    });
+
+    expect(prune.deletes).toEqual([]);
+    expect(prune.kept).toEqual([]);
+    expect(prune.ejected).toEqual([DEST]);
+  });
+
+  it('finds one with no manifest from the ejected list alone', () => {
+    const root = rootWithDest();
+
+    const prune = computePrune(root, {
+      manifest: null,
+      plannedDests: new Set(),
+      ejected: new Set([DEST]),
+    });
+
+    expect(prune.ejected).toEqual([DEST]);
+  });
+
+  it('lists nothing for an ejected dest a current module still plans', () => {
+    const root = rootWithDest();
+
+    const prune = computePrune(root, {
+      manifest: null,
+      plannedDests: new Set([DEST]),
+      ejected: new Set([DEST]),
+    });
+
+    expect(prune.ejected).toEqual([]);
+  });
+
+  it('lists nothing for an ejected dest absent from disk', () => {
+    const root = tempDir();
+
+    const prune = computePrune(root, {
+      manifest: null,
+      plannedDests: new Set(),
+      ejected: new Set([DEST]),
+    });
+
+    expect(prune.ejected).toEqual([]);
+  });
+});
+
+describe('computeEffects, given a rule whose paths the config sets', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-rule-paths-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  function writeFile(root: string, rel: string, content: string): string {
+    const abs = join(root, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, content);
+    return abs;
+  }
+
+  const DEST = '.claude/rules/example.md';
+  const SHIPPED_FRONTMATTER =
+    "---\ndescription:  kept  as is\npaths:\n  - '**/*.ts'\n  - '**/*.svelte'\nalwaysApply: false\n---\n";
+  const RENDERED_FRONTMATTER =
+    "---\ndescription:  kept  as is\npaths:\n  - 'src/**/*.ts'\nalwaysApply: false\n---\n";
+  const SHIPPED_BODY = '\n# Example\n\nCurrent body.\n';
+  const RULE_PATHS = { example: ['src/**/*.ts'] };
+
+  function bodyAction(src: string, dest = DEST): BodyAction {
+    return { kind: 'body', module: 'test', src, dest, reason: 'test' };
+  }
+
+  function manifestWith(body: string, frontmatter: string) {
+    return {
+      kitVersion: '1.0.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      modules: ['test'],
+      files: {
+        [DEST]: { body: sha256(body), frontmatter: sha256(frontmatter) },
+      },
+    };
+  }
+
+  it('creates the rule with the config paths rendered and every other key byte for byte', () => {
+    const src = writeFile(
+      tempDir(),
+      'example.md',
+      SHIPPED_FRONTMATTER + SHIPPED_BODY,
+    );
+
+    const effect = single(
+      computeEffects(tempDir(), [bodyAction(src)], { rulePaths: RULE_PATHS })
+        .effects,
+    );
+
+    expect(effect.op).toBe('create');
+    expect(effect.content?.toString('utf8')).toBe(
+      RENDERED_FRONTMATTER + SHIPPED_BODY,
+    );
+  });
+
+  it("records the shipped frontmatter's hash and the body's, never the rendered frontmatter's", () => {
+    const src = writeFile(
+      tempDir(),
+      'example.md',
+      SHIPPED_FRONTMATTER + SHIPPED_BODY,
+    );
+
+    const effect = single(
+      computeEffects(tempDir(), [bodyAction(src)], { rulePaths: RULE_PATHS })
+        .effects,
+    );
+
+    expect(effect.frontmatterHash).toBe(sha256(SHIPPED_FRONTMATTER));
+    expect(effect.hash).toBe(sha256(SHIPPED_BODY));
+  });
+
+  it('renders the config paths over the shipped frontmatter on a refresh, along with the new body', () => {
+    const root = tempDir();
+    const src = writeFile(
+      tempDir(),
+      'example.md',
+      SHIPPED_FRONTMATTER + SHIPPED_BODY,
+    );
+    writeFile(root, DEST, SHIPPED_FRONTMATTER + 'Old body.\n');
+
+    const effect = single(
+      computeEffects(root, [bodyAction(src)], {
+        rulePaths: RULE_PATHS,
+        manifest: manifestWith('Old body.\n', SHIPPED_FRONTMATTER),
+      }).effects,
+    );
+
+    expect(effect.op).toBe('update');
+    expect(effect.content?.toString('utf8')).toBe(
+      RENDERED_FRONTMATTER + SHIPPED_BODY,
+    );
+  });
+
+  it('skips as identical once the rendered rule is on disk', () => {
+    const root = tempDir();
+    const src = writeFile(
+      tempDir(),
+      'example.md',
+      SHIPPED_FRONTMATTER + SHIPPED_BODY,
+    );
+    writeFile(root, DEST, RENDERED_FRONTMATTER + SHIPPED_BODY);
+
+    const effect = single(
+      computeEffects(root, [bodyAction(src)], {
+        rulePaths: RULE_PATHS,
+        manifest: manifestWith(SHIPPED_BODY, SHIPPED_FRONTMATTER),
+      }).effects,
+    );
+
+    expect(effect.op).toBe('skip-identical');
+  });
+
+  it('replaces a hand-trimmed frontmatter with the rendered one, since the config owns it', () => {
+    const root = tempDir();
+    const src = writeFile(
+      tempDir(),
+      'example.md',
+      SHIPPED_FRONTMATTER + SHIPPED_BODY,
+    );
+    writeFile(root, DEST, "---\npaths:\n  - 'lib/**'\n---\n" + SHIPPED_BODY);
+
+    const effect = single(
+      computeEffects(root, [bodyAction(src)], {
+        rulePaths: RULE_PATHS,
+        manifest: manifestWith(SHIPPED_BODY, SHIPPED_FRONTMATTER),
+      }).effects,
+    );
+
+    expect(effect.op).toBe('update');
+    expect(effect.content?.toString('utf8')).toBe(
+      RENDERED_FRONTMATTER + SHIPPED_BODY,
+    );
+  });
+
+  it('adds the key to a rule that ships no paths', () => {
+    const src = writeFile(
+      tempDir(),
+      'example.md',
+      '---\ndescription: no globs\n---\n' + SHIPPED_BODY,
+    );
+
+    const effect = single(
+      computeEffects(tempDir(), [bodyAction(src)], { rulePaths: RULE_PATHS })
+        .effects,
+    );
+
+    expect(effect.content?.toString('utf8')).toBe(
+      "---\ndescription: no globs\npaths:\n  - 'src/**/*.ts'\n---\n" +
+        SHIPPED_BODY,
+    );
+  });
+
+  it('keeps a hand-trimmed frontmatter when the config sets paths only for another rule', () => {
+    const root = tempDir();
+    const src = writeFile(
+      tempDir(),
+      'example.md',
+      SHIPPED_FRONTMATTER + SHIPPED_BODY,
+    );
+    const trimmed = "---\npaths:\n  - 'lib/**'\n---\n";
+    writeFile(root, DEST, trimmed + 'Old body.\n');
+
+    const effect = single(
+      computeEffects(root, [bodyAction(src)], {
+        rulePaths: { other: ['src/**'] },
+        manifest: manifestWith('Old body.\n', SHIPPED_FRONTMATTER),
+      }).effects,
+    );
+
+    expect(effect.op).toBe('update');
+    expect(effect.content?.toString('utf8')).toBe(trimmed + SHIPPED_BODY);
+  });
+
+  it('leaves a body action outside .claude/rules/ alone, whatever its file name', () => {
+    const src = writeFile(
+      tempDir(),
+      'example.md',
+      SHIPPED_FRONTMATTER + SHIPPED_BODY,
+    );
+
+    const effect = single(
+      computeEffects(tempDir(), [bodyAction(src, '.claude/other/example.md')], {
+        rulePaths: RULE_PATHS,
+      }).effects,
+    );
+
+    expect(effect.content?.toString('utf8')).toBe(
+      SHIPPED_FRONTMATTER + SHIPPED_BODY,
+    );
+  });
+});

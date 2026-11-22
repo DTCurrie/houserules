@@ -18,6 +18,7 @@ import { manifestOf, sha256, writeManifest } from '#test/installed-tree';
 
 import {
   classifyEffect,
+  computeDrift,
   driftedFiles,
   FIXABLE,
   FORCE_ONLY,
@@ -435,11 +436,101 @@ describe('classifyEffect, the "defaultMoved" annotation on a body action', () =>
   });
 });
 
+describe('computeDrift, given a rule whose paths the config sets', () => {
+  const DEST = '.claude/rules/example.md';
+  const BODY = '\n# Example\n\nCurrent body.\n';
+  const SHIPPED = "---\nname: example\npaths:\n  - '**/*.ts'\n---\n";
+  const RENDERED = "---\nname: example\npaths:\n  - 'src/**'\n---\n";
+  const RULE_PATHS = { example: ['src/**'] };
+  let root: string;
+  let src: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'kit-drift-rule-paths-'));
+    mkdirSync(join(root, '.claude/rules'), { recursive: true });
+    src = join(root, 'payload-example.md');
+    writeFileSync(src, SHIPPED + BODY);
+    return () => rmSync(root, { recursive: true, force: true });
+  });
+
+  function manifestRecording(frontmatter: string) {
+    return {
+      kitVersion: '1.0.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      modules: ['test'],
+      files: {
+        [DEST]: { body: sha256(BODY), frontmatter: sha256(frontmatter) },
+      },
+    };
+  }
+
+  function driftOf(
+    manifest: ReturnType<typeof manifestRecording> | null,
+    rulePaths: Record<string, string[]> = RULE_PATHS,
+  ) {
+    const action = bodyAction({ src, dest: DEST });
+    const { effects } = computeEffects(root, [action], { manifest, rulePaths });
+    return single(computeDrift(root, effects, { manifest }).files);
+  }
+
+  function single<T>(items: readonly T[]): T {
+    expect(items).toHaveLength(1);
+    return items[0] as T;
+  }
+
+  it('reads the rendered rule as clean, with no default-moved notice', () => {
+    writeFileSync(join(root, DEST), RENDERED + BODY);
+
+    const entry = driftOf(manifestRecording(SHIPPED));
+
+    expect(entry.status).toBe('ok');
+    expect(entry.defaultMoved).toBeUndefined();
+  });
+
+  it('reads the rendered rule as clean on a clone with no manifest', () => {
+    writeFileSync(join(root, DEST), RENDERED + BODY);
+
+    expect(driftOf(null).status).toBe('ok');
+  });
+
+  it('flags the default as moved, still clean, when the shipped paths changed since the last update', () => {
+    writeFileSync(join(root, DEST), RENDERED + BODY);
+
+    const entry = driftOf(
+      manifestRecording("---\nname: example\npaths:\n  - '**/*.js'\n---\n"),
+    );
+
+    expect(entry.status).toBe('ok');
+    expect(entry.defaultMoved, 'default moved').toBe(true);
+  });
+
+  it('reports a rule still carrying the shipped paths as stale, with the paths in the diff', () => {
+    writeFileSync(join(root, DEST), SHIPPED + BODY);
+
+    const entry = driftOf(manifestRecording(SHIPPED));
+
+    expect(entry.status).toBe('stale');
+    expect(entry.yours, 'not marked as your edit').toBe(false);
+    expect(entry.diff).toMatch(/-\s+- '\*\*\/\*\.ts'/);
+    expect(entry.diff).toMatch(/\+\s+- 'src\/\*\*'/);
+  });
+
+  it('reads a rule rendered for an earlier config value as stale rather than as your edit', () => {
+    writeFileSync(join(root, DEST), RENDERED + BODY);
+
+    const entry = driftOf(manifestRecording(SHIPPED), { example: ['lib/**'] });
+
+    expect(entry.status).toBe('stale');
+    expect(entry.yours, 'not marked as your edit').toBe(false);
+  });
+});
+
 describe('orphanDrift', () => {
   it('reports a deleted-but-not-gone entry as "orphaned"', () => {
     const result = orphanDrift({
       deletes: [{ dest: '.claude/scripts/retired.mjs', gone: false }],
       kept: [],
+      ejected: [],
       removedScripts: [],
     });
     expect(result).toEqual([
@@ -451,6 +542,7 @@ describe('orphanDrift', () => {
     const result = orphanDrift({
       deletes: [{ dest: '.claude/scripts/retired.mjs', gone: true }],
       kept: [],
+      ejected: [],
       removedScripts: [],
     });
     expect(result).toEqual([]);
@@ -460,11 +552,28 @@ describe('orphanDrift', () => {
     const result = orphanDrift({
       deletes: [],
       kept: ['.claude/scripts/retired-edited.mjs'],
+      ejected: [],
       removedScripts: [],
     });
     expect(result).toEqual([
       {
         path: '.claude/scripts/retired-edited.mjs',
+        status: 'orphaned',
+        yours: true,
+      },
+    ]);
+  });
+
+  it('reports a retired ejected entry as "orphaned" with yours true, so it never holds the exit code red', () => {
+    const result = orphanDrift({
+      deletes: [],
+      kept: [],
+      ejected: ['.claude/skills/ready/SKILL.md'],
+      removedScripts: [],
+    });
+    expect(result).toEqual([
+      {
+        path: '.claude/skills/ready/SKILL.md',
         status: 'orphaned',
         yours: true,
       },

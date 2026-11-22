@@ -37,7 +37,7 @@ export interface FileDrift {
   status: FileStatus;
   /**
    * You edited this file. Set on `yours` and `conflict`, and on an `orphaned` file that
-   * the prune path kept BECAUSE you edited it. Callers use it to decide what is
+   * the prune path kept BECAUSE you edited or ejected it. Callers use it to decide what is
    * actionable: a deliberate edit should not hold an exit code red forever.
    */
   yours?: boolean;
@@ -176,18 +176,22 @@ export function classifyEffect(
   }
 
   if (action.kind === 'body') {
-    const diskBody = bodyHost === null ? '' : splitFrontmatter(bodyHost).body;
-    // `content` is the disk frontmatter spliced onto the canonical body, so re-splitting
-    // it recovers the canonical body without re-deriving it from the payload file.
-    const canonicalBody = splitFrontmatter(
-      content?.toString('utf8') ?? '',
-    ).body;
+    const disk = splitFrontmatter(bodyHost ?? '');
+    // `content` is the frontmatter this plan resolved spliced onto the canonical body, so
+    // re-splitting it recovers the canonical body without re-deriving it from the payload file.
+    const canonical = splitFrontmatter(content?.toString('utf8') ?? '');
+    // The resolved frontmatter differs from disk only when houserules would rewrite it, as
+    // it does for a config-owned `paths:`, so only then does the diff show it.
+    const diff =
+      disk.frontmatter === canonical.frontmatter
+        ? unifiedDiff(disk.body, canonical.body)
+        : unifiedDiff(bodyHost ?? '', content?.toString('utf8') ?? '');
     return {
       ...base,
       ...annotation,
       status,
       yours: edited,
-      diff: truncateDiff(unifiedDiff(diskBody, canonicalBody)),
+      diff: truncateDiff(diff),
     };
   }
 
@@ -216,6 +220,11 @@ export function orphanDrift(prune?: PruneResult | null): FileDrift[] {
   // it, so it is reported but must not hold the exit code red. Same reasoning as
   // `yours`.
   for (const dest of prune?.kept ?? []) {
+    files.push({ path: dest, status: 'orphaned', yours: true });
+  }
+  // Ejected: you took ownership of it, so it is kept on purpose whatever its bytes. The
+  // same reasoning holds, edited or not.
+  for (const dest of prune?.ejected ?? []) {
     files.push({ path: dest, status: 'orphaned', yours: true });
   }
   return files;

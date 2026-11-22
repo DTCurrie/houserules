@@ -62,6 +62,28 @@ describe('flags are scoped per subcommand, the point of the commander rewrite ov
   });
 });
 
+describe('eject', () => {
+  it('is listed in the help, with its --undo option', () => {
+    expect(runCli(['--help']).stdout).toMatch(/^\s+eject\b/m);
+    expect(runCli(['eject', '--help']).stdout).toMatch(/--undo/);
+    expect(runCli(['eject', '--help']).stdout).toMatch(/--yes/);
+  });
+
+  it('takes no path, so a bare --undo reaches the command instead of a usage error', () => {
+    const root = useRepo('npm-single');
+    const r = runCli(['--cwd', root, 'eject', '--undo']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).not.toMatch(/missing required argument/i);
+    expect(r.stderr).toMatch(/No readable \.claude\/houserules\.config\.json/);
+  });
+
+  it('rejects an option it does not define', () => {
+    const r = runCli(['eject', '--force', 'x']);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/unknown option/i);
+  });
+});
+
 describe('update --sync', () => {
   it('is accepted by update, where an unknown option is rejected', () => {
     const root = useInstalledRepo('npm-single');

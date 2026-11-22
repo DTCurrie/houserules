@@ -274,6 +274,23 @@ export async function selectNewModules(
 }
 
 /**
+ * Multiselect over file dests, for `houserules eject`. Nothing is preselected and an empty pick
+ * is not allowed, so a confirmed pick always names a file.
+ */
+export async function selectFiles(
+  dests: string[],
+  message: string,
+): Promise<string[]> {
+  return bail<string[]>(
+    await p.multiselect({
+      message: `${message} (space toggles, enter confirms)`,
+      options: dests.map((dest) => ({ value: dest, label: dest })),
+      required: true,
+    }),
+  );
+}
+
+/**
  * Prefixes a module's follow-up question with the module asking it, and with the plugin that
  * module came from.
  *

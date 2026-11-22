@@ -37,6 +37,65 @@ export function frontmatterBlock(text: string): string | null {
   return captured === undefined ? null : captured;
 }
 
+/** A `paths:` key in the shape shipped rules write it, one single-quoted glob per line. */
+function pathsLines(paths: readonly string[], lineEnd: string): string[] {
+  if (paths.length === 0) return [`paths: []${lineEnd}`];
+  return [
+    `paths:${lineEnd}`,
+    ...paths.map((glob) => `  - '${glob.replaceAll("'", "''")}'${lineEnd}`),
+  ];
+}
+
+/**
+ * A line that continues the value of the key above it: an indented line, or a block
+ * sequence item written flush with its key.
+ */
+function continuesValue(line: string): boolean {
+  return /^[ \t]/.test(line) || /^-(?:[ \t]|\r?$)/.test(line);
+}
+
+/**
+ * Renders a config-owned `paths:` value into a rule's frontmatter. The `paths:` key and its
+ * value are replaced, or appended when the frontmatter has none, and every other byte is
+ * kept, delimiters and line endings included. A file with no frontmatter gains a block that
+ * holds only `paths:`.
+ *
+ * @param frontmatter The frontmatter half {@link splitFrontmatter} returns, possibly empty.
+ */
+export function renderFrontmatterPaths(
+  frontmatter: string,
+  paths: readonly string[],
+): string {
+  const found = FRONTMATTER.exec(frontmatter);
+  if (!found) return `---\n${pathsLines(paths, '').join('\n')}\n---\n`;
+  const inner = found[1] ?? '';
+  const opening = frontmatter.startsWith('---\r\n') ? '---\r\n' : '---\n';
+  const closing = frontmatter.slice(opening.length + inner.length);
+  const lineEnd = opening === '---\r\n' ? '\r' : '';
+  // Split on `\n` alone so a `\r` stays on its line and an untouched line keeps its bytes.
+  // The last line's own `\r` sits in `closing`, so it borrows one while lines move around.
+  const lines = inner === '' ? [] : inner.split('\n');
+  if (lines.length > 0) lines[lines.length - 1] += lineEnd;
+  const start = lines.findIndex((line) => /^paths[ \t]*:/.test(line));
+  let rendered: string[];
+  if (start === -1) {
+    rendered = [...lines, ...pathsLines(paths, lineEnd)];
+  } else {
+    let end = start + 1;
+    while (end < lines.length && continuesValue(lines[end] ?? '')) end++;
+    rendered = [
+      ...lines.slice(0, start),
+      ...pathsLines(paths, lineEnd),
+      ...lines.slice(end),
+    ];
+  }
+  const last = rendered.length - 1;
+  if (lineEnd !== '' && last >= 0) {
+    rendered[last] = (rendered[last] ?? '').replace(/\r$/, '');
+  }
+  return opening + rendered.join('\n') + closing;
+}
+
 /**
  * What the user has done with a body-owned file's frontmatter.
  *

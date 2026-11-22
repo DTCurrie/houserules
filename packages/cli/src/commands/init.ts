@@ -21,6 +21,7 @@ import {
   MODULES,
   buildPlan,
   computeEffects,
+  configOwnership,
   resolveModuleIds,
 } from '../plan.js';
 import { HouseError } from '../house-error.js';
@@ -209,6 +210,7 @@ export async function init(dir: string, flags: Flags): Promise<number> {
       manifest: installed,
       plugins: registry.plugins,
       shouldPlanPrepare: true,
+      ...configOwnership(ctx.claude.houseConfig),
     });
   } catch (e) {
     if (e instanceof HouseError) {

@@ -33,6 +33,11 @@ export interface ApplyOptions {
   paths?: Set<string>;
   /** The plugins the registry resolved for this run, recorded on the manifest. */
   plugins?: PluginSource[];
+  /**
+   * Whether to write the manifest receipt. Defaults to true. `eject` on a repo with no
+   * manifest passes false, so a fresh clone's first sync still sees the manifest missing.
+   */
+  recordsManifest?: boolean;
 }
 
 export interface WrittenEntry {
@@ -70,6 +75,7 @@ export function apply(
     previousManifest = null,
     paths,
     plugins,
+    recordsManifest = true,
   }: ApplyOptions,
 ): ApplyResult {
   const repo = new TargetRepo(root);
@@ -79,7 +85,14 @@ export function apply(
   };
   const wanted = (dest: string) => paths === undefined || paths.has(dest);
 
-  for (const { action, op, content, hash, frontmatterHash } of effects) {
+  for (const {
+    action,
+    op,
+    content,
+    hash,
+    frontmatterHash,
+    substitutedHash,
+  } of effects) {
     if (!wanted(action.dest)) continue;
     // `region` and `body` are manifest-tracked like copy/write, but the recorded hash
     // covers only the part houserules owns: the region body, or the file body below the
@@ -93,7 +106,21 @@ export function apply(
       action.kind === 'body' && frontmatterHash !== undefined
         ? { body: hash ?? '', frontmatter: frontmatterHash }
         : hash;
-    if (op === 'skip-exists' || op === 'skip-modified') continue;
+    if (op === 'skip-modified') {
+      // An ejected edit judged against a substituted hash. Recording it gives a clone the
+      // base a later kit bump reads `conflict` against. An existing record is never replaced.
+      if (
+        substitutedHash !== undefined &&
+        previousManifest?.files[action.dest] === undefined
+      ) {
+        files[action.dest] =
+          action.kind === 'body' && frontmatterHash !== undefined
+            ? { body: substitutedHash, frontmatter: frontmatterHash }
+            : substitutedHash;
+      }
+      continue;
+    }
+    if (op === 'skip-exists') continue;
     if (op === 'skip-identical') {
       if (owned && recorded) files[action.dest] = recorded; // adopt identical file as kit-owned
       continue;
@@ -167,7 +194,7 @@ export function apply(
         ...(signature ? { settings: signature } : {}),
         ...(manifestPlugins.length ? { plugins: manifestPlugins } : {}),
       };
-  if (!stable) {
+  if (!stable && recordsManifest) {
     repo.write(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
   }
 

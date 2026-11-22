@@ -35,6 +35,7 @@ interface CommandOptions {
   export?: string;
   import?: string[];
   label?: string;
+  undo?: boolean;
 }
 
 /** Null until a subcommand runs, which tells "no command given" apart from "exited 0". */
@@ -180,6 +181,40 @@ program
       exitCode = await update(
         targetDir(dir, command),
         flagsFrom(options, command),
+      );
+    },
+  );
+
+program
+  .command('eject')
+  .description(
+    'take ownership of an installed file so you can edit and commit it, or hand it back with --undo',
+  )
+  .argument(
+    '[paths...]',
+    'installed files, relative to the repo root. A directory or no path opens a picker',
+  )
+  .option(
+    '--undo',
+    'hand the files back: ignored and refreshed by update again',
+  )
+  .option('--yes', 'never prompt: refuse and list the files instead')
+  .action(
+    async (paths: string[], options: CommandOptions, command: Command) => {
+      const { eject } = await import('./commands/eject.js');
+      exitCode = await eject(
+        targetDir(undefined, command),
+        paths,
+        {
+          shouldUndo: options.undo ?? false,
+          // A missing terminal on either end cannot answer the picker.
+          yes:
+            (options.yes ?? false) ||
+            !process.stdout.isTTY ||
+            !process.stdin.isTTY,
+          dryRun: command.optsWithGlobals<GlobalOptions>().dryRun ?? false,
+        },
+        KIT_VERSION,
       );
     },
   );

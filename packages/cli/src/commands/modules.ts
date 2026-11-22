@@ -6,7 +6,13 @@ import {
   parseModuleOptionFlags,
   resolveModuleOptions,
 } from '../module-options.js';
-import { MODULES, buildPlan, computeEffects, computePrune } from '../plan.js';
+import {
+  MODULES,
+  buildPlan,
+  computeEffects,
+  computePrune,
+  configOwnership,
+} from '../plan.js';
 import { HouseError } from '../house-error.js';
 import {
   assertNotWithdrawn,
@@ -173,7 +179,11 @@ async function reconfigureModules(
         { moduleIds, targets, seedChangesetConfig: false, moduleOptions },
         registry,
       ),
-      { manifest, plugins: registry.plugins },
+      {
+        manifest,
+        plugins: registry.plugins,
+        ...configOwnership(ctx.claude.houseConfig),
+      },
     );
   } catch (e) {
     if (e instanceof HouseError) {
@@ -192,6 +202,7 @@ async function reconfigureModules(
     manifest,
     plannedDests: planResult.plannedDests,
     force: flags.force,
+    ejected: configOwnership(ctx.claude.houseConfig).ejected,
   });
 
   const label = `Reconfigure ${requested.join(', ')}`;
@@ -322,6 +333,7 @@ async function disableModules(
       {
         manifest,
         plugins: registry.plugins,
+        ...configOwnership(ctx.claude.houseConfig),
       },
     );
   } catch (e) {
@@ -340,6 +352,7 @@ async function disableModules(
     manifest,
     plannedDests: planResult.plannedDests,
     force: flags.force,
+    ejected: configOwnership(ctx.claude.houseConfig).ejected,
   });
 
   // Fold the withdrawal into the same settings write the remaining modules produce,
@@ -584,6 +597,7 @@ export async function modules(dir: string, flags: Flags): Promise<number> {
     planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
       manifest,
       plugins: registry.plugins,
+      ...configOwnership(ctx.claude.houseConfig),
     });
   } catch (e) {
     if (e instanceof HouseError) {

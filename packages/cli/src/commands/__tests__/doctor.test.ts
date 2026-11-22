@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn } from '#test/run';
 import {
+  editHouseConfig,
   type HouseManifestShape,
   manifestOf,
   readJson,
@@ -818,5 +819,85 @@ describe('doctor instructions-file silencing', () => {
     writeFileSync(join(root, 'CLAUDE.md'), '# mine\n');
     const after = runCli(['doctor', root], { env });
     expect(after.stdout).toMatch(/CLAUDE\.md silences AGENTS\.md/);
+  });
+});
+
+describe('doctor on an edited houserules file, by who owns it', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo', { modules: 'ready' });
+  });
+
+  it('offers eject to keep an edited ignored file and a delete-then-update to discard it', () => {
+    appendFileSync(join(root, EDITED_SKILL), '<!-- tweak -->\n');
+
+    const report = runDoctorJson(root);
+    const readouts = report.readouts ?? [];
+    const findings = report.findings ?? [];
+
+    expect(readouts).toContain(
+      `${EDITED_SKILL}: to keep your edit, run \`npx houserules eject ${EDITED_SKILL}\``,
+    );
+    const discard = readouts.find((line) => line.includes('to discard'));
+    expect(discard).toBe(
+      `${EDITED_SKILL}: to discard your edit, delete the file and run \`npx houserules update\`, which recreates it`,
+    );
+    expect(discard).not.toContain('--force');
+    expect(findings).toEqual([]);
+  });
+
+  it('offers neither line for an edited ejected file', () => {
+    editHouseConfig(root, (config) => {
+      config.ejected = [EDITED_SKILL];
+    });
+    appendFileSync(join(root, EDITED_SKILL), '<!-- tweak -->\n');
+
+    const readouts = runDoctorJson(root).readouts ?? [];
+
+    expect(readouts.join('\n')).not.toContain('houserules eject');
+    expect(readouts.join('\n')).not.toContain('to discard');
+  });
+
+  it('offers neither line for an edited file under payload.commit: true', () => {
+    editHouseConfig(root, (config) => {
+      config.payload = { commit: true };
+    });
+    runCli(['update', root]);
+    appendFileSync(join(root, EDITED_SKILL), '<!-- tweak -->\n');
+
+    const readouts = runDoctorJson(root).readouts ?? [];
+
+    expect(readouts.join('\n')).toContain('your edits on 1 houserules file');
+    expect(readouts.join('\n')).not.toContain('houserules eject');
+  });
+
+  it('drops the --fix --force clause from the conflict finding of an edited ejected file', () => {
+    editHouseConfig(root, (config) => {
+      config.ejected = [EDITED_SKILL];
+    });
+    appendFileSync(join(root, EDITED_SKILL), '<!-- tweak -->\n');
+    const manifest = manifestOf(root);
+    manifest.files[EDITED_SKILL] = sha256('an older shipped version');
+    writeManifest(root, manifest);
+
+    const findings = runDoctorJson(root).findings ?? [];
+
+    const conflict = findings.find((f) => f.msg.startsWith(EDITED_SKILL));
+    expect(conflict?.msg).toContain('you edited it and houserules shipped');
+    expect(conflict?.msg).not.toContain('--fix --force');
+  });
+
+  it('keeps the --fix --force clause on the conflict finding of an un-ejected file', () => {
+    appendFileSync(join(root, EDITED_SKILL), '<!-- tweak -->\n');
+    const manifest = manifestOf(root);
+    manifest.files[EDITED_SKILL] = sha256('an older shipped version');
+    writeManifest(root, manifest);
+
+    const findings = runDoctorJson(root).findings ?? [];
+
+    expect(findings.find((f) => f.msg.startsWith(EDITED_SKILL))?.msg).toContain(
+      '--fix --force',
+    );
   });
 });

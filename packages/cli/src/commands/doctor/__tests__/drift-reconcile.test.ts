@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import type { Flags } from '../../../cli-contract.js';
@@ -146,5 +152,58 @@ describe('reconcileDrift, given a config and a manifest that disagree on modules
         'install uses a module that moved into a plugin:',
       ),
     ]);
+  });
+});
+
+const EJECTED_SKILL = '.claude/skills/ready/SKILL.md';
+
+function ejectAndDisableReady(root: string): void {
+  const manifestPath = join(root, '.claude', 'houserules.manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const configPath = join(root, '.claude', 'houserules.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.modules = (manifest.modules as string[]).filter(
+    (id) => id !== 'ready',
+  );
+  config.ejected = [EJECTED_SKILL];
+  writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+function reconcile(root: string, flags: Partial<Flags> = {}) {
+  const ctx = detect(root);
+  const { registry } = checkConfigValidity(root, ctx);
+  if (!registry) throw new Error('unreachable: registry failed to build');
+  return reconcileDrift(root, ctx, { ...FLAGS, ...flags }, registry);
+}
+
+describe('reconcileDrift, given an ejected file whose module is no longer enabled', () => {
+  it('lists it in a readout as kept', () => {
+    const root = useInstalledRepo('npm-single', { modules: 'ready' });
+    ejectAndDisableReady(root);
+
+    expect(reconcile(root).readouts).toContainEqual(
+      expect.stringContaining(EJECTED_SKILL),
+    );
+  });
+
+  it('raises no finding naming it, so no prune is offered', () => {
+    const root = useInstalledRepo('npm-single', { modules: 'ready' });
+    ejectAndDisableReady(root);
+
+    expect(reconcile(root).findings.map((f) => f.msg)).not.toContainEqual(
+      expect.stringContaining(EJECTED_SKILL),
+    );
+  });
+
+  it('keeps the file under --fix --prune --force', () => {
+    const root = useInstalledRepo('npm-single', { modules: 'ready' });
+    ejectAndDisableReady(root);
+
+    reconcile(root, { fix: true, prune: true, force: true });
+
+    expect(
+      existsSync(join(root, EJECTED_SKILL)),
+      `${EJECTED_SKILL} still on disk`,
+    ).toBe(true);
   });
 });

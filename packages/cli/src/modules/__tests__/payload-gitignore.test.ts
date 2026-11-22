@@ -145,6 +145,28 @@ describe('payloadGitignoreActions, the paths it lists', () => {
     expect(listedPaths(actions)).toEqual(['/houserules.manifest.json']);
   });
 
+  it('leaves out each ejected dest and still lists every other dest', () => {
+    const ctx = ctxWithConfig({
+      ejected: ['.claude/skills/tidy/SKILL.md', '.claude/rules/a.md'],
+    });
+
+    expect(
+      listedPaths(
+        [
+          write('.claude/skills/tidy/SKILL.md'),
+          write('.claude/skills/other/SKILL.md'),
+          write('.claude/rules/a.md'),
+          write('.claude/rules/b.md'),
+        ],
+        ctx,
+      ),
+    ).toEqual([
+      '/houserules.manifest.json',
+      '/rules/b.md',
+      '/skills/other/SKILL.md',
+    ]);
+  });
+
   it('leaves out dests outside .claude/', () => {
     expect(
       listedPaths([write('docs/guide.md'), write('.github/x.yml')]),
