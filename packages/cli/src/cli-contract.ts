@@ -10,6 +10,11 @@ export interface Flags {
    * `--force`.
    */
   sync?: boolean;
+  /**
+   * `update` only: answer a payload-migration finding by keeping every edited file as the
+   * team's own, which ejects it. Read only while that migration runs.
+   */
+  ejectAll?: boolean;
   nextSteps: boolean;
   /** `modules` only: comma-separated ids to withdraw from the install. */
   disable: string;

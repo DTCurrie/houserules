@@ -15,6 +15,7 @@ import { MANIFEST_PATH, type HouseManifest } from '@houserules/api/internal';
 import type { Ctx } from '../../detect.js';
 import { formatterMangleHint } from '../../modules/formatter-mangle.js';
 import {
+  classifiedDests,
   ignoredUnejectedDests,
   localEditHints,
 } from '../../core/local-edit-hints.js';
@@ -69,6 +70,7 @@ export function reconcileDrift(
   const manifest = ctx.claude.manifest;
   let drift: DriftReport = { files: [] };
   let ignored: ReadonlySet<string> = new Set();
+  let tracked: ReadonlySet<string> = new Set();
 
   if (!manifest) return { drift, findings, readouts: [] };
 
@@ -124,6 +126,19 @@ export function reconcileDrift(
       findings.push({ level: 'ERROR', msg: problem.message });
     drift = driftReportFor(root, planResult, manifest, ownership.ejected);
     ignored = ignoredUnejectedDests(ctx, planResult.effects, ownership.ejected);
+    const trackedDests = classifiedDests(
+      root,
+      ctx,
+      planResult.effects,
+      ownership.ejected,
+    );
+    tracked = new Set(trackedDests);
+    if (trackedDests.length)
+      findings.push({
+        id: 'payload-tracked',
+        level: 'WARN',
+        msg: `${trackedDests.length} installed payload file(s) are committed but now listed in .claude/.gitignore: ${trackedDests.join(', ')}. Untrack them, keeping them on disk: npx houserules update`,
+      });
 
     let settledManifest: HouseManifest | null = manifest;
     let settledPlanResult = planResult;
@@ -177,7 +192,7 @@ export function reconcileDrift(
     drift,
     findings,
     readouts: [
-      ...settledReadout(settled, ignored),
+      ...settledReadout(settled, ignored, tracked),
       ...retiredEjectedReadout(retiredEjected),
     ],
   };
@@ -345,11 +360,12 @@ function classifyDriftFindings(
 function settledReadout(
   settled: string[],
   ignored: ReadonlySet<string>,
+  tracked: ReadonlySet<string>,
 ): string[] {
   if (!settled.length) return [];
   return [
     `your edits on ${settled.length} houserules file(s), kept as-is: ${settled.join(', ')}`,
-    ...localEditHints(settled, ignored, 'npx houserules'),
+    ...localEditHints(settled, ignored, 'npx houserules', tracked),
   ];
 }
 

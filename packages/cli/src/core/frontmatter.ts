@@ -96,6 +96,46 @@ export function renderFrontmatterPaths(
   return opening + rendered.join('\n') + closing;
 }
 
+/** One block sequence item's scalar, or null for a shape this reader does not take. */
+function sequenceItem(raw: string): string | null {
+  const single = /^'((?:[^']|'')*)'$/.exec(raw);
+  if (single) return (single[1] ?? '').replaceAll("''", "'");
+  const double = /^"((?:[^"\\]|\\["\\])*)"$/.exec(raw);
+  if (double) return (double[1] ?? '').replace(/\\(["\\])/g, '$1');
+  if (raw === '' || /^['"[\]{}&*!|>%@`#,?:-]/.test(raw)) return null;
+  if (/[ \t]#|:[ \t]|:$/.test(raw)) return null;
+  return raw;
+}
+
+/**
+ * Reads the `paths:` key from a rule's frontmatter: `paths: []`, or a block sequence whose
+ * items are single-quoted (with `''` escapes), double-quoted, or bare.
+ *
+ * @param frontmatter The frontmatter half {@link splitFrontmatter} returns.
+ * @returns Null when there is no frontmatter, no `paths:` key, or a shape it cannot read.
+ */
+export function parseFrontmatterPaths(frontmatter: string): string[] | null {
+  const inner = frontmatterBlock(frontmatter);
+  if (inner === null) return null;
+  const lines = inner.split('\n').map((line) => line.replace(/\r$/, ''));
+  const start = lines.findIndex((line) => /^paths[ \t]*:/.test(line));
+  if (start === -1) return null;
+  const value = (lines[start] ?? '').replace(/^paths[ \t]*:/, '').trim();
+  if (value === '[]') return [];
+  if (value !== '') return null;
+  const paths: string[] = [];
+  for (let index = start + 1; index < lines.length; index++) {
+    const line = lines[index] ?? '';
+    if (!continuesValue(line)) break;
+    const item = /^[ \t]*-[ \t]+(.*?)[ \t]*$/.exec(line);
+    if (!item) return null;
+    const glob = sequenceItem(item[1] ?? '');
+    if (glob === null) return null;
+    paths.push(glob);
+  }
+  return paths.length === 0 ? null : paths;
+}
+
 /**
  * What the user has done with a body-owned file's frontmatter.
  *

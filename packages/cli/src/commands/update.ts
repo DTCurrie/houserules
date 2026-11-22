@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 
 import {
   detect,
+  trackedAmong,
   trackedLedgerLogs,
   trackedLedgerSurfaces,
   trackedScriptFiles,
@@ -11,7 +12,11 @@ import {
   untrackFromIndex,
 } from '../detect.js';
 import type { Ctx } from '../detect.js';
-import { backupDestFor, ensureBackupDir } from '../core/fs-target.js';
+import {
+  BACKUP_DIR,
+  backupDestFor,
+  ensureBackupDir,
+} from '../core/fs-target.js';
 import { ledgerDirFor } from '../core/ledger-dir.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import { assertOptionsRecorded } from '../module-options.js';
@@ -35,6 +40,7 @@ import {
 } from '../module-requires.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import {
+  MANIFEST_PATH,
   parseSettingsText,
   reconcileSettings,
   removeHooksByScript,
@@ -43,14 +49,22 @@ import {
 } from '@houserules/api/internal';
 import { apply } from '../apply.js';
 import { formatterMangleHint } from '../modules/formatter-mangle.js';
+import { selfIgnoredDirs } from '../modules/payload-gitignore.js';
+import { shellWord } from '../core/shell-word.js';
 import {
   ignoredUnejectedDests,
   localEditHints,
 } from '../core/local-edit-hints.js';
+import { classifyMigration } from '../core/migration-classify.js';
+import {
+  noTerminalReport,
+  preverifyMigration,
+} from '../core/migration-preverify.js';
+import type { MigrationFinding } from '../core/migration-preverify.js';
 import * as ui from '../ui.js';
 import { EXIT } from '../cli-contract.js';
 import type { Flags } from '../cli-contract.js';
-import type { Answers } from '@houserules/api';
+import type { Action, Answers, HouseConfig } from '@houserules/api';
 import type { PlanResult, PruneResult } from '../plan.js';
 
 // The two dests whose pre-relocation backups sat beside them as `<dest>.bak`. Static on
@@ -201,12 +215,16 @@ function untrackAndReport(
  * A hash mismatch is the only evidence `update` has, and on its own it reads as an
  * accusation. Without the diff the user cannot tell a formatter rewrite from a real edit,
  * which leaves `--force` as the only lever and no reason to trust it.
+ *
+ * @param shouldOfferForce False while a payload-migration finding is on screen. That finding already
+ *   put `--force` beside its other answers, so the formatter hint leaves its own out.
  */
 function showLocalEdits(
   root: string,
   dests: string[],
   ignored: ReadonlySet<string>,
   ejected: ReadonlySet<string>,
+  shouldOfferForce: boolean,
 ): void {
   if (!dests.length) return;
   ui.message(
@@ -217,9 +235,11 @@ function showLocalEdits(
   const hint = formatterMangleHint(
     root,
     dests.filter((dest) => !ejected.has(dest)),
-    'Run `npx houserules update --force` to restore them',
+    shouldOfferForce
+      ? 'Run `npx houserules update --force` to restore them'
+      : '',
   );
-  if (hint) ui.message(hint);
+  if (hint) ui.message(hint.trimEnd());
 }
 
 /**
@@ -228,6 +248,9 @@ function showLocalEdits(
  * `computePrune` can never see a plan that is missing a module's files: continuing past
  * either would delete them and look identical to a deliberate removal.
  *
+ * @param planning `force` is what `computeEffects` plans with, which the payload migration
+ *   holds false to read the edits even under `--force`. `configKeys` are extra top-level config
+ *   keys, with their full next values, folded into core's own config seed.
  * @throws HouseError from any of the gates or from `computeEffects` itself, for the caller
  *   to report and exit 1 on.
  */
@@ -238,6 +261,7 @@ function resolveUpdatePlan(
   manifest: Ctx['claude']['manifest'],
   targets: Ctx['targets'],
   flags: Flags,
+  planning: { force: boolean; configKeys?: Record<string, unknown> },
 ): {
   planResult: PlanResult;
   updateModuleIds: string[];
@@ -283,9 +307,13 @@ function resolveUpdatePlan(
     seedChangesetConfig: false,
     moduleOptions,
   };
-  const planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
+  const actions = extendConfigSeed(
+    buildPlan(ctx, answers, registry),
+    planning.configKeys ?? {},
+  );
+  const planResult = computeEffects(root, actions, {
     manifest,
-    force: flags.force,
+    force: planning.force,
     plugins: registry.plugins,
     shouldPlanPrepare: !flags.sync,
     ...configOwnership(ctx.claude.houseConfig),
@@ -348,6 +376,184 @@ function foldReconciledSettings(
       detail: `${event}${matcher ? `(${matcher})` : ''}: ${script}`,
     })),
   );
+}
+
+const CONFIG_DEST = '.claude/houserules.config.json';
+const PAYLOAD_GITIGNORE_DEST = '.claude/.gitignore';
+
+/**
+ * Folds `keys` into core's own `houserules.config.json` seed: each key joins its `managedKeys`,
+ * and its full next value joins its `content`. The payload migration writes `ejected` and
+ * `rules` this way, so the config keeps exactly one seed.
+ */
+function extendConfigSeed(
+  actions: Action[],
+  keys: Record<string, unknown>,
+): Action[] {
+  const names = Object.keys(keys);
+  if (!names.length) return actions;
+  return actions.map((action) => {
+    if (action.kind !== 'seed' || action.dest !== CONFIG_DEST) return action;
+    const content = JSON.parse(action.content) as Record<string, unknown>;
+    return {
+      ...action,
+      content: `${JSON.stringify({ ...content, ...keys }, null, 2)}\n`,
+      managedKeys: [...(action.managedKeys ?? []), ...names],
+    };
+  });
+}
+
+/** What the payload migration settled on before anything was written. */
+interface PayloadMigration {
+  /** The edited dests this run ejects, sorted. Empty when force applies. */
+  ejected: string[];
+  /** Rule id to the trimmed `paths:` this run moves into the config. */
+  rulePaths: Record<string, string[]>;
+  /** The dests this run removes from the index, the manifest included when git tracks it. */
+  untrack: string[];
+  /** A mass-misread or manifest finding was shown, which already offered `--force`. */
+  wasFindingShown: boolean;
+}
+
+type MigrationAnswer =
+  { force: boolean; wasFindingShown: boolean } | { failure: string };
+
+/**
+ * Resolves the pre-verify findings into one answer. A staged or unmerged path always stops.
+ * Otherwise `--force` and `--eject-all` answer every finding, no terminal stops with the
+ * report, and a terminal asks once per finding. Force applies when any answer is force.
+ */
+async function answerMigration(
+  findings: readonly MigrationFinding[],
+  flags: Flags,
+): Promise<MigrationAnswer> {
+  const blocked = findings.find(
+    (finding) => finding.kind === 'staged-or-unmerged',
+  );
+  if (blocked) {
+    return {
+      failure: [
+        blocked.message,
+        ...blocked.paths.map((path) => `  ${path}`),
+        'Nothing was written.',
+      ].join('\n'),
+    };
+  }
+  if (!findings.length) return { force: flags.force, wasFindingShown: false };
+  if (flags.force) return { force: true, wasFindingShown: true };
+  if (flags.ejectAll) return { force: false, wasFindingShown: true };
+  if (flags.yes) return { failure: noTerminalReport(findings) };
+  let force = false;
+  for (const finding of findings) {
+    const choice = await ui.chooseMigrationOption(finding);
+    if (choice === 'stop') return { failure: 'Stopped. Nothing was written.' };
+    if (choice === 'force') force = true;
+  }
+  return { force, wasFindingShown: true };
+}
+
+/**
+ * The config the migration plans against, and the keys it changed with their full next
+ * values, or null when it changes nothing.
+ */
+function migratedConfig(
+  config: HouseConfig | null,
+  ejected: readonly string[],
+  rulePaths: Readonly<Record<string, string[]>>,
+): { config: HouseConfig; keys: Record<string, unknown> } | null {
+  const keys: Partial<HouseConfig> = {};
+  if (ejected.length) {
+    keys.ejected = [...new Set([...(config?.ejected ?? []), ...ejected])];
+  }
+  if (Object.keys(rulePaths).length) {
+    const rules = { ...config?.rules };
+    for (const [ruleId, paths] of Object.entries(rulePaths)) {
+      rules[ruleId] = { ...rules[ruleId], paths };
+    }
+    keys.rules = rules;
+  }
+  if (!Object.keys(keys).length) return null;
+  return { config: { ...config, ...keys } as HouseConfig, keys };
+}
+
+/** The files a real run of this plan would write, deletes and the manifest left out. */
+function plannedWriteDests(planResult: PlanResult): string[] {
+  const dests = planResult.effects
+    .filter((effect) => !effect.op.startsWith('skip-') && effect.content)
+    .map((effect) => effect.action.dest);
+  if (planResult.settingsPlan?.changes.length && planResult.settingsPlan.text)
+    dests.push(planResult.settingsPlan.dest);
+  const prepare = planResult.prepareScript?.kind;
+  if (prepare === 'add' || prepare === 'append') dests.push('package.json');
+  return dests;
+}
+
+/**
+ * What the user stages beside the removals: the ignore block and the config, then every other
+ * written file git would not ignore. Each path is relative to the install root.
+ */
+function filesToStage(
+  root: string,
+  planCtx: Ctx,
+  planResult: PlanResult,
+  writtenDests: readonly string[],
+  deletedDests: readonly string[],
+): string[] {
+  const ignored = ignoredUnejectedDests(
+    planCtx,
+    planResult.effects,
+    configOwnership(planCtx.claude.houseConfig).ejected,
+  );
+  const ignoredDirs = selfIgnoredDirs(
+    planResult.effects.map((effect) => effect.action),
+  );
+  const first = [PAYLOAD_GITIGNORE_DEST, CONFIG_DEST];
+  const rest = writtenDests.filter(
+    (dest) =>
+      !first.includes(dest) &&
+      dest !== MANIFEST_PATH &&
+      !ignored.has(dest) &&
+      !ignoredDirs.some((dir) => dest.startsWith(`${dir}/`)),
+  );
+  // A tracked file this run deletes stays an unstaged deletion until `git add` names it.
+  const deleted = trackedAmong(
+    root,
+    deletedDests.filter(
+      (dest) => !ignoredDirs.some((dir) => dest.startsWith(`${dir}/`)),
+    ),
+  );
+  return [...first, ...[...new Set([...rest, ...deleted])].sort()];
+}
+
+/** The migration summary: the counts, each auto-ejected file, then the one `git add` line. */
+function reportMigration(
+  migration: PayloadMigration,
+  stage: readonly string[],
+  dryRun: boolean,
+): void {
+  const lines: string[] = [];
+  if (migration.untrack.length) {
+    lines.push(
+      `payload: ${dryRun ? 'would untrack' : 'untracked'} ${migration.untrack.length} committed payload file(s) from git, kept on disk.`,
+    );
+  }
+  const ruleCount = Object.keys(migration.rulePaths).length;
+  if (ruleCount) {
+    lines.push(
+      `payload: ${dryRun ? 'would move' : 'moved'} the trimmed \`paths:\` of ${ruleCount} rule(s) into ${CONFIG_DEST}.`,
+    );
+  }
+  if (migration.ejected.length) {
+    lines.push(
+      `payload: ${dryRun ? 'would eject' : 'ejected'} ${migration.ejected.length} edited file(s), which stay committed as yours:`,
+      ...migration.ejected.map((dest) => `  ${dest}`),
+    );
+  }
+  lines.push(
+    `Stage the rest with: git add ${stage.map(shellWord).join(' ')}`,
+    'Commit them in the same commit as the staged removals.',
+  );
+  ui.message(lines.join('\n'));
 }
 
 /** What one update run did, for `--sync` to fold into its single line. */
@@ -456,6 +662,91 @@ async function withOutputSilenced<TResult>(
   }
 }
 
+/**
+ * The payload migration up to the point of writing: classifies the committed payload, runs
+ * the pre-verify pass, resolves the answer, and builds the next config in memory. Reads the
+ * tree and the index and writes nothing. With nothing committed to migrate, `migration` is
+ * null and the run is a plain update.
+ */
+async function settleMigration(
+  root: string,
+  ctx: Ctx,
+  readPlan: PlanResult,
+  flags: Flags,
+): Promise<
+  | {
+      migration: PayloadMigration | null;
+      force: boolean;
+      next: ReturnType<typeof migratedConfig>;
+    }
+  | { failure: string }
+> {
+  const classification = classifyMigration(root, ctx, readPlan);
+  const manifestTracked = trackedAmong(root, [MANIFEST_PATH]).length > 0;
+  if (!classification.classified.length && !manifestTracked)
+    return { migration: null, force: flags.force, next: null };
+  const answer = await answerMigration(
+    preverifyMigration(root, ctx, classification),
+    flags,
+  );
+  if ('failure' in answer) return answer;
+  // `--force` never writes an ejected dest, so under it the migration ejects nothing.
+  const ejected = answer.force ? [] : classification.toEject;
+  const kept = new Set(ejected);
+  return {
+    migration: {
+      ejected,
+      rulePaths: classification.rulePaths,
+      untrack: [
+        ...classification.classified.filter((dest) => !kept.has(dest)),
+        ...(manifestTracked ? [MANIFEST_PATH] : []),
+      ],
+      wasFindingShown: answer.wasFindingShown,
+    },
+    force: answer.force,
+    next: migratedConfig(
+      ctx.claude.houseConfig,
+      ejected,
+      classification.rulePaths,
+    ),
+  };
+}
+
+/**
+ * Stages the migration's removals, then prints its summary and `git add` line.
+ *
+ * @returns The failure message when git refused the removal, which was already printed.
+ */
+function finishMigration(
+  root: string,
+  migration: PayloadMigration,
+  planCtx: Ctx,
+  planResult: PlanResult,
+  written: readonly { op: string; dest: string }[],
+  prune: PruneResult,
+): string | undefined {
+  if (!untrackFromIndex(root, migration.untrack)) {
+    const failure = `payload: git refused to untrack ${migration.untrack.length} committed payload file(s). Run \`git rm --cached\` on them by hand.`;
+    console.error(failure);
+    return failure;
+  }
+  const writtenDests = written
+    .filter((entry) => entry.op !== 'delete')
+    .map((entry) => entry.dest);
+  reportMigration(
+    migration,
+    filesToStage(
+      root,
+      planCtx,
+      planResult,
+      writtenDests,
+      prune.deletes.map((entry) => entry.dest),
+    ),
+    false,
+  );
+  return undefined;
+}
+
 async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
   const ctx = detect(root);
   const configPath = join(root, '.claude', 'houserules.config.json');
@@ -497,9 +788,18 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
     ? ctx.claude.houseConfig.targets
     : ctx.targets;
 
+  // The payload migration stages removals, so `--sync` never runs it. It classifies from a
+  // plan that reads edits, since a forced plan reads every edit as an update.
+  const isMigrating =
+    !flags.sync &&
+    ctx.git.isRepo &&
+    ctx.claude.houseConfig?.payload?.commit !== true;
   let planResult: PlanResult;
   let updateModuleIds: string[];
   let closure: RequirementClosure;
+  let planCtx = ctx;
+  let runFlags = flags;
+  let migration: PayloadMigration | null = null;
   try {
     ({ planResult, updateModuleIds, closure } = resolveUpdatePlan(
       root,
@@ -508,7 +808,31 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
       manifest,
       targets,
       flags,
+      { force: isMigrating ? false : flags.force },
     ));
+    if (isMigrating) {
+      const settled = await settleMigration(root, ctx, planResult, flags);
+      if ('failure' in settled) return failed(EXIT.error, settled.failure);
+      migration = settled.migration;
+      runFlags = settled.force ? { ...flags, force: true } : flags;
+      if (settled.next) {
+        planCtx = {
+          ...ctx,
+          claude: { ...ctx.claude, houseConfig: settled.next.config },
+        };
+      }
+      if (settled.next || runFlags.force) {
+        ({ planResult, updateModuleIds, closure } = resolveUpdatePlan(
+          root,
+          planCtx,
+          registry,
+          manifest,
+          targets,
+          runFlags,
+          { force: runFlags.force, configKeys: settled.next?.keys ?? {} },
+        ));
+      }
+    }
   } catch (e) {
     if (e instanceof HouseError) return failed(EXIT.error, e.message);
     throw e;
@@ -526,8 +850,8 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
   const prune: PruneResult = computePrune(root, {
     manifest,
     plannedDests: planResult.plannedDests,
-    force: flags.force,
-    ejected: configOwnership(ctx.claude.houseConfig).ejected,
+    force: runFlags.force,
+    ejected: configOwnership(planCtx.claude.houseConfig).ejected,
   });
   if (prune.removedScripts.length) {
     foldRemovedHooksSettings(planResult, ctx, prune.removedScripts);
@@ -564,15 +888,21 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
   const skipped = planResult.effects
     .filter((e) => e.op === 'skip-modified')
     .map((e) => e.action.dest);
-  const ejectedDests = configOwnership(ctx.claude.houseConfig).ejected;
+  const ejectedDests = configOwnership(planCtx.claude.houseConfig).ejected;
   const ignoredDests = ignoredUnejectedDests(
-    ctx,
+    planCtx,
     planResult.effects,
     ejectedDests,
   );
   const keptIgnored = skipped.filter((dest) => ignoredDests.has(dest)).length;
   const skippedUnejected = skipped.filter((dest) => !ejectedDests.has(dest));
-  showLocalEdits(root, skipped, ignoredDests, ejectedDests);
+  showLocalEdits(
+    root,
+    skipped,
+    ignoredDests,
+    ejectedDests,
+    !migration?.wasFindingShown,
+  );
 
   if (prune.deletes.length || prune.kept.length || prune.ejected.length) {
     const lines: string[] = [];
@@ -606,8 +936,13 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
 
   const backupMoves = legacyBackupMoves(root);
 
+  // Every file under the backup dir is one machine's pre-merge copy, its own `.gitignore`
+  // included, so a committed install that migrates stops tracking all of it.
+  const strayBackups = isMigrating ? trackedAmong(root, [BACKUP_DIR]) : [];
+
   if (flags.dryRun) {
     reportWouldMoveBackups(backupMoves);
+    reportWouldUntrack(strayBackups, 'backups', 'backup file(s)');
     reportWouldUntrack(strayTemplates, 'templates', 'reference template(s)');
     reportWouldUntrack(strayScripts, 'scripts', 'hook script(s)');
     reportWouldUntrack(
@@ -621,6 +956,19 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
       'ledger log(s)',
       ' The GitHub Project is now the durable record, once `projects-sync.mjs push` has run.',
     );
+    if (migration) {
+      reportMigration(
+        migration,
+        filesToStage(
+          root,
+          planCtx,
+          planResult,
+          plannedWriteDests(planResult),
+          prune.deletes.map((entry) => entry.dest),
+        ),
+        true,
+      );
+    }
     showLegacyLedgerHint(root);
     showNextSteps(planResult.advisories, flags);
     ui.outro('Dry run — nothing written.');
@@ -659,6 +1007,7 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
       'reference template(s)',
     );
     untrackAndReport(root, strayScripts, 'scripts', 'hook script(s)');
+    untrackAndReport(root, strayBackups, 'backups', 'backup file(s)');
     untrackAndReport(
       root,
       strayLedgerSurfaces(root, ctx),
@@ -673,6 +1022,9 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
       ' The record now lives in the GitHub Project once `projects-sync.mjs push` has run.',
     );
   }
+  const migrationFailure = migration
+    ? finishMigration(root, migration, planCtx, planResult, written, prune)
+    : undefined;
 
   showLegacyLedgerHint(root);
   showNextSteps(planResult.advisories, flags);
@@ -690,12 +1042,13 @@ async function runUpdate(root: string, flags: Flags): Promise<UpdateOutcome> {
   );
   // apply() hands back the previous manifest object itself when it left the file as it was.
   const manifestWritten = recorded !== manifest;
+  const failure = brokenFailure ?? migrationFailure;
   return {
-    code: hasBrokenPlugins ? EXIT.error : EXIT.ok,
+    code: failure !== undefined ? EXIT.error : EXIT.ok,
     written: written.length + (manifestWritten ? 1 : 0),
     kept: skipped.length + prune.kept.length,
     keptIgnored,
-    ...(brokenFailure !== undefined && { failure: brokenFailure }),
+    ...(failure !== undefined && { failure }),
   };
 }
 

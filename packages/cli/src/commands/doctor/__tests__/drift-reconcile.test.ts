@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -10,6 +13,7 @@ import { join } from 'node:path';
 
 import type { Flags } from '../../../cli-contract.js';
 import { detect } from '../../../detect.js';
+import { editHouseConfig } from '#test/installed-tree';
 import { useInstalledRepo } from '#test/repo';
 import { checkConfigValidity } from '../config-validity.js';
 import { reconcileDrift } from '../drift-reconcile.js';
@@ -205,5 +209,88 @@ describe('reconcileDrift, given an ejected file whose module is no longer enable
       existsSync(join(root, EJECTED_SKILL)),
       `${EJECTED_SKILL} still on disk`,
     ).toBe(true);
+  });
+});
+
+const TRACKED_RULE = '.claude/rules/code-cleanliness.md';
+const IGNORED_RULE = '.claude/skills/ready/SKILL.md';
+
+function gitIn(root: string, args: string[]): void {
+  execFileSync('git', args, { cwd: root });
+}
+
+describe('reconcileDrift, given a payload file git tracks', () => {
+  it('raises payload-tracked naming the count, the file, and update with no flags', () => {
+    const root = useInstalledRepo('npm-single', {
+      modules: 'code-cleanliness',
+    });
+    gitIn(root, ['add', '-f', TRACKED_RULE]);
+
+    const finding = reconcile(root).findings.find(
+      (f) => f.id === 'payload-tracked',
+    );
+
+    expect(finding).toMatchObject({ level: 'WARN' });
+    expect(finding?.msg).toContain('1 installed payload file(s)');
+    expect(finding?.msg).toContain(TRACKED_RULE);
+    expect(finding?.msg).toMatch(/npx houserules update$/);
+  });
+
+  it('raises nothing when no payload file is tracked', () => {
+    const root = useInstalledRepo('npm-single', {
+      modules: 'code-cleanliness',
+    });
+
+    expect(reconcile(root).findings.map((f) => f.id)).not.toContain(
+      'payload-tracked',
+    );
+  });
+
+  it('raises nothing under payload.commit: true', () => {
+    const root = useInstalledRepo('npm-single', {
+      modules: 'code-cleanliness',
+    });
+    gitIn(root, ['add', '-f', TRACKED_RULE]);
+    editHouseConfig(root, (config) => {
+      config.payload = { commit: true };
+    });
+
+    expect(reconcile(root).findings.map((f) => f.id)).not.toContain(
+      'payload-tracked',
+    );
+  });
+
+  it('raises nothing outside a git work tree', () => {
+    const root = useInstalledRepo('npm-single', {
+      modules: 'code-cleanliness',
+    });
+    gitIn(root, ['add', '-f', TRACKED_RULE]);
+    rmSync(join(root, '.git'), { recursive: true, force: true });
+
+    expect(reconcile(root).findings.map((f) => f.id)).not.toContain(
+      'payload-tracked',
+    );
+  });
+
+  it('drops the eject line for an edited tracked file and keeps it for an edited ignored file', () => {
+    const root = useInstalledRepo('npm-single', {
+      modules: 'code-cleanliness,ready',
+    });
+    gitIn(root, ['add', '-f', TRACKED_RULE]);
+    const ignoredPath = join(root, IGNORED_RULE);
+    appendFileSync(join(root, TRACKED_RULE), '\nmy team edit\n');
+    appendFileSync(ignoredPath, '\nmy team edit\n');
+
+    const lines = reconcile(root).readouts;
+
+    expect(lines).toContainEqual(
+      expect.stringContaining(`${TRACKED_RULE}: to discard your edit`),
+    );
+    expect(lines).not.toContainEqual(
+      expect.stringContaining(`eject ${TRACKED_RULE}`),
+    );
+    expect(lines).toContainEqual(
+      expect.stringContaining(`eject ${IGNORED_RULE}`),
+    );
   });
 });

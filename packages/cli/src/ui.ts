@@ -5,6 +5,10 @@ import type { WrittenEntry } from './apply.js';
 import { BACKUP_DIR } from './core/fs-target.js';
 import type { ChangesetInvocation, Ctx, Target } from './detect.js';
 import type { SettingsPlan } from '@houserules/api/internal';
+import type {
+  MigrationChoice,
+  MigrationFinding,
+} from './core/migration-preverify.js';
 import type { Effect, EffectOp } from './plan.js';
 import type { RegisteredModule } from './plugin-registry.js';
 
@@ -286,6 +290,25 @@ export async function selectFiles(
       message: `${message} (space toggles, enter confirms)`,
       options: dests.map((dest) => ({ value: dest, label: dest })),
       required: true,
+    }),
+  );
+}
+
+/**
+ * Asks how to answer one pre-verify finding. `stop` is preselected, so a bare enter changes
+ * nothing, and a cancel exits 1 with nothing written.
+ */
+export async function chooseMigrationOption(
+  finding: MigrationFinding,
+): Promise<MigrationChoice> {
+  return bail<MigrationChoice>(
+    await p.select<MigrationChoice>({
+      message: finding.message,
+      options: finding.options.map((option) => ({
+        value: option.choice,
+        label: option.label,
+      })),
+      initialValue: 'stop',
     }),
   );
 }

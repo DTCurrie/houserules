@@ -43,7 +43,7 @@ const SCRIPTS_DIR = '.claude/scripts';
  * `<dir>/.gitignore` writes rather than a list, so a module that adds one is honored the day
  * it lands. Listing a dest under one of them again would only repeat what git already does.
  */
-function selfIgnoredDirs(actions: Action[]): string[] {
+export function selfIgnoredDirs(actions: readonly Action[]): string[] {
   return actions
     .filter(
       (action): action is WriteAction =>

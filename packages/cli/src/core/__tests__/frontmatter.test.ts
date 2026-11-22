@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   frontmatterBlock,
+  parseFrontmatterPaths,
   renderFrontmatterPaths,
   splitFrontmatter,
 } from '../frontmatter.js';
@@ -126,5 +127,85 @@ describe('renderFrontmatterPaths', () => {
     ]);
 
     expect(renderFrontmatterPaths(once, ['src/**'])).toBe(once);
+  });
+});
+
+describe('parseFrontmatterPaths', () => {
+  it.each([
+    {
+      shape: 'an inline empty list',
+      input: '---\npaths: []\n---\n',
+      expected: [],
+    },
+    {
+      shape: 'single-quoted items with a doubled quote',
+      input: "---\npaths:\n  - 'src/**'\n  - 'it''s/*.md'\n---\n",
+      expected: ['src/**', "it's/*.md"],
+    },
+    {
+      shape: 'double-quoted items with an escaped quote',
+      input: '---\npaths:\n  - "a/**"\n  - "b\\"c"\n---\n',
+      expected: ['a/**', 'b"c'],
+    },
+    {
+      shape: 'bare items written flush with the key',
+      input: '---\npaths:\n- src/**/*.ts\n- lib/*.js\n---\n',
+      expected: ['src/**/*.ts', 'lib/*.js'],
+    },
+    {
+      shape: 'a list between other keys',
+      input: "---\nname: x\npaths:\n  - 'a/**'\nalwaysApply: false\n---\n",
+      expected: ['a/**'],
+    },
+    {
+      shape: 'CRLF line endings',
+      input: "---\r\npaths:\r\n  - 'a/**'\r\n  - 'b/**'\r\n---\r\n",
+      expected: ['a/**', 'b/**'],
+    },
+  ])('reads $shape', ({ input, expected }) => {
+    expect(parseFrontmatterPaths(input)).toEqual(expected);
+  });
+
+  it.each([
+    { shape: 'no frontmatter', input: '' },
+    { shape: 'no paths: key', input: '---\nname: x\n---\n' },
+    { shape: 'an inline flow list', input: '---\npaths: ["a/**"]\n---\n' },
+    { shape: 'a scalar value', input: '---\npaths: src/**\n---\n' },
+    { shape: 'a key with no items', input: '---\npaths:\nname: x\n---\n' },
+    {
+      shape: 'a nested mapping under the key',
+      input: '---\npaths:\n  glob: a/**\n---\n',
+    },
+    {
+      shape: 'a bare item with a trailing comment',
+      input: '---\npaths:\n  - a/** # mine\n---\n',
+    },
+    {
+      shape: 'an unterminated quoted item',
+      input: "---\npaths:\n  - 'a/**\n---\n",
+    },
+  ])('returns null for $shape', ({ input }) => {
+    expect(parseFrontmatterPaths(input)).toBeNull();
+  });
+
+  it('round-trips the paths renderFrontmatterPaths writes', () => {
+    const paths = ['src/**/*.ts', "it's/**", 'a b/*.md'];
+
+    const rendered = renderFrontmatterPaths(
+      '---\ndescription: a rule\n---\n',
+      paths,
+    );
+
+    expect(parseFrontmatterPaths(rendered)).toEqual([
+      'src/**/*.ts',
+      "it's/**",
+      'a b/*.md',
+    ]);
+  });
+
+  it('round-trips an empty list', () => {
+    expect(
+      parseFrontmatterPaths(renderFrontmatterPaths('---\nname: x\n---\n', [])),
+    ).toEqual([]);
   });
 });

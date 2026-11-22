@@ -24,6 +24,7 @@ import {
   editHouseConfig,
   type HouseManifestShape,
   hookCommandsFor,
+  houseConfigPath,
   manifestOf,
   readClaudeMd,
   readJson,
@@ -549,6 +550,9 @@ describe('update with a config from before `modules` was recorded', () => {
 
     expect(result.status, result.stderr).toBe(0);
     expect(manifestOf(root).modules).toEqual(modulesBefore);
+    expect(
+      readJson<{ modules?: string[] }>(houseConfigPath(root)).modules,
+    ).toEqual(modulesBefore);
   });
 });
 

@@ -19,6 +19,7 @@ import {
   configOwnership,
 } from '../plan.js';
 import { selectFiles } from '../ui.js';
+import { shellWord } from '../core/shell-word.js';
 import { resolveRecordedModuleIds } from '../retired-modules.js';
 import { buildRegistry } from '../plugin-resolver.js';
 
@@ -68,7 +69,7 @@ function isInIndex(root: string, dest: string): boolean {
 }
 
 function isInHead(root: string, dest: string): boolean {
-  return gitQuiet(root, ['cat-file', '-e', `HEAD:${dest}`]);
+  return gitQuiet(root, ['cat-file', '-e', `HEAD:./${dest}`]);
 }
 
 /** Every whole file the plan writes under `.claude/`, whether or not the block lists it. */
@@ -169,12 +170,6 @@ function candidatesUnder(
       !ownership.ejected.has(dest) &&
       'dest' in judgeEject(root, dest, ownership),
   );
-}
-
-function shellWord(path: string): string {
-  return /^[\w./@+=-]+$/.test(path)
-    ? path
-    : `'${path.replaceAll("'", `'\\''`)}'`;
 }
 
 function planOwnership(root: string, ctx: Ctx, config: HouseConfig): Ownership {

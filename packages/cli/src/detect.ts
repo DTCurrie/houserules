@@ -149,6 +149,21 @@ function trackedFilesUnder(root: string, dir: string): string[] {
     .filter((p) => p && p !== ownGitignore);
 }
 
+/**
+ * The members of `paths` git tracks, in git's order. Runs with cwd at `root` and the paths as
+ * cwd-relative pathspecs, so an install below the git top answers for its own `.claude/`.
+ * Empty on any git failure or non-repo.
+ */
+export function trackedAmong(root: string, paths: readonly string[]): string[] {
+  if (!paths.length) return [];
+  const out = git(root, ['ls-files', '-c', '--', ...paths]);
+  if (!out) return [];
+  return out
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 /** Committed reference templates from installs that predate the self-gitignore. */
 export function trackedTemplateFiles(root: string): string[] {
   return trackedFilesUnder(root, '.claude/templates');

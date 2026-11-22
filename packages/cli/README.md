@@ -283,6 +283,18 @@ Want the committed layout? Set `payload.commit: true` in `.claude/houserules.con
 houserules then drops the block, and the payload is committed as before. For the hook scripts
 alone, `scripts.commit: true` skips their gitignore and the migration that untracks them.
 
+#### Upgrading an install that committed its payload
+
+One plain `houserules update` converts an install that committed its payload. It ejects each
+file you edited, so those stay yours. It removes every other file and the manifest from the
+index and leaves them on disk. Then it prints the `git add` line to run, and you commit that
+in the same commit as the staged removals.
+
+After that commit, a teammate's pull deletes those now-untracked files from their working tree.
+`prepare` or the payload-sync hook rebuilds them. Git refuses the pull for a teammate who has an
+uncommitted edit to one of those files. They set the edit aside first, then pull. To keep the
+committed layout instead, see the [`payload.commit` opt-out](#the-installed-payload-is-generated-not-source).
+
 ### Drift: `stale` vs `yours`
 
 `doctor` reports every managed file whose contents no longer match what houserules would write,

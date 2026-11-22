@@ -1,11 +1,21 @@
-import { existsSync, mkdirSync, symlinkSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { makeCtx } from '#test/ctx-builder';
+import { editHouseConfig } from '#test/installed-tree';
+import { useInstalledRepo } from '#test/repo';
 import type { HouseConfig } from '@houserules/api';
 import type { HouseManifest } from '@houserules/api/internal';
+import { detect } from '../../../detect.js';
 import type { Ctx } from '../../../detect.js';
 import { MODULES } from '../../../plan.js';
 import type { Registry } from '../../../plugin-registry.js';
@@ -385,5 +395,71 @@ describe('checkInstallIntegrity, given a config and a manifest that disagree on 
         msg: expect.stringContaining('"config-only-ghost"'),
       }),
     );
+  });
+});
+
+const MANIFEST_FILE = '.claude/houserules.manifest.json';
+
+function trackManifest(root: string): void {
+  execFileSync('git', ['add', '-f', MANIFEST_FILE], { cwd: root });
+}
+
+function manifestTrackedFindings(root: string, kitVersion: string) {
+  const ctx = detect(root);
+  return checkInstallIntegrity(root, ctx, kitVersion, null).findings.filter(
+    (finding) => finding.id === 'manifest-tracked',
+  );
+}
+
+describe('checkInstallIntegrity, given a tracked manifest', () => {
+  it('raises manifest-tracked naming update with no flags when the ignore block lists it', () => {
+    const root = useInstalledRepo('npm-single');
+    trackManifest(root);
+
+    const [finding, ...rest] = manifestTrackedFindings(root, '1.0.0');
+
+    expect(rest).toEqual([]);
+    expect(finding).toMatchObject({ level: 'WARN', id: 'manifest-tracked' });
+    expect(finding?.msg).toContain('local state');
+    expect(finding?.msg).toMatch(/npx houserules update$/);
+  });
+
+  it('raises nothing when the manifest is untracked', () => {
+    const root = useInstalledRepo('npm-single');
+    execFileSync(
+      'git',
+      ['rm', '--cached', '-q', '--ignore-unmatch', MANIFEST_FILE],
+      {
+        cwd: root,
+      },
+    );
+
+    expect(manifestTrackedFindings(root, '1.0.0')).toEqual([]);
+  });
+
+  it('raises nothing under payload.commit: true', () => {
+    const root = useInstalledRepo('npm-single');
+    trackManifest(root);
+    editHouseConfig(root, (config) => {
+      config.payload = { commit: true };
+    });
+
+    expect(manifestTrackedFindings(root, '1.0.0')).toEqual([]);
+  });
+
+  it('raises nothing when .claude/.gitignore holds no payload block', () => {
+    const root = useInstalledRepo('npm-single');
+    trackManifest(root);
+    writeFileSync(join(root, '.claude', '.gitignore'), '/scripts/\n');
+
+    expect(manifestTrackedFindings(root, '1.0.0')).toEqual([]);
+  });
+
+  it('raises nothing outside a git work tree', () => {
+    const root = useInstalledRepo('npm-single');
+    trackManifest(root);
+    rmSync(join(root, '.git'), { recursive: true, force: true });
+
+    expect(manifestTrackedFindings(root, '1.0.0')).toEqual([]);
   });
 });

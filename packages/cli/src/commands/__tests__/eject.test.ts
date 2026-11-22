@@ -13,7 +13,15 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 import { useInstalledRepo } from '#test/repo';
 import { runCli, runIn } from '#test/run';
@@ -325,6 +333,37 @@ describe('eject --undo', () => {
     expect(existsSync(join(root, SKILL))).toBe(true);
     expect(read(root, SKILL)).toBe(edited);
     expect(JSON.parse(read(root, CONFIG)).ejected).toBeUndefined();
+  });
+
+  it('stages the removal of a committed file when .claude sits one directory below the git root', async () => {
+    const { root, edited } = ejectedAndEdited(SKILL);
+    const parent = mkdtempSync(join(tmpdir(), 'kit-below-root-'));
+    onTestFinished(() => rmSync(parent, { recursive: true, force: true }));
+    const nested = join(parent, 'app');
+    cpSync(root, nested, { recursive: true });
+    rmSync(join(nested, '.git'), { recursive: true, force: true });
+    runIn(parent, 'git', ['init', '-q']);
+    runIn(parent, 'git', ['add', '-A']);
+    runIn(parent, 'git', ['add', '-f', `app/${SKILL}`]);
+    runIn(parent, 'git', [
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@example.com',
+      'commit',
+      '-qm',
+      'share the skill',
+    ]);
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+
+    const status = await inProcess(nested, [SKILL], { shouldUndo: true });
+
+    expect(status).toBe(0);
+    expect(log).toHaveBeenCalledWith('Commit the staged removal to finish.');
+    expect(stagedChanges(nested)).toBe(`D\tapp/${SKILL}\n`);
+    expect(read(nested, SKILL)).toBe(edited);
   });
 
   it('refuses a file that is not ejected', () => {

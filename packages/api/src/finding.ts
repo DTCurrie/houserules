@@ -3,6 +3,11 @@ export type Level = 'ERROR' | 'WARN';
 export interface Finding {
   level: Level;
   msg: string;
+  /**
+   * A stable name for the finding, carried into `doctor --json` so a script or a test can
+   * match it without parsing `msg`. Absent on findings that predate it.
+   */
+  id?: string;
 }
 
 /**

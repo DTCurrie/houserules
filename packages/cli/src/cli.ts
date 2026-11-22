@@ -28,6 +28,7 @@ interface CommandOptions {
   prune?: boolean;
   force?: boolean;
   sync?: boolean;
+  ejectAll?: boolean;
   nextSteps?: boolean;
   json?: boolean;
   slug?: string[];
@@ -67,6 +68,7 @@ function flagsFrom(options: CommandOptions, command: Command): Flags {
     prune: options.prune ?? false,
     force: options.force ?? false,
     ...(options.sync !== undefined && { sync: options.sync }),
+    ...(options.ejectAll !== undefined && { ejectAll: options.ejectAll }),
     nextSteps: options.nextSteps ?? false,
     json: options.json ?? false,
     ...(options.slug !== undefined && { slug: options.slug }),
@@ -168,6 +170,10 @@ program
     'unattended run for hooks and prepare: no prompts, no git index writes, one line, exit 0',
   )
   .option(
+    '--eject-all',
+    'while migrating a committed payload, keep every edited file as yours by ejecting it',
+  )
+  .option(
     '--next-steps',
     'print the full post-install to-do list (summarized by default)',
   )
@@ -178,10 +184,11 @@ program
       command: Command,
     ) => {
       const { update } = await import('./commands/update.js');
-      exitCode = await update(
-        targetDir(dir, command),
-        flagsFrom(options, command),
-      );
+      exitCode = await update(targetDir(dir, command), {
+        ...flagsFrom(options, command),
+        // The payload migration asks its questions only with a terminal on both ends.
+        yes: !process.stdout.isTTY || !process.stdin.isTTY,
+      });
     },
   );
 

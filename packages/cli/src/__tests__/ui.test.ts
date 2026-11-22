@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as clack from '@clack/prompts';
 
 import {
+  chooseMigrationOption,
   optionPromptMessage,
   renderPreview,
   selectModules,
@@ -10,6 +11,7 @@ import {
 
 import type { ModuleDef } from '@houserules/api';
 import type { Ctx } from '../detect.js';
+import type { MigrationFinding } from '../core/migration-preverify.js';
 import type { Effect } from '../plan.js';
 import type { RegisteredModule } from '../plugin-registry.js';
 
@@ -164,6 +166,8 @@ describe('renderPreview, given a region effect', () => {
 vi.mock('@clack/prompts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@clack/prompts')>()),
   multiselect: vi.fn(),
+  select: vi.fn(),
+  isCancel: vi.fn(() => false),
 }));
 
 describe('selectModules with a required module', () => {
@@ -209,5 +213,50 @@ describe('selectModules with a required module', () => {
     const ids = await selectModules(modules, ctx, ['core'], requiredBy, close);
 
     expect(ids).toEqual(['core']);
+  });
+});
+
+describe('chooseMigrationOption', () => {
+  const finding: MigrationFinding = {
+    kind: 'mass-misread',
+    message: '3 of 4 files read as edited',
+    paths: ['a'],
+    options: [
+      { choice: 'stop', label: 'stop label', flag: null },
+      { choice: 'force', label: 'force label', flag: '--force' },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.mocked(clack.select).mockReset();
+  });
+
+  it('offers the finding options with stop preselected and returns the pick', async () => {
+    vi.mocked(clack.select).mockResolvedValue('force');
+
+    await expect(chooseMigrationOption(finding)).resolves.toBe('force');
+
+    expect(vi.mocked(clack.select).mock.calls[0]![0]).toMatchObject({
+      message: '3 of 4 files read as edited',
+      initialValue: 'stop',
+      options: [
+        { value: 'stop', label: 'stop label' },
+        { value: 'force', label: 'force label' },
+      ],
+    });
+  });
+
+  it('exits 1 on a cancel', async () => {
+    vi.mocked(clack.select).mockResolvedValue(Symbol('cancel'));
+    vi.mocked(clack.isCancel).mockReturnValueOnce(true);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('exit');
+    }) as never);
+
+    await expect(chooseMigrationOption(finding)).rejects.toThrow('exit');
+
+    expect(exit).toHaveBeenCalledWith(1);
+    vi.restoreAllMocks();
   });
 });

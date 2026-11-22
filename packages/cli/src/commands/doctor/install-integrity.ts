@@ -1,17 +1,19 @@
 import { installedModuleIds } from '../../installed-modules.js';
 import { execFileSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ledgerDirFor } from '../../core/ledger-dir.js';
 import { MANIFEST_PATH } from '@houserules/api/internal';
 import {
+  trackedAmong,
   trackedLedgerLogs,
   trackedLedgerSurfaces,
   trackedScriptFiles,
   trackedTemplateFiles,
 } from '../../detect.js';
 import type { Ctx } from '../../detect.js';
+import { PAYLOAD_GITIGNORE_REGION } from '../../modules/payload-gitignore.js';
 import { payloadPath } from '../../paths.js';
 import { MODULES } from '../../plan.js';
 import type { Registry } from '../../plugin-registry.js';
@@ -125,6 +127,20 @@ function publishedVersionReadout(
   ];
 }
 
+/** Git tracks the manifest while the payload ignore block lists it: committed before the block existed. */
+function isManifestTracked(root: string, ctx: Ctx): boolean {
+  if (!ctx.git.isRepo) return false;
+  if (ctx.claude.houseConfig?.payload?.commit === true) return false;
+  let gitignore: string;
+  try {
+    gitignore = readFileSync(join(root, '.claude', '.gitignore'), 'utf8');
+  } catch {
+    return false;
+  }
+  if (!gitignore.includes(PAYLOAD_GITIGNORE_REGION.start)) return false;
+  return trackedAmong(root, [MANIFEST_PATH]).length > 0;
+}
+
 /**
  * Whether what the manifest claims still matches what houserules ships: the receipt
  * exists, its version is current, nothing generated got committed, and no retired
@@ -158,6 +174,13 @@ export function checkInstallIntegrity(
     findings.push({
       level: 'WARN',
       msg: `installed houserules v${manifest.kitVersion}, this CLI is v${kitVersion}. Run: npx houserules update`,
+    });
+  }
+  if (isManifestTracked(root, ctx)) {
+    findings.push({
+      id: 'manifest-tracked',
+      level: 'WARN',
+      msg: `${MANIFEST_PATH} is committed, but it is local state now, listed in .claude/.gitignore. Untrack it, keeping it on disk: npx houserules update`,
     });
   }
   // Reference templates that got committed before houserules ignored them. File integrity
