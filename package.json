@@ -260,7 +260,8 @@
         "scripts/verify-module-references.mjs",
         "scripts/health-kit/gather/*.mjs",
         "scripts/health-kit/closeout/*.mjs",
-        "scripts/bench/**/*.mjs"
+        "scripts/bench/**/*.mjs",
+        "scripts/eval/**/*.mjs"
       ],
       "output": []
     },

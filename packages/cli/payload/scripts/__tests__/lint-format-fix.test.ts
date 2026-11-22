@@ -73,6 +73,7 @@ function setRunner(
       filterFlag: '--filter',
       runScriptPrefix: ['run'],
       commands: ['lint:fix', 'format:fix'],
+      passPaths: true,
       ...fixOverrides,
     };
   });
@@ -367,7 +368,9 @@ describe('lint-format-fix.mjs on a changed package in a monorepo', () => {
   it('invokes the runner once with --filter <pkg> using the target’s fixCommands override', () => {
     const r = runScript(root, SCRIPT, { input: '{}' });
     expect(r.status, r.stderr).toBe(0);
-    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville fix -- src/game.ts',
+    ]);
   });
 });
 
@@ -550,7 +553,9 @@ describe('lint-format-fix.mjs gating on the ended turn', () => {
     });
 
     expect(r.status, r.stderr).toBe(0);
-    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville fix -- src/game.ts',
+    ]);
   });
 
   it('runs the fix when the payload carries no transcript_path', () => {
@@ -559,7 +564,9 @@ describe('lint-format-fix.mjs gating on the ended turn', () => {
     });
 
     expect(r.status, r.stderr).toBe(0);
-    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville fix -- src/game.ts',
+    ]);
   });
 
   it('runs the fix when the transcript file is unreadable', () => {
@@ -571,7 +578,9 @@ describe('lint-format-fix.mjs gating on the ended turn', () => {
     });
 
     expect(r.status, r.stderr).toBe(0);
-    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville fix -- src/game.ts',
+    ]);
   });
 
   it('exits 0 without spawning git or the runner while background_tasks is non-empty', () => {
@@ -601,7 +610,9 @@ describe('lint-format-fix.mjs gating on the ended turn', () => {
     });
 
     expect(r.status, r.stderr).toBe(0);
-    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville fix -- src/game.ts',
+    ]);
   });
 });
 
@@ -652,7 +663,9 @@ describe('lint-format-fix.mjs scoping the fix to the ended turn', () => {
     });
 
     expect(r.status, r.stderr).toBe(0);
-    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville fix -- src/game.ts',
+    ]);
   });
 });
 
@@ -695,7 +708,9 @@ describe('lint-format-fix.mjs on a file in a directory git has never seen', () =
     const r = runAfterPrompt('Arena.tsx', 'arena.bin');
 
     expect(r.status, r.stderr).toBe(0);
-    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville fix -- src/levels/boss/Arena.tsx',
+    ]);
   });
 
   it('runs nothing when the new directory holds only a non-lintable file', () => {
@@ -957,7 +972,7 @@ describe('fix.passPaths planning', () => {
     const steps = planFixSteps(['games/cityville/src/game.ts'], settings);
 
     expect(steps[0]).toEqual(['@fix/cityville', 'lint:fix']);
-    expect(stepArgv(steps[0]!, settings).argv).toEqual([
+    expect(stepArgv(steps[0]!, settings)).toEqual([
       '--filter',
       '@fix/cityville',
       'lint:fix',
@@ -968,26 +983,13 @@ describe('fix.passPaths planning', () => {
     const settings = on();
     const [step] = planFixSteps(['games/cityville/src/game.ts'], settings);
 
-    expect(stepArgv(step!, settings)).toEqual({
-      argv: ['--filter', '@fix/cityville', 'lint:fix', '--', 'src/game.ts'],
-      isUnscoped: false,
-    });
-  });
-
-  it('keeps the scoped argv at the byte budget and falls back to unscoped one byte over', () => {
-    const settings = on();
-    const atBudget = 'a'.repeat(ARGV_PATH_BYTE_BUDGET - 1);
-    const overBudget = 'a'.repeat(ARGV_PATH_BYTE_BUDGET);
-
-    expect(
-      stepArgv(['@fix/cityville', 'lint:fix', [atBudget]], settings).isUnscoped,
-    ).toBe(false);
-    expect(
-      stepArgv(['@fix/cityville', 'lint:fix', [overBudget]], settings),
-    ).toEqual({
-      argv: ['--filter', '@fix/cityville', 'lint:fix'],
-      isUnscoped: true,
-    });
+    expect(stepArgv(step!, settings)).toEqual([
+      '--filter',
+      '@fix/cityville',
+      'lint:fix',
+      '--',
+      'src/game.ts',
+    ]);
   });
 
   it('drops a path whose file was deleted during the turn', () => {
@@ -1095,22 +1097,6 @@ describe('lint-format-fix.mjs with a missing script and with fix.passPaths', () 
     ]);
   });
 
-  it('runs unscoped and says so when the path list outgrows the argv budget', () => {
-    setRunner(root, { passPaths: true });
-    const name = 'n'.repeat(90);
-    for (let i = 0; i < 400; i++)
-      writeFileSync(
-        join(root, `games/cityville/src/${name}${i}.ts`),
-        'export {};\n',
-      );
-
-    const r = runScript(root, SCRIPT, { input: '{}' });
-
-    expect(r.status, r.stderr).toBe(0);
-    expect(r.stderr).toMatch(/too many changed paths .* ran unscoped/);
-    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville fix']);
-  });
-
   it('spawns nothing when every changed path sits outside the targets', () => {
     setRunner(root, { passPaths: true });
     mkdirSync(join(root, 'docs'), { recursive: true });
@@ -1122,5 +1108,67 @@ describe('lint-format-fix.mjs with a missing script and with fix.passPaths', () 
     expect(existsSync(join(root, 'runner-calls.txt')), 'nothing spawned').toBe(
       false,
     );
+  });
+});
+
+describe('fixer timeouts: the fix', () => {
+  it('spawns nothing and prints nothing on Stop when fix.passPaths is off', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    stubRunner(root);
+    setRunner(root, { passPaths: false });
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const x = 9;\n',
+    );
+
+    const r = runScript(root, SCRIPT, {
+      input: JSON.stringify({
+        hook_event_name: 'Stop',
+        transcript_path: transcriptWith('Edit'),
+      }),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toBe('');
+    expect(existsSync(join(root, 'runner-calls.txt')), 'nothing spawned').toBe(
+      false,
+    );
+  });
+
+  it('spawns nothing and says why once when the path list outgrows the argv budget', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    stubRunner(root);
+    setRunner(root, { passPaths: true });
+    const name = 'n'.repeat(90);
+    for (let i = 0; i < 400; i++)
+      writeFileSync(
+        join(root, `games/cityville/src/${name}${i}.ts`),
+        'export {};\n',
+      );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toBe(
+      'lint-format-fix: fix for @fix/cityville had too many changed paths for one command line, so it was skipped.\n',
+    );
+    expect(existsSync(join(root, 'runner-calls.txt')), 'nothing spawned').toBe(
+      false,
+    );
+  });
+
+  it('returns the scoped argv at the byte budget and null one byte over it', () => {
+    const settings = resolveFixSettings(
+      baseConfig({ fix: { passPaths: true } }),
+    );
+    const atBudget = 'a'.repeat(ARGV_PATH_BYTE_BUDGET - 1);
+    const overBudget = 'a'.repeat(ARGV_PATH_BYTE_BUDGET);
+
+    expect(
+      stepArgv(['@fix/cityville', 'lint:fix', [atBudget]], settings),
+    ).toEqual(['--filter', '@fix/cityville', 'lint:fix', '--', atBudget]);
+    expect(
+      stepArgv(['@fix/cityville', 'lint:fix', [overBudget]], settings),
+    ).toBe(null);
   });
 });

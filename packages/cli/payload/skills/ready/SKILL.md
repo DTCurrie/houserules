@@ -10,6 +10,10 @@ and reading only their compact results.
 
 ## 1. Verify (delegate — do not run the full suite here)
 
+When `fix.passPaths` in `.claude/houserules.config.json` is not `true`, no Stop fixed anything. Run
+the repo's fix commands once over the changed packages before verifying. They are `fix.commands`, or
+a target's `fixCommands`.
+
 If `/verify-changed` is installed (`.claude/skills/verify-changed/`), invoke it and take its
 per-package PASS/FAIL verdict as the verification result. If it is not installed, run the repo's
 verify or test command in the foreground with `timeout: 600000`. If it is expected to cover more than
@@ -26,8 +30,9 @@ A reviewer that stalled counts as review not run for its area, even after the re
 
 ## 3. Changeset / handoff hooks (don't re-run — just report)
 
-houserules' Stop hooks already enforce the auto-fix and changeset-nudge on every turn boundary. Do
-**not** re-run them. Only confirm the deterministic state they check:
+houserules' Stop hooks nudge for a changeset on every turn boundary, and with `fix.passPaths` on they
+fixed each turn's changed files. Do **not** re-run them. Only confirm the deterministic state they
+check:
 
 - **Changeset present** if the change is user-visible. `ls .changeset/*.md`, excluding README, shows a
   pending entry, or you record why none is needed.

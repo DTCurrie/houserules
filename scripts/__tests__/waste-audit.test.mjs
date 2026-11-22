@@ -6,7 +6,9 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
+  ABLATION_IDS,
   KIND_NAMES,
+  RULE_IDS,
   classify,
   readAgentType,
   summarize,
@@ -103,6 +105,81 @@ function withFirstRecordFields(text, fields) {
   );
 }
 
+const keepaliveCommand = readFileSync(
+  new URL(
+    '../../packages/cli/payload/agents/phase-orchestrator.md',
+    import.meta.url,
+  ),
+  'utf8',
+)
+  .split('\n')
+  .find((line) => line.startsWith('i=0; while'))
+  .replace('<sub-plan>', '.claude/plans/x/phase-3-plan-lint-checks.md');
+
+const toText = (records) =>
+  records.map((record) => JSON.stringify(record)).join('\n') + '\n';
+
+function lateStampedText() {
+  return toText([
+    userRecord(0, 'hi'),
+    assistantRecord(
+      1,
+      'msg_1',
+      [
+        {
+          type: 'tool_use',
+          id: 'tl1',
+          name: 'Read',
+          input: { file_path: '/r/a.ts' },
+        },
+      ],
+      USAGE,
+    ),
+    userRecord(2, [{ type: 'tool_result', tool_use_id: 'tl1', content: 'ok' }]),
+    { type: 'api-request', timestamp: iso(3) },
+    { type: 'attachment', timestamp: iso(60) },
+    assistantRecord(
+      61,
+      'msg_2',
+      [
+        {
+          type: 'tool_use',
+          id: 'tl2',
+          name: 'Read',
+          input: { file_path: '/r/b.ts' },
+        },
+      ],
+      USAGE,
+    ),
+    userRecord(62, [
+      { type: 'tool_result', tool_use_id: 'tl2', content: 'ok' },
+    ]),
+  ]);
+}
+
+function resumedCallText(leadRecord) {
+  return toText([
+    userRecord(0, 'hi'),
+    leadRecord,
+    assistantRecord(
+      3605,
+      'msg_r',
+      [
+        {
+          type: 'tool_use',
+          id: 'tr1',
+          name: 'Read',
+          input: { file_path: '/r/a.ts' },
+        },
+      ],
+      USAGE,
+    ),
+    userRecord(3610, [
+      { type: 'tool_result', tool_use_id: 'tr1', content: 'ok' },
+    ]),
+  ]);
+}
+
 function episodes(text, kind, fileName = '/t/session.jsonl') {
   const result = summarize([classify(text, fileName)]);
   return result.kinds.find((entry) => entry.kind === kind);
@@ -160,17 +237,6 @@ describe('rerun-unchanged', () => {
 
     assertNone(text, 'rerun-unchanged');
   });
-
-  const keepaliveCommand = readFileSync(
-    new URL(
-      '../../packages/cli/payload/agents/phase-orchestrator.md',
-      import.meta.url,
-    ),
-    'utf8',
-  )
-    .split('\n')
-    .find((line) => line.startsWith('i=0; while'))
-    .replace('<sub-plan>', '.claude/plans/x/phase-3-plan-lint-checks.md');
 
   it('rejects two identical keepalive launches in the background', () => {
     const launch = call('Bash', {
@@ -822,74 +888,10 @@ describe('totals', () => {
   });
 
   it('starts a request wall at the api-request after the last user record, not at a late-stamped attachment', () => {
-    const lateRecords = [
-      userRecord(0, 'hi'),
-      assistantRecord(
-        1,
-        'msg_1',
-        [
-          {
-            type: 'tool_use',
-            id: 'tl1',
-            name: 'Read',
-            input: { file_path: '/r/a.ts' },
-          },
-        ],
-        USAGE,
-      ),
-      userRecord(2, [
-        { type: 'tool_result', tool_use_id: 'tl1', content: 'ok' },
-      ]),
-      { type: 'api-request', timestamp: iso(3) },
-      { type: 'attachment', timestamp: iso(60) },
-      assistantRecord(
-        61,
-        'msg_2',
-        [
-          {
-            type: 'tool_use',
-            id: 'tl2',
-            name: 'Read',
-            input: { file_path: '/r/b.ts' },
-          },
-        ],
-        USAGE,
-      ),
-      userRecord(62, [
-        { type: 'tool_result', tool_use_id: 'tl2', content: 'ok' },
-      ]),
-    ];
-    const lateText =
-      lateRecords.map((record) => JSON.stringify(record)).join('\n') + '\n';
-
-    const result = summarize([classify(lateText, '/t/late.jsonl')]);
+    const result = summarize([classify(lateStampedText(), '/t/late.jsonl')]);
 
     assert.equal(result.totals.wallSeconds, 61);
   });
-
-  function resumedCallText(leadRecord) {
-    const records = [
-      userRecord(0, 'hi'),
-      leadRecord,
-      assistantRecord(
-        3605,
-        'msg_r',
-        [
-          {
-            type: 'tool_use',
-            id: 'tr1',
-            name: 'Read',
-            input: { file_path: '/r/a.ts' },
-          },
-        ],
-        USAGE,
-      ),
-      userRecord(3610, [
-        { type: 'tool_result', tool_use_id: 'tr1', content: 'ok' },
-      ]),
-    ];
-    return records.map((record) => JSON.stringify(record)).join('\n') + '\n';
-  }
 
   const resumedWall = (leadRecord) =>
     summarize([classify(resumedCallText(leadRecord), '/t/resumed.jsonl')])
@@ -927,8 +929,315 @@ describe('totals', () => {
   });
 });
 
+describe('classify with rules off', () => {
+  const subagentPath = '/p/sess/subagents/agent-1.jsonl';
+  const edit = call('Edit', { file_path: '/r/a.ts' });
+  const handback = step(call('SubagentHandback', { message: 'done' }));
+  const acceptance = 'pnpm --filter @houserules/cli test';
+  const report = `SLICE 1: DONE\nAcceptance\n$ ${acceptance}\n12 passed`;
+  const compound = `cd /r && ${acceptance}`;
+  const readA = call('Read', { file_path: '/r/a.ts', offset: 10, limit: 50 });
+  const launch = call('Bash', {
+    command: keepaliveCommand,
+    run_in_background: true,
+  });
+
+  const summaryOf = (text, fileName, rules) =>
+    summarize([classify(text, fileName, null, new Set(rules))]);
+  const countOf = (kind) => (text, fileName, rules) =>
+    summaryOf(text, fileName, rules).kinds.find((entry) => entry.kind === kind)
+      .count;
+  const callsOf = (kind) => (text, fileName, rules) =>
+    summaryOf(text, fileName, rules).kinds.find((entry) => entry.kind === kind)
+      .calls;
+  const totalWall = (text, fileName, rules) =>
+    summaryOf(text, fileName, rules).totals.wallSeconds;
+
+  const fixtures = [
+    {
+      name: 'a summary flagged isCompactSummary',
+      rule: 'compaction-ask',
+      measure: countOf('ask-to-act-gap'),
+      text: () =>
+        withFirstRecordFields(
+          transcript('Summary: the user asked to fix the parser.', [
+            ...reads(10),
+            step(edit),
+          ]),
+          { isCompactSummary: true },
+        ),
+      before: 1,
+      after: 0,
+    },
+    {
+      name: 'a continuation opener',
+      rule: 'compaction-ask',
+      measure: countOf('ask-to-act-gap'),
+      text: () =>
+        transcript(
+          'This session is being continued from a previous conversation that ran out of context. The user asked to fix the parser.',
+          [...reads(10), step(edit)],
+        ),
+      before: 1,
+      after: 0,
+    },
+    {
+      name: 'a gap a compaction boundary interrupts',
+      rule: 'compaction-ask',
+      measure: countOf('ask-to-act-gap'),
+      text: () =>
+        transcript('fix it', [
+          ...reads(5, 'before'),
+          boundary(),
+          ...reads(5, 'after'),
+          step(edit),
+        ]),
+      before: 1,
+      after: 0,
+    },
+    {
+      name: 'an api-request an hour after the user record',
+      rule: 'span-clock',
+      measure: totalWall,
+      text: () =>
+        resumedCallText({ type: 'api-request', timestamp: iso(3600) }),
+      before: 3610,
+      after: 10,
+    },
+    {
+      name: 'an api-request before a late-stamped attachment',
+      rule: 'span-clock',
+      measure: totalWall,
+      text: lateStampedText,
+      before: 62,
+      after: 61,
+    },
+    {
+      name: 'three Reads and a terminal SubagentHandback',
+      rule: 'terminal-handback',
+      measure: callsOf('small-agent'),
+      fileName: subagentPath,
+      text: () => transcript('go', [...reads(3), handback]),
+      before: 4,
+      after: 3,
+    },
+    {
+      name: 'four Reads and a terminal SubagentHandback',
+      rule: 'terminal-handback',
+      measure: countOf('small-agent'),
+      fileName: subagentPath,
+      text: () => transcript('go', [...reads(4), handback]),
+      before: 0,
+      after: 1,
+    },
+    {
+      name: 'four Reads and a terminal StructuredOutput',
+      rule: 'terminal-handback',
+      measure: countOf('small-agent'),
+      fileName: subagentPath,
+      text: () =>
+        transcript('go', [
+          ...reads(4),
+          step(call('StructuredOutput', { verdict: 'ok' })),
+        ]),
+      before: 0,
+      after: 1,
+    },
+    {
+      name: 'a Read repeated across a compaction boundary',
+      rule: 'reread-reset',
+      measure: countOf('reread-unchanged'),
+      text: () => transcript('hi', [step(readA), boundary(), step(readA)]),
+      before: 1,
+      after: 0,
+    },
+    {
+      name: 'a background task output file read twice',
+      rule: 'reread-reset',
+      measure: countOf('reread-unchanged'),
+      text: () => {
+        const readOutput = call('Read', {
+          file_path: '/private/tmp/claude-501/proj/tasks/b7f3k2.output',
+        });
+        return transcript('hi', [step(readOutput), step(readOutput)]);
+      },
+      before: 1,
+      after: 0,
+    },
+    {
+      name: 'a check the classifier blocked, then run',
+      rule: 'rerun-classifier-blocked',
+      measure: countOf('rerun-unchanged'),
+      text: () =>
+        transcript('hi', [
+          step(
+            call(
+              'Bash',
+              { command: acceptance },
+              'The server-side auto mode classifier gave no verdict (error), so auto mode cannot determine the safety of Bash.',
+            ),
+          ),
+          step(call('Bash', { command: acceptance })),
+        ]),
+      before: 1,
+      after: 0,
+    },
+    {
+      name: 'two identical keepalive launches in the background',
+      rule: 'rerun-keepalive',
+      measure: countOf('rerun-unchanged'),
+      text: () => transcript('hi', [step(launch), step(launch)]),
+      before: 1,
+      after: 0,
+    },
+    {
+      name: 'a compound command whose text before a grep sits in the report',
+      rule: 'acceptance-claims',
+      measure: countOf('acceptance-rerun-after-report'),
+      text: () =>
+        transcript('hi', [
+          step(
+            call(
+              'Agent',
+              { prompt: 'do it' },
+              `SLICE 1: DONE\nAcceptance\n$ ${compound}\n12 passed`,
+            ),
+          ),
+          step(call('Bash', { command: `${compound} | grep -E "pass|fail"` })),
+        ]),
+      before: 0,
+      after: 1,
+    },
+    {
+      name: 'a command quoted in a meta hand-back',
+      rule: 'acceptance-claims',
+      measure: countOf('acceptance-rerun-after-report'),
+      text: () =>
+        transcript('hi', [
+          metaNote(
+            `Another Claude session sent a message.\n<agent-message>[Subagent hand-back]\n${report}\n</agent-message>`,
+          ),
+          step(call('Bash', { command: acceptance })),
+        ]),
+      before: 0,
+      after: 1,
+    },
+    {
+      name: 'a rerun after a failing run that named no test',
+      rule: 'acceptance-claims',
+      measure: countOf('acceptance-rerun-after-report'),
+      text: () =>
+        transcript('hi', [
+          step(
+            call(
+              'Bash',
+              { command: `${acceptance} | tail -5` },
+              'Exit code 1\nℹ tests 3\nℹ fail 1',
+            ),
+          ),
+          step(call('Bash', { command: `${acceptance} | tail -40` })),
+        ]),
+      before: 0,
+      after: 1,
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    const fileName = fixture.fileName ?? '/t/session.jsonl';
+
+    it(`reports ${fixture.before} for ${fixture.name} with ${fixture.rule} off`, () => {
+      assert.equal(
+        fixture.measure(fixture.text(), fileName, [fixture.rule]),
+        fixture.before,
+      );
+    });
+
+    it(`reports ${fixture.after} for ${fixture.name} with every rule on`, () => {
+      assert.equal(
+        fixture.measure(fixture.text(), fileName, []),
+        fixture.after,
+      );
+    });
+
+    it(`reports ${fixture.before} for ${fixture.name} with all off`, () => {
+      assert.equal(
+        fixture.measure(fixture.text(), fileName, ['all']),
+        fixture.before,
+      );
+    });
+  }
+
+  it('runs every rule when called with no disabled ids', () => {
+    const text = transcript('hi', [step(launch), step(launch)]);
+
+    const result = classify(text, '/t/session.jsonl');
+
+    assert.deepEqual(result.kinds['rerun-unchanged'], []);
+  });
+
+  it('keeps the boundary reread reset with compaction-ask off', () => {
+    const text = transcript('hi', [step(readA), boundary(), step(readA)]);
+
+    assert.equal(
+      countOf('reread-unchanged')(text, '/t/session.jsonl', ['compaction-ask']),
+      0,
+    );
+  });
+
+  it('hands a call acceptance-claims claimed to rerun-unchanged once, within the total, with that rule off', () => {
+    const failing = 'Exit code 1\nℹ tests 3\nℹ fail 1';
+    const text = transcript('hi', [
+      step(call('Bash', { command: `${acceptance} | tail -5` }, failing)),
+      step(call('Bash', { command: `${acceptance} | tail -40` }, failing)),
+      step(call('Bash', { command: `${acceptance} | tail -5` })),
+    ]);
+
+    const result = summaryOf(text, '/t/session.jsonl', ['acceptance-claims']);
+
+    assert.deepEqual(
+      {
+        calls: Object.fromEntries(
+          result.kinds.map((entry) => [entry.kind, entry.calls]),
+        ),
+        kindCost: result.kinds.reduce(
+          (total, entry) => total + entry.costUsd,
+          0,
+        ),
+        totalCost: result.totals.costUsd,
+      },
+      {
+        calls: {
+          'rerun-unchanged': 1,
+          'reread-unchanged': 0,
+          'ask-to-act-gap': 0,
+          'acceptance-rerun-after-report': 0,
+          'grep-after-wireit-skip': 0,
+          'small-agent': 0,
+          'plan-read-before-write': 0,
+        },
+        kindCost: 3,
+        totalCost: 9,
+      },
+    );
+  });
+
+  it('names seven rules and ablates each, then all', () => {
+    assert.deepEqual(ABLATION_IDS, [
+      'compaction-ask',
+      'span-clock',
+      'terminal-handback',
+      'reread-reset',
+      'rerun-classifier-blocked',
+      'rerun-keepalive',
+      'acceptance-claims',
+      'all',
+    ]);
+    assert.deepEqual(RULE_IDS, ABLATION_IDS.slice(0, 7));
+  });
+});
+
 describe('cli', () => {
-  it('prints waste-audit@2 with every kind, and exits 2 with no input', () => {
+  it('prints waste-audit@3 with every kind, and exits 2 with no input', () => {
     const dir = mkdtempSync(join(tmpdir(), 'waste-audit-'));
     const file = join(dir, 'session.jsonl');
     writeFileSync(
@@ -951,7 +1260,7 @@ describe('cli', () => {
     });
     assert.equal(run.status, 0);
     const parsed = JSON.parse(run.stdout);
-    assert.equal(parsed.schema, 'waste-audit@2');
+    assert.equal(parsed.schema, 'waste-audit@3');
     assert.equal(parsed.sessions, 1);
     assert.deepEqual(
       parsed.kinds.map((entry) => entry.kind),
@@ -1009,5 +1318,74 @@ describe('cli', () => {
         costUsd: 12,
       },
     ]);
+  });
+
+  describe('--ablate', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'waste-audit-ablate-'));
+    const file = join(dir, 'session.jsonl');
+    const launch = call('Bash', {
+      command: keepaliveCommand,
+      run_in_background: true,
+    });
+    writeFileSync(file, transcript('hi', [step(launch), step(launch)]));
+    const runAudit = (...flags) => {
+      const run = spawnSync(process.execPath, [SCRIPT, ...flags, file], {
+        encoding: 'utf8',
+      });
+      assert.equal(run.status, 0, run.stderr);
+      return JSON.parse(run.stdout);
+    };
+    const plain = runAudit();
+    const ablated = runAudit('--ablate');
+
+    it('prints no ablation key without the flag', () => {
+      assert.deepEqual(Object.keys(plain), [
+        'schema',
+        'sessions',
+        'totals',
+        'unpricedModels',
+        'kinds',
+      ]);
+    });
+
+    it('keeps every top-level kind figure equal to the run without the flag', () => {
+      assert.deepEqual(ablated.kinds, plain.kinds);
+    });
+
+    it('prints one entry per rule id with each kind figure recomputed with that rule off', () => {
+      const rerunCounts = ablated.ablation.map((entry) => [
+        entry.rule,
+        entry.kinds.find((kind) => kind.kind === 'rerun-unchanged').count,
+      ]);
+
+      assert.deepEqual(rerunCounts, [
+        ['compaction-ask', 0],
+        ['span-clock', 0],
+        ['terminal-handback', 0],
+        ['reread-reset', 0],
+        ['rerun-classifier-blocked', 0],
+        ['rerun-keepalive', 1],
+        ['acceptance-claims', 0],
+        ['all', 1],
+      ]);
+    });
+
+    it('prints each ablated kind without its rule text or agent types', () => {
+      const smallAgent = ablated.ablation
+        .find((entry) => entry.rule === 'all')
+        .kinds.find((kind) => kind.kind === 'small-agent');
+
+      assert.deepEqual(Object.keys(smallAgent), [
+        'kind',
+        'count',
+        'calls',
+        'wallSeconds',
+        'inputTokens',
+        'outputTokens',
+        'costUsd',
+        'sessionsAffected',
+        'pointers',
+      ]);
+    });
   });
 });

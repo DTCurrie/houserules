@@ -275,6 +275,7 @@ describe('the per-extension fix-command gate', () => {
         runScriptPrefix: ['run'],
         commands: ['lint:fix', 'format:fix'],
         commandExtensions: { 'lint:fix': ['ts', 'tsx'] },
+        passPaths: true,
       };
       const targets = c.targets as Array<{ fixCommands?: string[] }>;
       for (const t of targets) delete t.fixCommands;
@@ -287,7 +288,9 @@ describe('the per-extension fix-command gate', () => {
     writeFileSync(join(root, 'games/cityville/NOTES.md'), '# notes\n');
     const r = runScript(root, SCRIPT, { input: '{}' });
     expect(r.status, r.stderr).toBe(0);
-    expect(recordedCalls(root)).toEqual(['--filter @fix/cityville format:fix']);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville format:fix -- NOTES.md',
+    ]);
   });
 
   it('runs a gated command when the edit touches one of its extensions', () => {
@@ -298,8 +301,8 @@ describe('the per-extension fix-command gate', () => {
     const r = runScript(root, SCRIPT, { input: '{}' });
     expect(r.status, r.stderr).toBe(0);
     expect(recordedCalls(root).sort()).toEqual([
-      '--filter @fix/cityville format:fix',
-      '--filter @fix/cityville lint:fix',
+      '--filter @fix/cityville format:fix -- src/game.ts',
+      '--filter @fix/cityville lint:fix -- src/game.ts',
     ]);
   });
 });

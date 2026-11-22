@@ -15,7 +15,7 @@ import { join } from 'node:path';
 export const PREPARE_COMMAND = 'houserules update --sync';
 
 /** The joiner used when appending {@link PREPARE_COMMAND} to an existing `prepare` script. */
-export const PREPARE_JOINER = ' && ';
+const PREPARE_JOINER = ' && ';
 
 /**
  * What planning found in the root `package.json`, and what applying would do.

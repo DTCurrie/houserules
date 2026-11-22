@@ -27,6 +27,10 @@
  *   fix.onSubagentStop                            opt back into per-subagent fixes
  *   fix.passPaths                                 append `-- <the turn's changed paths>` to each step
  *
+ * With fix.passPaths off the hook runs nothing and exits 0, since a whole-tree fix outlasts a
+ * Stop. With it on, a step whose path list outgrows the command-line budget is skipped with
+ * one stderr line, and the hook goes on to the next step.
+ *
  * A step whose script the target's package.json does not define is skipped with one stderr
  * notice, and the hook still exits 0.
  */
@@ -297,28 +301,19 @@ export function fixArgs(
 }
 
 /**
- * The argv for one step. A path list over {@link ARGV_PATH_BYTE_BUDGET} falls back to the
- * unscoped argv, and `isUnscoped` says so.
+ * The scoped argv for one step, or `null` when its path list outgrows
+ * {@link ARGV_PATH_BYTE_BUDGET} and the step has to be skipped.
  */
 export function stepArgv(
   [pkg, script, paths = []]: FixStep,
   settings: FixSettings,
-): { argv: string[]; isUnscoped: boolean } {
+): string[] | null {
   const bytes = paths.reduce(
     (sum, path) => sum + Buffer.byteLength(path) + ARGV_SEPARATOR_BYTES,
     0,
   );
-  const isUnscoped = bytes > ARGV_PATH_BYTE_BUDGET;
-  return {
-    argv: fixArgs(
-      pkg,
-      script,
-      settings.filterFlag,
-      settings.runPrefix,
-      isUnscoped ? [] : paths,
-    ),
-    isUnscoped,
-  };
+  if (bytes > ARGV_PATH_BYTE_BUDGET) return null;
+  return fixArgs(pkg, script, settings.filterFlag, settings.runPrefix, paths);
 }
 
 /** `paths` whose file still exists, so a path deleted during the turn is never passed. */
@@ -569,11 +564,13 @@ export async function runFixSteps(
     const [pkg, script] = step;
     const remaining = budgetMs - (now() - startedAt);
     if (remaining <= 0) return { errors, overrun: { pkg, step: script } };
-    const { argv, isUnscoped } = stepArgv(step, settings);
-    if (isUnscoped)
+    const argv = stepArgv(step, settings);
+    if (argv === null) {
       process.stderr.write(
-        `lint-format-fix: ${script} for ${pkg} had too many changed paths for one command line, so it ran unscoped.\n`,
+        `lint-format-fix: ${script} for ${pkg} had too many changed paths for one command line, so it was skipped.\n`,
       );
+      continue;
+    }
     const r = await runStep(argv, cwd, settings, remaining);
     if (r.timedOut) return { errors, overrun: { pkg, step: script } };
     if (!r.ok) errors.push({ pkg, step: script, output: r.output });
@@ -596,6 +593,8 @@ async function main(): Promise<void> {
   // buys nothing the parent's Stop doesn't: exit before spending the spawn.
   if (input.hook_event_name === 'SubagentStop' && !settings.onSubagentStop)
     process.exit(0);
+  // A whole-tree fix outlasts a Stop, so with passPaths off there is nothing to run.
+  if (!settings.passPaths) process.exit(0);
   if (
     Array.isArray(input.background_tasks) &&
     input.background_tasks.length > 0
@@ -608,10 +607,7 @@ async function main(): Promise<void> {
   const changed = changedPaths(cwd);
   const paths =
     startedAt === undefined ? changed : modifiedSince(changed, cwd, startedAt);
-  const planned = planFixSteps(
-    settings.passPaths ? existingPaths(paths, cwd) : paths,
-    settings,
-  );
+  const planned = planFixSteps(existingPaths(paths, cwd), settings);
   const { steps, notices } = skipMissingScripts(planned, cwd, settings);
   for (const notice of notices) process.stderr.write(notice);
   if (steps.length === 0) process.exit(0);

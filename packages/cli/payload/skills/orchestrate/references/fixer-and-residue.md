@@ -15,7 +15,7 @@ skill.
 ## Why the fixer belongs at the barrier
 
 A fixer run by one worker rewrites files its siblings still hold open, so the edits collide and N
-workers redo the same whole-repo pass N times. One run at the wave barrier (§7) is cleaner and
+workers redo the same pass N times. One run at the wave barrier (§7) is cleaner and
 cheaper, and `/tidy` is bound the same way because it also rewrites files. If houserules'
 `lint-fix` module is installed, confirm `fix.onSubagentStop` is not `true` in
 `.claude/houserules.config.json`. That setting fires the fixer at every worker's exit, which is
@@ -23,7 +23,7 @@ exactly the collision above.
 
 **That setting covers only half of it.** `fix.onSubagentStop` governs a WORKER's exit. A `Stop` hook
 fires at YOUR exit, and this pattern ends a turn every time you dispatch or review, with every
-worker still holding files open. So the repo-wide fixer runs against a tree mid-edit anyway, from the
+worker still holding files open. So the fixer runs against a tree mid-edit anyway, from the
 other direction. houserules' own `lint-format-fix.mjs` exits without running while the Stop
 payload's `background_tasks` is non-empty, and after a turn whose tool uses were all read-only.
 A dispatch-only or review-only turn no longer triggers it. Keep the warning for repos whose fix
@@ -40,11 +40,12 @@ Two consequences, and the second one matters more:
 
 ## Scoping and skipping in the fix hook
 
-`fix.passPaths` is off by default. Set it to `true` and `lint-format-fix.mjs` ends each fix step's
-argv with `--` and the paths the ended turn changed, package-relative in the filtered shape and
-root-relative in the repo-root shape. It is opt-in because a script such as `eslint . --fix` widens
-or errors on trailing paths. A path list too long for one command line falls back to the unscoped
-run, and the hook says so on stderr.
+`fix.passPaths` is off by default, and with it off `lint-format-fix.mjs` runs nothing at Stop, since
+a whole-tree fix outlasts a Stop. Set it to `true` and the hook ends each fix step's argv with `--`
+and the paths the ended turn changed, package-relative in the filtered shape and root-relative in the
+repo-root shape. It is opt-in because a script such as `eslint . --fix` widens or errors on trailing
+paths. A path list too long for one command line skips that step, and the hook says so with one
+stderr line.
 
 A fix step whose script is absent from the `package.json` it runs in is skipped. The hook prints one
 notice naming the script and the file, and still exits 0. `houserules doctor` warns about global

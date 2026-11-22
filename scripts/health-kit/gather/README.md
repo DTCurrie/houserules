@@ -20,6 +20,8 @@ that holds the installs:
 5. `node $K/agent-ledger.mjs --machine local --out $W/baseline/agent-ledger-local.json $P/<repo> $P/<repo2>`
 6. `node $K/check-agent-ledger.mjs --ledger $W/baseline/agent-ledger-local.json --reports $W/baseline --projects-root $P`
 7. `node $K/waste-audit.mjs --sessions $W/baseline/sessions.txt > $W/baseline/waste-audit.json`
+   Adding `--ablate` recomputes every kind's figures with each correction rule off in turn, for a
+   per-rule size of each rule's effect.
 8. `node $K/wait-timeline.mjs --sessions $W/baseline/sessions.txt --json $W/baseline/wait-timeline.json`
 9. `node $K/doc-conformance.mjs --repo <root> --issues $W/baseline/issues.json --before <capture-start> --json $W/baseline/doc-conformance.json`
 

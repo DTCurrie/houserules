@@ -139,7 +139,7 @@ const HouseConfigSchema = z.strictObject({
         .boolean()
         .optional()
         .describe(
-          'Append the paths the turn changed to each fix command, after `--`, filtered by commandExtensions. Package-relative per target, root-relative for a root command. Off by default: a script such as `eslint . --fix` widens or errors on trailing paths.',
+          'Run each fix command at Stop on only the paths the turn changed, appended after `--` and filtered by commandExtensions. Package-relative per target, root-relative for a root command. Off by default, and the Stop hook then runs nothing, since a whole-tree fix outlasts a Stop. Turn it on only with fix scripts that take paths: a script such as `eslint . --fix` widens or errors on trailing paths.',
         ),
     })
     .optional(),

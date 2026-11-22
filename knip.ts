@@ -16,7 +16,17 @@ const config: KnipConfig = {
         // The benchmark harness, documented in scripts/bench/README.md and invoked by hand as
         // `node scripts/bench/run.mjs`. Nothing in the workspace imports it.
         'scripts/bench/run.mjs',
+        // Field extractors, piped over ssh to another machine as single self-contained files.
+        // Nothing in the workspace imports them.
+        'scripts/bench/field-stop-runs.mjs',
+        'scripts/bench/field-repro.mjs',
+        // The paid behavioral check, documented in scripts/eval/README.md and invoked by hand as
+        // `node scripts/eval/run.mjs`. Nothing in the workspace imports it.
+        'scripts/eval/run.mjs',
       ],
+      // The eval's fixture repo, copied into a scratch directory for each paid session and never
+      // imported from this workspace.
+      ignore: ['scripts/eval/fixtures/**'],
     },
     'packages/cli': {
       entry: [

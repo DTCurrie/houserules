@@ -378,14 +378,18 @@ Three gather scripts write JSON whose shape lives in the script, not in a key li
 them reads this file at run time, and nothing checks their output against it. Each script's header
 comment states its shape, and a change to that shape bumps the version string in the script.
 
-- `waste-audit@2`, printed on stdout by `waste-audit.mjs`. `unpricedModels` lists each model the
+- `waste-audit@3`, printed on stdout by `waste-audit.mjs`. `unpricedModels` lists each model the
   report command's price table does not know. Requests from those models count as zero cost, so a
   non-empty list means the cost totals are understated. A request's span starts at the latest
   `api-request` record after its latest user record, or at that user record when none follows it.
   The `small-agent` entry, and no other, carries `agentTypes`, one
   `{ agentType, count, calls, wallSeconds, costUsd }` row per agent type. Version 2 also changed
   the `KIND_RULES` text of `ask-to-act-gap`, `reread-unchanged`, `rerun-unchanged`,
-  `acceptance-rerun-after-report`, and `small-agent`.
+  `acceptance-rerun-after-report`, and `small-agent`. Version 3 adds the `--ablate` flag, which
+  adds the `ablation` key of eight `{ rule, kinds }` entries. The first seven turn one correction
+  rule off each, in the order `compaction-ask`, `span-clock`, `terminal-handback`,
+  `reread-reset`, `rerun-classifier-blocked`, `rerun-keepalive`, and `acceptance-claims`. The
+  eighth, `all`, turns every rule off. Without the flag the output has no `ablation` key.
 - `doc-conformance@1`, written to `--json` by `doc-conformance.mjs`.
 - `wait-timeline@2`, written to `--json` by `wait-timeline.mjs`. Each `waits[]` element keeps
   `endedBy`, the event that ended the wait, beside `awaited`, the event the waiter was blocked on.

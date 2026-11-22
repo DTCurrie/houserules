@@ -7,3 +7,5 @@ import '../bench/__tests__/cli-suite.test.mjs';
 import '../bench/__tests__/scripts-suite.test.mjs';
 import '../bench/__tests__/run.test.mjs';
 import '../bench/__tests__/profile.test.mjs';
+import '../bench/__tests__/field-stop-runs.test.mjs';
+import '../bench/__tests__/field-repro.test.mjs';

@@ -39,8 +39,9 @@ export function defaultEnabled(ctx: Ctx): boolean {
 }
 
 /**
- * A Stop and SubagentStop hook that auto-fixes lint and format on changed packages and
- * surfaces only the unfixable residue.
+ * A Stop and SubagentStop hook that fixes lint and format on the files the turn changed and
+ * surfaces only the unfixable residue. It does so only with `fix.passPaths` on and fix scripts
+ * that take paths. Without the key it runs nothing, since a whole-tree fix outlasts a Stop.
  *
  * Stop is always wired. SubagentStop is wired only when `fix.onSubagentStop` is true,
  * because parallel subagents would each fix every changed package concurrently. Turning
@@ -51,7 +52,7 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
     script(
       id,
       'lint-format-fix.mjs',
-      'Stop hook: run fix commands on changed packages',
+      'Stop hook: fix the files each turn changed (needs fix.passPaths)',
     ),
   ];
 

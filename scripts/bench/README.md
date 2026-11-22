@@ -62,6 +62,41 @@ Each sample is charged the time until the next sample, so the startup gap before
 is not counted. Profiler overhead inflates every share a little, so read the shares and ignore the
 absolute milliseconds.
 
+## Scope cases
+
+The `hooks` suite also holds three cases that time the build's own `lint-format-fix` over a real
+tree, to show what `fix.passPaths` changes. They exist only when the build tree is not the live
+repository, so no case edits the build or this checkout. Each runs in a standalone git repository
+made from the build commit's tracked files, whose `node_modules` links into the build's. Every run
+restores that repository and leaves one formatting edit in one `.ts` file under a configured target.
+
+| Case                                | Fix commands                     | `passPaths` |
+| ----------------------------------- | -------------------------------- | ----------- |
+| `stop-lint-format-fix-scope-off`    | `lint:fix`, `format`             | off         |
+| `stop-lint-format-fix-scope-on`     | `lint:fix:paths`, `format:paths` | on          |
+| `stop-lint-format-fix-scope-on-dot` | `lint:fix`, `format`             | on          |
+
+`lint:fix` is `eslint . --fix` and `format` is `prettier --cache --write .`. The fixture's root
+`package.json` gains `lint:fix:paths` as `eslint --fix` and `format:paths` as
+`prettier --cache --write`. On-dot shows the widening the schema warns of.
+
+## Field scripts
+
+Two self-contained scripts, Node built-ins only, read a machine's real history instead of timing a
+fixture. Each runs from a file or piped over ssh. A shell that ssh starts for a command is not
+interactive and may skip the profile that puts `node` on the PATH. If the remote side answers
+`command not found: node`, name node by the full path `command -v node` prints on that machine.
+
+- `scripts/bench/field-stop-runs.mjs` reads Claude Code transcripts and writes every
+  `lint-format-fix` Stop run as `stop-runs@1` JSON Lines on stdout. It changes nothing.
+  - `node scripts/bench/field-stop-runs.mjs <repo>... [--projects-dir <dir>]`
+  - `node --input-type=module - <repo>... < scripts/bench/field-stop-runs.mjs`
+- `scripts/bench/field-repro.mjs` times the steps the fixer would plan for a dirty set, once each,
+  in check mode, and writes `fix-repro@1` JSON Lines. It changes no file in the checkout. Run it
+  from the checkout's root.
+  - `node scripts/bench/field-repro.mjs <path>...`
+  - `node --input-type=module - <path>... < scripts/bench/field-repro.mjs`
+
 ## Timing
 
 A node harness over `spawnSync`, timed with `process.hrtime.bigint()` around each spawn. `hyperfine`

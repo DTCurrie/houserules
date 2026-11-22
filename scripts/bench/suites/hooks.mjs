@@ -1,11 +1,14 @@
 import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
+  cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -29,6 +32,34 @@ const DIRTY_SOURCE = 'export const answer = 43;\n';
 
 // Stands in for the fixer: the hooks run `pnpm run lint:fix` and `format`, which here do nothing.
 const NO_OP_FIX_SCRIPT = 'node -e 0';
+
+const BUILD_MARKER = '.bench-build.json';
+const GIT_MAX_BUFFER = 256 * 1024 * 1024;
+const SKIPPED_MODULES_ENTRY = '.cache';
+
+// A source file the scope cases edit: a tracked `.ts` directly under some `packages/<name>/src/`.
+const SCOPE_SOURCE_RE = /^packages\/([^/]+)\/src\/(?!.*\.d\.ts$)[^/]+\.ts$/;
+const SCOPE_HOOK_COMMAND =
+  'exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/lint-format-fix.mjs"';
+const SCOPE_EDIT_DIRTY = 'export const   benchScope  =  1 ;';
+const SCOPE_TIMEOUT_MS = 300_000;
+
+// `off` runs this repo's whole-tree scripts, `on` the path-taking ones, and `on-dot` the whole-tree
+// scripts with `passPaths` on, which is the widening the schema warns of.
+const SCOPE_ARMS = [
+  { name: 'off', commands: ['lint:fix', 'format'], passPaths: false },
+  {
+    name: 'on',
+    commands: ['lint:fix:paths', 'format:paths'],
+    passPaths: true,
+  },
+  { name: 'on-dot', commands: ['lint:fix', 'format'], passPaths: true },
+];
+
+const SCOPE_PATH_SCRIPTS = {
+  'lint:fix:paths': 'eslint --fix',
+  'format:paths': 'prettier --cache --write',
+};
 
 const BACKLOG_ID = 'BENCH-a1b2c3';
 
@@ -305,5 +336,178 @@ export async function cases({ root, repoDir, workDir }) {
   );
   const hooks = wiredHooks(settings);
   const fixture = prepareFixture({ root, workDir, hooks });
-  return hooks.flatMap((hook) => casesForHook(hook, fixture));
+  const hookCases = hooks.flatMap((hook) => casesForHook(hook, fixture));
+  if (root === repoDir) return hookCases;
+  return [...hookCases, ...scopeCases({ root, repoDir, workDir })];
+}
+
+function scopeConfig(arm, targetName) {
+  return {
+    ...CONFIG,
+    fix: { ...CONFIG.fix, commands: arm.commands, passPaths: arm.passPaths },
+    targets: [
+      {
+        name: targetName,
+        prefix: 'SCOPE',
+        packageName: `@bench/${targetName}`,
+        pathPrefix: `packages/${targetName}/`,
+        sourcePath: `packages/${targetName}/src`,
+        label: 'Scope',
+        verifyCommands: [],
+      },
+    ],
+  };
+}
+
+/** The paths tracked at the build's commit, read from `repoDir`, since a cached build's own `.git` is pruned. */
+function trackedPaths(root, repoDir) {
+  const { commit } = JSON.parse(readFileSync(join(root, BUILD_MARKER), 'utf8'));
+  const result = spawnSync(
+    'git',
+    ['-C', repoDir, 'ls-tree', '-r', '-z', '--name-only', commit],
+    { encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER },
+  );
+  if (result.status !== 0)
+    throw new Error(
+      `hooks suite: git ls-tree ${commit} failed in ${repoDir}: ${result.stderr}`,
+    );
+  return result.stdout.split('\0').filter(Boolean);
+}
+
+function linkEntries(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const entry of readdirSync(from))
+    if (entry !== SKIPPED_MODULES_ENTRY)
+      symlinkSync(join(from, entry), join(to, entry));
+}
+
+/** Copies each tracked file that exists in `root` into `scope`, then adds the scope scripts to its package.json. */
+function copyTrackedFiles(root, scope, tracked) {
+  for (const path of tracked) {
+    const from = join(root, path);
+    if (!lstatSync(from, { throwIfNoEntry: false })) continue;
+    mkdirSync(dirname(join(scope, path)), { recursive: true });
+    cpSync(from, join(scope, path), { verbatimSymlinks: true });
+  }
+  const rootPackage = JSON.parse(
+    readFileSync(join(scope, 'package.json'), 'utf8'),
+  );
+  rootPackage.scripts = { ...rootPackage.scripts, ...SCOPE_PATH_SCRIPTS };
+  write(join(scope, 'package.json'), json(rootPackage));
+}
+
+function linkNodeModules(root, scope, tracked) {
+  if (existsSync(join(root, 'node_modules')))
+    linkEntries(join(root, 'node_modules'), join(scope, 'node_modules'));
+  for (const path of tracked.filter((trackedPath) =>
+    trackedPath.endsWith('/package.json'),
+  )) {
+    const packageDir = dirname(path);
+    const modules = join(root, packageDir, 'node_modules');
+    if (existsSync(modules))
+      symlinkSync(modules, join(scope, packageDir, 'node_modules'));
+  }
+}
+
+function commitFixture(scope, env) {
+  git(scope, ['config', 'user.name', 'bench'], env);
+  git(scope, ['config', 'user.email', 'bench@example.invalid'], env);
+  git(scope, ['add', '-A'], env);
+  git(scope, ['commit', '-q', '-m', 'fixture'], env);
+}
+
+/**
+ * Makes a standalone git repository at `scope` from the build commit's tracked files, copied
+ * out of `root`. Its root `node_modules` is a real directory of links into the build's, and each
+ * package's `node_modules` is a link, so the toolchain runs as it does here while a cache file
+ * lands in the fixture. Nothing is written under `root`.
+ */
+function buildScopeRepo({ root, repoDir, scope, env }) {
+  const tracked = trackedPaths(root, repoDir);
+  copyTrackedFiles(root, scope, tracked);
+
+  const editPath = tracked.find((path) => SCOPE_SOURCE_RE.test(path));
+  if (!editPath)
+    throw new Error(
+      `hooks suite: no tracked packages/<name>/src/*.ts to edit in ${root}`,
+    );
+
+  git(scope, ['init', '-q', '-b', 'main'], env);
+  // A package's `node_modules` is a symlink, which a `node_modules/` pattern does not match.
+  write(join(scope, '.git/info/exclude'), 'node_modules\n.claude/\n');
+  linkNodeModules(root, scope, tracked);
+  installScripts(root, ['lint-format-fix'], join(scope, '.claude/scripts'));
+  commitFixture(scope, env);
+  return { editPath, targetName: SCOPE_SOURCE_RE.exec(editPath)[1] };
+}
+
+/** One scope case, which runs the build's fixer over `scope` with `arm`'s settings after a restore and a dirty edit. */
+function scopeCase(
+  arm,
+  { scope, env, stdin, editPath, targetName, originalSource },
+) {
+  return {
+    name: `stop-lint-format-fix-scope-${arm.name}`,
+    command: '/bin/sh',
+    args: ['-c', SCOPE_HOOK_COMMAND],
+    cwd: scope,
+    env,
+    stdin,
+    expectExit: [0],
+    timeoutMs: SCOPE_TIMEOUT_MS,
+    beforeEach: () => {
+      git(scope, ['reset', '-q', '--hard', 'HEAD'], env);
+      git(scope, ['clean', '-fdq'], env);
+      rmSync(join(scope, '.claude/state'), { recursive: true, force: true });
+      write(
+        join(scope, '.claude/houserules.config.json'),
+        json(scopeConfig(arm, targetName)),
+      );
+      writeFileSync(
+        join(scope, editPath),
+        `${originalSource}\n${SCOPE_EDIT_DIRTY}\n`,
+      );
+    },
+  };
+}
+
+/**
+ * Three cases that run the build's own `lint-format-fix` over a real tree, to time what
+ * `fix.passPaths` changes. The tree is a standalone git repository under `workDir`, so no case
+ * edits `root`, its `node_modules`, or the live repository. Each run restores the repository and
+ * leaves one formatting edit in a `.ts` file under the configured target, after the transcript's
+ * prompt.
+ *
+ * @param {{ root: string, repoDir: string, workDir: string }} context `root` must not be `repoDir`.
+ */
+export function scopeCases({ root, repoDir, workDir }) {
+  if (root === repoDir)
+    throw new Error(
+      'hooks suite: scope cases need a build tree, not the live repository',
+    );
+  const scope = join(workDir, 'scope');
+  const home = join(workDir, 'scope-home');
+  const transcript = join(workDir, 'scope-transcript.jsonl');
+  mkdirSync(home, { recursive: true });
+  copyFileSync(join(FIXTURES, 'transcript.jsonl'), transcript);
+  const env = hookCaseEnv(home, scope);
+  const { editPath, targetName } = buildScopeRepo({
+    root,
+    repoDir,
+    scope,
+    env,
+  });
+  const originalSource = readFileSync(join(scope, editPath), 'utf8');
+  const stdin = payloadFor('Stop', scope, transcript);
+
+  return SCOPE_ARMS.map((arm) =>
+    scopeCase(arm, {
+      scope,
+      env,
+      stdin,
+      editPath,
+      targetName,
+      originalSource,
+    }),
+  );
 }

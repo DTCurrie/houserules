@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * Classifies the tool calls in Claude Code transcripts into seven waste kinds and prints one
- * `waste-audit@2` JSON object on stdout.
+ * `waste-audit@3` JSON object on stdout.
  *
- * Usage: node waste-audit.mjs [--sessions <sessions.txt>] [<transcript.jsonl> ...]
+ * Usage: node waste-audit.mjs [--ablate] [--sessions <sessions.txt>] [<transcript.jsonl> ...]
  *
  * `--sessions` reads the baseline list: `#` lines are comments, every other line is
  * `path<TAB>bytes<TAB>last-write[<TAB>note]`. A file named `journal.jsonl` is skipped.
@@ -20,6 +20,11 @@
  * `{ agentType, count, calls, wallSeconds, costUsd }` per distinct agent type, `null` apart,
  * ranked by cost. The type is the `agentType` of the `.meta.json` beside each transcript whose
  * path has a `subagents` segment.
+ * `--ablate` adds the `ablation` key: one `{ rule, kinds }` entry per correction rule, in the
+ * order `compaction-ask`, `span-clock`, `terminal-handback`, `reread-reset`,
+ * `rerun-classifier-blocked`, `rerun-keepalive`, `acceptance-claims`, and `all`, which turns
+ * every rule off. Each `kinds` element holds a kind's figures and pointers recomputed with that
+ * rule off, and no `rule` or `agentTypes` field. Without the flag the output has no `ablation` key.
  *
  * Exit codes: 0 printed, 2 no input. Reads the named files and each subagent transcript's
  * `.meta.json` sibling only, and writes stdout only.
@@ -32,7 +37,7 @@ import { lookupModelPrice } from '../../../packages/cli/dist/commands/report/mod
 import { isCompactionRecord } from './compaction.mjs';
 import { isKeepaliveCommand } from './keepalive.mjs';
 
-const SCHEMA_VERSION = 'waste-audit@2';
+const SCHEMA_VERSION = 'waste-audit@3';
 
 const CACHE_WRITE_5M_MULTIPLE = 1.25;
 const CACHE_WRITE_1H_MULTIPLE = 2;
@@ -99,6 +104,21 @@ const KIND_RULES = {
 
 export const KIND_NAMES = Object.keys(KIND_RULES);
 
+/** The correction rules `--ablate` turns off one at a time. */
+export const RULE_IDS = [
+  'compaction-ask',
+  'span-clock',
+  'terminal-handback',
+  'reread-reset',
+  'rerun-classifier-blocked',
+  'rerun-keepalive',
+  'acceptance-claims',
+];
+const ALL_RULES = 'all';
+/** The `ablation` entries in print order: each rule alone, then every rule at once. */
+export const ABLATION_IDS = [...RULE_IDS, ALL_RULES];
+const NO_RULES_OFF = new Set();
+
 const normalize = (text) => text.replace(/\s+/g, ' ').trim();
 
 function resultText(content) {
@@ -138,7 +158,11 @@ function requestCost(usage, model, unpriced) {
 }
 
 /** Reads one transcript into a call list, a request map, and an ordered event list. */
-function parseTranscript(text) {
+function parseTranscript(text, off) {
+  const isClockOn = !off.has('span-clock');
+  const isAskResetOn = !off.has('compaction-ask');
+  const readsCompaction = isAskResetOn || !off.has('reread-reset');
+  const keepsHandback = !off.has('acceptance-claims');
   const calls = [];
   const events = [];
   const requests = new Map();
@@ -160,15 +184,17 @@ function parseTranscript(text) {
     const lineNumber = lineIndex + 1;
     const timestampMs = Date.parse(record.timestamp ?? '');
     const message = record.message;
-    if (isCompactionRecord(record)) {
-      events.push({ type: 'compaction', line: lineNumber });
-    } else if (record.type === 'assistant' && message) {
+    const isCompaction = readsCompaction && isCompactionRecord(record);
+    if (isCompaction) events.push({ type: 'compaction', line: lineNumber });
+    // With compaction-ask off, a compaction record also parses as the message it was before.
+    const isMessage = !isCompaction || !isAskResetOn;
+    if (isMessage && record.type === 'assistant' && message) {
       const key = message.id ?? `line:${lineNumber}`;
       let request = requests.get(key);
       if (!request) {
         request = {
           startTimestampMs:
-            lastApiRequestTimestampMs ??
+            (isClockOn ? lastApiRequestTimestampMs : undefined) ??
             lastUserTimestampMs ??
             previousTimestampMs ??
             timestampMs,
@@ -205,7 +231,7 @@ function parseTranscript(text) {
         callById.set(call.id, call);
         events.push({ type: 'call', call });
       }
-    } else if (record.type === 'user' && message) {
+    } else if (isMessage && record.type === 'user' && message) {
       const content = message.content;
       const texts = [];
       if (typeof content === 'string') texts.push(content);
@@ -231,7 +257,11 @@ function parseTranscript(text) {
       const text = texts.join('\n');
       if (texts.length > 0 && record.isMeta !== true)
         events.push({ type: 'user', text, line: lineNumber });
-      else if (texts.length > 0 && text.includes(HANDBACK_MARKER))
+      else if (
+        keepsHandback &&
+        texts.length > 0 &&
+        text.includes(HANDBACK_MARKER)
+      )
         events.push({ type: 'handback', text, line: lineNumber });
     }
     if (Number.isFinite(timestampMs)) {
@@ -286,13 +316,15 @@ const isKeepaliveLaunch = (call) =>
   call.input.run_in_background === true &&
   isKeepaliveCommand(call.input.command);
 
-function findRerunUnchanged({ events }) {
+function findRerunUnchanged({ parsed: { events }, off }) {
+  const isBlockSkipOn = !off.has('rerun-classifier-blocked');
+  const isKeepaliveSkipOn = !off.has('rerun-keepalive');
   const episodes = [];
   const blocked = new Set();
   const firstRunOf = new Map();
   for (const event of events) {
     if (event.type === 'result') {
-      if (!isClassifierBlock(event)) continue;
+      if (!isBlockSkipOn || !isClassifierBlock(event)) continue;
       blocked.add(event.call.index);
       const command = bashCommand(event.call);
       if (firstRunOf.get(command) === event.call) firstRunOf.delete(command);
@@ -306,7 +338,7 @@ function findRerunUnchanged({ events }) {
     }
     const command = bashCommand(call);
     if (command === undefined || !CHECK_COMMAND.test(command)) continue;
-    if (isKeepaliveLaunch(call)) continue;
+    if (isKeepaliveSkipOn && isKeepaliveLaunch(call)) continue;
     if (firstRunOf.has(command))
       episodes.push({ calls: [call], line: call.line });
     else firstRunOf.set(command, call);
@@ -314,12 +346,13 @@ function findRerunUnchanged({ events }) {
   return episodes.filter((episode) => !blocked.has(episode.calls[0].index));
 }
 
-function findRereadUnchanged({ events }) {
+function findRereadUnchanged({ parsed: { events }, off }) {
+  const isResetOn = !off.has('reread-reset');
   const episodes = [];
   const reads = new Map();
   for (const event of events) {
     if (event.type === 'compaction') {
-      reads.clear();
+      if (isResetOn) reads.clear();
       continue;
     }
     if (event.type !== 'call') continue;
@@ -331,7 +364,8 @@ function findRereadUnchanged({ events }) {
       continue;
     }
     if (call.name !== 'Read') continue;
-    if (TASK_OUTPUT_PATH.test(call.input.file_path ?? '')) continue;
+    if (isResetOn && TASK_OUTPUT_PATH.test(call.input.file_path ?? ''))
+      continue;
     const key = `${call.input.file_path}${READ_KEY_SEPARATOR}${call.input.offset ?? ''}${READ_KEY_SEPARATOR}${call.input.limit ?? ''}`;
     if (reads.has(key)) episodes.push({ calls: [call], line: call.line });
     reads.set(key, true);
@@ -343,13 +377,14 @@ const isMutating = (call) =>
   isWrite(call) ||
   (call.name === 'Bash' && MUTATING_BASH.test(call.input.command ?? ''));
 
-function findAskToActGap({ events }, fileName) {
+function findAskToActGap({ parsed: { events }, fileName, off }) {
   if (SUBAGENT_PATH.test(fileName)) return [];
+  const isAskResetOn = !off.has('compaction-ask');
   const episodes = [];
   let pending;
   for (const event of events) {
     if (event.type === 'compaction') {
-      pending = undefined;
+      if (isAskResetOn) pending = undefined;
       continue;
     }
     if (event.type === 'user') {
@@ -377,12 +412,12 @@ function findAskToActGap({ events }, fileName) {
 
 const withoutPipeFilters = (command) => normalize(command.split(PIPE)[0]);
 
-const isReport = (event) =>
+const isReport = (event, isClaimsOn) =>
   (event.type === 'result' && REPORT_TOOLS.has(event.call.name)) ||
   event.type === 'handback' ||
   (event.type === 'user' &&
     (event.text.includes('<task-notification>') ||
-      event.text.includes(HANDBACK_MARKER)));
+      (isClaimsOn && event.text.includes(HANDBACK_MARKER))));
 
 const isUnnamedFailure = (text) =>
   FAILED_RESULT.test(text) && !NAMED_FAILURE.test(text);
@@ -391,12 +426,13 @@ const isUnnamedFailure = (text) =>
  * Claims a run of a command the last worker report quotes, and a rerun after a failing run that
  * named no test. Both compare the command's text before its first pipe.
  */
-function findAcceptanceRerun({ events }) {
+function findAcceptanceRerun({ parsed: { events }, off }) {
+  const isClaimsOn = !off.has('acceptance-claims');
   const episodes = [];
   let report;
   const unnamedFailureSinceWrite = new Map();
   for (const event of events) {
-    if (isReport(event)) {
+    if (isReport(event, isClaimsOn)) {
       report = normalize(event.text);
       continue;
     }
@@ -421,12 +457,13 @@ function findAcceptanceRerun({ events }) {
     }
     const command = bashCommand(call);
     if (command === undefined) continue;
-    const stripped = withoutPipeFilters(command);
+    const stripped = isClaimsOn ? withoutPipeFilters(command) : command;
     const isReportRerun =
       report !== undefined &&
       stripped.length >= MIN_VERBATIM_COMMAND_LENGTH &&
       report.includes(stripped);
     const isBlindRerun =
+      isClaimsOn &&
       CHECK_COMMAND.test(stripped) &&
       unnamedFailureSinceWrite.get(stripped) === true;
     if (isReportRerun || isBlindRerun)
@@ -435,7 +472,7 @@ function findAcceptanceRerun({ events }) {
   return episodes;
 }
 
-function findGrepAfterWireitSkip({ events }) {
+function findGrepAfterWireitSkip({ parsed: { events } }) {
   const episodes = [];
   let sinceSkip = Infinity;
   for (const event of events) {
@@ -463,11 +500,13 @@ function findGrepAfterWireitSkip({ events }) {
   return episodes;
 }
 
-function findSmallAgent(parsed, fileName, agentType) {
+function findSmallAgent({ parsed, fileName, agentType, off }) {
   if (!SUBAGENT_PATH.test(fileName)) return [];
   const lastCall = parsed.calls.at(-1);
   const workCalls =
-    lastCall && TERMINAL_TOOLS.has(lastCall.name)
+    !off.has('terminal-handback') &&
+    lastCall &&
+    TERMINAL_TOOLS.has(lastCall.name)
       ? parsed.calls.slice(0, -1)
       : parsed.calls;
   if (workCalls.length >= SMALL_AGENT_MAX_CALLS) return [];
@@ -496,7 +535,7 @@ function findSmallAgent(parsed, fileName, agentType) {
   ];
 }
 
-function findPlanReadBeforeWrite({ events }) {
+function findPlanReadBeforeWrite({ parsed: { events } }) {
   let hasPlanProjectFired = false;
   let between = [];
   for (const event of events) {
@@ -552,11 +591,18 @@ const FINDERS = {
  * segment marks a subagent transcript.
  * @param agentType The subagent's type, as `readAgentType` returns it. Each `small-agent`
  * episode carries it as `agentType`.
+ * @param disabledRules The `RULE_IDS` to turn off, or `all` for every one. Empty runs every rule.
  * @returns Per-file totals and, per kind, the episodes with their attributed cost.
  */
-export function classify(text, fileName, agentType = null) {
+export function classify(
+  text,
+  fileName,
+  agentType = null,
+  disabledRules = NO_RULES_OFF,
+) {
+  const off = disabledRules.has(ALL_RULES) ? new Set(RULE_IDS) : disabledRules;
   const unpriced = new Set();
-  const parsed = parseTranscript(text);
+  const parsed = parseTranscript(text, off);
   attribute(parsed, unpriced);
   const totals = { calls: parsed.calls.length, wallSeconds: 0, costUsd: 0 };
   for (const call of parsed.calls) {
@@ -571,7 +617,7 @@ export function classify(text, fileName, agentType = null) {
   ]) {
     const kept = [];
     const claims = CLAIM_ORDER.includes(kind);
-    for (const episode of FINDERS[kind](parsed, fileName, agentType)) {
+    for (const episode of FINDERS[kind]({ parsed, fileName, agentType, off })) {
       if (!claims) {
         kept.push(episode);
         continue;
@@ -647,7 +693,7 @@ function agentTypeShares(episodes) {
 }
 
 /**
- * Folds per-file classifications into the `waste-audit@2` document. The `small-agent` kind
+ * Folds per-file classifications into the `waste-audit@3` document. The `small-agent` kind
  * entry, and no other, carries `agentTypes`, one `{ agentType, count, calls, wallSeconds,
  * costUsd }` per distinct agent type with `null` as its own element, sorted by cost descending.
  */
@@ -749,13 +795,29 @@ function parseSessionsList(text) {
     .map((line) => line.split('\t')[0]);
 }
 
+/** Keeps a summarized kind's figures and pointers, without its `rule` or `agentTypes`. */
+const ablatedFigures = (entry) => ({
+  kind: entry.kind,
+  count: entry.count,
+  calls: entry.calls,
+  wallSeconds: entry.wallSeconds,
+  inputTokens: entry.inputTokens,
+  outputTokens: entry.outputTokens,
+  costUsd: entry.costUsd,
+  sessionsAffected: entry.sessionsAffected,
+  pointers: entry.pointers,
+});
+
 const USAGE =
-  'Usage: node waste-audit.mjs [--sessions <sessions.txt>] [<transcript.jsonl> ...]';
+  'Usage: node waste-audit.mjs [--ablate] [--sessions <sessions.txt>] [<transcript.jsonl> ...]';
 
 function main(argv) {
   const paths = [];
+  let isAblating = false;
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--sessions') {
+    if (argv[i] === '--ablate') {
+      isAblating = true;
+    } else if (argv[i] === '--sessions') {
       const listFile = argv[i + 1];
       if (!listFile) {
         console.error(USAGE);
@@ -775,6 +837,9 @@ function main(argv) {
     return 2;
   }
   const results = [];
+  const ablated = new Map(
+    (isAblating ? ABLATION_IDS : []).map((rule) => [rule, []]),
+  );
   for (const path of transcripts) {
     let text;
     try {
@@ -783,15 +848,18 @@ function main(argv) {
       console.error(`skipped ${path}: ${error.message}`);
       continue;
     }
-    results.push(
-      classify(
-        text,
-        path,
-        SUBAGENT_PATH.test(path) ? readAgentType(path) : null,
-      ),
-    );
+    const agentType = SUBAGENT_PATH.test(path) ? readAgentType(path) : null;
+    results.push(classify(text, path, agentType));
+    for (const [rule, ruleResults] of ablated)
+      ruleResults.push(classify(text, path, agentType, new Set([rule])));
   }
-  console.log(JSON.stringify(summarize(results), null, 2));
+  const output = summarize(results);
+  if (isAblating)
+    output.ablation = [...ablated].map(([rule, ruleResults]) => ({
+      rule,
+      kinds: summarize(ruleResults).kinds.map(ablatedFigures),
+    }));
+  console.log(JSON.stringify(output, null, 2));
   return 0;
 }
 
