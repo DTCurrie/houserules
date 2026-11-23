@@ -1,5 +1,11 @@
 # @houserules/test
 
+## 0.1.4
+
+### Patch Changes
+
+- 960b086: Fixture repos copy a template committed once per run, and cleanup retries.
+
 ## 0.1.3
 
 ### Patch Changes

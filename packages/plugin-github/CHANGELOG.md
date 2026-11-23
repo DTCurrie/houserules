@@ -1,5 +1,11 @@
 # @houserules/plugin-github
 
+## 0.2.7
+
+### Patch Changes
+
+- 960b086: A push lock makes a burst of session-end hooks drain the ledger sync queue once.
+
 ## 0.2.6
 
 ### Patch Changes

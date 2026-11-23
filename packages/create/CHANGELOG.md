@@ -1,5 +1,38 @@
 # @houserules/create
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [b349bee]
+- Updated dependencies [577ec59]
+- Updated dependencies [960b086]
+- Updated dependencies [960b086]
+- Updated dependencies [960b086]
+- Updated dependencies [1deb8dc]
+- Updated dependencies [960b086]
+- Updated dependencies [d5b8480]
+- Updated dependencies [960b086]
+- Updated dependencies [960b086]
+- Updated dependencies [d031728]
+- Updated dependencies [960b086]
+- Updated dependencies [577ec59]
+- Updated dependencies [d031728]
+- Updated dependencies [960b086]
+- Updated dependencies [960b086]
+- Updated dependencies [1deb8dc]
+- Updated dependencies [960b086]
+- Updated dependencies [960b086]
+- Updated dependencies [1deb8dc]
+- Updated dependencies [960b086]
+- Updated dependencies [960b086]
+- Updated dependencies [960b086]
+- Updated dependencies [d031728]
+- Updated dependencies [1688ed9]
+- Updated dependencies [1deb8dc]
+- Updated dependencies [960b086]
+  - @houserules/cli@0.17.0
+
 ## 0.1.7
 
 ### Patch Changes

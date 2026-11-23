@@ -1,5 +1,29 @@
 # @houserules/api
 
+## 0.10.0
+
+### Minor Changes
+
+- 960b086: `houserules eject` takes ownership of an installed file, `eject --undo` gives it back, and `rules.<id>.paths` overrides a rule's globs.
+- 960b086: The installed payload is gitignored by default, and `payload.commit` keeps it tracked.
+- d5b8480: verify-changed `--run` starts independent package jobs together, and `verify.concurrent: false` restores the serial order.
+- 1deb8dc: Add `verify-changed --paths` and `--full`, a who-verifies table, and `verify.relatedCommand` file-level tests, which worker loops use unless `orchestrate.fileLevelAcceptance` is false.
+- 960b086: Session start prints the kit version and a daily notice of a newer release, which `versionCheck` turns off.
+
+### Patch Changes
+
+- 960b086: A SessionStart hook syncs the install to the pinned CLI version.
+- 960b086: `houserules update` migrates an install with a committed payload to the ignored layout.
+- 960b086: `init` turns `fix.passPaths` on when the fix scripts take paths.
+- Updated dependencies [1deb8dc]
+- Updated dependencies [960b086]
+- Updated dependencies [d5b8480]
+- Updated dependencies [577ec59]
+- Updated dependencies [960b086]
+- Updated dependencies [1deb8dc]
+- Updated dependencies [1deb8dc]
+  - @houserules/payload@0.7.0
+
 ## 0.9.0
 
 ### Minor Changes
