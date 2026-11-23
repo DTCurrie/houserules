@@ -1,5 +1,20 @@
 # @houserules/payload
 
+## 0.7.0
+
+### Minor Changes
+
+- 1deb8dc: Add `plan-state.mjs` (`show`, `set`) and `plan-scaffold.mjs`, which creates a plan workspace that passes plan-lint.
+- d5b8480: verify-changed `--run` starts independent package jobs together, and `verify.concurrent: false` restores the serial order.
+- 577ec59: Orchestrate briefs cap each worker test pool at a wave share, which `wave-ceiling.mjs` now computes at two workers per core.
+- 960b086: `wave-ceiling.mjs` prints a script `budget` and `share` from a new `resource-budget` lib, and takes `--workers`.
+- 1deb8dc: Add `verify-changed --paths` and `--full`, a who-verifies table, and `verify.relatedCommand` file-level tests, which worker loops use unless `orchestrate.fileLevelAcceptance` is false.
+- 1deb8dc: Research module adds a research-orchestrator, thread-scoped researchers, `fetch-batch`, JSONL records, and `check-findings --verify-urls` on the host turndown.
+
+### Patch Changes
+
+- 960b086: Hooks find the repo root by walking up to `.git` instead of spawning git.
+
 ## 0.6.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @houserules/plugin-svelte
 
+## 0.3.0
+
+### Minor Changes
+
+- d031728: The `svelte` module installs `svelte-reviewer`, a read-only agent that reviews one Svelte file with the autofixer and the Svelte rules.
+
 ## 0.2.2
 
 ### Patch Changes

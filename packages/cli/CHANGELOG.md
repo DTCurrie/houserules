@@ -1,5 +1,55 @@
 # @houserules/cli
 
+## 0.17.0
+
+### Minor Changes
+
+- 960b086: `houserules eject` takes ownership of an installed file, `eject --undo` gives it back, and `rules.<id>.paths` overrides a rule's globs.
+- 960b086: The installed payload is gitignored by default, and `payload.commit` keeps it tracked.
+- 1deb8dc: Add `plan-state.mjs` (`show`, `set`) and `plan-scaffold.mjs`, which creates a plan workspace that passes plan-lint.
+- 960b086: The `houserules report` Bash wall section gains an `unscoped calls` column.
+- d5b8480: verify-changed `--run` starts independent package jobs together, and `verify.concurrent: false` restores the serial order.
+- 960b086: A SessionStart hook syncs the install to the pinned CLI version.
+- d031728: The reviewers module installs a read-only diff-reviewer agent that `/orchestrate` runs at large wave barriers and at phase close.
+- 577ec59: Orchestrate briefs cap each worker test pool at a wave share, which `wave-ceiling.mjs` now computes at two workers per core.
+- 960b086: `wave-ceiling.mjs` prints a script `budget` and `share` from a new `resource-budget` lib, and takes `--workers`.
+- 1deb8dc: Add `verify-changed --paths` and `--full`, a who-verifies table, and `verify.relatedCommand` file-level tests, which worker loops use unless `orchestrate.fileLevelAcceptance` is false.
+- 960b086: `houserules update` migrates an install with a committed payload to the ignored layout.
+- 960b086: Session start prints the kit version and a daily notice of a newer release, which `versionCheck` turns off.
+- 1deb8dc: Research module adds a research-orchestrator, thread-scoped researchers, `fetch-batch`, JSONL records, and `check-findings --verify-urls` on the host turndown.
+- 960b086: `init` turns `fix.passPaths` on when the fix scripts take paths.
+- 960b086: `houserules report` gains a Bash wall time section.
+- 1688ed9: Milestone runs write the step two ahead at each flip, and plan-lint checks it.
+- 1deb8dc: Add an orchestrate reference for dispatching a few disjoint slices without a plan workspace.
+- 960b086: The managed CLAUDE.md region is now an `@` import of `.claude/houserules.md`.
+
+### Patch Changes
+
+- b349bee: plan-project grounding now stops at the first plan write.
+- 577ec59: `/verify-changed` passes the script budget fan-out to its children unless the caller already set one.
+- 960b086: Milestone runs write one changeset per feature at each barrier.
+- 960b086: Orchestrate wave barriers rerun slice acceptances and typecheck, and the full verify runs once per phase.
+- 960b086: `init` validates the config it writes.
+- d031728: `plan-reviewer` takes a `Level:` line, `milestone`, `plan`, or `phase`, and reads one sub-plan at `phase`.
+- 960b086: A milestone step item skips `/verify-changed` at its phase close, and the step barrier carries the check.
+- 960b086: verify-changed treats a timeout in an overlapped run as load and reruns it alone.
+- d031728: `task-worker` and `phase-orchestrator` write their report prose as fragments and keep commands, numbers, errors, and negations whole.
+- Updated dependencies [960b086]
+- Updated dependencies [960b086]
+- Updated dependencies [1deb8dc]
+- Updated dependencies [960b086]
+- Updated dependencies [d5b8480]
+- Updated dependencies [960b086]
+- Updated dependencies [577ec59]
+- Updated dependencies [960b086]
+- Updated dependencies [1deb8dc]
+- Updated dependencies [960b086]
+- Updated dependencies [960b086]
+- Updated dependencies [1deb8dc]
+- Updated dependencies [960b086]
+  - @houserules/api@0.10.0
+  - @houserules/payload@0.7.0
+
 ## 0.16.0
 
 ### Minor Changes

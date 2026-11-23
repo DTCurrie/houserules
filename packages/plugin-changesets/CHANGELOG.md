@@ -1,5 +1,11 @@
 # @houserules/plugin-changesets
 
+## 0.5.1
+
+### Patch Changes
+
+- 960b086: Changeset summaries are capped at 20 words, checked on write.
+
 ## 0.5.0
 
 ### Minor Changes

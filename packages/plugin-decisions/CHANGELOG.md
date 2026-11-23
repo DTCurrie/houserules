@@ -1,5 +1,11 @@
 # @houserules/plugin-decisions
 
+## 0.2.3
+
+### Patch Changes
+
+- 960b086: Backlog and decision reviewers run in the background, once per batch of entries.
+
 ## 0.2.2
 
 ### Patch Changes
