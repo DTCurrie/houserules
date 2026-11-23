@@ -13,6 +13,12 @@
  *   (default)  print the resolved scope + the exact command per package — a plan the
  *              subagent executes, reporting one compact line per package.
  *   --json     emit the resolved scope as JSON (tests / tooling).
+ *   --paths a,b  take the changed-path list from a root-relative comma list instead of
+ *              git. A path outside every package (monorepo) exits 1. With
+ *              verify.relatedCommand set, each changed package's `test` step runs that
+ *              template instead, with {files} expanded to its selected paths.
+ *   --full     plan every workspace package as full scope, with no git call. Cannot be
+ *              combined with --paths (exit 1).
  *   --run      run each package's verify commands, then print "<pkg>: PASS|FAIL", plus a
  *              trimmed residue tail on failure. Exit 2 if any package failed. Each child
  *              gets the script budget's share for a run alone in WIREIT_PARALLEL and
@@ -21,7 +27,7 @@
  *
  * Config (houserules.config.json, verify block — mirrors fix): verify.runner / filterFlag /
  * runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
- * "main"). Per-target verifyCommands overrides commands for that package. A target
+ * "main"), verify.relatedCommand (whitespace-split template used with --paths). Per-target verifyCommands overrides commands for that package. A target
  * resolving to no verify commands is reported as skipped, never as passing.
  */
 
@@ -48,6 +54,9 @@ import {
   vitestDefaultPool,
   type BudgetSignals,
 } from '@houserules/payload/resource-budget';
+
+/** Where the changed-path list came from. */
+export type ScopeSource = 'git' | 'paths' | 'full';
 
 export interface ScopeEntry {
   package: string;
@@ -116,6 +125,19 @@ export function withDependents(
   return inScope;
 }
 
+/** Each package target's `pathPrefix` and name, longest prefix first so a nested target wins over its ancestor. */
+function ownersByLongestPrefix(
+  targets: ConfigTarget[],
+): { prefix: string; name: string }[] {
+  return targets
+    .filter((t) => t.pathPrefix && t.packageName && t.packageName !== '.')
+    .map((t) => ({
+      prefix: t.pathPrefix as string,
+      name: t.packageName as string,
+    }))
+    .sort((a, b) => b.prefix.length - a.prefix.length);
+}
+
 /**
  * The verify scope for `changed` paths: for a single-package repo (`packages` empty), the
  * whole repo as one entry when any non-dotfile changed. For a monorepo, every changed
@@ -137,14 +159,7 @@ export function resolveScope(
       : [];
   }
 
-  const byPath = targets
-    .filter((t) => t.pathPrefix && t.packageName && t.packageName !== '.')
-    .map((t) => ({
-      prefix: t.pathPrefix as string,
-      name: t.packageName as string,
-    }))
-    // Longest prefix first so a nested target wins over its ancestor.
-    .sort((a, b) => b.prefix.length - a.prefix.length);
+  const byPath = ownersByLongestPrefix(targets);
   const changedNames = new Set<string>();
   for (const p of changed) {
     const hit = byPath.find((t) => p.startsWith(t.prefix));
@@ -189,6 +204,74 @@ export function verifyArgv(
   return filterFlag ? [filterFlag, name, script] : [...runPrefix, script];
 }
 
+/** The flags `verify-changed` reads. `paths` is `undefined` when `--paths` is absent. */
+interface ParsedArgs {
+  mode: 'run' | 'json' | 'plan';
+  isFullScope: boolean;
+  paths: string[] | undefined;
+}
+
+/** Parses argv (without node and script). `--paths` takes the next token as a comma list, empty entries dropped. */
+function parseArgs(argv: string[]): ParsedArgs {
+  const pathsAt = argv.indexOf('--paths');
+  const paths =
+    pathsAt === -1
+      ? undefined
+      : (argv[pathsAt + 1] ?? '').split(',').filter(Boolean);
+  return {
+    mode: argv.includes('--run')
+      ? 'run'
+      : argv.includes('--json')
+        ? 'json'
+        : 'plan',
+    isFullScope: argv.includes('--full'),
+    paths,
+  };
+}
+
+/**
+ * Splits `paths` by the target that owns each (longest `pathPrefix` wins), with the prefix
+ * stripped. Paths no target owns come back in `outside`.
+ */
+function pathsByPackage(
+  paths: string[],
+  targets: ConfigTarget[],
+): { byPackage: Map<string, string[]>; outside: string[] } {
+  const owners = ownersByLongestPrefix(targets);
+  const byPackage = new Map<string, string[]>();
+  const outside: string[] = [];
+  for (const p of paths) {
+    const hit = owners.find((t) => p.startsWith(t.prefix));
+    if (!hit) {
+      outside.push(p);
+      continue;
+    }
+    byPackage.set(hit.name, [
+      ...(byPackage.get(hit.name) ?? []),
+      p.slice(hit.prefix.length),
+    ]);
+  }
+  return { byPackage, outside };
+}
+
+/**
+ * The argv for a `relatedCommand` template: whitespace-split, a `{files}` token expanded to
+ * `files`, or `files` appended when no token is `{files}`. A monorepo prefixes the filter
+ * flag and package name.
+ */
+function relatedArgv(
+  template: string,
+  files: string[],
+  name: string,
+  filterFlag: string,
+): string[] {
+  const tokens = template.split(/\s+/).filter(Boolean);
+  const expanded = tokens.includes('{files}')
+    ? tokens.flatMap((t) => (t === '{files}' ? files : [t]))
+    : [...tokens, ...files];
+  return filterFlag ? [filterFlag, name, ...expanded] : expanded;
+}
+
 /** The `--run`-less plan output: a summary line, one command line per step, a closing note. */
 export function planLines(
   scope: ScopeEntry[],
@@ -197,32 +280,109 @@ export function planLines(
   runPrefix: string[],
   base: string,
   degraded: boolean,
+  source: ScopeSource,
 ): string[] {
   const changedCount = scope.filter((s) => s.reason === 'changed').length;
   const dependentCount = scope.filter((s) => s.reason === 'dependent').length;
   const summary = degraded
     ? `${scope.length} package(s), FULL SCOPE (git/config unavailable)`
-    : `${scope.length} package(s) in scope (${changedCount} changed` +
-      (dependentCount ? ` + ${dependentCount} dependent` : '') +
-      `) vs base \`${base}\``;
+    : source === 'full'
+      ? `${scope.length} package(s), FULL SCOPE (--full)`
+      : `${scope.length} package(s) in scope (${changedCount} changed` +
+        (dependentCount ? ` + ${dependentCount} dependent` : '') +
+        `) vs base \`${base}\``;
   const lines = [`verify-changed: ${summary}`];
   for (const s of scope) {
     if (!s.commands?.length)
       lines.push(`  ${s.package}  [${s.reason}]  SKIPPED (no verify commands)`);
-    for (const script of s.commands ?? [])
-      lines.push(
-        `  ${s.package}  [${s.reason}]  ${runner} ${verifyArgv(s.package, script, filterFlag, runPrefix).join(' ')}`,
-      );
+    (s.commands ?? []).forEach((script, index) => {
+      const argv =
+        s.argv?.[index] ?? verifyArgv(s.package, script, filterFlag, runPrefix);
+      lines.push(`  ${s.package}  [${s.reason}]  ${runner} ${argv.join(' ')}`);
+    });
   }
+  if (source === 'paths')
+    lines.push(
+      "Note: --paths selects packages, not tests. Each selected package still runs its steps package-wide, so a run can test a sibling's in-progress edit in the same package.",
+    );
   lines.push(
     'Run each command; report one compact line per package: "<pkg>: PASS" or "<pkg>: FAIL (<step>)".',
   );
   return lines;
 }
 
+/** Whether `script` runs the `relatedCommand` template: the `test` step of a changed package under `--paths`, with the key set. */
+function usesRelatedCommand(
+  script: string,
+  source: ScopeSource,
+  entry: ScopeEntry,
+  relatedCommand: string | undefined,
+): relatedCommand is string {
+  return (
+    script === 'test' &&
+    source === 'paths' &&
+    entry.reason === 'changed' &&
+    relatedCommand !== undefined
+  );
+}
+
+/**
+ * The scope for `source`, plus each package's `--paths` selection. A `--paths` entry outside
+ * every package exits 1. Any other failure degrades to full scope, since a verify helper
+ * never blocks a session on its own error.
+ */
+function selectScope(
+  source: ScopeSource,
+  paths: string[] | undefined,
+  root: string,
+  baseBranch: string,
+  packages: WorkspacePackage[],
+  targets: ConfigTarget[],
+): {
+  scope: ScopeEntry[];
+  degraded: boolean;
+  selected: Map<string, string[]>;
+} {
+  const selected = new Map<string, string[]>();
+  if (source === 'full')
+    return { scope: fullScopeEntries(packages), degraded: false, selected };
+  try {
+    if (paths) {
+      const split = pathsByPackage(paths, targets);
+      if (packages.length && split.outside.length) {
+        process.stderr.write(
+          split.outside
+            .map(
+              (p) => `verify-changed: --paths ${p} is outside every package.\n`,
+            )
+            .join(''),
+        );
+        process.exit(1);
+      }
+      return {
+        scope: resolveScope(paths, packages, targets),
+        degraded: false,
+        selected: split.byPackage,
+      };
+    }
+    return {
+      scope: resolveScope(changedPaths(root, baseBranch), packages, targets),
+      degraded: false,
+      selected,
+    };
+  } catch {
+    return { scope: fullScopeEntries(packages), degraded: true, selected };
+  }
+}
+
 function main() {
-  const argv = new Set(process.argv.slice(2));
-  const mode = argv.has('--run') ? 'run' : argv.has('--json') ? 'json' : 'plan';
+  const { mode, isFullScope, paths } = parseArgs(process.argv.slice(2));
+  if (isFullScope && paths) {
+    process.stderr.write(
+      'verify-changed: --paths and --full cannot be combined.\n',
+    );
+    process.exit(1);
+  }
 
   const config = loadConfigSafe();
   const verify: RunnerBlock = config.verify ?? {};
@@ -243,26 +403,33 @@ function main() {
 
   const packages = listWorkspacePackages(root);
 
-  // Resolve scope. Any failure here degrades to full scope (never blocks).
-  let scope: ScopeEntry[] = [];
-  let degraded = false;
-  try {
-    scope = resolveScope(changedPaths(root, baseBranch), packages, targets);
-  } catch {
-    degraded = true;
-  }
-  if (degraded) scope = fullScopeEntries(packages);
+  const source: ScopeSource = isFullScope ? 'full' : paths ? 'paths' : 'git';
+  const { scope, degraded, selected } = selectScope(
+    source,
+    paths,
+    root,
+    baseBranch,
+    packages,
+    targets,
+  );
 
   for (const s of scope) {
     s.commands = resolveVerifyCommands(s.package, targets, commands);
     s.argv = s.commands.map((script) =>
-      verifyArgv(s.package, script, filterFlag, runPrefix),
+      usesRelatedCommand(script, source, s, verify.relatedCommand)
+        ? relatedArgv(
+            verify.relatedCommand,
+            packages.length ? (selected.get(s.package) ?? []) : (paths ?? []),
+            s.package,
+            filterFlag,
+          )
+        : verifyArgv(s.package, script, filterFlag, runPrefix),
     );
   }
 
   if (mode === 'json') {
     process.stdout.write(
-      `${JSON.stringify({ base: baseBranch, degraded, runner: runner, scope }, null, 2)}\n`,
+      `${JSON.stringify({ base: baseBranch, source, degraded, runner: runner, scope }, null, 2)}\n`,
     );
     process.exit(0);
   }
@@ -276,7 +443,7 @@ function main() {
 
   if (mode === 'plan') {
     process.stdout.write(
-      `${planLines(scope, runner, filterFlag, runPrefix, baseBranch, degraded).join('\n')}\n`,
+      `${planLines(scope, runner, filterFlag, runPrefix, baseBranch, degraded, source).join('\n')}\n`,
     );
     process.exit(0);
   }
@@ -293,8 +460,6 @@ function main() {
     scope,
     root,
     runner,
-    filterFlag,
-    runPrefix,
     budgetShareEnv(process.env, readSignals),
     verify.timeoutMs,
   );
@@ -363,8 +528,6 @@ function runScope(
   scope: ScopeEntry[],
   root: string,
   runner: string,
-  filterFlag: string,
-  runPrefix: string[],
   childEnv: NodeJS.ProcessEnv,
   timeoutMs?: number,
 ): Residue[] {
@@ -379,18 +542,14 @@ function runScope(
     let failedStep: string | null = null;
     let timedOut = false;
     let output = '';
-    for (const script of s.commands ?? []) {
-      const r = spawnSync(
-        runner,
-        verifyArgv(s.package, script, filterFlag, runPrefix),
-        {
-          cwd: root,
-          env: childEnv,
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: cap,
-        },
-      );
+    for (const [index, script] of (s.commands ?? []).entries()) {
+      const r = spawnSync(runner, s.argv?.[index] ?? [], {
+        cwd: root,
+        env: childEnv,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: cap,
+      });
       if (r.status !== 0) {
         failedStep = script;
         output = (r.stdout || '') + (r.stderr || '');

@@ -3,7 +3,7 @@
  * Lays out a synthesis skeleton from findings reports, one table row per finding id.
  *
  * Usage: scaffold-synthesis.mjs --destinations <a,b,...> [--template <template.md>]
- * <report.md>...
+ * [--jsonl <out>] <report.md>...
  *
  * The skeleton goes to stdout. It is `# Synthesis`, then the template from its first `##`
  * heading on when `--template` is given. The row table sits directly under the first
@@ -14,11 +14,23 @@
  * `--destinations` lists the values a report's `destination` field may hold, the same list
  * `check-findings.mjs` takes. Every report must pass that checker's block checks.
  *
+ * `--jsonl <out>` writes `<out>` instead of the skeleton, one JSON object per finding, one per
+ * line, with keys `id`, `topic`, `thread`, `claim`, `source`, `quote`, `report`. `claim` is the
+ * finding title. `source` and `quote` come from the first evidence line, the URL or the
+ * backtick-quoted command or citation and the quoted text after `→` with its quotes or
+ * backticks removed, each `null` when absent. `report` is the path as given. In this mode
+ * nothing is printed to stdout and a duplicate id is not an error, so two reports that
+ * disagree on one id yield two records that both carry it. Reports must still pass the block
+ * checks. Topic and thread come from the report's path: a report at
+ * `<domain>/research/<topic>/<thread>.md` has `topic` = `<topic>` and `thread` = `<thread>`,
+ * the file stem. Any other report has `topic` = its file stem and `thread` = `null`.
+ *
  * Exit 0 when written, 1 when a report fails the block checks (its result lines go to
  * stderr), when two reports share an id (both paths are named), or when a file is
  * unreadable, 2 on a usage error.
  */
-import { realpathSync } from 'node:fs';
+import { realpathSync, writeFileSync } from 'node:fs';
+import { basename, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { readCheckerInputs } from '@houserules/payload/checker-input';
@@ -29,10 +41,11 @@ import {
 } from '@houserules/payload/finding-blocks';
 
 const USAGE =
-  'usage: scaffold-synthesis.mjs --destinations <a,b,...> [--template <template.md>] <report.md>...';
-const VALUE_OPTIONS = ['--destinations', '--template'];
+  'usage: scaffold-synthesis.mjs --destinations <a,b,...> [--template <template.md>] [--jsonl <out>] <report.md>...';
+const VALUE_OPTIONS = ['--destinations', '--template', '--jsonl'];
 const EXIT_FAILED = 1;
 const EXIT_USAGE_ERROR = 2;
+const RESEARCH_DIRECTORY = 'research';
 const FINDINGS_HEADING = '## Findings';
 const TABLE_HEADER = [
   '| id | title | action | destination | source |',
@@ -62,6 +75,65 @@ export function findDuplicateIds(
   return [...pathsById]
     .filter(([, paths]) => paths.length > 1)
     .map(([id, paths]) => ({ id, paths }));
+}
+
+interface FindingRecord {
+  id: string;
+  topic: string;
+  thread: string | null;
+  claim: string;
+  source: string | null;
+  quote: string | null;
+  report: string;
+}
+
+function stripQuoting(value: string): string {
+  const match = /^(["`])(.*)\1$/.exec(value);
+  return match ? (match[2] as string) : value;
+}
+
+function firstEvidence(line: string | undefined): {
+  source: string | null;
+  quote: string | null;
+} {
+  if (line === undefined) return { source: null, quote: null };
+  const arrowIndex = line.indexOf('→');
+  const head = (arrowIndex === -1 ? line : line.slice(0, arrowIndex)).trim();
+  const tail = arrowIndex === -1 ? '' : line.slice(arrowIndex + 1).trim();
+  const source = stripQuoting(head) || null;
+  return { source, quote: tail ? stripQuoting(tail) : null };
+}
+
+/** `topic` and `thread` for a report path, by the `<domain>/research/<topic>/<thread>.md` layout. */
+function topicAndThread(path: string): {
+  topic: string;
+  thread: string | null;
+} {
+  const [researchSegment, topicSegment, fileSegment] = path
+    .replace(/\\/g, '/')
+    .split('/')
+    .slice(-3);
+  const stem = basename(path, extname(path));
+  const isInResearchTree =
+    researchSegment === RESEARCH_DIRECTORY && fileSegment !== undefined;
+  return isInResearchTree
+    ? { topic: topicSegment as string, thread: stem }
+    : { topic: stem, thread: null };
+}
+
+/** One record per finding, in report order then file order. Duplicate ids are kept. */
+function findingRecords(reports: readonly ScaffoldReport[]): FindingRecord[] {
+  return reports.flatMap(({ path, text }) => {
+    const { topic, thread } = topicAndThread(path);
+    return parseFindings(text).map(({ id, title, fields }) => ({
+      id,
+      topic,
+      thread,
+      claim: title,
+      ...firstEvidence(fields.get('evidence')?.[0]),
+      report: path,
+    }));
+  });
 }
 
 function tableCell(value: string | undefined): string {
@@ -124,6 +196,7 @@ interface Invocation {
   files: string[];
   destinations: string;
   template: string | undefined;
+  jsonl: string | undefined;
 }
 
 function usageError(message: string): never {
@@ -150,11 +223,12 @@ function parseArguments(args: readonly string[]): Invocation {
     files,
     destinations: options.destinations,
     template: options.template,
+    jsonl: options.jsonl,
   };
 }
 
-/** Prints each report's block defects and each duplicate id to stderr, and says whether any. */
-function reportFailures(
+/** Prints each report's block defects to stderr, and says whether there were any. */
+function reportBlockDefects(
   reports: readonly ScaffoldReport[],
   destinations: ReadonlySet<string>,
 ): boolean {
@@ -165,11 +239,15 @@ function reportFailures(
     hasFailure = true;
     console.error(formatFileResult(path, parseFindings(text).length, defects));
   }
-  for (const { id, paths: holders } of findDuplicateIds(reports)) {
-    hasFailure = true;
-    console.error(`duplicate id ${id} in ${holders.join(' and ')}`);
-  }
   return hasFailure;
+}
+
+/** Prints each id held by more than one report to stderr, and says whether there were any. */
+function reportDuplicateIds(reports: readonly ScaffoldReport[]): boolean {
+  const duplicates = findDuplicateIds(reports);
+  for (const { id, paths: holders } of duplicates)
+    console.error(`duplicate id ${id} in ${holders.join(' and ')}`);
+  return duplicates.length > 0;
 }
 
 function main(): void {
@@ -193,7 +271,17 @@ function main(): void {
     text: textByPath.get(path) as string,
   }));
 
-  if (reportFailures(reports, destinations)) process.exit(EXIT_FAILED);
+  const hasBlockDefects = reportBlockDefects(reports, destinations);
+  const hasDuplicateIds = !invocation.jsonl && reportDuplicateIds(reports);
+  if (hasBlockDefects || hasDuplicateIds) process.exit(EXIT_FAILED);
+
+  if (invocation.jsonl) {
+    const lines = findingRecords(reports).map((record) =>
+      JSON.stringify(record),
+    );
+    writeFileSync(invocation.jsonl, lines.map((line) => `${line}\n`).join(''));
+    return;
+  }
 
   const templateText = invocation.template
     ? (textByPath.get(invocation.template) as string)

@@ -51,11 +51,17 @@ the docs are dateable on resume:
 date +%Y-%m-%d
 ```
 
-Create the workspace directory (houserules already installed `.claude/plans/.gitignore`):
+The workspace is written in one call once §2 has cut the phase slugs, since the call needs them.
+Pick the slug now and run the call after §2:
 
 ```
-mkdir -p .claude/plans/<slug>
+node .claude/scripts/plan-scaffold.mjs <slug> --phases <phase-slug>,<phase-slug> --date <date>
 ```
+
+It writes `PLAN.md`, `ROADMAP.md`, and one `phase-N-<phase-slug>.md` per phase, every status `TODO`,
+and refuses a slug whose `.claude/plans/<slug>` already exists. Phase slugs are kebab-case and
+unique. houserules already installed `.claude/plans/.gitignore`. If the script is not installed,
+create the three doc types by hand from §3.
 
 Everything under `.claude/plans/` is **gitignored by default**. It's your living project state, not a
 commit artifact, and it churns every phase. To share a plan with the team, `git add -f` it or delete
@@ -102,11 +108,14 @@ reference document, resolving contradictions explicitly. Both agents are optiona
 `research` module. When they are absent, the phase says what to research and the implementer does it
 in-context.
 
-## 3. Write the three doc types
+## 3. Fill the three doc types
 
-Create these under `.claude/plans/<slug>/`. Keep each lean and cross-linked, with relative links so
-the workspace is self-contained. A phase that records its spec in `## Reference` is what lets
-`/orchestrate` hand that spec to the slice it judges, as the brief's `Reference:` line.
+`plan-scaffold.mjs` wrote these under `.claude/plans/<slug>/` with headers, links, dates, and every
+status set. The templates below show what each prose section holds. Replace each `<...>` placeholder
+by editing the scaffolded file, and add the optional lines and sections where a phase needs them. Keep
+each doc lean and cross-linked, with relative links so the workspace is self-contained. A phase that
+records its spec in `## Reference` is what lets `/orchestrate` hand that spec to the slice it judges,
+as the brief's `Reference:` line.
 
 **`PLAN.md`** is the stable overview: goal plus approach, and it rarely changes once set.
 
@@ -268,11 +277,14 @@ cleanly.
 
 ## 5. Status in place (for whoever implements)
 
-The instant a phase lands and its acceptance actually passes, update **both** the ROADMAP line
-(`[x]` / `Status: DONE (<date>)`) and the sub-plan header, in the same edit pass, before moving on. A
-stale ROADMAP is worse than none, because it lies to the next session. Add a one-line `## Log` entry
-with the date and what's next, and bump the `**Updated:**` date. If a phase is blocked, mark it
-`BLOCKED` and note why in the sub-plan. Don't leave it silently `IN PROGRESS`. Under nested `/orchestrate` the ROADMAP line is the dispatcher's
+The instant a phase lands and its acceptance actually passes, record it before moving on. A stale
+ROADMAP is worse than none, because it lies to the next session. Make the call
+`node .claude/scripts/plan-state.mjs set .claude/plans/<slug> <phase> DONE --log "<what landed, what's next>"`.
+It writes the checkbox, `Status: DONE (<date>)`, the sub-plan header, `**Updated:**`, and the Log line
+in one call, and it refuses a status outside the vocabulary before writing anything. A slice row takes
+`set <workspace> <phase> --slice <id> <status>`. If the script is not installed, make the same edits
+by hand in one pass. If a phase is blocked, mark it `BLOCKED` and note why in the sub-plan. Don't
+leave it silently `IN PROGRESS`. Under nested `/orchestrate` the ROADMAP line is the dispatcher's
 write, per `references/nested.md`.
 
 If `.claude/scripts/plan-lint.mjs` is installed, run `node .claude/scripts/plan-lint.mjs` after

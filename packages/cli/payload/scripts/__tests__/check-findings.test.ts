@@ -3,9 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 
-import { checkCovers, checkOrder } from '../check-findings.mjs';
+import { loadConverter } from '@houserules/payload/html-markdown';
+
+import { checkCovers, checkOrder, pageText } from '../check-findings.mjs';
 
 const SCRIPT = fileURLToPath(
   new URL('../../../payload-dist/scripts/check-findings.mjs', import.meta.url),
@@ -410,4 +414,352 @@ describe('checkCovers', () => {
       expect(checkCovers(text, ['AB-01'])).toEqual([]);
     },
   );
+});
+
+function runAsync(args: string[], cwd?: string) {
+  const env = { ...process.env };
+  delete env.NODE_PATH;
+  return new Promise<{ status: number; stdout: string; stderr: string }>(
+    (resolve) => {
+      execFile(
+        process.execPath,
+        [SCRIPT, ...args],
+        { encoding: 'utf8', env, cwd },
+        (error, stdout, stderr) => {
+          const code = error && typeof error.code === 'number' ? error.code : 0;
+          resolve({ status: code, stdout, stderr });
+        },
+      );
+    },
+  );
+}
+
+describe('check-findings.mjs --verify-urls', () => {
+  const PAGE =
+    '<html><head><style>.x{color:red}</style><script>var q = "hidden words";</script></head>' +
+    '<body><p>Tom &amp;  Jerry\n   are   &#8220;friends&#8221; &mdash; always.</p></body></html>';
+  let dir: string;
+  let server: Server;
+  let base: string;
+  let requests: number;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'check-findings-urls-'));
+    requests = 0;
+    server = createServer((request, response) => {
+      requests++;
+      if (request.url === '/missing') {
+        response.statusCode = 404;
+        response.end('nope');
+        return;
+      }
+      response.setHeader('content-type', 'text/html');
+      response.end(PAGE);
+    });
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise((done) => server.close(done));
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function writeReport(...evidence: string[]): string {
+    const path = join(dir, 'report.md');
+    const lines = evidence.map((line) => `- **evidence:** ${line}`).join('\n');
+    writeFileSync(
+      path,
+      `### AB-01 A title\n\n- **tag:** quality\n- **surface:** none\n${lines}\n- **version gate:** n/a\n- **candidate action:** fix-now\n- **destination:** phase-3\n- **cost:** one file\n`,
+    );
+    return path;
+  }
+
+  it('accepts a quote the page holds after entities, tags, and whitespace are normalized', async () => {
+    const path = writeReport(
+      `${base}/a → "Tom & Jerry are "friends" - always."`,
+    );
+
+    const result = await runAsync([
+      '--destinations',
+      DESTINATIONS,
+      '--verify-urls',
+      path,
+    ]);
+
+    expect(result.stdout).toBe(
+      `${path}: 1 finding(s), 0 defect(s)\nverify-urls: 1 URL(s) fetched, 1 quote(s) checked, 0 not found, 0 unreachable, 0 unconvertible, 0 skipped past the cap\n`,
+    );
+    expect(result.status).toBe(0);
+  });
+
+  it('reports a quote the page lacks, including text inside a script', async () => {
+    const path = writeReport(`${base}/a → "hidden words"`);
+
+    const result = await runAsync([
+      '--destinations',
+      DESTINATIONS,
+      '--verify-urls',
+      path,
+    ]);
+
+    expect(result.stdout).toContain(
+      `${path}: AB-01: quote not found at ${base}/a\n`,
+    );
+    expect(result.stdout).toContain('1 not found');
+    expect(result.status).toBe(1);
+  });
+
+  it('reports a closed port as unreachable and not as a failed quote', async () => {
+    const closed = createServer();
+    await new Promise<void>((done) => closed.listen(0, '127.0.0.1', done));
+    const port = (closed.address() as AddressInfo).port;
+    await new Promise((done) => closed.close(done));
+    const path = writeReport(`http://127.0.0.1:${port}/a → "anything"`);
+
+    const result = await runAsync([
+      '--destinations',
+      DESTINATIONS,
+      '--verify-urls',
+      path,
+    ]);
+
+    expect(result.stdout).toMatch(
+      new RegExp(
+        `${path}: AB-01: unreachable http://127.0.0.1:${port}/a \\(.+\\)\n`,
+      ),
+    );
+    expect(result.stdout).toContain('0 not found, 1 unreachable');
+    expect(result.status).toBe(0);
+  });
+
+  it('reports a non-2xx status as unreachable', async () => {
+    const path = writeReport(`${base}/missing → "anything"`);
+
+    const result = await runAsync([
+      '--destinations',
+      DESTINATIONS,
+      '--verify-urls',
+      path,
+    ]);
+
+    expect(result.stdout).toContain(
+      `${path}: AB-01: unreachable ${base}/missing (status 404)\n`,
+    );
+    expect(result.status).toBe(0);
+  });
+
+  it('fetches a URL cited twice once', async () => {
+    const path = writeReport(
+      `${base}/a → "Tom & Jerry"`,
+      `${base}/a → "always."`,
+    );
+
+    const result = await runAsync([
+      '--destinations',
+      DESTINATIONS,
+      '--verify-urls',
+      path,
+    ]);
+
+    expect(result.stdout).toContain('1 URL(s) fetched, 2 quote(s) checked');
+    expect(requests).toBe(1);
+  });
+
+  it('skips URLs past --max-urls and counts them', async () => {
+    const path = writeReport(
+      `${base}/a → "Tom & Jerry"`,
+      `${base}/b → "Tom & Jerry"`,
+    );
+
+    const result = await runAsync([
+      '--destinations',
+      DESTINATIONS,
+      '--verify-urls',
+      '--max-urls',
+      '1',
+      path,
+    ]);
+
+    expect(result.stdout).toContain(
+      '1 URL(s) fetched, 1 quote(s) checked, 0 not found, 0 unreachable, 0 unconvertible, 1 skipped past the cap',
+    );
+    expect(requests).toBe(1);
+  });
+
+  it('matches a quote inside emphasis and a link in the main content', async () => {
+    server.removeAllListeners('request');
+    server.on('request', (_request, response) => {
+      requests++;
+      response.setHeader('content-type', 'text/html');
+      response.end(
+        '<nav>menu</nav><main><p>alpha <em>beta</em> <a href="/x">gamma</a></p></main>',
+      );
+    });
+    const path = writeReport(`${base}/a → "alpha beta gamma"`);
+
+    const result = await runAsync([
+      '--destinations',
+      DESTINATIONS,
+      '--verify-urls',
+      path,
+    ]);
+
+    expect(result.stdout).toContain('1 quote(s) checked, 0 not found');
+    expect(result.status).toBe(0);
+  });
+
+  function serve(contentType: string, body: string): void {
+    server.removeAllListeners('request');
+    server.on('request', (_request, response) => {
+      requests++;
+      response.setHeader('content-type', contentType);
+      response.end(body);
+    });
+  }
+
+  function verify(path: string) {
+    return runAsync(['--destinations', DESTINATIONS, '--verify-urls', path]);
+  }
+
+  it('finds a table-row quote with escaped quotes in a text/plain page', async () => {
+    serve(
+      'text/plain; charset=utf-8',
+      '| Bug fixed | Test original symptom: passes | Code changed, assumed fixed |\n| Agent completed | VCS diff shows changes | Agent reports "success" |\n| Requirements met | Line-by-line checklist | Tests passing |\n',
+    );
+    const path = writeReport(
+      `${base}/a → "| Agent completed | VCS diff shows changes | Agent reports \\"success\\" |"`,
+    );
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain('1 quote(s) checked, 0 not found');
+    expect(result.status).toBe(0);
+  });
+
+  it('searches a text/plain declaration file with angle brackets without converting it', async () => {
+    serve(
+      'text/plain',
+      'export declare function first<T>(items: Array<T>): T | undefined;\n',
+    );
+    const path = writeReport(`${base}/a → "first<T>(items: Array<T>): T"`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain(
+      '1 quote(s) checked, 0 not found, 0 unreachable, 0 unconvertible',
+    );
+    expect(result.status).toBe(0);
+  });
+
+  it('searches an application/json body with angle brackets in a string', async () => {
+    serve('application/json', '{"type": "Promise<string>", "name": "load"}');
+    const path = writeReport(`${base}/a → "Promise<string>"`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain('1 quote(s) checked, 0 not found');
+    expect(result.status).toBe(0);
+  });
+
+  it('sniffs a body with no content type for a leading doctype', async () => {
+    server.removeAllListeners('request');
+    server.on('request', (_request, response) => {
+      response.writeHead(200);
+      response.end('<!DOCTYPE html><p>alpha <b>beta</b></p>');
+    });
+    const path = writeReport(`${base}/a → "alpha beta"`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain('1 quote(s) checked, 0 not found');
+  });
+
+  it('reports a page the converter throws on as unconvertible and not unreachable', async () => {
+    serve('text/html', `${'<div>'.repeat(20000)}deep`);
+    const path = writeReport(`${base}/a → "deep"`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toMatch(
+      new RegExp(`${path}: AB-01: unconvertible ${base}/a \\(.+\\)\n`),
+    );
+    expect(result.stdout).toContain(
+      '0 not found, 0 unreachable, 1 unconvertible',
+    );
+    expect(result.status).toBe(1);
+  });
+
+  it('exits 1 before any request and prints the install command when turndown cannot be resolved', async () => {
+    const bareDir = mkdtempSync(join(tmpdir(), 'check-findings-bare-'));
+    try {
+      const path = writeReport(`${base}/a → "Tom & Jerry"`);
+
+      const result = await runAsync(
+        ['--destinations', DESTINATIONS, '--verify-urls', path],
+        bareDir,
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('npm install -D turndown');
+      expect(result.stderr).toContain('pnpm add -D turndown');
+      expect(requests).toBe(0);
+    } finally {
+      rmSync(bareDir, { recursive: true, force: true });
+    }
+  });
+
+  it('makes no request without the flag', async () => {
+    const path = writeReport(`${base}/a → "Tom & Jerry"`);
+
+    const result = await runAsync(['--destinations', DESTINATIONS, path]);
+
+    expect(result.stdout).toBe(`${path}: 1 finding(s), 0 defect(s)\n`);
+    expect(requests).toBe(0);
+  });
+});
+
+describe('pageText', () => {
+  const convert = loadConverter();
+  if (!convert) throw new Error('turndown must resolve from the package');
+
+  it('drops script and style bodies and folds curly quotes and dashes', () => {
+    expect(
+      pageText(
+        '<style>b{}</style><p>It&rsquo;s  A\u2014B</p><script>x</script>',
+        'text/html',
+        convert,
+      ),
+    ).toBe("it's a-b");
+  });
+
+  it('joins text across inline tags without adding a space before punctuation', () => {
+    expect(
+      pageText(
+        '<p>Call <code>x</code>. Then <b>stop</b>, now.</p>',
+        'text/html',
+        convert,
+      ),
+    ).toBe('call x. then stop, now.');
+  });
+
+  it('separates words across block elements', () => {
+    expect(
+      pageText(
+        '<p>alpha</p><p>beta</p><ul><li>gamma</li></ul>',
+        'text/html',
+        convert,
+      ),
+    ).toBe('alpha beta gamma');
+  });
+
+  it('unwraps links and drops heading markers', () => {
+    expect(
+      pageText(
+        '<h2>Title</h2><p>see <a href="/x">the docs</a></p>',
+        'text/html',
+        convert,
+      ),
+    ).toBe('title see the docs');
+  });
 });

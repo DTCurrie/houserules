@@ -93,6 +93,11 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "relatedCommand": {
+          "description": "Trial. A file-level test command template, e.g. \"exec vitest related --run {files}\". With --paths, it replaces the \"test\" step of each changed package and runs through the runner and filter flag, with {files} expanded to the selected paths relative to the package (appended when absent). Unset keeps --paths package-level.",
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": ["runner", "filterFlag", "runScriptPrefix", "commands"],

@@ -104,6 +104,24 @@ On Claude Code 2.1.330:
 
 Pick `--per-run` above the nested figure.
 
+## When a step down holds
+
+A step down is a cheaper cell (a lower model or effort) standing in for the cell it replaces. It
+holds only when all three rules pass:
+
+- The score is the fixture's acceptance: its hidden tests pass or fail per run, and nothing
+  else is judged.
+- The step down must cost at least 5% less than the cell it replaces, 5% of that cell's cost, to
+  count.
+- A run fails when its acceptance fails, or when its acceptance did not run after the run's last
+  edit.
+
+With zero failures in n runs, the one-sided 95% upper bound on the failure rate is
+p = 1 - 0.05^(1/n), the p at which zero failures in n runs has a 5% chance. For n = 5, 0.05^(1/5)
+is about 0.549, so p is about 45%. For n = 10, 0.05^(1/10) is about 0.741, so p is about 26%.
+Five clean runs cannot rule out a failure rate of 45%, and ten cannot rule out 26%. Quality can
+show only a gross collapse at these sample sizes, so cost carries the decision.
+
 ## Spend ledger
 
 Each `--out` holds `spend.jsonl`, one line per started session, with the session key's one field

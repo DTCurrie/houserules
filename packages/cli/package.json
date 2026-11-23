@@ -221,11 +221,10 @@
     "@types/semver": "^7.8.0",
     "prettier": "catalog:",
     "publint": "catalog:",
+    "turndown": "7.2.5",
     "type-fest": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wireit": "catalog:"
-  },
-  "peerDependencies": {},
-  "optionalDependencies": {}
+  }
 }

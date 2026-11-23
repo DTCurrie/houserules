@@ -21,8 +21,8 @@ This skill executes a **plan that already exists**. List the candidates with the
 find .claude/plans -maxdepth 3 \( -name ROADMAP.md -o -name MILESTONE.md \) ! -path '*/_*' | xargs grep -H '^\*\*Status:\*\*'
 ```
 
-- **No plan workspace?** Stop and run `/plan-project "<what to build>"` first.
-  Without a persisted phase boundary there is nothing to slice and nowhere to record status.
+- **No plan workspace?** Stop and run `/plan-project "<what to build>"` first. A few disjoint
+  slices are the exception: dispatch them as `references/direct-dispatch.md` says.
 - **Trivial work?** If you'd finish the phase in one pass, **do it yourself**. Below roughly two
   slices, orchestration costs more than the work.
 
@@ -298,12 +298,11 @@ does not override this.
 All waves done → run `/verify-changed` if installed (changed packages plus dependents,
 off-context), otherwise the repo's verify on the touched packages. A milestone item skips it, per
 `references/milestone.md`. A failure is §7 residue. Then check the phase's own acceptance from the
-sub-plan, and update **both** the sub-plan header and the `ROADMAP.md` line to `DONE (<date>)` in
-one pass, with a `## Log` entry.
+sub-plan, and record it with `node .claude/scripts/plan-state.mjs set <workspace> <N> DONE --log
+"<what landed>"`, one call for the header, the `ROADMAP.md` line, and a `## Log` entry.
 
-Run `node .claude/scripts/plan-lint.mjs` if installed, to confirm both files updated. Nested, the
-ROADMAP flip and that run belong to the dispatcher (`references/nested.md`). Under `--flat` this
-layer writes both files.
+Then run `node .claude/scripts/plan-lint.mjs` if installed. Nested, both calls belong to the
+dispatcher (`references/nested.md`). Under `--flat` this layer runs them.
 
 **A phase that touched UI surfaces gets its reviews now.** When the diff reached UI code, or the
 sub-plan carries a `ui` signal, run `/accessibility-review` and `/design-review`, each skipped

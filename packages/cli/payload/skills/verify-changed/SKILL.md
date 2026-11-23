@@ -51,5 +51,21 @@ timeout measured the load and not the test.
   `FAIL (<step>, timed out after <n>s)` instead of a stalled run.
 - Preview the scope without running anything. `node .claude/scripts/verify-changed.mjs` prints the
   plan, and `--json` emits it machine-readably.
+- `--paths a,b` replaces the git changed-path list with the paths you name. Each selected package is
+  still verified package-wide, plus its dependents. `--full` selects every package and reads no git.
+  The two flags cannot combine, and a usage error exits 1. `verify.relatedCommand` is a trial that is
+  off while unset. Set it only to measure whether a related-tests run beats the package-wide one.
+- Who verifies, by stage:
+
+  | Stage               | Runs                                                                         |
+  | ------------------- | ---------------------------------------------------------------------------- |
+  | Worker              | Its brief's acceptance command.                                              |
+  | Wave                | Each slice's acceptance rerun, plus a typecheck of the packages it touched.  |
+  | Phase or step       | `/verify-changed`. A milestone item leaves it to the step barrier.           |
+  | Hand-off (`/ready`) | `/verify-changed`, with `--full` past 8 packages or on a root config change. |
+
+  A worker does not run `/verify-changed`. It is package-granular, so parallel workers would test each
+  other's half-edited files.
+
 - This replaces a hand-maintained "shared packages" list. Dependents come from the workspace
   dependency graph, so a change to a leaf package still verifies its consumers.

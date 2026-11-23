@@ -844,7 +844,7 @@ describe('research module', () => {
     '.claude/scripts/scaffold-synthesis.mjs',
   ];
 
-  it('lands all three research agents when enabled', () => {
+  it('lands all four research agents when enabled', () => {
     const root = useInstalledRepo('pnpm-monorepo', { modules: 'research' });
 
     const spikePath = join(root, '.claude/agents/research-spike.md');
@@ -855,6 +855,10 @@ describe('research module', () => {
     );
     expect(existsSync(spikePath), 'research-spike installed').toBe(true);
     expect(existsSync(synthPath), 'research-synth installed').toBe(true);
+    expect(
+      existsSync(join(root, '.claude/agents/research-orchestrator.md')),
+      'research-orchestrator installed',
+    ).toBe(true);
     expect(existsSync(refactorPlannerPath), 'refactor-planner installed').toBe(
       true,
     );

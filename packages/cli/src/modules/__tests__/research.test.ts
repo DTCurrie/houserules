@@ -19,6 +19,17 @@ describe('research module plan()', () => {
     expect(action).toBeDefined();
   });
 
+  it('copies all three research agents', () => {
+    const dests = actions.flatMap((a) => (a.kind === 'copy' ? [a.dest] : []));
+    expect(dests).toEqual(
+      expect.arrayContaining([
+        '.claude/agents/research-spike.md',
+        '.claude/agents/research-synth.md',
+        '.claude/agents/research-orchestrator.md',
+      ]),
+    );
+  });
+
   it('copies the refactor-planner agent', () => {
     const action = actions.find(
       (a) =>
@@ -49,6 +60,22 @@ describe('research module plan()', () => {
       (a) =>
         a.kind === 'copy' &&
         a.dest === '.claude/scripts/scaffold-synthesis.mjs',
+    );
+    expect(action).toBeDefined();
+  });
+
+  it('copies the fetch-batch script', () => {
+    const action = actions.find(
+      (a) => a.kind === 'copy' && a.dest === '.claude/scripts/fetch-batch.mjs',
+    );
+    expect(action).toBeDefined();
+  });
+
+  it('copies the research layout reference under plan-project references', () => {
+    const action = actions.find(
+      (a) =>
+        a.kind === 'copy' &&
+        a.dest === '.claude/skills/plan-project/references/research-layout.md',
     );
     expect(action).toBeDefined();
   });

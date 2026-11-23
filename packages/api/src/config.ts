@@ -161,6 +161,13 @@ const HouseConfigSchema = z.strictObject({
         .describe(
           'Wall-clock cap in milliseconds, applied to each verify command separately. Unset means no cap. A command over the cap is reported as "FAIL (<step>, timed out after <n>s)".',
         ),
+      relatedCommand: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          'Trial. A file-level test command template, e.g. "exec vitest related --run {files}". With --paths, it replaces the "test" step of each changed package and runs through the runner and filter flag, with {files} expanded to the selected paths relative to the package (appended when absent). Unset keeps --paths package-level.',
+        ),
     })
     .optional()
     .describe('Only present when the verify-changed module is enabled.'),

@@ -1,6 +1,12 @@
 import type { Action, ModuleGroup, ModuleRequirement } from '@houserules/api';
 import { payloadPath } from '../paths.js';
-import { agent, selfGitignoreAction, skill } from './copy-actions.js';
+import {
+  agent,
+  lib,
+  script,
+  selfGitignoreAction,
+  skill,
+} from './copy-actions.js';
 
 export const id = 'plans';
 export const title = 'Phased-implementation planning (/plan-project)';
@@ -30,9 +36,10 @@ export function defaultEnabled(): boolean {
  * status stays current in place, so a returning session greps status instead of
  * re-deriving scope from the transcript.
  *
- * Script-free, because the value is the doc structure and status-in-place discipline. The
- * pointer lives in the root CLAUDE.md rather than a nested `.claude/plans/CLAUDE.md`,
- * which would never load when it is needed.
+ * The value is the doc structure and status-in-place discipline. Two scripts back it:
+ * `plan-scaffold.mjs` writes a new workspace, and `plan-state.mjs` reads one back and
+ * records status changes. The pointer lives in the root CLAUDE.md
+ * rather than a nested `.claude/plans/CLAUDE.md`, which would never load when it is needed.
  */
 export function plan(): Action[] {
   return [
@@ -57,6 +64,18 @@ export function plan(): Action[] {
       reason:
         'deep-dive reference the plan-project SKILL.md defers to for a closeout phase',
     },
+    // The plan-markdown parsers. `orchestrate` requires this module, so its plan-lint.mjs reads them from here too.
+    lib(id, 'plan-markdown.mjs'),
+    script(
+      id,
+      'plan-state.mjs',
+      "prints a plan workspace's phases, statuses, and slices: `plan-state.mjs show <workspace>`",
+    ),
+    script(
+      id,
+      'plan-scaffold.mjs',
+      'writes a new plan workspace (PLAN, ROADMAP, phase sub-plans) from a slug and phase list: `plan-scaffold.mjs <slug> --phases a,b,c`',
+    ),
     // /blast-radius shares the .claude/plans/ home, where its dated impact maps land.
     skill(
       id,

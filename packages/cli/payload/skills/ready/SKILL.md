@@ -8,14 +8,17 @@ Roll the pre-handoff checks into a **single ready / not-ready verdict** plus the
 the user can actually verify. Keep the heavy work off this context by delegating to the scoped skills
 and reading only their compact results.
 
-## 1. Verify (delegate — do not run the full suite here)
+## 1. Verify (delegate, and do not run the full suite here)
 
 When `fix.passPaths` in `.claude/houserules.config.json` is not `true`, no Stop fixed anything. Run
 the repo's fix commands once over the changed packages before verifying. They are `fix.commands`, or
 a target's `fixCommands`.
 
 If `/verify-changed` is installed (`.claude/skills/verify-changed/`), invoke it and take its
-per-package PASS/FAIL verdict as the verification result. If it is not installed, run the repo's
+per-package PASS/FAIL verdict as the verification result. Pass `--full` when its preview lists more
+than 8 packages or a root config changed. Root config means a file at the repo root that every
+package reads: the workspace manifest, the lockfile, the workspace file, a shared tsconfig, or the
+lint or format config. If it is not installed, run the repo's
 verify or test command in the foreground with `timeout: 600000`. If it is expected to cover more than
 8 packages, background it and wait with foreground `sleep 20` calls as `/verify-changed` describes.
 Read only the tail of the output for PASS/FAIL plus any failing residue. Do not read the full suite
@@ -28,7 +31,7 @@ and take its OK/Conflict/Gap reconciliation. If none exist, skip the step and sa
 A reviewer that stalled counts as review not run for its area, even after the re-dispatch
 `/review-change` makes. The verdict must name that area as unreviewed.
 
-## 3. Changeset / handoff hooks (don't re-run — just report)
+## 3. Changeset / handoff hooks (don't re-run, just report)
 
 houserules' Stop hooks nudge for a changeset on every turn boundary, and with `fix.passPaths` on they
 fixed each turn's changed files. Do **not** re-run them. Only confirm the deterministic state they

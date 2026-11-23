@@ -9,10 +9,11 @@ from `packages/cli` and every plugin. Read this before touching any file under a
 - **Payload code crosses packages by PACKAGE NAME, and the build rewrites it.** Recorded in
   the decision ledger. Any payload file, script or lib, reaches a shared lib as
   `import { nowIso } from '@houserules/payload/entry-ledger'`, for values and types alike.
-  There is one form, not two. The twelve shared libs live in the standalone
+  There is one form, not two. The fifteen shared libs live in the standalone
   `@houserules/payload` package: `backlog-id`, `entry-ledger`, `config`, `ledger-index`,
   `proc`, `workspaces`, `comment-scan`, `findings`, `markdown-segment`,
-  `transcript-turn`, `checker-input`, and `finding-blocks`. Anything else
+  `transcript-turn`, `checker-input`, `finding-blocks`, `resource-budget`,
+  `plan-markdown`, and `html-markdown`. Anything else
   under `./lib/` is the package's own and stays a relative import.
   - **`houserules-payload` is what makes it safe**, a bin the CLI publishes that each plugin
     runs after its `tsc`. It rewrites those specifiers in the emitted `.mjs` to the relative
@@ -32,8 +33,10 @@ from `packages/cli` and every plugin. Read this before touching any file under a
   - The old rule here said a payload lib could not import a CLI lib. That was measured false
     on two packages, and a name collision fails loudly at build with TS2305 rather than
     shadowing silently. Do not reintroduce the prohibition.
-- A lib the CLI's OWN scripts import must still be listed in `src/modules/core.ts`'s copy
-  manifest. A plugin's cross-package imports are derived from its sidecar instead, so only
+- A lib the CLI's OWN scripts import must still be listed in a module's copy manifest by
+  hand. That is `src/modules/core.ts` for a lib any install may need. A lib only one module's
+  scripts import is listed in that module, as `plan-markdown` is in `src/modules/plans.ts`,
+  and every other module that imports it must require that module. A plugin's cross-package imports are derived from its sidecar instead, so only
   the CLI's own manifest is hand-maintained now.
 
 ## Config readers

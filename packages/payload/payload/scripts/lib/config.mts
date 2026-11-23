@@ -18,6 +18,8 @@ export interface RunnerBlock {
   baseBranch?: string | undefined;
   /** `verify` only: per-command wall-clock cap in milliseconds. Unset means no cap. */
   timeoutMs?: number | undefined;
+  /** `verify` only: a command template that tests only the files `--paths` names. Unset means package-level. */
+  relatedCommand?: string | undefined;
 }
 
 export interface ConfigTarget {

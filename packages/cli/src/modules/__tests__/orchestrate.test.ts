@@ -417,6 +417,24 @@ describe('orchestrate', () => {
       );
     });
 
+    it('installs the direct-dispatch reference with its worker count read from wave-ceiling.mjs', () => {
+      const direct = readFileSync(
+        join(root, '.claude/skills/orchestrate/references/direct-dispatch.md'),
+        'utf8',
+      );
+      const atOnce = direct
+        .split('## How many go out at once')[1]
+        ?.split('\n## ')[0];
+
+      expect(Object.keys(manifestOf(root).files)).toContain(
+        '.claude/skills/orchestrate/references/direct-dispatch.md',
+      );
+      expect(atOnce).toContain('`node .claude/scripts/wave-ceiling.mjs`');
+      expect(atOnce).toContain('`ceiling`');
+      expect(atOnce).toContain('`share`');
+      expect(atOnce).not.toMatch(/\d/);
+    });
+
     it('prefixes the brief template acceptance command with the share', () => {
       expect(skillText).toContain(
         '> Acceptance: `<share prefix> <command(s), scoped to your owned paths>`',
@@ -774,6 +792,21 @@ describe('orchestrate plan(), phase-orchestrator', () => {
     for (const text of [hint(), ...strings]) {
       expect(text).not.toMatch(/\b(sonnet|opus|haiku|fable)\b/i);
     }
+  });
+});
+
+describe('orchestrate plan(), direct-dispatch reference', () => {
+  it('copies the reference in a default install', () => {
+    const actions = plan({} as Ctx, baseAnswers());
+
+    expect(
+      actions.some(
+        (action) =>
+          action.kind === 'copy' &&
+          action.dest ===
+            '.claude/skills/orchestrate/references/direct-dispatch.md',
+      ),
+    ).toBe(true);
   });
 });
 

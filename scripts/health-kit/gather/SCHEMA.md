@@ -331,7 +331,7 @@ rows[].spawnDepth              number        meta `spawnDepth`, 0 for main
 rows[].parent                  string|null   chain id, see Parent
 rows[].model                   string|null   meta `model`, null for main or when absent
 rows[].pickedEffortModel       string|null   meta `pickedEffortModel`, null when absent
-rows[].effort                  string|null   the spawning Agent call's `effort` input, fixed keyword
+rows[].effort                  string|null   subagent: the spawning Agent call's `effort` input; main: the transcript's recorded `perTurnEffort`, most turns win; null is unknown; fixed keyword
 rows[].turns                   number
 rows[].placeholderTurns        number        turns whose usage was excluded
 rows[].turnsByModel{}          number        keys are model ids

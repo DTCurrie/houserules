@@ -283,7 +283,15 @@ describe('planLines', () => {
       { package: '@fix/studio', reason: 'dependent', commands: ['verify'] },
     ];
 
-    const lines = planLines(scope, 'pnpm', '--filter', [], 'main', false);
+    const lines = planLines(
+      scope,
+      'pnpm',
+      '--filter',
+      [],
+      'main',
+      false,
+      'git',
+    );
 
     expect(lines[0]).toBe(
       'verify-changed: 2 package(s) in scope (1 changed + 1 dependent) vs base `main`',
@@ -301,7 +309,7 @@ describe('planLines', () => {
       { package: '@fix/cityville', reason: 'full-scope', commands: [] },
     ];
 
-    const lines = planLines(scope, 'pnpm', '--filter', [], 'main', true);
+    const lines = planLines(scope, 'pnpm', '--filter', [], 'main', true, 'git');
 
     expect(lines[0]).toBe(
       'verify-changed: 1 package(s), FULL SCOPE (git/config unavailable)',
@@ -313,7 +321,15 @@ describe('planLines', () => {
       { package: '@fix/cityville', reason: 'changed', commands: [] },
     ];
 
-    const lines = planLines(scope, 'pnpm', '--filter', [], 'main', false);
+    const lines = planLines(
+      scope,
+      'pnpm',
+      '--filter',
+      [],
+      'main',
+      false,
+      'git',
+    );
 
     expect(lines[0]).toBe(
       'verify-changed: 1 package(s) in scope (1 changed) vs base `main`',
@@ -463,6 +479,202 @@ describe('verify-changed.mjs --json', () => {
     const city = out.scope.find((s) => s.package === '@fix/cityville');
     expect(city?.package, r.stdout).toBe('@fix/cityville');
     expect(city!.argv).toEqual([]);
+  });
+});
+
+interface ScopeJson {
+  source: string;
+  degraded: boolean;
+  scope: { package: string; reason: string; argv: string[][] }[];
+}
+
+function runWithoutGit(root: string, args: string[]) {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    GIT_DIR: join(root, 'no-such-git-dir'),
+  };
+  delete env.NODE_PATH;
+  return spawnSync(process.execPath, [join(root, SCRIPT), ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    env,
+  });
+}
+
+describe('verify-changed.mjs --paths', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = repoWithStudioDependingOnCityville();
+  });
+
+  it('plans the owning package and its dependents only, from the given paths', () => {
+    const r = runScript(root, SCRIPT, {
+      args: [
+        '--json',
+        '--paths',
+        'games/cityville/src/game.ts,games/cityville/src/other.ts',
+      ],
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    const out = JSON.parse(r.stdout) as ScopeJson;
+    expect(out.source).toBe('paths');
+    expect(
+      Object.fromEntries(out.scope.map((s) => [s.package, s.reason])),
+    ).toEqual({ '@fix/cityville': 'changed', '@fix/studio': 'dependent' });
+  });
+
+  it('leaves out a package that neither contains a path nor depends on one', () => {
+    const r = runScript(root, SCRIPT, {
+      args: ['--json', '--paths', 'apps/studio/src/a.ts,apps/studio/src/b.ts'],
+    });
+
+    const out = JSON.parse(r.stdout) as ScopeJson;
+    expect(out.scope.map((s) => s.package)).toEqual(['@fix/studio']);
+  });
+
+  it('exits 1 naming a path that no package contains', () => {
+    const r = runScript(root, SCRIPT, {
+      args: ['--json', '--paths', 'games/cityville/src/game.ts,stray/file.ts'],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toBe(
+      'verify-changed: --paths stray/file.ts is outside every package.\n',
+    );
+  });
+
+  it('adds the package-wide Note line to the plan preview', () => {
+    const withPaths = runScript(root, SCRIPT, {
+      args: ['--paths', 'games/cityville/src/game.ts'],
+    });
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const y = 2;\n',
+    );
+    const withoutPaths = runScript(root, SCRIPT);
+
+    expect(withPaths.stdout).toContain(
+      "Note: --paths selects packages, not tests. Each selected package still runs its steps package-wide, so a run can test a sibling's in-progress edit in the same package.\n",
+    );
+    expect(withoutPaths.stdout).not.toContain('Note: --paths');
+  });
+
+  it('exits 1 when combined with --full', () => {
+    const r = runScript(root, SCRIPT, {
+      args: ['--paths', 'games/cityville/src/game.ts', '--full'],
+    });
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toBe(
+      'verify-changed: --paths and --full cannot be combined.\n',
+    );
+  });
+
+  describe('with verify.relatedCommand', () => {
+    function setRelatedCommand(template: string | undefined): void {
+      editHouseConfig(root, (config) => {
+        const verify = config.verify as {
+          commands?: string[];
+          relatedCommand?: string | undefined;
+        };
+        verify.commands = ['check', 'test'];
+        verify.relatedCommand = template;
+      });
+    }
+
+    function scopeFor(): ScopeJson['scope'] {
+      const r = runScript(root, SCRIPT, {
+        args: [
+          '--json',
+          '--paths',
+          'games/cityville/src/game.ts,games/cityville/src/other.ts',
+        ],
+      });
+      return (JSON.parse(r.stdout) as ScopeJson).scope;
+    }
+
+    it('replaces only the changed package test step, with the prefix stripped from each path', () => {
+      setRelatedCommand('run-related --bail {files}');
+
+      const scope = scopeFor();
+
+      expect(scope.find((s) => s.package === '@fix/cityville')!.argv).toEqual([
+        ['--filter', '@fix/cityville', 'check'],
+        [
+          '--filter',
+          '@fix/cityville',
+          'run-related',
+          '--bail',
+          'src/game.ts',
+          'src/other.ts',
+        ],
+      ]);
+      expect(scope.find((s) => s.package === '@fix/studio')!.argv).toEqual([
+        ['--filter', '@fix/studio', 'check'],
+        ['--filter', '@fix/studio', 'test'],
+      ]);
+    });
+
+    it('appends the paths when the template has no {files}', () => {
+      setRelatedCommand('run-related');
+
+      const city = scopeFor().find((s) => s.package === '@fix/cityville');
+
+      expect(city!.argv[1]).toEqual([
+        '--filter',
+        '@fix/cityville',
+        'run-related',
+        'src/game.ts',
+        'src/other.ts',
+      ]);
+    });
+
+    it('keeps the package-level test step when the key is unset', () => {
+      setRelatedCommand(undefined);
+
+      const city = scopeFor().find((s) => s.package === '@fix/cityville');
+
+      expect(city!.argv[1]).toEqual(['--filter', '@fix/cityville', 'test']);
+    });
+  });
+});
+
+describe('verify-changed.mjs --full', () => {
+  it('plans every workspace package as full-scope without asking git', () => {
+    const root = repoWithStudioDependingOnCityville();
+
+    const r = runWithoutGit(root, ['--json', '--full']);
+
+    expect(r.status, r.stderr).toBe(0);
+    const out = JSON.parse(r.stdout) as ScopeJson;
+    expect(out.source).toBe('full');
+    expect(out.degraded).toBe(false);
+    expect(out.scope.map((s) => [s.package, s.reason]).sort()).toEqual([
+      ['@fix/cityville', 'full-scope'],
+      ['@fix/studio', 'full-scope'],
+    ]);
+  });
+
+  it('plans nothing under the same broken git when --full is absent', () => {
+    const root = repoWithStudioDependingOnCityville();
+
+    const r = runWithoutGit(root, ['--json']);
+
+    const out = JSON.parse(r.stdout) as ScopeJson;
+    expect(out.source).toBe('git');
+    expect(out.scope).toEqual([]);
+  });
+
+  it('words the plan summary as --full, not as unavailable git', () => {
+    const root = repoWithStudioDependingOnCityville();
+
+    const r = runScript(root, SCRIPT, { args: ['--full'] });
+
+    expect(r.stdout).toContain(
+      'verify-changed: 2 package(s), FULL SCOPE (--full)\n',
+    );
   });
 });
 

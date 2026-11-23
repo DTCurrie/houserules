@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -280,6 +286,52 @@ describe('scaffold-synthesis.mjs (real execution)', () => {
     expect(result.stderr).toContain('AA-01');
     expect(result.stderr).toContain(firstReport);
     expect(result.stderr).toContain(secondReport);
+  });
+
+  it('writes one record per finding, keeping both records when two reports share an id', () => {
+    mkdirSync(join(dir, 'domain/research/caching'), { recursive: true });
+    const first = write(
+      'domain/research/caching/ttl.md',
+      `# R\n\n${block('AA-01', 'ttl is sixty seconds', { evidence: 'https://example.com/a → "sixty seconds"' })}`,
+    );
+    const second = write(
+      'domain/research/caching/eviction.md',
+      `# R\n\n${block('AA-01', 'ttl is ten seconds', { evidence: '`curl -s x` → `ttl=10`' })}`,
+    );
+    const out = join(dir, 'records.jsonl');
+    const result = run([
+      '--destinations',
+      DESTINATIONS,
+      '--jsonl',
+      out,
+      first,
+      second,
+    ]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(readFileSync(out, 'utf8')).toBe(
+      `{"id":"AA-01","topic":"caching","thread":"ttl","claim":"ttl is sixty seconds","source":"https://example.com/a","quote":"sixty seconds","report":${JSON.stringify(first)}}\n` +
+        `{"id":"AA-01","topic":"caching","thread":"eviction","claim":"ttl is ten seconds","source":"curl -s x","quote":"ttl=10","report":${JSON.stringify(second)}}\n`,
+    );
+  });
+
+  it('gives a report outside a research tree its file stem as topic and a null thread', () => {
+    const only = write(
+      'notes.md',
+      `# R\n\n${block('AA-01', 'one', { evidence: 'https://example.com/a → "q"' })}`,
+    );
+    const out = join(dir, 'records.jsonl');
+    const result = run(['--destinations', DESTINATIONS, '--jsonl', out, only]);
+    expect(result.status).toBe(0);
+    expect(readFileSync(out, 'utf8')).toBe(
+      `{"id":"AA-01","topic":"notes","thread":null,"claim":"one","source":"https://example.com/a","quote":"q","report":${JSON.stringify(only)}}\n`,
+    );
+  });
+
+  it('still requires --destinations with --jsonl', () => {
+    const only = write('a.md', report('AA', ['one']));
+    const result = run(['--jsonl', join(dir, 'x.jsonl'), only]);
+    expect(result.status).toBe(2);
   });
 
   it('exits 1 with the checker result lines when a report has a defect', () => {

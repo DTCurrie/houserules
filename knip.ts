@@ -5,6 +5,9 @@ const config: KnipConfig = {
   // instead, because every `entry` below exists for a reason knip cannot see.
   workspaces: {
     '.': {
+      // The research scripts resolve the host's turndown from the working directory, which
+      // is the repo root when an agent runs them here. knip cannot see a `createRequire` load.
+      ignoreDependencies: ['turndown'],
       entry: [
         // Dev-facing probe documented in CLAUDE.md, invoked by hand as
         // `node scripts/probe-plugin.mjs <pkg>`. Nothing in the workspace imports it.
@@ -20,6 +23,7 @@ const config: KnipConfig = {
         // Nothing in the workspace imports them.
         'scripts/bench/field-stop-runs.mjs',
         'scripts/bench/field-repro.mjs',
+        'scripts/bench/verify-jobs.mjs',
         // The paid behavioral check, documented in scripts/eval/README.md and invoked by hand as
         // `node scripts/eval/run.mjs`. Nothing in the workspace imports it.
         'scripts/eval/run.mjs',
@@ -70,6 +74,9 @@ const config: KnipConfig = {
         'src/modules/tool-output-trim.ts',
         'src/modules/verify-changed.ts',
       ],
+      // The HOST's own turndown, resolved at runtime by payload/scripts/fetch-batch.mts through
+      // `createRequire`, the way plugin-design reaches the host's Tailwind. knip cannot see it.
+      ignoreDependencies: ['turndown'],
     },
     'packages/cli/test/plugin-fixture': {
       // Loaded by the plugin resolver under test through paths built at test time, and the

@@ -333,6 +333,7 @@
     "globals": "^17.14.0",
     "knip": "^6.45.1",
     "prettier": "catalog:",
+    "turndown": "7.2.5",
     "typescript": "catalog:",
     "typescript-eslint": "^8.73.0",
     "wireit": "catalog:"

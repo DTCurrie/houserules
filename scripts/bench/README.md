@@ -97,6 +97,48 @@ interactive and may skip the profile that puts `node` on the PATH. If the remote
   - `node scripts/bench/field-repro.mjs <path>...`
   - `node --input-type=module - <path>... < scripts/bench/field-repro.mjs`
 
+## Verify jobs probe
+
+`scripts/bench/verify-jobs.mjs` times one multi-package verify scope two ways, on the live
+checkout. The serial arm runs its package jobs one after another, as `verify-changed` does today.
+The concurrent arm starts every job at once. A job is `<runner> --filter <pkg> run <command>` for
+each command in turn, stopping at the first failure.
+
+```sh
+node scripts/bench/verify-jobs.mjs [--packages a,b,c] [--rounds 5] [--json <file>] [--dry-run]
+```
+
+| Flag             | Default                                                   | Meaning                                              |
+| ---------------- | --------------------------------------------------------- | ---------------------------------------------------- |
+| `--packages`     | `plugin-backlog`, `plugin-decisions`, `plugin-changesets` | The scope, as full package names.                    |
+| `--commands`     | `check,test`                                              | The verify commands each job runs.                   |
+| `--clear`        | the `--packages` list                                     | The packages whose `.wireit` a cold round deletes.   |
+| `--rounds`       | 5                                                         | Timed rounds per arm per temperature.                |
+| `--temperatures` | `cold,warm`                                               | Which temperatures to run, in order.                 |
+| `--root`         | this checkout                                             | The workspace root, holding `packages/*`.            |
+| `--runner`       | `pnpm`                                                    | The executable each step runs.                       |
+| `--filter-flag`  | `--filter`                                                | The runner's package filter flag.                    |
+| `--timeout-ms`   | 600000                                                    | Per step. A step past it is killed.                  |
+| `--json`         | off                                                       | Also write every row and the summary to this path.   |
+| `--dry-run`      | off                                                       | Print the jobs and the round order, and run nothing. |
+
+- **Cold** deletes `<package>/.wireit` for every `--clear` package before the round. Dependency
+  builds outside that list stay cached.
+- **Warm** follows one untimed serial priming round. A warm row prints `warm-invalid` unless the
+  row before it passed and `git status --porcelain=v1 -uall` read the same before and after.
+- Each round runs both arms, and the lead arm alternates, serial first in odd rounds.
+- Rounds run back to back with no wait for the load to fall. Every row records the one-minute
+  load average at its start.
+
+Each round prints one line, such as
+`cold r1 concurrent load=1.84 wall=42.31s exits=plugin-backlog:0,plugin-decisions:0,plugin-changesets:0`.
+A killed job prints its signal in place of the exit code. The summary is a table of the median,
+min, max, and spread in seconds per temperature and arm, a line per temperature saying whether the
+serial median minus the concurrent median exceeds the wider spread, and the flipped rounds. A flip
+is a round where the concurrent arm failed and the serial arm of the same round passed, quoted
+with each failing job's last error line. It exits 0 when every round ran, whatever the rounds
+returned, and 2 on a usage error.
+
 ## Timing
 
 A node harness over `spawnSync`, timed with `process.hrtime.bigint()` around each spawn. `hyperfine`
@@ -183,6 +225,7 @@ All times are milliseconds, unrounded.
 | `machine.mjs`          | `machineFacts`                                               |
 | `timing.mjs`           | `measureCase`, `CaseError`                                   |
 | `profile.mjs`          | `profileCase`, `mergeProfiles`, `selfTimeByFrame`            |
+| `verify-jobs.mjs`      | the verify jobs probe above                                  |
 | `suites/index.mjs`     | `SUITES`, a map from suite name to a lazy import             |
 | `suites/<name>.mjs`    | `cases`                                                      |
 | `fixtures/<name>/`     | static fixture files for that suite only                     |
