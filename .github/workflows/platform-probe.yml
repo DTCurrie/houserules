@@ -56,6 +56,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Untimed build
         run: pnpm build
+      # Same reason as CI's test job: `test:scripts` imports installed scripts from `.claude/`.
+      - run: pnpm dogfood
       # Ten runs, interleaved 2, 5, 2, 5. Each run appends a fresh comment to one source file
       # that every package depends on, rebuilds untimed, and then times `pnpm test:all` alone,
       # so no run is answered from a fresh fingerprint. `test:all` is called directly because
@@ -73,6 +75,12 @@ jobs:
             for fanout in 2 5; do
               echo "// platform-probe run $run fan-out $fanout" >> packages/api/src/regions.ts
               pnpm build > "probe-logs/build-$run-$fanout.log" 2>&1
+              # The rebuild leaves the one-minute load well above the core count. Wait for it
+              # to fall under 2, for at most five minutes, so each timed run starts settled.
+              for _ in $(seq 1 60); do
+                awk '{ exit !($1 < 2) }' /proc/loadavg && break
+                sleep 5
+              done
               load=$(cut -d' ' -f1 /proc/loadavg)
               start=$(date +%s.%N)
               status=0

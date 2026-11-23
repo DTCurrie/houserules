@@ -41,6 +41,9 @@ jobs:
       # Kept as its own step even though `pnpm test` now depends on the builds through wireit.
       # A build failure reads as a build failure in the log instead of as a test failure.
       - run: pnpm build
+      # `.claude/` is gitignored, so a fresh checkout has no installed scripts. `test:scripts`
+      # imports several of them, and the local runs it mirrors always have a dogfooded tree.
+      - run: pnpm dogfood
       - run: pnpm test
         env:
           # plugin-design's rendered tier drives a real headless Chrome. Chrome's sandbox needs
