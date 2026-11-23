@@ -2,6 +2,11 @@ import { availableParallelism, loadavg } from 'node:os';
 
 /** Worker processes per core, fitted on 18 cores. */
 export const WORKERS_PER_CORE = 4;
+/**
+ * Worker processes per core across one agent wave. Nine concurrent cli suites on
+ * 18 cores passed at 36 workers in total and timed out tests at 72.
+ */
+export const WAVE_WORKERS_PER_CORE = 2;
 
 const MIN_BUDGET = 2;
 /** A one-minute load at or above the core count halves the usable cores. */
@@ -17,6 +22,8 @@ export interface BudgetInput {
   ncpu: number;
   load1: number;
   memory?: { available: number; perWorker: number };
+  /** Defaults to `WORKERS_PER_CORE`. A wave passes `WAVE_WORKERS_PER_CORE`. */
+  workersPerCore?: number;
 }
 
 /**
@@ -39,10 +46,10 @@ export function readSignals(): BudgetSignals {
  * a positive `perWorker`.
  */
 export function budgetFor(input: BudgetInput): number {
-  const { ncpu, load1, memory } = input;
+  const { ncpu, load1, memory, workersPerCore = WORKERS_PER_CORE } = input;
   const usableCores =
     load1 >= ncpu ? Math.floor(ncpu / LOAD_HALVING_DIVISOR) : ncpu;
-  let budget = WORKERS_PER_CORE * usableCores;
+  let budget = workersPerCore * usableCores;
   if (memory !== undefined && memory.perWorker > 0) {
     budget = Math.min(budget, Math.floor(memory.available / memory.perWorker));
   }

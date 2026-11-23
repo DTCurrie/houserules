@@ -108,7 +108,8 @@ step with one item runs its suite once, not three times.
 
 Run `wave-ceiling.mjs` once at the spawn and divide the figure across the step's items, as
 nested.md "Workers" divides it across a ready set. An `owner` item counts as zero, so the nested
-items split the whole figure. Its flat waves dispatch one worker at a time.
+items split the whole figure. Its flat waves dispatch one worker at a time. Each nested item's
+brief carries the script's `share` unchanged on its `Share:` line.
 
 ## An `owner` item
 

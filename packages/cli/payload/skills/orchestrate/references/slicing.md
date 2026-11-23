@@ -123,7 +123,16 @@ acceptance that boots a test runner, type-checker, or linter counts as one worke
 acceptance counts as half. When the wave's weight is above the ceiling, dispatch the first batch up to
 the ceiling, close it at a barrier like any wave, then send the next batch.
 
-A `Workers: <n>` line in a nested brief replaces the script's number. `orchestrate.maxWorkers` in
+Read `share` from the same line. It is how many test workers each slice in the wave may start.
+When the wave holds more than one worker, the share prefix on every acceptance command that boots a
+test runner is `VITEST_MAX_WORKERS=<share> WIREIT_PARALLEL=1`. A repo on another runner sets that
+runner's worker variable instead. A wave of one worker takes no prefix, so a run alone keeps its
+default pool. For a wave under the ceiling, rerun the script with `--workers <n>` and read `share`
+again. The reason is measured: nine concurrent suites on 18 cores passed in 313 s at a share of 4,
+and with no prefix they took 1721 s and timed out about 110 tests each.
+
+A `Workers: <n>` line in a nested brief replaces the script's number, and a `Share: <n>` line
+replaces its share. `orchestrate.maxWorkers` in
 `.claude/houserules.config.json` overrides the machine-derived ceiling for the repo.
 
 The lower slice bound is here. A brief under about three steps, or one

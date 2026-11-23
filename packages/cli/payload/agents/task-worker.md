@@ -76,7 +76,8 @@ The main conversation starts it before the spawn and stops it after `DONE`.
 
 **Run the acceptance yourself.** A slice reported without its acceptance output is sent back
 unreviewed, every time. Run each command exactly as your brief gives it, whole, in one Bash call
-of its own. A brief command that holds `&&` or `|` runs that way, and its `$` line is that string.
+of its own. An environment prefix on it, such as `VITEST_MAX_WORKERS=4`, is part of the command:
+never strip it, and never add one your brief did not give. A brief command that holds `&&` or `|` runs that way, and its `$` line is that string.
 A brief command that spans several lines runs that way, and the report gives it line for line: its
 first line after `$ `, each later line as it ran with nothing added before it, then its output.
 The ban covers only what you add yourself: a pipe, a tail, a redirect, or a chained second

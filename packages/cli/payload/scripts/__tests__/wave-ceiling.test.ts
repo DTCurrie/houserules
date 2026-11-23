@@ -27,31 +27,31 @@ describe('ceilingFor', () => {
 });
 
 describe('waveFigures', () => {
-  it('divides the budget by the ceiling when no workers are given', () => {
+  it('divides the wave budget, half the budget, by the ceiling when no workers are given', () => {
     expect(waveFigures({ ncpu: 18, load1: 3 })).toEqual({
       ceiling: 9,
       ncpu: 18,
       load1: 3,
       source: 'cpu',
       budget: 72,
-      share: 8,
+      share: 4,
     });
   });
 
-  it('divides the budget by the workers when given', () => {
-    expect(waveFigures({ ncpu: 18, load1: 3, workers: 4 }).share).toBe(18);
+  it('divides the wave budget by the workers when given', () => {
+    expect(waveFigures({ ncpu: 18, load1: 3, workers: 4 }).share).toBe(9);
   });
 
   it('halves the budget and ceiling at full load', () => {
     const figures = waveFigures({ ncpu: 18, load1: 18 });
 
     expect([figures.ceiling, figures.budget, figures.share]).toEqual([
-      4, 36, 9,
+      4, 36, 4,
     ]);
   });
 
   it('falls back to the ceiling for a zero workers count', () => {
-    expect(waveFigures({ ncpu: 18, load1: 3, workers: 0 }).share).toBe(8);
+    expect(waveFigures({ ncpu: 18, load1: 3, workers: 0 }).share).toBe(4);
   });
 });
 
@@ -85,14 +85,15 @@ describe('wave-ceiling.mjs (installed)', () => {
     expect(parsed.share).toBeLessThanOrEqual(parsed.budget);
   });
 
-  it('gives the whole budget as the share for one worker', () => {
+  it('gives the whole wave budget as the share for one worker', () => {
     const root = useInstalledRepo('pnpm-monorepo', { modules: 'orchestrate' });
 
     const result = runScript(root, SCRIPT, { args: ['--workers', '1'] });
 
     expect(result.status, result.stderr).toBe(0);
     const parsed = JSON.parse(result.stdout.trim());
-    expect(parsed.share).toBe(parsed.budget);
+    expect(parsed.share).toBeLessThan(parsed.budget);
+    expect(parsed.share).toBeGreaterThanOrEqual(parsed.budget / 2);
   });
 
   it('ignores a non-numeric workers value and exits 0', () => {

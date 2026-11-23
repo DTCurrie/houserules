@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  WAVE_WORKERS_PER_CORE,
   WORKERS_PER_CORE,
   budgetFor,
   divideShare,
@@ -14,6 +15,13 @@ describe('budgetFor', () => {
   it('is four workers per core on 18 cores at load 3', () => {
     expect(WORKERS_PER_CORE).toBe(4);
     expect(budgetFor({ ncpu: 18, load1: 3 })).toBe(72);
+  });
+
+  it('is two workers per core for a wave, 36 on 18 cores', () => {
+    expect(WAVE_WORKERS_PER_CORE).toBe(2);
+    expect(
+      budgetFor({ ncpu: 18, load1: 3, workersPerCore: WAVE_WORKERS_PER_CORE }),
+    ).toBe(36);
   });
 
   it('halves the cores when load reaches the core count', () => {

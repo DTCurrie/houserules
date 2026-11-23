@@ -20,6 +20,7 @@ Domain: all | <path roots the orchestrator and its workers may write, comma-sepa
 Siblings: none | <the domains of the other orchestrators in flight>
 Seam: none | <paths the layer above wrote, comma-separated>
 Workers: <n, optional: the wave ceiling for this orchestrator>
+Share: <n, optional: the test workers each of its task-workers may start>
 Ruling: <on a resume only: the answer to the last NEEDS_RULING, verbatim>
 ```
 
@@ -147,7 +148,8 @@ returned.
 
 **Workers.** Under `all`, the main conversation runs `node .claude/scripts/wave-ceiling.mjs` once and
 divides `ceiling` across the ready set, at least one each. It sends each orchestrator its share as
-`Workers:`. An absent line means the orchestrator runs the script itself.
+`Workers:`. It sends the script's `share` to each one unchanged as `Share:`, since the ready set
+together still runs `ceiling` workers. An absent line means the orchestrator runs the script itself.
 
 **Ownership.** `ROADMAP.md` is the main conversation's: the `IN PROGRESS` flip before each spawn,
 the `DONE` flip on each report, the `## Log` line, the `**Updated:**` bump, and the `plan-lint.mjs`

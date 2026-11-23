@@ -207,6 +207,7 @@ describe('orchestrate', () => {
       'Siblings:',
       'Seam:',
       'Workers:',
+      'Share:',
       'Ruling:',
     ])('defines the %s brief label in nested.md', (label) => {
       expect(nestedText).toContain(label);
@@ -413,6 +414,35 @@ describe('orchestrate', () => {
       ).toBe(true);
       expect(Object.keys(manifestOf(root).files)).toContain(
         '.claude/scripts/wave-ceiling.mjs',
+      );
+    });
+
+    it('prefixes the brief template acceptance command with the share', () => {
+      expect(skillText).toContain(
+        '> Acceptance: `<share prefix> <command(s), scoped to your owned paths>`',
+      );
+    });
+
+    it('names the share prefix variables in the slicing wave-ceiling step', () => {
+      const slicing = readFileSync(
+        join(root, '.claude/skills/orchestrate/references/slicing.md'),
+        'utf8',
+      );
+
+      expect(slicing).toContain(
+        '`VITEST_MAX_WORKERS=<share> WIREIT_PARALLEL=1`',
+      );
+    });
+
+    it('tells the phase-orchestrator where its share comes from', () => {
+      expect(orchestratorText.replace(/\s+/g, ' ')).toContain(
+        '`Share:` is the share `references/slicing.md` "Wave ceiling" prefixes onto each acceptance command, and absent it you read `share` from that same call.',
+      );
+    });
+
+    it('tells the task-worker to keep an environment prefix as given', () => {
+      expect(agentText.replace(/\s+/g, ' ')).toContain(
+        'never strip it, and never add one your brief did not give.',
       );
     });
 

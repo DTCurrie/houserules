@@ -23,7 +23,9 @@ slicing and never rewrite it, because a change it needs goes up under `Requests`
 sibling's domain goes under `Out of scope` and is never fixed. A `Siblings:` entry may be another
 plan's phase, labeled per `references/nested.md` "The ready set", and you treat it as a sibling
 phase of your own plan. A finding there names that label. `Workers:` is the wave ceiling, and
-absent it you run `node .claude/scripts/wave-ceiling.mjs` yourself. `Ruling:` arrives on a resume,
+absent it you run `node .claude/scripts/wave-ceiling.mjs` yourself. `Share:` is the share
+`references/slicing.md` "Wave ceiling" prefixes onto each acceptance command, and absent it you
+read `share` from that same call. `Ruling:` arrives on a resume,
 and you continue where you stopped.
 
 ## When you return

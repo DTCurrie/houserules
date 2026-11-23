@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { ConfigTarget } from '@houserules/payload/config';
 import type { WorkspacePackage } from '@houserules/payload/workspaces';
+import type { BudgetSignals } from '@houserules/payload/resource-budget';
 import {
+  budgetShareEnv,
   fullScopeEntries,
   planLines,
   resolveScope,
@@ -67,6 +70,51 @@ function useStubVerifyRunner(
     const verify = config.verify as { runner?: string; timeoutMs?: number };
     verify.runner = './stub-runner.sh';
     if (timeoutMs !== undefined) verify.timeoutMs = timeoutMs;
+  });
+}
+
+const SHARE_VARIABLES = [
+  'VITEST_MAX_WORKERS',
+  'WIREIT_PARALLEL',
+  'pnpm_config_workspace_concurrency',
+] as const;
+
+/** Swaps the stub runner for one that records each share variable, or `unset`, per call. */
+function useEnvRecordingRunner(root: string): void {
+  useStubVerifyRunner(root);
+  const lines = SHARE_VARIABLES.map(
+    (name) => `echo "${name}=\${${name}-unset}" >> runner-env.txt`,
+  );
+  writeFileSync(
+    join(root, 'stub-runner.sh'),
+    `#!/bin/sh\n${lines.join('\n')}\nexit 0\n`,
+  );
+}
+
+/** The share variables the first recorded child saw, `unset` for an absent one. */
+function recordedShare(root: string): Record<string, string> {
+  const lines = readFileSync(join(root, 'runner-env.txt'), 'utf8')
+    .trim()
+    .split('\n')
+    .slice(0, SHARE_VARIABLES.length);
+  return Object.fromEntries(lines.map((line) => line.split('=')));
+}
+
+/**
+ * Runs `--run` with none of the share variables inherited from this test process,
+ * so a wave's own share never leaks into the case, then applies `parentEnv`.
+ */
+function runVerifyWithParentEnv(
+  root: string,
+  parentEnv: Record<string, string> = {},
+) {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env.NODE_PATH;
+  for (const name of SHARE_VARIABLES) delete env[name];
+  return spawnSync(process.execPath, [join(root, SCRIPT), '--run'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...env, ...parentEnv },
   });
 }
 
@@ -273,6 +321,54 @@ describe('planLines', () => {
   });
 });
 
+describe('budgetShareEnv', () => {
+  function fakeBudgetSignals(ncpu: number, load1: number): () => BudgetSignals {
+    return () => ({ ncpu, load1, availableMemory: 0 });
+  }
+
+  it('gives a run alone on 18 cores the outer fan-out 4 and no vitest cap', () => {
+    const env = budgetShareEnv({ PATH: '/bin' }, fakeBudgetSignals(18, 3));
+    expect(env).toEqual({
+      PATH: '/bin',
+      WIREIT_PARALLEL: '4',
+      pnpm_config_workspace_concurrency: '4',
+    });
+  });
+
+  it('halves the fan-out to 2 when the load reaches the core count', () => {
+    const env = budgetShareEnv({}, fakeBudgetSignals(18, 18));
+    expect(env.WIREIT_PARALLEL).toBe('2');
+    expect(env.pnpm_config_workspace_concurrency).toBe('2');
+    expect(env).not.toHaveProperty('VITEST_MAX_WORKERS');
+  });
+
+  it('gives a 4-core machine the fan-out 5, its budget 16 over a vitest pool of 3', () => {
+    const env = budgetShareEnv({}, fakeBudgetSignals(4, 0));
+    expect(env.WIREIT_PARALLEL).toBe('5');
+    expect(env.pnpm_config_workspace_concurrency).toBe('5');
+  });
+
+  it('passes a caller-set share through unchanged and fills only what is unset', () => {
+    const parent = { VITEST_MAX_WORKERS: '8', WIREIT_PARALLEL: '1' };
+    const env = budgetShareEnv(parent, fakeBudgetSignals(18, 3));
+    expect(env).toEqual({
+      VITEST_MAX_WORKERS: '8',
+      WIREIT_PARALLEL: '1',
+      pnpm_config_workspace_concurrency: '4',
+    });
+    expect(parent).toEqual({ VITEST_MAX_WORKERS: '8', WIREIT_PARALLEL: '1' });
+  });
+
+  it('returns the parent environment unchanged when the signals cannot be read', () => {
+    const parent = { PATH: '/bin' };
+    const env = budgetShareEnv(parent, () => {
+      throw new Error('availableParallelism unavailable');
+    });
+    expect(env).toBe(parent);
+    expect(env).toEqual({ PATH: '/bin' });
+  });
+});
+
 describe('spawnTimedOut', () => {
   const etimedout = Object.assign(
     new Error('spawnSync ./stub-runner.sh ETIMEDOUT'),
@@ -423,6 +519,28 @@ describe('verify-changed.mjs --run', () => {
     const r = runScript(root, SCRIPT, { args: ['--run'] });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/@fix\/cityville: PASS/);
+  });
+
+  it('passes a run alone its outer fan-out and no vitest cap', () => {
+    useEnvRecordingRunner(root);
+    const r = runVerifyWithParentEnv(root);
+    expect(r.status, r.stderr).toBe(0);
+    const share = recordedShare(root);
+    expect(share.VITEST_MAX_WORKERS).toBe('unset');
+    expect(share.WIREIT_PARALLEL).toMatch(/^[1-9]\d*$/);
+    expect(share.pnpm_config_workspace_concurrency).toBe(share.WIREIT_PARALLEL);
+  });
+
+  it('passes a share the caller set to the child unchanged', () => {
+    useEnvRecordingRunner(root);
+    const r = runVerifyWithParentEnv(root, {
+      VITEST_MAX_WORKERS: '8',
+      WIREIT_PARALLEL: '1',
+    });
+    expect(r.status, r.stderr).toBe(0);
+    const share = recordedShare(root);
+    expect(share.VITEST_MAX_WORKERS).toBe('8');
+    expect(share.WIREIT_PARALLEL).toBe('1');
   });
 
   it('exits 0 with "nothing to verify" when there are no changes', () => {

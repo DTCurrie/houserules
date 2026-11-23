@@ -170,7 +170,7 @@ prohibition (below).
 > Context you need: `<the seam file(s) + the 2–3 files worth reading first>`.
 > Reference: `<the plan doc(s) this slice's output is judged against, by path, or "none">`.
 > Steps: `<the ≤8 steps>`.
-> Acceptance: `<command(s), scoped to your owned paths>` is your iteration loop. Run it, fix what is
+> Acceptance: `<share prefix> <command(s), scoped to your owned paths>` is your iteration loop. Run it, fix what is
 > red, run it again, and stop the moment it goes green. Run each command in its own Bash call,
 > untailed, report it as run, and name each failing test and its error.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.

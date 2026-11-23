@@ -14,7 +14,10 @@
  *              subagent executes, reporting one compact line per package.
  *   --json     emit the resolved scope as JSON (tests / tooling).
  *   --run      run each package's verify commands, then print "<pkg>: PASS|FAIL", plus a
- *              trimmed residue tail on failure. Exit 2 if any package failed.
+ *              trimmed residue tail on failure. Exit 2 if any package failed. Each child
+ *              gets the script budget's share for a run alone in WIREIT_PARALLEL and
+ *              pnpm_config_workspace_concurrency. A value the caller already set, and a
+ *              caller's VITEST_MAX_WORKERS, pass through unchanged.
  *
  * Config (houserules.config.json, verify block — mirrors fix): verify.runner / filterFlag /
  * runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
@@ -38,6 +41,13 @@ import {
   type WorkspacePackage,
 } from '@houserules/payload/workspaces';
 import { git, tail } from '@houserules/payload/proc';
+import {
+  budgetFor,
+  divideShare,
+  readSignals,
+  vitestDefaultPool,
+  type BudgetSignals,
+} from '@houserules/payload/resource-budget';
 
 export interface ScopeEntry {
   package: string;
@@ -285,6 +295,7 @@ function main() {
     runner,
     filterFlag,
     runPrefix,
+    budgetShareEnv(process.env, readSignals),
     verify.timeoutMs,
   );
   for (const r of residues) {
@@ -292,6 +303,31 @@ function main() {
     process.stderr.write(`${tail(r.output, 40)}\n`);
   }
   process.exit(residues.length > 0 ? 2 : 0);
+}
+
+/**
+ * The environment for each verify child: `parentEnv` plus the share variables for a run
+ * alone, whose share is the whole budget. That share never falls under vitest's default
+ * pool, so `VITEST_MAX_WORKERS` is left to the caller. A variable the caller already set
+ * passes through unchanged, so a run inside a wave keeps the wave's share. Signals that
+ * cannot be read return `parentEnv` as it is.
+ */
+export function budgetShareEnv(
+  parentEnv: NodeJS.ProcessEnv,
+  readBudgetSignals: () => BudgetSignals,
+): NodeJS.ProcessEnv {
+  let signals: BudgetSignals;
+  try {
+    signals = readBudgetSignals();
+  } catch {
+    return parentEnv;
+  }
+  const share = budgetFor({ ncpu: signals.ncpu, load1: signals.load1 });
+  const { outer } = divideShare(share, vitestDefaultPool(signals.ncpu));
+  const env = { ...parentEnv };
+  env.WIREIT_PARALLEL ??= String(outer);
+  env.pnpm_config_workspace_concurrency ??= String(outer);
+  return env;
 }
 
 /** The fields of a finished `spawnSync` result that {@link spawnTimedOut} reads. */
@@ -329,6 +365,7 @@ function runScope(
   runner: string,
   filterFlag: string,
   runPrefix: string[],
+  childEnv: NodeJS.ProcessEnv,
   timeoutMs?: number,
 ): Residue[] {
   const cap =
@@ -348,6 +385,7 @@ function runScope(
         verifyArgv(s.package, script, filterFlag, runPrefix),
         {
           cwd: root,
+          env: childEnv,
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
           timeout: cap,

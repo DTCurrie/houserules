@@ -6,8 +6,9 @@
  *
  * Prints one JSON line,
  * `{"ceiling":…,"ncpu":…,"load1":…,"source":…,"budget":…,"share":…}`, and exits 0.
- * `budget` is the script budget and `share` is one run's slice of it. `share` divides
- * the budget by `--workers <n>` when given, else by the ceiling. A missing or invalid
+ * `budget` is the script budget of a run alone. `share` is one worker's slice of the
+ * wave budget, which is half of it. `share` divides the wave budget by `--workers <n>`
+ * when given, else by the ceiling. A missing or invalid
  * `--workers` value is ignored. The ceiling is a number the orchestrator reads, not a
  * limit this script enforces. A missing or broken config never fails the run.
  */
@@ -16,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 
 import { loadConfigSafe } from '@houserules/payload/config';
 import {
+  WAVE_WORKERS_PER_CORE,
   budgetFor,
   readSignals,
   shareFor,
@@ -65,8 +67,9 @@ interface FiguresInput extends CeilingInput {
 }
 
 /**
- * The ceiling figures plus the script budget and one run's share. The share divides
- * by `workers` when it is a positive integer, else by the ceiling.
+ * The ceiling figures plus the script budget and one worker's share of the wave
+ * budget. The share divides by `workers` when it is a positive integer, else by the
+ * ceiling.
  */
 export function waveFigures({
   ncpu,
@@ -85,7 +88,12 @@ export function waveFigures({
   const budget = budgetFor({ ncpu, load1 });
   const hasWorkers =
     workers !== undefined && Number.isInteger(workers) && workers > 0;
-  const share = shareFor(budget, hasWorkers ? workers : ceiling);
+  const waveBudget = budgetFor({
+    ncpu,
+    load1,
+    workersPerCore: WAVE_WORKERS_PER_CORE,
+  });
+  const share = shareFor(waveBudget, hasWorkers ? workers : ceiling);
   return { ceiling, ncpu, load1, source, budget, share };
 }
 
