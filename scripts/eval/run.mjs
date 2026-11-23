@@ -10,6 +10,8 @@
  *     [--work <dir>] [--rev <rev>] [--timeout-min <minutes>]
  *   node scripts/eval/run.mjs --verdict-only --out <dir>
  *   node scripts/eval/run.mjs --fixture <dir> --arm <name> [--paid ... --samples <n>]
+ *   node scripts/eval/run.mjs --fixture <dir> --arm <name> --sample <k> [--paid --api-key-file
+ *     <file> --per-run <usd> --margin <ratio> --out <dir>]
  *
  * Options:
  *   --paid          Start real sessions. Without it the run is free: it builds the CLI,
@@ -39,6 +41,16 @@
  *   --arm           The `eval.json` arm to run: its prompt, its overlay over `.claude/`, and its
  *                   `model` when set. Artifacts go to `<out>/<arm>/sample-<k>/`, and `--samples`
  *                   counts only that arm's valid samples. Requires `--fixture`.
+ *   --sample        Run exactly sample `<k>` of `--arm` into `<out>/<arm>/sample-<k>/`. Requires
+ *                   `--fixture` and `--arm`. Refused with `--samples`, `--budget`, `--no-slug`,
+ *                   `--preflight`, or `--verdict-only`, and when `<k>` is not a positive integer.
+ *                   Under `--paid` it takes no `--budget`: it meters its one session against
+ *                   `--per-run` times one plus `--margin` over `--out`'s own ledger, and is
+ *                   refused when `<out>/<arm>/sample-<k>/` exists. A free run numbers the
+ *                   assembled sample `<k>`.
+ *
+ * `eval.json` may set `network` to a boolean (default false). Unless true, the child runs with
+ * `--disallowedTools WebFetch,WebSearch`, which does not cover network access through Bash.
  *
  * Environment:
  *   HOUSERULES_EVAL_CLI  A prebuilt `cli.js` to install with in place of building `--rev`. The
@@ -165,6 +177,17 @@ function parseSamples(text) {
 
 /**
  * @param {string | undefined} text
+ * @returns {number | undefined} `undefined` when the flag is absent.
+ */
+function parseSample(text) {
+  if (text === undefined) return undefined;
+  const sample = Number(text);
+  if (Number.isInteger(sample) && sample >= 1) return sample;
+  throw new UsageError(`--sample must be a positive integer, got "${text}"`);
+}
+
+/**
+ * @param {string | undefined} text
  * @returns {number}
  */
 function parseTimeoutMinutes(text) {
@@ -189,6 +212,7 @@ function parseOptions(argv) {
       preflight: { type: 'boolean', default: false },
       'verdict-only': { type: 'boolean', default: false },
       samples: { type: 'string' },
+      sample: { type: 'string' },
       'no-slug': { type: 'boolean', default: false },
       budget: { type: 'string' },
       'per-run': { type: 'string' },
@@ -209,6 +233,8 @@ function parseOptions(argv) {
     isPreflight: values.preflight,
     isVerdictOnly: values['verdict-only'],
     samples: parseSamples(values.samples),
+    isSamplesGiven: values.samples !== undefined,
+    sample: parseSample(values.sample),
     hasNoSlug: values['no-slug'],
     budget: numberFlag(values.budget),
     perRun: numberFlag(values['per-run']),
@@ -251,12 +277,34 @@ function readApiKey(path) {
 }
 
 /**
+ * Refuses `--sample` without `--fixture` and `--arm`, or beside a flag that sizes or replaces a
+ * multi-sample run.
+ *
+ * @param {ReturnType<typeof parseOptions>} options
+ */
+function refuseSampleFlags(options) {
+  if (options.fixture === undefined || options.arm === undefined)
+    throw new UsageError('--sample requires --fixture and --arm');
+  if (options.isSamplesGiven)
+    throw new UsageError('--sample takes no --samples');
+  if (options.budget !== undefined)
+    throw new UsageError(
+      '--sample takes no --budget, it meters against --per-run and --margin',
+    );
+  if (options.hasNoSlug || options.isPreflight || options.isVerdictOnly)
+    throw new UsageError(
+      '--sample takes no --no-slug, --preflight, or --verdict-only',
+    );
+}
+
+/**
  * Refuses `--arm` without `--fixture`, and `--fixture` without `--arm` or beside a flag only the
  * orchestrate-report check takes.
  *
  * @param {ReturnType<typeof parseOptions>} options
  */
 function refuseFixtureFlags(options) {
+  if (options.sample !== undefined) refuseSampleFlags(options);
   if (options.fixture === undefined) {
     if (options.arm !== undefined)
       throw new UsageError('--arm requires --fixture');
@@ -269,6 +317,22 @@ function refuseFixtureFlags(options) {
   }
   if (options.arm === undefined)
     throw new UsageError('--fixture requires --arm');
+}
+
+/**
+ * Refuses a paid `--sample` whose directory already holds artifacts.
+ *
+ * @param {ReturnType<typeof parseOptions>} options
+ * @param {import('./fixture-arm.mjs').ArmFixture} fixture
+ */
+function refuseExistingSample(options, fixture) {
+  if (options.out === undefined) return;
+  const dir = armSessionDir(resolve(options.out), {
+    arm: fixture.arm,
+    sample: options.sample,
+  });
+  if (existsSync(dir))
+    throw new UsageError(`--sample ${options.sample}: ${dir} already exists`);
 }
 
 /**
@@ -304,6 +368,12 @@ function refuseBeforeStart(options) {
       );
     }
     return { work, apiKey: null, fixture };
+  }
+  if (options.sample !== undefined) {
+    refuseExistingSample(options, fixture);
+    // `--sample` takes no `--budget`, so only `--per-run` and `--margin` are checked here.
+    requirePaidFlags({ ...options, budget: 0 });
+    options.budget = options.perRun * (1 + options.margin);
   }
   requirePaidFlags(options);
   if (options.isPreflight && options.perRun !== PROBE_CAP_USD) {
@@ -405,12 +475,13 @@ function fixtureDryRun(options, work, fixture) {
     cliPath,
     work,
     stamp: makeStamp(),
-    sample: 1,
+    sample: options.sample ?? 1,
   });
   const argv = childArgv({
     prompt: fixture.prompt,
     model: fixture.model,
     perRun: options.perRun ?? DRY_RUN_PER_RUN,
+    isNetworkAllowed: fixture.isNetworkAllowed,
   });
   console.log(`sample root ${root}`);
   console.log(['claude', ...argv].map(shellQuote).join(' '));
@@ -775,6 +846,7 @@ async function runArmSession(context, key) {
       prompt: fixture.prompt,
       model: fixture.model,
       perRun: context.options.perRun,
+      isNetworkAllowed: fixture.isNetworkAllowed,
     }),
     env: context.env,
     timeoutMinutes: context.options.timeoutMinutes,
@@ -820,10 +892,13 @@ async function armLoop(context) {
   const highest = existing.at(-1)?.number ?? 0;
   const missing = Math.max(options.samples - validCount, 0);
   /** @type {import('./layout.mjs').ArmKey[]} */
-  const jobs = Array.from({ length: missing }, (_, index) => ({
-    arm: fixture.arm,
-    sample: highest + index + 1,
-  }));
+  const jobs =
+    options.sample === undefined
+      ? Array.from({ length: missing }, (_, index) => ({
+          arm: fixture.arm,
+          sample: highest + index + 1,
+        }))
+      : [{ arm: fixture.arm, sample: options.sample }];
   const { refused } = await runMetered({
     out: context.out,
     budget: options.budget,

@@ -62,6 +62,13 @@ is a reason to prefer slicing along package or tsconfig-project boundaries where
 When slices in one wave share a project, leave the typecheck at the barrier and **say so in the
 brief**, so a worker does not add it back on its own.
 
+**A worker's iteration loop runs file-level when the repo sets it up.** When
+`.claude/houserules.config.json` sets `verify.relatedCommand` and `orchestrate.fileLevelAcceptance`
+is not `false`, write the slice's test acceptance with that template, with `{files}` expanded to the
+slice's owned test or source files. Otherwise keep the package-scoped form. The barrier, the phase
+close, and `/ready` stay package-level. The file-level run skips tests that reach the code through a
+child process, and it does not run the build first, so a green file-level run does not prove either.
+
 ## What a slice has to own
 
 **A slice owns the tests that assert its files' behavior, or it cannot finish.** If a slice changes

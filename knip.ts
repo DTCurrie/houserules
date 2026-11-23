@@ -24,9 +24,6 @@ const config: KnipConfig = {
         'scripts/bench/field-stop-runs.mjs',
         'scripts/bench/field-repro.mjs',
         'scripts/bench/verify-jobs.mjs',
-        // The paid behavioral check, documented in scripts/eval/README.md and invoked by hand as
-        // `node scripts/eval/run.mjs`. Nothing in the workspace imports it.
-        'scripts/eval/run.mjs',
         // The bench and eval suites, run by `test:scripts` as files of their own. Its command
         // names three globs, and knip reads only the first as test entries.
         'scripts/bench/__tests__/*.test.mjs',

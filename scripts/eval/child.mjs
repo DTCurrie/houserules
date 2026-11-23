@@ -13,12 +13,16 @@ import { join } from 'node:path';
 import { STDERR, STREAM, TRANSCRIPTS } from './layout.mjs';
 
 const MS_PER_MINUTE = 60_000;
+/** The built-in tools that reach the network. Bash's own network access is not covered. */
+const NETWORK_TOOLS = 'WebFetch,WebSearch';
 
 /**
  * The argv after `claude` for one child session, prompt right after `-p`.
  *
- * @param {{ prompt: string, model: string, perRun: number, tools?: string }} options `tools`,
- *   when set, adds `--tools <value>`, as preflight probe (a) passes `""`.
+ * @param {{ prompt: string, model: string, perRun: number, tools?: string, isNetworkAllowed?: boolean }} options
+ *   `tools`, when set, adds `--tools <value>`, as preflight probe (a) passes `""`. `isNetworkAllowed`
+ *   `false` adds `--disallowedTools WebFetch,WebSearch`. `true` or absent adds nothing, so the
+ *   preflight calls, which pass none, keep their argv.
  * @returns {string[]}
  */
 export function childArgv(options) {
@@ -38,6 +42,9 @@ export function childArgv(options) {
     String(options.perRun),
   ];
   if (options.tools !== undefined) argv.push('--tools', options.tools);
+  if (options.isNetworkAllowed === false) {
+    argv.push('--disallowedTools', NETWORK_TOOLS);
+  }
   return argv;
 }
 

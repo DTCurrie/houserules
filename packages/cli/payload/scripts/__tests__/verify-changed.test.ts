@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import type { ConfigTarget } from '@houserules/payload/config';
@@ -9,6 +14,9 @@ import type { BudgetSignals } from '@houserules/payload/resource-budget';
 import {
   budgetShareEnv,
   fullScopeEntries,
+  jobEdges,
+  jobPlan,
+  nextJob,
   planLines,
   resolveScope,
   resolveVerifyCommands,
@@ -101,17 +109,18 @@ function recordedShare(root: string): Record<string, string> {
 }
 
 /**
- * Runs `--run` with none of the share variables inherited from this test process,
+ * Runs `args`, `--run` by default, with none of the share variables inherited from this test process,
  * so a wave's own share never leaks into the case, then applies `parentEnv`.
  */
 function runVerifyWithParentEnv(
   root: string,
   parentEnv: Record<string, string> = {},
+  args: string[] = ['--run'],
 ) {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.NODE_PATH;
   for (const name of SHARE_VARIABLES) delete env[name];
-  return spawnSync(process.execPath, [join(root, SCRIPT), '--run'], {
+  return spawnSync(process.execPath, [join(root, SCRIPT), ...args], {
     cwd: root,
     encoding: 'utf8',
     env: { ...env, ...parentEnv },
@@ -428,6 +437,151 @@ describe('spawnTimedOut', () => {
       expect(spawnTimedOut(result, cap)).toBe(expected);
     },
   );
+});
+
+describe('jobPlan', () => {
+  const eighteenCores = (): BudgetSignals => ({
+    ncpu: 18,
+    load1: 3,
+    availableMemory: 0,
+  });
+
+  it('runs 4 jobs on 18 cores, each child getting a fan-out of 1 and no vitest cap', () => {
+    expect(jobPlan({ PATH: '/bin' }, eighteenCores, true)).toEqual({
+      limit: 4,
+      childEnv: {
+        PATH: '/bin',
+        WIREIT_PARALLEL: '1',
+        pnpm_config_workspace_concurrency: '1',
+      },
+    });
+  });
+
+  it('runs one job with the run-alone share when concurrent is false', () => {
+    expect(jobPlan({ PATH: '/bin' }, eighteenCores, false)).toEqual({
+      limit: 1,
+      childEnv: {
+        PATH: '/bin',
+        WIREIT_PARALLEL: '4',
+        pnpm_config_workspace_concurrency: '4',
+      },
+    });
+  });
+
+  it('runs one job and passes the share through when the caller set VITEST_MAX_WORKERS', () => {
+    expect(jobPlan({ VITEST_MAX_WORKERS: '8' }, eighteenCores, true)).toEqual({
+      limit: 1,
+      childEnv: {
+        VITEST_MAX_WORKERS: '8',
+        WIREIT_PARALLEL: '4',
+        pnpm_config_workspace_concurrency: '4',
+      },
+    });
+  });
+
+  it('runs one job with the parent environment as it is when the signals cannot be read', () => {
+    const parent = { PATH: '/bin' };
+    const plan = jobPlan(
+      parent,
+      () => {
+        throw new Error('availableParallelism unavailable');
+      },
+      true,
+    );
+    expect(plan.limit).toBe(1);
+    expect(plan.childEnv).toBe(parent);
+  });
+});
+
+describe('jobEdges', () => {
+  it('lists the in-scope packages a manifest names in any dependency field, dropping the rest', () => {
+    const packages: WorkspacePackage[] = [
+      pkg('core'),
+      pkg('mid', { core: 'workspace:*' }),
+      {
+        ...pkg('outer'),
+        pkg: {
+          name: 'outer',
+          devDependencies: { mid: 'workspace:*' },
+          peerDependencies: { core: 'workspace:*' },
+          optionalDependencies: { lone: 'workspace:*' },
+        },
+      },
+      pkg('lone'),
+    ];
+    const scope: ScopeEntry[] = ['core', 'mid', 'outer'].map((name) => ({
+      package: name,
+      reason: 'changed',
+    }));
+
+    expect(jobEdges(scope, packages)).toEqual(
+      new Map([
+        ['core', []],
+        ['mid', ['core']],
+        ['outer', ['mid', 'core']],
+      ]),
+    );
+  });
+
+  it('gives a single-package entry with no workspace manifest no edges', () => {
+    expect(
+      jobEdges([{ package: '.', reason: 'changed', single: true }], []),
+    ).toEqual(new Map([['.', []]]));
+  });
+});
+
+describe('nextJob', () => {
+  it.each([
+    {
+      name: 'the first pending job in scope order when none has an edge',
+      pending: ['a', 'b'],
+      edges: { a: [], b: [] },
+      exited: [],
+      runningCount: 1,
+      expected: 'a',
+    },
+    {
+      name: 'a later job when the first waits on a dependency still running',
+      pending: ['b', 'c'],
+      edges: { b: ['a'], c: [] },
+      exited: [],
+      runningCount: 1,
+      expected: 'c',
+    },
+    {
+      name: 'a dependent once its dependency has exited',
+      pending: ['b'],
+      edges: { b: ['a'] },
+      exited: ['a'],
+      runningCount: 0,
+      expected: 'b',
+    },
+    {
+      name: 'nothing while every pending job waits on a running one',
+      pending: ['b', 'c'],
+      edges: { b: ['a'], c: ['a'] },
+      exited: [],
+      runningCount: 1,
+      expected: undefined,
+    },
+    {
+      name: 'the first pending job of a cycle when nothing is running',
+      pending: ['a', 'b'],
+      edges: { a: ['b'], b: ['a'] },
+      exited: [],
+      runningCount: 0,
+      expected: 'a',
+    },
+  ])('starts $name', ({ pending, edges, exited, runningCount, expected }) => {
+    expect(
+      nextJob(
+        pending,
+        new Map(Object.entries(edges)),
+        new Set(exited),
+        runningCount,
+      ),
+    ).toBe(expected);
+  });
 });
 
 describe('verify-changed.mjs --json', () => {
@@ -810,5 +964,177 @@ describe('verify-changed.mjs --run', () => {
         /@fix\/cityville\s+\[changed\]\s+SKIPPED \(no verify commands\)/,
       );
     });
+  });
+});
+
+interface JobSpan {
+  start: number;
+  end: number;
+}
+
+/**
+ * Swaps the stub runner for one that appends `start <pkg> <ms>` and `end <pkg> <ms>` to
+ * `timeline.txt` around a wait of `jobs[pkg].ms`, then fails when `jobs[pkg].fail` is set.
+ */
+function useTimelineRunner(
+  root: string,
+  jobs: Record<string, { ms: number; fail?: boolean }>,
+  { concurrent }: { concurrent?: boolean } = {},
+): void {
+  useStubVerifyRunner(root);
+  const timeline = join(root, 'timeline.txt');
+  writeFileSync(
+    join(root, 'stub-timeline.mjs'),
+    [
+      "import { appendFileSync } from 'node:fs';",
+      'const name = process.argv[3];',
+      `const { ms, fail } = ${JSON.stringify(jobs)}[name];`,
+      `appendFileSync(${JSON.stringify(timeline)}, \`start \${name} \${Date.now()}\\n\`);`,
+      'setTimeout(() => {',
+      `  appendFileSync(${JSON.stringify(timeline)}, \`end \${name} \${Date.now()}\\n\`);`,
+      '  if (fail) {',
+      '    process.stderr.write(`${name} broke: type error TS2322\\n`);',
+      '    process.exitCode = 1;',
+      '  }',
+      '}, ms);',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(root, 'stub-runner.sh'),
+    `#!/bin/sh\nexec node ${JSON.stringify(join(root, 'stub-timeline.mjs'))} "$@"\n`,
+  );
+  if (concurrent !== undefined)
+    editHouseConfig(root, (config) => {
+      (config.verify as { concurrent?: boolean }).concurrent = concurrent;
+    });
+}
+
+/** Each package's recorded start and end, in epoch milliseconds. */
+function readTimeline(root: string): Record<string, JobSpan> {
+  const spans: Record<string, JobSpan> = {};
+  for (const line of readFileSync(join(root, 'timeline.txt'), 'utf8')
+    .trim()
+    .split('\n')) {
+    const [event, name, ms] = line.split(' ') as [
+      'start' | 'end',
+      string,
+      string,
+    ];
+    spans[name] = { ...spans[name], [event]: Number(ms) } as JobSpan;
+  }
+  return spans;
+}
+
+function repoWithIndependentPackages(): string {
+  return useInstalledRepo('pnpm-monorepo', { modules: 'verify-changed' });
+}
+
+/** The fixture plus `toolkits/shared` as `@fix/shared`, which cityville and studio both depend on. */
+function repoWithSharedDependency(): string {
+  const root = useInstalledRepo('pnpm-monorepo', { modules: 'verify-changed' });
+  mkdirSync(join(root, 'toolkits/shared'), { recursive: true });
+  writeFileSync(
+    join(root, 'toolkits/shared/package.json'),
+    JSON.stringify({ name: '@fix/shared', private: true }, null, 2),
+  );
+  for (const dir of ['games/cityville', 'apps/studio']) {
+    const path = join(root, dir, 'package.json');
+    const manifest = readJson<CityvillePackageJson>(path);
+    manifest.dependencies = { '@fix/shared': 'workspace:*' };
+    writeFileSync(path, JSON.stringify(manifest, null, 2));
+  }
+  return root;
+}
+
+const RUN_FULL = ['--run', '--full'];
+
+describe('verify-changed.mjs --run jobs', () => {
+  it('starts two packages with no dependency edge between them together', () => {
+    const root = repoWithIndependentPackages();
+    useTimelineRunner(root, {
+      '@fix/cityville': { ms: 400 },
+      '@fix/studio': { ms: 400 },
+    });
+
+    const r = runVerifyWithParentEnv(root, {}, RUN_FULL);
+
+    expect(r.status, r.stderr).toBe(0);
+    const spans = readTimeline(root);
+    expect(
+      spans['@fix/studio']!.start,
+      'studio should start before cityville ends',
+    ).toBeLessThan(spans['@fix/cityville']!.end);
+  });
+
+  it('starts a dependent only after the job of the package it depends on exits', () => {
+    const root = repoWithStudioDependingOnCityville();
+    useTimelineRunner(root, {
+      '@fix/cityville': { ms: 400 },
+      '@fix/studio': { ms: 100 },
+    });
+
+    const r = runVerifyWithParentEnv(root, {}, RUN_FULL);
+
+    expect(r.status, r.stderr).toBe(0);
+    const spans = readTimeline(root);
+    expect(spans['@fix/studio']!.start).toBeGreaterThanOrEqual(
+      spans['@fix/cityville']!.end,
+    );
+  });
+
+  it('runs one job at a time in scope order when verify.concurrent is false', () => {
+    const root = repoWithIndependentPackages();
+    useTimelineRunner(
+      root,
+      { '@fix/cityville': { ms: 400 }, '@fix/studio': { ms: 100 } },
+      { concurrent: false },
+    );
+
+    const r = runVerifyWithParentEnv(root, {}, RUN_FULL);
+
+    expect(r.status, r.stderr).toBe(0);
+    const spans = readTimeline(root);
+    expect(spans['@fix/studio']!.start).toBeGreaterThanOrEqual(
+      spans['@fix/cityville']!.end,
+    );
+  });
+
+  it('a package two in-scope packages both depend on exits before either dependent starts, so no two jobs write its build output at once', () => {
+    const root = repoWithSharedDependency();
+    useTimelineRunner(root, {
+      '@fix/shared': { ms: 400 },
+      '@fix/cityville': { ms: 100 },
+      '@fix/studio': { ms: 100 },
+    });
+
+    const r = runVerifyWithParentEnv(root, {}, RUN_FULL);
+
+    expect(r.status, r.stderr).toBe(0);
+    const spans = readTimeline(root);
+    expect(
+      Math.min(spans['@fix/cityville']!.start, spans['@fix/studio']!.start),
+    ).toBeGreaterThanOrEqual(spans['@fix/shared']!.end);
+  });
+
+  it('prints every verdict and residue block in scope order when the first job in scope finishes last', () => {
+    const root = repoWithIndependentPackages();
+    useTimelineRunner(root, {
+      '@fix/cityville': { ms: 800, fail: true },
+      '@fix/studio': { ms: 100 },
+    });
+
+    const r = runVerifyWithParentEnv(root, {}, RUN_FULL);
+
+    const spans = readTimeline(root);
+    expect(
+      spans['@fix/studio']!.end,
+      'studio must finish first, or this case cannot tell scope order from finish order',
+    ).toBeLessThan(spans['@fix/cityville']!.end);
+    expect(r.status).toBe(2);
+    expect(r.stdout).toBe('@fix/cityville: FAIL (verify)\n@fix/studio: PASS\n');
+    expect(r.stderr).toBe(
+      '\n--- @fix/cityville :: verify ---\n@fix/cityville broke: type error TS2322\n\n',
+    );
   });
 });

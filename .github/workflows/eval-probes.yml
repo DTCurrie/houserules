@@ -1,0 +1,295 @@
+name: Eval probes
+
+# A manual measurement, never a check. Mode `eval` runs a committed fixture's arms, one job per
+# arm and sample on a fresh runner, and prints one table of validity, cost, and wall time. Mode
+# `bench` runs a free timing bench under `scripts/bench` with no secret and no approval.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: eval runs fixture arms, bench runs a timing bench
+        type: choice
+        options: [eval, bench]
+        default: eval
+      fixture:
+        description: Fixture directory under scripts/eval/fixtures
+        type: string
+        default: scripts/eval/fixtures/effort-stage-a
+      arms:
+        description: Comma list of the fixture's arms
+        type: string
+        default: medium
+      samples:
+        description: Samples per arm
+        type: string
+        default: '1'
+      paid:
+        description: Start real sessions that bill the eval key
+        type: boolean
+        default: false
+      per-run:
+        description: Dollar cap per session
+        type: string
+        default: '1.5'
+      margin:
+        description: Overshoot ratio the meter adds to each cap
+        type: string
+        default: '0.2'
+      total-cap:
+        description: Dollars the whole matrix may reach at worst case
+        type: string
+        default: '5'
+      max-parallel:
+        description: Arm jobs running at once
+        type: string
+        default: '2'
+      upload-transcripts:
+        description: With paid, upload scrubbed transcripts encrypted to the owner's key
+        type: boolean
+        default: false
+      bench:
+        description: Bench script under scripts/bench
+        type: string
+        default: scripts/bench/verify-jobs.mjs
+      bench-args:
+        description: Arguments for the bench, split on whitespace
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    if: inputs.mode == 'eval'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # The total cap is checked here, before any arm job starts, since each job meters only
+      # its own session.
+      - name: Plan matrix
+        id: matrix
+        env:
+          FIXTURE: ${{ inputs.fixture }}
+          ARMS: ${{ inputs.arms }}
+          SAMPLES: ${{ inputs.samples }}
+          PER_RUN: ${{ inputs.per-run }}
+          MARGIN: ${{ inputs.margin }}
+          TOTAL_CAP: ${{ inputs.total-cap }}
+        run: |
+          matrix=$(node scripts/eval/actions-plan.mjs matrix --fixture="$FIXTURE" --arms="$ARMS" --samples="$SAMPLES" --per-run="$PER_RUN" --margin="$MARGIN" --total="$TOTAL_CAP")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  arm:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: eval-probes
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.max-parallel) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      ARM: ${{ matrix.arm }}
+      SAMPLE: ${{ matrix.sample }}
+      PAID: ${{ inputs.paid }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Install Claude Code
+        if: inputs.paid
+        run: npm install --global @anthropic-ai/claude-code@2.1.330
+      - name: Write key file
+        if: inputs.paid
+        env:
+          EVAL_API_KEY: ${{ secrets.EVAL_ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$EVAL_API_KEY" ]; then
+            echo "secret EVAL_ANTHROPIC_API_KEY is empty" >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$EVAL_API_KEY" > "$RUNNER_TEMP/eval-api-key"
+          chmod 600 "$RUNNER_TEMP/eval-api-key"
+      # The run's exit is recorded, not fatal here, so the record and its upload still happen.
+      # The last step fails the job on it. The CLI comes from this checkout's build, so the run
+      # does not build a second copy at `--rev`.
+      - name: Run arm sample
+        id: run
+        env:
+          FIXTURE: ${{ inputs.fixture }}
+          PER_RUN: ${{ inputs.per-run }}
+          MARGIN: ${{ inputs.margin }}
+          HOUSERULES_EVAL_CLI: packages/cli/dist/cli.js
+        run: |
+          out="$RUNNER_TEMP/eval-out"
+          mkdir -p "$out"
+          args=(--fixture="$FIXTURE" --arm="$ARM" --sample="$SAMPLE")
+          if [ "$PAID" = "true" ]; then
+            args+=(--paid --api-key-file="$RUNNER_TEMP/eval-api-key" --per-run="$PER_RUN" --margin="$MARGIN" --out="$out")
+          fi
+          start=$(date +%s.%N)
+          status=0
+          node scripts/eval/run.mjs "${args[@]}" || status=$?
+          end=$(date +%s.%N)
+          wall=$(node -e 'console.log((process.argv[2] - process.argv[1]).toFixed(1))' "$start" "$end")
+          echo "exit=$status" >> "$GITHUB_OUTPUT"
+          echo "wall=$wall" >> "$GITHUB_OUTPUT"
+      - name: Remove key file
+        if: always() && inputs.paid
+        run: rm -f "$RUNNER_TEMP/eval-api-key"
+      - name: Write result record
+        if: steps.run.outputs.exit != ''
+        env:
+          RUN_EXIT: ${{ steps.run.outputs.exit }}
+          RUN_WALL: ${{ steps.run.outputs.wall }}
+        run: |
+          mode=dry-run
+          if [ "$PAID" = "true" ]; then mode=paid; fi
+          mkdir -p "$RUNNER_TEMP/result"
+          node scripts/eval/actions-report.mjs record --out="$RUNNER_TEMP/eval-out" --arm="$ARM" --sample="$SAMPLE" --mode="$mode" --exit="$RUN_EXIT" --wall="$RUN_WALL" --image="$ImageOS $ImageVersion" --file="$RUNNER_TEMP/result/result.json"
+      - name: Upload result record
+        if: steps.run.outputs.exit != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: result-${{ matrix.arm }}-${{ matrix.sample }}
+          path: ${{ runner.temp }}/result/result.json
+          if-no-files-found: error
+      - name: Scrub transcripts
+        if: inputs.upload-transcripts && inputs.paid
+        env:
+          EVAL_SCRUB_KEY: ${{ secrets.EVAL_ANTHROPIC_API_KEY }}
+        run: node scripts/eval/scrub.mjs "$RUNNER_TEMP/eval-out"
+      - name: Archive transcripts
+        if: inputs.upload-transcripts && inputs.paid
+        run: tar -czf "$RUNNER_TEMP/transcripts.tar.gz" -C "$RUNNER_TEMP/eval-out" .
+      # The key is imported into a throwaway GNUPGHOME and trusted by `--trust-model always` on
+      # this one command, so no trust database outlives the run. The plaintext archive is removed
+      # once the encrypted copy exists.
+      - name: Encrypt transcripts
+        if: inputs.upload-transcripts && inputs.paid
+        env:
+          PUBLIC_KEY: ${{ vars.EVAL_TRANSCRIPT_PUBLIC_KEY }}
+        run: |
+          if [ -z "$PUBLIC_KEY" ]; then
+            echo "variable EVAL_TRANSCRIPT_PUBLIC_KEY is empty" >&2
+            exit 1
+          fi
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          printf '%s\n' "$PUBLIC_KEY" | gpg --batch --import
+          fingerprint=$(gpg --batch --with-colons --list-keys | awk -F: '$1 == "fpr" { print $10; exit }')
+          gpg --batch --yes --trust-model always --recipient "$fingerprint" --output "$RUNNER_TEMP/transcripts.tar.gz.gpg" --encrypt "$RUNNER_TEMP/transcripts.tar.gz"
+          rm -f "$RUNNER_TEMP/transcripts.tar.gz"
+      - name: Upload encrypted transcripts
+        if: inputs.upload-transcripts && inputs.paid
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: transcripts-${{ matrix.arm }}-${{ matrix.sample }}
+          path: ${{ runner.temp }}/transcripts.tar.gz.gpg
+          if-no-files-found: error
+          retention-days: 1
+      - name: Fail on a failed run
+        if: steps.run.outputs.exit != '0'
+        env:
+          RUN_EXIT: ${{ steps.run.outputs.exit }}
+        run: |
+          echo "run.mjs exited ${RUN_EXIT:-without starting}" >&2
+          exit 1
+
+  summary:
+    needs: arm
+    if: always() && inputs.mode == 'eval'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: result-*
+          path: ${{ runner.temp }}/results
+      - name: Summary table
+        run: node scripts/eval/actions-report.mjs table "$RUNNER_TEMP/results" >> "$GITHUB_STEP_SUMMARY"
+
+  bench:
+    if: inputs.mode == 'bench'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # Checked before the install, so a refused path costs seconds, not a build.
+      - name: Check bench path
+        id: path
+        env:
+          BENCH: ${{ inputs.bench }}
+        run: |
+          path=$(node scripts/eval/actions-plan.mjs bench --path="$BENCH")
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      # No wireit cache action. A restored fingerprint would let a timed run skip its work.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # Same reason as CI's test job: a bench's test commands may import installed `.claude/` scripts.
+      - run: pnpm dogfood
+      # `read -a` splits the arguments on whitespace without the shell parsing them, so no
+      # argument can run a command.
+      - name: Run bench
+        env:
+          BENCH_PATH: ${{ steps.path.outputs.path }}
+          BENCH_ARGS: ${{ inputs.bench-args }}
+          # Same opt-out as CI's test job: ubuntu-24.04 denies Chrome's sandbox.
+          CHROME_NO_SANDBOX: '1'
+        run: |
+          read -r -a args <<< "$BENCH_ARGS"
+          log="$RUNNER_TEMP/bench.log"
+          status=0
+          node "$BENCH_PATH" "${args[@]}" 2>&1 | tee "$log" || status=$?
+          {
+            echo "## Bench \`$BENCH_PATH\`"
+            echo
+            echo '```'
+            cat "$log"
+            echo '```'
+            echo
+            echo "- exit: $status"
+            echo "- nproc: $(nproc)"
+            echo "- os.availableParallelism(): $(node -p 'require("node:os").availableParallelism()')"
+            echo "- runner image: $ImageOS $ImageVersion"
+            echo
+            echo "A runner reading describes that runner. A 4-core result does not set a constant for an 18-core machine. It is a second machine beside the local run, not a replacement for it."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

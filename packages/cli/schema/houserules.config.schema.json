@@ -98,6 +98,10 @@
           "description": "Trial. A file-level test command template, e.g. \"exec vitest related --run {files}\". With --paths, it replaces the \"test\" step of each changed package and runs through the runner and filter flag, with {files} expanded to the selected paths relative to the package (appended when absent). Unset keeps --paths package-level.",
           "type": "string",
           "minLength": 1
+        },
+        "concurrent": {
+          "description": "Whether `--run` starts the jobs of packages with no dependency edge between them together, within the resource budget. Unset or true runs them together, and a dependent still waits for the package it depends on. False runs every job one at a time in scope order.",
+          "type": "boolean"
         }
       },
       "required": ["runner", "filterFlag", "runScriptPrefix", "commands"],
@@ -196,6 +200,10 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "fileLevelAcceptance": {
+          "description": "Whether a task-worker iterates against `verify.relatedCommand`, the file-level test command, when that key is set. Unset or true uses it in worker loops only. False keeps every worker acceptance package-level.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false

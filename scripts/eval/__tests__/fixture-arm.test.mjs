@@ -11,9 +11,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { describe, it } from 'node:test';
 
+import { requireCommittedFixture } from '../fixture-arm.mjs';
 import { LEDGER, RUN_JSON, VERDICT } from '../layout.mjs';
 import { writeStubClaude } from './stub-claude.mjs';
 
@@ -307,6 +308,72 @@ describe('run --fixture refusals', () => {
         context.out,
       ],
     },
+    {
+      name: 'a non-boolean network',
+      error: /eval\.json "network" must be a boolean/,
+      args: () => [
+        '--fixture',
+        writeFixture(scratch('fixture'), { network: 'yes' }),
+        '--arm',
+        'a',
+      ],
+    },
+    {
+      name: '--sample without --fixture',
+      error: /--sample requires --fixture and --arm/,
+      args: () => ['--sample', '1'],
+    },
+    {
+      name: '--sample with --samples',
+      error: /--sample takes no --samples/,
+      args: (context) =>
+        armArgs(context, 'a', ['--sample', '1', '--samples', '1']),
+    },
+    {
+      name: '--sample with --budget',
+      error: /--sample takes no --budget/,
+      args: (context) =>
+        armArgs(context, 'a', [
+          '--sample',
+          '1',
+          '--budget',
+          '10',
+          '--per-run',
+          '1',
+          '--margin',
+          '0',
+        ]),
+    },
+    {
+      name: '--sample 0',
+      error: /--sample must be a positive integer, got "0"/,
+      args: (context) => armArgs(context, 'a', ['--sample', '0']),
+    },
+    {
+      name: '--sample 1.5',
+      error: /--sample must be a positive integer, got "1.5"/,
+      args: (context) => armArgs(context, 'a', ['--sample', '1.5']),
+    },
+    {
+      name: '--sample with --no-slug',
+      error: /--sample takes no --no-slug, --preflight, or --verdict-only/,
+      args: (context) => armArgs(context, 'a', ['--sample', '1', '--no-slug']),
+    },
+    {
+      name: '--sample whose directory already exists under --paid',
+      error: /--sample 2: .*a[\\/]sample-2 already exists/,
+      args: (context) => {
+        mkdirSync(join(context.out, 'a', 'sample-2'), { recursive: true });
+        return armArgs(context, 'a', [
+          '--sample',
+          '2',
+          '--per-run',
+          '1',
+          '--margin',
+          '0',
+        ]);
+      },
+    },
   ];
 
   for (const refusal of cases) {
@@ -534,4 +601,125 @@ describe('run --fixture collect', () => {
       false,
     );
   });
+});
+
+describe('run --fixture network', () => {
+  function printedCommand(fixture, context) {
+    const result = runEval(context, [
+      '--fixture',
+      fixture,
+      '--arm',
+      'a',
+      '--work',
+      context.work,
+    ]);
+    assert.equal(result.status, EXIT_OK, result.stderr);
+    return result.stdout.split('\n').find((line) => line.startsWith('claude '));
+  }
+
+  it('keeps the child off the web tools unless eval.json sets network true', () => {
+    const context = setup();
+    const lifted = writeFixture(scratch('fixture'), { network: true });
+
+    assert.match(
+      printedCommand(context.fixture, context),
+      /--disallowedTools WebFetch,WebSearch$/,
+    );
+    assert.doesNotMatch(printedCommand(lifted, context), /--disallowedTools/);
+  });
+});
+
+describe('run --sample', () => {
+  it('runs exactly one session numbered k under --paid', () => {
+    const context = setup();
+
+    const result = runEval(
+      context,
+      armArgs(context, 'a', [
+        '--sample',
+        '3',
+        '--per-run',
+        '1',
+        '--margin',
+        '0',
+      ]),
+    );
+
+    assert.equal(result.status, EXIT_OK, result.stderr);
+    assert.equal(stubSessions(context.recordDir).length, 1);
+    assert.deepEqual(
+      ledgerLines(context.out).map((line) => [line.arm, line.sample]),
+      [['a', 3]],
+    );
+    assert.deepEqual(readdirSync(join(context.out, 'a')), ['sample-3']);
+    assert.equal(readRun(context.out, 'a', 3).sample, 3);
+  });
+
+  it('meters one session against per-run times one plus margin over the out ledger', () => {
+    const context = setup();
+    const flags = ['--per-run', '1', '--margin', '0'];
+    const first = runEval(
+      context,
+      armArgs(context, 'a', ['--sample', '1', ...flags]),
+      { EVAL_STUB_COST: '0.50' },
+    );
+    assert.equal(first.status, EXIT_OK, first.stderr);
+
+    const second = runEval(
+      context,
+      armArgs(context, 'a', ['--sample', '2', ...flags]),
+      { EVAL_STUB_COST: '0.50' },
+    );
+
+    assert.equal(second.status, EXIT_NOT_STARTED, second.stderr);
+    assert.match(second.stdout, /^meter refused a\/sample-2$/m);
+    assert.equal(stubSessions(context.recordDir).length, 1);
+  });
+
+  it('numbers the assembled sample k in a free run', () => {
+    const context = setup();
+
+    const result = runEval(context, [
+      '--fixture',
+      context.fixture,
+      '--arm',
+      'a',
+      '--sample',
+      '4',
+      '--work',
+      context.work,
+    ]);
+
+    assert.equal(result.status, EXIT_OK, result.stderr);
+    assert.match(
+      /^sample root (.+)$/m.exec(result.stdout)[1],
+      /a[\\/]sample-4$/,
+    );
+    assert.equal(stubSessions(context.recordDir).length, 0);
+  });
+});
+
+describe('requireCommittedFixture', () => {
+  const root = resolve('/repo');
+
+  it('accepts a directory under scripts/eval/fixtures', () => {
+    assert.doesNotThrow(() =>
+      requireCommittedFixture('scripts/eval/fixtures/effort-stage-a', root),
+    );
+  });
+
+  const refused = [
+    ['a path outside the fixtures', 'packages/cli'],
+    ['a .. escape out of the fixtures', 'scripts/eval/fixtures/../../bench'],
+    ['the fixtures directory itself', 'scripts/eval/fixtures'],
+    ['an absolute path elsewhere', '/elsewhere/fixture'],
+  ];
+  for (const [name, path] of refused) {
+    it(`refuses ${name}`, () => {
+      assert.throws(
+        () => requireCommittedFixture(path, root),
+        /is not a directory under scripts[\\/]eval[\\/]fixtures/,
+      );
+    });
+  }
 });

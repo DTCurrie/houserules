@@ -45,6 +45,7 @@ const CLI_DIR_DEPTH = 3;
  * @property {string[]} collect Paths relative to the sample root, copied into `tree/` on exit.
  * @property {string} prompt The arm's prompt file, verbatim, which becomes the `-p` text.
  * @property {string} overlayDir The arm's overlay directory, absolute.
+ * @property {boolean} isNetworkAllowed Whether the child's tools may reach the network, from `eval.json`.
  */
 
 /**
@@ -90,6 +91,27 @@ function isInsideRelative(path) {
   return (
     !isAbsolute(path) && !path.split(/[\\/]+/).some((part) => part === '..')
   );
+}
+
+/** Where a fixture the Actions workflow runs must live, relative to the repo root. */
+const COMMITTED_FIXTURES = join('scripts', 'eval', 'fixtures');
+
+/**
+ * Refuses a fixture directory outside `scripts/eval/fixtures` under `repoRoot`, since a runner
+ * sees only committed files.
+ *
+ * @param {string} fixtureDir
+ * @param {string} repoRoot
+ * @throws {Error} Naming the path, when it resolves outside the committed fixtures.
+ */
+export function requireCommittedFixture(fixtureDir, repoRoot) {
+  const fixtures = resolve(repoRoot, COMMITTED_FIXTURES);
+  const fromFixtures = relative(fixtures, resolve(repoRoot, fixtureDir));
+  if (fromFixtures === '' || !isInsideRelative(fromFixtures)) {
+    throw new Error(
+      `fixture ${fixtureDir} is not a directory under ${COMMITTED_FIXTURES}`,
+    );
+  }
 }
 
 /**
@@ -172,6 +194,9 @@ export function loadArmFixture(fixtureDir, armName) {
   const promptPath = join(dir, requireString(arm, 'prompt', armWhere));
   const overlayDir = join(dir, requireString(arm, 'overlay', armWhere));
   if (arm.model !== undefined) requireString(arm, 'model', armWhere);
+  if (spec.network !== undefined && typeof spec.network !== 'boolean') {
+    throw new Error(`${where} "network" must be a boolean`);
+  }
   requireEntry(join(dir, REPO_DIR), 'directory');
   requireEntry(promptPath, 'file');
   requireEntry(overlayDir, 'directory');
@@ -185,6 +210,7 @@ export function loadArmFixture(fixtureDir, armName) {
     collect: readCollect(spec.collect, where),
     prompt: readFileSync(promptPath, 'utf8'),
     overlayDir,
+    isNetworkAllowed: spec.network === true,
   };
 }
 

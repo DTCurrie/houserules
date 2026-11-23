@@ -10,7 +10,7 @@
  * "<pkg>: FAIL (<step>, timed out after <n>s)" (n = timeoutMs / 1000, e.g. 0.5 or 30).
  *
  * Modes:
- *   (default)  print the resolved scope + the exact command per package — a plan the
+ *   (default)  print the resolved scope + the exact command per package, a plan the
  *              subagent executes, reporting one compact line per package.
  *   --json     emit the resolved scope as JSON (tests / tooling).
  *   --paths a,b  take the changed-path list from a root-relative comma list instead of
@@ -20,18 +20,26 @@
  *   --full     plan every workspace package as full scope, with no git call. Cannot be
  *              combined with --paths (exit 1).
  *   --run      run each package's verify commands, then print "<pkg>: PASS|FAIL", plus a
- *              trimmed residue tail on failure. Exit 2 if any package failed. Each child
- *              gets the script budget's share for a run alone in WIREIT_PARALLEL and
- *              pnpm_config_workspace_concurrency. A value the caller already set, and a
- *              caller's VITEST_MAX_WORKERS, pass through unchanged.
+ *              trimmed residue tail on failure. Exit 2 if any package failed. Packages
+ *              with no dependency edge between them run as concurrent jobs, up to the
+ *              outer fan-out of the script budget, and a package waits for every in-scope
+ *              package it depends on to exit. Verdict lines print in scope order, each
+ *              once every job ahead of it has exited. Residue tails print after all jobs,
+ *              in scope order. Each child gets its job's share of the budget in
+ *              WIREIT_PARALLEL and pnpm_config_workspace_concurrency, plus
+ *              VITEST_MAX_WORKERS when that share is under vitest's default pool. Jobs run
+ *              one at a time when the caller already set any of those three variables,
+ *              which then pass through unchanged, or when the budget signals cannot be read.
  *
- * Config (houserules.config.json, verify block — mirrors fix): verify.runner / filterFlag /
+ * Config (houserules.config.json, verify block, mirroring fix): verify.runner / filterFlag /
  * runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
- * "main"), verify.relatedCommand (whitespace-split template used with --paths). Per-target verifyCommands overrides commands for that package. A target
- * resolving to no verify commands is reported as skipped, never as passing.
+ * "main"), verify.relatedCommand (whitespace-split template used with --paths),
+ * verify.concurrent (false runs the --run jobs one at a time in scope order). Per-target
+ * verifyCommands overrides commands for that package. A target resolving to no verify
+ * commands is reported as skipped, never as passing.
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -51,9 +59,19 @@ import {
   budgetFor,
   divideShare,
   readSignals,
+  shareFor,
   vitestDefaultPool,
   type BudgetSignals,
 } from '@houserules/payload/resource-budget';
+
+/** The share variables a caller sets when this run sits inside its own budget. */
+const MILLISECONDS_PER_SECOND = 1000;
+
+const SHARE_VARIABLES = [
+  'VITEST_MAX_WORKERS',
+  'WIREIT_PARALLEL',
+  'pnpm_config_workspace_concurrency',
+] as const;
 
 /** Where the changed-path list came from. */
 export type ScopeSource = 'git' | 'paths' | 'full';
@@ -66,8 +84,8 @@ export interface ScopeEntry {
   argv?: string[][];
 }
 
-// Working-tree dirty paths + everything committed since the base branch (when it
-// resolves) — the same baseline the changeset nudge uses.
+// Working-tree dirty paths + everything committed since the base branch, when it
+// resolves. This is the same baseline the changeset nudge uses.
 function changedPaths(root: string, base: string): string[] {
   const out = new Set<string>();
   const status = git(root, ['status', '--porcelain']) ?? '';
@@ -92,6 +110,16 @@ function changedPaths(root: string, base: string): string[] {
   return [...out];
 }
 
+/** Every package name `p`'s manifest lists in any of its four dependency fields. */
+function manifestDependencyNames(workspacePackage: WorkspacePackage): string[] {
+  return Object.keys({
+    ...workspacePackage.pkg.dependencies,
+    ...workspacePackage.pkg.devDependencies,
+    ...workspacePackage.pkg.peerDependencies,
+    ...workspacePackage.pkg.optionalDependencies,
+  });
+}
+
 // Seed with the changed package names, then pull in every package that transitively
 // lists an in-scope one as a dependency.
 export function withDependents(
@@ -103,13 +131,7 @@ export function withDependents(
     packages.map((p) => [p.name, []]),
   );
   for (const p of packages) {
-    const deps = {
-      ...p.pkg.dependencies,
-      ...p.pkg.devDependencies,
-      ...p.pkg.peerDependencies,
-      ...p.pkg.optionalDependencies,
-    };
-    for (const d of Object.keys(deps))
+    for (const d of manifestDependencyNames(p))
       if (names.has(d) && d !== p.name) dependents.get(d)?.push(p.name);
   }
   const inScope = new Set(seed);
@@ -375,7 +397,7 @@ function selectScope(
   }
 }
 
-function main() {
+async function main() {
   const { mode, isFullScope, paths } = parseArgs(process.argv.slice(2));
   if (isFullScope && paths) {
     process.stderr.write(
@@ -456,11 +478,12 @@ function main() {
   }
 
   // --run: execute and emit the compact verdict.
-  const residues = runScope(
+  const residues = await runScope(
     scope,
+    jobEdges(scope, packages),
     root,
     runner,
-    budgetShareEnv(process.env, readSignals),
+    jobPlan(process.env, readSignals, verify.concurrent !== false),
     verify.timeoutMs,
   );
   for (const r of residues) {
@@ -495,7 +518,96 @@ export function budgetShareEnv(
   return env;
 }
 
-/** The fields of a finished `spawnSync` result that {@link spawnTimedOut} reads. */
+/** How many verify jobs may run at once, and the environment every job's children get. */
+interface JobPlan {
+  limit: number;
+  childEnv: NodeJS.ProcessEnv;
+}
+
+/**
+ * The job limit and child environment for `--run`, from signals read once. Concurrent, the
+ * limit is the outer fan-out of the run-alone share, and each child gets `shareFor(budget,
+ * limit)` divided the same way. That share never falls under vitest's default pool at the
+ * computed limit, so `VITEST_MAX_WORKERS` is left to the caller. The plan falls back to one job with
+ * {@link budgetShareEnv}'s environment when `isConcurrent` is false or the caller set any
+ * share variable, since the run then sits inside someone else's budget. Signals that cannot
+ * be read give one job and `parentEnv` as it is.
+ */
+export function jobPlan(
+  parentEnv: NodeJS.ProcessEnv,
+  readBudgetSignals: () => BudgetSignals,
+  isConcurrent: boolean,
+): JobPlan {
+  let signals: BudgetSignals;
+  try {
+    signals = readBudgetSignals();
+  } catch {
+    return { limit: 1, childEnv: parentEnv };
+  }
+  const isInsideCallerBudget = SHARE_VARIABLES.some(
+    (name) => parentEnv[name] !== undefined,
+  );
+  if (!isConcurrent || isInsideCallerBudget)
+    return { limit: 1, childEnv: budgetShareEnv(parentEnv, () => signals) };
+  const budget = budgetFor({ ncpu: signals.ncpu, load1: signals.load1 });
+  const pool = vitestDefaultPool(signals.ncpu);
+  const limit = divideShare(budget, pool).outer;
+  const { outer } = divideShare(shareFor(budget, limit), pool);
+  const childEnv: NodeJS.ProcessEnv = {
+    ...parentEnv,
+    WIREIT_PARALLEL: String(outer),
+    pnpm_config_workspace_concurrency: String(outer),
+  };
+  return { limit, childEnv };
+}
+
+/**
+ * Each scope entry's in-scope dependencies: the other scope packages its manifest lists in
+ * any dependency field. An entry with no workspace manifest, such as a single-package
+ * repo's, has none.
+ */
+export function jobEdges(
+  scope: ScopeEntry[],
+  packages: WorkspacePackage[],
+): Map<string, string[]> {
+  const inScope = new Set(scope.map((s) => s.package));
+  const byName = new Map(packages.map((p) => [p.name, p]));
+  return new Map(
+    scope.map((s) => {
+      const manifest = byName.get(s.package);
+      const deps = manifest
+        ? manifestDependencyNames(manifest).filter(
+            (d) => d !== s.package && inScope.has(d),
+          )
+        : [];
+      return [s.package, deps];
+    }),
+  );
+}
+
+/**
+ * The next job to start from `pending`, which is in scope order: the first whose every
+ * in-scope dependency has exited. When none is ready and `runningCount` is 0, the first
+ * pending job, so a dependency cycle never deadlocks the run. `undefined` means wait for a
+ * running job to exit.
+ */
+export function nextJob(
+  pending: string[],
+  edges: Map<string, string[]>,
+  exited: Set<string>,
+  runningCount: number,
+): string | undefined {
+  const ready = pending.find((name) =>
+    (edges.get(name) ?? []).every((dep) => exited.has(dep)),
+  );
+  if (ready !== undefined) return ready;
+  return runningCount === 0 ? pending[0] : undefined;
+}
+
+/**
+ * The fields of a finished step that {@link spawnTimedOut} reads. A step the cap killed
+ * carries an `ETIMEDOUT` error and its signal, the same shape `spawnSync` gives.
+ */
 export interface FinishedSpawn {
   error?: Error;
   signal: NodeJS.Signals | null;
@@ -523,59 +635,161 @@ interface Residue {
   output: string;
 }
 
-/** Runs each scope entry's commands in order, prints one PASS/FAIL line per package, and returns the failures. */
-function runScope(
-  scope: ScopeEntry[],
+interface StepResult extends FinishedSpawn {
+  status: number | null;
+  output: string;
+}
+
+/**
+ * Runs one step as a child and resolves once it closes, never rejecting. With `cap` set, a
+ * step still running after `cap` ms is sent SIGTERM and resolves with an `ETIMEDOUT` error.
+ * `output` is the step's stdout followed by its stderr.
+ */
+function runStep(
+  runner: string,
+  argv: string[],
+  root: string,
+  env: NodeJS.ProcessEnv,
+  cap: number | undefined,
+): Promise<StepResult> {
+  return new Promise((resolve) => {
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let error: Error | undefined;
+    let isSettled = false;
+    const child = spawn(runner, argv, {
+      cwd: root,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const timer =
+      cap === undefined
+        ? undefined
+        : setTimeout(() => {
+            error = Object.assign(new Error(`spawn ${runner} ETIMEDOUT`), {
+              code: 'ETIMEDOUT',
+            });
+            child.kill('SIGTERM');
+          }, cap);
+    const finish = (
+      status: number | null,
+      signal: NodeJS.Signals | null,
+    ): void => {
+      if (isSettled) return;
+      isSettled = true;
+      clearTimeout(timer);
+      resolve({
+        status,
+        signal,
+        ...(error && { error }),
+        output:
+          Buffer.concat(stdout).toString('utf8') +
+          Buffer.concat(stderr).toString('utf8'),
+      });
+    };
+    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
+    child.on('error', (spawnError) => {
+      error ??= spawnError;
+      finish(null, null);
+    });
+    child.on('close', finish);
+  });
+}
+
+/** One finished job: its verdict line, and the residue when it failed. */
+interface JobResult {
+  verdict: string;
+  residue?: Residue;
+}
+
+/** Runs `entry`'s steps in order, stopping at the first failure. */
+async function runJob(
+  entry: ScopeEntry,
   root: string,
   runner: string,
   childEnv: NodeJS.ProcessEnv,
+  cap: number | undefined,
+): Promise<JobResult> {
+  if (!entry.commands?.length)
+    return { verdict: `${entry.package}: SKIPPED (no verify commands)` };
+  for (const [index, script] of entry.commands.entries()) {
+    const stepResult = await runStep(
+      runner,
+      entry.argv?.[index] ?? [],
+      root,
+      childEnv,
+      cap,
+    );
+    if (stepResult.status === 0) continue;
+    const why = spawnTimedOut(stepResult, cap)
+      ? `, timed out after ${(cap ?? 0) / MILLISECONDS_PER_SECOND}s`
+      : '';
+    return {
+      verdict: `${entry.package}: FAIL (${script}${why})`,
+      residue: { pkg: entry.package, step: script, output: stepResult.output },
+    };
+  }
+  return { verdict: `${entry.package}: PASS` };
+}
+
+/**
+ * Runs the scope as jobs, up to `plan.limit` at once, each starting once every in-scope
+ * dependency's job has exited. Prints one verdict line per package in scope order, each
+ * once every job ahead of it has exited, and returns the failures in scope order.
+ */
+async function runScope(
+  scope: ScopeEntry[],
+  edges: Map<string, string[]>,
+  root: string,
+  runner: string,
+  plan: JobPlan,
   timeoutMs?: number,
-): Residue[] {
+): Promise<Residue[]> {
   const cap =
     typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : undefined;
-  const residues: Residue[] = [];
-  for (const s of scope) {
-    if (!s.commands?.length) {
-      process.stdout.write(`${s.package}: SKIPPED (no verify commands)\n`);
-      continue;
-    }
-    let failedStep: string | null = null;
-    let timedOut = false;
-    let output = '';
-    for (const [index, script] of (s.commands ?? []).entries()) {
-      const r = spawnSync(runner, s.argv?.[index] ?? [], {
-        cwd: root,
-        env: childEnv,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: cap,
-      });
-      if (r.status !== 0) {
-        failedStep = script;
-        output = (r.stdout || '') + (r.stderr || '');
-        timedOut = spawnTimedOut(r, cap);
-        break;
+  const byName = new Map(scope.map((s) => [s.package, s]));
+  const pending = scope.map((s) => s.package);
+  const exited = new Set<string>();
+  const results = new Map<string, JobResult>();
+  let runningCount = 0;
+  let printedCount = 0;
+  await new Promise<void>((resolve, reject) => {
+    const pump = (): void => {
+      for (;;) {
+        const head = scope[printedCount];
+        const result = head && results.get(head.package);
+        if (!result) break;
+        process.stdout.write(`${result.verdict}\n`);
+        printedCount++;
       }
-    }
-    if (failedStep) {
-      const why = timedOut ? `, timed out after ${cap! / 1000}s` : '';
-      process.stdout.write(`${s.package}: FAIL (${failedStep}${why})\n`);
-      residues.push({ pkg: s.package, step: failedStep, output });
-    } else {
-      process.stdout.write(`${s.package}: PASS\n`);
-    }
-  }
-  return residues;
+      if (printedCount === scope.length) {
+        resolve();
+        return;
+      }
+      while (runningCount < plan.limit) {
+        const name = nextJob(pending, edges, exited, runningCount);
+        const entry = name === undefined ? undefined : byName.get(name);
+        if (name === undefined || !entry) return;
+        pending.splice(pending.indexOf(name), 1);
+        runningCount++;
+        runJob(entry, root, runner, plan.childEnv, cap).then((done) => {
+          runningCount--;
+          exited.add(name);
+          results.set(name, done);
+          pump();
+        }, reject);
+      }
+    };
+    pump();
+  });
+  return scope.flatMap((s) => results.get(s.package)?.residue ?? []);
 }
 
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
 ) {
-  try {
-    main();
-  } catch {
-    // A verify helper must never take down a session with its own error.
-    process.exit(0);
-  }
+  // A verify helper must never take down a session with its own error.
+  main().catch(() => process.exit(0));
 }

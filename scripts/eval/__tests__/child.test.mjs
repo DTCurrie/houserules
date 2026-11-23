@@ -83,6 +83,33 @@ describe('child invocation', () => {
     assert.equal(argv[argv.indexOf('--tools') + 1], '');
   });
 
+  it('disallows the web tools when network is false and adds nothing otherwise', () => {
+    const base = ['-p', 'x', '--model', 'haiku', '--permission-mode', 'auto'];
+    const common = {
+      prompt: 'x',
+      model: 'haiku',
+      perRun: 1,
+    };
+    const prefix = [
+      ...base,
+      '--setting-sources',
+      'project,local',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--max-budget-usd',
+      '1',
+    ];
+
+    assert.deepEqual(childArgv({ ...common, isNetworkAllowed: false }), [
+      ...prefix,
+      '--disallowedTools',
+      'WebFetch,WebSearch',
+    ]);
+    assert.deepEqual(childArgv({ ...common, isNetworkAllowed: true }), prefix);
+    assert.deepEqual(childArgv(common), prefix);
+  });
+
   it('removes every CLAUDE variable and gives the child an empty stdin', async () => {
     const record = await runRecording(SAMPLE_PROMPT);
     assert.deepEqual(

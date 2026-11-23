@@ -20,6 +20,8 @@ export interface RunnerBlock {
   timeoutMs?: number | undefined;
   /** `verify` only: a command template that tests only the files `--paths` names. Unset means package-level. */
   relatedCommand?: string | undefined;
+  /** `verify` only: `false` runs the `--run` jobs one at a time. Unset or `true` runs independent packages together. */
+  concurrent?: boolean | undefined;
 }
 
 export interface ConfigTarget {
@@ -78,7 +80,11 @@ export interface HouseConfig {
   /** Read by the design plugin's `design.mjs`: the stylesheet Tailwind compiles, repo-root-relative. */
   design?: { themeEntry?: string };
   /** `maxWorkers` is read by `wave-ceiling.mjs`: the per-wave worker ceiling, overriding the machine-derived one. */
-  orchestrate?: { workerTools?: string[]; maxWorkers?: number };
+  orchestrate?: {
+    workerTools?: string[];
+    maxWorkers?: number;
+    fileLevelAcceptance?: boolean;
+  };
   targets: ConfigTarget[];
   [key: string]: unknown;
 }

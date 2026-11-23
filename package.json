@@ -299,6 +299,7 @@
         "scripts/health-kit/gather/SCHEMA.md",
         "scripts/bench/fixtures/**",
         "scripts/eval/fixtures/**",
+        ".github/workflows/eval-probes.yml",
         "packages/cli/payload/agents/phase-orchestrator.md",
         "packages/cli/src/commands/report/model-prices.ts",
         ".claude/scripts/**",

@@ -168,6 +168,12 @@ const HouseConfigSchema = z.strictObject({
         .describe(
           'Trial. A file-level test command template, e.g. "exec vitest related --run {files}". With --paths, it replaces the "test" step of each changed package and runs through the runner and filter flag, with {files} expanded to the selected paths relative to the package (appended when absent). Unset keeps --paths package-level.',
         ),
+      concurrent: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether `--run` starts the jobs of packages with no dependency edge between them together, within the resource budget. Unset or true runs them together, and a dependent still waits for the package it depends on. False runs every job one at a time in scope order.',
+        ),
     })
     .optional()
     .describe('Only present when the verify-changed module is enabled.'),
@@ -258,6 +264,12 @@ const HouseConfigSchema = z.strictObject({
         .optional()
         .describe(
           'The most task-workers one /orchestrate wave dispatches at once. Read at runtime by `wave-ceiling.mjs`, which otherwise derives the ceiling from the machine: half the CPU count, at least 2, halved again when the one-minute load is at or above the CPU count. Set it higher than the CPU count and it still wins, since it is an explicit override.',
+        ),
+      fileLevelAcceptance: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether a task-worker iterates against `verify.relatedCommand`, the file-level test command, when that key is set. Unset or true uses it in worker loops only. False keeps every worker acceptance package-level.',
         ),
     })
     .optional()
