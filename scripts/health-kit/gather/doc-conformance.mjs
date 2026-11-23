@@ -38,7 +38,7 @@
  *
  * `changeset-shape` and `public-text` are small checks defined here, since no checker script
  * validates a changeset or an issue body. changeset-shape checks the frontmatter fences, the
- * release lines, a non-empty summary, and the 15-word limit the changeset skill sets.
+ * release lines, a non-empty summary, and the 20-word limit the changeset writer enforces.
  * public-text flags a ledger id such as `CLI-72633f`, which the project keeps out of public
  * text. It skips the id inside a board sync marker, `<!-- houserules:entry:<id> -->`, which the
  * sync writes on purpose. An id anywhere else in the body still fails.
@@ -85,7 +85,7 @@ const KIND_CHECKERS = Object.freeze({
 });
 const SYNC_MARKER = /<!-- houserules:entry:[A-Z][A-Z0-9]*-[0-9a-f]{6} -->/g;
 const MAX_EXAMPLES = 3;
-const MAX_SUMMARY_WORDS = 15;
+const MAX_SUMMARY_WORDS = 20;
 const RELEASE_LINE = /^\s*['"]?[^'"]+?['"]?\s*:\s*(patch|minor|major)\s*$/;
 const FINDING_HEAD = /^### [A-Z]{2}-\d{2} /m;
 const LINT_LINE = /^(.+?)(?::(\d+))? {2}(ERROR|WARN) {2}\[([^\]]+)\] {2}/;

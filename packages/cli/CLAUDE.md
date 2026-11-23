@@ -88,16 +88,24 @@ are relative to `packages/cli/`.
   users to trim a rule's `paths:` to their repo. Both record a hash of the part the KIT
   wrote, never of the whole file, and `update` splices rather than overwrites. Adding a
   third split needs a reason this good.
-- `.claude/scripts/` is **generated, not source**: self-gitignored on init, and installs
-  that committed it are migrated by `update` (`git rm --cached` only, working tree
-  untouched, never committed). `scripts.commit: true` opts back into committing them.
+- The installed payload is **generated, not source**. Skills, rules, agents, reference,
+  output styles and the manifest are listed by path in houserules' managed block in
+  `.claude/.gitignore`, and `.claude/scripts/` keeps its own `*` ignore file. git tracks only
+  what the user decided: the config, `settings.json`, and any file taken out of the block with
+  `houserules eject <file>`, which the config records under `ejected`. An install that
+  committed its payload is migrated by `update` (`git rm --cached` only, staged, working tree
+  untouched, never committed). `payload.commit: true` keeps the committed mode, and
+  `scripts.commit: true` does the same for the scripts alone. The tracked config has to be
+  enough to rebuild the install, since a fresh clone has no manifest.
   Because the scripts may be absent on a fresh clone while `settings.json` is committed,
   `hookCommand()` wraps every hook in a file-existence guard that `exec`s node. `exec` is
   load-bearing, since a plain `node` would let any non-zero exit fall through to the
   fallback echo and swallow the code (changeset-check exits 2 on purpose).
 - init never runs package-manager installs and never touches settings.local.json.
 - Managed regions: houserules maintains its own marker-delimited block inside files the user
-  owns (CLAUDE.md, and `.prettierignore` when prettier is detected). It writes ONLY between
+  owns (CLAUDE.md, `.claude/.gitignore`, and `.prettierignore` when prettier is detected).
+  The CLAUDE.md block holds one `@.claude/houserules.md` import line, so a release changes
+  that generated file and not the user's CLAUDE.md. It writes ONLY between
   the markers, and bytes outside them are never modified. Those paths are in
   `SHARED_HOST_FILES`: never created wholesale, never pruned, and their manifest hash covers
   the region BODY, not the file.
@@ -109,7 +117,9 @@ are relative to `packages/cli/`.
   after every module's `plan()` in `src/plan.ts`, not scoped to `core`, and derives the
   protected `.claude/` subtrees dynamically from the actions the plan actually produced
   (`protectedSubtrees()`), rather than a hand-maintained constant. A new kit-owned subtree
-  under `.claude/` is covered automatically, the day its action lands.
+  under `.claude/` is covered automatically, the day its action lands. The block still
+  matters now that the payload is gitignored, because an ejected file and a
+  `payload.commit: true` install are tracked.
 - `doctor` is an orchestrator over independent checks. Each check in `src/commands/doctor/`
   is a pure-ish function of `(root, ctx, flags)` returning `{ findings, readouts }`, and
   `src/commands/doctor.ts` only sequences them and rolls the severity up to an exit code.
