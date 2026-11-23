@@ -6,11 +6,11 @@ import type {
   ModuleRequirement,
 } from '@houserules/api';
 import type { Ctx } from '../detect.js';
-import { script, skill } from './copy-actions.js';
+import { agent, script, skill } from './copy-actions.js';
 
 export const id = 'reviewers';
 export const title =
-  'Per-target reviewer agent drafts + /review-change dispatch';
+  'Per-target reviewer agent drafts + /review-change dispatch + diff-reviewer';
 export const group: ModuleGroup = 'optional';
 
 // Modules this one's shipped prose hands off to when installed, and skips or falls back from
@@ -49,6 +49,11 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       id,
       'review-package.mjs',
       'package a commit range (log, stat, -U10 diff) into one reviewable file',
+    ),
+    agent(
+      id,
+      'diff-reviewer',
+      'read-only correctness reviewer /orchestrate dispatches at a wave or phase close',
     ),
   ];
   let reviewers = 0;

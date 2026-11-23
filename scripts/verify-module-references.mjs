@@ -9,7 +9,8 @@
  * What counts as a name, keyed by the installed destination:
  * - `.claude/skills/<name>/SKILL.md` installs the token `/<name>`.
  * - `.claude/agents/<name>.md` installs `<name>`, except the `reviewers` module's agents, which
- *   it generates per repo, so their names are not fixed.
+ *   it writes through a `seed` action per repo, so their names are not fixed. A fixed agent that
+ *   module copies installs its name like any other.
  * - `.claude/scripts/<name>.mjs` installs `<name>.mjs`. Shared libs under `scripts/lib/` do not.
  * - `.claude/rules/`, `.claude/reference/`, and `.claude/output-styles/` install their basename.
  * Agent templates under `.claude/templates/` install no token.
@@ -283,10 +284,16 @@ function everythingSelected(registry, ctx) {
   };
 }
 
-/** Whether `dest` names a fixed install path, rather than one of the per-repo reviewer agents. */
-function isFixedInstallPath(moduleId, dest) {
+/**
+ * Whether `action` installs a fixed path, rather than one of the per-repo reviewer agents. Only
+ * an agent the generated-agents module writes through a `seed` action has no fixed name.
+ */
+export function isFixedInstallPath(moduleId, action) {
+  const dest = action.dest ?? action.path ?? '';
   return !(
-    moduleId === GENERATED_AGENTS_MODULE && dest.startsWith('.claude/agents/')
+    moduleId === GENERATED_AGENTS_MODULE &&
+    action.kind === 'seed' &&
+    dest.startsWith('.claude/agents/')
   );
 }
 
@@ -304,7 +311,7 @@ function describeModule(registered, ctx, answers) {
   for (const action of def.plan(ctx, answers)) {
     const dest = action.dest ?? action.path ?? null;
     const token =
-      dest && isFixedInstallPath(registered.id, dest)
+      dest && isFixedInstallPath(registered.id, action)
         ? tokenForDest(dest)
         : null;
     if (token) tokens.add(token);

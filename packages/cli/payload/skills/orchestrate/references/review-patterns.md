@@ -69,3 +69,50 @@ worker then builds on it instead of redoing it.
 A worker that backgrounds a long command hands back an interim report at once, or none. The task
 notification says it is waiting on its own background work and will deliver its report when that
 finishes. Wait for that report. Reviewing the interim one judges work that has not finished.
+
+## The diff reviewer
+
+The diff reviewer catches defects the gates passed, and review recall falls with diff size. Skip it
+silently when `.claude/agents/diff-reviewer.md` is absent.
+
+### When it runs
+
+At each wave barrier, after §7 step 3's recheck passes, count the changed lines not yet reviewed in
+this phase. Count added plus deleted lines of tracked files with
+`git diff --numstat HEAD -- <paths>`. Add the lines of untracked new files under those paths with
+`git ls-files --others --exclude-standard -- <paths> | xargs cat | wc -l`, since `git diff` omits them.
+
+- Over 150: dispatch the reviewer over those paths now.
+- 150 or fewer: carry them to the next barrier.
+
+At §8 phase close, review whatever is still unreviewed, once.
+
+The 150 comes from the research: F1 falls from 0.657 under 10 changed lines to 0.043 over 150, per
+https://arxiv.org/html/2606.15689.
+
+### The brief
+
+Make one `Agent` call with `subagent_type: diff-reviewer` and no model override. The brief is three
+lines:
+
+```
+Diff: <the command that prints the change, such as `git diff HEAD -- <paths>`>
+New files: <untracked paths the diff command cannot show, or none>
+Spec: <the sub-plan's ## Objective and ## Steps, pasted verbatim>
+```
+
+### What a finding becomes
+
+Work each finding in this order.
+
+1. A finding whose `Command` is `none` is dropped. Count it.
+2. Otherwise run the command yourself. If its output does not show the claimed failure, drop the
+   finding and count it.
+3. A shown defect in a file a slice of this phase owns becomes one `REVISE` to that slice's worker
+   by `SendMessage`. It counts against the worker's two-round cap. Rerun that slice's acceptance.
+4. A shown defect anywhere else becomes a backlog row, per §5's out-of-scope rule.
+5. Never act on `## Cannot verify` entries. List them, with the dropped and acted-on counts, in the
+   sub-plan's `## Notes & decisions`, so the reviewer's precision stays readable later.
+
+Do not filter by confidence and do not add a second-opinion critic. The probe rated no finding high,
+and dropping its low ones lost a real defect.

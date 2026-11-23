@@ -124,6 +124,38 @@ describe('plans', () => {
       expect(agentText).toContain('`MILESTONE.md`');
     });
 
+    it('has the plan-reviewer take a Level line that defaults to plan', () => {
+      const agentText = readFileSync(
+        join(root, '.claude/agents/plan-reviewer.md'),
+        'utf8',
+      );
+      expect(agentText).toMatch(
+        /Its values are `milestone`, `plan`, and `phase`\. An absent line means\s+`plan`\./,
+      );
+      expect(agentText).toMatch(/^- `phase`: the brief names one sub-plan/m);
+    });
+
+    it('puts a Level line in every plan-reviewer dispatch the skill writes', () => {
+      const docs = [
+        '.claude/skills/plan-project/SKILL.md',
+        '.claude/skills/plan-project/references/milestone.md',
+      ];
+      const dispatches = docs.flatMap((doc) =>
+        readFileSync(join(root, doc), 'utf8')
+          .split(/\n\s*\n/)
+          .filter((paragraph) =>
+            /Dispatch[^.]*`plan-reviewer`/i.test(paragraph),
+          )
+          .map((paragraph) => ({ doc, paragraph })),
+      );
+      expect(dispatches.map(({ doc }) => doc)).toEqual(docs);
+      expect(
+        dispatches.map(
+          ({ paragraph }) => paragraph.match(/`Level: (\w+)`/)?.[1],
+        ),
+      ).toEqual(['plan', 'milestone']);
+    });
+
     it('hands a milestone off in-context when the orchestrate module is absent', () => {
       const text = readFileSync(
         join(root, '.claude/skills/plan-project/SKILL.md'),

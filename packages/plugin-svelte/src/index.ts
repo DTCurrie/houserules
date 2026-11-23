@@ -25,6 +25,7 @@ function svelteModule(api: PluginApi): ModuleDef {
       { id: 'prose-voice', package: '@houserules/plugin-prose' },
       { id: 'accessibility', package: '@houserules/plugin-accessibility' },
       { id: 'orchestrate' },
+      { id: 'three', package: '@houserules/plugin-three' },
     ],
     hint(): string {
       return 'path-scoped rule for Svelte 5 runes and component conventions, with an opt-in SvelteKit guide';
@@ -60,6 +61,11 @@ function svelteModule(api: PluginApi): ModuleDef {
           'svelte-lint.mjs',
           "checks mechanical and hybrid clauses of svelte.md and sveltekit.md: no <slot>, no onDestroy in .svelte components, +server.ts export names, hooks.*.ts handleError presence, and the repo's own ESLint config wiring for eslint-plugin-svelte",
         ),
+        api.payload.agent(
+          id,
+          'svelte-reviewer',
+          'read-only reviewer for one Svelte file, the autofixer plus a read against the Svelte rules',
+        ),
         {
           kind: 'merge-settings',
           module: id,
@@ -69,7 +75,7 @@ function svelteModule(api: PluginApi): ModuleDef {
         },
         {
           kind: 'advise',
-          text: "Svelte rule installed at .claude/rules/svelte.md, path-scoped via its `paths:` frontmatter (**/*.svelte, **/*.svelte.ts, **/*.svelte.js) so Claude Code loads it only when Svelte code is in the working set. Trim or widen `paths:` to where this repo's Svelte code actually lives. Keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn. Install the `svelte-mcp` module separately for the Svelte MCP server (svelte-autofixer and live docs), since that config does not defer to this rule. .claude/scripts/svelte-lint.mjs checks five mechanical and hybrid clauses: no <slot>, no onDestroy in .svelte components (svelte/no-on-destroy-in-component), +server.ts export names, hooks.*.ts handleError presence, and the repo's own ESLint config wiring for eslint-plugin-svelte. Run it with `node .claude/scripts/svelte-lint.mjs <files>`. UNMEASURED: this checker has never run against a real corpus of .svelte, +server.ts, or hooks.*.ts files, only against paired fire-or-stay-silent fixtures. Treat its findings as a starting point, and report a false positive rather than working around it.",
+          text: "Svelte rule installed at .claude/rules/svelte.md, path-scoped via its `paths:` frontmatter (**/*.svelte, **/*.svelte.ts, **/*.svelte.js) so Claude Code loads it only when Svelte code is in the working set. Trim or widen `paths:` to where this repo's Svelte code actually lives. Keep the frontmatter — a rule file WITHOUT `paths:` is loaded on every turn. Install the `svelte-mcp` module separately for the Svelte MCP server (svelte-autofixer and live docs), since that config does not defer to this rule. .claude/scripts/svelte-lint.mjs checks five mechanical and hybrid clauses: no <slot>, no onDestroy in .svelte components (svelte/no-on-destroy-in-component), +server.ts export names, hooks.*.ts handleError presence, and the repo's own ESLint config wiring for eslint-plugin-svelte. Run it with `node .claude/scripts/svelte-lint.mjs <files>`. UNMEASURED: this checker has never run against a real corpus of .svelte, +server.ts, or hooks.*.ts files, only against paired fire-or-stay-silent fixtures. Treat its findings as a starting point, and report a false positive rather than working around it. The svelte-reviewer agent reviews one Svelte file per run: brief it with the file's absolute path, the repo root, and the Svelte version. It calls the Svelte autofixer when the Svelte MCP server is wired and reads without it otherwise.",
           module: id,
         },
       ];

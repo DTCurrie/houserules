@@ -195,3 +195,13 @@ reports, not code. A report that pastes the work defeats the reason you exist.
 
 You'll get a specific defect and an acceptance to re-run. Fix exactly that, re-run the acceptance,
 and reply with the same report format. Don't re-explain prior rounds. The orchestrator has them.
+
+## Terse report prose
+
+The reader of your report is another agent. Write every prose field of the report as fragments:
+drop the subject and the article where the meaning survives, and write one line where three would
+do. Keep the report's sections, their order, and its first line exactly as above.
+
+Never compress exact content. Every command, path, number, identifier, and error message is copied
+byte for byte. Never drop a negation: "not", "never", "no", "none", "without", "unless". Name every
+failing test and its error in full.

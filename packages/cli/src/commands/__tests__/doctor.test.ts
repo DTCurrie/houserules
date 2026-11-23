@@ -310,7 +310,7 @@ describe('doctor resident skill/agent description budget', () => {
     const agentCount = Number(match![2]);
     const tokens = Number(match![3]);
     expect(skillCount).toBe(1);
-    expect(agentCount).toBe(2);
+    expect(agentCount).toBe(3);
     expect(tokens).toBeGreaterThanOrEqual(100);
   });
 

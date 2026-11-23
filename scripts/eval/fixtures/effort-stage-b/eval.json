@@ -1,0 +1,23 @@
+{
+  "modules": "plans,orchestrate",
+  "plugins": [],
+  "model": "opus",
+  "validityAgent": "phase-orchestrator",
+  "collect": [
+    "src",
+    "test",
+    "scripts/lint.js",
+    "package.json",
+    ".claude/plans/eval-fixture"
+  ],
+  "arms": {
+    "high": {
+      "prompt": "arms/high/prompt.txt",
+      "overlay": "arms/high/overlay"
+    },
+    "medium": {
+      "prompt": "arms/medium/prompt.txt",
+      "overlay": "arms/medium/overlay"
+    }
+  }
+}

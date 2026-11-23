@@ -230,7 +230,7 @@ installed, and fix every error before the handoff.
 ## 5. Hand off
 
 Dispatch the `plan-reviewer` on the milestone directory, as `SKILL.md` section 4 describes for a
-plan. Then follow that section's paragraph that begins "A milestone gets one handoff for the whole
+plan, with a `Level: milestone` line in the brief in place of `Level: plan`. Then follow that section's paragraph that begins "A milestone gets one handoff for the whole
 milestone". Give `/orchestrate <milestone>` as the execution line, one phase-orchestrator per item, and offer
 in-context only when `/orchestrate` is not installed. List the gates closed by a default taken, so
 the owner can reopen one. Every phase and every step stays `TODO`.

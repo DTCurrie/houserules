@@ -171,6 +171,22 @@ describe('svelte', () => {
     ).toEqual(expect.objectContaining({ body: sha256(ruleBody(ruleText)) }));
   });
 
+  it('installs the read-only svelte-reviewer agent with the autofixer tool', () => {
+    const root = installedWith([]);
+
+    const agentText = readFileSync(
+      join(root, '.claude/agents/svelte-reviewer.md'),
+      'utf8',
+    );
+    expect(agentText).toMatch(
+      /^tools: Read, Grep, Glob, mcp__svelte__svelte-autofixer$/m,
+    );
+    expect(agentText).toMatch(/^model: haiku$/m);
+    expect(manifestOf(root).files).toHaveProperty(
+      '.claude/agents/svelte-reviewer.md',
+    );
+  });
+
   it('is not installed by default', () => {
     const root = useInstalledRepo('pnpm-monorepo', { plugins: PLUGINS });
 

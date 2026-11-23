@@ -17,6 +17,7 @@ import {
   hint,
   options,
   plan,
+  uses,
   renderTaskWorkerBase,
   renderTaskWorkerVariant,
 } from '../orchestrate.js';
@@ -37,6 +38,10 @@ function baseAnswers(overrides: Partial<Answers> = {}): Answers {
 }
 
 describe('orchestrate', () => {
+  it('uses the reviewers module', () => {
+    expect(uses).toContainEqual({ id: 'reviewers' });
+  });
+
   it('is off by default', () => {
     const off = useInstalledRepo('pnpm-monorepo');
     expect(

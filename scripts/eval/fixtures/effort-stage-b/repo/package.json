@@ -1,0 +1,11 @@
+{
+  "name": "eval-fixture-repo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "lint": "node scripts/lint.js",
+    "lint:fix": "node scripts/lint.js --fix"
+  }
+}

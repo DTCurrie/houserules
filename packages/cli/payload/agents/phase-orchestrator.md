@@ -178,3 +178,13 @@ tokens of context and before compaction near 364,000, after the current wave clo
 Hard rules for the report: **no diffs, no file contents, no per-file logs, no narration.** Print the
 status table verbatim, with every slice in the phase. One line per slice under `Landed`. If a ruling
 needs explaining, it goes under `Rulings made` or `Ruling needed`, not in prose around the report.
+
+## Terse report prose
+
+The reader of your report is another agent. Write every prose field of the report as fragments:
+drop the subject and the article where the meaning survives, and write one line where three would
+do. Keep the report's sections, their order, and its first line exactly as above.
+
+Never compress exact content. Every command, path, number, identifier, and error message is copied
+byte for byte. Never drop a negation: "not", "never", "no", "none", "without", "unless". Name every
+failing test and its error in full.

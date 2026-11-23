@@ -48,6 +48,7 @@ export const uses: ModuleRequirement[] = [
   { id: 'code-cleanliness' },
   { id: 'ready' },
   { id: 'research' },
+  { id: 'reviewers' },
   { id: 'lint-fix' },
   { id: 'verify-changed' },
   { id: 'backlog', package: '@houserules/plugin-backlog' },

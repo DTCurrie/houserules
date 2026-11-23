@@ -36,6 +36,11 @@ select them when `init` asks.
   actions, and the server-versus-universal split. It installs alongside the base rule when
   chosen, never on its own, because it opens by assuming `svelte.md` is already installed.
 
+  Ships `svelte-reviewer`, a read-only agent that reviews one Svelte file per run. It calls the
+  Svelte autofixer when the Svelte MCP server is wired, then reads the file against the installed
+  Svelte rules for what the autofixer cannot see, such as an `$effect` with no cleanup. Brief it
+  with the file's absolute path, the repo root, and the Svelte version.
+
 - **`svelte-mcp`** installs the three Svelte MCP server configs under `.claude/mcp/`:
   `svelte.http.json`, `svelte.stdio.json`, and `svelte.vscode.json`. houserules never writes
   `.mcp.json`, so an advise action explains how to wire one of them into this repo's own config,

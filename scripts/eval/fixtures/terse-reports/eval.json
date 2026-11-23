@@ -1,0 +1,17 @@
+{
+  "modules": "plans,orchestrate",
+  "plugins": [],
+  "model": "opus",
+  "validityAgent": "phase-orchestrator",
+  "collect": [],
+  "arms": {
+    "normal": {
+      "prompt": "arms/normal/prompt.txt",
+      "overlay": "arms/normal/overlay"
+    },
+    "terse": {
+      "prompt": "arms/terse/prompt.txt",
+      "overlay": "arms/terse/overlay"
+    }
+  }
+}

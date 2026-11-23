@@ -42,6 +42,19 @@ describe('reviewers', () => {
     expect(text).toMatch(/OK.*Conflict.*Gap/s);
   });
 
+  it('installs the diff-reviewer agent with the module and not without it', () => {
+    const withoutRoot = useInstalledRepo('pnpm-monorepo');
+
+    expect(
+      existsSync(join(root, '.claude/agents/diff-reviewer.md')),
+      'installed with reviewers',
+    ).toBe(true);
+    expect(
+      existsSync(join(withoutRoot, '.claude/agents/diff-reviewer.md')),
+      'absent without reviewers',
+    ).toBe(false);
+  });
+
   it('installs review-package.mjs beside the dispatch skill', () => {
     const root = useInstalledRepo('pnpm-monorepo', {
       modules: 'reviewers',

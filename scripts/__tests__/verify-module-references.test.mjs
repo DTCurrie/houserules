@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   findUndeclaredReferences,
+  isFixedInstallPath,
   tokenForDest,
 } from '../verify-module-references.mjs';
 
@@ -163,6 +164,35 @@ describe('findUndeclaredReferences, skipped regions', () => {
     assert.deepEqual(
       findUndeclaredReferences([orchestrateModule(heading), sweepModule()]),
       found(4),
+    );
+  });
+});
+
+describe('isFixedInstallPath', () => {
+  const dest = '.claude/agents/diff-reviewer.md';
+
+  it('exempts an agent the reviewers module seeds', () => {
+    assert.equal(
+      isFixedInstallPath('reviewers', { kind: 'seed', dest }),
+      false,
+    );
+  });
+
+  it('checks a fixed agent the reviewers module copies', () => {
+    assert.equal(isFixedInstallPath('reviewers', { kind: 'copy', dest }), true);
+  });
+
+  it('checks a seeded agent from any other module', () => {
+    assert.equal(isFixedInstallPath('sweep', { kind: 'seed', dest }), true);
+  });
+
+  it('checks a reviewers path outside the agents directory', () => {
+    assert.equal(
+      isFixedInstallPath('reviewers', {
+        kind: 'seed',
+        dest: '.claude/rules/x.md',
+      }),
+      true,
     );
   });
 });

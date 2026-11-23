@@ -109,7 +109,11 @@ Then apply four rules to the set you drew:
   so each one is owned once.
 
 Read `references/slicing.md` before you write the briefs. It carries acceptance wording, the
-test-ownership and carry-the-spec-by-path rules, lanes, multi-plan waves, and dropped-slice scope.
+file-level command a worker's loop runs, the test-ownership and carry-the-spec-by-path rules,
+lanes, multi-plan waves, and dropped-slice scope.
+
+To check one phase before slicing it, dispatch `plan-reviewer` with the workspace path, a
+`Level: phase` line, and the sub-plan path, and carry its questions to the user.
 
 **Orchestrator-owned files** never appear in any worker's `owns`: lockfiles, generated indexes,
 barrel/export files, shared type modules, migrations, config. You edit those (§2). Workers that need a
@@ -162,8 +166,7 @@ Before dispatching, check whether a rule scoped to the wave's paths needs an MCP
 `tools:` line lacks. The fix is `orchestrate.workerTools`, with its recipe in `references/slicing.md`.
 
 `task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice,
-and **never restates or overrides a standing rule**. The one most often violated is the fixer
-prohibition (below).
+and **never restates or overrides a standing rule**.
 
 > **Slice `<id>` — `<name>`.** Objective: `<the falsifiable done>`.
 > You own **only** these paths: `<owns>`. Do not edit anything outside them.
@@ -179,8 +182,8 @@ Hand a worker its slice, seam, and constraints, not the plan.
 
 ### The status table: the one shape you print between waves
 
-The slice table (§3) is state on disk. This is its user-facing projection. Emit it **once when the
-wave goes out and once when it closes**, and nowhere else. Same three columns, every run:
+This is the user-facing projection of the slice table (§3). Emit it **once when the
+wave goes out and once when it closes**, and nowhere else. Same three columns:
 
 ```markdown
 | Slice            | Owns                     | State      |
@@ -190,8 +193,7 @@ wave goes out and once when it closes**, and nowhere else. Same three columns, e
 | 2a route wiring  | `src/api/routes/auth.ts` | ⬜ pending |
 ```
 
-Every slice in the phase appears in every printing, including the waves that haven't opened yet,
-because a live-wave-only table hides how much is left.
+Every slice in the phase appears in every printing, unopened waves included.
 
 Collapse the on-disk vocabulary into four display states: `DONE` prints `✅ done`, `DISPATCHED`
 `IN REVIEW` `REVISING` print `🔄 running`, `TODO` prints `⬜ pending`, and `BLOCKED` prints
@@ -259,8 +261,8 @@ sub-plan when no backlog skill is installed. Never drop one silently.
 
 ## 6. Revise in place, capped at 2 rounds
 
-Send the fix back to **the same worker** via `SendMessage` with its agent ID. Its context is intact,
-so the fix costs a fraction of a cold respawn that re-reads everything. Mark the slice `REVISING`.
+Send the fix back to **the same worker** via `SendMessage` with its agent ID, whose context is
+intact. Mark the slice `REVISING`.
 Name the specific defect and the acceptance to re-run, never "please improve this."
 
 **Cap: 2 revise rounds.** A third failure is evidence the _brief_ was wrong, not that the model is too
@@ -273,8 +275,7 @@ Every slice reviewed (`DONE` or `BLOCKED`), and only then. This is the wave **ba
 where the tree is quiet enough to touch globally:
 
 1. **Fix once.** Run the repo's auto-fix (`lint:fix` / `format:fix`, or the `fix.commands` in
-   `.claude/houserules.config.json`) across the packages the wave touched, in one pass over a tree
-   that is finally consistent.
+   `.claude/houserules.config.json`) across the packages the wave touched, in one pass.
 2. **Tidy once.** Run `/tidy` over the wave's diff, if that skill is installed, after the fixer
    and before step 3, so step 3 proves its edits. Never inside a worker, for the same reason as
    the fixer.
@@ -283,8 +284,10 @@ where the tree is quiet enough to touch globally:
 4. **Update the slice table** in place, then print the status table (§4), the wave-close printing.
 5. **Snapshot the state nothing can regenerate**: the plan workspace and anything else gitignored that
    no command can rebuild. `references/closing.md` says what to copy and where.
-6. **Then** open the next wave. Dispatching over an unreviewed slice is how the
-   architecture drifts unseen.
+6. **Then** open the next wave.
+
+**A large wave diff, and every phase close, gets the diff reviewer** when it is installed.
+"The diff reviewer" in `references/review-patterns.md` has the trigger and the brief.
 
 **Residue** is what auto-fix couldn't fix, and it's yours by default. Never send it back to the slice
 workers, whose briefs are spent. `references/fixer-and-residue.md` has the routing table for when it
@@ -295,8 +298,8 @@ does not override this.
 
 ## 8. Close the phase
 
-All waves done → run `/verify-changed` if installed (changed packages plus dependents,
-off-context), otherwise the repo's verify on the touched packages. A milestone item skips it, per
+All waves done → run `/verify-changed` if installed, otherwise the repo's verify on the touched
+packages. A milestone item skips it, per
 `references/milestone.md`. A failure is §7 residue. Then check the phase's own acceptance from the
 sub-plan, and record it with `node .claude/scripts/plan-state.mjs set <workspace> <N> DONE --log
 "<what landed>"`, one call for the header, the `ROADMAP.md` line, and a `## Log` entry.

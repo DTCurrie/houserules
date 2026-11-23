@@ -1,0 +1,23 @@
+{
+  "modules": "plans,orchestrate",
+  "plugins": [],
+  "model": "opus",
+  "validityAgent": "phase-orchestrator",
+  "collect": [
+    "src",
+    "test",
+    "scripts/lint.js",
+    "package.json",
+    ".claude/plans/eval-fixture"
+  ],
+  "arms": {
+    "normal": {
+      "prompt": "arms/normal/prompt.txt",
+      "overlay": "arms/normal/overlay"
+    },
+    "terse": {
+      "prompt": "arms/terse/prompt.txt",
+      "overlay": "arms/terse/overlay"
+    }
+  }
+}
