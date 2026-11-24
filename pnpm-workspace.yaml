@@ -10,7 +10,7 @@ catalog:
   '@types/node': 26.6.6
   prettier: ^3.10.1
   publint: ^0.3.25
-  type-fest: ^6.0.1
+  type-fest: ^6.0.3
   typescript: ^6.0.3
   vitest: ^5.1.0
   wireit: ^0.15.0
