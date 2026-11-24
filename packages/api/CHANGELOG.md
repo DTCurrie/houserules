@@ -1,5 +1,12 @@
 # @houserules/api
 
+## 0.11.1
+
+### Patch Changes
+
+- Updated dependencies [dc02aae]
+  - @houserules/payload@0.8.1
+
 ## 0.11.0
 
 ### Minor Changes
