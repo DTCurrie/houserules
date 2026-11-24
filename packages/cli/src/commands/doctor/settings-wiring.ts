@@ -12,7 +12,12 @@ import type { HookWiring } from '@houserules/api/internal';
 
 // module id → hook script that must appear in a settings.json hook command.
 export const HOOK_SCRIPTS: Record<string, string[]> = {
-  core: ['guard-bash.mjs', 'ledger-inject.mjs', 'notice-interim.mjs'],
+  core: [
+    'guard-bash.mjs',
+    'ledger-inject.mjs',
+    'notice-interim.mjs',
+    'manual-mode-notice.mjs',
+  ],
   'lint-fix': ['lint-format-fix.mjs'],
   changesets: ['changeset-check.mjs'],
   'session-context': ['session-context.mjs'],

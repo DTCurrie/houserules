@@ -54,6 +54,12 @@ describe('decisions', () => {
       );
     });
 
+    it('tells the decide skill to record a change decision only after the user kept the change', () => {
+      expect(
+        readFileSync(join(root, '.claude/skills/decide/SKILL.md'), 'utf8'),
+      ).toContain('Never record one for an edit the\n   user rejected.');
+    });
+
     it('points the imported houserules sections at the decide skill', () => {
       expect(
         readFileSync(join(root, '.claude/houserules.md'), 'utf8'),

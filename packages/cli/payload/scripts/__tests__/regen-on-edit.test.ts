@@ -120,4 +120,51 @@ describe('regen-on-edit.mjs', () => {
     expect(r.stderr).toMatch(/regen/);
     expect(r.stderr).toMatch(/boom/);
   });
+
+  describe('by permission_mode', () => {
+    beforeEach(() => {
+      editHouseConfig(root, (c) => {
+        const targets = c.targets as Array<{
+          name: string;
+          regen?: { sourceGlob: string; command: string };
+        }>;
+        const studio = targets.find((t) => t.name === 'studio');
+        if (!studio) throw new Error('fixture missing studio target');
+        studio.regen = {
+          sourceGlob: 'apps/studio/**',
+          command: 'echo ran > regen-marker.txt',
+        };
+      });
+    });
+
+    function runWithMode(mode?: string): ReturnType<typeof runScript> {
+      return runScript(root, REGEN, {
+        input: JSON.stringify({
+          tool_input: { file_path: 'apps/studio/src/main.ts' },
+          ...(mode === undefined ? {} : { permission_mode: mode }),
+        }),
+      });
+    }
+
+    it('in default mode runs no generator and names the command on stderr', () => {
+      const r = runWithMode('default');
+      expect(r.status, r.stderr).toBe(2);
+      expect(existsSync(join(root, 'regen-marker.txt'))).toBe(false);
+      expect(r.stderr).toBe(
+        'houserules regen: skipped the generator because this session reviews each edit. Run the command below, then continue:\necho ran > regen-marker.txt\n',
+      );
+    });
+
+    it('in acceptEdits mode runs the generator', () => {
+      const r = runWithMode('acceptEdits');
+      expect(r.status, r.stderr).toBe(0);
+      expect(existsSync(join(root, 'regen-marker.txt'))).toBe(true);
+    });
+
+    it('with no permission_mode runs the generator', () => {
+      const r = runWithMode();
+      expect(r.status, r.stderr).toBe(0);
+      expect(existsSync(join(root, 'regen-marker.txt'))).toBe(true);
+    });
+  });
 });

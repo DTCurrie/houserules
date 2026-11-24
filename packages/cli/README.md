@@ -21,6 +21,7 @@ uses, and previews every write before making it.
 - [Milestones](#milestones)
 - [Plugins](#plugins)
 - [After install](#after-install)
+- [Working in manual mode](#working-in-manual-mode)
 - [Staying current](#staying-current)
 - [Ledgers: what is committed and what is generated](#ledgers-what-is-committed-and-what-is-generated)
 - [Changesets are the canonical changelog](#changesets-are-the-canonical-changelog)
@@ -434,6 +435,33 @@ that depends on `@houserules/cli` gets the local
 `npx @houserules/cli` without installing it has no local copy, so it gets the published URL instead. `doctor` reports
 any problem per field (`changesets.baseBranchh is not a known changesets setting`) and exits 2.
 `init` and `update` also refuse a schema-invalid config with exit 2, printing each problem and writing nothing.
+
+## Working in manual mode
+
+Manual mode is the Claude Code permission mode where you approve each edit at a prompt. Its
+config value is `default`, and hooks receive it as `"default"`. The fixer, regen, and notice hooks
+read that value. The changeset and decision behaviors judge a turn by the edits you kept, in any
+mode. In manual mode that changes these behaviors:
+
+- **Changeset nudges.** `changeset-check.mjs` and the changeset gate act only on edits you kept.
+  A rejected edit changes nothing, so it raises no nudge. The changeset trigger in the generated
+  `houserules.md` says the same.
+- **Fixer and regen hooks.** `lint-fix` and `regen` skip their writes, since a hook write would
+  land without a prompt. Each exits 2 and names the exact commands it skipped, so Claude runs
+  them through a prompt you see.
+- **Dispatch skills.** Every edit a subagent makes raises its own prompt in your session. When
+  you type `/orchestrate` or `/sweep`, the `manual-mode-notice.mjs` UserPromptSubmit hook prints
+  `[houserules] Manual mode: every edit a subagent makes raises its own permission prompt in this session.`
+  Both skills then offer to switch mode or run the work in your context before any spawn.
+- **Refused edits.** `task-worker` and the other writing agents report a refused edit as blocked.
+  They do not retry it or route around it with Bash.
+- **Decisions.** The `/decide` trigger records a decision about a change only after you kept it.
+
+Two settings help:
+
+- `init` allows the ledger scripts (`changeset-write.mjs`, `backlog-log.mjs`, `decision-log.mjs`),
+  so ledger writes raise no prompt. It adds no other allow rules.
+- Switching to accept-edits mode removes the per-worker prompts.
 
 ## Staying current
 

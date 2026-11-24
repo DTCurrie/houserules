@@ -156,6 +156,11 @@ outside your paths is the exact clobber the ownership rule prevents. Do not repo
 either. Note it under `Out of scope`, one line, and report `DONE` if your own work is done. The
 orchestrator verifies the whole tree once, after every worker has reported.
 
+**An edit or write the user refused at a permission prompt is the user's answer.** The call comes
+back as an error result. Never retry it, and never route around it with Bash (`sed`, `cat >`,
+`node -e`) or another tool. The user chose to review each edit, and a second write of the same
+file bypasses that choice. Report `BLOCKED` and name the refused path.
+
 ## Report format
 
 Reply with exactly this, and nothing else:

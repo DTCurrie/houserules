@@ -95,6 +95,27 @@ describe('changeset skill condense section', () => {
     expect(body).toMatch(/Never hand-edit a `\.changeset\/\*\.md`/);
   });
 
+  it('starts with a working-tree check that stops when the change is absent', () => {
+    const root = installed();
+
+    const body = readFileSync(join(root, SKILL_PATH), 'utf8');
+    expect(body).toContain(
+      '1. **Confirm the change is in the working tree.** `git status --porcelain` and\n' +
+        '   `git diff --name-only` must show the change you are about to describe, in package source. If\n' +
+        '   they do not, for example because the user rejected the edit, record nothing, say so, and stop.',
+    );
+    expect(body).toContain('2. **Survey what is already pending.**');
+  });
+
+  it('does not retry a changeset write the user rejected', () => {
+    const root = installed();
+
+    const body = readFileSync(join(root, SKILL_PATH), 'utf8');
+    expect(body).toContain(
+      'If the user\n   rejects the `changeset-write.mjs` call at the permission prompt, do not retry it and do not\n   work around it. Report that the write was rejected and stop.',
+    );
+  });
+
   it('adds nothing to the always-loaded surface', () => {
     const root = installed();
 

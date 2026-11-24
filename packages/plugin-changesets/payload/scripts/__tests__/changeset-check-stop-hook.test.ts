@@ -240,6 +240,96 @@ describe('changeset-check.mjs, turn tool uses', () => {
   });
 });
 
+function transcriptWithEdits(
+  root: string,
+  decisions: Array<'accept' | 'reject'>,
+): string {
+  const path = join(root, 'transcript.jsonl');
+  const records: unknown[] = [
+    { type: 'user', message: { role: 'user', content: 'do the thing' } },
+    {
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: decisions.map((_, i) => ({
+          type: 'tool_use',
+          id: `toolu_edit_${i}`,
+          name: 'Edit',
+          input: {},
+        })),
+      },
+    },
+    ...decisions.map((decision, i) => ({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: `toolu_edit_${i}`,
+            content: decision === 'reject' ? 'rejected' : 'ok',
+          },
+        ],
+      },
+      permissionDecision: { decision, source: 'user' },
+      ...(decision === 'reject' ? { toolDenialKind: 'user-reject' } : {}),
+    })),
+  ];
+  writeFileSync(path, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  return path;
+}
+
+describe('changeset-check.mjs, rejected writes', () => {
+  let root: string;
+  let command: string;
+  const signaturePath = (): string =>
+    join(root, '.claude/state/changeset-check.json');
+
+  beforeEach(() => {
+    root = installChangesets();
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const more = 2;\n',
+    );
+    command = stopHookCommandFor(root, 'changeset-check.mjs');
+  });
+
+  it('exits 0 silently and records no signature when the turn only had a rejected Edit', () => {
+    const payload = JSON.stringify({
+      transcript_path: transcriptWithEdits(root, ['reject']),
+    });
+
+    const r = runShellCommand(root, command, payload);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toBe('');
+    expect(r.stderr).toBe('');
+    expect(existsSync(signaturePath()), 'signature file written').toBe(false);
+  });
+
+  it('nudges when the same Edit was accepted', () => {
+    const payload = JSON.stringify({
+      transcript_path: transcriptWithEdits(root, ['accept']),
+    });
+
+    const r = runShellCommand(root, command, payload);
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/Package source changed \(1 file\(s\)\)/);
+  });
+
+  it('nudges when one Edit was rejected and another accepted', () => {
+    const payload = JSON.stringify({
+      transcript_path: transcriptWithEdits(root, ['reject', 'accept']),
+    });
+
+    const r = runShellCommand(root, command, payload);
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/Package source changed/);
+  });
+});
+
 function stopPayload(root: string, backgroundTasks: unknown[]): string {
   return JSON.stringify({
     transcript_path: transcriptWith(root, ['Edit']),

@@ -4,8 +4,10 @@
  * edited file matches its `sourceGlob`.
  *
  * A generator failure exits 2 with a trimmed tail so Claude sees it and fixes the source.
- * Every other path exits 0, because a PostToolUse hook that crashes would spew on every
- * edit.
+ * When the payload's permission_mode is "default" (the user approves each edit), no generator
+ * runs. The hook names each skipped command on stderr and exits 2, so Claude runs it through
+ * a prompt the user sees. Every other path exits 0, because a PostToolUse hook that crashes
+ * would spew on every edit.
  *
  * Config (houserules.config.json): a target may carry a `regen` block of `sourceGlob` (for
  * example `packages/foo/data/**`) and `command` (for example `pnpm --filter foo gen`).
@@ -18,6 +20,7 @@ import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import { loadConfigSafe, type ConfigTarget } from '@houserules/payload/config';
+import { isManualMode } from '@houserules/payload/permission-mode';
 import {
   globToRe,
   readStdinJson,
@@ -27,6 +30,12 @@ import {
 
 interface RegenPayload {
   tool_input?: { file_path?: string; path?: string };
+  permission_mode?: string;
+}
+
+/** The stderr text for a manual-mode session, naming each generator command that was not run. */
+function manualModeNotice(commands: string[]): string {
+  return `houserules regen: skipped the generator because this session reviews each edit. Run the command${commands.length > 1 ? 's' : ''} below, then continue:\n${commands.join('\n')}\n`;
 }
 
 /**
@@ -78,6 +87,11 @@ function main(): void {
 
     const commands = regenCommandsFor(rel, config.targets ?? []);
     if (!commands.length) process.exit(0);
+
+    if (isManualMode(input)) {
+      process.stderr.write(manualModeNotice(commands));
+      process.exit(2);
+    }
 
     const failures: { command: string; output: string }[] = [];
     for (const command of commands) {

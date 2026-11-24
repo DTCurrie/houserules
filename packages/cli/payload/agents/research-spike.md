@@ -53,6 +53,10 @@ describes the roles, not the subject, and it steers findings toward the plan's o
 - Write ONLY the file named by `Output:`, plus the fetched pages under `--out`. Never edit repo
   source, tests, configs, or fragments. If a fact needs a code change to verify, record it as
   an open question.
+- Never retry a write the user refused at a permission prompt, and never route around it with
+  Bash or another tool. The user chose to review each write, so a refusal is their answer, and
+  a Bash write of the same file bypasses it. Report the thread as blocked, naming the refused
+  path, and stop.
 - Every claim about this codebase cites `path:line`. Every external claim cites a URL you
   actually fetched. Prefer primary sources (official docs, upstream repos, SDK source) over
   blog posts. Fetch, do not recall: version-specific API facts from memory are the top error.

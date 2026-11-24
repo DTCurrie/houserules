@@ -10,19 +10,23 @@ Record what this change means for the next release. Arguments (optional override
 **If you dispatched the `changeset-writer` subagent, its report is a recommendation, not a
 completed write.** `changeset-write.mjs` is refused for any subagent by the repo's ledger write
 gate, so the agent stops at package set, bump levels, summary, and the literal command. Run that
-command yourself at step 5 below. Read its recommendation, sanity-check it against the diff, and
-proceed from wherever the numbered steps below still apply, usually straight to step 5.
+command yourself at step 6 below. Read its recommendation, sanity-check it against the diff, and
+proceed from wherever the numbered steps below still apply, usually straight to step 6.
 
 **One changeset per feature, not one per change.** A feature is usually built over several
 turns, and each turn is not its own release note. Read the release notes a user will see: one
 feature is one bullet there, however many commits it took.
 
-1. **Survey what is already pending.** Glob `.changeset/*.md` and read them. For each, ask
+1. **Confirm the change is in the working tree.** `git status --porcelain` and
+   `git diff --name-only` must show the change you are about to describe, in package source. If
+   they do not, for example because the user rejected the edit, record nothing, say so, and stop.
+   A changeset follows a change the user kept.
+2. **Survey what is already pending.** Glob `.changeset/*.md` and read them. For each, ask
    whether this change is part of the feature that changeset already describes.
    - **Already covered, and its summary still describes the feature.** Record nothing. Report
      which file covers it and stop. This is the common case on a feature's second turn.
    - **Covered, but the summary is now wrong or the package set grew.** Amend it in place with
-     step 5's `--amend`. Do not add a second file.
+     step 6's `--amend`. Do not add a second file.
    - **A genuinely separate feature.** Write a new changeset.
 
    The test is whether a reader needs both bullets. If the second one only extends, refines, or
@@ -31,13 +35,13 @@ feature is one bullet there, however many commits it took.
    describe one tangled feature, follow the Condense section below instead of amending them
    one at a time.
 
-2. **Identify touched packages.** `git status --porcelain` and `git diff --name-only`, mapped
+3. **Identify touched packages.** `git status --porcelain` and `git diff --name-only`, mapped
    through the targets in `.claude/houserules.config.json`.
-3. **Pick the bump level per package** (semver):
+4. **Pick the bump level per package** (semver):
    - `patch`: fixes, internal refactors with no API change. The default.
    - `minor`: new user-facing capability, backward-compatible.
    - `major`: breaking change. **Propose a major and get the user's answer before writing it.**
-4. **Write the summary.** This is the canonical spec, and the `changeset-writer` agent follows it
+5. **Write the summary.** This is the canonical spec, and the `changeset-writer` agent follows it
    too.
    - **One short sentence**, 20 words or fewer, in changelog voice, naming what changed as the
      package's users read it.
@@ -57,7 +61,9 @@ feature is one bullet there, however many commits it took.
 installed, so files match the version; the zero-dep writer remains as fallback.`
    → `Changeset authoring uses the repo's installed changesets writer when available.`
 
-5. **Record it.** The script validates package names against the real workspace.
+6. **Record it.** The script validates package names against the real workspace. If the user
+   rejects the `changeset-write.mjs` call at the permission prompt, do not retry it and do not
+   work around it. Report that the write was rejected and stop.
 
    ```
    node .claude/scripts/changeset-write.mjs --pkg <name>:<level> [--pkg <name>:<level> ...] --summary "<summary>" --chat <session-id>
@@ -82,12 +88,12 @@ installed, so files match the version; the zero-dep writer remains as fallback.`
    node .claude/scripts/changeset-write.mjs --empty --summary "<why no release is needed>"
    ```
 
-6. **Check for package-set drift.** `node .claude/scripts/changeset-gate.mjs` flags a
+7. **Check for package-set drift.** `node .claude/scripts/changeset-gate.mjs` flags a
    just-written changeset whose declared packages are missing one the current diff also
    touches. It also runs on its own as a Stop hook at the end of the turn, so this step just
    surfaces the same finding immediately instead of waiting for it. If it reports drift, add
    the missing package with `--amend` and re-run it.
-7. **Report** the `.changeset/*.md` path and what it declares, and say whether you created it or
+8. **Report** the `.changeset/*.md` path and what it declares, and say whether you created it or
    amended it.
 
 Never hand-edit `CHANGELOG.md`, which `changeset version` generates at release time, and never
@@ -97,7 +103,7 @@ hand-write or hand-edit `.changeset/*.md`. Always go through the script.
 
 Fold the pending changesets that describe one feature into one entry. Ask for it with
 `/changeset condense [id ...]` or a plain request such as "condense the pending changesets". The
-optional ids limit the pass to those files. Skip steps 1 to 7 above and follow these instead.
+optional ids limit the pass to those files. Skip steps 1 to 8 above and follow these instead.
 
 Everything in `.changeset/` ships in the same release. Two pending entries for the same work both
 reach the changelog, and when the later one changed what the earlier one described, the earlier
@@ -112,7 +118,7 @@ bullet announces something no user ever saw.
      sentence is now false. "Adds an `x` flag" plus "Renames `x` to `y`" is one entry, "Adds a `y`
      flag". The flag called `x` never existed for a user.
    - **The later one extends or refines the earlier.** One feature built over more turns. This is
-     step 1 above applied after the fact.
+     step 2 above applied after the fact.
    - **The later one fixes something unreleased.** The bug lives only in another pending
      changeset's work, so it never reached a user and it is not its own bullet.
    - **A release-free entry is now wrong.** Work recorded with `--empty` as needing no release, and
@@ -129,7 +135,7 @@ bullet announces something no user ever saw.
 4. **Write the summary for the feature as it now stands.** Not for the survivor alone, and not the
    old summaries concatenated. Every summary in the group is replaced, so the new one has to cover
    all of them.
-   - **A one-sentence survivor stays one sentence.** 20 words or fewer, under the rules in step 4
+   - **A one-sentence survivor stays one sentence.** 20 words or fewer, under the rules in step 5
      above.
    - **A long-form survivor keeps its shape.** Some changesets are a multi-paragraph release note.
      `--amend` replaces the whole body, so pass the full rewritten note and edit only the part the
@@ -152,7 +158,7 @@ bullet announces something no user ever saw.
    never `rm` one, and never merge by writing a new changeset and deleting the originals. The
    script owns both the write and the delete.
 
-7. **Check for package-set drift** with `node .claude/scripts/changeset-gate.mjs`, as in step 6
+7. **Check for package-set drift** with `node .claude/scripts/changeset-gate.mjs`, as in step 7
    above. It flags a just-written survivor whose declared packages are missing one the current
    diff also touches.
 8. **Report** each surviving path, what it now declares, and which ids it absorbed. An absorbed

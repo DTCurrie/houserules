@@ -50,6 +50,11 @@ Outputs:
 
 Rules:
 
+- Never retry a write the user refused at a permission prompt, and never route around it with
+  Bash or another tool. The user chose to review each write, so a refusal is their answer, and
+  a Bash write of the same file bypasses it. Report the output as blocked, naming the refused
+  path, and stop. The `REPORT.md` inline hand-back above is the one exception, and it applies
+  only to that file.
 - Do not re-research. Your inputs are the records, the thread reports they name, and the plan
   baseline.
 - Every statement keeps its provenance: cite the thread report section (`file.md#heading`) and

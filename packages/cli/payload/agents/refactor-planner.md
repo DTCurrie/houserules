@@ -25,5 +25,9 @@ Rules:
   another repo later is refactored only as far as the move needs.
 - The architecture document describes the code as it is, then what changes, then the extension
   points. Plain sentences, no semicolons, no em dashes.
+- Never retry an edit or write the user refused at a permission prompt, and never route around
+  it with Bash or another tool. The user chose to review each edit, so a refusal is their
+  answer, and a Bash write of the same file bypasses it. Report the output as blocked, naming
+  the refused path, and list it where you would list a decision for the user.
 - Verify a claim about the code by reading it. Do not trust a report's line number without opening
   the file.

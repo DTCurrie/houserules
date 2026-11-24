@@ -60,6 +60,11 @@ Nothing else. Thread reports belong to the researchers. `SYNTHESIS.md` and `REPO
 the synthesizer. Bash runs only the keepalive below, `wave-ceiling.mjs`, `scaffold-synthesis.mjs`,
 and `check-findings.mjs`. Never run any other command with Bash.
 
+Never retry a write the user refused at a permission prompt, and never route around it with
+Bash or another tool. The user chose to review each write, so a refusal is their answer, and a
+Bash write of the same file bypasses it. When a researcher or the synthesizer reports a refused
+write, never respawn it to retry the same write. Report `BLOCKED`, naming the refused path.
+
 ## The round loop
 
 Keep a thread list as you go: each thread opened, the round that opened it, and whether it is open

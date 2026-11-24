@@ -28,6 +28,8 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
 interface ContentBlock {
   type?: string;
   name?: string;
+  id?: string;
+  tool_use_id?: string;
 }
 
 /** The fields of a transcript record this module reads. Every other record type is skipped. */
@@ -38,6 +40,7 @@ export interface TurnRecord {
   origin?: { kind?: string };
   timestamp?: string;
   message?: { content?: unknown };
+  permissionDecision?: { decision?: string };
 }
 
 /**
@@ -59,13 +62,30 @@ function isHumanPrompt(record: TurnRecord): boolean {
   );
 }
 
-function toolUseNames(record: TurnRecord): string[] {
+function rejectedToolUseIds(record: TurnRecord): string[] {
+  if (record.type !== 'user') return [];
+  if (record.permissionDecision?.decision !== 'reject') return [];
+  const content = record.message?.content;
+  if (!Array.isArray(content)) return [];
+  const ids: string[] = [];
+  for (const block of content as ContentBlock[])
+    if (block?.type === 'tool_result' && typeof block.tool_use_id === 'string')
+      ids.push(block.tool_use_id);
+  return ids;
+}
+
+function toolUseNames(
+  record: TurnRecord,
+  rejectedIds: ReadonlySet<string>,
+): string[] {
   const content = record.message?.content;
   if (!Array.isArray(content)) return [];
   const names: string[] = [];
-  for (const block of content as ContentBlock[])
-    if (block?.type === 'tool_use' && typeof block.name === 'string')
-      names.push(block.name);
+  for (const block of content as ContentBlock[]) {
+    if (block?.type !== 'tool_use' || typeof block.name !== 'string') continue;
+    if (typeof block.id === 'string' && rejectedIds.has(block.id)) continue;
+    names.push(block.name);
+  }
   return names;
 }
 
@@ -75,12 +95,14 @@ function toolUseNames(record: TurnRecord): string[] {
  */
 function collectNewestFirst(records: Iterable<TurnRecord>): string[] | null {
   const names: string[] = [];
+  const rejectedIds = new Set<string>();
   let sawAssistant = false;
   for (const record of records) {
     if (isHumanPrompt(record)) break;
+    for (const id of rejectedToolUseIds(record)) rejectedIds.add(id);
     if (record.type !== 'assistant') continue;
     sawAssistant = true;
-    names.push(...toolUseNames(record).reverse());
+    names.push(...toolUseNames(record, rejectedIds).reverse());
   }
   return sawAssistant ? names.reverse() : null;
 }
@@ -113,9 +135,11 @@ function* parsedFromEnd(lines: readonly string[]): Iterable<TurnRecord> {
 
 /**
  * The name of every tool the assistant used since the last human prompt in `records`, in
- * transcript order. Null when no assistant record follows that prompt. Null is the lag case:
- * the harness writes the transcript asynchronously, so a file with no assistant record since
- * the prompt may not have caught up yet, and a caller must not read it as "no tools used".
+ * transcript order, leaving out any use the user rejected, since a rejected edit never
+ * reached the working tree. A record with no permission decision counts as written. Null
+ * when no assistant record follows that prompt. Null is the lag case: the harness writes the
+ * transcript asynchronously, so a file with no assistant record since the prompt may not
+ * have caught up yet, and a caller must not read it as "no tools used".
  *
  * @param records Transcript records oldest first, as the `.jsonl` file holds them.
  */
@@ -131,7 +155,8 @@ export function toolUsesSinceLastPrompt(
  *
  * `false` means every tool use was in {@link READ_ONLY_TOOLS}, or there were none, so a Stop
  * hook that reacts to edits can exit before spawning anything. `true` means at least one
- * tool use could have written. `undefined` means the question has no answer: no path, an
+ * tool use could have written and the user kept it: a rejected tool use is not counted,
+ * because it changed nothing. `undefined` means the question has no answer: no path, an
  * unreadable file, or no assistant record since the prompt, which is how a lagging write
  * looks. A caller treats `undefined` exactly as it behaved before this gate existed.
  */

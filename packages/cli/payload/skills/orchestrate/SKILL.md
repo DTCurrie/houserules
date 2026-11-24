@@ -66,6 +66,7 @@ Resolving the plan leaves the mode as is. A no-slug `/orchestrate --auto` still 
 Never infer a plan from mtime or sort order. Before the first spawn or slice, state in one line the
 plan slug and its ROADMAP `phase <N>`, such as `auth-rework phase 2`, never `phase-<N>`. A
 milestone's form is in `references/milestone.md`. The user can stop a wrong pick cheaply only then.
+In manual mode, before that first spawn, follow `references/manual-mode.md`.
 
 **Default is check-in.** After each phase closes, report what landed and stop for the user. `--auto`
 suppresses only that pause.

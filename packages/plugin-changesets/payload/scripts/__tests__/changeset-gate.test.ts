@@ -828,3 +828,113 @@ describe('changeset-gate.mjs, scoping h5 to the turn', () => {
     expect(r.stderr).toMatch(/@fix\/studio/);
   });
 });
+
+describe('changeset-gate.mjs, rejected edits', () => {
+  const PROMPT_AT = '2026-01-01T01:00:00.000Z';
+
+  function toolUse(id: string, name: string, filePath: string) {
+    return {
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id, name, input: { file_path: filePath } },
+        ],
+      },
+    };
+  }
+
+  function rejection(id: string) {
+    return {
+      type: 'user',
+      permissionDecision: { decision: 'reject' },
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: id,
+            is_error: true,
+            content: 'The user rejected this tool use.',
+          },
+        ],
+      },
+    };
+  }
+
+  function acceptance(id: string) {
+    return {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }],
+      },
+    };
+  }
+
+  function payloadFor(root: string, records: object[]): string {
+    const path = join(root, 'transcript.jsonl');
+    const prompt = {
+      type: 'user',
+      timestamp: PROMPT_AT,
+      message: { role: 'user', content: 'do the thing' },
+    };
+    writeFileSync(
+      path,
+      [prompt, ...records].map((r) => JSON.stringify(r)).join('\n') + '\n',
+    );
+    return JSON.stringify({ transcript_path: path });
+  }
+
+  it('exits 0 on a drifted tree when the only edit of the turn was rejected', () => {
+    const root = driftedRepo();
+
+    const r = runScript(root, SCRIPT, {
+      input: payloadFor(root, [
+        toolUse('toolu_1', 'Edit', 'apps/studio/src/main.ts'),
+        rejection('toolu_1'),
+      ]),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toBe('');
+  });
+
+  it('flags the same drifted tree when that edit was accepted', () => {
+    const root = driftedRepo();
+
+    const r = runScript(root, SCRIPT, {
+      input: payloadFor(root, [
+        toolUse('toolu_1', 'Edit', 'apps/studio/src/main.ts'),
+        acceptance('toolu_1'),
+      ]),
+    });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/studio/);
+  });
+
+  it('judges the real tree, not a later rejected edit, after a changeset written this turn', () => {
+    const root = installChangesets();
+    appendFileSync(
+      join(root, 'apps/studio/src/main.ts'),
+      'export const two = 2;\n',
+    );
+    writeFileSync(
+      join(root, '.changeset/kit-studio.md'),
+      '---\n"@fix/studio": patch\n---\n\nStudio.\n',
+    );
+
+    const r = runScript(root, SCRIPT, {
+      input: payloadFor(root, [
+        toolUse('toolu_1', 'Write', join(root, '.changeset/kit-studio.md')),
+        acceptance('toolu_1'),
+        toolUse('toolu_2', 'Edit', 'games/cityville/src/main.ts'),
+        rejection('toolu_2'),
+      ]),
+    });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toBe('');
+  });
+});

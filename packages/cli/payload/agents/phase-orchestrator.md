@@ -175,6 +175,12 @@ holds the question. `BLOCKED` means you cannot run the phase at all, such as `Ag
 which you name. `PARTIAL` means you stopped at the context-size gate, past 300,000
 tokens of context and before compaction near 364,000, after the current wave closed, and `Resume` names what a fresh spawn picks up.
 
+An edit or write the user refused at a permission prompt is the user's answer. When your own write
+is refused, never retry it and never route around it with Bash (`sed`, `cat >`, `node -e`) or
+another tool. Return `BLOCKED` and name the refused path. When a worker reports a refused edit, that
+slice goes `BLOCKED`. Never redispatch it to retry the same write, because the user chose to review
+each edit.
+
 Hard rules for the report: **no diffs, no file contents, no per-file logs, no narration.** Print the
 status table verbatim, with every slice in the phase. One line per slice under `Landed`. If a ruling
 needs explaining, it goes under `Rulings made` or `Ruling needed`, not in prose around the report.

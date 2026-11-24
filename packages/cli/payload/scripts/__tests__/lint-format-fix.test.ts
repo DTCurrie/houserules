@@ -33,6 +33,7 @@ import {
   stepArgv,
   stepTimedOut,
   killGroup,
+  manualModeNotice,
   type FixSettings,
 } from '../lint-format-fix.mjs';
 import { useInstalledRepo } from '#test/repo';
@@ -1208,5 +1209,78 @@ describe('lintable extensions: the change', () => {
       lintableExtRe.test('packages/cli/payload/scripts/lint-format-fix.mts'),
     ).toBe(true);
     expect(lintableExtRe.test('src/config.cts')).toBe(true);
+  });
+});
+
+describe('manualModeNotice', () => {
+  it('names each step’s exact command line after one skipped-fix sentence', () => {
+    const settings = resolveFixSettings(baseConfig());
+
+    expect(
+      manualModeNotice(
+        [
+          ['@fix/cityville', 'lint:fix', ['src/game.ts']],
+          ['@fix/studio', 'format:fix'],
+        ],
+        settings,
+      ),
+    ).toBe(
+      'lint-format-fix: skipped the auto-fix because this session reviews each edit. Run these commands, then return control:\n' +
+        'pnpm --filter @fix/cityville lint:fix -- src/game.ts\n' +
+        'pnpm --filter @fix/studio format:fix\n',
+    );
+  });
+
+  it('reports a step with too many paths the way runFixSteps does', () => {
+    const settings = resolveFixSettings(baseConfig());
+    const tooMany = ['x'.repeat(ARGV_PATH_BYTE_BUDGET + 1)];
+
+    expect(
+      manualModeNotice([['@fix/cityville', 'lint:fix', tooMany]], settings),
+    ).toContain(
+      'lint-format-fix: lint:fix for @fix/cityville had too many changed paths for one command line, so it was skipped.\n',
+    );
+  });
+});
+
+describe('lint-format-fix.mjs by permission_mode', () => {
+  let root: string;
+  const gamePath = 'games/cityville/src/game.ts';
+
+  beforeEach(() => {
+    root = useInstalledRepo('pnpm-monorepo');
+    stubRunner(root);
+    setRunner(root);
+    appendFileSync(join(root, gamePath), 'export const x = 9;\n');
+  });
+
+  it('in default mode runs nothing, exits 2, and names the command on stderr', () => {
+    const r = runScript(root, SCRIPT, {
+      input: '{"permission_mode":"default"}',
+    });
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toContain('--filter @fix/cityville fix -- src/game.ts');
+    expect(
+      existsSync(join(root, 'runner-calls.txt')),
+      'the runner was never spawned',
+    ).toBe(false);
+  });
+
+  it('in acceptEdits mode runs the fixer as without the field', () => {
+    const r = runScript(root, SCRIPT, {
+      input: '{"permission_mode":"acceptEdits"}',
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville fix -- src/game.ts',
+    ]);
+  });
+
+  it('with no permission_mode runs the fixer', () => {
+    const r = runScript(root, SCRIPT, { input: '{}' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(recordedCalls(root)).toEqual([
+      '--filter @fix/cityville fix -- src/game.ts',
+    ]);
   });
 });

@@ -24,6 +24,7 @@ const ORCHESTRATE_REFERENCES = [
   'nested.md',
   'milestone.md',
   'direct-dispatch.md',
+  'manual-mode.md',
 ] as const;
 
 export const id = 'orchestrate';

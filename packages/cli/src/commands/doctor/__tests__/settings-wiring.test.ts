@@ -50,6 +50,7 @@ function coreWiring(): Settings {
     'node .claude/scripts/guard-bash.mjs',
     'node .claude/scripts/ledger-inject.mjs',
     'node .claude/scripts/notice-interim.mjs',
+    'node .claude/scripts/manual-mode-notice.mjs',
   );
 }
 
@@ -287,6 +288,7 @@ describe('checkSettingsWiring, given an install whose settings.json runs the hoo
       UserPromptSubmit: [
         { script: 'ledger-inject.mjs' },
         { script: 'notice-interim.mjs' },
+        { script: 'manual-mode-notice.mjs' },
       ],
     },
   };
@@ -310,7 +312,10 @@ describe('checkSettingsWiring, given an install whose settings.json runs the hoo
       version: 1,
       events: {
         PreToolUse: [{ script: 'guard-bash.mjs', matcher: 'Bash' }],
-        UserPromptSubmit: [{ script: 'notice-interim.mjs' }],
+        UserPromptSubmit: [
+          { script: 'notice-interim.mjs' },
+          { script: 'manual-mode-notice.mjs' },
+        ],
       },
     });
     const ctx = installedCtx({

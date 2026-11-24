@@ -73,6 +73,7 @@ function libActions(): Action[] {
     'resource-budget.mjs',
     'findings.mjs',
     'transcript-turn.mjs',
+    'permission-mode.mjs',
     'checker-input.mjs',
     'finding-blocks.mjs',
   ]) {
@@ -101,6 +102,14 @@ function libActions(): Action[] {
       id,
       'notice-interim.mjs',
       'UserPromptSubmit: tell the turn an interim agent notice opens how to answer it',
+    ),
+  );
+  // Prints only in manual mode, for a prompt that invokes /orchestrate or /sweep.
+  actions.push(
+    script(
+      id,
+      'manual-mode-notice.mjs',
+      'UserPromptSubmit: warn that subagent edits each raise a permission prompt in manual mode',
     ),
   );
   actions.push(
@@ -296,6 +305,15 @@ function settingsActions(): Action[] {
       kind: 'merge-settings',
       module: id,
       fragment: hookFragment('UserPromptSubmit', null, 'notice-interim.mjs'),
+    },
+    {
+      kind: 'merge-settings',
+      module: id,
+      fragment: hookFragment(
+        'UserPromptSubmit',
+        null,
+        'manual-mode-notice.mjs',
+      ),
     },
     {
       kind: 'merge-settings',

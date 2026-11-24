@@ -56,6 +56,13 @@ options:
 
 With 8 or fewer shards, skip the question and dispatch.
 
+**Manual mode.** If a line starting `[houserules] Manual mode` is in context, or the user said they
+approve each edit, every edit a writer makes raises its own permission prompt in this session. Before
+any `Agent` call, say so once and call `AskUserQuestion` with two options: switch the permission mode
+(for example to accept edits) and then dispatch, or run the edits in-context with no writers. Dispatch
+nothing until the user answers. A refused writer edit comes back as `blocked` naming the path. A
+session that auto-accepts edits skips this.
+
 Dispatch all shards in a single message as parallel `Agent` calls. Each writer is **cheap and
 pinned**: request `model: haiku` (or `effort: low`). A mechanical edit doesn't need a strong model,
 and a fleet of strong ones is the cost trap this skill exists to avoid.

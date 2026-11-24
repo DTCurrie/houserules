@@ -106,7 +106,8 @@ Local variable and parameter renames carry no such risk. Apply those directly.
 ## 5. Report
 
 List what was fixed, each with the clause it violated and whether a checker or the subagent's
-read found it. Then list what was deliberately left alone, each with the reason, such as a
+read found it. Count a fix only if its `Edit` succeeded, and list a refused edit as refused, not
+fixed. Then list what was deliberately left alone, each with the reason, such as a
 40-line function that genuinely needs the length, or a checker warning judged not worth
 splitting. Silent non-action reads as clean, so name it instead. Finally list any proposed
 exported-symbol renames that need the `rename` module, or ran through it if installed.

@@ -248,8 +248,8 @@ function skillTriggersSection(answers: Answers): string[] {
   const bullets: string[] = [];
   if (has('changesets'))
     bullets.push(
-      '- After a meaningful change to a package: record a changeset with `/changeset`, **before',
-      '  the commit**.',
+      '- After a meaningful change to a package lands, meaning an edit the user kept: record a',
+      '  changeset with `/changeset`, **before the commit**. Never for an edit the user rejected.',
     );
   if (has('backlog'))
     bullets.push(
@@ -259,6 +259,8 @@ function skillTriggersSection(answers: Answers): string[] {
   if (has('decisions'))
     bullets.push(
       '- Settled a design question the code does not explain on its own? Record it with `/decide`.',
+      '  When the decision is about a change, record it after the user kept that change. Never for an',
+      '  edit the user rejected.',
     );
   if (has('plans') && has('orchestrate'))
     bullets.push(
@@ -406,11 +408,12 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
     ...subagentExceptionLine(answers, { bold: false }),
     '- Verify with static gates (tests, typecheck, lint) plus a short falsifiable acceptance checklist',
     '  for the user. No browser/screenshot verification unless explicitly asked.',
-    '- Run them in order, scoped to the packages you changed: format first, then lint with autofix,',
-    '  then typecheck and test, so only real problems are left.',
+    '- Run them in order, scoped to the packages whose edits the user kept: format first, then',
+    '  lint with autofix, then typecheck and test, so only real problems are left.',
     '- **"Done" means every check passed, not that the edits were made.** Report a check that failed',
     '  or never ran, with its output. The recorded evasions, and what each one means:',
-    '  - "The edits are in, so it is done": done is the checks passing, with output you read.',
+    '  - "The edits are in, so it is done": done is the checks passing, with output you read. An edit',
+    '    the user rejected is not in. Never check it, record it, or report it as done.',
     '  - "I know this fact from memory": a fact from training data or an earlier session is a guess',
     '    until a command confirms it. A fact this session already observed, on files unchanged since,',
     '    is evidence. Cite where you saw it instead of re-running, since a re-run costs wall time and',
@@ -428,7 +431,9 @@ export function renderClaudeAdditions(ctx: Ctx, answers: Answers): string {
     '    content is ready, take it, then check the result once. Before it, at most one check, and only',
     '    for a claim you can name a doubt about. Cheap to reverse: editing a pull request or issue',
     '    body, a local edit under version control, a re-runnable command with no effect outside the',
-    '    repo. Not cheap: a push, a publish, a merge, a delete, or a message to another person.',
+    '    repo. Not cheap: a push, a publish, a merge, a delete, or a message to another person. When',
+    '    the action raises a permission prompt, that prompt is the confirmation, so never ask first as',
+    '    well. A rejected action did not happen, so never check, verify, record, or report it as done.',
     '- Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.',
     '- A subagent runs a command expected to outlast the default Bash timeout with',
     '  `run_in_background: true`, ends its turn without reporting, and reports when the completion',

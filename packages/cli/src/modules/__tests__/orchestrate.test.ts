@@ -142,6 +142,20 @@ describe('orchestrate', () => {
       ).toBe(true);
     });
 
+    it('points the first spawn at the manual-mode reference, which asks before any spawn', () => {
+      const manual = readFileSync(
+        join(root, '.claude/skills/orchestrate/references/manual-mode.md'),
+        'utf8',
+      );
+      expect(skillText).toMatch(
+        /manual mode[^\n]*references\/manual-mode\.md/i,
+      );
+      expect(manual).toContain('[houserules] Manual mode');
+      expect(manual).toContain('own permission prompt');
+      expect(manual).toMatch(/Under `--auto` this is still a stop/);
+      expect(manual).toMatch(/`BLOCKED` and names the path/);
+    });
+
     it('installs the milestone reference and points a milestone slug at it', () => {
       expect(
         existsSync(

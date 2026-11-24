@@ -135,6 +135,17 @@ describe('toolUsesSinceLastPrompt', () => {
   });
 });
 
+const RECORDED_REJECTED_EDIT_SESSION: string[] = [
+  '{"type":"user","message":{"role":"user","content":"change the greeting"},"timestamp":"2026-11-24T13:47:40.000Z"}',
+  '{"type":"api-request-blob","message":{"content":[{"type":"text","text":"system"}]}}',
+  '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01Ghv8GnnvxxjAVVZpjPAKrC","name":"Read","input":{}}]}}',
+  '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01Ghv8GnnvxxjAVVZpjPAKrC","type":"tool_result","content":"1\\texport"}]},"permissionDecision":{"decision":"accept","source":"config","reasonType":"mode"}}',
+  '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01CrJtVFkJRv3ViRZzjHredK","name":"Edit","input":{}}]}}',
+  '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01CrJtVFkJRv3ViRZzjHredK","type":"tool_result","content":"denied","is_error":true}]},"permissionDecision":{"decision":"reject","source":"config","reasonType":"rule"},"toolDenialKind":"permission-rule"}',
+  '{"type":"api-request-blob","message":{"content":[{"type":"tool_use","id":"toolu_01CrJtVFkJRv3ViRZzjHredK","name":"Edit"}]}}',
+  '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The edit was denied."}]}}',
+];
+
 let dir: string | undefined;
 afterEach(() => {
   if (dir) rmSync(dir, { recursive: true, force: true });
@@ -215,6 +226,205 @@ describe('turnTouchedFiles', () => {
       '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit"',
       assistant(),
     ]);
+    expect(turnTouchedFiles(path)).toBe(false);
+  });
+});
+
+function toolUseRecord(id: string, name: string): TurnRecord {
+  return {
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', id, name, input: {} }] },
+  };
+}
+
+function toolResultRecord(id: string, decision?: string): TurnRecord {
+  return {
+    type: 'user',
+    ...(decision ? { permissionDecision: { decision } } : {}),
+    message: {
+      content: [{ type: 'tool_result', tool_use_id: id, content: 'x' }],
+    },
+  };
+}
+
+function blobNoise(id: string, name: string): TurnRecord {
+  return {
+    type: 'api-request-blob',
+    message: { content: [{ type: 'tool_use', id, name }] },
+  };
+}
+
+describe('toolUsesSinceLastPrompt with permission decisions', () => {
+  it('counts every writing use whose result was accepted', () => {
+    const records = [
+      prompt(),
+      toolUseRecord('a', 'Edit'),
+      toolResultRecord('a', 'accept'),
+      toolUseRecord('b', 'Write'),
+      toolResultRecord('b', 'accept'),
+    ];
+    expect(toolUsesSinceLastPrompt(records)).toEqual(['Edit', 'Write']);
+  });
+
+  it('returns only the read-only uses when every writing use was rejected', () => {
+    const records = [
+      prompt(),
+      toolUseRecord('a', 'Edit'),
+      toolResultRecord('a', 'reject'),
+      toolUseRecord('b', 'Read'),
+      toolResultRecord('b', 'accept'),
+      toolUseRecord('c', 'Bash'),
+      toolResultRecord('c', 'reject'),
+    ];
+    expect(toolUsesSinceLastPrompt(records)).toEqual(['Read']);
+  });
+
+  it('omits the rejected Edit and keeps the accepted one in a mixed turn', () => {
+    const records = [
+      prompt(),
+      toolUseRecord('a', 'Edit'),
+      toolResultRecord('a', 'accept'),
+      toolUseRecord('b', 'Edit'),
+      toolResultRecord('b', 'reject'),
+    ];
+    expect(toolUsesSinceLastPrompt(records)).toEqual(['Edit']);
+  });
+
+  it('rejects every tool use named by one result record with several blocks', () => {
+    const records: TurnRecord[] = [
+      prompt(),
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', id: 'a', name: 'Edit' },
+            { type: 'tool_use', id: 'b', name: 'Write' },
+          ],
+        },
+      },
+      {
+        type: 'user',
+        permissionDecision: { decision: 'reject' },
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 'a' },
+            { type: 'tool_result', tool_use_id: 'b' },
+          ],
+        },
+      },
+    ];
+    expect(toolUsesSinceLastPrompt(records)).toEqual([]);
+  });
+});
+
+describe('turnTouchedFiles with permission decisions', () => {
+  it('is false when every writing use was rejected', () => {
+    const path = transcript([
+      prompt(),
+      toolUseRecord('a', 'Edit'),
+      toolResultRecord('a', 'reject'),
+      toolUseRecord('b', 'Read'),
+      toolResultRecord('b', 'accept'),
+    ]);
+    expect(turnTouchedFiles(path)).toBe(false);
+  });
+
+  it('is true when one Edit was accepted and another rejected', () => {
+    const path = transcript([
+      prompt(),
+      toolUseRecord('a', 'Edit'),
+      toolResultRecord('a', 'accept'),
+      toolUseRecord('b', 'Edit'),
+      toolResultRecord('b', 'reject'),
+    ]);
+    expect(turnTouchedFiles(path)).toBe(true);
+  });
+
+  it('counts a rejected Edit followed by an accepted retry of the same file as touched', () => {
+    const path = transcript([
+      prompt(),
+      toolUseRecord('first', 'Edit'),
+      toolResultRecord('first', 'reject'),
+      toolUseRecord('retry', 'Edit'),
+      toolResultRecord('retry', 'accept'),
+      assistant(),
+    ]);
+    expect(turnTouchedFiles(path)).toBe(true);
+  });
+
+  it('counts a writing use as written when no record carries a permission decision', () => {
+    const path = transcript([
+      prompt(),
+      toolUseRecord('a', 'Edit'),
+      toolResultRecord('a'),
+      assistant(),
+    ]);
+    expect(turnTouchedFiles(path)).toBe(true);
+  });
+
+  it('counts a writing use as written when the decision is not reject', () => {
+    const path = transcript([
+      prompt(),
+      toolUseRecord('a', 'Write'),
+      toolResultRecord('a', 'ask'),
+    ]);
+    expect(turnTouchedFiles(path)).toBe(true);
+  });
+
+  it('is false for a long turn whose writing uses were all rejected among noise records', () => {
+    const records: TurnRecord[] = [
+      prompt('earlier'),
+      toolUseRecord('old', 'Edit'),
+      toolResultRecord('old', 'accept'),
+      prompt(),
+    ];
+    const WRITING_TOOL_NAMES = ['Edit', 'Write'];
+    for (let i = 0; i < 6; i++) {
+      records.push(
+        toolUseRecord(`r${i}`, 'Read'),
+        toolResultRecord(`r${i}`, 'accept'),
+      );
+      records.push(blobNoise(`r${i}`, 'Read'), { type: 'attachment' });
+      records.push(
+        toolUseRecord(
+          `w${i}`,
+          WRITING_TOOL_NAMES[i % WRITING_TOOL_NAMES.length]!,
+        ),
+        toolResultRecord(`w${i}`, 'reject'),
+      );
+      records.push(blobNoise(`w${i}`, 'Edit'));
+    }
+    records.push(assistant());
+    expect(toolUsesSinceLastPrompt(records)).toEqual([
+      'Read',
+      'Read',
+      'Read',
+      'Read',
+      'Read',
+      'Read',
+    ]);
+    expect(turnTouchedFiles(transcript(records))).toBe(false);
+  });
+
+  it('is true for a long turn where one of many writing uses was accepted', () => {
+    const records: TurnRecord[] = [prompt()];
+    const ACCEPTED_WRITE_INDEX = 7;
+    for (let i = 0; i < 12; i++) {
+      records.push(
+        toolUseRecord(`w${i}`, 'Edit'),
+        toolResultRecord(
+          `w${i}`,
+          i === ACCEPTED_WRITE_INDEX ? 'accept' : 'reject',
+        ),
+      );
+      records.push(blobNoise(`w${i}`, 'Edit'));
+    }
+    expect(toolUsesSinceLastPrompt(records)).toEqual(['Edit']);
+    expect(turnTouchedFiles(transcript(records))).toBe(true);
+  });
+
+  it('is false for the recorded session whose only write was rejected', () => {
+    const path = transcript(RECORDED_REJECTED_EDIT_SESSION);
     expect(turnTouchedFiles(path)).toBe(false);
   });
 });

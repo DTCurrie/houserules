@@ -343,7 +343,29 @@ describe('renderClaudeAdditions', () => {
       makeAnswers({ moduleIds: ['core', 'changesets'] }),
     );
     expect(body).toMatch(/### Skill triggers/);
-    expect(body).toMatch(/record a changeset with `\/changeset`/);
+    expect(body).toContain(
+      '- After a meaningful change to a package lands, meaning an edit the user kept: record a\n' +
+        '  changeset with `/changeset`, **before the commit**. Never for an edit the user rejected.',
+    );
+  });
+
+  it('renders the decide trigger as recorded only after the user kept the change', () => {
+    const body = renderClaudeAdditions(
+      makeCtx(),
+      makeAnswers({ moduleIds: ['core', 'decisions'] }),
+    );
+    expect(body).toContain(
+      'Record it with `/decide`.\n' +
+        '  When the decision is about a change, record it after the user kept that change. Never for an\n' +
+        '  edit the user rejected.',
+    );
+  });
+
+  it('scopes the verification order to the packages whose edits the user kept', () => {
+    const body = renderClaudeAdditions(makeCtx(), makeAnswers());
+    expect(body).toContain(
+      'scoped to the packages whose edits the user kept: format first, then\n  lint with autofix, then typecheck and test, so only real problems are left.',
+    );
   });
 
   it('renders contributed trigger lines after the ledger-ids bullet', () => {
@@ -585,7 +607,8 @@ describe('renderClaudeMd', () => {
     expect(body).toContain(
       [
         '  or never ran, with its output. The recorded evasions, and what each one means:',
-        '  - "The edits are in, so it is done": done is the checks passing, with output you read.',
+        '  - "The edits are in, so it is done": done is the checks passing, with output you read. An edit',
+        '    the user rejected is not in. Never check it, record it, or report it as done.',
         '  - "I know this fact from memory": a fact from training data or an earlier session is a guess',
         '    until a command confirms it. A fact this session already observed, on files unchanged since,',
         '    is evidence. Cite where you saw it instead of re-running, since a re-run costs wall time and',
@@ -603,7 +626,9 @@ describe('renderClaudeMd', () => {
         '    content is ready, take it, then check the result once. Before it, at most one check, and only',
         '    for a claim you can name a doubt about. Cheap to reverse: editing a pull request or issue',
         '    body, a local edit under version control, a re-runnable command with no effect outside the',
-        '    repo. Not cheap: a push, a publish, a merge, a delete, or a message to another person.',
+        '    repo. Not cheap: a push, a publish, a merge, a delete, or a message to another person. When',
+        '    the action raises a permission prompt, that prompt is the confirmation, so never ask first as',
+        '    well. A rejected action did not happen, so never check, verify, record, or report it as done.',
         '- Derive empirical constants by parsing the artifact itself, not screenshot-and-iterate loops.',
       ].join('\n'),
     );

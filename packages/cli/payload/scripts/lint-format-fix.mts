@@ -33,6 +33,10 @@
  *
  * A step whose script the target's package.json does not define is skipped with one stderr
  * notice, and the hook still exits 0.
+ *
+ * When the payload's permission_mode is "default" (the user approves each edit), the hook
+ * runs no fix step. It exits 2 with each step's exact command on stderr, so Claude runs them
+ * through a prompt the user sees.
  */
 
 import { spawn, spawnSync } from 'node:child_process';
@@ -47,6 +51,7 @@ import {
   runsAtRepoRoot,
   type HouseConfig,
 } from '@houserules/payload/config';
+import { isManualMode } from '@houserules/payload/permission-mode';
 import { readStdinJson, repoRoot, tail } from '@houserules/payload/proc';
 import {
   turnStartedAt,
@@ -58,6 +63,7 @@ interface HookInput {
   hook_event_name?: string;
   transcript_path?: string;
   background_tasks?: unknown[];
+  permission_mode?: string;
 }
 
 /** Everything {@link planFixSteps} needs, resolved once from a loaded `HouseConfig`. */
@@ -540,6 +546,11 @@ export interface FixRun {
   overrun: BudgetOverrun | null;
 }
 
+/** The line naming a step skipped because its path list outgrew one command line. */
+function tooManyPathsNotice(pkg: string, script: string): string {
+  return `lint-format-fix: ${script} for ${pkg} had too many changed paths for one command line, so it was skipped.`;
+}
+
 /** The single stderr line written when `overrun` ended the run. */
 export function overrunNotice(
   overrun: BudgetOverrun,
@@ -568,9 +579,7 @@ export async function runFixSteps(
     if (remaining <= 0) return { errors, overrun: { pkg, step: script } };
     const argv = stepArgv(step, settings);
     if (argv === null) {
-      process.stderr.write(
-        `lint-format-fix: ${script} for ${pkg} had too many changed paths for one command line, so it was skipped.\n`,
-      );
+      process.stderr.write(`${tooManyPathsNotice(pkg, script)}\n`);
       continue;
     }
     const r = await runStep(argv, cwd, settings, remaining);
@@ -578,6 +587,29 @@ export async function runFixSteps(
     if (!r.ok) errors.push({ pkg, step: script, output: r.output });
   }
   return { errors, overrun: null };
+}
+
+/**
+ * The stderr text for a manual-mode session: one line saying the fix was skipped, then each
+ * step's command line as {@link runFixSteps} would spawn it, one per line.
+ */
+export function manualModeNotice(
+  steps: FixStep[],
+  settings: FixSettings,
+): string {
+  const lines = [
+    'lint-format-fix: skipped the auto-fix because this session reviews each edit. Run these commands, then return control:',
+  ];
+  for (const step of steps) {
+    const argv = stepArgv(step, settings);
+    if (argv === null) {
+      const [pkg, script] = step;
+      lines.push(tooManyPathsNotice(pkg, script));
+      continue;
+    }
+    lines.push([settings.runner, ...argv].join(' '));
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 async function main(): Promise<void> {
@@ -613,6 +645,11 @@ async function main(): Promise<void> {
   const { steps, notices } = skipMissingScripts(planned, cwd, settings);
   for (const notice of notices) process.stderr.write(notice);
   if (steps.length === 0) process.exit(0);
+
+  if (isManualMode(input)) {
+    process.stderr.write(manualModeNotice(steps, settings));
+    process.exit(2);
+  }
 
   const { errors, overrun } = await runFixSteps(
     steps,

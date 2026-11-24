@@ -3,9 +3,9 @@
 Working on the shared payload libs package. Payload authoring conventions, including the
 package-name import rule, are in `docs/payload.md`.
 
-- `@houserules/payload` holds the fifteen shared payload libs (`backlog-id`, `entry-ledger`,
+- `@houserules/payload` holds the sixteen shared payload libs (`backlog-id`, `entry-ledger`,
   `config`, `ledger-index`, `proc`, `workspaces`, `comment-scan`, `findings`,
-  `markdown-segment`, `transcript-turn`, `checker-input`, `finding-blocks`,
+  `markdown-segment`, `transcript-turn`, `permission-mode`, `checker-input`, `finding-blocks`,
   `resource-budget`, `plan-markdown`, `html-markdown`) as their own
   package. It ships no modules and installs nothing on its own. A payload script, in the CLI or in a plugin, imports one by package name,
   `@houserules/payload/config`, and the build rewrites that specifier to the relative path

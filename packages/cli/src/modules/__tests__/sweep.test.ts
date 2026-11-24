@@ -39,6 +39,12 @@ describe('sweep', () => {
       expect(skillText, 'threshold missing').toMatch(/more than 8 shards/);
     });
 
+    it('branches on manual mode before dispatching writers', () => {
+      expect(skillText).toContain('[houserules] Manual mode');
+      expect(skillText).toMatch(/own permission prompt/);
+      expect(skillText).toMatch(/Dispatch\s+nothing until the user answers/);
+    });
+
     it('passes doctor', () => {
       expect(runCli(['doctor', root]).status).toBe(0);
     });

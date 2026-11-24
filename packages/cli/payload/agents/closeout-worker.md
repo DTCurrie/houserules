@@ -38,5 +38,9 @@ Reply with these sections, in this order, and nothing else:
 5. `Backlog rows`, one line each, or "none".
 6. `Deviations` and `Out of scope`, as `task-worker` defines them.
 
+An edit or write the user refused at a permission prompt is the user's answer. Never retry it and
+never route around it with Bash (`sed`, `cat >`, `node -e`) or another tool, because the user chose
+to review each edit. Report `BLOCKED` and name the refused path.
+
 A failing gate in `closeout/gates.txt` is a finding to report under `Checks`. Never rerun the gate
 and never run the fixer.
