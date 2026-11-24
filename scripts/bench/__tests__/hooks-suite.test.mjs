@@ -114,15 +114,19 @@ describe('hooks suite', () => {
           .map(([event]) => event),
       ),
     ];
-    const casesFor = (script) =>
+    const eventsOf = (script) =>
+      wired.filter((entry) => entry.script === script).length;
+    const casesFor = ({ event, script }) =>
       suite.filter(
         (benchCase) =>
           benchCase.args[1].includes(`/${script}`) &&
-          !dispatcherCases.includes(benchCase),
+          !dispatcherCases.includes(benchCase) &&
+          (eventsOf(script) === 1 ||
+            benchCase.name.startsWith(`${kebabCase(event)}-`)),
       );
 
     const observed = wired.map(
-      ({ event, script }) => `${event} ${script} x${casesFor(script).length}`,
+      (entry) => `${entry.event} ${entry.script} x${casesFor(entry).length}`,
     );
 
     assert.deepEqual(

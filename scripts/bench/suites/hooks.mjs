@@ -318,7 +318,24 @@ function prepareFixture({ root, workDir, hooks, wiring }) {
   return { project, transcript, env };
 }
 
-function casesForHook(hook, { project, transcript, env }) {
+/** The scripts wired under more than one event, whose cases take the event as a name prefix. */
+function scriptsWiredTwice(hooks) {
+  const eventsByScript = new Map();
+  for (const { event, script, isDispatcher } of hooks) {
+    if (isDispatcher) continue;
+    eventsByScript.set(
+      script,
+      (eventsByScript.get(script) ?? new Set()).add(event),
+    );
+  }
+  return new Set(
+    [...eventsByScript]
+      .filter(([, events]) => events.size > 1)
+      .map(([script]) => script),
+  );
+}
+
+function casesForHook(hook, { project, transcript, env }, repeatedScripts) {
   const caseFor = ({ name, isDirty, expectExit }) => ({
     name,
     command: '/bin/sh',
@@ -340,7 +357,10 @@ function casesForHook(hook, { project, transcript, env }) {
     ];
   }
   if (hook.event !== 'Stop') {
-    return [caseFor({ name: hook.script, isDirty: false, expectExit: [0] })];
+    const name = repeatedScripts.has(hook.script)
+      ? `${kebab(hook.event)}-${hook.script}`
+      : hook.script;
+    return [caseFor({ name, isDirty: false, expectExit: [0] })];
   }
   return [
     caseFor({
@@ -399,7 +419,10 @@ export async function cases({ root, repoDir, workDir }) {
   const { settings, wiring } = readBuildWiring(root);
   const hooks = wiredHooks(settings, wiring, hasBuiltDispatcher(root));
   const fixture = prepareFixture({ root, workDir, hooks, wiring });
-  const hookCases = hooks.flatMap((hook) => casesForHook(hook, fixture));
+  const repeatedScripts = scriptsWiredTwice(hooks);
+  const hookCases = hooks.flatMap((hook) =>
+    casesForHook(hook, fixture, repeatedScripts),
+  );
   if (root === repoDir) return hookCases;
   return [...hookCases, ...scopeCases({ root, repoDir, workDir })];
 }
