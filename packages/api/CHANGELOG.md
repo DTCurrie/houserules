@@ -1,5 +1,15 @@
 # @houserules/api
 
+## 0.12.0
+
+### Minor Changes
+
+- ff260b8: Exports hasModule, which answers whether a module is selected under any alias.
+
+### Patch Changes
+
+- @houserules/payload@0.8.1
+
 ## 0.11.1
 
 ### Patch Changes

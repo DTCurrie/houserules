@@ -1,5 +1,11 @@
 # @houserules/plugin-github
 
+## 0.3.0
+
+### Minor Changes
+
+- ff260b8: Ledger sync holds rows written in a turn with a rejected tool use until released with `projects-sync.mjs release <id>`.
+
 ## 0.2.8
 
 ### Patch Changes

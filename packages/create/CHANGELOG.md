@@ -1,5 +1,22 @@
 # @houserules/create
 
+## 0.1.11
+
+### Patch Changes
+
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+- Updated dependencies [ff260b8]
+  - @houserules/cli@0.20.0
+
 ## 0.1.10
 
 ### Patch Changes

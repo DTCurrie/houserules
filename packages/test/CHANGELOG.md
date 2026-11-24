@@ -1,5 +1,11 @@
 # @houserules/test
 
+## 0.3.0
+
+### Minor Changes
+
+- ff260b8: Serializes snapshot builds per key across processes and exports linkInstalledChangesetsCli for plugin suites.
+
 ## 0.2.0
 
 ### Minor Changes
