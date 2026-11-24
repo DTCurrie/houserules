@@ -46,7 +46,7 @@
     "dogfood:watch": "pnpm --filter @houserules/cli dogfood:watch",
     "audit:knip": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles --include-entry-exports",
     "time-gate": "node scripts/time-gate.mjs",
-    "prepare": "houserules update --sync"
+    "prepare": "[ ! -f packages/cli/dist/cli.js ] || houserules update --sync"
   },
   "wireit": {
     "lint": {
