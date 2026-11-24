@@ -34,20 +34,32 @@ const NETWORK_SANDBOX = {
 /**
  * The argv after `claude` for one child session, prompt right after `-p`.
  *
- * @param {{ prompt: string, model: string, perRun: number, tools?: string, isNetworkAllowed?: boolean }} options
+ * @param {{ prompt: string, model: string, perRun: number, tools?: string, isNetworkAllowed?: boolean, permissionMode?: 'auto' | 'default', settings?: Record<string, unknown> }} options
  *   `tools`, when set, adds `--tools <value>`, as preflight probe (a) passes `""`. `isNetworkAllowed`
  *   `false` adds `--disallowedTools WebFetch,WebSearch` and `--settings` with `NETWORK_SANDBOX`. `true` or absent adds nothing, so the
- *   preflight calls, which pass none, keep their argv.
+ *   preflight calls, which pass none, keep their argv. `permissionMode` absent means `auto`.
+ *   `settings` is one `--settings` JSON: merged over `NETWORK_SANDBOX` when the network is closed
+ *   (a `sandbox` key then throws), or alone otherwise.
  * @returns {string[]}
  */
 export function childArgv(options) {
+  const isClosed = options.isNetworkAllowed === false;
+  if (
+    isClosed &&
+    options.settings !== undefined &&
+    'sandbox' in options.settings
+  ) {
+    throw new Error(
+      'settings must not set "sandbox" while the network is closed, since the runner owns it',
+    );
+  }
   const argv = [
     '-p',
     options.prompt,
     '--model',
     options.model,
     '--permission-mode',
-    'auto',
+    options.permissionMode ?? 'auto',
     '--setting-sources',
     'project,local',
     '--output-format',
@@ -57,9 +69,12 @@ export function childArgv(options) {
     String(options.perRun),
   ];
   if (options.tools !== undefined) argv.push('--tools', options.tools);
-  if (options.isNetworkAllowed === false) {
-    argv.push('--disallowedTools', NETWORK_TOOLS);
-    argv.push('--settings', JSON.stringify(NETWORK_SANDBOX));
+  if (isClosed) argv.push('--disallowedTools', NETWORK_TOOLS);
+  if (isClosed || options.settings !== undefined) {
+    const merged = isClosed
+      ? { ...NETWORK_SANDBOX, ...options.settings }
+      : options.settings;
+    argv.push('--settings', JSON.stringify(merged));
   }
   return argv;
 }

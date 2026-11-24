@@ -60,12 +60,13 @@
       ]
     },
     "test": {
-      "command": "vitest run",
+      "command": "node ../../scripts/with-build-locks.mjs test vitest run",
       "dependencies": [
         "build",
         "../test:build"
       ],
       "files": [
+        "../../scripts/with-build-locks.mjs",
         "src/**/*.ts",
         "vitest.config.ts",
         "package.json",

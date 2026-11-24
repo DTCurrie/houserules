@@ -447,8 +447,8 @@ function foldTurn(
   const key = `${message.id ?? ''}\u0000${record.requestId ?? ''}`;
   const repeatOf = hasKey ? seenResponses.get(key) : undefined;
   const isTurn = Boolean(message.usage) && repeatOf === undefined;
-  const placeholder = isSubagent && isPlaceholderUsageVersion(record.version);
-  const usage = placeholder ? {} : (message.usage ?? {});
+  const isPlaceholder = isSubagent && isPlaceholderUsageVersion(record.version);
+  const usage = isPlaceholder ? {} : (message.usage ?? {});
   const tokens = {
     input: usage.input_tokens ?? 0,
     output: usage.output_tokens ?? 0,
@@ -457,56 +457,88 @@ function foldTurn(
     cacheWrite1h: usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
   };
   if (isTurn) {
-    row.turns += 1;
-    if (placeholder) row.placeholderTurns += 1;
-    if (message.model)
-      row.turnsByModel[message.model] =
-        (row.turnsByModel[message.model] ?? 0) + 1;
-    for (const field of Object.keys(tokens)) row.tokens[field] += tokens[field];
+    tallyTurn(row, message, tokens, isPlaceholder);
     if (hasKey) seenResponses.set(key, row.series.ts.length);
   }
   const markers = isTurn ? [...pending].map(plainMarker) : [];
   if (isTurn) pending.clear();
+  const toolNames = collectToolCalls(
+    row,
+    record,
+    toolNameById,
+    toolUseIds,
+    markers,
+  );
+  if (isTurn) {
+    pushTurnSeries(
+      row.series,
+      record,
+      tokens,
+      isPlaceholder,
+      toolNames,
+      markers,
+    );
+  } else if (repeatOf !== undefined) {
+    row.series.tools[repeatOf].push(...toolNames);
+    row.series.markers[repeatOf].push(...markers);
+  }
+}
+
+function tallyTurn(row, message, tokens, isPlaceholder) {
+  row.turns += 1;
+  if (isPlaceholder) row.placeholderTurns += 1;
+  if (message.model)
+    row.turnsByModel[message.model] =
+      (row.turnsByModel[message.model] ?? 0) + 1;
+  for (const field of Object.keys(tokens)) row.tokens[field] += tokens[field];
+}
+
+/** Counts each tool_use block of an assistant record, appending skill and marker side effects. */
+function collectToolCalls(row, record, toolNameById, toolUseIds, markers) {
   const toolNames = [];
-  if (record.type === 'assistant' && Array.isArray(message.content)) {
-    for (const block of message.content) {
-      if (
-        block?.type !== 'tool_use' ||
-        typeof block.id !== 'string' ||
-        typeof block.name !== 'string'
-      )
-        continue;
-      toolNames.push(block.name);
-      toolNameById.set(block.id, block.name);
-      toolUseIds.add(block.id);
-      const tool = (row.tools[block.name] ??= { uses: 0, resultBytes: 0 });
-      tool.uses += 1;
-      const input = block.input ?? {};
-      if (block.name === 'Skill' && typeof input.skill === 'string')
-        row.skills[input.skill] = (row.skills[input.skill] ?? 0) + 1;
-      if (block.name === 'Artifact') markers.push(artifactMarker(input));
-      if (block.name === 'SubagentHandback' || block.name === 'SendMessage') {
-        const status = reportStatus(input.message);
-        if (status) markers.push({ ...plainMarker('report'), status });
-      }
+  const content = record.message?.content;
+  if (record.type !== 'assistant' || !Array.isArray(content)) return toolNames;
+  for (const block of content) {
+    if (
+      block?.type !== 'tool_use' ||
+      typeof block.id !== 'string' ||
+      typeof block.name !== 'string'
+    )
+      continue;
+    toolNames.push(block.name);
+    toolNameById.set(block.id, block.name);
+    toolUseIds.add(block.id);
+    const tool = (row.tools[block.name] ??= { uses: 0, resultBytes: 0 });
+    tool.uses += 1;
+    const input = block.input ?? {};
+    if (block.name === 'Skill' && typeof input.skill === 'string')
+      row.skills[input.skill] = (row.skills[input.skill] ?? 0) + 1;
+    if (block.name === 'Artifact') markers.push(artifactMarker(input));
+    if (block.name === 'SubagentHandback' || block.name === 'SendMessage') {
+      const status = reportStatus(input.message);
+      if (status) markers.push({ ...plainMarker('report'), status });
     }
   }
-  const series = row.series;
-  if (!isTurn) {
-    if (repeatOf !== undefined) {
-      series.tools[repeatOf].push(...toolNames);
-      series.markers[repeatOf].push(...markers);
-    }
-    return;
-  }
+  return toolNames;
+}
+
+function pushTurnSeries(
+  series,
+  record,
+  tokens,
+  isPlaceholder,
+  toolNames,
+  markers,
+) {
+  const model = record.message?.model;
   series.ts.push(isoOrNull(record.timestamp));
-  series.model.push(typeof message.model === 'string' ? message.model : null);
+  series.model.push(typeof model === 'string' ? model : null);
   series.input.push(tokens.input);
   series.output.push(tokens.output);
   series.cacheRead.push(tokens.cacheRead);
   series.cacheWrite.push(tokens.cacheWrite);
   series.cacheWrite1h.push(tokens.cacheWrite1h);
-  series.counted.push(!placeholder);
+  series.counted.push(!isPlaceholder);
   series.tools.push(toolNames);
   series.markers.push(markers);
 }

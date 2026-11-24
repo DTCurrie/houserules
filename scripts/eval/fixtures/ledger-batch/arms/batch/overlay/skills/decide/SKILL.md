@@ -136,7 +136,9 @@ to `.claude/ledgers/studio.DECISIONS.md`. For a repo-wide decision, pass `DECISI
 
 ## Steps
 
-1. Check the bar above. If it does not pass, say so and stop.
+1. Check the bar above. If it does not pass, say so and stop. When the decision is about a
+   change, record it only after the user kept that change. Never record one for an edit the
+   user rejected. A design question not tied to an edit records as usual.
 2. Draft Why, Rejected, In the code, Revisit when. If Rejected or Revisit when is missing,
    ask the user rather than inventing one.
 3. Check whether Revisit when is path-watchable. If it is, add that path to `--scope`

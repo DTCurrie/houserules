@@ -1,0 +1,18 @@
+{
+  "modules": "core,plans,orchestrate",
+  "plugins": [],
+  "model": "sonnet",
+  "permissionMode": "default",
+  "validityAgent": null,
+  "collect": ["src"],
+  "arms": {
+    "notice-on": {
+      "prompt": "arms/notice-on/prompt.txt",
+      "overlay": "arms/notice-on/overlay"
+    },
+    "notice-off": {
+      "prompt": "arms/notice-off/prompt.txt",
+      "overlay": "arms/notice-off/overlay"
+    }
+  }
+}

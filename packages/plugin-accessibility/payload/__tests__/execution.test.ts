@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
@@ -53,36 +53,23 @@ function runStaged(script: string) {
   });
 }
 
+const LIB_MODULES = ['wcag-patterns.mjs'];
+
 describe('every lib module loads on bare node', () => {
-  const libDir = join(SCRIPTS, 'lib');
-  const hasLibDir = existsSync(libDir);
+  it.each(LIB_MODULES)('%s imports and exits 0', (file) => {
+    const fileUrl = pathToFileURL(join(SCRIPTS, 'lib', file)).href;
 
-  const libFiles = hasLibDir
-    ? readdirSync(libDir).filter((f) => f.endsWith('.mjs'))
-    : [];
+    const r = spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', `await import('${fileUrl}')`],
+      {
+        cwd: dependencyFreeDir,
+        encoding: 'utf8',
+        env: envWithoutVitestNodePath(),
+      },
+    );
 
-  describe.runIf(hasLibDir)('scripts/lib', () => {
-    function importLibInChildProcess(file: string) {
-      const fileUrl = pathToFileURL(join(libDir, file)).href;
-      return spawnSync(
-        process.execPath,
-        ['--input-type=module', '-e', `await import('${fileUrl}')`],
-        {
-          cwd: dependencyFreeDir,
-          encoding: 'utf8',
-          env: envWithoutVitestNodePath(),
-        },
-      );
-    }
-
-    it('has lib files to check', () => {
-      expect(libFiles.length).toBe(1);
-    });
-
-    it.each(libFiles)('%s imports and exits 0', (file) => {
-      const r = importLibInChildProcess(file);
-      expect(r.status, `${file} exited ${r.status}: ${r.stderr}`).toBe(0);
-    });
+    expect(r.status, `${file} exited ${r.status}: ${r.stderr}`).toBe(0);
   });
 });
 

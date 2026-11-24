@@ -7,6 +7,17 @@ import { checkInvoice } from '../src/invoice-contract.js';
 
 const mug = (qty = 1, unitCents = 1000) => ({ sku: 'MUG-01', qty, unitCents });
 const tea = (qty = 1, unitCents = 1000) => ({ sku: 'TEA-01', qty, unitCents });
+const seconds = (qty = 1, unitCents = 1000) => ({
+  sku: 'MUG-2ND',
+  qty,
+  unitCents,
+});
+const book = (qty = 1, unitCents = 1000) => ({ sku: 'BOOK-7', qty, unitCents });
+const kettle = (qty = 1, unitCents = 4999) => ({
+  sku: 'KETTLE',
+  qty,
+  unitCents,
+});
 const gift = (qty = 1, unitCents = 2500) => ({
   sku: 'GIFT-25',
   qty,
@@ -163,6 +174,69 @@ describe('coupon', () => {
   });
 });
 
+describe('coupon caps', () => {
+  test('caps the coupon at the sum of the line caps', () => {
+    const invoice = buildInvoice([seconds(1, 1000), mug(1, 1000), gift()], {
+      couponCents: 5000,
+    });
+
+    assert.deepEqual(
+      invoice.lines.map((line) => line.discountCents),
+      [200, 1000, 0],
+    );
+    assert.equal(invoice.totalCents, 3460);
+  });
+
+  test('keeps re-splitting until no line is over its cap', () => {
+    const invoice = buildInvoice(
+      [seconds(1, 1000), tea(1, 1000), mug(1, 1000)],
+      { couponCents: 1500 },
+    );
+
+    assert.deepEqual(
+      invoice.lines.map((line) => line.discountCents),
+      [200, 500, 800],
+      'a single re-split gives [200, 650, 650], the tea line over its 500 cap',
+    );
+  });
+
+  test('holds a line the second split pushes over its cap', () => {
+    const invoice = buildInvoice(
+      [kettle(1, 1499), book(2, 350), seconds(1, 1250)],
+      { couponCents: 1400 },
+    );
+
+    assert.deepEqual(
+      invoice.lines.map((line) => line.discountCents),
+      [800, 350, 250],
+      'a single re-split gives [784, 366, 250], the book line over its 350 cap',
+    );
+  });
+
+  test('rounds a cap on an exact half cent down to even', () => {
+    const invoice = buildInvoice([tea(1, 1001), mug(1, 1001)], {
+      couponCents: 2000,
+    });
+
+    assert.deepEqual(
+      invoice.lines.map((line) => line.discountCents),
+      [500, 1001],
+    );
+  });
+
+  test('rounds a cap on an exact half cent up to even', () => {
+    const invoice = buildInvoice([tea(1, 1003), mug(1, 1003)], {
+      couponCents: 5000,
+    });
+
+    assert.deepEqual(
+      invoice.lines.map((line) => line.discountCents),
+      [502, 1003],
+      'a floored cap gives the tea line 501',
+    );
+  });
+});
+
 describe('tax', () => {
   test('rounds an exact half cent down to even', () => {
     assert.equal(buildInvoice([tea(1, 10)]).taxCents, 0);
@@ -216,6 +290,8 @@ describe('invariants', () => {
       1234,
     ],
     [[mug(1, 7), gift(1, 2500)], 100],
+    [[seconds(1, 1000), tea(1, 1000), mug(1, 1000)], 1500],
+    [[kettle(1, 1499), book(2, 350), seconds(1, 1250)], 1400],
   ];
   for (const [order, couponCents] of orders) {
     test(`holds for ${order.map((line) => `${line.qty}x${line.sku}`).join(',')} with coupon ${couponCents}`, () => {

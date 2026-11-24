@@ -85,6 +85,11 @@ function libActions(): Action[] {
       'guard-bash.mjs',
       'PreToolUse guard: git commit/push/stash, git checkout/restore/reset --hard/clean, gh pr create, and subagent ledger/changeset writes',
     ),
+    script(
+      id,
+      'guard-mods.mjs',
+      'PreToolUse guard: a Write/Edit/MultiEdit into a Claude Code mod directory in a mode that loads mods without asking',
+    ),
   );
   // Inert until a prompt actually references a logged ID. Verified on the stock CLI:
   // UserPromptSubmit exit-0 stdout is added to context, same as SessionStart. Reads any
@@ -104,12 +109,12 @@ function libActions(): Action[] {
       'UserPromptSubmit: tell the turn an interim agent notice opens how to answer it',
     ),
   );
-  // Prints only in manual mode, for a prompt that invokes /orchestrate or /sweep.
+  // Prints only in manual mode, for a prompt or a Skill tool call that invokes /orchestrate or /sweep.
   actions.push(
     script(
       id,
       'manual-mode-notice.mjs',
-      'UserPromptSubmit: warn that subagent edits each raise a permission prompt in manual mode',
+      'UserPromptSubmit and PreToolUse Skill: warn that subagent edits each raise a permission prompt in manual mode',
     ),
   );
   actions.push(
@@ -275,7 +280,7 @@ function instructionsFileActions(ctx: Ctx, answers: Answers): Action[] {
   return actions;
 }
 
-/** The settings fragments core contributes: the Bash guard, the two prompt hooks, and payload sync. */
+/** The settings fragments core contributes: the Bash and mod-write guards, the prompt hooks, and payload sync. */
 function settingsActions(): Action[] {
   return [
     {
@@ -299,6 +304,17 @@ function settingsActions(): Action[] {
     {
       kind: 'merge-settings',
       module: id,
+      fragment: hookFragment(
+        'PreToolUse',
+        'Write|Edit|MultiEdit',
+        'guard-mods.mjs',
+        undefined,
+        { onFailure: 'block' },
+      ),
+    },
+    {
+      kind: 'merge-settings',
+      module: id,
       fragment: hookFragment('UserPromptSubmit', null, 'ledger-inject.mjs'),
     },
     {
@@ -314,6 +330,11 @@ function settingsActions(): Action[] {
         null,
         'manual-mode-notice.mjs',
       ),
+    },
+    {
+      kind: 'merge-settings',
+      module: id,
+      fragment: hookFragment('PreToolUse', 'Skill', 'manual-mode-notice.mjs'),
     },
     {
       kind: 'merge-settings',

@@ -1,7 +1,13 @@
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,6 +16,7 @@ import {
   gitDenyRules,
   guardRefusalFor,
   isSidechainTurn,
+  modWriteRefusalFor,
   writeGateRefusalFor,
 } from '../guard-bash.mjs';
 import { GUARD_DEFAULTS } from '@houserules/payload/config';
@@ -307,6 +314,49 @@ describe('guardRefusalFor', () => {
       expect(guardRefusalFor(cmd)).toMatch(/Blocked by houserules guard/);
     },
   );
+
+  it.each([
+    'env git commit -m x',
+    'env FOO=1 git commit -m x',
+    'env -u HOME git commit -m x',
+    'sudo git commit -m x',
+    'sudo -u root git commit -m x',
+    'command git commit -m x',
+    'exec git commit -m x',
+    'nohup git commit -m x',
+    'nohup sudo env FOO=1 git commit -m x',
+    'xargs git commit -m x',
+    'echo a | xargs -I{} git commit -m {}',
+    'git $(echo commit) -m x',
+    'git $(echo push)',
+    'sudo bash -c "git commit -m x"',
+    'sudo git push origin main',
+    'env git stash',
+    'xargs git checkout -- src/world.py',
+    'nohup gh pr create --fill',
+  ])(
+    'refuses the wrapped form "%s", since a wrapper still runs the guarded command',
+    (cmd) => {
+      expect(guardRefusalFor(cmd)).toMatch(/Blocked by houserules guard/);
+    },
+  );
+
+  it.each([
+    'echo "git commit"',
+    "grep 'git commit' file",
+    'echo env git commit',
+    'sudo echo "git commit"',
+    'xargs echo git commit',
+    'command -v git commit',
+    'env FOO=1 ls',
+    'git log $(git rev-parse HEAD)',
+    'git -C "$(pwd)" status',
+  ])(
+    'returns null for "%s", since the guarded words are data or a wrapper runs something else',
+    (cmd) => {
+      expect(guardRefusalFor(cmd)).toBeNull();
+    },
+  );
 });
 
 describe('writeGateRefusalFor', () => {
@@ -360,6 +410,140 @@ describe('writeGateRefusalFor', () => {
     'pnpm test',
   ])('returns null for "%s", since it does not write', (cmd) => {
     expect(writeGateRefusalFor(cmd)).toBeNull();
+  });
+
+  it.each([
+    'env node .claude/scripts/changeset-write.mjs --pkg foo --summary "x"',
+    'env FOO=1 node .claude/scripts/changeset-write.mjs --summary "x"',
+    'command node .claude/scripts/changeset-write.mjs --summary "x"',
+    'nohup node .claude/scripts/backlog-log.mjs add API area "title"',
+    'sudo -u me node .claude/scripts/decision-log.mjs decide "use zod"',
+    'bash -c "node .claude/scripts/changeset-write.mjs --summary x"',
+    'echo $(node .claude/scripts/backlog-log.mjs remove abc123 API "dup")',
+  ])('returns a refusal for the wrapped "%s"', (cmd) => {
+    expect(writeGateRefusalFor(cmd)).toMatch(
+      /Blocked by houserules subagent write gate/,
+    );
+  });
+
+  it('returns null for a wrapped read-only ledger command', () => {
+    expect(
+      writeGateRefusalFor('env node .claude/scripts/backlog-log.mjs list'),
+    ).toBeNull();
+  });
+});
+
+describe('modWriteRefusalFor', () => {
+  function useModLocations(): { home: string; modDir: string } {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'guard-bash-mods-')));
+    onTestFinished(() => rmSync(home, { recursive: true, force: true }));
+    const modDir = join(home, '.claude', 'dev-mods', 'mine');
+    mkdirSync(modDir, { recursive: true });
+    return { home, modDir };
+  }
+
+  const refuses = /houserules mod guard/;
+
+  it.each([
+    ['a redirect', (dir: string) => `cat > ${dir}/index.js <<'EOF'\nx\nEOF`],
+    ['an append redirect', (dir: string) => `echo x >> ${dir}/index.js`],
+    ['a redirect with no space', (dir: string) => `echo x >${dir}/index.js`],
+    ['tee', (dir: string) => `echo x | tee -a ${dir}/index.js`],
+    ['cp to a file', (dir: string) => `cp ./index.js ${dir}/index.js`],
+    ['cp into the directory', (dir: string) => `cp ./index.js ${dir}`],
+    ['mv', (dir: string) => `mv /tmp/a.js ${dir}/a.js`],
+    ['a wrapped redirect', (dir: string) => `bash -c "echo x > ${dir}/a.js"`],
+  ])('refuses %s into a dev-mods directory in auto mode', (_, build) => {
+    const { home, modDir } = useModLocations();
+
+    const refusal = modWriteRefusalFor(build(modDir), 'auto', home, {
+      configDir: join(home, '.claude'),
+      pluginDirs: [],
+    });
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  it('refuses a relative redirect after a cd into the mod directory', () => {
+    const { home, modDir } = useModLocations();
+
+    const refusal = modWriteRefusalFor(
+      `cd ${modDir} && echo x > index.js`,
+      'bypassPermissions',
+      home,
+      { configDir: join(home, '.claude'), pluginDirs: [] },
+    );
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  it('refuses a tilde path, resolving it against the home directory', () => {
+    const { home } = useModLocations();
+
+    const refusal = modWriteRefusalFor(
+      `cat > ~/.claude/dev-mods/mine/index.js < src.js`,
+      'auto',
+      home,
+      { configDir: join(homedir(), '.claude'), pluginDirs: [] },
+    );
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  it('refuses a write into a directory laid out as a mod', () => {
+    const { home } = useModLocations();
+    const layoutMod = join(home, 'elsewhere', 'my-mod');
+    mkdirSync(join(layoutMod, '.claude-plugin'), { recursive: true });
+    mkdirSync(join(layoutMod, 'hooks'), { recursive: true });
+    writeFileSync(join(layoutMod, '.claude-plugin', 'plugin.json'), '{}');
+    writeFileSync(
+      join(layoutMod, 'hooks', 'hooks.json'),
+      '{"modules":["./index.js"]}',
+    );
+
+    const refusal = modWriteRefusalFor(
+      `echo x > ${layoutMod}/index.js`,
+      'auto',
+      home,
+      { configDir: join(home, '.claude'), pluginDirs: [] },
+    );
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  it.each(['default', 'acceptEdits'])(
+    'allows a redirect into a mod directory in %s mode, where the write is put to the user',
+    (mode) => {
+      const { home, modDir } = useModLocations();
+
+      const refusal = modWriteRefusalFor(
+        `echo x > ${modDir}/a.js`,
+        mode,
+        home,
+        {
+          configDir: join(home, '.claude'),
+          pluginDirs: [],
+        },
+      );
+
+      expect(refusal).toBeNull();
+    },
+  );
+
+  it.each([
+    ['a read of the mod file', (dir: string) => `cat ${dir}/index.js`],
+    ['a copy out of the mod', (dir: string) => `cp ${dir}/index.js ./copy.js`],
+    ['a quoted mention', (dir: string) => `echo "> ${dir}/index.js"`],
+    ['a redirect elsewhere', () => 'echo x > ./notes.txt'],
+  ])('allows %s in auto mode', (_, build) => {
+    const { home, modDir } = useModLocations();
+
+    const refusal = modWriteRefusalFor(build(modDir), 'auto', home, {
+      configDir: join(home, '.claude'),
+      pluginDirs: [],
+    });
+
+    expect(refusal).toBeNull();
   });
 });
 
@@ -482,6 +666,21 @@ describe('guard-bash.mjs', () => {
     });
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/ask first/);
+  });
+
+  it('refuses a custom rule that has no message with a default reason naming the missing field', () => {
+    const root = useInstalledRepo('pnpm-monorepo');
+    withConfig(root, {
+      custom: [{ pattern: '\\bdocker\\s+system\\s+prune\\b' }],
+    });
+    const r = runScript(root, SCRIPT, {
+      input: payload('docker system prune -f'),
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).not.toMatch(/undefined/);
+    expect(r.stderr).toContain(
+      'Blocked by houserules guard: the guard.custom rule for pattern `\\bdocker\\s+system\\s+prune\\b` has no `message` field',
+    );
   });
 
   it('allows Bash to proceed on stdin that is not valid JSON', () => {

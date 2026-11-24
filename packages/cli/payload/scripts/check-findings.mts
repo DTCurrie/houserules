@@ -27,7 +27,12 @@
  * converted, and only a response with no content type is sniffed for a leading `<!doctype html`
  * or `<html`. A quote may hold backslash-escaped quotes (`\"`). The quote and the page text
  * pass through one normalizer that unwraps inline Markdown, drops table pipes, and unescapes
- * backslashes. Without `turndown` it prints the install command and exits 1 before any request.
+ * backslashes. The normalizer also drops U+200B and U+2061 to U+2064. Before conversion, a
+ * footnote reference (a `<sup>` holding only an in-page link) is dropped and a LaTeXML `<math>`
+ * element is replaced by its `alttext`, while an exponent `<sup>` stays. A quote not found prints
+ * its first 60 characters, with an ellipsis when cut. A quote not found whose text minus trailing
+ * `.,;:!?` is found prints "ends with punctuation the source lacks" and still counts as not found.
+ * Without `turndown` it prints the install command and exits 1 before any request.
  * An unreachable URL (network error, timeout, or non-2xx status) is reported as unreachable and
  * never as a failed quote. A page the converter throws on is reported as unconvertible, counted
  * apart from unreachable, and exits 1.
@@ -113,9 +118,12 @@ export function checkCovers(text: string, ids: readonly string[]): string[] {
   return defects;
 }
 
+const INVISIBLE_CHARACTERS = /[\u200b\u2061-\u2064]/g;
+
 /** Folds curly quotes and dashes to ASCII, collapses whitespace, and lowercases. */
 function normalizeText(text: string): string {
   return text
+    .replace(INVISIBLE_CHARACTERS, '')
     .replace(/[\u2018\u2019\u201a\u201b]/g, "'")
     .replace(/[\u201c\u201d\u201e\u201f]/g, '"')
     .replace(/[\u2010-\u2015\u2212]/g, '-')
@@ -149,6 +157,21 @@ function isHtmlPage(body: string, contentType: string): boolean {
   return HTML_CONTENT_TYPE.test(contentType);
 }
 
+const FOOTNOTE_REFERENCE =
+  /<sup\b[^>]*>\s*<a\b[^>]*\bhref\s*=\s*["']#[^"']*["'][^>]*>[^<]*<\/a>\s*<\/sup>/gi;
+const MATH_WITH_ALTTEXT =
+  /<math\b[^>]*?\balttext\s*=\s*"([^"]*)"[^>]*>[\s\S]*?<\/math>/gi;
+
+/**
+ * Drops footnote references (a `<sup>` holding only an in-page link) and replaces each LaTeXML
+ * `<math>` element with its `alttext`. An exponent `<sup>` stays, since quotes keep it.
+ */
+function simplifyMarkup(html: string): string {
+  return html
+    .replace(FOOTNOTE_REFERENCE, '')
+    .replace(MATH_WITH_ALTTEXT, (_match, alttext: string) => ` ${alttext} `);
+}
+
 /**
  * Page text for the quote search. Only a page the content type marks as HTML goes through the
  * converter, which may throw. Every page then loses its Markdown markup.
@@ -159,7 +182,7 @@ export function pageText(
   convert: MarkdownConverter,
 ): string {
   if (!isHtmlPage(body, contentType)) return normalizeForMatch(body);
-  return normalizeForMatch(convert(body));
+  return normalizeForMatch(convert(simplifyMarkup(body)));
 }
 
 interface CitedQuote {
@@ -254,6 +277,17 @@ async function fetchAll(
   return pages;
 }
 
+const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
+const QUOTE_START_LENGTH = 60;
+
+/** The quoted start of a quote, cut to QUOTE_START_LENGTH characters with an ellipsis. */
+function quoteStart(quote: string): string {
+  const flat = quote.replace(/\s+/g, ' ').trim();
+  return flat.length > QUOTE_START_LENGTH
+    ? `"${flat.slice(0, QUOTE_START_LENGTH)}..."`
+    : `"${flat}"`;
+}
+
 /**
  * Prints one line per unreachable citation and per quote missing from its page.
  *
@@ -281,10 +315,19 @@ function reportQuotes(
       continue;
     }
     checked++;
-    if (!page.text.includes(normalizeForMatch(item.quote))) {
-      notFound++;
-      console.log(`${item.file}: ${item.id}: quote not found at ${item.url}`);
-    }
+    const wanted = normalizeForMatch(item.quote);
+    if (page.text.includes(wanted)) continue;
+    notFound++;
+    const start = quoteStart(item.quote);
+    const trimmed = wanted.replace(TRAILING_PUNCTUATION, '');
+    if (trimmed !== wanted && trimmed !== '' && page.text.includes(trimmed))
+      console.log(
+        `${item.file}: ${item.id}: quote ends with punctuation the source lacks at ${item.url}: ${start}`,
+      );
+    else
+      console.log(
+        `${item.file}: ${item.id}: quote not found at ${item.url}: ${start}`,
+      );
   }
   return { checked, notFound };
 }

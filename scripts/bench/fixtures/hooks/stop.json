@@ -2,7 +2,7 @@
   "session_id": "00000000-0000-4000-8000-000000000001",
   "transcript_path": "",
   "cwd": "",
-  "permission_mode": "default",
+  "permission_mode": "acceptEdits",
   "hook_event_name": "Stop",
   "stop_hook_active": false,
   "background_tasks": []

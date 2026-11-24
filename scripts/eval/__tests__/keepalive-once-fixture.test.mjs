@@ -88,7 +88,8 @@ function syntheticSample(echo = []) {
     JSON.stringify({ arm: 'with', sample: 1 }),
   );
   writeJsonl(join(sample, 'stream.jsonl'), [
-    { type: 'result', total_cost_usd: 0.5, duration_ms: 90000 },
+    { type: 'system', timestamp: '2026-11-24T02:00:00.000Z' },
+    { type: 'result', total_cost_usd: 0.5, duration_ms: 40 },
   ]);
   writeJsonl(join(subagents, 'agent-po.jsonl'), [
     dispatch('w1'),
@@ -104,6 +105,7 @@ function syntheticSample(echo = []) {
     background('k3'),
     started('k3', 'bkeep3'),
     ...echo,
+    { type: 'system', timestamp: '2026-11-24T02:01:30.000Z' },
   ]);
   writeFileSync(
     join(subagents, 'agent-po.meta.json'),

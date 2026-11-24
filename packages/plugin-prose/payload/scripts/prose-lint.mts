@@ -557,34 +557,53 @@ export function commentsOf(source: string): string {
   return out;
 }
 
-const CSS_FILE = /\.css$/;
+const CSS_FILE = /\.(?:css|scss|pcss)$/;
+const SCSS_FILE = /\.scss$/;
 
-/** Whether `file` is a stylesheet, whose prose lives only in its `/* *\/` comments. */
+/** Whether `file` is a stylesheet, whose prose lives only in its comments. */
 function isCssFile(file: string): boolean {
   return CSS_FILE.test(file);
 }
+
+const CSS_STRINGS = [
+  String.raw`'(?:\\[\s\S]|[^'\\\n])*'`,
+  String.raw`"(?:\\[\s\S]|[^"\\\n])*"`,
+];
 
 /** A block comment, a quoted string that may hold `/*`, or any one other character. */
 const CSS_TOKEN = new RegExp(
   [
     String.raw`(?<block>/\*[\s\S]*?\*/)`,
-    String.raw`'(?:\\[\s\S]|[^'\\\n])*'`,
-    String.raw`"(?:\\[\s\S]|[^"\\\n])*"`,
+    ...CSS_STRINGS,
+    String.raw`[\s\S]`,
+  ].join('|'),
+  'g',
+);
+
+/** Adds the `//` line comment, and swallows an unquoted `url(...)` so its `//` is not one. */
+const SCSS_TOKEN = new RegExp(
+  [
+    String.raw`(?<block>/\*[\s\S]*?\*/)`,
+    String.raw`(?<line>//[^\n]*)`,
+    ...CSS_STRINGS,
+    String.raw`url\((?!\s*['"])[^)\n]*\)`,
     String.raw`[\s\S]`,
   ].join('|'),
   'g',
 );
 
 /**
- * The block comments of a stylesheet, line for line, with every declaration dropped. CSS has
- * no `//` comment, so an unquoted `url(https://x.test/a.png)` is not one, which is why this
- * is not `commentsOf`.
+ * The comments of a stylesheet, line for line, with every declaration dropped. Plain CSS and
+ * PostCSS have no `//` comment, so an unquoted `url(https://x.test/a.png)` is not one, which
+ * is why this is not `commentsOf`. SCSS has `//` comments, and keeps the `url(...)` exception.
  */
-function cssCommentsOf(source: string): string {
+function cssCommentsOf(file: string, source: string): string {
+  const token = SCSS_FILE.test(file) ? SCSS_TOKEN : CSS_TOKEN;
   let out = '';
-  for (const match of source.matchAll(CSS_TOKEN)) {
-    const { block } = match.groups ?? {};
+  for (const match of source.matchAll(token)) {
+    const { block, line } = match.groups ?? {};
     if (block !== undefined) out += blockCommentBody(block);
+    else if (line !== undefined) out += lineCommentBody(line);
     else out += newlinesIn(match[0]);
   }
   return out;
@@ -593,7 +612,7 @@ function cssCommentsOf(source: string): string {
 /** The part of `file` that is prose: its comments for code and stylesheets, all of it otherwise. */
 function proseOf(file: string, text: string): string {
   if (isSourceFile(file)) return commentsOf(text);
-  if (isCssFile(file)) return cssCommentsOf(text);
+  if (isCssFile(file)) return cssCommentsOf(file, text);
   return text;
 }
 

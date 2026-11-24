@@ -615,6 +615,24 @@ export function buildPushQueue(
 }
 
 /**
+ * `ops` without any op for a held entry.
+ *
+ * A `mark-superseded` op is dropped when its successor is held too, since the flip names an
+ * entry the board does not have yet. Compaction reads the unfiltered queue, so a held entry
+ * still counts as pending and is never compacted away.
+ */
+export function withoutHeldEntries(
+  ops: readonly PushOp[],
+  held: ReadonlySet<string>,
+): PushOp[] {
+  return ops.filter(
+    (op) =>
+      !held.has(op.entryId) &&
+      !(op.op === 'mark-superseded' && held.has(op.successorId)),
+  );
+}
+
+/**
  * The board item id a `mark-superseded` op should flip, given what earlier ops in the same run
  * have created.
  *

@@ -17,3 +17,14 @@ we should have test coverage to let us be confident changes didn't break anythin
 this will probably need to start with a pretty broad sweep of the codebase, issues, the `ignored-payload` plan, maybe a report on this system to get a current baseline. we have been working in this repo a lot so itself should provide some insight
 
 are the goals of this clear?
+
+yes, the goals are clear. this session is headless and I will not answer questions, so here is everything you would otherwise ask me. take each as given and scaffold the plan without stopping to ask:
+
+- the tier is a milestone, with `ignored-payload` moved in as a member unchanged.
+- "ours" in quality means the payload houserules ships (skills, rules, agents, hooks), judged against what `packages/cli/README.md` and each skill description promise. The CLI commands come second.
+- this milestone is diagnosis first: the baseline and the four catalogs. fix phases get written only after the findings exist, so scaffold the plan as rolling and write only as far as the baseline and diagnose phases.
+- performance means hook latency (the Bash guard on every Bash call, the SessionStart hook), CLI `init`/`update`/`doctor` on fixtures, and payload scripts such as `plan-lint`. test-suite wall-clock is secondary. token and turn cost of skill runs belongs under efficiency.
+- there is no git remote and no ledger here, so there is no backlog to read. do not ask for one. treat the backlog as empty and use the repo, its plans, and its git history as the evidence.
+- you may not read my session transcripts, and no existing report tool needs to be run. the baseline report is itself a deliverable of the plan.
+- order: take the baseline before `ignored-payload/ignore-core` lands. its probes phase is read-only and can run alongside.
+- no eval tooling exists. the quality strategy starts from nothing, with two or three skills.

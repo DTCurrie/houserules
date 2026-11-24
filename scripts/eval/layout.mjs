@@ -67,7 +67,7 @@ export const VERDICT = 'verdict.json';
  *   root: string,
  *   prompt: string,
  *   model: string,
- *   validityAgent: string,
+ *   validityAgent: string | null,
  *   exitCode: number | null,
  *   timedOut: boolean,
  *   sessionId: string | null,

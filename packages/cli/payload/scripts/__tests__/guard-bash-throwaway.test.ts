@@ -458,7 +458,6 @@ describe('guardRefusalFor with a throwaway context', () => {
     ['$(...) in the path', (f) => `cd $(echo ${f}) && git commit -m x`],
     ['$(...) in an argument', (f) => `git -C ${f} commit -m "$(date)"`],
     ['a backtick', (f) => `cd \`echo ${f}\` && git commit -m x`],
-    ['a quoted -C path', (f) => `git -C "${f}" commit -m x`],
     [
       'a GIT_ variable',
       (f, p) => `export GIT_DIR=${p}/.git; git -C ${f} commit -m x`,
@@ -490,5 +489,74 @@ describe('guardRefusalFor with a throwaway context', () => {
       cmd: build(fixture, project),
       context: throwaway(project),
     });
+  });
+});
+
+describe('guardRefusalFor with a quoted separator in a throwaway commit', () => {
+  let sharedBase: string;
+  let sharedProject: string;
+
+  beforeAll(() => {
+    sharedBase = mkdtempSync(join(tmpdir(), 'guard-throwaway-quoted-'));
+    sharedProject = makeProject(sharedBase);
+  });
+
+  afterAll(() => {
+    rmSync(sharedBase, { recursive: true, force: true });
+  });
+
+  it.each([
+    ['a semicolon', 'wip; git commit'],
+    ['an ampersand pair', 'wip && git -C /elsewhere commit'],
+    ['a pipe', 'wip | git commit'],
+    ['a newline', 'wip\ngit commit'],
+  ])(
+    'allows a -C commit whose message holds %s, since the quoted separator is data',
+    (_, message) => {
+      const fixture = initRepo(join(sharedBase, `fixture-${Math.random()}`));
+      const cmd = `git -C ${fixture} -c user.name= -c user.email= commit -m "${message}"`;
+      expect(guardRefusalFor(cmd, throwaway(sharedProject))).toBeNull();
+    },
+  );
+
+  it('allows a -C path in quotes, since the shell reads it as the same plain path', () => {
+    const fixture = initRepo(join(sharedBase, 'fixture-quoted-path'));
+    const cmd = `git -C "${fixture}" -c user.name= -c user.email= commit -m x`;
+    expect(guardRefusalFor(cmd, throwaway(sharedProject))).toBeNull();
+  });
+
+  it('refuses a -C path in quotes that expands a variable', () => {
+    const cmd = `git -C "$HOME/fixture" -c user.name= -c user.email= commit -m x`;
+    expect(guardRefusalFor(cmd, throwaway(sharedProject))).toMatch(
+      /Blocked by houserules guard/,
+    );
+  });
+
+  it('still refuses when the separator outside the quotes starts a second git call', () => {
+    const fixture = initRepo(join(sharedBase, 'fixture-unquoted'));
+    const cmd = `git -C ${fixture} -c user.name= -c user.email= commit -m "wip"; git commit -m x`;
+    expect(guardRefusalFor(cmd, throwaway(sharedProject))).toMatch(
+      /Blocked by houserules guard/,
+    );
+  });
+
+  it('refuses a leading cd joined by a semicolon, since a failed cd runs the commit in the project', () => {
+    const fixture = initRepo(join(sharedBase, 'fixture-semicolon'));
+    const cmd = `cd ${fixture}; git -c user.name= -c user.email= commit -m x`;
+    expect(guardRefusalFor(cmd, throwaway(sharedProject))).toMatch(
+      /Blocked by houserules guard/,
+    );
+  });
+
+  it('allows a leading cd whose path Code Mode single-quoted, since the shell reads it as the same plain path', () => {
+    const fixture = initRepo(join(sharedBase, 'fixture-code-mode-cd'));
+    const cmd = `cd '${fixture}' && git -c user.name= -c user.email= commit -m x`;
+    expect(guardRefusalFor(cmd, throwaway(sharedProject))).toBeNull();
+  });
+
+  it('allows a leading cd whose quoted commit message names another directory change', () => {
+    const fixture = initRepo(join(sharedBase, 'fixture-cd-message'));
+    const cmd = `cd ${fixture} && git -c user.name= -c user.email= commit -m "then cd /elsewhere"`;
+    expect(guardRefusalFor(cmd, throwaway(sharedProject))).toBeNull();
   });
 });

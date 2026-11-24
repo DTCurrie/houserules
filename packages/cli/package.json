@@ -129,8 +129,8 @@
       "output": []
     },
     "test": {
-      "//": "with-build-locks.mjs holds wireit's lock on every upstream build for vitest's lifetime, so a concurrent run cannot rebuild dist/ or payload-dist/ under it.",
-      "command": "node scripts/with-build-locks.mjs test vitest run",
+      "//": "with-build-locks.mjs holds wireit's lock on every upstream build as a shared reader for vitest's lifetime, so a concurrent run cannot rebuild dist/ or payload-dist/ under it, while other readers still run.",
+      "command": "node ../../scripts/with-build-locks.mjs test vitest run",
       "dependencies": [
         "build:ts",
         "build:payload",
@@ -148,7 +148,7 @@
         "!test/**/node_modules/**",
         "payload/**",
         "vitest.config.ts",
-        "scripts/with-build-locks.mjs",
+        "../../scripts/with-build-locks.mjs",
         "houserules.config.example.json",
         "package.json",
         "bin/**",

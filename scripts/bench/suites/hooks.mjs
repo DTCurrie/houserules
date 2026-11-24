@@ -134,10 +134,11 @@ const DISPATCHER_SCRIPT = 'hook-dispatch';
 
 /**
  * Each hook to bench, in settings order, with its event and script name. A dispatcher entry
- * expands to the scripts `wiring` lists for its event, each run directly, so the dispatcher is
- * never a case. A direct entry keeps its own command.
+ * expands to the scripts `wiring` lists for its event, each run directly, and, when
+ * `hasDispatcher` and the wiring lists scripts for that event, is also one case of its own that
+ * runs the dispatcher. A direct entry keeps its own command.
  */
-function wiredHooks(settings, wiring) {
+function wiredHooks(settings, wiring, hasDispatcher) {
   const out = [];
   for (const [event, groups] of Object.entries(settings.hooks ?? {})) {
     for (const group of groups) {
@@ -152,7 +153,15 @@ function wiredHooks(settings, wiring) {
           out.push({ event, script: match[1], command: hook.command });
           continue;
         }
-        for (const entry of wiring.events[event] ?? []) {
+        const wired = wiring.events[event] ?? [];
+        if (hasDispatcher && wired.length > 0)
+          out.push({
+            event,
+            script: DISPATCHER_SCRIPT,
+            command: hook.command,
+            isDispatcher: true,
+          });
+        for (const entry of wired) {
           const script = entry.script.replace(/\.mjs$/, '');
           out.push({
             event,
@@ -284,7 +293,13 @@ export function hookCaseEnv(home, project) {
   };
 }
 
-function prepareFixture({ root, workDir, hooks }) {
+function hasBuiltDispatcher(root) {
+  return payloadScriptDirs(root).some((dir) =>
+    existsSync(join(dir, `${DISPATCHER_SCRIPT}.mjs`)),
+  );
+}
+
+function prepareFixture({ root, workDir, hooks, wiring }) {
   const project = join(workDir, 'project');
   const home = join(workDir, 'home');
   const transcript = join(workDir, 'transcript.jsonl');
@@ -298,6 +313,8 @@ function prepareFixture({ root, workDir, hooks }) {
     project,
     env,
   );
+  if (hooks.some((hook) => hook.isDispatcher))
+    write(join(project, '.claude/scripts/hook-wiring.json'), json(wiring));
   return { project, transcript, env };
 }
 
@@ -313,6 +330,15 @@ function casesForHook(hook, { project, transcript, env }) {
     beforeEach: () => resetTree(project, env, isDirty),
   });
 
+  if (hook.isDispatcher) {
+    return [
+      caseFor({
+        name: `${kebab(hook.event)}-${DISPATCHER_SCRIPT}`,
+        isDirty: false,
+        expectExit: [0],
+      }),
+    ];
+  }
   if (hook.event !== 'Stop') {
     return [caseFor({ name: hook.script, isDirty: false, expectExit: [0] })];
   }
@@ -355,7 +381,8 @@ function readBuildWiring(root) {
  * event, against a fixture project whose `.claude/scripts/` is assembled from the build tree's
  * `packages/*\/payload-dist/scripts/`. Settings, wiring, and scripts all come from `root`, so
  * the wiring and the scripts it names are always one revision. Stop hooks get two cases, a
- * clean tree and one with an uncommitted source edit. Every case resets the fixture in
+ * clean tree and one with an uncommitted source edit. Each event wired through the dispatcher
+ * also gets one `<event>-hook-dispatch` case that runs the dispatcher, when the build carries it. Every case resets the fixture in
  * `beforeEach`, so no case depends on run order or on what an earlier run wrote.
  *
  * `HOME` points at a fixture directory, the GitHub tokens are blanked, corepack may not
@@ -370,8 +397,8 @@ function readBuildWiring(root) {
  */
 export async function cases({ root, repoDir, workDir }) {
   const { settings, wiring } = readBuildWiring(root);
-  const hooks = wiredHooks(settings, wiring);
-  const fixture = prepareFixture({ root, workDir, hooks });
+  const hooks = wiredHooks(settings, wiring, hasBuiltDispatcher(root));
+  const fixture = prepareFixture({ root, workDir, hooks, wiring });
   const hookCases = hooks.flatMap((hook) => casesForHook(hook, fixture));
   if (root === repoDir) return hookCases;
   return [...hookCases, ...scopeCases({ root, repoDir, workDir })];

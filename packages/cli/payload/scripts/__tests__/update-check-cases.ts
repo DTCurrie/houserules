@@ -171,6 +171,27 @@ export const UPGRADE_CASES: UpgradeCase[] = [
     command: 'pnpm add -D -w @houserules/cli@latest',
   },
   {
+    name: 'a pnpm workspace root with an empty packages list',
+    files: {
+      'package.json': PLAIN_PACKAGE,
+      'pnpm-lock.yaml': '',
+      'pnpm-workspace.yaml': 'packages: []\n',
+    },
+    command: 'pnpm add -D -w @houserules/cli@latest',
+  },
+  {
+    name: 'a pnpm repo whose package.json lists workspaces but has no pnpm-workspace.yaml',
+    files: {
+      'package.json': JSON.stringify({
+        name: 'host',
+        workspaces: ['packages/*'],
+      }),
+      'pnpm-lock.yaml': '',
+      'packages/a/package.json': JSON.stringify({ name: 'a' }),
+    },
+    command: 'pnpm add -D @houserules/cli@latest',
+  },
+  {
     name: 'a yarn workspace root',
     files: {
       'package.json': JSON.stringify({

@@ -2,7 +2,7 @@
 name: ledger-sync
 description: Push the backlog and decision ledgers to GitHub Projects (issues and project board items). Use when the user asks to sync, push, or upload to GitHub Projects or the project board.
 disable-model-invocation: true
-argument-hint: status|push|pull|backfill|compact [--dry-run]
+argument-hint: status|push|pull|backfill|compact|release <id> [--dry-run]
 allowed-tools: Bash(node .claude/scripts/projects-sync.mjs:*)
 ---
 
@@ -39,6 +39,14 @@ Never hand-edit either one. Deleting the index is safe, since a pull rebuilds it
 Pull first: `node .claude/scripts/projects-sync.mjs pull`. An empty or stale index is the
 usual cause, and it costs one command to rule out. A contributor who cannot push can still
 pull, because reading a board needs only read access.
+
+## If `status` lists held entries
+
+The session-end hook holds an entry written in a turn where the user rejected a tool use, so
+a row for a rejected change never reaches the board unseen. A held entry stays in the queue
+and every push skips it. Ask the user whether the entry still stands. If it does, release it
+with `node .claude/scripts/projects-sync.mjs release <id>`, and the next push sends it. If it
+does not, remove it through its own ledger script.
 
 ## If a push fails partway
 

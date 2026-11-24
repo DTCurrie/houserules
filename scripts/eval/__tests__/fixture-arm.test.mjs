@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { requireCommittedFixture } from '../fixture-arm.mjs';
+import { loadArmFixture, requireCommittedFixture } from '../fixture-arm.mjs';
 import { LEDGER, RUN_JSON, VERDICT } from '../layout.mjs';
 import { writeStubClaude } from './stub-claude.mjs';
 
@@ -627,6 +627,137 @@ describe('run --fixture network', () => {
     const open = printedCommand(lifted, context);
     assert.doesNotMatch(open, /--disallowedTools/);
     assert.doesNotMatch(open, /--settings/);
+  });
+});
+
+describe('eval.json seam keys', () => {
+  const armWith = (extra) => ({
+    a: {
+      prompt: 'arms/a/prompt.txt',
+      overlay: 'arms/a/overlay',
+      ...extra,
+    },
+  });
+
+  it('returns permissionMode, auto when absent, and refuses other values naming the field', () => {
+    const plain = writeFixture(scratch('fixture'));
+    assert.equal(loadArmFixture(plain, 'a').permissionMode, 'auto');
+    const manual = writeFixture(scratch('fixture'), {
+      permissionMode: 'default',
+    });
+    assert.equal(loadArmFixture(manual, 'a').permissionMode, 'default');
+    const bad = writeFixture(scratch('fixture'), { permissionMode: 'plan' });
+    assert.throws(
+      () => loadArmFixture(bad, 'a'),
+      /eval\.json "permissionMode" must be "auto" or "default"/,
+    );
+  });
+
+  it('reads arm settings, replacing {{fixtureDir}} in nested string values', () => {
+    const dir = writeFixture(scratch('fixture'), {
+      network: true,
+      arms: armWith({ settings: 'settings/open.json' }),
+    });
+    writeFile(
+      join(dir, 'settings', 'open.json'),
+      JSON.stringify({
+        env: { HOOKS: '{{fixtureDir}}/hooks' },
+        list: ['{{fixtureDir}}', 'x'],
+        count: 3,
+      }),
+    );
+    assert.deepEqual(loadArmFixture(dir, 'a').settings, {
+      env: { HOOKS: `${resolve(dir)}/hooks` },
+      list: [resolve(dir), 'x'],
+      count: 3,
+    });
+    assert.equal(
+      loadArmFixture(writeFixture(scratch('fixture')), 'a').settings,
+      undefined,
+    );
+  });
+
+  it('refuses a settings file that is missing, not an object, or escapes the fixture', () => {
+    const missing = writeFixture(scratch('fixture'), {
+      arms: armWith({ settings: 'settings/nowhere.json' }),
+    });
+    assert.throws(() => loadArmFixture(missing, 'a'), /nowhere\.json/);
+    const array = writeFixture(scratch('fixture'), {
+      arms: armWith({ settings: 'settings/list.json' }),
+    });
+    writeFile(join(array, 'settings', 'list.json'), '[]');
+    assert.throws(() => loadArmFixture(array, 'a'), /settings.*JSON object/);
+    const escaped = writeFixture(scratch('fixture'), {
+      arms: armWith({ settings: '../outside.json' }),
+    });
+    assert.throws(() => loadArmFixture(escaped, 'a'), /arms\.a settings/);
+  });
+
+  it('refuses a sandbox key in settings on a network-false fixture only', () => {
+    const closed = writeFixture(scratch('fixture'), {
+      arms: armWith({ settings: 'settings/s.json' }),
+    });
+    writeFile(
+      join(closed, 'settings', 's.json'),
+      '{"sandbox":{"enabled":false}}',
+    );
+    assert.throws(() => loadArmFixture(closed, 'a'), /"sandbox"/);
+    const open = writeFixture(scratch('fixture'), {
+      network: true,
+      arms: armWith({ settings: 'settings/s.json' }),
+    });
+    writeFile(
+      join(open, 'settings', 's.json'),
+      '{"sandbox":{"enabled":false}}',
+    );
+    assert.deepEqual(loadArmFixture(open, 'a').settings, {
+      sandbox: { enabled: false },
+    });
+  });
+
+  it('returns a null validityAgent and still refuses a missing or empty one', () => {
+    const nulled = writeFixture(scratch('fixture'), { validityAgent: null });
+    assert.equal(loadArmFixture(nulled, 'a').validityAgent, null);
+    const empty = writeFixture(scratch('fixture'), { validityAgent: '' });
+    assert.throws(() => loadArmFixture(empty, 'a'), /"validityAgent"/);
+  });
+
+  it('prints --permission-mode default and the merged --settings in the free run', () => {
+    const context = setup();
+    const dir = writeFixture(scratch('fixture'), {
+      permissionMode: 'default',
+      arms: armWith({ settings: 'settings/s.json' }),
+    });
+    writeFile(
+      join(dir, 'settings', 's.json'),
+      JSON.stringify({ env: { DIR: '{{fixtureDir}}' } }),
+    );
+    const result = runEval(context, [
+      '--fixture',
+      dir,
+      '--arm',
+      'a',
+      '--work',
+      context.work,
+    ]);
+    assert.equal(result.status, EXIT_OK, result.stderr);
+    const line = result.stdout.split('\n').find((l) => l.startsWith('claude '));
+    assert.match(line, /--permission-mode default /);
+    assert.match(line, /failIfUnavailable\\":true/);
+    assert.ok(line.includes(`${resolve(dir)}`), line);
+  });
+
+  it('keeps a sample with a null validityAgent valid without any spawn, and still voids a failed result', () => {
+    const context = setup();
+    context.fixture = writeFixture(scratch('fixture'), {
+      validityAgent: null,
+    });
+    const ok = runEval(context, armArgs(context, 'a', ONE_SAMPLE), {
+      EVAL_STUB_BY_TYPE: '{}',
+    });
+    assert.equal(ok.status, EXIT_OK, ok.stderr);
+    assert.match(ok.stdout, /^a\/sample-1: valid$/m);
+    assert.equal(readRun(context.out, 'a', 1).validityAgent, null);
   });
 });
 

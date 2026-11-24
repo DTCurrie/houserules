@@ -116,4 +116,28 @@ describe('eval-probes workflow arm job', () => {
       "steps.run.outputs.exit != ''",
     );
   });
+
+  it('checks out the full history, which the plan-stop-rule archive reads', () => {
+    const checkout = armSteps.find((step) =>
+      step.includes('actions/checkout@'),
+    );
+
+    assert.match(checkout ?? '', /^ {10}fetch-depth: 0$/m);
+  });
+
+  it('builds the plan-stop-rule repo before the arm runs, for that fixture only', () => {
+    const names = armSteps.map(nameOf);
+    const build = armSteps.find((step) => step.includes('make-repo.mjs'));
+
+    assert.equal(
+      conditionOf(build ?? ''),
+      "inputs.fixture == 'plan-stop-rule'",
+    );
+    assert.deepEqual(
+      names.indexOf('Build the plan-stop-rule repo') <
+        names.indexOf('Run arm sample'),
+      true,
+      `step order: ${names.join(', ')}`,
+    );
+  });
 });

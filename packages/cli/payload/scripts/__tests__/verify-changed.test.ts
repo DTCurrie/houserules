@@ -717,8 +717,13 @@ describe('verify-changed.mjs with verify.rootCommands', () => {
     });
   }
 
-  function rootName(root: string): string {
-    return readJson<{ name?: string }>(join(root, 'package.json')).name ?? '.';
+  const ROOT_ID = '<root>';
+
+  function renameRootPackage(root: string, name: string): void {
+    const path = join(root, 'package.json');
+    const manifest = readJson<Record<string, unknown>>(path);
+    manifest['name'] = name;
+    writeFileSync(path, JSON.stringify(manifest, null, 2));
   }
 
   function scopeOf(root: string): RootScope['scope'] {
@@ -740,13 +745,41 @@ describe('verify-changed.mjs with verify.rootCommands', () => {
     expect(scope.map((s) => s.package)).toEqual([
       '@fix/cityville',
       '@fix/studio',
-      rootName(root),
+      ROOT_ID,
     ]);
     expect(scope[2]).toMatchObject({
       reason: 'root',
       commands: ['verify:knip'],
       argv: [['run', 'verify:knip']],
     });
+  });
+
+  it('keeps a package and the root entry apart when the root package.json carries that package name', () => {
+    const root = repoWithStudioDependingOnCityville();
+    useStubVerifyRunner(root);
+    renameRootPackage(root, '@fix/cityville');
+    setRootCommands(root, ['verify:knip']);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const y = 2;\n',
+    );
+
+    const scope = scopeOf(root);
+    const r = runScript(root, SCRIPT, { args: ['--run'] });
+
+    expect(scope.map((s) => [s.package, s.reason])).toEqual([
+      ['@fix/cityville', 'changed'],
+      ['@fix/studio', 'dependent'],
+      [ROOT_ID, 'root'],
+    ]);
+    expect(r.status, r.stderr).toBe(0);
+    expect(
+      readFileSync(join(root, 'runner-calls.txt'), 'utf8').trim().split('\n'),
+    ).toEqual([
+      '--filter @fix/cityville verify',
+      '--filter @fix/studio verify',
+      'run verify:knip',
+    ]);
   });
 
   it('adds no root entry when rootCommands is unset', () => {
@@ -784,7 +817,7 @@ describe('verify-changed.mjs with verify.rootCommands', () => {
     const scope = scopeOf(root);
 
     expect(scope.map((s) => [s.package, s.reason])).toEqual([
-      [rootName(root), 'root'],
+      [ROOT_ID, 'root'],
     ]);
   });
 
@@ -812,7 +845,7 @@ describe('verify-changed.mjs with verify.rootCommands', () => {
 
     const r = runScript(root, SCRIPT);
 
-    expect(r.stdout).toContain(`${rootName(root)}  [root]  `);
+    expect(r.stdout).toContain(`${ROOT_ID}  [root]  `);
   });
 
   it('runs the root commands after every package job and prints the root verdict last', () => {
@@ -827,7 +860,7 @@ describe('verify-changed.mjs with verify.rootCommands', () => {
     const r = runScript(root, SCRIPT, { args: ['--run'] });
 
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout.trim().split('\n').at(-1)).toBe(`${rootName(root)}: PASS`);
+    expect(r.stdout.trim().split('\n').at(-1)).toBe(`${ROOT_ID}: PASS`);
     expect(
       readFileSync(join(root, 'runner-calls.txt'), 'utf8').trim().split('\n'),
     ).toEqual([

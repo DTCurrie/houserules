@@ -65,6 +65,7 @@
         "*.mjs",
         "packages/*/bin/**/*.mjs",
         "packages/*/test/**/*.cjs",
+        "scripts/eval/fixtures/**/*.js",
         "!**/node_modules/**"
       ],
       "output": []
@@ -189,6 +190,7 @@
         ".changeset/config.json",
         ".prettierrc.json",
         ".claude/houserules.config.json",
+        ".claude/houserules.manifest.json",
         ".claude/settings.json",
         "CLAUDE.md",
         "!**/node_modules/**"
@@ -305,6 +307,7 @@
         "scripts/eval/**/*.mjs",
         "scripts/time-gate.mjs",
         "scripts/capped-wireit.mjs",
+        "scripts/with-build-locks.mjs",
         "node_modules/.cache/houserules-bench/builds/*/.bench-build.json",
         "scripts/health-kit/gather/SCHEMA.md",
         "scripts/bench/fixtures/**",

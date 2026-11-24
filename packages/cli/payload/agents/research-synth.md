@@ -19,6 +19,10 @@ Your brief gives these lines:
 - `Synthesis: <Domain>/research/SYNTHESIS.md`, the reference document you write.
 - `Report: <Domain>/research/REPORT.md`, the short answer you write.
 - `Destinations: <a,b,...>`, the values a finding's destination may hold.
+- `Brief: <Domain>/research/BRIEF.md`, whose `Synthesis prefix:` line gives the id prefix for any
+  finding you add to `SYNTHESIS.md`. Read the prefix from that line. Never choose one, because
+  the orchestrator keeps it out of every thread's prefixes. When your brief has no `Brief:`
+  line, use `SY`.
 
 Read order:
 

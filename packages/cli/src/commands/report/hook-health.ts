@@ -89,7 +89,7 @@ export interface HookHealthReport {
   runLog?: RunLogReport;
 }
 
-const GUARD_SCRIPT = 'guard-bash.mjs';
+export const GUARD_SCRIPT = 'guard-bash.mjs';
 const STOP_EVENT = 'Stop';
 const TOTAL_SECONDS_DECIMALS = 1;
 const MEDIAN_PERCENTILE = 50;
@@ -246,7 +246,23 @@ export function formatTailShare(row: StopHookRow): string {
   return `${row.slowRuns} (${pct.toFixed(TAIL_SHARE_DECIMALS)}%)`;
 }
 
-function computeStopHooks(corpus: Corpus): StopHookRow[] {
+const DISPATCHER_SCRIPT = 'hook-dispatch.mjs';
+
+/**
+ * The name a dispatched Stop run shows under. A summary records only the dispatcher's own
+ * command, so the scripts come from the run log: every Stop script it recorded in the window,
+ * joined. With no run-log Stop records the dispatcher keeps its own name.
+ */
+function dispatchedName(runLog: RunLogReport | undefined): string {
+  const scripts = [...new Set(runLog?.stopPaths.map((row) => row.script))];
+  return scripts.length ? scripts.join(', ') : DISPATCHER_SCRIPT;
+}
+
+function computeStopHooks(
+  corpus: Corpus,
+  runLog: RunLogReport | undefined,
+): StopHookRow[] {
+  const dispatched = dispatchedName(runLog);
   const byHook = new Map<string, number[]>();
   const timedOut = new Map<string, { date?: string; session: string }[]>();
   const totals: number[] = [];
@@ -254,7 +270,8 @@ function computeStopHooks(corpus: Corpus): StopHookRow[] {
     for (const summary of session.stopHookSummaries) {
       let total = 0;
       for (const run of summary.hooks) {
-        const name = stopHookName(run.command);
+        const base = stopHookName(run.command);
+        const name = base === DISPATCHER_SCRIPT ? dispatched : base;
         const ms = run.durationMs ?? 0;
         const list = byHook.get(name) ?? [];
         list.push(ms);
@@ -393,7 +410,7 @@ export function computeHookHealth(
     rows,
     crashSignatures,
     bashCalls,
-    stopHooks: computeStopHooks(corpus),
+    stopHooks: computeStopHooks(corpus, runLog),
     ...(runLog ? { runLog } : {}),
   };
 }

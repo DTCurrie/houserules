@@ -41,6 +41,7 @@ before round 1.
   Layout: .claude/skills/plan-project/references/research-layout.md
   Format: .claude/reference/findings-format.md
   Destinations: <a,b,...,none>
+  Synthesis prefix: SY
 
   ## Threads
 
@@ -51,7 +52,8 @@ before round 1.
 
   Before each later round, append one row for each thread that round opens. An id prefix is two
   uppercase letters, unique across all threads. You choose every prefix. A researcher never does,
-  because two researchers once chose the same one. Researchers read `BRIEF.md` and never write it.
+  because two researchers once chose the same one. You set the `Synthesis prefix:` line, `SY` by
+  convention, and no thread may use it. The synthesizer numbers its own findings with it. Researchers read `BRIEF.md` and never write it.
 
 - `<Domain>/research/records.jsonl`, only through the scaffold command in step 3 of the round
   loop.
@@ -85,7 +87,8 @@ Each round runs these steps in order.
    researcher writes its file before its last check.
 3. **Regenerate the records.** Run
    `node .claude/scripts/scaffold-synthesis.mjs --destinations <Destinations> --jsonl <Domain>/research/records.jsonl <every thread report>`,
-   naming every report from every round so far. No researcher writes this file, so concurrent
+   naming every report from every round so far. Run it from the repo root, with every path
+   relative to the repo root. No researcher writes this file, so concurrent
    researchers never race on it.
 4. **Read the leads.** Read the `## Leads` section of each report this round produced. Drop each
    lead whose `<topic>/<thread>` names a thread that is open or done, and drop each `- none` line.
@@ -131,6 +134,7 @@ held back the `finished` notice for 85 seconds after the report.
    - `Synthesis: <Domain>/research/SYNTHESIS.md`
    - `Report: <Domain>/research/REPORT.md`
    - `Destinations: <Destinations>`
+   - `Brief: <Domain>/research/BRIEF.md`
 3. Wait for its report as in "Waiting", with the keepalive testing the `Synthesis:` path.
    If the synthesizer hands back the report text inline, carry that text in your own hand-back
    under `Report`, between the same two marker lines it used. Never write it to a file yourself,

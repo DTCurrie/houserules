@@ -8,6 +8,11 @@
  * immediately, inside the shared 1.5 second SessionEnd budget. A contributor who never opted in
  * sees no evidence the integration exists, so every silent-return path writes nothing at all,
  * not even a log line. Always exits 0.
+ *
+ * Before the empty check it holds back every ledger row this session wrote in a turn where the
+ * user rejected a tool use, read from the `session_id` and `transcript_path` on stdin. Held ids
+ * go to `.claude/state/projects-sync-holds.json`, which `projects-sync.mjs status` lists and
+ * `projects-sync.mjs release <id>` clears. The hook never writes a ledger.
  */
 
 import {
@@ -27,9 +32,25 @@ import { readStdinJson } from '@houserules/payload/proc';
 import { loadConfigSafe, repoRoot } from '@houserules/payload/config';
 import { ledgerDir, readLog } from '@houserules/payload/entry-ledger';
 import { ENABLE_TOKEN_BASENAME } from './lib/sync-gate.mjs';
-import { buildPushQueue, summarizeQueue } from './lib/push-queue.mjs';
+import {
+  buildPushQueue,
+  summarizeQueue,
+  withoutHeldEntries,
+} from './lib/push-queue.mjs';
 import type { LedgerRecord } from './lib/push-queue.mjs';
 import { pushLockIsHeld, pushLockPath } from './lib/push-lock.mjs';
+import {
+  USER_REJECTION_TEXT,
+  rejectedTurnWindows,
+  rowsInRejectedTurns,
+} from './lib/rejected-turns.mjs';
+import {
+  heldIds,
+  holdsPath,
+  mergeHolds,
+  readHolds,
+  writeHolds,
+} from './lib/sync-holds.mjs';
 
 const BACKLOG_LEDGER_BASENAME = 'backlog.jsonl';
 const DECISIONS_LEDGER_BASENAME = 'decisions.jsonl';
@@ -37,6 +58,14 @@ const STATE_DIR = '.claude/state';
 const LOG_BASENAME = 'projects-sync.log';
 const MAX_LOG_BYTES = 256 * 1024;
 const KEPT_LOG_BYTES = 64 * 1024;
+/** The JSON field a user-rejected tool result carries, as it appears in the raw transcript. */
+const USER_REJECTED_MARKER = '"toolDenialKind":"user-rejected"';
+
+/** The fields of the `SessionEnd` stdin payload this hook reads. */
+interface HookInput {
+  session_id?: string;
+  transcript_path?: string;
+}
 
 /** Whether a live, fresh push lock exists, so a burst of hooks spawns one push. */
 function pushLockHeld(root: string): boolean {
@@ -69,15 +98,60 @@ function ledgerFilesExist(ledgerDirectory: string): boolean {
  * publishes those bodies. This only counts, and gunzipping several hundred records inside a hook
  * that shares a 1.5 second budget would be work for no answer.
  */
-function pushQueueEmpty(ledgerDirectory: string): boolean {
-  const backlog = readLog<LedgerRecord>(
-    resolve(ledgerDirectory, BACKLOG_LEDGER_BASENAME),
+function pushQueueEmpty(
+  backlog: readonly LedgerRecord[],
+  decisions: readonly LedgerRecord[],
+  held: ReadonlySet<string>,
+): boolean {
+  const summary = summarizeQueue(
+    withoutHeldEntries(buildPushQueue(backlog, decisions), held),
   );
-  const decisions = readLog<LedgerRecord>(
-    resolve(ledgerDirectory, DECISIONS_LEDGER_BASENAME),
-  );
-  const summary = summarizeQueue(buildPushQueue(backlog, decisions));
   return summary.backlogPending + summary.decisionsPending === 0;
+}
+
+/**
+ * The rows this session wrote in a turn where the user rejected a tool use.
+ *
+ * Reads the transcript only when the session wrote a row at all, and parses it only when its
+ * text holds a rejection, so the common session costs one ledger filter and no transcript read.
+ */
+function rowsToHold(
+  records: readonly LedgerRecord[],
+  input: HookInput,
+): LedgerRecord[] {
+  const sessionId = input.session_id;
+  if (!sessionId || !input.transcript_path) return [];
+  if (!records.some((record) => record.chat === sessionId)) return [];
+
+  const transcript = readFileSync(input.transcript_path, 'utf8');
+  if (
+    !transcript.includes(USER_REJECTED_MARKER) &&
+    !transcript.includes(USER_REJECTION_TEXT)
+  )
+    return [];
+
+  const windows = rejectedTurnWindows(transcript.split('\n'), sessionId);
+  return rowsInRejectedTurns(records, windows, sessionId);
+}
+
+/**
+ * Records holds for this session's rows from rejected turns, merged into the existing file, and
+ * returns every held id. Never writes a ledger: a hold is undone by `projects-sync.mjs release`.
+ */
+function recordHolds(
+  root: string,
+  records: readonly LedgerRecord[],
+  input: HookInput,
+): ReadonlySet<string> {
+  const path = holdsPath(root);
+  const holds = readHolds(path);
+  const rows = rowsToHold(records, input);
+  if (rows.length === 0) return heldIds(holds);
+
+  const merged = mergeHolds(holds, rows);
+  if (JSON.stringify(merged) !== JSON.stringify(holds))
+    writeHolds(path, merged);
+  return heldIds(merged);
 }
 
 /**
@@ -119,7 +193,7 @@ function spawnPush(root: string): void {
 
 // No GitHub permission check here: push already does it, and a network round trip inside the
 // hook's shared budget would blow it.
-function run(): void {
+function run(input: HookInput): void {
   const root = repoRoot();
   const config = loadConfigSafe(root);
   const ledgerDirectory = ledgerDir(root, config.ledgers?.dir);
@@ -127,15 +201,25 @@ function run(): void {
   if (!hasSyncToken(ledgerDirectory)) return;
   if (autoSyncDisabled(config)) return;
   if (!ledgerFilesExist(ledgerDirectory)) return;
-  if (pushQueueEmpty(ledgerDirectory)) return;
+
+  const backlog = readLog<LedgerRecord>(
+    resolve(ledgerDirectory, BACKLOG_LEDGER_BASENAME),
+  );
+  const decisions = readLog<LedgerRecord>(
+    resolve(ledgerDirectory, DECISIONS_LEDGER_BASENAME),
+  );
+  // Any failure here throws to the catch below and spawns no push, so a rejected row is never
+  // pushed because the hold could not be recorded.
+  const held = recordHolds(root, [...backlog, ...decisions], input);
+
+  if (pushQueueEmpty(backlog, decisions, held)) return;
   if (pushLockHeld(root)) return;
 
   spawnPush(root);
 }
 
 try {
-  readStdinJson();
-  run();
+  run(readStdinJson<HookInput>());
 } catch {
   // A sync attempt must never break session termination.
 }

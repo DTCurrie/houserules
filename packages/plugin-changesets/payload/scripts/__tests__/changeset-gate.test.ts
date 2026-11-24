@@ -3,7 +3,6 @@ import {
   appendFileSync,
   mkdirSync,
   readFileSync,
-  symlinkSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
@@ -11,6 +10,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { linkInstalledChangesetsCli } from '#test/changesets-cli';
 import { useInstalledRepo } from '#test/repo';
 import { runIn, runScript } from '#test/run';
 import {
@@ -59,16 +59,6 @@ function writeToolFragment(root: string, manifestIgnoreKeys: string[]): void {
     join(root, '.claude/extensions/wireit.json'),
     JSON.stringify({ manifestIgnoreKeys }),
   );
-}
-
-function linkInstalledChangesetsCli(root: string): void {
-  mkdirSync(join(root, 'node_modules/@changesets'), { recursive: true });
-  symlinkSync(
-    INSTALLED_CHANGESETS_CLI,
-    join(root, 'node_modules/@changesets/cli'),
-    'dir',
-  );
-  appendFileSync(join(root, '.git/info/exclude'), 'node_modules/\n');
 }
 
 function words(n: number): string {
@@ -560,7 +550,7 @@ describe('changeset-gate.mjs, packages and files that ship nothing', () => {
 
   function writeIgnore(root: string, ignore: string[]): void {
     writeIgnoreWithoutChangesets(root, ignore);
-    linkInstalledChangesetsCli(root);
+    linkInstalledChangesetsCli(root, INSTALLED_CHANGESETS_CLI);
   }
 
   function writeIgnoreWithoutChangesets(root: string, ignore: string[]): void {

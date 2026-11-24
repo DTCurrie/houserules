@@ -39,12 +39,13 @@ The merged blocks.
 Carried questions.
 `;
 
-function run(args: string[]) {
+function run(args: string[], cwd?: string) {
   const env = { ...process.env };
   delete env.NODE_PATH;
   return spawnSync(process.execPath, [SCRIPT, ...args], {
     encoding: 'utf8',
     env,
+    cwd,
   });
 }
 
@@ -325,6 +326,48 @@ describe('scaffold-synthesis.mjs (real execution)', () => {
     expect(result.status).toBe(0);
     expect(readFileSync(out, 'utf8')).toBe(
       `{"id":"AA-01","topic":"notes","thread":null,"claim":"one","source":"https://example.com/a","quote":"q","report":${JSON.stringify(only)}}\n`,
+    );
+  });
+
+  it('resolves topic and thread from a relative path when run from inside the research directory', () => {
+    const researchDir = join(dir, 'domain/research');
+    mkdirSync(join(researchDir, 'caching'), { recursive: true });
+    write(
+      'domain/research/caching/ttl.md',
+      `# R\n\n${block('AA-01', 'ttl', { evidence: 'https://example.com/a → "q"' })}`,
+    );
+    const out = join(dir, 'records.jsonl');
+    const result = run(
+      ['--destinations', DESTINATIONS, '--jsonl', out, 'caching/ttl.md'],
+      researchDir,
+    );
+    expect(result.status).toBe(0);
+    expect(readFileSync(out, 'utf8')).toBe(
+      '{"id":"AA-01","topic":"caching","thread":"ttl","claim":"ttl","source":"https://example.com/a","quote":"q","report":"caching/ttl.md"}\n',
+    );
+  });
+
+  it('resolves topic and thread from a ../ path when run from the repo root below the domain', () => {
+    mkdirSync(join(dir, 'domain/research/caching'), { recursive: true });
+    mkdirSync(join(dir, 'domain/other'), { recursive: true });
+    write(
+      'domain/research/caching/ttl.md',
+      `# R\n\n${block('AA-01', 'ttl', { evidence: 'https://example.com/a → "q"' })}`,
+    );
+    const out = join(dir, 'records.jsonl');
+    const result = run(
+      [
+        '--destinations',
+        DESTINATIONS,
+        '--jsonl',
+        out,
+        '../research/caching/ttl.md',
+      ],
+      join(dir, 'domain/other'),
+    );
+    expect(result.status).toBe(0);
+    expect(readFileSync(out, 'utf8')).toContain(
+      '"topic":"caching","thread":"ttl"',
     );
   });
 

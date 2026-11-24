@@ -109,6 +109,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The plan-stop-rule fixture archives an old commit, which a shallow clone lacks.
+          fetch-depth: 0
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -116,6 +118,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: Build the plan-stop-rule repo
+        if: inputs.fixture == 'plan-stop-rule'
+        run: node scripts/eval/fixtures/plan-stop-rule/make-repo.mjs
       - name: Install Claude Code
         if: inputs.paid
         run: npm install --global @anthropic-ai/claude-code@2.1.330

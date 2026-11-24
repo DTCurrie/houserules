@@ -5,7 +5,7 @@ import {
   regionImportsSections,
 } from './core/claude-md-region.js';
 import { upsertRegion } from '@houserules/api/internal';
-import { hasModule } from './plugin-registry.js';
+import { hasModule } from '@houserules/api';
 import { passPathsDefault } from './path-taking-scripts.js';
 import type { Ctx, PackageManagerInfo, Target } from './detect.js';
 import type { Answers } from '@houserules/api';

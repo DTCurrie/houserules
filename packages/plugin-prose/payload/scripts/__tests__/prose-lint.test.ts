@@ -326,6 +326,97 @@ describe('prose-lint.mjs over a CSS file', () => {
   });
 });
 
+describe('prose-lint.mjs over SCSS and PostCSS files', () => {
+  it.each([
+    {
+      ext: 'scss',
+      source: '$a: 1px;\n.a {\n  margin: $a;\n}\n/* Clean note. */\n',
+    },
+    {
+      ext: 'pcss',
+      source:
+        '/* Clean note. */\n.a{margin:0;padding:1px}\n@media (x){.b{top:0;}}\n',
+    },
+  ])(
+    'reports nothing for declarations beside a clean comment in .$ext',
+    ({ ext, source }) => {
+      const root = stage();
+      const rel = writeMarkdown(root, `src/ok.${ext}`, source);
+
+      const r = lint(root, rel);
+
+      expect(r.status, r.stdout).toBe(0);
+      expect(r.stdout).toContain('No findings.');
+    },
+  );
+
+  it.each([
+    {
+      ext: 'scss',
+      source: '$a: 1px;\n\n/* Tokens; keep sorted. */\n.a { margin: $a; }\n',
+    },
+    {
+      ext: 'pcss',
+      source:
+        '.a{margin:0;}\n.b {\n  top: 1px;\n}\n/* Tokens; keep sorted. */\n',
+    },
+  ])(
+    'reports a semicolon in a .$ext comment on its line',
+    ({ ext, source }) => {
+      const root = stage();
+      const rel = writeMarkdown(root, `src/bad.${ext}`, source);
+
+      const r = lint(root, rel);
+
+      expect(r.stdout.match(/no-semicolons/g)?.length).toBe(1);
+      expect(r.stdout).toContain(ext === 'scss' ? 'bad.scss:3' : 'bad.pcss:5');
+    },
+  );
+
+  it('reads a // line comment in .scss as prose', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/line.scss',
+      '.a { color: red; }\n\n.b { top: 0; } // trailing; note\n// Own line; here.\n',
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.stdout.match(/no-semicolons/g)?.length).toBe(2);
+    expect(r.stdout).toContain('line.scss:3');
+    expect(r.stdout).toContain('line.scss:4');
+  });
+
+  it('does not read an unquoted url() in .scss as a line comment', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/img.scss',
+      '.a {\n  background: url(https://x.test/a.png); color: blue;\n}\n',
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).toContain('No findings.');
+  });
+
+  it('does not read an unquoted url() in .pcss as a line comment', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/img.pcss',
+      '.a{background:url(https://x.test/a.png);color:blue;}\n',
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).toContain('No findings.');
+  });
+});
+
 describe('commentsOf', () => {
   it('keeps the line count of the source so findings map back to it', () => {
     const source =

@@ -44,8 +44,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
-import { join } from 'node:path';
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -354,23 +353,15 @@ function usesRelatedCommand(
   );
 }
 
-/** The root entry's identity and scripts, from the root `package.json` name and `verify.rootCommands`. */
-interface RootEntrySpec {
-  name: string;
-  commands: string[];
-}
+/**
+ * The root entry's key in every map keyed by `package`. No npm package name can contain `<` or
+ * `>`, so a workspace package never takes it, even one named like the root `package.json`.
+ */
+const ROOT_ENTRY_ID = '<root>';
 
-/** The workspace root's `package.json` name, else `'.'`. Never throws. */
-function rootPackageName(root: string): string {
-  try {
-    const manifest: unknown = JSON.parse(
-      readFileSync(join(root, 'package.json'), 'utf8'),
-    );
-    const name = (manifest as { name?: unknown } | null)?.name;
-    return typeof name === 'string' && name ? name : '.';
-  } catch {
-    return '.';
-  }
+/** The root entry's scripts, from `verify.rootCommands`. */
+interface RootEntrySpec {
+  commands: string[];
 }
 
 /**
@@ -388,7 +379,7 @@ function withRootEntry(
   if (!packages.length || !rootEntry.commands.length) return scope;
   const hasOutsidePath = pathsByPackage(changed, targets).outside.length > 0;
   if (!scope.length && !hasOutsidePath) return scope;
-  return [...scope, { package: rootEntry.name, reason: 'root' }];
+  return [...scope, { package: ROOT_ENTRY_ID, reason: 'root' }];
 }
 
 /**
@@ -484,7 +475,7 @@ async function main() {
     baseBranch,
     packages,
     targets,
-    { name: rootPackageName(root), commands: rootCommands },
+    { commands: rootCommands },
   );
 
   for (const s of scope) {

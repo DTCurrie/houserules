@@ -20,6 +20,19 @@
     "after-p2": {
       "prompt": "prompts/p2.txt",
       "overlay": "overlays/after"
+    },
+    "landed-p3": {
+      "prompt": "prompts/p3.txt",
+      "overlay": "overlays/after"
+    },
+    "fix2-p3": {
+      "prompt": "prompts/p3.txt",
+      "overlay": "overlays/fix2"
+    },
+    "fix3-p3": {
+      "prompt": "prompts/p3.txt",
+      "overlay": "overlays/fix2",
+      "settings": "settings/fix3.json"
     }
   }
 }

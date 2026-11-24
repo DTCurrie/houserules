@@ -35,6 +35,10 @@ const SCOPE_REFORMAT_CASE_NAMES = [
 const SETTINGS_SCRIPT_RE = /\.claude\/scripts\/([\w.-]+)\.mjs/;
 const CLEAN_AND_EDITED_STOP_CASES = 2;
 
+function kebabCase(event) {
+  return event.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
 function readBuildJson(...segments) {
   const path = join(BUILD.root, '.claude', ...segments);
   return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
@@ -92,10 +96,30 @@ describe('hooks suite', () => {
     );
   });
 
-  it('returns one case per wired script, and two per Stop script', () => {
+  it('returns one case per wired script, and two per Stop script, plus one dispatcher case per dispatched event', () => {
     const wired = wiredScripts();
+    const dispatcherCases = suite.filter((benchCase) =>
+      benchCase.args[1].includes('/hook-dispatch'),
+    );
+    const dispatchedEvents = [
+      ...new Set(
+        Object.entries(readBuildJson('settings.json').hooks)
+          .filter(([, groups]) =>
+            groups.some((group) =>
+              group.hooks.some((hook) =>
+                hook.command.includes('hook-dispatch'),
+              ),
+            ),
+          )
+          .map(([event]) => event),
+      ),
+    ];
     const casesFor = (script) =>
-      suite.filter((benchCase) => benchCase.args[1].includes(`/${script}`));
+      suite.filter(
+        (benchCase) =>
+          benchCase.args[1].includes(`/${script}`) &&
+          !dispatcherCases.includes(benchCase),
+      );
 
     const observed = wired.map(
       ({ event, script }) => `${event} ${script} x${casesFor(script).length}`,
@@ -110,12 +134,13 @@ describe('hooks suite', () => {
     );
     assert.equal(
       suite.length,
-      observed.length + wired.filter(({ event }) => event === 'Stop').length,
+      observed.length +
+        wired.filter(({ event }) => event === 'Stop').length +
+        dispatcherCases.length,
     );
-    assert.equal(
-      suite.filter((benchCase) => benchCase.args[1].includes('hook-dispatch'))
-        .length,
-      0,
+    assert.deepEqual(
+      dispatcherCases.map((benchCase) => benchCase.name),
+      dispatchedEvents.map((event) => `${kebabCase(event)}-hook-dispatch`),
     );
   });
 
@@ -330,6 +355,30 @@ describe('hook wiring source', () => {
       ['bench-probe', ...SCOPE_CASE_NAMES],
       'the live wiring names notice-interim.mjs, which the build lacks, so reading it fails with "expected one built notice-interim.mjs"',
     );
+  });
+
+  it('adds a dispatcher case ahead of its scripts when the build carries hook-dispatch', async () => {
+    const buildDir = join(dir, 'dispatch-build');
+    mkdirSync(buildDir);
+    const fake = makeFakeBuild(buildDir, 'process.exit(0);\n');
+    for (const script of ['bench-probe', 'hook-dispatch'])
+      writeFileEnsuringDirectory(
+        join(fake.root, `packages/cli/payload-dist/scripts/${script}.mjs`),
+        'process.exit(0);\n',
+      );
+    writeWiring(fake.root, ['bench-probe.mjs']);
+
+    const suite = await cases({
+      root: fake.root,
+      repoDir: fake.repoDir,
+      workDir: join(dir, 'dispatch-work'),
+    });
+
+    assert.deepEqual(
+      suite.map((benchCase) => benchCase.name),
+      ['user-prompt-submit-hook-dispatch', 'bench-probe', ...SCOPE_CASE_NAMES],
+    );
+    assert.match(suite[0].args[1], /hook-dispatch\.mjs/);
   });
 
   it('throws naming the missing settings file when the build tree has none', async () => {

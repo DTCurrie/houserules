@@ -1,5 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { beforeEach, describe, expect, it, onTestFinished } from 'vitest';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
@@ -602,5 +610,63 @@ describe('trackedLedgerLogs', () => {
     expect(trackedLedgerLogs(root, '.claude/ledgers')).toEqual([
       '.claude/ledgers/backlog.jsonl',
     ]);
+  });
+});
+
+describe('detect, ctx.git spawns', () => {
+  /** Puts a logging `git` shim first on PATH and returns a reader of the argv lines it saw. */
+  function shimGit(): () => string[] {
+    const dir = mkdtempSync(join(tmpdir(), 'git-shim-'));
+    const log = join(dir, 'calls.log');
+    writeFileSync(log, '');
+    const shim = join(dir, 'git');
+    writeFileSync(
+      shim,
+      `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\nPATH="$ORIGINAL_PATH" exec git "$@"\n`,
+    );
+    chmodSync(shim, 0o755);
+    const originalPath = process.env['PATH'];
+    process.env['ORIGINAL_PATH'] = originalPath;
+    process.env['PATH'] = `${dir}:${originalPath}`;
+    onTestFinished(() => {
+      process.env['PATH'] = originalPath;
+      delete process.env['ORIGINAL_PATH'];
+    });
+    return () =>
+      readFileSync(log, 'utf8')
+        .split('\n')
+        .filter((line) => line.startsWith('rev-parse'));
+  }
+
+  it('runs one git rev-parse on a repo with commits', () => {
+    const root = useRepo('non-js');
+    const calls = shimGit();
+    const ctx = detect(root);
+    expect(calls()).toHaveLength(1);
+    expect(ctx.git.isRepo).toBe(true);
+    expect(ctx.git.hasCommits).toBe(true);
+    expect(ctx.git.top).toBeTruthy();
+    expect(ctx.git.branch).toBeTruthy();
+  });
+
+  it('reads a repo with no commits as a repo with no branch', () => {
+    const root = mkdtempSync(join(tmpdir(), 'detect-unborn-'));
+    runIn(root, 'git', ['init', '-q']);
+    const ctx = detect(root);
+    expect(ctx.git.isRepo).toBe(true);
+    expect(ctx.git.top).toBeTruthy();
+    expect(ctx.git.hasCommits).toBe(false);
+    expect(ctx.git.branch).toBe(null);
+  });
+
+  it('reads a directory outside any repo as not a repo', () => {
+    const root = mkdtempSync(join(tmpdir(), 'detect-nonrepo-'));
+    const ctx = detect(root);
+    expect(ctx.git).toEqual({
+      isRepo: false,
+      top: null,
+      hasCommits: false,
+      branch: null,
+    });
   });
 });

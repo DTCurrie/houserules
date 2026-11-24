@@ -9,6 +9,7 @@ import {
   NO_VALIDITY_AGENT,
   PREDICATES,
   verdict,
+  wallSeconds,
 } from '../orchestrate-report.mjs';
 
 const DONE_REPORT = `PHASE eval-fixture/1: DONE
@@ -327,6 +328,41 @@ describe('predicates: loadSample', () => {
     assert.equal(judgeValidity(loaded).valid, true);
     for (const id of Object.keys(PREDICATES))
       assert.equal(judge(id, loaded), 'pass', id);
+  });
+});
+
+describe('wallSeconds', () => {
+  const stamped = (timestamp) => ({ type: 'assistant', timestamp });
+
+  test('spans the earliest to the latest timestamp across stream and subagents', () => {
+    const session = {
+      stream: [
+        stamped('2026-11-24T10:00:30.000Z'),
+        { type: 'result', duration_ms: 40 },
+        stamped('2026-11-24T10:00:00.000Z'),
+      ],
+      subagents: [{ records: [stamped('2026-11-24T10:01:30.000Z')] }],
+    };
+
+    assert.equal(wallSeconds(session), 90);
+  });
+
+  test('is null when fewer than two records carry a parseable timestamp', () => {
+    const session = {
+      stream: [stamped('2026-11-24T10:00:00.000Z'), stamped('not a date')],
+      subagents: [],
+    };
+
+    assert.equal(wallSeconds(session), null);
+  });
+
+  test('reads a stream too long to spread into Math.max', () => {
+    const start = Date.parse('2026-11-24T10:00:00.000Z');
+    const stream = Array.from({ length: 500_000 }, (_, index) =>
+      stamped(new Date(start + index).toISOString()),
+    );
+
+    assert.equal(wallSeconds({ stream, subagents: [] }), 499.999);
   });
 });
 

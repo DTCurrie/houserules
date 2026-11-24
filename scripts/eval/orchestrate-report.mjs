@@ -59,6 +59,7 @@ const PHASE_ORCHESTRATOR = 'phase-orchestrator';
 /** The `validityAgent` of a fixture whose task spawns no subagent, so no spawn is required. */
 export const NO_VALIDITY_AGENT = 'none';
 const TASK_WORKER = 'task-worker';
+const MS_PER_SECOND = 1000;
 const EXIT_PASS = 0;
 const EXIT_FAIL = 1;
 const EXIT_INCONCLUSIVE = 2;
@@ -138,6 +139,33 @@ export function loadSample(dir) {
     stream: readJsonl(join(dir, STREAM)),
     subagents: loadSubagents(dir),
   };
+}
+
+/**
+ * Wall time of a session in seconds, from the earliest to the latest `timestamp` on any stream
+ * event or subagent record. The result event's `duration_ms` is not used: it read near zero on
+ * sessions that ran for minutes. Null when fewer than two records carry a parseable timestamp.
+ *
+ * @param {SampleArtifacts} sample
+ * @returns {number | null}
+ */
+export function wallSeconds(sample) {
+  const records = [
+    ...sample.stream,
+    ...sample.subagents.flatMap((agent) => agent.records),
+  ];
+  let earliest = Infinity;
+  let latest = -Infinity;
+  let stamped = 0;
+  for (const record of records) {
+    const time = Date.parse(record?.timestamp);
+    if (!Number.isFinite(time)) continue;
+    stamped += 1;
+    earliest = Math.min(earliest, time);
+    latest = Math.max(latest, time);
+  }
+  if (stamped < 2) return null;
+  return (latest - earliest) / MS_PER_SECOND;
 }
 
 /** The last `result` event of the dispatcher's stream, or null. */

@@ -374,3 +374,80 @@ describe('renderComparison on an old document beside a new one', () => {
     ]);
   });
 });
+
+describe('renderComparison hook run log rows', () => {
+  function withRunLog(
+    label: string,
+    runLog: NonNullable<ReportDocument['hooks']['runLog']> | undefined,
+  ): ReportDocument {
+    const base = documentFor(label, assistantTurns(1));
+    const { runLog: dropped, ...hooks } = base.hooks;
+    void dropped;
+    return { ...base, hooks: runLog ? { ...hooks, runLog } : hooks };
+  }
+
+  const before = withRunLog('before', {
+    stopPaths: [
+      {
+        script: 'stop-check.mjs',
+        path: 'clean',
+        runs: 10,
+        medianMilliseconds: 120,
+        totalSeconds: 1.2,
+      },
+    ],
+    guard: { runs: 40, medianMilliseconds: 30, totalSeconds: 1.2 },
+  });
+  const after = withRunLog('after', {
+    stopPaths: [
+      {
+        script: 'stop-check.mjs',
+        path: 'clean',
+        runs: 12,
+        medianMilliseconds: 80,
+        totalSeconds: 1,
+      },
+    ],
+    guard: { runs: 50, medianMilliseconds: 20, totalSeconds: 1 },
+  });
+
+  it('reads a before and an after figure on each run log row', () => {
+    const lines = renderComparison([before, after]);
+
+    expect(cells(lines, 'run log runs: stop-check.mjs clean')).toEqual([
+      'run log runs: stop-check.mjs clean',
+      '10',
+      '12',
+    ]);
+    expect(cells(lines, 'run log median ms: stop-check.mjs clean')).toEqual([
+      'run log median ms: stop-check.mjs clean',
+      '120',
+      '80',
+    ]);
+    expect(cells(lines, 'run log runs: guard-bash.mjs')).toEqual([
+      'run log runs: guard-bash.mjs',
+      '40',
+      '50',
+    ]);
+    expect(cells(lines, 'run log median ms: guard-bash.mjs')).toEqual([
+      'run log median ms: guard-bash.mjs',
+      '30',
+      '20',
+    ]);
+  });
+
+  it('dashes the older document that has no runLog, not a zero', () => {
+    const lines = renderComparison([withRunLog('old', undefined), after]);
+
+    expect(cells(lines, 'run log runs: stop-check.mjs clean')).toEqual([
+      'run log runs: stop-check.mjs clean',
+      '-',
+      '12',
+    ]);
+    expect(cells(lines, 'run log median ms: guard-bash.mjs')).toEqual([
+      'run log median ms: guard-bash.mjs',
+      '-',
+      '20',
+    ]);
+  });
+});

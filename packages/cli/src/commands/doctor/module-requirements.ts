@@ -2,7 +2,8 @@ import { installedModuleIds } from '../../installed-modules.js';
 import type { Ctx } from '../../detect.js';
 import { requirementsOf } from '../../module-requires.js';
 import { resolveModuleOptions } from '../../module-options.js';
-import { hasModule, type Registry } from '../../plugin-registry.js';
+import { hasModule } from '@houserules/api';
+import type { Registry } from '../../plugin-registry.js';
 import type { CheckResult, Finding, ModuleRequirement } from '@houserules/api';
 
 /**

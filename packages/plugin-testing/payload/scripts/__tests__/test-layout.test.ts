@@ -95,6 +95,33 @@ describe('test-layout.mjs test-dir-contents', () => {
     expect(r.stdout).not.toContain('testing/test-dir-contents');
   });
 
+  it.each([
+    ['src/lib/Select/__tests__/fixtures/BoundSelect.svelte', 0],
+    ['src/lib/Select/__tests__/BoundSelect.svelte', 1],
+    ['src/lib/Select/__tests__/Select.svelte.spec.ts', 0],
+    ['src/lib/__tests__/computed-style.ts', 1],
+    ['src/lib/Select/__tests__/fixtures', 1],
+    ['src/__tests__/a/__tests__/fixtures/x.ts', 0],
+    ['src/lib/__tests__/__snapshots__/x.snap', 0],
+    ['src/fixtures/x.ts', 0],
+  ])('reports %s with %i test-dir-contents findings', (file, count) => {
+    const root = stage();
+
+    const r = run(root, [file]);
+
+    expect(r.stdout.split('testing/test-dir-contents').length - 1).toBe(count);
+    expect(r.status).toBe(count);
+  });
+
+  it('names both homes in the finding message', () => {
+    const root = stage();
+
+    const r = run(root, ['src/core/__tests__/fixture.json']);
+
+    expect(r.stdout).toContain('__tests__/fixtures/');
+    expect(r.stdout).toContain('plainly named test/ directory');
+  });
+
   it('does not flag a snapshot Vitest wrote under __snapshots__', () => {
     const root = stage();
 

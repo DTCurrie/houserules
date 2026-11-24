@@ -13,8 +13,8 @@
  * counts launches made while an earlier launch was still running. A launch ends at the first
  * later record that names its background task id beside a finished status (`completed`,
  * `failed`, `killed`, or `exited`), and a launch with no such record runs to the end of the
- * transcript. `cost` is the result event's `total_cost_usd`, and `wallS` the result event's
- * `duration_ms` in seconds, each null when the stream has none.
+ * transcript. `cost` is the result event's `total_cost_usd`, null when the stream has none. `wallS` is the
+ * seconds from the first to the last timestamp in the transcripts, null with fewer than two.
  *
  * Exit codes: 0 when every sample was scored, 2 on a usage error.
  */
@@ -22,7 +22,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadSample } from '../../orchestrate-report.mjs';
+import { loadSample, wallSeconds } from '../../orchestrate-report.mjs';
 
 const EXIT_USAGE = 2;
 const PHASE_ORCHESTRATOR = 'phase-orchestrator';
@@ -30,7 +30,6 @@ const WORKER_TYPE = 'task-worker';
 const DISPATCH_TOOLS = new Set(['Agent', 'Task']);
 const TASK_ID = /Command running in background with ID: (\S+?)\./;
 const FINISHED = /completed|failed|killed|exited/;
-const MS_PER_SECOND = 1000;
 const COST_DECIMAL_PLACES = 4;
 const WALL_DECIMAL_PLACES = 1;
 
@@ -145,7 +144,7 @@ function scoreSample(sample) {
     perWave[launch.wave] = (perWave[launch.wave] ?? 0) + 1;
   const result = resultEvent(sample.stream);
   const cost = result?.total_cost_usd;
-  const wall = result?.duration_ms;
+  const wall = wallSeconds(sample);
   return {
     sample: sample.label,
     arm: sample.run?.arm ?? null,
@@ -160,10 +159,7 @@ function scoreSample(sample) {
       typeof cost === 'number'
         ? Number(cost.toFixed(COST_DECIMAL_PLACES))
         : null,
-    wallS:
-      typeof wall === 'number'
-        ? Number((wall / MS_PER_SECOND).toFixed(WALL_DECIMAL_PLACES))
-        : null,
+    wallS: wall === null ? null : Number(wall.toFixed(WALL_DECIMAL_PLACES)),
   };
 }
 

@@ -34,6 +34,10 @@
       "types": "./dist/global-setup.d.ts",
       "default": "./dist/global-setup.js"
     },
+    "./changesets-cli": {
+      "types": "./dist/changesets-cli.d.ts",
+      "default": "./dist/changesets-cli.js"
+    },
     "./hook-input": {
       "types": "./dist/hook-input.d.ts",
       "default": "./dist/hook-input.js"

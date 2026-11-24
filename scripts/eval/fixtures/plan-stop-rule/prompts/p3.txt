@@ -1,0 +1,7 @@
+/plan-project I want to do another health check as we have been pushing a few improvements. These are from my work machine, a colleagues work machine, and this machine:
+
+.notes/houserules-usage-2026-11-19.md
+.notes/work-colleague-houserules-usage-2026-11-19.md
+.notes/work-houserules-usage-2026-11-19.md
+
+I also want to resolve all the open issues (that aren't parked)

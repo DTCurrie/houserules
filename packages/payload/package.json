@@ -50,11 +50,12 @@
       "output": []
     },
     "test": {
-      "command": "vitest run",
+      "command": "node ../../scripts/with-build-locks.mjs test vitest run",
       "dependencies": [
         "../test:build"
       ],
       "files": [
+        "../../scripts/with-build-locks.mjs",
         "payload/**",
         "vitest.config.ts",
         "../*/payload/rules/**/*.md",

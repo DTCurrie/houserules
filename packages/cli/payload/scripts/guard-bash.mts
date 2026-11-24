@@ -54,6 +54,10 @@
  * When identity can't be established (no `agent_id`), the gate allows, because a false
  * refusal blocks legitimate work far worse than a missed write.
  *
+ * Mod guard: a command that writes into a Claude Code mod directory, by an output redirection,
+ * `tee`, or `cp`/`mv`/`install`/`ln`, is refused outside `default` and `acceptEdits` modes,
+ * from any thread. It applies the rule `guard-mods` applies to Write and Edit, and fails open.
+ *
  * `--diagnose <transcript-path>` is a separate, manually-run mode (never invoked by the
  * hook itself) kept for inspecting an old session. It reports whether the transcript's
  * trailing turn is a sidechain, printing JSON and exiting 0 when it is, 1 when it is not.
@@ -61,15 +65,26 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { basename, resolve, sep } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import {
+  basename,
+  delimiter,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { GUARD_DEFAULTS, loadConfigSafe } from '@houserules/payload/config';
 import { readStdinJson } from '@houserules/payload/proc';
 
 interface BashPayload {
+  cwd?: string;
+  permission_mode?: string;
   tool_input?: { command?: string };
   transcript_path?: string;
   agent_id?: string;
@@ -99,7 +114,10 @@ const GIT_DISCARD = String.raw`(?:checkout\b|restore\b|clean\b|reset\b[^\n;&|]*\
 
 // Only the stash subcommands that change state. Bare `stash` and `stash -u` are a push, so a
 // flag or a separator after the word counts. `list` and `show` read only and pass.
-const STASH_MUTATING = String.raw`stash(?=\s*(?:$|[\n;&|])|\s+-|\s+(?:push|save|pop|apply|drop|clear|branch|create|store)\b)`;
+const STASH_MUTATING = String.raw`stash\b(?=\s*(?:$|[\n;&|])|\s+-|\s+(?:push|save|pop|apply|drop|clear|branch|create|store)\b)`;
+// A subcommand the shell computes, as in `git $(echo commit)`, could be any guarded one.
+// A lone `-C` or `-c` takes the substitution as its value, so that position is not the subcommand.
+const COMPUTED_SUBCOMMAND = String.raw`(?<!\s-[Cc]\s)\$\(\)`;
 
 /**
  * One guard rule. A `segment` rule is tested against each tokenized command segment, so a
@@ -119,14 +137,16 @@ export function gitDenyRules(guard: {
   gitStash: boolean;
   gitDiscard: boolean;
   prCreate: boolean;
-  custom?: { pattern: string; message: string }[];
+  custom?: { pattern: string; message?: string }[];
 }): DenyRule[] {
   const gitRule = (
     sub: string,
     msg: string,
     exemptable: boolean,
   ): DenyRule => ({
-    re: new RegExp(`${CMD_START}git\\s+${GIT_FLAGS}${sub}\\b`),
+    re: new RegExp(
+      `${CMD_START}git\\s+${GIT_FLAGS}(?:${sub}|${COMPUTED_SUBCOMMAND})`,
+    ),
     msg,
     exemptable,
     scope: 'segment',
@@ -136,14 +156,16 @@ export function gitDenyRules(guard: {
   if (guard.gitCommit) {
     deny.push(
       gitRule(
-        'commit',
+        String.raw`commit\b`,
         "git commit is the user's to run. Describe what's staged and stop.",
         true,
       ),
     );
   }
   if (guard.gitPush) {
-    deny.push(gitRule('push', "git push is the user's to run.", false));
+    deny.push(
+      gitRule(String.raw`push\b`, "git push is the user's to run.", false),
+    );
   }
   if (guard.gitStash) {
     deny.push(
@@ -156,7 +178,9 @@ export function gitDenyRules(guard: {
   }
   if (guard.gitDiscard) {
     deny.push({
-      re: new RegExp(`${CMD_START}git\\s+${GIT_FLAGS}${GIT_DISCARD}`),
+      re: new RegExp(
+        `${CMD_START}git\\s+${GIT_FLAGS}(?:${GIT_DISCARD}|${COMPUTED_SUBCOMMAND})`,
+      ),
       msg: 'git checkout/restore/reset --hard/clean/switch -f discard uncommitted work, and a file reverted to HEAD loses every uncommitted edit in it, not only yours. Undo your own edit by applying its inverse with Edit. Switch branches with `git switch`. List untracked files with `git status --short`.',
       exemptable: true,
       scope: 'segment',
@@ -174,7 +198,7 @@ export function gitDenyRules(guard: {
     try {
       deny.push({
         re: new RegExp(rule.pattern),
-        msg: rule.message,
+        msg: customMessageOf(rule),
         exemptable: false,
         scope: 'command',
       });
@@ -183,6 +207,14 @@ export function gitDenyRules(guard: {
     }
   }
   return deny;
+}
+
+/** A hand-edited rule can reach the guard with no message, so the refusal names the field. */
+function customMessageOf(rule: { pattern: string; message?: string }): string {
+  if (typeof rule.message === 'string' && rule.message !== '') {
+    return rule.message;
+  }
+  return `the guard.custom rule for pattern \`${rule.pattern}\` has no \`message\` field. Add one to .claude/houserules.config.json so the refusal says why.`;
 }
 
 /**
@@ -204,7 +236,7 @@ export function guardRefusalFor(
     const match = ruleMatchOf(rule, cmd, tokenized);
     if (match === 'none') continue;
     if (rule.exemptable && throwaway && match === 'top-level') {
-      isExempt ??= isThrowawayCommand(cmd, throwaway);
+      isExempt ??= isThrowawayCommand(cmd, tokenized, throwaway);
       if (isExempt) continue;
     }
     return `Blocked by houserules guard: ${rule.msg}\n`;
@@ -232,11 +264,20 @@ function ruleMatchOf(
   return matched.some((segment) => segment.isNested) ? 'nested' : 'top-level';
 }
 
+/** The `separator` of a command that the end of the input closed. */
+const END_SEPARATOR = 'end';
+
 /** One simple command, its words after quote removal, joined for the segment rules. */
 interface CommandSegment {
   text: string;
+  /** The words after quote removal, with any wrapper such as `env` or `sudo` removed. */
+  words: string[];
+  /** The operator that ended the command: `&&`, `||`, `;`, `|`, `&`, `\n`, a paren, or `end`. */
+  separator: string;
   /** Whether it runs from a substitution, a heredoc expansion, `sh -c`, or `eval`. */
   isNested: boolean;
+  /** The targets of its output redirections (`>`, `>>`, `>|`, `&>`), after quote removal. */
+  redirectTargets: string[];
 }
 
 interface TokenizedCommand {
@@ -310,6 +351,10 @@ class ShellScanner {
   private hasWord = false;
   private parenDepth = 0;
   private heredocs: PendingHeredoc[] = [];
+  /** Where the current word's output redirection target begins, or null when it has none. */
+  private redirectStart: number | null = null;
+  private isRedirectTargetNext = false;
+  private redirectTargets: string[] = [];
 
   constructor(
     source: string,
@@ -361,7 +406,7 @@ class ShellScanner {
       case '$':
         return this.readDollar();
       case '\n':
-        this.endSegment();
+        this.endSegment('\n');
         this.pos++;
         return this.readHeredocBodies();
       case ';':
@@ -382,8 +427,18 @@ class ShellScanner {
     if (char === '#' && !this.hasWord) return this.skipComment();
     if (char === '&' && !this.isRedirectAmpersand()) return this.breakSegment();
     if ((char === '<' || char === '>') && this.readRedirection(char)) return;
+    if (char === '>') return this.readOutputRedirect();
     this.append(char);
     this.pos++;
+  }
+
+  /** Reads an output redirection operator and notes where its target begins. `>&` has none. */
+  private readOutputRedirect(): void {
+    const next = this.source[this.pos + 1];
+    const operator = next === '>' || next === '|' ? `>${next}` : '>';
+    this.append(operator);
+    this.pos += operator.length;
+    if (this.source[this.pos] !== '&') this.redirectStart = this.word.length;
   }
 
   private fail(reason: string): void {
@@ -396,24 +451,51 @@ class ShellScanner {
   }
 
   private endWord(): void {
-    if (this.hasWord) this.words.push(this.word);
+    if (this.hasWord) {
+      this.noteRedirectTarget();
+      this.words.push(this.word);
+    }
     this.word = '';
     this.hasWord = false;
+    this.redirectStart = null;
+  }
+
+  /** Records the word just ended as a redirection target, or arms the next word as one. */
+  private noteRedirectTarget(): void {
+    if (this.isRedirectTargetNext) {
+      this.isRedirectTargetNext = false;
+      this.redirectTargets.push(this.word);
+      return;
+    }
+    if (this.redirectStart === null) return;
+    const target = this.word.slice(this.redirectStart);
+    if (target === '') this.isRedirectTargetNext = true;
+    else this.redirectTargets.push(target);
   }
 
   private breakSegment(): void {
-    this.endSegment();
-    this.pos++;
+    const char = this.source[this.pos] ?? '';
+    const isDoubled =
+      (char === '&' || char === '|') && this.source[this.pos + 1] === char;
+    const separator = isDoubled ? char + char : char;
+    this.endSegment(separator);
+    this.pos += separator.length;
   }
 
-  private endSegment(): void {
+  private endSegment(separator = END_SEPARATOR): void {
     this.endWord();
-    const words = commandWordsOf(this.words);
+    const words = unwrapCommand(commandWordsOf(this.words));
+    const redirectTargets = this.redirectTargets;
     this.words = [];
+    this.redirectTargets = [];
+    this.isRedirectTargetNext = false;
     if (words.length === 0) return;
     this.out.push({
       text: words.map(segmentWord).join(' '),
+      words,
+      separator,
       isNested: this.depth > 0,
+      redirectTargets,
     });
     this.scanNestedShell(words);
   }
@@ -677,6 +759,47 @@ function commandWordsOf(words: string[]): string[] {
   return start === -1 ? [] : words.slice(start);
 }
 
+// Options of a wrapper that consume the next word as their value.
+const WRAPPER_VALUE_OPTIONS: Record<string, ReadonlySet<string>> = {
+  env: new Set(['-u', '--unset', '-C', '--chdir', '-S', '--split-string']),
+  sudo: new Set(['-u', '-g', '-C', '-h', '-p', '-r', '-t', '-U', '-D', '-T']),
+  doas: new Set(['-u', '-C']),
+  exec: new Set(['-a']),
+  nice: new Set(['-n']),
+  xargs: new Set(['-I', '-n', '-P', '-L', '-s', '-E', '-d', '-a', '-J']),
+  command: new Set(),
+  nohup: new Set(),
+};
+
+/**
+ * `words` with the wrappers that only run the next command removed, so `env FOO=1 sudo git
+ * commit` reads as `git commit`. A wrapper that looks a command up instead of running it,
+ * such as `command -v`, is left as it is.
+ */
+function unwrapCommand(words: string[]): string[] {
+  let rest = words;
+  for (;;) {
+    const [program = '', ...args] = rest;
+    const valueOptions = WRAPPER_VALUE_OPTIONS[basename(program)];
+    if (valueOptions === undefined) return rest;
+    let index = 0;
+    while (index < args.length) {
+      const arg = args[index] ?? '';
+      if (arg === '--') {
+        index++;
+        break;
+      }
+      const isEnvAssignment = program === 'env' && ASSIGNMENT_RE.test(arg);
+      if (!arg.startsWith('-') && !isEnvAssignment) break;
+      index += valueOptions.has(arg) ? 2 : 1;
+      if (program === 'command' && /^-[vV]/.test(arg)) return rest;
+    }
+    const inner = commandWordsOf(args.slice(index));
+    if (inner.length === 0) return rest;
+    rest = inner;
+  }
+}
+
 /** One word as a single space-free token, so the segment rules see its boundaries. */
 function segmentWord(word: string): string {
   return word === '' ? "''" : word.replace(WORD_BREAK_RE, '_');
@@ -691,14 +814,10 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'commit.gpgsign',
 ]);
 const UNRECOGNIZED_TEXT_RE = /\$\(|`|GIT_|--git-dir|--work-tree/;
-const LEADING_CD_RE = /^\s*cd\s+(\S+)\s*&&([\s\S]*)$/;
-const DIRECTORY_CHANGE_RE =
-  /(?:^|[\s;&|(){}"'])(?:cd|pushd|popd)(?=$|[\s;&|(){}"'])/;
+const DIRECTORY_CHANGE_WORDS = new Set(['cd', 'pushd', 'popd']);
 // No quotes, `$`, `~`, globs, or backslashes, so the shell cannot expand it into another path.
 const PLAIN_ABSOLUTE_PATH_RE = /^\/[\w./@+,%=:-]*$/;
 const SUBCOMMAND_RE = /^[a-z][a-z-]*$/;
-const SEGMENT_SEPARATOR_RE = /[\n;&|]+/;
-const SEGMENT_PREFIX_RE = /^[\s({!"']+/;
 
 interface ProjectIdentity {
   dir: string;
@@ -707,8 +826,12 @@ interface ProjectIdentity {
 }
 
 /** Whether `cmd` names exactly one target and that target is a throwaway fixture repo. */
-function isThrowawayCommand(cmd: string, context: ThrowawayContext): boolean {
-  const target = targetOf(cmd);
+function isThrowawayCommand(
+  cmd: string,
+  tokenized: TokenizedCommand,
+  context: ThrowawayContext,
+): boolean {
+  const target = targetOf(cmd, tokenized);
   if (!target || !context.projectDir) return false;
   try {
     return isThrowawayRepo(target, context.projectDir, context.tempRoots);
@@ -719,23 +842,33 @@ function isThrowawayCommand(cmd: string, context: ThrowawayContext): boolean {
 
 /**
  * The one directory every git call in `cmd` runs in, from a leading `cd <path> &&` or from
- * the same `-C <path>` on every git call. Null for any form the resolver does not recognize.
+ * the same `-C <path>` on every git call. Reads the commands from the same tokenizer as the
+ * guard rules, so a separator inside a quote is data. Null for any form the resolver does
+ * not recognize.
  */
-function targetOf(cmd: string): string | null {
-  if (UNRECOGNIZED_TEXT_RE.test(cmd)) return null;
-  const leadingCd = LEADING_CD_RE.exec(cmd);
-  const cdTarget = leadingCd?.[1];
-  const rest = leadingCd ? (leadingCd[2] ?? '') : cmd;
-  if (cdTarget !== undefined && !PLAIN_ABSOLUTE_PATH_RE.test(cdTarget)) {
+function targetOf(cmd: string, tokenized: TokenizedCommand): string | null {
+  if (UNRECOGNIZED_TEXT_RE.test(cmd) || !tokenized.isClean) return null;
+  const [first, ...later] = tokenized.segments;
+  if (
+    first === undefined ||
+    tokenized.segments.some((segment) => segment.isNested)
+  ) {
     return null;
   }
-  if (DIRECTORY_CHANGE_RE.test(rest)) return null;
+  const isLeadingCd = first.words[0] === 'cd' && first.separator === '&&';
+  const cdTarget = isLeadingCd ? first.words[1] : undefined;
+  if (isLeadingCd && !isPlainCdTarget(first.words, cdTarget)) return null;
+  const rest = isLeadingCd ? later : tokenized.segments;
+  if (
+    rest.some((segment) => DIRECTORY_CHANGE_WORDS.has(segment.words[0] ?? ''))
+  ) {
+    return null;
+  }
 
   const cTargets = new Set<string>();
-  for (const segment of rest.split(SEGMENT_SEPARATOR_RE)) {
-    const words = segment.replace(SEGMENT_PREFIX_RE, '').split(/\s+/);
-    if (words[0] !== 'git') continue;
-    const invocation = gitInvocationOf(words);
+  for (const segment of rest) {
+    if (segment.words[0] !== 'git') continue;
+    const invocation = gitInvocationOf(segment.words);
     if (!invocation) return null;
     const hasDashCTarget = invocation.cTarget !== undefined;
     if (hasDashCTarget === (cdTarget !== undefined)) return null;
@@ -743,6 +876,17 @@ function targetOf(cmd: string): string | null {
   }
   if (cdTarget !== undefined) return cdTarget;
   return cTargets.size === 1 ? ([...cTargets][0] ?? null) : null;
+}
+
+function isPlainCdTarget(
+  words: string[],
+  target: string | undefined,
+): target is string {
+  return (
+    words.length === 2 &&
+    target !== undefined &&
+    PLAIN_ABSOLUTE_PATH_RE.test(target)
+  );
 }
 
 /**
@@ -966,10 +1110,23 @@ const REDIRECT_RE = new RegExp(
  * The stderr message refusing `cmd` under the subagent write gate, or null when the
  * command cannot write a ledger or a changeset.
  *
- * Every check here is a regex over one string, so the overwhelming majority of Bash calls
- * (which are not mutating) are answered before the payload's identity is looked at.
+ * The checks run over the raw command and over each tokenized segment, so a wrapper such as
+ * `env` or `sudo`, a substitution, or `bash -c` cannot hide a ledger or changeset write. The
+ * overwhelming majority of Bash calls are answered before the payload's identity is looked at.
  */
 export function writeGateRefusalFor(cmd: string): string | null {
+  const texts = [
+    cmd,
+    ...tokenizeCommand(cmd).segments.map((segment) => segment.text),
+  ];
+  for (const text of texts) {
+    const refusal = writeGateRefusalIn(text);
+    if (refusal) return refusal;
+  }
+  return null;
+}
+
+function writeGateRefusalIn(cmd: string): string | null {
   const mutatingMatch =
     cmd.match(BACKLOG_MUTATING_RE) ?? cmd.match(DECISION_MUTATING_RE);
   if (mutatingMatch) {
@@ -994,6 +1151,160 @@ export function writeGateRefusalFor(cmd: string): string | null {
     );
   }
 
+  return null;
+}
+
+/**
+ * Where the mod guard looks for mods. This and the detection below mirror `guard-mods.mts`,
+ * since `docs/payload.md` provides no way for one payload script to import another.
+ */
+export interface ModLocations {
+  configDir: string;
+  pluginDirs: string[];
+}
+
+// Claude Code prompts for a write to a mod directory in these modes, so the user decides.
+const MOD_PROMPTED_MODES = new Set(['default', 'acceptEdits']);
+// Programs whose last operand is the path they write, with each source landing inside it when it is a directory.
+const COPY_PROGRAMS = new Set(['cp', 'mv', 'install', 'ln']);
+const REDIRECTION_WORD_RE = /^(?:\d+|&)?(?:>>?|>\||>&|<<<|<&|<)/;
+const HOME_PREFIX_RE = /^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/;
+
+/** The mod locations `env` names, defaulting the config directory to `~/.claude`. */
+function modLocationsFrom(env: NodeJS.ProcessEnv): ModLocations {
+  const configDir = env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+  const pluginDirs = (env.CLAUDE_CODE_PLUGIN_DIRS ?? '')
+    .split(delimiter)
+    .filter((dir) => dir !== '');
+  return { configDir, pluginDirs };
+}
+
+/** `path` with every symlink followed, a missing tail appended to its deepest existing ancestor. */
+function realPathOf(path: string): string {
+  const missingTail: string[] = [];
+  let current = path;
+  for (;;) {
+    try {
+      return join(realpathSync(current), ...missingTail);
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return path;
+      missingTail.unshift(basename(current));
+      current = parent;
+    }
+  }
+}
+
+function isInsideDir(dir: string, target: string): boolean {
+  const relativePath = relative(dir, target);
+  return (
+    relativePath === '' ||
+    (!relativePath.startsWith('..') && !isAbsolute(relativePath))
+  );
+}
+
+function declaresModules(hooksJson: string): boolean {
+  try {
+    const parsed = JSON.parse(readFileSync(hooksJson, 'utf8')) as {
+      modules?: unknown;
+    };
+    return Array.isArray(parsed.modules);
+  } catch {
+    return false;
+  }
+}
+
+/** The nearest ancestor of `target` laid out as a mod, or null when none is. */
+function enclosingModDir(target: string): string | null {
+  let dir = dirname(target);
+  for (;;) {
+    if (
+      existsSync(join(dir, '.claude-plugin', 'plugin.json')) &&
+      declaresModules(join(dir, 'hooks', 'hooks.json'))
+    ) {
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/** The mod directory `target` resolves into, or null when it resolves into none. */
+function modDirHolding(target: string, locations: ModLocations): string | null {
+  const roots = [
+    join(locations.configDir, 'dev-mods'),
+    ...locations.pluginDirs,
+  ];
+  const match = roots.find((root) => isInsideDir(realPathOf(root), target));
+  return match ?? enclosingModDir(target);
+}
+
+/** `words` without their redirection operators and the words those operators take. */
+function operandsOf(words: string[]): string[] {
+  const operands: string[] = [];
+  for (let index = 0; index < words.length; index++) {
+    const word = words[index] ?? '';
+    const redirection = REDIRECTION_WORD_RE.exec(word);
+    if (redirection === null) operands.push(word);
+    else if (redirection[0] === word) index++;
+  }
+  return operands.filter((operand) => !operand.startsWith('-'));
+}
+
+/** The paths one simple command writes: its redirection targets, `tee`'s files, a copy's destination. */
+function writeTargetsOf(segment: CommandSegment): string[] {
+  const [program = '', ...rest] = segment.words;
+  const name = basename(program);
+  if (name === 'tee') return [...segment.redirectTargets, ...operandsOf(rest)];
+  if (!COPY_PROGRAMS.has(name)) return segment.redirectTargets;
+  const operands = operandsOf(rest);
+  const destination = operands[operands.length - 1];
+  const sources = operands.slice(0, -1);
+  if (sources.length === 0 || destination === undefined) {
+    return segment.redirectTargets;
+  }
+  const landings = sources.map((source) => join(destination, basename(source)));
+  return [...segment.redirectTargets, destination, ...landings];
+}
+
+function expandHome(path: string): string {
+  return path.replace(HOME_PREFIX_RE, () => homedir());
+}
+
+/**
+ * The stderr message refusing a Bash command that writes into a Claude Code mod directory,
+ * or null when it writes into none or `permissionMode` puts each such write to the user. The
+ * same rule `guard-mods` applies to Write and Edit, read from the command's redirections,
+ * `tee`, and `cp`/`mv`/`install`/`ln`, with each `cd` before them followed.
+ */
+export function modWriteRefusalFor(
+  cmd: string,
+  permissionMode: string | undefined,
+  cwd: string,
+  locations: ModLocations,
+): string | null {
+  if (permissionMode && MOD_PROMPTED_MODES.has(permissionMode)) return null;
+  let base = cwd;
+  for (const segment of tokenizeCommand(cmd).segments) {
+    const [program, directory] = segment.words;
+    if (program === 'cd') {
+      if (directory !== '-') base = resolve(base, expandHome(directory ?? '~'));
+      continue;
+    }
+    for (const path of writeTargetsOf(segment)) {
+      const target = realPathOf(resolve(base, expandHome(path)));
+      const modDir = modDirHolding(target, locations);
+      if (!modDir) continue;
+      return (
+        `houserules mod guard: ${target} is inside the Claude Code mod directory ${modDir}. ` +
+        `A mod loads without asking in ${permissionMode ?? 'this'} mode and runs ahead of every ` +
+        `PreToolUse hook, so this command was not run. Tell the user what the mod should do ` +
+        `and let them write it, or ask them to switch to default or acceptEdits mode, where ` +
+        `each mod file write is put to them.\n`
+      );
+    }
+  }
   return null;
 }
 
@@ -1048,6 +1359,23 @@ function runDiagnose(transcriptPath: string): never {
   process.exit(sidechainDetected ? 0 : 1);
 }
 
+/** The mod-dir refusal for `cmd`, or null. Fails open, as guard-mods does on any error. */
+function modRefusalOrNull(
+  cmd: string,
+  input: BashPayload | null | undefined,
+): string | null {
+  try {
+    return modWriteRefusalFor(
+      cmd,
+      input?.permission_mode,
+      input?.cwd ?? process.cwd(),
+      modLocationsFrom(process.env),
+    );
+  } catch {
+    return null;
+  }
+}
+
 function main(): void {
   if (process.argv[2] === '--diagnose') {
     const transcriptPath = process.argv[3];
@@ -1069,6 +1397,12 @@ function main(): void {
   });
   if (guardRefusal) {
     process.stderr.write(guardRefusal);
+    process.exit(2);
+  }
+
+  const modRefusal = modRefusalOrNull(cmd, input);
+  if (modRefusal) {
+    process.stderr.write(modRefusal);
     process.exit(2);
   }
 

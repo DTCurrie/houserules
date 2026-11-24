@@ -10,6 +10,11 @@
  *   compact [--dry-run]    # shrink the local ledgers to what a push still owes
  *   status                 # print the resolved project per ledger, and gate state
  *   reconcile [--enqueue | --drop]  # find and repair entries orphaned on a rendered surface
+ *   release <id>           # clear the hold the SessionEnd hook put on one entry
+ *
+ * status also lists each held entry, one the SessionEnd hook kept out of the push because a row
+ * for it was written in a turn where the user rejected a tool use. push skips held entries.
+ * release needs no token and no network.
  *
  * bootstrap, push, and backfill need the local enable token (<ledger dir>/.projects.json) and
  * maintain or admin on the repository. pull needs neither. status prints the current gate state.
@@ -95,8 +100,16 @@ import {
   resolveMarkSupersededItemId,
   summarizeQueue,
   syncedRecord,
+  withoutHeldEntries,
 } from './lib/push-queue.mjs';
 import type { LedgerRecord, PushOp } from './lib/push-queue.mjs';
+import {
+  heldIds,
+  holdsPath,
+  readHolds,
+  releaseHold,
+  writeHolds,
+} from './lib/sync-holds.mjs';
 import { recordPushOutcomeOnExit } from './lib/push-outcome.mjs';
 import type { PendingCounts } from './lib/push-outcome.mjs';
 import {
@@ -134,6 +147,7 @@ const REPO_ROOT = requireRepoRoot();
 const CONFIG = loadConfigSafe();
 const LEDGER_DIRECTORY = ledgerDir(REPO_ROOT, CONFIG.ledgers?.dir);
 const LEDGER_KINDS: readonly LedgerKind[] = ['backlog', 'decisions'];
+const HOLDS_PATH = holdsPath(REPO_ROOT);
 
 function autoSyncSetting(): boolean | undefined {
   return (CONFIG.projects as { autoSync?: boolean } | undefined)?.autoSync;
@@ -658,13 +672,19 @@ function readDecodedLog(path: string): LedgerRecord[] {
  * The index is what lets an operation land on an entry that already left the queue: a supersede
  * needs the target's draft item id, an amend needs the same, and a close needs the issue number.
  * Without it, emptying the queue would silently make every synced entry uneditable.
+ *
+ * Leaves out every entry the `SessionEnd` hook held, the same filter the hook's own empty check
+ * applies, so the two never disagree about what is pending.
  */
 function readPushQueue(): PushOp[] {
-  return buildPushQueue(
-    readDecodedLog(backlogLedgerPath()),
-    readDecodedLog(decisionsLedgerPath()),
-    loadIndex(LEDGER_DIRECTORY, 'backlog')?.entries ?? [],
-    loadIndex(LEDGER_DIRECTORY, 'decisions')?.entries ?? [],
+  return withoutHeldEntries(
+    buildPushQueue(
+      readDecodedLog(backlogLedgerPath()),
+      readDecodedLog(decisionsLedgerPath()),
+      loadIndex(LEDGER_DIRECTORY, 'backlog')?.entries ?? [],
+      loadIndex(LEDGER_DIRECTORY, 'decisions')?.entries ?? [],
+    ),
+    heldIds(readHolds(HOLDS_PATH)),
   );
 }
 
@@ -950,10 +970,40 @@ function printClosedUpstream(): void {
   );
 }
 
+/** One line per held entry, then the command that releases one, or nothing when none is held. */
+function printHeldEntries(): void {
+  const held = Object.entries(readHolds(HOLDS_PATH).held);
+  if (held.length === 0) return;
+  for (const [id, ts] of held)
+    console.log(`held: ${id}  (row written ${ts} in a rejected turn)`);
+  console.log(
+    'A push skips each one. Release one with `projects-sync.mjs release <id>`.',
+  );
+}
+
+/**
+ * Clears the hold on `id`, so the next push sends it. Local only: no preflight and no gate,
+ * since a hold is a local file and releasing one writes nothing to the board.
+ */
+function runRelease(id: string | undefined): void {
+  if (!id) {
+    console.error('release needs an entry id: projects-sync.mjs release <id>');
+    process.exit(1);
+  }
+  const released = releaseHold(readHolds(HOLDS_PATH), id);
+  if (!released) {
+    console.error(`${id} is not held.`);
+    process.exit(1);
+  }
+  writeHolds(HOLDS_PATH, released);
+  console.log(`released ${id}. The next push sends it.`);
+}
+
 function runStatus(): void {
   const { repo } = preflight();
   printGateState();
   printPendingCounts();
+  printHeldEntries();
 
   const resolved = readEnableToken();
   if (!resolved) {
@@ -2059,6 +2109,7 @@ function usage(): void {
       '  projects-sync.mjs pull [--dry-run]',
       '  projects-sync.mjs status',
       '  projects-sync.mjs reconcile [--enqueue | --drop]',
+      '  projects-sync.mjs release <id>',
       '',
       'bootstrap creates or adopts one GitHub Project per (backlog, decisions),',
       'and writes the resolved project numbers to <ledger dir>/.projects.json. That file',
@@ -2079,6 +2130,9 @@ function usage(): void {
       'the index, so no other command can see them. With no flag it only lists them, and exits',
       '1 when it finds any. --enqueue appends each one back to its ledger queue for the next',
       'push. --drop re-renders the surfaces from the queue and index, removing them.',
+      'status also lists the entries the SessionEnd hook held, because a row for them was',
+      'written in a turn where the user rejected a tool use. push skips a held entry.',
+      'release clears one hold, so the next push sends that entry. It needs no network.',
       '--dry-run runs every read but prints each planned step instead of executing it.',
     ].join('\n'),
   );
@@ -2117,6 +2171,10 @@ switch (action) {
 
   case 'reconcile':
     runReconcile(argv.includes('--enqueue'), argv.includes('--drop'));
+    break;
+
+  case 'release':
+    runRelease(argv.filter((arg) => arg !== '--dry-run')[1]);
     break;
 
   default:

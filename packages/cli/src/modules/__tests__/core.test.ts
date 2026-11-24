@@ -32,6 +32,56 @@ describe('core plan, the merged Bash gate', () => {
   });
 });
 
+describe('core plan, the mod-write guard', () => {
+  it('wires guard-mods.mjs as a PreToolUse hook matching Write, Edit and MultiEdit', () => {
+    const matchers = plan(makeCtx(), makeAnswers())
+      .filter(
+        (a): a is Extract<typeof a, { kind: 'merge-settings' }> =>
+          a.kind === 'merge-settings',
+      )
+      .flatMap((a) => a.fragment.hooks?.PreToolUse ?? [])
+      .filter((group) =>
+        group.hooks.some((hook) => hook.command.includes('guard-mods.mjs')),
+      )
+      .map((group) => group.matcher);
+
+    expect(matchers).toEqual(['Write|Edit|MultiEdit']);
+  });
+
+  it('copies guard-mods.mjs into the install', () => {
+    const copied = plan(makeCtx(), makeAnswers()).filter(
+      (a) => a.kind === 'copy' && a.dest.endsWith('scripts/guard-mods.mjs'),
+    );
+
+    expect(copied).toHaveLength(1);
+  });
+});
+
+describe('core plan, the manual-mode notice', () => {
+  function noticeMatchers(event: 'PreToolUse' | 'UserPromptSubmit') {
+    return plan(makeCtx(), makeAnswers())
+      .filter(
+        (a): a is Extract<typeof a, { kind: 'merge-settings' }> =>
+          a.kind === 'merge-settings',
+      )
+      .flatMap((a) => a.fragment.hooks?.[event] ?? [])
+      .filter((group) =>
+        group.hooks.some((hook) =>
+          hook.command.includes('manual-mode-notice.mjs'),
+        ),
+      )
+      .map((group) => group.matcher);
+  }
+
+  it('wires manual-mode-notice.mjs into PreToolUse matching only Skill', () => {
+    expect(noticeMatchers('PreToolUse')).toEqual(['Skill']);
+  });
+
+  it('keeps manual-mode-notice.mjs wired into UserPromptSubmit', () => {
+    expect(noticeMatchers('UserPromptSubmit')).toHaveLength(1);
+  });
+});
+
 describe('core plan, hook failure mode', () => {
   function hookFor(script: string): Record<string, unknown> | undefined {
     return plan(makeCtx(), makeAnswers())
@@ -46,6 +96,10 @@ describe('core plan, hook failure mode', () => {
 
   it('fails closed on the guard-bash hook', () => {
     expect(hookFor('guard-bash.mjs')?.onFailure).toBe('block');
+  });
+
+  it('fails closed on the guard-mods hook', () => {
+    expect(hookFor('guard-mods.mjs')?.onFailure).toBe('block');
   });
 
   it('leaves the ledger-inject hook without onFailure', () => {

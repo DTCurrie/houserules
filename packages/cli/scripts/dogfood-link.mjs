@@ -463,6 +463,65 @@ function sameBytes(a, b) {
   return a.length === b.length && a.equals(b);
 }
 
+/** Every `.claude/`-relative payload entry under the link surfaces, mapped to its sole owning package. */
+function collectOwners() {
+  const owners = new Map();
+  for (const surface of LINK_SURFACES) {
+    for (const [rel, pkg] of resolveOwners(
+      'payload',
+      surface,
+      payloadPackages(),
+    )) {
+      owners.set(rel, pkg);
+    }
+  }
+  return owners;
+}
+
+/**
+ * Relinks one manifest destination when it is byte-identical to its payload source.
+ *
+ * @returns `{ status: 'relinked' | 'alreadyLive' }`, or `{ status: 'kept', reason }` when the
+ *   destination stays a real file.
+ */
+function relinkDestination(dest, relPath, owners) {
+  const fullDest = join(repoRoot, dest);
+  // A manifest entry whose file is gone is a drift finding for `doctor`, not a reason to
+  // abort the relink pass. lstatSync would throw ENOENT and take the whole run with it.
+  if (!existsSync(fullDest)) {
+    return { status: 'kept', reason: 'manifest destination missing from disk' };
+  }
+  if (lstatSync(fullDest).isSymbolicLink()) return { status: 'alreadyLive' };
+
+  const source = findPayloadSource(relPath, owners);
+  if (!source) {
+    return {
+      status: 'kept',
+      reason: 'no single payload source owns this path',
+    };
+  }
+  if (!existsSync(source.srcPath)) {
+    return {
+      status: 'kept',
+      reason: `payload source missing: ${source.srcPath}`,
+    };
+  }
+
+  const destBytes = readFileSync(fullDest);
+  const srcBytes = readFileSync(source.srcPath);
+  if (sameBytes(destBytes, srcBytes)) {
+    const up = '../'.repeat(relPath.split('/').length);
+    rmSync(fullDest);
+    symlinkSync(`${up}packages/${source.pkg}/payload/${relPath}`, fullDest);
+    return { status: 'relinked' };
+  }
+
+  const reason = destBytes.includes(srcBytes)
+    ? 'appendBody routing tail appended (body action, kit-owned frontmatter split)'
+    : 'content differs from its payload source (locally edited, or frontmatter customized)';
+  return { status: 'kept', reason };
+}
+
 /**
  * Runs AFTER apply, over what `.claude/houserules.manifest.json` says the install just wrote.
  * Swaps a destination back to a symlink at its payload source when the two are byte-identical
@@ -477,16 +536,7 @@ function relink() {
   if (!existsSync(manifestPath)) return;
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 
-  const owners = new Map();
-  for (const surface of LINK_SURFACES) {
-    for (const [rel, pkg] of resolveOwners(
-      'payload',
-      surface,
-      payloadPackages(),
-    )) {
-      owners.set(rel, pkg);
-    }
-  }
+  const owners = collectOwners();
 
   let relinked = 0;
   let alreadyLive = 0;
@@ -503,42 +553,10 @@ function relink() {
     const relPath = dest.slice('.claude/'.length);
     if (!LINK_SURFACES.includes(relPath.split('/')[0])) continue;
 
-    const fullDest = join(repoRoot, dest);
-    // A manifest entry whose file is gone is a drift finding for `doctor`, not a reason to
-    // abort the relink pass. lstatSync would throw ENOENT and take the whole run with it.
-    if (!existsSync(fullDest)) {
-      kept.push({ dest, reason: 'manifest destination missing from disk' });
-      continue;
-    }
-    if (lstatSync(fullDest).isSymbolicLink()) {
-      alreadyLive++;
-      continue;
-    }
-
-    const source = findPayloadSource(relPath, owners);
-    if (!source) {
-      kept.push({ dest, reason: 'no single payload source owns this path' });
-      continue;
-    }
-    if (!existsSync(source.srcPath)) {
-      kept.push({ dest, reason: `payload source missing: ${source.srcPath}` });
-      continue;
-    }
-
-    const destBytes = readFileSync(fullDest);
-    const srcBytes = readFileSync(source.srcPath);
-    if (sameBytes(destBytes, srcBytes)) {
-      const up = '../'.repeat(relPath.split('/').length);
-      rmSync(fullDest);
-      symlinkSync(`${up}packages/${source.pkg}/payload/${relPath}`, fullDest);
-      relinked++;
-      continue;
-    }
-
-    const reason = destBytes.includes(srcBytes)
-      ? 'appendBody routing tail appended (body action, kit-owned frontmatter split)'
-      : 'content differs from its payload source (locally edited, or frontmatter customized)';
-    kept.push({ dest, reason });
+    const outcome = relinkDestination(dest, relPath, owners);
+    if (outcome.status === 'relinked') relinked++;
+    else if (outcome.status === 'alreadyLive') alreadyLive++;
+    else kept.push({ dest, reason: outcome.reason });
   }
 
   console.log(
