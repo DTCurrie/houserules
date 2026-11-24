@@ -47,13 +47,13 @@ const SCOPE_TIMEOUT_MS = 300_000;
 // `off` runs this repo's whole-tree scripts, `on` the path-taking ones, and `on-dot` the whole-tree
 // scripts with `passPaths` on, which is the widening the schema warns of.
 const SCOPE_ARMS = [
-  { name: 'off', commands: ['lint:fix', 'format'], passPaths: false },
+  { name: 'off', commands: ['lint:fix', 'format:fix'], passPaths: false },
   {
     name: 'on',
     commands: ['lint:fix:paths', 'format:paths'],
     passPaths: true,
   },
-  { name: 'on-dot', commands: ['lint:fix', 'format'], passPaths: true },
+  { name: 'on-dot', commands: ['lint:fix', 'format:fix'], passPaths: true },
 ];
 
 const SCOPE_PATH_SCRIPTS = {

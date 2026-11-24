@@ -212,7 +212,10 @@ function makeFakeBuild(dir, fixerSource) {
     join(root, 'package.json'),
     JSON.stringify({
       name: 'fake',
-      scripts: { 'lint:fix': 'eslint . --fix', format: 'prettier --write .' },
+      scripts: {
+        'lint:fix': 'eslint . --fix',
+        'format:fix': 'prettier --write .',
+      },
     }),
   );
   writeFileEnsuringDirectory(
@@ -393,13 +396,13 @@ describe('scope cases', () => {
     });
 
     assert.deepEqual(observed, [
-      ['stop-lint-format-fix-scope-off', ['lint:fix', 'format'], false],
+      ['stop-lint-format-fix-scope-off', ['lint:fix', 'format:fix'], false],
       [
         'stop-lint-format-fix-scope-on',
         ['lint:fix:paths', 'format:paths'],
         true,
       ],
-      ['stop-lint-format-fix-scope-on-dot', ['lint:fix', 'format'], true],
+      ['stop-lint-format-fix-scope-on-dot', ['lint:fix', 'format:fix'], true],
     ]);
   });
 

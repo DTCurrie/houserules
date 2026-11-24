@@ -562,7 +562,7 @@ describe('run preflight', () => {
       EVAL_STUB_KEY_SOURCE: 'none',
     });
     assert.equal(result.status, EXIT_FAILED, result.stderr);
-    assert.match(result.stdout, /^probe a: fail, .*apiKeySource none$/m);
+    assert.match(result.stdout, /^probe a: fail, .*billed the API key false$/m);
     assert.match(result.stdout, /^probe b: fail, /m);
   });
 });
