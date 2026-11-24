@@ -1,5 +1,12 @@
 # @houserules/plugin-github
 
+## 0.2.8
+
+### Patch Changes
+
+- 7ac34e1: Payload scripts share one `repoRoot`, and `requireRepoRoot` refuses outside a git work tree.
+- 7ac34e1: Only one `projects-sync` run can take over a stale push lock.
+
 ## 0.2.7
 
 ### Patch Changes

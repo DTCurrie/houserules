@@ -1,5 +1,11 @@
 # @houserules/test
 
+## 0.2.0
+
+### Minor Changes
+
+- 7ac34e1: Add `hookWiringOf` and `dispatchedScriptsFor` installed-tree helpers for dispatched hooks.
+
 ## 0.1.4
 
 ### Patch Changes

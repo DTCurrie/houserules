@@ -1,5 +1,11 @@
 # @houserules/plugin-testing
 
+## 0.3.6
+
+### Patch Changes
+
+- 7ac34e1: Add @houserules/plugin-wireit, and move wireit specifics out of core scripts into plugin-written extension fragments.
+
 ## 0.3.5
 
 ### Patch Changes

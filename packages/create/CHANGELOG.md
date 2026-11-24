@@ -1,5 +1,30 @@
 # @houserules/create
 
+## 0.1.9
+
+### Patch Changes
+
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+  - @houserules/cli@0.18.0
+
 ## 0.1.8
 
 ### Patch Changes

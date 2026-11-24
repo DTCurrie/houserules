@@ -1,5 +1,16 @@
 # @houserules/payload
 
+## 0.8.0
+
+### Minor Changes
+
+- 7ac34e1: Add @houserules/plugin-wireit, and move wireit specifics out of core scripts into plugin-written extension fragments.
+
+### Patch Changes
+
+- 7ac34e1: Payload scripts share one `repoRoot`, and `requireRepoRoot` refuses outside a git work tree.
+- 7ac34e1: Add `verify.rootCommands`, root scripts that `verify-changed` runs after every package job.
+
 ## 0.7.0
 
 ### Minor Changes

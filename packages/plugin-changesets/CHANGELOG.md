@@ -1,5 +1,16 @@
 # @houserules/plugin-changesets
 
+## 0.6.0
+
+### Minor Changes
+
+- 7ac34e1: Add @houserules/plugin-wireit, and move wireit specifics out of core scripts into plugin-written extension fragments.
+
+### Patch Changes
+
+- 7ac34e1: Payload scripts share one `repoRoot`, and `requireRepoRoot` refuses outside a git work tree.
+- 7ac34e1: The changeset gate matches `ignore` with changesets' own matcher and treats `main` and `bin` files as shipped.
+
 ## 0.5.1
 
 ### Patch Changes
