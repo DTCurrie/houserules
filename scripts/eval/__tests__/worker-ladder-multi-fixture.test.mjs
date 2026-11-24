@@ -17,6 +17,10 @@ const FIXTURE = join(
 const ARMS = ['haiku', 'sonnet', 'opus'];
 const ACCEPTANCE =
   'node --test test/invoice.test.js test/invoice-format.test.js';
+const ACCEPTANCE_SPEC = ACCEPTANCE.replace(
+  'node --test',
+  'node --test --test-reporter=spec',
+);
 const HIDDEN = 'node --test --test-reporter=tap test/invoice.hidden.test.js';
 const FAILING_AT_START = [
   'prints the receipt for a discounted two-line order',
@@ -131,7 +135,7 @@ describe('worker-ladder-multi fixture', () => {
   });
 
   it('fails the visible acceptance on the starting repo with assertion errors, not a missing module', () => {
-    const { status, output } = run(sampleRoot(null), ACCEPTANCE);
+    const { status, output } = run(sampleRoot(null), ACCEPTANCE_SPEC);
 
     assert.equal(status, 1, output);
     assert.deepEqual(
