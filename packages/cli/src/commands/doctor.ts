@@ -96,7 +96,7 @@ export async function doctor(dir: string, flags: Flags): Promise<number> {
   // last because under `--fix` it writes, and every check before it must see the tree
   // as the user left it.
   const checks: CheckResult[] = [
-    checkResidentSurface(root),
+    checkResidentSurface(root, { repoTop: ctx.git.top ?? root }),
     checkInstructionsFile(root, ctx),
     checkAgentToolScope(root),
     checkWorkerToolCoverage(root),

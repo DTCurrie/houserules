@@ -16,9 +16,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  HOOK_RUNS_LOG_PATH,
+  HOOK_RUNS_ROTATED_PATH,
+} from '../../hook-runs-log.js';
 import { useInstalledRepo } from '#test/repo';
 import { runIn } from '#test/run';
 import {
+  dispatchedScriptsFor,
   editHouseConfig,
   hookCommandsFor,
   manifestOf,
@@ -67,11 +72,17 @@ const RUNS_BUILT_CLI = `#!/bin/sh\nexec node "${CLI_JS}" "$@"\n`;
 const EXITS_NON_ZERO = '#!/bin/sh\necho "cli crashed" >&2\nexit 3\n';
 
 function installedFixture(): string {
-  const root = useInstalledRepo('npm-single', { modules: 'code-cleanliness' });
+  const root = useInstalledRepo('npm-single', {
+    modules: 'code-cleanliness,-session-context',
+  });
   const { modules } = manifestOf(root);
   editHouseConfig(root, (config) => {
     config.modules = modules;
   });
+  expect(
+    dispatchedScriptsFor(root, 'SessionStart'),
+    'payload-sync is dispatched on SessionStart',
+  ).toContain('payload-sync.mjs');
   return root;
 }
 
@@ -98,10 +109,13 @@ function nodeOnlyBin(): string {
 }
 
 function syncHookCommand(root: string): string {
-  const command = hookCommandsFor(settingsOf(root), 'SessionStart').find((c) =>
-    c.includes('payload-sync.mjs'),
+  const command = hookCommandsFor(settingsOf(root), 'SessionStart').find(
+    (c) => c.includes('hook-dispatch.mjs') && c.includes('update --sync'),
   );
-  if (!command) throw new Error('no SessionStart hook names payload-sync.mjs');
+  if (!command)
+    throw new Error(
+      'no SessionStart dispatcher entry carries the bootstrap fallback',
+    );
   return command;
 }
 
@@ -109,6 +123,7 @@ function runSyncHook(root: string, extraPathDirs: string[] = []) {
   const result = spawnSync('/bin/sh', ['-c', syncHookCommand(root)], {
     cwd: root,
     encoding: 'utf8',
+    input: JSON.stringify({ hook_event_name: 'SessionStart' }),
     env: {
       PATH: [...extraPathDirs, nodeOnlyBin(), '/bin', '/usr/bin'].join(':'),
       HOME: scratchDir('hr-home-'),
@@ -123,6 +138,12 @@ function runSyncHook(root: string, extraPathDirs: string[] = []) {
   };
 }
 
+const DISPATCHER_RUN_LOGS = new Set([
+  HOOK_RUNS_LOG_PATH,
+  HOOK_RUNS_ROTATED_PATH,
+]);
+
+/** Every file under `root` as base64, leaving out git, dependencies, and the dispatcher's own run log. */
 function readTree(root: string): Record<string, string> {
   const out: Record<string, string> = {};
   const walk = (dir: string): void => {
@@ -130,8 +151,10 @@ function readTree(root: string): Record<string, string> {
       if (dir === root && (name === '.git' || name === 'node_modules'))
         continue;
       const full = join(dir, name);
+      const path = relative(root, full);
       if (statSync(full).isDirectory()) walk(full);
-      else out[relative(root, full)] = readFileSync(full).toString('base64');
+      else if (!DISPATCHER_RUN_LOGS.has(path))
+        out[path] = readFileSync(full).toString('base64');
     }
   };
   walk(root);

@@ -13,7 +13,9 @@ import { treeHash, useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, type RunResult } from '#test/run';
 import {
   allHookCommands,
+  dispatchedScriptsFor,
   editHouseConfig,
+  hookWiringOf,
   houseConfigPath,
   manifestOf,
   readJson,
@@ -402,6 +404,56 @@ describe('modules --disable', () => {
     expect(
       JSON.parse(readFileSync(join(root, '.claude/settings.json'), 'utf8')),
     ).toEqual(JSON.parse(enabled));
+  });
+
+  describe('an event whose last dispatched hook is withdrawn', () => {
+    it('drops that event’s dispatcher entry from settings.json and its key from the wiring', () => {
+      const regenRoot = useInstalledRepo('npm-single', { modules: 'regen' });
+      expect(
+        settingsOf(regenRoot).hooks?.PostToolUse,
+        'PostToolUse dispatcher present before the disable',
+      ).toHaveLength(1);
+      expect(dispatchedScriptsFor(regenRoot, 'PostToolUse')).toEqual([
+        'regen-on-edit.mjs',
+      ]);
+
+      const r = runCli(['modules', regenRoot, '--yes', '--disable', 'regen']);
+      expect(r.status, r.stderr).toBe(0);
+
+      expect(
+        settingsOf(regenRoot).hooks?.PostToolUse,
+        'PostToolUse dispatcher entry gone',
+      ).toBeUndefined();
+      expect(hookWiringOf(regenRoot).events.PostToolUse).toBeUndefined();
+    });
+
+    it('leaves the event’s dispatcher entry byte-identical while another hook remains', () => {
+      const sessionRoot = useInstalledRepo('npm-single', {
+        modules: 'debug-session',
+      });
+      expect(dispatchedScriptsFor(sessionRoot, 'SessionStart')).toContain(
+        'debug-session-check.mjs',
+      );
+      const before = JSON.stringify(
+        settingsOf(sessionRoot).hooks?.SessionStart,
+      );
+
+      const r = runCli([
+        'modules',
+        sessionRoot,
+        '--yes',
+        '--disable',
+        'debug-session',
+      ]);
+      expect(r.status, r.stderr).toBe(0);
+
+      expect(dispatchedScriptsFor(sessionRoot, 'SessionStart')).not.toContain(
+        'debug-session-check.mjs',
+      );
+      expect(JSON.stringify(settingsOf(sessionRoot).hooks?.SessionStart)).toBe(
+        before,
+      );
+    });
   });
 
   it('refuses to disable core', () => {

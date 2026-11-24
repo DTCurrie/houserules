@@ -1,0 +1,25 @@
+{
+  "modules": "plans,orchestrate",
+  "plugins": [],
+  "model": "opus",
+  "validityAgent": "plan-reviewer",
+  "collect": [".claude/plans"],
+  "arms": {
+    "before-p1": {
+      "prompt": "prompts/p1.txt",
+      "overlay": "overlays/before"
+    },
+    "after-p1": {
+      "prompt": "prompts/p1.txt",
+      "overlay": "overlays/after"
+    },
+    "before-p2": {
+      "prompt": "prompts/p2.txt",
+      "overlay": "overlays/before"
+    },
+    "after-p2": {
+      "prompt": "prompts/p2.txt",
+      "overlay": "overlays/after"
+    }
+  }
+}

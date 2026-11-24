@@ -249,6 +249,62 @@ function residentRows(documents: ReportDocument[]): Row[] {
   ];
 }
 
+// Families compared per document, slowest first.
+const TOP_FAMILIES = 5;
+const SECONDS_DIGITS = 2;
+
+const formatSeconds = (value: number) => value.toFixed(SECONDS_DIGITS);
+
+function topFamilies(doc: ReportDocument) {
+  return (doc.bashWall?.families ?? []).slice(0, TOP_FAMILIES);
+}
+
+function bashWallRows(documents: ReportDocument[]): Row[] {
+  const perDocument = documents.map(
+    (doc) =>
+      new Map(topFamilies(doc).map((wall) => [wall.family, wall.seconds])),
+  );
+  const names = [...new Set(perDocument.flatMap((map) => [...map.keys()]))];
+  return [
+    optionalRow('timed calls', documents, (doc) => doc.bashWall?.timed),
+    [
+      'seconds (listed families)',
+      ...documents.map((doc) =>
+        doc.bashWall
+          ? formatSeconds(
+              sum(doc.bashWall.families.map((wall) => wall.seconds)),
+            )
+          : MISSING,
+      ),
+    ],
+    ...names.sort().map((name): Row => [
+      `seconds: ${name}`,
+      ...perDocument.map((map) => {
+        const found = map.get(name);
+        return found === undefined ? MISSING : formatSeconds(found);
+      }),
+    ]),
+  ];
+}
+
+function kitVersionRows(documents: ReportDocument[]): Row[] {
+  return unionRows(
+    documents,
+    (doc) => {
+      const counts = new Map<string, number>();
+      for (const entry of doc.kitVersions?.rows ?? []) {
+        const label =
+          entry.source === 'recorded'
+            ? `${entry.version} (recorded)`
+            : entry.version;
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+      return counts;
+    },
+    (label) => `version ${label}`,
+  );
+}
+
 /** Renders the documents as one table per section, one value column per `meta.label`. */
 export function renderComparison(documents: ReportDocument[]): string[] {
   const headers = ['metric', ...documents.map((doc) => doc.meta.label)];
@@ -260,6 +316,8 @@ export function renderComparison(documents: ReportDocument[]): string[] {
     ['skill outcomes', outcomeRows(documents)],
     ['friction', frictionRows(documents)],
     ['resident context', residentRows(documents)],
+    ['bash wall', bashWallRows(documents)],
+    ['kit versions', kitVersionRows(documents)],
     [
       'artifact episodes',
       [

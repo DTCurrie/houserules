@@ -35,6 +35,7 @@
       "command": "tsc -p tsconfig.build.json && publint",
       "files": [
         "src/**/*.ts",
+        "package.json",
         "!src/**/__tests__/**",
         "tsconfig.build.json"
       ],
@@ -50,7 +51,8 @@
       "files": [
         "src/**/*.ts",
         "tsconfig.json",
-        "tsconfig.build.json"
+        "tsconfig.build.json",
+        "package.json"
       ],
       "output": [],
       "dependencies": [
@@ -65,7 +67,9 @@
       ],
       "files": [
         "src/**/*.ts",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "package.json",
+        "tsconfig.json"
       ],
       "output": []
     },

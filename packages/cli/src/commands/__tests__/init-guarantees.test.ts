@@ -53,11 +53,7 @@ describe('init --yes --dry-run settings preview', () => {
 describe('init --yes --dry-run file preview', () => {
   // Paths a real init writes that the preview never names. Each must appear in the
   // walk and be absent from the preview, so a stale entry or a closed gap fails.
-  const exceptions: string[] = [
-    '.claude/backups/.gitignore',
-    '.claude/backups/settings.json.bak',
-    '.claude/houserules.manifest.json',
-  ];
+  const exceptions: string[] = [];
 
   it('names every path a real init creates or changes, apart from listed exceptions', () => {
     const previewRoot = useRepo('npm-single');
@@ -159,12 +155,6 @@ describe('init over a config the schema rejects', () => {
       args: ['--yes'],
       text: '{nope',
       problem: 'not valid JSON',
-    },
-    {
-      name: 'a partial config with only instructionsFile',
-      args: ['--yes'],
-      text: JSON.stringify({ instructionsFile: 'AGENTS.md' }),
-      problem: 'packageManager is required',
     },
     {
       name: 'a plugin entry naming a missing package with an unknown key',

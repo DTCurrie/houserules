@@ -22,6 +22,8 @@ import {
 } from '../module-requires.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import {
+  HOOK_DISPATCH_SCRIPT,
+  isKitStockCommand,
   parseSettingsText,
   removeSettingsFragments,
   renderSettings,
@@ -30,9 +32,14 @@ import { apply } from '../apply.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import * as ui from '../ui.js';
 import type { Flags } from '../cli-contract.js';
-import type { HouseManifest } from '@houserules/api/internal';
+import type { HouseManifest, SettingsChange } from '@houserules/api/internal';
 import type { Ctx } from '../detect.js';
-import type { Answers } from '@houserules/api';
+import type {
+  Answers,
+  HookGroup,
+  Settings,
+  SettingsFragment,
+} from '@houserules/api';
 import type { PlanResult } from '../plan.js';
 import type { Registry, RegisteredModule } from '../plugin-registry.js';
 
@@ -246,6 +253,53 @@ async function reconfigureModules(
   return 0;
 }
 
+function withoutDispatcher(group: HookGroup): NonNullable<HookGroup['hooks']> {
+  return (group.hooks ?? []).filter(
+    (hook) => !isKitStockCommand(hook.command, HOOK_DISPATCH_SCRIPT),
+  );
+}
+
+/**
+ * Removes the dispatcher entry from every event no remaining fragment hooks, since the
+ * dispatcher then has nothing to run. An event that still has a hook is left byte-identical,
+ * and a user's own hook sharing a group with a dispatcher survives it.
+ */
+function dropEmptiedDispatchers(
+  settings: Settings,
+  remaining: SettingsFragment[],
+): { merged: Settings; changes: SettingsChange[] } {
+  const stillHooked = new Set(
+    remaining.flatMap((fragment) => Object.keys(fragment.hooks ?? {})),
+  );
+  const changes: SettingsChange[] = [];
+  const hooks: Record<string, HookGroup[]> = {};
+  for (const [event, groups] of Object.entries(settings.hooks ?? {})) {
+    if (stillHooked.has(event)) {
+      hooks[event] = groups;
+      continue;
+    }
+    const keptGroups: HookGroup[] = [];
+    for (const group of groups) {
+      const originalCount = (group.hooks ?? []).length;
+      const kept = withoutDispatcher(group);
+      if (kept.length === originalCount) {
+        keptGroups.push(group);
+        continue;
+      }
+      if (kept.length) keptGroups.push({ ...group, hooks: kept });
+      changes.push({
+        kind: 'remove-hook',
+        detail: `${event}${group.matcher ? `(${group.matcher})` : ''}: ${HOOK_DISPATCH_SCRIPT} (no hooks left)`,
+      });
+    }
+    if (keptGroups.length) hooks[event] = keptGroups;
+  }
+  if (!changes.length) return { merged: settings, changes };
+  const merged: Settings = { ...settings, hooks };
+  if (!Object.keys(hooks).length) delete merged.hooks;
+  return { merged, changes };
+}
+
 /**
  * `--disable=<ids>`: withdraw modules from an existing install. Files the reduced
  * plan no longer produces are pruned by the same hash-guarded path `update` uses
@@ -360,11 +414,14 @@ async function disableModules(
   const currentSettings = planResult.settingsPlan
     ? parseSettingsText(planResult.settingsPlan.text!)
     : (ctx.claude.settings ?? {});
-  const { merged, changes } = removeSettingsFragments(
+  const removal = removeSettingsFragments(
     currentSettings,
     fragmentsOf(doomed),
     fragmentsOf(remaining),
   );
+  const emptied = dropEmptiedDispatchers(removal.merged, planResult.fragments);
+  const merged = emptied.merged;
+  const changes = [...removal.changes, ...emptied.changes];
   if (changes.length) {
     planResult.settingsPlan ??= {
       dest: '.claude/settings.json',

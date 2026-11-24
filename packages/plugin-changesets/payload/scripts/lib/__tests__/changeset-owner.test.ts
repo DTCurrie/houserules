@@ -1,35 +1,111 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 
 import { useRepo } from '#test/repo';
 import { createGatedOwnerResolver } from '../changeset-owner.mjs';
 
-function publishableCityvilleResolver(
-  files: string[] | undefined,
-  gateIgnore: string[],
-): (path: string) => string | null {
-  const root = useRepo('pnpm-monorepo');
-  const manifestPath = join(root, 'games/cityville/package.json');
+const INSTALLED_CHANGESETS_CLI = dirname(
+  createRequire(import.meta.url).resolve('@changesets/cli/package.json'),
+);
+
+const INSTALLED_MICROMATCH = dirname(
+  createRequire(import.meta.url).resolve('micromatch/package.json'),
+);
+
+const PACKAGES = [
+  { name: '@fix/cityville', relDir: 'games/cityville' },
+  { name: '@fix/studio', relDir: 'apps/studio' },
+];
+
+function workspacePackages(root: string) {
+  return PACKAGES.map(({ name, relDir }) => ({
+    name,
+    dir: join(root, relDir),
+    relDir,
+    pkg: {},
+  }));
+}
+
+function publishManifest(
+  root: string,
+  relDir: string,
+  fields: Record<string, unknown>,
+): void {
+  const manifestPath = join(root, relDir, 'package.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<
     string,
     unknown
   >;
-  manifest.private = false;
-  manifest.files = files;
+  Object.assign(manifest, { private: false }, fields);
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+function publishableCityvilleResolver(
+  fields: Record<string, unknown>,
+  gateIgnore: string[],
+): (path: string) => string | null {
+  const root = useRepo('pnpm-monorepo');
+  publishManifest(root, 'games/cityville', fields);
   return createGatedOwnerResolver(
     root,
-    [
-      {
-        name: '@fix/cityville',
-        dir: join(root, 'games/cityville'),
-        relDir: 'games/cityville',
-        pkg: {},
-      },
-    ],
+    workspacePackages(root).slice(0, 1),
     gateIgnore,
   );
+}
+
+function writeChangesetsIgnore(root: string, ignore: string[]): void {
+  mkdirSync(join(root, '.changeset'), { recursive: true });
+  writeFileSync(
+    join(root, '.changeset/config.json'),
+    JSON.stringify({ ignore }),
+  );
+}
+
+function linkInstalledChangesetsCli(root: string): void {
+  mkdirSync(join(root, 'node_modules/@changesets'), { recursive: true });
+  symlinkSync(
+    INSTALLED_CHANGESETS_CLI,
+    join(root, 'node_modules/@changesets/cli'),
+    'dir',
+  );
+}
+
+function installChangesetsConfigV3(root: string): void {
+  const configDir = join(root, 'node_modules/@changesets/config');
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(
+    join(configDir, 'package.json'),
+    JSON.stringify({
+      name: '@changesets/config',
+      version: '3.1.4',
+      dependencies: { micromatch: '^4.0.8' },
+    }),
+  );
+  symlinkSync(
+    INSTALLED_MICROMATCH,
+    join(root, 'node_modules/micromatch'),
+    'dir',
+  );
+}
+
+function ignoredPackagesFor(
+  ignore: string[],
+  installChangesets: (root: string) => void = linkInstalledChangesetsCli,
+): string[] {
+  const root = useRepo('pnpm-monorepo');
+  for (const { relDir } of PACKAGES) publishManifest(root, relDir, {});
+  writeChangesetsIgnore(root, ignore);
+  installChangesets(root);
+  const resolveOwner = createGatedOwnerResolver(
+    root,
+    workspacePackages(root),
+    [],
+  );
+  return PACKAGES.filter(
+    ({ relDir }) => resolveOwner(`${relDir}/src/index.ts`) === null,
+  ).map(({ name }) => name);
 }
 
 describe('createGatedOwnerResolver', () => {
@@ -72,18 +148,82 @@ describe('createGatedOwnerResolver', () => {
   ])(
     'resolves $path to $owner when the files list is $files',
     ({ files, path, owner }) => {
-      const resolveOwner = publishableCityvilleResolver(files, []);
+      const resolveOwner = publishableCityvilleResolver({ files }, []);
 
       expect(resolveOwner(path)).toBe(owner);
     },
   );
 
   it('resolves a path matching a gateIgnore glob to no owner', () => {
-    const resolveOwner = publishableCityvilleResolver(
-      ['dist'],
-      ['games/cityville/src/**'],
-    );
+    const resolveOwner = publishableCityvilleResolver({ files: ['dist'] }, [
+      'games/cityville/src/**',
+    ]);
 
     expect(resolveOwner('games/cityville/src/game.ts')).toBe(null);
+  });
+});
+
+describe('createGatedOwnerResolver, root files npm packs regardless of files', () => {
+  it.each([
+    { entry: 'main', fields: { main: './cli.js' } },
+    { entry: 'a string bin', fields: { bin: 'cli.js' } },
+    { entry: 'an object bin', fields: { bin: { fix: './cli.js' } } },
+  ])(
+    'owes a changeset for a root file the manifest names as $entry',
+    ({ fields }) => {
+      const resolveOwner = publishableCityvilleResolver(
+        { files: ['dist'], ...fields },
+        [],
+      );
+
+      expect(resolveOwner('games/cityville/cli.js')).toBe('@fix/cityville');
+    },
+  );
+
+  it('owes none for a root file neither files, main, nor bin names', () => {
+    const resolveOwner = publishableCityvilleResolver(
+      { files: ['dist'], main: './cli.js', bin: { fix: './cli.js' } },
+      [],
+    );
+
+    expect(resolveOwner('games/cityville/eslint.config.js')).toBe(null);
+  });
+});
+
+describe('createGatedOwnerResolver, the changesets ignore list', () => {
+  it.each([
+    { entry: '@fix/{cityville,other}', ignored: ['@fix/cityville'] },
+    { entry: '@fix/!(cityville)', ignored: ['@fix/studio'] },
+    { entry: '@fix/@(studio|other)', ignored: ['@fix/studio'] },
+  ])('ignores exactly $ignored for the entry $entry', ({ entry, ignored }) => {
+    expect(ignoredPackagesFor([entry])).toEqual(ignored);
+  });
+
+  it.each([
+    { entry: '@fix/{cityville,other}', ignored: ['@fix/cityville'] },
+    { entry: '@fix/!(cityville)', ignored: ['@fix/studio'] },
+    { entry: '!@fix/studio', ignored: ['@fix/cityville'] },
+  ])(
+    'ignores exactly $ignored for the entry $entry under @changesets/config 3.x, which uses micromatch',
+    ({ entry, ignored }) => {
+      expect(
+        ignoredPackagesFor([entry], installChangesetsConfigV3),
+        'a lone negated entry matches nothing under the 4.x picomatch filter, so [] here means the picomatch branch ran',
+      ).toEqual(ignored);
+    },
+  );
+
+  it('resolves nothing and throws nothing when the ignore list is empty', () => {
+    const root = useRepo('pnpm-monorepo');
+    publishManifest(root, 'games/cityville', {});
+    writeChangesetsIgnore(root, []);
+
+    const resolveOwner = createGatedOwnerResolver(
+      root,
+      workspacePackages(root),
+      [],
+    );
+
+    expect(resolveOwner('games/cityville/src/game.ts')).toBe('@fix/cityville');
   });
 });

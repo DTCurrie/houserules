@@ -5,18 +5,37 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useInstalledRepo } from '#test/repo';
 import { runIn } from '#test/run';
-import { hookCommandsFor, settingsOf } from '#test/installed-tree';
+import {
+  dispatchedScriptsFor,
+  hookCommandsFor,
+  settingsOf,
+} from '#test/installed-tree';
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const INSTALLED_CHANGESETS_CLI = dirname(
+  createRequire(import.meta.url).resolve('@changesets/cli/package.json'),
+);
+
+function linkInstalledChangesetsCli(root: string): void {
+  mkdirSync(join(root, 'node_modules/@changesets'), { recursive: true });
+  symlinkSync(
+    INSTALLED_CHANGESETS_CLI,
+    join(root, 'node_modules/@changesets/cli'),
+    'dir',
+  );
+  appendFileSync(join(root, '.git/info/exclude'), 'node_modules/\n');
+}
 
 function rewritePackageJson(
   root: string,
@@ -45,10 +64,12 @@ function installChangesets(): string {
 }
 
 function stopHookCommandFor(root: string, scriptBasename: string): string {
-  const commands = hookCommandsFor(settingsOf(root), 'Stop');
-  const found = commands.find((c) => c.includes(scriptBasename));
+  expect(dispatchedScriptsFor(root, 'Stop')).toContain(scriptBasename);
+  const found = hookCommandsFor(settingsOf(root), 'Stop').find((c) =>
+    c.includes('hook-dispatch.mjs'),
+  );
   if (!found) {
-    throw new Error(`no Stop hook command wired to ${scriptBasename}`);
+    throw new Error('no Stop hook command runs hook-dispatch.mjs');
   }
   return found;
 }
@@ -67,7 +88,10 @@ function runShellCommand(
   delete env.NODE_PATH;
   return spawnSync('sh', ['-c', command], {
     cwd: root,
-    input,
+    input: JSON.stringify({
+      ...(JSON.parse(input) as Record<string, unknown>),
+      hook_event_name: 'Stop',
+    }),
     encoding: 'utf8',
     env,
   }) as { status: number | null; stdout: string; stderr: string };
@@ -270,6 +294,7 @@ describe('changeset-check.mjs, packages the gate would not gate', () => {
       JSON.stringify({ ignore }),
     );
     commitAll(root, 'chore: changesets ignore');
+    linkInstalledChangesetsCli(root);
   }
 
   function touchSource(root: string, dir: string, file: string): void {

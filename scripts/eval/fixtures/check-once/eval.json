@@ -1,0 +1,22 @@
+{
+  "modules": "core",
+  "plugins": [],
+  "model": "opus",
+  "validityAgent": "none",
+  "collect": ["prompt.md"],
+  "arms": {
+    "control": {
+      "prompt": "arms/control/prompt.txt",
+      "overlay": "arms/control/overlay"
+    },
+    "entry": {
+      "prompt": "arms/entry/prompt.txt",
+      "overlay": "arms/entry/overlay"
+    }
+  },
+  "score": {
+    "script": "score.mjs",
+    "primary": "callsBeforeFirstWrite",
+    "also": ["totalCalls", "wallS", "costUsd", "promptExists"]
+  }
+}

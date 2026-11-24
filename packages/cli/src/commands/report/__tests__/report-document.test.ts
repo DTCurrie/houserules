@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -55,6 +55,34 @@ describe('buildReportDocument bashWall', () => {
       seconds: 7.5,
       medianSeconds: 7.5,
       p90Seconds: 7.5,
+    });
+  });
+});
+
+describe('buildReportDocument hook run log', () => {
+  it('reads the log under the repo root it is given', () => {
+    const root = mkdtempSync(join(tmpdir(), 'report-document-log-'));
+    mkdirSync(join(root, '.claude/state'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/state/hook-runs.jsonl'),
+      `${JSON.stringify({
+        at: '2026-11-02T10:00:00.000Z',
+        event: 'PreToolUse',
+        script: 'guard-bash.mjs',
+        exitCode: 0,
+        hasOutput: false,
+        durationMilliseconds: 40,
+      })}\n`,
+    );
+
+    const document = buildReportDocument(emptyCorpus(['slug']), root, {
+      label: 'work',
+      cliVersion: '0.7.0',
+    });
+
+    expect(document.hooks.runLog).toEqual({
+      stopPaths: [],
+      guard: { runs: 1, medianMilliseconds: 40, totalSeconds: 0 },
     });
   });
 });

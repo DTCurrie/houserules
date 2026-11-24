@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import {
@@ -114,13 +114,21 @@ function shortName(pkgName: string | undefined, dir: string): string {
 
 let warnedGitMissing = false;
 
+// A whole-repo `git ls-files` outgrows execFileSync's 1 MiB default on a large monorepo.
+const GIT_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
+
 function git(root: string, args: string[]): string | null {
+  return gitRaw(root, args)?.trim() ?? null;
+}
+
+function gitRaw(root: string, args: string[]): string | null {
   try {
     return execFileSync('git', args, {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+      maxBuffer: GIT_MAX_BUFFER_BYTES,
+    });
   } catch (error) {
     // A non-repo dir fails with git's own exit code, not ENOENT: only the "git binary is
     // not on PATH" case is worth telling the user about, and only once per run.
@@ -137,31 +145,89 @@ function git(root: string, args: string[]): string | null {
   }
 }
 
+// Git honors these over its own discovery, so the index file cannot be found by walking up.
+const GIT_LOCATION_ENV = ['GIT_DIR', 'GIT_INDEX_FILE', 'GIT_WORK_TREE'];
+const GITDIR_LINE = /^gitdir: (.+)$/m;
+
+/**
+ * The index file git would read for `root`, found the way git discovers it: the nearest `.git`
+ * at or above `root`, a directory or a `gitdir:` file. Null when the env relocates it or none exists.
+ */
+function gitIndexFile(root: string): string | null {
+  if (GIT_LOCATION_ENV.some((name) => process.env[name])) return null;
+  let dir = resolve(root);
+  for (;;) {
+    const dotGit = join(dir, '.git');
+    const stats = statSync(dotGit, { throwIfNoEntry: false });
+    if (stats?.isDirectory()) return join(dotGit, 'index');
+    if (stats?.isFile()) {
+      const gitDir = GITDIR_LINE.exec(readFileSync(dotGit, 'utf8'))?.[1];
+      return gitDir ? join(resolve(dir, gitDir.trim()), 'index') : null;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+// Git replaces the index by rename on every write, so a new inode marks a new index state.
+// Null, which means "do not cache", whenever the index cannot be located or read.
+function gitIndexState(root: string): string | null {
+  try {
+    const indexFile = gitIndexFile(root);
+    if (!indexFile) return null;
+    const stats = statSync(indexFile, { throwIfNoEntry: false });
+    return stats
+      ? `${indexFile}:${stats.ino}:${stats.mtimeMs}:${stats.size}`
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const trackedListings = new Map<string, { state: string; files: string[] }>();
+
+/**
+ * Every file git tracks under `root`, cwd-relative, in git's order. One `git ls-files` per index
+ * state, so a run's many tracked-file questions cost one spawn. Null on any git failure.
+ */
+function trackedFiles(root: string): string[] | null {
+  const state = gitIndexState(root);
+  const cached = state ? trackedListings.get(root) : undefined;
+  if (cached && cached.state === state) return cached.files;
+  const out = gitRaw(root, ['ls-files', '-c', '-z']);
+  if (out === null) return null;
+  const files = out.split('\0').filter(Boolean);
+  if (state) trackedListings.set(root, { state, files });
+  return files;
+}
+
+// A literal pathspec: the path itself, or anything under it when it names a directory.
+function isUnderPathspec(file: string, pathspec: string): boolean {
+  const spec = pathspec.replace(/^\.\//, '').replace(/\/+$/, '');
+  if (spec === '' || spec === '.') return true;
+  return file === spec || file.startsWith(`${spec}/`);
+}
+
 // The directory's own .gitignore is excluded: it stays committed so the intent travels
 // with the repo. Empty on any git failure or non-repo.
 function trackedFilesUnder(root: string, dir: string): string[] {
-  const out = git(root, ['ls-files', '-c', '--', dir]);
-  if (!out) return [];
   const ownGitignore = `${dir}/.gitignore`;
-  return out
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((p) => p && p !== ownGitignore);
+  return trackedAmong(root, [dir]).filter((p) => p !== ownGitignore);
 }
 
 /**
- * The members of `paths` git tracks, in git's order. Runs with cwd at `root` and the paths as
- * cwd-relative pathspecs, so an install below the git top answers for its own `.claude/`.
+ * The members of `paths` git tracks, in git's order. Paths are cwd-relative to `root`, each a
+ * file or a directory, so an install below the git top answers for its own `.claude/`.
  * Empty on any git failure or non-repo.
  */
 export function trackedAmong(root: string, paths: readonly string[]): string[] {
   if (!paths.length) return [];
-  const out = git(root, ['ls-files', '-c', '--', ...paths]);
-  if (!out) return [];
-  return out
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const files = trackedFiles(root);
+  if (!files) return [];
+  return files.filter((file) =>
+    paths.some((pathspec) => isUnderPathspec(file, pathspec)),
+  );
 }
 
 /** Committed reference templates from installs that predate the self-gitignore. */
@@ -244,22 +310,12 @@ export function trackedLedgerSurfaces(
   const inDir = trackedFilesUnder(root, ledgerDir).filter((p) =>
     p.endsWith('.md'),
   );
-  const atRoot = (
-    git(root, ['ls-files', '-c', '--', 'BACKLOG.md', 'DECISIONS.md']) ?? ''
-  )
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const atRoot = trackedAmong(root, ['BACKLOG.md', 'DECISIONS.md']);
   const recorded = new Set<string>([
     ...ledgerRecordedFiles(join(root, ledgerDir, 'backlog.jsonl')),
     ...ledgerRecordedFiles(join(root, ledgerDir, 'decisions.jsonl')),
   ]);
-  const nested = recorded.size
-    ? (git(root, ['ls-files', '-c', '--', ...recorded]) ?? '')
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-    : [];
+  const nested = trackedAmong(root, [...recorded]);
   return [...inDir, ...atRoot, ...nested];
 }
 

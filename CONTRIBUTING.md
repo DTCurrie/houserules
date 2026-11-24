@@ -24,7 +24,7 @@ pnpm build
 This is a pnpm workspace that publishes sixteen packages: `@houserules/cli` (the installer,
 which ships the `houserules` binary), `@houserules/api` (the plugin API: action types, module
 definitions, and the `houserules.config.json` schema), `@houserules/payload` (the shared payload libs,
-imported by package name), twelve `@houserules/plugin-*` packages, and `@houserules/test`, a
+imported by package name), thirteen `@houserules/plugin-*` packages, and `@houserules/test`, a
 shared test library. Each package owns its own `src/`, tests, and, for the CLI and plugins, a
 `payload/` directory of files the installer copies into a user's repo.
 Root-level config (`prettier`, `eslint`, changesets, CI workflows) applies to the whole
@@ -36,7 +36,7 @@ Run these in order. Each rewrites or reports on the whole tree, so running them 
 keeps later checks from flagging noise the earlier ones would have fixed.
 
 ```sh
-pnpm format      # prettier --write, settles formatting first
+pnpm format:fix  # prettier --write, settles formatting first
 pnpm lint:fix    # eslint --fix, catches what formatting doesn't
 pnpm check       # tsc --noEmit across every package
 pnpm test        # the full test suite, including end-to-end fixtures

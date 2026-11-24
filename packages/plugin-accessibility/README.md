@@ -87,7 +87,7 @@ covering the rest of this package does not cover that file. The full notice is i
 ## Part of houserules
 
 [houserules](https://github.com/DTCurrie/houserules) is a portable set of Claude Code
-infrastructure that keeps the agent's context lean. This is one of twelve first-party plugins.
+infrastructure that keeps the agent's context lean. This is one of thirteen first-party plugins.
 The [package list](https://github.com/DTCurrie/houserules#packages) has the rest.
 
 ## License

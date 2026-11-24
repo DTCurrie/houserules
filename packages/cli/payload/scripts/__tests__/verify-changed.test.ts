@@ -99,6 +99,15 @@ function useEnvRecordingRunner(root: string): void {
   );
 }
 
+/** Installs a tool fragment that lists WIREIT_PARALLEL as a share variable. */
+function useWireitFragment(root: string): void {
+  mkdirSync(join(root, '.claude/extensions'), { recursive: true });
+  writeFileSync(
+    join(root, '.claude/extensions/wireit.json'),
+    JSON.stringify({ shareVariables: ['WIREIT_PARALLEL'] }),
+  );
+}
+
 /** The share variables the first recorded child saw, `unset` for an absent one. */
 function recordedShare(root: string): Record<string, string> {
   const lines = readFileSync(join(root, 'runner-env.txt'), 'utf8')
@@ -352,7 +361,9 @@ describe('budgetShareEnv', () => {
   }
 
   it('gives a run alone on 18 cores the outer fan-out 4 and no vitest cap', () => {
-    const env = budgetShareEnv({ PATH: '/bin' }, fakeBudgetSignals(18, 3));
+    const env = budgetShareEnv({ PATH: '/bin' }, fakeBudgetSignals(18, 3), [
+      'WIREIT_PARALLEL',
+    ]);
     expect(env).toEqual({
       PATH: '/bin',
       WIREIT_PARALLEL: '4',
@@ -361,21 +372,27 @@ describe('budgetShareEnv', () => {
   });
 
   it('halves the fan-out to 2 when the load reaches the core count', () => {
-    const env = budgetShareEnv({}, fakeBudgetSignals(18, 18));
+    const env = budgetShareEnv({}, fakeBudgetSignals(18, 18), [
+      'WIREIT_PARALLEL',
+    ]);
     expect(env.WIREIT_PARALLEL).toBe('2');
     expect(env.pnpm_config_workspace_concurrency).toBe('2');
     expect(env).not.toHaveProperty('VITEST_MAX_WORKERS');
   });
 
   it('gives a 4-core machine the fan-out 5, its budget 16 over a vitest pool of 3', () => {
-    const env = budgetShareEnv({}, fakeBudgetSignals(4, 0));
+    const env = budgetShareEnv({}, fakeBudgetSignals(4, 0), [
+      'WIREIT_PARALLEL',
+    ]);
     expect(env.WIREIT_PARALLEL).toBe('5');
     expect(env.pnpm_config_workspace_concurrency).toBe('5');
   });
 
   it('passes a caller-set share through unchanged and fills only what is unset', () => {
     const parent = { VITEST_MAX_WORKERS: '8', WIREIT_PARALLEL: '1' };
-    const env = budgetShareEnv(parent, fakeBudgetSignals(18, 3));
+    const env = budgetShareEnv(parent, fakeBudgetSignals(18, 3), [
+      'WIREIT_PARALLEL',
+    ]);
     expect(env).toEqual({
       VITEST_MAX_WORKERS: '8',
       WIREIT_PARALLEL: '1',
@@ -384,11 +401,19 @@ describe('budgetShareEnv', () => {
     expect(parent).toEqual({ VITEST_MAX_WORKERS: '8', WIREIT_PARALLEL: '1' });
   });
 
+  it('sets no WIREIT_PARALLEL when no fragment lists a tool variable', () => {
+    const env = budgetShareEnv({ PATH: '/bin' }, fakeBudgetSignals(18, 3), []);
+    expect(env).toEqual({
+      PATH: '/bin',
+      pnpm_config_workspace_concurrency: '4',
+    });
+  });
+
   it('returns the parent environment unchanged when the signals cannot be read', () => {
     const parent = { PATH: '/bin' };
     const env = budgetShareEnv(parent, () => {
       throw new Error('availableParallelism unavailable');
-    });
+    }, ['WIREIT_PARALLEL']);
     expect(env).toBe(parent);
     expect(env).toEqual({ PATH: '/bin' });
   });
@@ -447,7 +472,9 @@ describe('jobPlan', () => {
   });
 
   it('runs 4 jobs on 18 cores, each child getting a fan-out of 1 and no vitest cap', () => {
-    expect(jobPlan({ PATH: '/bin' }, eighteenCores, true)).toEqual({
+    expect(
+      jobPlan({ PATH: '/bin' }, eighteenCores, true, ['WIREIT_PARALLEL']),
+    ).toEqual({
       limit: 4,
       childEnv: {
         PATH: '/bin',
@@ -458,7 +485,9 @@ describe('jobPlan', () => {
   });
 
   it('runs one job with the run-alone share when concurrent is false', () => {
-    expect(jobPlan({ PATH: '/bin' }, eighteenCores, false)).toEqual({
+    expect(
+      jobPlan({ PATH: '/bin' }, eighteenCores, false, ['WIREIT_PARALLEL']),
+    ).toEqual({
       limit: 1,
       childEnv: {
         PATH: '/bin',
@@ -469,7 +498,11 @@ describe('jobPlan', () => {
   });
 
   it('runs one job and passes the share through when the caller set VITEST_MAX_WORKERS', () => {
-    expect(jobPlan({ VITEST_MAX_WORKERS: '8' }, eighteenCores, true)).toEqual({
+    expect(
+      jobPlan({ VITEST_MAX_WORKERS: '8' }, eighteenCores, true, [
+        'WIREIT_PARALLEL',
+      ]),
+    ).toEqual({
       limit: 1,
       childEnv: {
         VITEST_MAX_WORKERS: '8',
@@ -477,6 +510,20 @@ describe('jobPlan', () => {
         pnpm_config_workspace_concurrency: '4',
       },
     });
+  });
+
+  it('runs one job when the caller set a tool variable', () => {
+    const plan = jobPlan({ WIREIT_PARALLEL: '2' }, eighteenCores, true, [
+      'WIREIT_PARALLEL',
+    ]);
+    expect(plan.limit).toBe(1);
+    expect(plan.childEnv.WIREIT_PARALLEL).toBe('2');
+  });
+
+  it('adds no WIREIT_PARALLEL to the child env when the tool list is empty', () => {
+    const plan = jobPlan({ PATH: '/bin' }, eighteenCores, true, []);
+    expect(plan.limit).toBe(4);
+    expect(plan.childEnv).not.toHaveProperty('WIREIT_PARALLEL');
   });
 
   it('runs one job with the parent environment as it is when the signals cannot be read', () => {
@@ -487,6 +534,7 @@ describe('jobPlan', () => {
         throw new Error('availableParallelism unavailable');
       },
       true,
+      ['WIREIT_PARALLEL'],
     );
     expect(plan.limit).toBe(1);
     expect(plan.childEnv).toBe(parent);
@@ -519,6 +567,22 @@ describe('jobEdges', () => {
         ['core', []],
         ['mid', ['core']],
         ['outer', ['mid', 'core']],
+      ]),
+    );
+  });
+
+  it('makes a root entry depend on every other entry, however unrelated', () => {
+    const scope: ScopeEntry[] = [
+      { package: 'a', reason: 'changed' },
+      { package: 'b', reason: 'dependent' },
+      { package: 'top', reason: 'root' },
+    ];
+
+    expect(jobEdges(scope, [pkg('a'), pkg('b')])).toEqual(
+      new Map([
+        ['a', []],
+        ['b', []],
+        ['top', ['a', 'b']],
       ]),
     );
   });
@@ -633,6 +697,144 @@ describe('verify-changed.mjs --json', () => {
     const city = out.scope.find((s) => s.package === '@fix/cityville');
     expect(city?.package, r.stdout).toBe('@fix/cityville');
     expect(city!.argv).toEqual([]);
+  });
+});
+
+describe('verify-changed.mjs with verify.rootCommands', () => {
+  interface RootScope {
+    scope: {
+      package: string;
+      reason: string;
+      commands: string[];
+      argv: string[][];
+    }[];
+  }
+
+  function setRootCommands(root: string, rootCommands: string[]): void {
+    editHouseConfig(root, (config) => {
+      (config.verify as { rootCommands?: string[] }).rootCommands =
+        rootCommands;
+    });
+  }
+
+  function rootName(root: string): string {
+    return readJson<{ name?: string }>(join(root, 'package.json')).name ?? '.';
+  }
+
+  function scopeOf(root: string): RootScope['scope'] {
+    const r = runScript(root, SCRIPT, { args: ['--json'] });
+    expect(r.status, r.stderr).toBe(0);
+    return (JSON.parse(r.stdout) as RootScope).scope;
+  }
+
+  it('lists a root entry last, with the root commands and no filter flag, after a diff under one package', () => {
+    const root = repoWithStudioDependingOnCityville();
+    setRootCommands(root, ['verify:knip']);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const y = 2;\n',
+    );
+
+    const scope = scopeOf(root);
+
+    expect(scope.map((s) => s.package)).toEqual([
+      '@fix/cityville',
+      '@fix/studio',
+      rootName(root),
+    ]);
+    expect(scope[2]).toMatchObject({
+      reason: 'root',
+      commands: ['verify:knip'],
+      argv: [['run', 'verify:knip']],
+    });
+  });
+
+  it('adds no root entry when rootCommands is unset', () => {
+    const root = repoWithStudioDependingOnCityville();
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const y = 2;\n',
+    );
+
+    expect(scopeOf(root).map((s) => s.reason)).toEqual([
+      'changed',
+      'dependent',
+    ]);
+  });
+
+  it('adds no root entry when rootCommands is empty', () => {
+    const root = repoWithStudioDependingOnCityville();
+    setRootCommands(root, []);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const y = 2;\n',
+    );
+
+    expect(scopeOf(root).map((s) => s.reason)).toEqual([
+      'changed',
+      'dependent',
+    ]);
+  });
+
+  it('yields the root entry alone for a change to a root-level file', () => {
+    const root = repoWithStudioDependingOnCityville();
+    setRootCommands(root, ['verify']);
+    writeFileSync(join(root, 'notes.txt'), 'x\n');
+
+    const scope = scopeOf(root);
+
+    expect(scope.map((s) => [s.package, s.reason])).toEqual([
+      [rootName(root), 'root'],
+    ]);
+  });
+
+  it('adds the root entry last under --full', () => {
+    const root = repoWithStudioDependingOnCityville();
+    setRootCommands(root, ['verify']);
+
+    const r = runScript(root, SCRIPT, { args: ['--json', '--full'] });
+
+    expect(r.status, r.stderr).toBe(0);
+    const reasons = (JSON.parse(r.stdout) as RootScope).scope.map(
+      (s) => s.reason,
+    );
+    expect(reasons.at(-1)).toBe('root');
+    expect(reasons.filter((reason) => reason === 'root')).toHaveLength(1);
+  });
+
+  it('prints the root entry with a [root] reason in the plan', () => {
+    const root = repoWithStudioDependingOnCityville();
+    setRootCommands(root, ['verify:knip']);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const y = 2;\n',
+    );
+
+    const r = runScript(root, SCRIPT);
+
+    expect(r.stdout).toContain(`${rootName(root)}  [root]  `);
+  });
+
+  it('runs the root commands after every package job and prints the root verdict last', () => {
+    const root = repoWithStudioDependingOnCityville();
+    useStubVerifyRunner(root);
+    setRootCommands(root, ['verify:knip']);
+    appendFileSync(
+      join(root, 'games/cityville/src/game.ts'),
+      'export const y = 2;\n',
+    );
+
+    const r = runScript(root, SCRIPT, { args: ['--run'] });
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout.trim().split('\n').at(-1)).toBe(`${rootName(root)}: PASS`);
+    expect(
+      readFileSync(join(root, 'runner-calls.txt'), 'utf8').trim().split('\n'),
+    ).toEqual([
+      '--filter @fix/cityville verify',
+      '--filter @fix/studio verify',
+      'run verify:knip',
+    ]);
   });
 });
 
@@ -811,14 +1013,30 @@ describe('verify-changed.mjs --full', () => {
     ]);
   });
 
-  it('plans nothing under the same broken git when --full is absent', () => {
+  it('degrades to full scope under a failing git when --full is absent', () => {
     const root = repoWithStudioDependingOnCityville();
 
     const r = runWithoutGit(root, ['--json']);
 
+    expect(r.status, r.stderr).toBe(0);
     const out = JSON.parse(r.stdout) as ScopeJson;
     expect(out.source).toBe('git');
-    expect(out.scope).toEqual([]);
+    expect(out.degraded).toBe(true);
+    expect(out.scope.map((s) => [s.package, s.reason]).sort()).toEqual([
+      ['@fix/cityville', 'full-scope'],
+      ['@fix/studio', 'full-scope'],
+    ]);
+  });
+
+  it('words the plan summary as FULL SCOPE under a failing git', () => {
+    const root = repoWithStudioDependingOnCityville();
+
+    const r = runWithoutGit(root, []);
+
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain(
+      'verify-changed: 2 package(s), FULL SCOPE (git/config unavailable)\n',
+    );
   });
 
   it('words the plan summary as --full, not as unavailable git', () => {
@@ -889,6 +1107,7 @@ describe('verify-changed.mjs --run', () => {
 
   it('passes a run alone its outer fan-out and no vitest cap', () => {
     useEnvRecordingRunner(root);
+    useWireitFragment(root);
     const r = runVerifyWithParentEnv(root);
     expect(r.status, r.stderr).toBe(0);
     const share = recordedShare(root);
@@ -899,6 +1118,7 @@ describe('verify-changed.mjs --run', () => {
 
   it('passes a share the caller set to the child unchanged', () => {
     useEnvRecordingRunner(root);
+    useWireitFragment(root);
     const r = runVerifyWithParentEnv(root, {
       VITEST_MAX_WORKERS: '8',
       WIREIT_PARALLEL: '1',

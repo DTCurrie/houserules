@@ -162,8 +162,8 @@ as the brief's `Reference:` line.
 - <date>: <one line on what changed / what's next>
 ```
 
-Status vocabulary is fixed so it's greppable: **`TODO` · `IN PROGRESS` · `DONE` · `BLOCKED`**.
-Checkboxes mirror it: `[ ]` todo, `[~]` in progress, `[x]` done.
+Status vocabulary is fixed so it's greppable: **`TODO` · `IN PROGRESS` · `DONE` · `DROPPED` · `BLOCKED`**.
+Checkboxes mirror it: `[ ]` todo, `[~]` in progress or blocked, `[x]` done or dropped.
 
 The optional trailing `After` segment sets order. Absent means the phase waits on the line above it,
 and the first line waits on nothing. `none` means no dependency, and does not reset the chain for the

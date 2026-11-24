@@ -1,0 +1,131 @@
+{
+  "name": "@houserules/plugin-wireit",
+  "version": "0.0.0",
+  "description": "houserules plugin: a wireit rule, the wireit-lint checker, the /wireit-setup skill, and wireit's parallelism and manifest hints for the core scripts.",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "payload-dist"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "check": "wireit",
+    "prepack": "npm run build",
+    "test": "wireit",
+    "attw": "wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && houserules-payload && publint",
+      "dependencies": [
+        "../cli:build:ts",
+        "../api:build",
+        "../payload:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "package.json",
+        "!src/**/__tests__/**",
+        "payload/**",
+        "!payload/**/__tests__/**",
+        "tsconfig.build.json",
+        "tsconfig.payload.json"
+      ],
+      "output": [
+        "dist/**",
+        "payload-dist/**"
+      ]
+    },
+    "check": {
+      "command": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.payload.json",
+      "dependencies": [
+        "../cli:build:ts",
+        "../api:build",
+        "../test:build",
+        "../payload:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "payload/**/__tests__/**",
+        "tsconfig.json",
+        "tsconfig.build.json",
+        "payload/**/*.mts",
+        "tsconfig.payload.json",
+        "package.json"
+      ],
+      "output": []
+    },
+    "test": {
+      "command": "vitest run",
+      "dependencies": [
+        "build",
+        "../test:build"
+      ],
+      "files": [
+        "src/**/*.ts",
+        "payload/**",
+        "vitest.config.ts",
+        "package.json",
+        "tsconfig.json"
+      ],
+      "output": []
+    },
+    "attw": {
+      "command": "attw --pack . --profile esm-only",
+      "dependencies": [
+        "build"
+      ],
+      "files": [
+        "package.json"
+      ],
+      "output": []
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DTCurrie/houserules.git",
+    "directory": "packages/plugin-wireit"
+  },
+  "homepage": "https://github.com/DTCurrie/houserules/tree/main/packages/plugin-wireit#readme",
+  "bugs": "https://github.com/DTCurrie/houserules/issues",
+  "peerDependencies": {
+    "@houserules/api": ">=0.0.0 <1.0.0"
+  },
+  "devDependencies": {
+    "@houserules/api": "workspace:*",
+    "@houserules/cli": "workspace:*",
+    "@houserules/payload": "workspace:*",
+    "@houserules/test": "workspace:*",
+    "@arethetypeswrong/cli": "catalog:",
+    "@types/node": "catalog:",
+    "publint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "wireit": "catalog:"
+  },
+  "license": "MIT",
+  "author": "Devin T. Currie (https://github.com/DTCurrie)",
+  "keywords": [
+    "houserules",
+    "houserules-plugin",
+    "claude-code",
+    "wireit",
+    "build-orchestration"
+  ],
+  "dependencies": {},
+  "optionalDependencies": {}
+}

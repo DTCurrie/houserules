@@ -2,13 +2,21 @@ import { execFileSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
+
+import {
+  SKIP_CASES,
+  UPGRADE_CASES,
+} from '../../../../payload/scripts/__tests__/update-check-cases.js';
 
 import { makeCtx } from '#test/ctx-builder';
 import { editHouseConfig } from '#test/installed-tree';
@@ -305,6 +313,56 @@ describe('checkInstallIntegrity, published version check', () => {
 
     expect(result.readouts).toHaveLength(1);
   });
+
+  it.each(SKIP_CASES)(
+    'agrees with the session hook under $name, skipped $skipped',
+    ({ env, skipped }) => {
+      const ctx = ctxWithInstalledVersion('0.4.1');
+      const lookup = publishedAs('0.12.2', env);
+
+      checkInstallIntegrity('/repo', ctx, '0.4.1', null, lookup);
+
+      expect({ askedRegistry: lookup.calls > 0 }).toEqual({
+        askedRegistry: !skipped,
+      });
+    },
+  );
+});
+
+function repoWith(files: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), 'kit-upgrade-'));
+  onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), content);
+  }
+  return root;
+}
+
+describe('checkInstallIntegrity, upgrade command shared with the session hook', () => {
+  it.each(UPGRADE_CASES)('names $command for $name', ({ files, command }) => {
+    const root = repoWith(files);
+    const detected = detect(root);
+    const manifest: HouseManifest = {
+      kitVersion: '1.0.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      modules: [],
+      files: {},
+    };
+    const ctx: Ctx = { ...detected, claude: { ...detected.claude, manifest } };
+
+    const result = checkInstallIntegrity(
+      root,
+      ctx,
+      '1.0.0',
+      null,
+      publishedAs('1.1.0'),
+    );
+
+    expect(result.readouts).toEqual([
+      `installed houserules v1.0.0, latest published is v1.1.0. Update the CLI, then the install: ${command} && npx houserules update`,
+    ]);
+  });
 });
 
 describe('checkInstallIntegrity, plugin-aware retired-module check', () => {
@@ -381,6 +439,63 @@ describe('checkInstallIntegrity, plugin-aware retired-script check', () => {
           'retired houserules hook script ghost-script.mjs is no longer shipped',
         ),
       }),
+    ]);
+  });
+});
+
+const HOOK_WIRING_FILE = '.claude/scripts/hook-wiring.json';
+
+function readJsonFile(root: string, path: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(root, path), 'utf8'));
+}
+
+function writeJsonFile(root: string, path: string, value: unknown): void {
+  writeFileSync(join(root, path), JSON.stringify(value, null, 2) + '\n');
+}
+
+/**
+ * Records `script` as an installed hook script no payload ships, the state a release that drops
+ * a dispatched hook leaves behind, and lists it in the dispatcher's wiring when `dispatched`.
+ */
+function retireScript(root: string, script: string, dispatched: boolean): void {
+  writeFileSync(join(root, '.claude/scripts', script), '');
+  const manifest = readJsonFile(root, MANIFEST_FILE) as {
+    files: Record<string, string>;
+  };
+  manifest.files[`.claude/scripts/${script}`] = 'deadbeef';
+  writeJsonFile(root, MANIFEST_FILE, manifest);
+  if (!dispatched) return;
+  const wiring = readJsonFile(root, HOOK_WIRING_FILE) as {
+    events: Record<string, { script: string }[]>;
+  };
+  wiring.events.PreToolUse = [...(wiring.events.PreToolUse ?? []), { script }];
+  writeJsonFile(root, HOOK_WIRING_FILE, wiring);
+}
+
+function retiredScriptMessages(root: string): string[] {
+  const ctx = detect(root);
+  const kitVersion = ctx.claude.manifest?.kitVersion ?? '';
+  return checkInstallIntegrity(root, ctx, kitVersion, null, publishedAs(null))
+    .findings.map((finding) => finding.msg)
+    .filter((msg) => msg.startsWith('retired houserules hook script'));
+}
+
+describe('checkInstallIntegrity, retired-script check under hook dispatch', () => {
+  it('reports a retired script the hook wiring still dispatches as still wired', () => {
+    const root = useInstalledRepo('npm-single');
+    retireScript(root, 'ghost-hook.mjs', true);
+
+    expect(retiredScriptMessages(root)).toEqual([
+      'retired houserules hook script ghost-hook.mjs is no longer shipped by houserules but is still wired (a dead node process on every trigger) — prune it: npx houserules update',
+    ]);
+  });
+
+  it('reports a retired script the hook wiring no longer lists without the wired clause', () => {
+    const root = useInstalledRepo('npm-single');
+    retireScript(root, 'ghost-hook.mjs', false);
+
+    expect(retiredScriptMessages(root)).toEqual([
+      'retired houserules hook script ghost-hook.mjs is no longer shipped by houserules — prune it: npx houserules update',
     ]);
   });
 });

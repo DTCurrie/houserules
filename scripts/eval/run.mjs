@@ -50,7 +50,8 @@
  *                   assembled sample `<k>`.
  *
  * `eval.json` may set `network` to a boolean (default false). Unless true, the child runs with
- * `--disallowedTools WebFetch,WebSearch`, which does not cover network access through Bash.
+ * `--disallowedTools WebFetch,WebSearch` and a `--settings` sandbox that blocks network access
+ * from Bash and fails the session when the platform cannot sandbox.
  *
  * Environment:
  *   HOUSERULES_EVAL_CLI  A prebuilt `cli.js` to install with in place of building `--rev`. The
@@ -707,9 +708,10 @@ async function probeA(context) {
   }
   if (!run) return null;
   const { judged, outcome } = run;
-  const isPass = judged.pass && outcome.apiKeySource === API_KEY_SOURCE;
+  const isKeyBilled = outcome.apiKeySource === API_KEY_SOURCE;
+  const isPass = judged.pass && isKeyBilled;
   console.log(
-    `probe a: ${isPass ? 'pass' : 'fail'}, quoted ${judged.isQuoted}, files ${judged.fileCount}, rewritten ${judged.rewritten.length}, apiKeySource ${figure(outcome.apiKeySource)}`,
+    `probe a: ${isPass ? 'pass' : 'fail'}, quoted ${judged.isQuoted}, files ${judged.fileCount}, rewritten ${judged.rewritten.length}, billed the API key ${isKeyBilled}`,
   );
   return isPass;
 }
@@ -733,10 +735,11 @@ async function probeB(context) {
   const transcripts = join(outcome.outDir, TRANSCRIPTS);
   const pricedUsd = existsSync(transcripts) ? priceTranscripts(transcripts) : 0;
   const judged = judgeProbeB({ resultEvent: outcome.resultEvent, pricedUsd });
-  const isPass = judged.pass && outcome.apiKeySource === API_KEY_SOURCE;
+  const isKeyBilled = outcome.apiKeySource === API_KEY_SOURCE;
+  const isPass = judged.pass && isKeyBilled;
   const total = outcome.resultEvent?.total_cost_usd;
   console.log(
-    `probe b: ${isPass ? 'pass' : 'fail'}, subtype ${outcome.resultEvent?.subtype ?? 'none'}, total ${typeof total === 'number' ? total : 'none'}, priced ${pricedUsd}, ratio ${figure(judged.ratio)}, reached cap ${judged.hasReachedCap}, budget stop ${judged.isBudgetStop}, match ${judged.isMatch}, apiKeySource ${figure(outcome.apiKeySource)}, session ${figure(outcome.sessionId)}`,
+    `probe b: ${isPass ? 'pass' : 'fail'}, subtype ${outcome.resultEvent?.subtype ?? 'none'}, total ${typeof total === 'number' ? total : 'none'}, priced ${pricedUsd}, ratio ${figure(judged.ratio)}, reached cap ${judged.hasReachedCap}, budget stop ${judged.isBudgetStop}, match ${judged.isMatch}, billed the API key ${isKeyBilled}, session ${figure(outcome.sessionId)}`,
   );
   console.log(`margin ${figure(judged.margin)}`);
   return isPass;

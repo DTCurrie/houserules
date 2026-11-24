@@ -35,6 +35,7 @@
       ],
       "files": [
         "src/**/*.ts",
+        "package.json",
         "!src/**/__tests__/**",
         "payload/**",
         "tsconfig.build.json",
@@ -63,7 +64,8 @@
         "vitest.config.ts",
         "payload/**/*.mts",
         "payload/**/__tests__/**",
-        "tsconfig.payload.json"
+        "tsconfig.payload.json",
+        "package.json"
       ],
       "output": []
     },
@@ -86,7 +88,9 @@
       "files": [
         "src/**/*.ts",
         "payload/**",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "package.json",
+        "tsconfig.json"
       ],
       "output": []
     }

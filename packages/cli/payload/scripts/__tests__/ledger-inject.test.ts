@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
-import { hookCommandsFor, settingsOf } from '#test/installed-tree';
+import { dispatchedScriptsFor } from '#test/installed-tree';
 import { promptInput } from '#test/hook-input';
 
 import {
@@ -307,13 +307,10 @@ describe('ledger-inject.mjs', () => {
       const root = useInstalledRepo('pnpm-monorepo');
 
       expect(existsSync(join(root, INJECT)), 'injector installed').toBe(true);
-      const settings = settingsOf(root);
       expect(
-        hookCommandsFor(settings, 'UserPromptSubmit').some((c) =>
-          c.includes('ledger-inject.mjs'),
-        ),
+        dispatchedScriptsFor(root, 'UserPromptSubmit'),
         'wired into UserPromptSubmit',
-      ).toBe(true);
+      ).toContain('ledger-inject.mjs');
     });
 
     it('injects a logged entry when the prompt references its ID', () => {

@@ -22,18 +22,20 @@ const MODEL = 'claude-sonnet-5-5-20261001';
 const BASE = Date.parse('2026-11-20T00:00:00Z');
 const USAGE = { input_tokens: 1_000_000, output_tokens: 100_000 };
 
+const MILLISECONDS_PER_SECOND = 1000;
 let toolUseCounter = 0;
-const iso = (sec) => new Date(BASE + sec * 1000).toISOString();
+const iso = (seconds) =>
+  new Date(BASE + seconds * MILLISECONDS_PER_SECOND).toISOString();
 
-const userRecord = (sec, content) => ({
+const userRecord = (seconds, content) => ({
   type: 'user',
-  timestamp: iso(sec),
+  timestamp: iso(seconds),
   message: { role: 'user', content },
 });
 
-const assistantRecord = (sec, id, blocks, usage) => ({
+const assistantRecord = (seconds, id, blocks, usage) => ({
   type: 'assistant',
-  timestamp: iso(sec),
+  timestamp: iso(seconds),
   message: { id, model: MODEL, role: 'assistant', content: blocks, usage },
 });
 
@@ -48,10 +50,10 @@ const boundary = () => ({ boundary: true });
 function transcript(firstText, steps, usage = USAGE) {
   const records = [userRecord(0, firstText)];
   steps.forEach((entry, index) => {
-    const sec = 2 * index + 1;
+    const seconds = 2 * index + 1;
     const id = `msg_${index}`;
     if (entry.note !== undefined) {
-      const record = userRecord(sec + 1, entry.note);
+      const record = userRecord(seconds + 1, entry.note);
       records.push(entry.isMeta ? { ...record, isMeta: true } : record);
       return;
     }
@@ -59,13 +61,13 @@ function transcript(firstText, steps, usage = USAGE) {
       records.push({
         type: 'system',
         subtype: 'compact_boundary',
-        timestamp: iso(sec),
+        timestamp: iso(seconds),
       });
       return;
     }
     if (entry.textOnly) {
       records.push(
-        assistantRecord(sec, id, [{ type: 'text', text: 'done' }], usage),
+        assistantRecord(seconds, id, [{ type: 'text', text: 'done' }], usage),
       );
       return;
     }
@@ -77,11 +79,11 @@ function transcript(firstText, steps, usage = USAGE) {
     }));
     if (entry.split)
       for (const use of uses)
-        records.push(assistantRecord(sec, id, [use], usage));
-    else records.push(assistantRecord(sec, id, uses, usage));
+        records.push(assistantRecord(seconds, id, [use], usage));
+    else records.push(assistantRecord(seconds, id, uses, usage));
     records.push(
       userRecord(
-        sec + 1,
+        seconds + 1,
         uses.map((use, i) => ({
           type: 'tool_result',
           tool_use_id: use.id,
@@ -217,6 +219,46 @@ describe('rerun-unchanged', () => {
       step(pnpmTest),
     ]);
     assertNone(text, 'rerun-unchanged');
+  });
+
+  const bashEdits = {
+    'a python3 heredoc that writes':
+      "python3 - <<'EOF'\nopen('a.txt','w').write('x')\nEOF",
+    'a node heredoc that writes':
+      "node - <<'EOF'\nrequire('fs').writeFileSync('a','x')\nEOF",
+    'sed -i': "sed -i '' 's/a/b/' a.ts",
+    'cat redirected to a file': "cat > a.txt <<'EOF'\nx\nEOF",
+    'a > redirect': 'echo x > a.txt',
+    'a >> redirect': 'echo x >> a.txt',
+    tee: 'echo x | tee a.txt',
+    'perl -i': "perl -i -pe 's/a/b/' a.ts",
+    mv: 'mv a.txt b.txt',
+    cp: 'cp a.txt b.txt',
+  };
+  for (const [label, command] of Object.entries(bashEdits))
+    it(`rejects a rerun after a Bash call that edits a file with ${label}`, () => {
+      assertNone(
+        transcript('hi', [
+          step(pnpmTest),
+          step(call('Bash', { command })),
+          step(pnpmTest),
+        ]),
+        'rerun-unchanged',
+      );
+    });
+
+  it('still matches a rerun after Bash reads that do not edit', () => {
+    const found = episodes(
+      transcript('hi', [
+        step(pnpmTest),
+        step(call('Bash', { command: 'cat a.txt' })),
+        step(call('Bash', { command: 'grep -n x a.ts 2>&1 | head' })),
+        step(call('Bash', { command: 'ls > /dev/null' })),
+        step(pnpmTest),
+      ]),
+      'rerun-unchanged',
+    );
+    assert.equal(found.count, 1);
   });
 
   it('rejects a repeated command that is not a check', () => {
@@ -577,6 +619,43 @@ describe('grep-after-wireit-skip', () => {
     assert.deepEqual(found.pointers, ['/t/session.jsonl:6']);
   });
 
+  it('rejects a skip line in the result of a command that is not a check', () => {
+    assertNone(
+      transcript('hi', [
+        step(call('Bash', { command: 'cat notes.txt' }, 'Already fresh')),
+        step(tail),
+      ]),
+      'grep-after-wireit-skip',
+    );
+  });
+
+  it('matches after a skip from pnpm --filter x check', () => {
+    const check = call(
+      'Bash',
+      { command: 'pnpm --filter @houserules/cli check' },
+      'Already fresh',
+    );
+    assert.equal(
+      episodes(
+        transcript('hi', [step(check), step(tail)]),
+        'grep-after-wireit-skip',
+      ).count,
+      1,
+    );
+  });
+
+  it('rejects a read of a .output file or a /tasks/ path', () => {
+    for (const command of [
+      'tail -20 /tmp/x/tasks/abc.output',
+      'cat /r/job.output',
+      'grep -n ok /tmp/claude/tasks/abc',
+    ])
+      assertNone(
+        transcript('hi', [step(build), step(call('Bash', { command }))]),
+        'grep-after-wireit-skip',
+      );
+  });
+
   it('rejects a log read past the window and one after a run that was not skipped', () => {
     assertNone(
       transcript('hi', [step(build), ...reads(3), step(tail)]),
@@ -589,6 +668,67 @@ describe('grep-after-wireit-skip', () => {
       ]),
       'grep-after-wireit-skip',
     );
+  });
+});
+
+describe('empty-grep-retry', () => {
+  const emptyRecursive = (command) =>
+    call('Bash', { command }, '(Bash completed with no output)');
+  const matches = (command) =>
+    call('Bash', { command }, 'packages/a.ts:3: needle');
+
+  it('matches an empty recursive grep followed by a retry that found matches', () => {
+    const text = transcript('hi', [
+      step(emptyRecursive('grep -rn needle .claude/plans')),
+      step(call('Read', { file_path: '/r/a.ts' })),
+      step(matches('command grep -rn needle .claude/plans/x')),
+    ]);
+
+    const found = episodes(text, 'empty-grep-retry');
+
+    assert.equal(found.count, 1);
+    assert.equal(found.calls, 1);
+    assert.deepEqual(found.pointers, ['/t/session.jsonl:2']);
+  });
+
+  it('matches an empty rg followed by a retry rooted deeper', () => {
+    const text = transcript('hi', [
+      step(emptyRecursive('rg "needle" .claude')),
+      step(matches('rg needle .claude/plans')),
+    ]);
+
+    assert.equal(episodes(text, 'empty-grep-retry').count, 1);
+  });
+
+  it('rejects an empty recursive grep with no retry', () => {
+    const text = transcript('hi', [
+      step(emptyRecursive('grep -R needle .claude/plans')),
+      step(call('Bash', { command: 'ls' })),
+    ]);
+
+    assertNone(text, 'empty-grep-retry');
+  });
+
+  it('rejects a retry with a different pattern', () => {
+    const text = transcript('hi', [
+      step(emptyRecursive('grep -rn needle .claude/plans')),
+      step(matches('grep -rn haystack .claude/plans/x')),
+    ]);
+
+    assertNone(text, 'empty-grep-retry');
+  });
+
+  it('rejects a retry past five Bash calls', () => {
+    const filler = Array.from({ length: 5 }, (_, i) =>
+      step(call('Bash', { command: `echo ${i}` })),
+    );
+    const text = transcript('hi', [
+      step(emptyRecursive('grep -rn needle .claude/plans')),
+      ...filler,
+      step(matches('command grep -rn needle .claude/plans/x')),
+    ]);
+
+    assertNone(text, 'empty-grep-retry');
   });
 });
 
@@ -1214,6 +1354,7 @@ describe('classify with rules off', () => {
           'grep-after-wireit-skip': 0,
           'small-agent': 0,
           'plan-read-before-write': 0,
+          'empty-grep-retry': 0,
         },
         kindCost: 3,
         totalCost: 9,
@@ -1266,7 +1407,7 @@ describe('cli', () => {
       parsed.kinds.map((entry) => entry.kind),
       KIND_NAMES,
     );
-    assert.equal(KIND_NAMES.length, 7);
+    assert.equal(KIND_NAMES.length, 8);
     for (const entry of parsed.kinds) assert.ok(entry.rule.length > 0);
     assert.equal(
       parsed.kinds.find((entry) => entry.kind === 'rerun-unchanged').count,
@@ -1311,7 +1452,7 @@ describe('cli', () => {
     const parsed = JSON.parse(run.stdout);
     assert.deepEqual(
       parsed.kinds.map((entry) => entry.count),
-      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0],
     );
     assert.deepEqual(parsed.bashWall.families[0], {
       family: 'pnpm build',

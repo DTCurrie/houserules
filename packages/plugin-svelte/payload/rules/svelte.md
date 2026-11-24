@@ -70,13 +70,45 @@ value)` to read reactive state without taking a dependency.
 
 ## Context Providers
 
-Reactive shared state lives in `.svelte.ts` files using `getContext` and `setContext`.
-Use `Symbol` keys, so two contexts can never collide. Never declare `$state` at module scope
-here: on the server it is one instance shared across every request and user, so create it
-inside `provide*` instead.
+Reactive shared state lives in `.svelte.ts` files. When the package's `svelte` peer or
+dependency range is 5.40 or later, use `createContext` imported from `svelte`: it is typed and
+needs no key. A package that supports earlier versions uses `getContext` and `setContext`
+with `Symbol` keys, so two contexts can never collide. For either form, never declare `$state`
+at module scope: on the server it is one instance shared across every request and user, so
+create it inside `provide*` instead.
 
 ```typescript
-// theme-context.svelte.ts
+// theme-context.svelte.ts, Svelte 5.40 and later
+import { createContext } from 'svelte';
+
+interface ThemeContext {
+  readonly current: 'light' | 'dark';
+  toggle: () => void;
+}
+
+const [getTheme, setTheme] = createContext<ThemeContext>();
+
+export const provideTheme = () => {
+  let theme = $state<'light' | 'dark'>('light');
+  const context: ThemeContext = {
+    get current() {
+      return theme;
+    },
+    toggle: () => {
+      theme = theme === 'light' ? 'dark' : 'light';
+    },
+  };
+  setTheme(context);
+  return context;
+};
+
+export const useTheme = (): ThemeContext => getTheme();
+```
+
+Before 5.40, the same file keys the context with a `Symbol` instead:
+
+```typescript
+// theme-context.svelte.ts, Svelte before 5.40
 import { getContext, setContext } from 'svelte';
 
 const key = Symbol('theme');
@@ -104,7 +136,7 @@ export const useTheme = (): ThemeContext => getContext(key);
 ```
 
 - `.svelte.ts` for any file using runes outside a `.svelte` component.
-- `Symbol()` keys prevent collisions.
+- `Symbol()` keys, for the pre-5.40 form, prevent collisions.
 - Return **getters**, not plain properties, to preserve reactivity.
 - Name `provide*` to inject, `use*` or `create*` to consume.
 

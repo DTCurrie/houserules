@@ -1,0 +1,17 @@
+{
+  "modules": "plans,orchestrate",
+  "plugins": [],
+  "model": "sonnet",
+  "validityAgent": "phase-orchestrator",
+  "collect": ["src"],
+  "arms": {
+    "without": {
+      "prompt": "arms/without/prompt.txt",
+      "overlay": "arms/without/overlay"
+    },
+    "with": {
+      "prompt": "arms/with/prompt.txt",
+      "overlay": "arms/with/overlay"
+    }
+  }
+}

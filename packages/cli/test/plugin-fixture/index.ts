@@ -9,6 +9,8 @@ import type {
 
 interface FixtureConfig {
   note?: string;
+  /** Wires a second Stop hook, so a test can add a hook without editing this file. */
+  extraStopHook?: boolean;
 }
 
 function readConfig(config: unknown): FixtureConfig {
@@ -69,6 +71,17 @@ function buildCopyModule(api: PluginApi): ModuleDef {
   };
 }
 
+function extraStopHookActions(fixtureConfig: FixtureConfig): Action[] {
+  if (!fixtureConfig.extraStopHook) return [];
+  return [
+    {
+      kind: 'merge-settings',
+      module: 'fixture-extra',
+      fragment: hookFragment('Stop', null, 'fixture-extra-hook.mjs'),
+    },
+  ];
+}
+
 function buildRawModule(api: PluginApi): ModuleDef {
   const fixtureConfig = readConfig(api.config);
   const note = fixtureConfig.note ?? 'no note configured';
@@ -117,6 +130,7 @@ function buildRawModule(api: PluginApi): ModuleDef {
           module: 'fixture-extra',
           fragment: hookFragment('Stop', null, 'fixture-script.mjs'),
         },
+        ...extraStopHookActions(fixtureConfig),
         {
           kind: 'advise',
           module: 'fixture-extra',

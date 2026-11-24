@@ -621,11 +621,12 @@ describe('run --fixture network', () => {
     const context = setup();
     const lifted = writeFixture(scratch('fixture'), { network: true });
 
-    assert.match(
-      printedCommand(context.fixture, context),
-      /--disallowedTools WebFetch,WebSearch$/,
-    );
-    assert.doesNotMatch(printedCommand(lifted, context), /--disallowedTools/);
+    const closed = printedCommand(context.fixture, context);
+    assert.match(closed, /--disallowedTools WebFetch,WebSearch /);
+    assert.match(closed, /--settings ".*failIfUnavailable\\":true/);
+    const open = printedCommand(lifted, context);
+    assert.doesNotMatch(open, /--disallowedTools/);
+    assert.doesNotMatch(open, /--settings/);
   });
 });
 

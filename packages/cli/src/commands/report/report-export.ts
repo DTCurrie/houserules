@@ -57,8 +57,6 @@ const READ_GUARD_REASON = new RegExp(
 );
 const LEDGER_GATE_REASON =
   /^(Blocked by houserules subagent write gate: a subagent may not run ledger command )`.+`(\. Describe the issue and let the caller act on it\.)$/;
-const CUSTOM_RULE_REASON =
-  /^(Blocked by houserules\.config\.json guard rule: ).+$/;
 const FIXED_REASONS = new Set([
   "git commit is the user's to run. Describe what's staged and stop.",
   "git push is the user's to run.",
@@ -92,8 +90,6 @@ function redactReason(reason: string): string {
   if (read) return redactReadGuardReason(read[2] ?? '');
   const ledger = LEDGER_GATE_REASON.exec(reason);
   if (ledger) return `${ledger[1]}\`<subcommand>\`${ledger[2]}`;
-  const custom = CUSTOM_RULE_REASON.exec(reason);
-  if (custom) return `${custom[1]}<pattern>`;
   if (FIXED_REASONS.has(reason)) return reason;
   return REASON_REDACTED;
 }

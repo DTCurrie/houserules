@@ -102,6 +102,11 @@
         "concurrent": {
           "description": "Whether `--run` starts the jobs of packages with no dependency edge between them together, within the resource budget. Unset or true runs them together, and a dependent still waits for the package it depends on. False runs every job one at a time in scope order.",
           "type": "boolean"
+        },
+        "rootCommands": {
+          "description": "Workspace-root package.json scripts, e.g. [\"verify\"], run at the repo root with no filter flag whenever a monorepo verify scope is non-empty, after every package job. Holds repo-wide checks, such as an unused-export scan, that a package-scoped run never reaches. Unset runs none.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
         }
       },
       "required": ["runner", "filterFlag", "runScriptPrefix", "commands"],

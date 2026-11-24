@@ -23,7 +23,7 @@ function doctor({
       : `· resident context (CLAUDE.md): ~${claude} tokens / 137 lines vs budget ~4000 / 200 — 2062 tokens, 63 lines headroom`,
     '· nested (on-demand, not in resident total): packages/api/CLAUDE.md',
     `· resident skill/agent descriptions (9 skill(s) + 11 agent(s)): ~${descriptions} tokens`,
-    `· resident output style (Prose): ~${style} tokens`,
+    style == null ? null : `· resident output style (Prose): ~${style} tokens`,
     `· 11 installed skills measured, largest body ${largest} bytes`,
     '',
   ]
@@ -101,6 +101,30 @@ describe('metrics-table', () => {
     assert.equal(
       lines[3],
       '| largest skill body (bytes) | 19000 | 19000 | 0 |',
+    );
+  });
+
+  it('sums the two present lines when the output style line is absent', () => {
+    const paths = setup([
+      doctor({ claude: 2000, descriptions: 900, style: null }),
+      doctor({ claude: 1800, descriptions: 950, style: null }),
+    ]);
+    const lines = run(paths).stdout.split('\n');
+    assert.equal(
+      lines[2],
+      '| always-loaded total (tokens) | 2900 | 2750 | -150 |',
+    );
+  });
+
+  it('reports not captured when the CLAUDE.md line is missing and the style line is absent', () => {
+    const paths = setup([
+      doctor({ claude: null, style: null }),
+      doctor({ style: null }),
+    ]);
+    const lines = run(paths).stdout.split('\n');
+    assert.equal(
+      lines[2],
+      '| always-loaded total (tokens) | not captured | 2800 | not captured |',
     );
   });
 

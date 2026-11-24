@@ -121,6 +121,148 @@ describe('renderComparison', () => {
   });
 });
 
+describe('renderComparison bash wall and kit versions', () => {
+  const family = (name: string, seconds: number, calls: number) => ({
+    family: name,
+    calls,
+    subagentCalls: 0,
+    unscopedCalls: 0,
+    seconds,
+    medianSeconds: 1,
+    p90Seconds: 1,
+  });
+  const wall = (families: ReturnType<typeof family>[]) => ({
+    calls: 10,
+    timed: 8,
+    background: 1,
+    unanswered: 1,
+    includesSubagents: false,
+    families,
+    slowest: [],
+  });
+  const kitRows = (rows: [string, string, 'banner' | 'recorded'][]) => ({
+    rows: rows.map(([sessionId, version, source]) => ({
+      sessionId,
+      version,
+      source,
+    })),
+  });
+  const first: ReportDocument = {
+    ...documentFor('before', assistantTurns(1)),
+    bashWall: wall([family('pnpm', 30.5, 4), family('git', 2, 3)]),
+    kitVersions: kitRows([
+      ['a', '1.2.0', 'banner'],
+      ['b', '1.2.0', 'banner'],
+      ['c', '1.1.0', 'recorded'],
+    ]),
+  };
+  const second: ReportDocument = {
+    ...documentFor('after', assistantTurns(1)),
+    bashWall: wall([family('pnpm', 12.25, 2), family('vitest', 40, 5)]),
+    kitVersions: kitRows([['d', '1.3.0', 'banner']]),
+  };
+  const bare = documentFor('bare', assistantTurns(1));
+  delete bare.bashWall;
+  delete bare.kitVersions;
+
+  it('renders each section title once', () => {
+    const lines = renderComparison([first, second]);
+
+    expect(lines.filter((l) => l === '-- bash wall --')).toHaveLength(1);
+    expect(lines.filter((l) => l === '-- kit versions --')).toHaveLength(1);
+  });
+
+  it('compares timed seconds and calls per document', () => {
+    const lines = renderComparison([first, second]);
+
+    expect(cells(lines, 'seconds (listed families)')).toEqual([
+      'seconds (listed families)',
+      '32.50',
+      '52.25',
+    ]);
+    expect(cells(lines, 'timed calls')).toEqual(['timed calls', '8', '8']);
+  });
+
+  it('sums only the listed families when the document timed more calls than they hold', () => {
+    const truncated = {
+      ...first,
+      bashWall: {
+        ...wall([family('pnpm', 1.5, 1), family('git', 2, 1)]),
+        timed: 40,
+      },
+    };
+
+    const lines = renderComparison([truncated]);
+
+    expect(cells(lines, 'timed calls')).toEqual(['timed calls', '40']);
+    expect(cells(lines, 'seconds (listed families)')).toEqual([
+      'seconds (listed families)',
+      '3.50',
+    ]);
+    expect(lines.some((l) => l.trim().startsWith('timed seconds'))).toBe(false);
+  });
+
+  it('dashes a family that only one document timed', () => {
+    const lines = renderComparison([first, second]);
+
+    expect(cells(lines, 'seconds: pnpm')).toEqual([
+      'seconds: pnpm',
+      '30.50',
+      '12.25',
+    ]);
+    expect(cells(lines, 'seconds: git')).toEqual(['seconds: git', '2.00', '-']);
+    expect(cells(lines, 'seconds: vitest')).toEqual([
+      'seconds: vitest',
+      '-',
+      '40.00',
+    ]);
+  });
+
+  it('caps the families at the five slowest per document', () => {
+    const many = {
+      ...first,
+      bashWall: wall(
+        ['a', 'b', 'c', 'd', 'e', 'f'].map((name, index) =>
+          family(`fam-${name}`, 60 - index, 1),
+        ),
+      ),
+    };
+
+    const lines = renderComparison([many]);
+
+    expect(lines.filter((l) => l.includes('seconds: fam-'))).toHaveLength(5);
+    expect(lines.some((l) => l.includes('seconds: fam-f'))).toBe(false);
+  });
+
+  it('shows each document its own kit versions with session counts', () => {
+    const lines = renderComparison([first, second]);
+
+    expect(cells(lines, 'version 1.2.0')).toEqual(['version 1.2.0', '2', '-']);
+    expect(cells(lines, 'version 1.1.0 (recorded)')).toEqual([
+      'version 1.1.0 (recorded)',
+      '1',
+      '-',
+    ]);
+    expect(cells(lines, 'version 1.3.0')).toEqual(['version 1.3.0', '-', '1']);
+  });
+
+  it('dashes a document that exported neither key', () => {
+    const lines = renderComparison([first, bare]);
+
+    expect(cells(lines, 'seconds (listed families)')).toEqual([
+      'seconds (listed families)',
+      '32.50',
+      '-',
+    ]);
+    expect(cells(lines, 'seconds: pnpm')).toEqual([
+      'seconds: pnpm',
+      '30.50',
+      '-',
+    ]);
+    expect(cells(lines, 'version 1.2.0')).toEqual(['version 1.2.0', '2', '-']);
+  });
+});
+
 describe('renderComparison on an old document beside a new one', () => {
   const old = JSON.parse(
     JSON.stringify(documentFor('old', assistantTurns(2))),

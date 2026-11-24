@@ -7,6 +7,7 @@ import {
   detectFixCommands,
   detectVerifyCommands,
   suggestPrefix,
+  trackedAmong,
   trackedLedgerLogs,
   trackedLedgerSurfaces,
   trackedScriptFiles,
@@ -445,6 +446,46 @@ function commitAll(root: string): void {
   runIn(root, 'git', ['add', '-A']);
   runIn(root, 'git', ['commit', '-qm', 'fixture: ledger']);
 }
+
+describe('trackedAmong', () => {
+  it('sees a file staged by another git process after an earlier answer in the same run', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(join(root, '.claude/houserules.md'), '# sections\n');
+    const before = trackedAmong(root, ['.claude/houserules.md']);
+    runIn(root, 'git', ['add', '.claude/houserules.md']);
+
+    const after = trackedAmong(root, ['.claude/houserules.md']);
+
+    expect(before, 'the file was tracked before it was staged').toEqual([]);
+    expect(
+      after,
+      'a listing cached across an index write answered stale',
+    ).toEqual(['.claude/houserules.md']);
+  });
+
+  it('matches a directory pathspec only at a path boundary, never a sibling sharing its prefix', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, '.claude/scripts'), { recursive: true });
+    mkdirSync(join(root, '.claude/scripts-old'), { recursive: true });
+    writeFileSync(join(root, '.claude/scripts/guard.mjs'), '\n');
+    writeFileSync(join(root, '.claude/scripts-old/guard.mjs'), '\n');
+    commitAll(root);
+
+    expect(trackedAmong(root, ['.claude/scripts'])).toEqual([
+      '.claude/scripts/guard.mjs',
+    ]);
+  });
+
+  it('returns a tracked name holding a space and a non-ASCII letter byte for byte, unquoted', () => {
+    const root = useRepo('non-js');
+    mkdirSync(join(root, 'notes'), { recursive: true });
+    writeFileSync(join(root, 'notes/café menu.md'), '\n');
+    commitAll(root);
+
+    expect(trackedAmong(root, ['notes'])).toEqual(['notes/café menu.md']);
+  });
+});
 
 describe('trackedLedgerSurfaces, nested per-area surfaces', () => {
   it('offers a nested surface a pre-move ledger entry records by repo-relative path', () => {

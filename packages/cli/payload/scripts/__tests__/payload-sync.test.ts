@@ -34,6 +34,7 @@ import {
   upgradeCommand,
   versionNotices,
 } from '../payload-sync.mjs';
+import { SKIP_CASES, UPGRADE_CASES } from './update-check-cases.js';
 
 const SCRIPT = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -503,6 +504,24 @@ describe('payload-sync.mjs', () => {
       ]);
     });
 
+    it.each(UPGRADE_CASES)(
+      'prints the upgrade command doctor prints for $name',
+      ({ files, command }) => {
+        writeManifest(root, current());
+        for (const [path, content] of Object.entries(files))
+          put(root, path, content);
+        writeCache(root, {
+          checkedAt: hoursAgo(1),
+          latest: { '@houserules/cli': '3.0.0' },
+        });
+
+        expect(lines(run(root, nodeDir(), {}).stdout)).toEqual([
+          '[houserules] kit 2.0.0',
+          `[houserules] 3.0.0 available (installed 2.0.0). Upgrade: ${command}`,
+        ]);
+      },
+    );
+
     it('prints a line per behind plugin after the CLI line', () => {
       installPlugin('@houserules/plugin-x', '1.0.0');
       installPlugin('@houserules/plugin-y', '1.4.0');
@@ -635,6 +654,13 @@ describe('isVersionCheckSkipped', () => {
   ])('env %j with config %j is %s', (env, config, expected) => {
     expect(isVersionCheckSkipped(env, config)).toBe(expected);
   });
+
+  it.each(SKIP_CASES)(
+    'agrees with doctor under $name, skipped $skipped',
+    ({ env, skipped }) => {
+      expect(isVersionCheckSkipped(env, undefined)).toBe(skipped);
+    },
+  );
 });
 
 describe('isNewer', () => {
@@ -664,6 +690,24 @@ describe('localManager', () => {
     for (const lockfile of lockfiles) put(dir, lockfile, '');
     expect(localManager(dir)).toBe(expected);
   });
+
+  it.each([
+    ['{"packageManager":"yarn@4.5.0"}', 'yarn'],
+    ['{"packageManager":"pnpm"}', 'pnpm'],
+    ['{"packageManager":"@1.0.0"}', 'pnpm'],
+    ['{"packageManager":42}', 'pnpm'],
+    ['null', 'pnpm'],
+    ['{not json', 'pnpm'],
+  ])(
+    'package.json %s over a pnpm-lock.yaml chooses %s',
+    (packageJson, expected) => {
+      const dir = tmp();
+      put(dir, 'pnpm-lock.yaml', '');
+      put(dir, 'package.json', packageJson);
+
+      expect(localManager(dir)).toBe(expected);
+    },
+  );
 });
 
 describe('globalManager', () => {

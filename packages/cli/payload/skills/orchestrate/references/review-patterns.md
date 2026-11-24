@@ -16,11 +16,18 @@ intended.
 - **Acceptance evidence present and passing?** The one rule that keeps review from decaying into
   rubber-stamping. A test tail alone, where you also asked for a typecheck, is an unrun acceptance.
 - **Did the acceptance actually RUN, or did the build system skip it?** An incremental runner
-  (wireit, turbo, nx, bazel) reports a cache hit as success. `Ran 0 scripts and skipped 26` is a
-  claim that a previous run with these inputs passed, not evidence that anything ran now. That is
-  usually fine and is the reason the cache exists. It is not fine as the sole evidence for a slice
-  that changed a dozen files, and it is worthless when the worker populated the cache itself moments
-  earlier. When a tail shows everything skipped on a large slice, verify one thing yourself directly.
+  (turbo, nx, bazel) reports a cache hit as success. `Ran 0 scripts and skipped 26` is a
+  claim that a previous run with these inputs passed. A skip on unchanged declared inputs is a pass
+  on the current bytes, and that is the reason the cache exists. A doubtful skip gets one check:
+  do the changed files sit inside the script's declared inputs? If they do, the
+  skip stands. If a changed file sits outside them, the skip proves nothing about that file, so
+  verify it yourself directly. A skip is also worthless when the worker populated the cache itself
+  moments earlier.
+- **Do I re-run the worker's acceptance?** The acceptance output in the report is the evidence.
+  Re-run an acceptance only when its output is missing, could be a cache skip outside the declared
+  inputs, or you can name the doubt. The tree check (`git status`, `git diff --name-only` against
+  the owned paths) still runs first. The barrier re-run in `references/nested.md` stays, because it
+  follows the fixer and runs on changed files.
 - **Could the evidence have come out any other way?** One worker mirrored a route across the wrong
   axis and confirmed it by reading the Z column back, but the fixture sat at z ≈ 0, where negating
   changes nothing, so correct and broken produce the same output. The report was accurate and carried

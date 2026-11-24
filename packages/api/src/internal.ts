@@ -12,6 +12,9 @@
 
 export { extractBody, hasLegacyRegion, upsertRegion } from './regions.js';
 
+export { HOOK_DISPATCH_SCRIPT, HOOK_WIRING_PATH } from './hook-wiring.js';
+export type { HookWiring, HookWiringEntry } from './hook-wiring.js';
+
 export {
   isKitStockCommand,
   mergeSettings,

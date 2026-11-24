@@ -21,12 +21,15 @@ import {
 } from '../plan.js';
 import { HouseError } from '../house-error.js';
 import { payloadGitignoreActions } from '../modules/payload-gitignore.js';
+import { hookCommand, hookFragment } from '@houserules/api';
 import type {
   BodyAction,
   CopyAction,
+  HookFragmentOptions,
   MergeSettingsAction,
   RegionAction,
   SeedAction,
+  Settings,
   ModuleDef,
   WriteAction,
 } from '@houserules/api';
@@ -1396,6 +1399,349 @@ describe('computeEffects, given a merge-settings action and a malformed settings
     expect(() => computeEffects(root, [fragmentAction()])).toThrow(
       /\.claude\/settings\.json is not valid JSON/,
     );
+  });
+});
+
+describe('computeEffects, given merge-settings actions carrying hooks', () => {
+  const dirs: string[] = [];
+  const DISPATCH_GUARD = hookCommand('hook-dispatch.mjs', 'guard');
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  function tempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-plan-dispatch-'));
+    dirs.push(dir);
+    return dir;
+  }
+
+  function hookAction(
+    event: string,
+    matcher: string | null,
+    script: string,
+    options?: HookFragmentOptions,
+  ): MergeSettingsAction {
+    return {
+      kind: 'merge-settings',
+      module: 'core',
+      fragment: hookFragment(event, matcher, script, undefined, options),
+    };
+  }
+
+  function seedSettings(root: string, settings: Settings): void {
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude', 'settings.json'),
+      `${JSON.stringify(settings, null, 2)}\n`,
+    );
+  }
+
+  function plannedSettings(root: string, actions: MergeSettingsAction[]) {
+    const { settingsPlan } = computeEffects(root, actions);
+    return JSON.parse(settingsPlan!.text!) as Settings;
+  }
+
+  function plannedWiring(actions: MergeSettingsAction[]): unknown {
+    const { effects } = computeEffects(tempDir(), actions);
+    const effect = effects.find(
+      (e) => e.action.dest === '.claude/scripts/hook-wiring.json',
+    );
+    return JSON.parse(effect!.content!.toString('utf8'));
+  }
+
+  describe('over settings that carry a user-edited variant of guard-bash', () => {
+    const EDITED_COMMAND = `${hookCommand('guard-bash.mjs', 'guard')} --my-extra-flag`;
+    const EDITED_SETTINGS: Settings = {
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Bash',
+            hooks: [{ type: 'command', command: EDITED_COMMAND }],
+          },
+        ],
+      },
+    };
+    const actions = [
+      hookAction('PreToolUse', 'Bash', 'guard-bash.mjs'),
+      hookAction('PreToolUse', 'Read', 'guard-read.mjs'),
+    ];
+
+    function plannedWiringOver(root: string): {
+      events: Record<string, { script: string }[]>;
+    } {
+      const { effects } = computeEffects(root, actions);
+      const effect = effects.find(
+        (e) => e.action.dest === '.claude/scripts/hook-wiring.json',
+      );
+      return JSON.parse(effect!.content!.toString('utf8'));
+    }
+
+    it('leaves guard-bash out of the PreToolUse wiring', () => {
+      const root = tempDir();
+      seedSettings(root, EDITED_SETTINGS);
+
+      expect(plannedWiringOver(root).events.PreToolUse).toEqual([
+        { script: 'guard-read.mjs', matcher: 'Read' },
+      ]);
+    });
+
+    it('keeps the edited entry in settings byte for byte beside the dispatcher', () => {
+      const root = tempDir();
+      seedSettings(root, EDITED_SETTINGS);
+
+      const commands = (
+        plannedSettings(root, actions).hooks?.PreToolUse ?? []
+      ).flatMap((group) => group.hooks.map((hook) => hook.command));
+
+      expect(commands.sort()).toEqual([DISPATCH_GUARD, EDITED_COMMAND].sort());
+    });
+
+    it('writes no wiring entry and no dispatcher when the edited script was the only hook of its event', () => {
+      const root = tempDir();
+      seedSettings(root, EDITED_SETTINGS);
+      const only = [hookAction('PreToolUse', 'Bash', 'guard-bash.mjs')];
+
+      const { effects, settingsPlan } = computeEffects(root, only);
+
+      expect(
+        effects.some(
+          (e) => e.action.dest === '.claude/scripts/hook-wiring.json',
+        ),
+      ).toBe(false);
+      expect(JSON.parse(settingsPlan!.text!).hooks.PreToolUse).toEqual(
+        EDITED_SETTINGS.hooks!.PreToolUse,
+      );
+    });
+  });
+
+  it('writes one PreToolUse entry whose matcher is the sorted union of its hooks’ alternatives', () => {
+    const settings = plannedSettings(tempDir(), [
+      hookAction('PreToolUse', 'Read|Bash', 'guard-read.mjs'),
+      hookAction('PreToolUse', 'Bash', 'guard-bash.mjs'),
+      hookAction('PreToolUse', 'mcp__(a|b)__x', 'guard-mcp.mjs'),
+    ]);
+
+    expect(settings.hooks).toEqual({
+      PreToolUse: [
+        {
+          matcher: 'Bash|Read|mcp__(a|b)__x',
+          hooks: [{ type: 'command', command: DISPATCH_GUARD }],
+        },
+      ],
+    });
+  });
+
+  it('drops the matcher when any hook in the event has none', () => {
+    const settings = plannedSettings(tempDir(), [
+      hookAction('PostToolUse', 'Edit', 'regen-on-edit.mjs'),
+      hookAction('PostToolUse', null, 'tool-output-trim.mjs'),
+    ]);
+
+    expect(settings.hooks?.PostToolUse).toEqual([
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: hookCommand('hook-dispatch.mjs', 'silent'),
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('marks the dispatcher onFailure block when one of its hooks carries it', () => {
+    const settings = plannedSettings(tempDir(), [
+      hookAction('PreToolUse', 'Bash', 'guard-bash.mjs', {
+        onFailure: 'block',
+      }),
+      hookAction('PreToolUse', 'Read', 'guard-read.mjs'),
+    ]);
+
+    expect(settings.hooks?.PreToolUse?.[0]?.hooks).toEqual([
+      { type: 'command', command: DISPATCH_GUARD, onFailure: 'block' },
+    ]);
+  });
+
+  it('gives the dispatcher a timeout past its slowest hook when that outlasts the harness default for the event', () => {
+    const settings = plannedSettings(tempDir(), [
+      hookAction('UserPromptSubmit', null, 'slow.mjs', { timeout: 60 }),
+      hookAction('UserPromptSubmit', null, 'quick.mjs'),
+    ]);
+
+    expect(settings.hooks?.UserPromptSubmit?.[0]?.hooks?.[0]?.timeout).toBe(62);
+  });
+
+  it('leaves the dispatcher timeout unset when the harness default covers its slowest hook', () => {
+    const settings = plannedSettings(tempDir(), [
+      hookAction('Stop', null, 'lint-format-fix.mjs', { timeout: 120 }),
+      hookAction('UserPromptSubmit', null, 'quick.mjs', { timeout: 20 }),
+    ]);
+
+    expect(settings.hooks?.Stop?.[0]?.hooks?.[0]).not.toHaveProperty('timeout');
+    expect(
+      settings.hooks?.UserPromptSubmit?.[0]?.hooks?.[0],
+    ).not.toHaveProperty('timeout');
+  });
+
+  it('gives the SessionStart dispatcher the bootstrap fallback when payload-sync is among its hooks', () => {
+    const settings = plannedSettings(tempDir(), [
+      hookAction('SessionStart', null, 'session-context.mjs'),
+      hookAction('SessionStart', null, 'payload-sync.mjs', {
+        fallback: 'bootstrap',
+      }),
+    ]);
+
+    expect(settings.hooks?.SessionStart?.[0]?.hooks?.[0]?.command).toBe(
+      hookCommand('hook-dispatch.mjs', 'bootstrap'),
+    );
+  });
+
+  it('keeps a hook with an if condition as its own direct settings entry', () => {
+    const settings = plannedSettings(tempDir(), [
+      hookAction('PreToolUse', 'Bash', 'guard-bash.mjs'),
+      hookAction('PreToolUse', 'Edit', 'conditional.mjs', {
+        if: 'tool_input.file_path',
+      }),
+    ]);
+
+    expect(settings.hooks?.PreToolUse).toEqual([
+      {
+        matcher: 'Edit',
+        hooks: [
+          {
+            type: 'command',
+            command: hookCommand('conditional.mjs', 'guard'),
+            if: 'tool_input.file_path',
+          },
+        ],
+      },
+      {
+        matcher: 'Bash',
+        hooks: [{ type: 'command', command: DISPATCH_GUARD }],
+      },
+    ]);
+  });
+
+  it('writes each dispatched hook to hook-wiring.json in plan order, without the direct one', () => {
+    const wiring = plannedWiring([
+      hookAction('PreToolUse', 'Bash', 'guard-bash.mjs', {
+        onFailure: 'block',
+      }),
+      hookAction('Stop', null, 'lint-format-fix.mjs', { timeout: 120 }),
+      hookAction('PreToolUse', 'Edit', 'conditional.mjs', { async: true }),
+      hookAction('Stop', null, 'lint-format-fix.mjs'),
+    ]);
+
+    expect(wiring).toEqual({
+      version: 1,
+      events: {
+        PreToolUse: [
+          { script: 'guard-bash.mjs', matcher: 'Bash', onFailure: 'block' },
+        ],
+        Stop: [{ script: 'lint-format-fix.mjs', timeout: 120 }],
+      },
+    });
+  });
+
+  it('plans no wiring file when no hook is dispatchable', () => {
+    const { effects } = computeEffects(tempDir(), [
+      hookAction('Stop', null, 'conditional.mjs', { async: true }),
+    ]);
+
+    expect(effects.map((e) => e.action.dest)).toEqual([]);
+  });
+
+  it('drops a pre-dispatch per-script entry houserules wrote, keeping the user’s hook in the same group', () => {
+    const root = tempDir();
+    seedSettings(root, {
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Bash',
+            hooks: [
+              { type: 'command', command: 'node ./my-own-hook.js' },
+              {
+                type: 'command',
+                command: hookCommand('guard-bash.mjs', 'guard'),
+                onFailure: 'block',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const settings = plannedSettings(root, [
+      hookAction('PreToolUse', 'Bash', 'guard-bash.mjs', {
+        onFailure: 'block',
+      }),
+    ]);
+
+    expect(settings.hooks?.PreToolUse).toEqual([
+      {
+        matcher: 'Bash',
+        hooks: [
+          { type: 'command', command: 'node ./my-own-hook.js' },
+          { type: 'command', command: DISPATCH_GUARD, onFailure: 'block' },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps a user’s edited variant of a dispatched script’s command', () => {
+    const root = tempDir();
+    const variant = 'node .claude/scripts/guard-bash.mjs --verbose';
+    seedSettings(root, {
+      hooks: {
+        PreToolUse: [
+          { matcher: 'Bash', hooks: [{ type: 'command', command: variant }] },
+        ],
+      },
+    });
+
+    const settings = plannedSettings(root, [
+      hookAction('PreToolUse', 'Bash', 'guard-bash.mjs'),
+    ]);
+
+    expect(settings.hooks?.PreToolUse?.[0]?.hooks?.[0]?.command).toBe(variant);
+  });
+
+  it('moves an existing dispatcher entry onto the matcher a newly added hook needs', () => {
+    const root = tempDir();
+    seedSettings(root, {
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Bash',
+            hooks: [{ type: 'command', command: DISPATCH_GUARD }],
+          },
+        ],
+      },
+    });
+
+    const settings = plannedSettings(root, [
+      hookAction('PreToolUse', 'Bash', 'guard-bash.mjs'),
+      hookAction('PreToolUse', 'Read', 'guard-read.mjs'),
+    ]);
+
+    expect(settings.hooks?.PreToolUse).toEqual([
+      {
+        matcher: 'Bash|Read',
+        hooks: [{ type: 'command', command: DISPATCH_GUARD }],
+      },
+    ]);
+  });
+
+  it('records the dispatcher, not the dispatched script, in the settings signature', () => {
+    const { signature } = computeEffects(tempDir(), [
+      hookAction('PreToolUse', 'Bash', 'guard-bash.mjs'),
+    ]);
+
+    expect(signature.hooks).toEqual([
+      { event: 'PreToolUse', matcher: 'Bash', script: 'hook-dispatch.mjs' },
+    ]);
   });
 });
 

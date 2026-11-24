@@ -59,8 +59,13 @@ timeout measured the load and not the test.
   `exec vitest related --run {files}`, and `--paths` runs that template as the package's `test` step.
   A worker's iteration loop uses it too, unless `orchestrate.fileLevelAcceptance` is `false`. A
   file-level pass does not prove two things. It skips tests that reach the code through a child
-  process, because `vitest related` follows the import graph. It also bypasses wireit, so the build
+  process, because `vitest related` follows the import graph. It also bypasses the build orchestrator, so the build
   does not run first, and a test that reads `dist/` runs against the last build.
+- `verify.rootCommands` ships unset. In a monorepo, set it to workspace-root scripts such as
+  `["verify"]` when the root holds repo-wide checks that read package paths, like an unused-export
+  scan. The scope then ends with a root entry that runs those scripts at the repo root with no filter
+  flag, after every package job. It applies whenever the scope holds a package or a changed path lies
+  outside every package. A single-package repo never gets one.
 - `--run` starts the jobs of packages with no dependency edge between them together, bounded by the
   resource budget, and runs a dependent after its dependency. Set `verify.concurrent: false` to
   restore the serial order.

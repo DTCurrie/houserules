@@ -253,6 +253,25 @@ export function useInstalledRepo(
   shape: RepoShape,
   opts: InstalledRepoOptions = {},
 ): string {
+  const snapshot = prepareInstalledRepo(shape, opts);
+  const root = mkdtempSync(join(tmpdir(), `kit-${shape}-`));
+  cpSync(snapshot, root, { recursive: true });
+  onTestFinished(() => removeRepo(root));
+  return root;
+}
+
+/**
+ * Builds the snapshot {@link useInstalledRepo} copies for these arguments, unless this run
+ * already has it. Call it from `beforeAll` so the one cold `init` lands in a hook rather than
+ * in whichever test runs first, which otherwise takes it or not depending on whether another
+ * worker sharing the key published the snapshot first.
+ *
+ * @returns The snapshot directory. Never write into it.
+ */
+export function prepareInstalledRepo(
+  shape: RepoShape,
+  opts: InstalledRepoOptions = {},
+): string {
   const key = cacheKeyFor(shape, opts);
   const hashedKey = createHash('sha256').update(key).digest('hex').slice(0, 16);
   const snapshot = join(snapshotRoot(), hashedKey);
@@ -260,11 +279,7 @@ export function useInstalledRepo(
   // On disk, not a module-level Map: vitest gives every test FILE a fresh module registry, so
   // an in-memory cache never survives across files and each would clobber the shared snapshot.
   if (!existsSync(snapshot)) buildSnapshot(shape, opts, snapshot, key);
-
-  const root = mkdtempSync(join(tmpdir(), `kit-${shape}-`));
-  cpSync(snapshot, root, { recursive: true });
-  onTestFinished(() => removeRepo(root));
-  return root;
+  return snapshot;
 }
 
 interface InstalledRepoOptions {

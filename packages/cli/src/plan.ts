@@ -4,6 +4,9 @@ import { join, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 
 import {
+  HOOK_DISPATCH_SCRIPT,
+  HOOK_WIRING_PATH,
+  isKitStockCommand,
   mergeSettings,
   parseSettingsText,
   renderSettings,
@@ -14,6 +17,7 @@ import {
   bodyHashes,
   wholeFileHash,
 } from '@houserules/api/internal';
+import { fallbackForEvent, hookCommand } from '@houserules/api';
 import { HouseError } from './house-error.js';
 import { mergeManagedKeys } from './merge-config-keys.js';
 import {
@@ -54,12 +58,16 @@ import type {
   SeedAction,
   WriteAction,
   Answers,
+  HookEntry,
+  HookGroup,
   HouseConfig,
   ModuleDef,
   Settings,
   SettingsFragment,
 } from '@houserules/api';
 import type {
+  HookWiring,
+  HookWiringEntry,
   HouseManifest,
   SettingsChange,
   SettingsPlan,
@@ -187,9 +195,10 @@ export interface PlanResult {
   advisories: AdviseAction[];
   signature: SettingsSignature;
   /**
-   * Every module's settings fragment this run resolved, exposed so a caller can reconcile
-   * a previously recorded {@link SettingsSignature} against what is CURRENTLY declared,
-   * such as `update`'s stale-hook cleanup.
+   * The settings fragments this run merges: every module's, minus the hooks the dispatcher
+   * runs, then one dispatcher fragment per event. Exposed so a caller can reconcile a
+   * previously recorded {@link SettingsSignature} against what is CURRENTLY declared, such
+   * as `update`'s stale-hook cleanup, which is what drops a pre-dispatch per-script entry.
    */
   fragments: SettingsFragment[];
   /** Every dest the current plan produces. The reference set prune diffs against. */
@@ -709,33 +718,381 @@ function effectForCopyOrWrite(
 }
 
 /**
+ * The modules' fragments split into what settings.json carries and what the dispatcher reads
+ * from {@link HOOK_WIRING_PATH}, so a release that adds or rewires a hook leaves the tracked
+ * settings.json alone.
+ */
+interface HookDispatchPlan {
+  /** Each module's fragment minus its dispatched hooks, then one dispatcher fragment per event. */
+  settingsFragments: SettingsFragment[];
+  /** Null when no fragment carries a dispatchable hook. */
+  wiring: HookWiring | null;
+}
+
+/** The hook whose fallback runs `update --sync`, which the SessionStart dispatcher inherits. */
+const BOOTSTRAP_SCRIPT = 'payload-sync.mjs';
+const KIT_SCRIPT_BASENAME_RE = /([\w-]+\.mjs)\b/;
+/** Matcher values the harness reads as every input. */
+const MATCH_EVERY_INPUT = new Set(['', '*']);
+
+/** The `.mjs` basename a hook's command names, or undefined when it names none. */
+function kitScriptOf(hook: HookEntry): string | undefined {
+  return KIT_SCRIPT_BASENAME_RE.exec(String(hook.command ?? ''))?.[1];
+}
+
+/**
+ * The script a hook runs through the dispatcher, or null for one that stays a direct
+ * settings entry: a hook with `if` or `async`, which the dispatcher cannot honor, or a
+ * command houserules' `hookCommand` did not build.
+ */
+function dispatchedScriptOf(hook: HookEntry): string | null {
+  if (hook.if !== undefined || hook.async !== undefined) return null;
+  const script = kitScriptOf(hook);
+  if (script === undefined || !isKitStockCommand(hook.command, script))
+    return null;
+  return script;
+}
+
+function wiringEntryFor(
+  script: string,
+  group: HookGroup,
+  hook: HookEntry,
+): HookWiringEntry {
+  return {
+    script,
+    ...(group.matcher !== undefined && { matcher: group.matcher }),
+    ...(hook.timeout !== undefined && { timeout: hook.timeout }),
+    ...(hook.onFailure !== undefined && { onFailure: hook.onFailure }),
+    ...(hook.statusMessage !== undefined && {
+      statusMessage: hook.statusMessage,
+    }),
+  };
+}
+
+/**
+ * Moves a fragment's dispatchable hooks into `events`, first declaration of a script per
+ * event winning as `mergeSettings` did, and returns the fragment with what remains.
+ */
+function withoutDispatchedHooks(
+  fragment: SettingsFragment,
+  events: Record<string, HookWiringEntry[]>,
+  editedScripts: ReadonlyMap<string, ReadonlySet<string>>,
+): SettingsFragment {
+  if (!fragment.hooks) return fragment;
+  collectDispatchedHooks(fragment.hooks, events, editedScripts);
+  return withDirectHooksOnly(fragment);
+}
+
+function collectDispatchedHooks(
+  hooks: Record<string, HookGroup[]>,
+  events: Record<string, HookWiringEntry[]>,
+  editedScripts: ReadonlyMap<string, ReadonlySet<string>>,
+): void {
+  for (const [event, groups] of Object.entries(hooks)) {
+    for (const group of groups) {
+      for (const hook of group.hooks) {
+        const script = dispatchedScriptOf(hook);
+        if (script === null) continue;
+        if (editedScripts.get(event)?.has(script)) continue;
+        const entries = (events[event] ??= []);
+        if (!entries.some((entry) => entry.script === script))
+          entries.push(wiringEntryFor(script, group, hook));
+      }
+    }
+  }
+}
+
+/** The fragment with every hook the dispatcher runs removed, and empty groups and events dropped. */
+function withDirectHooksOnly(fragment: SettingsFragment): SettingsFragment {
+  const directHooks: Record<string, HookGroup[]> = {};
+  for (const [event, groups] of Object.entries(fragment.hooks ?? {})) {
+    const keptGroups: HookGroup[] = [];
+    for (const group of groups) {
+      const direct = group.hooks.filter(
+        (hook) => dispatchedScriptOf(hook) === null,
+      );
+      if (direct.length) keptGroups.push({ ...group, hooks: direct });
+    }
+    if (keptGroups.length) directHooks[event] = keptGroups;
+  }
+  const residual: SettingsFragment = { ...fragment };
+  delete residual.hooks;
+  if (Object.keys(directHooks).length) residual.hooks = directHooks;
+  return residual;
+}
+
+/**
+ * Splits a matcher on its top-level `|`, leaving an alternation inside a regex group or
+ * character class whole, so `mcp__(a|b)__x|Bash` yields two alternatives, not three.
+ */
+function matcherAlternatives(matcher: string): string[] {
+  const alternatives: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < matcher.length; index++) {
+    const char = matcher[index];
+    if (char === '\\') index++;
+    else if (char === '(' || char === '[') depth++;
+    else if ((char === ')' || char === ']') && depth > 0) depth--;
+    else if (char === '|' && depth === 0) {
+      alternatives.push(matcher.slice(start, index));
+      start = index + 1;
+    }
+  }
+  alternatives.push(matcher.slice(start));
+  return alternatives.filter((alternative) => alternative !== '');
+}
+
+/**
+ * The dispatcher entry's matcher: the sorted, deduped union of its hooks' alternatives, or
+ * null when any hook matches every input, since the entry must then fire on every input too.
+ */
+function dispatcherMatcher(entries: HookWiringEntry[]): string | null {
+  const alternatives = new Set<string>();
+  for (const { matcher } of entries) {
+    if (matcher === undefined || MATCH_EVERY_INPUT.has(matcher)) return null;
+    for (const alternative of matcherAlternatives(matcher))
+      alternatives.add(alternative);
+  }
+  return [...alternatives].sort().join('|');
+}
+
+/** The harness's default timeout for a command hook, in seconds. */
+const HARNESS_TIMEOUT_SECONDS = 600;
+/**
+ * The events on which the harness lowers that default. Mirrors `EVENT_TIMEOUT_SECONDS` in the
+ * payload's `hook-dispatch.mts`, which cannot import from here.
+ */
+const EVENT_TIMEOUT_SECONDS: Readonly<Record<string, number>> = {
+  UserPromptSubmit: 30,
+  PreModelSwitch: 30,
+  PostModelSwitch: 30,
+  MessageDisplay: 10,
+};
+/** Seconds the dispatcher gets past its slowest hook to merge the outputs and exit. */
+const DISPATCH_MARGIN_SECONDS = 2;
+
+/**
+ * The `timeout` the dispatcher entry of `event` needs so the harness does not kill it before
+ * its slowest wired hook times out, or null when the harness default already covers it.
+ */
+function dispatcherTimeout(
+  event: string,
+  entries: HookWiringEntry[],
+): number | null {
+  const slowest = Math.max(0, ...entries.map((entry) => entry.timeout ?? 0));
+  const harnessDefault = Object.hasOwn(EVENT_TIMEOUT_SECONDS, event)
+    ? EVENT_TIMEOUT_SECONDS[event]!
+    : HARNESS_TIMEOUT_SECONDS;
+  const needed = slowest + DISPATCH_MARGIN_SECONDS;
+  return needed > harnessDefault ? needed : null;
+}
+
+/** The one settings entry that runs every dispatched hook of `event`. */
+function dispatcherFragment(
+  event: string,
+  entries: HookWiringEntry[],
+): SettingsFragment {
+  const isBootstrap =
+    event === 'SessionStart' &&
+    entries.some((entry) => entry.script === BOOTSTRAP_SCRIPT);
+  const hook: HookEntry = {
+    type: 'command',
+    command: hookCommand(
+      HOOK_DISPATCH_SCRIPT,
+      isBootstrap ? 'bootstrap' : fallbackForEvent(event),
+    ),
+  };
+  if (entries.some((entry) => entry.onFailure === 'block'))
+    hook.onFailure = 'block';
+  const timeout = dispatcherTimeout(event, entries);
+  if (timeout !== null) hook.timeout = timeout;
+  const matcher = dispatcherMatcher(entries);
+  const group: HookGroup =
+    matcher === null ? { hooks: [hook] } : { matcher, hooks: [hook] };
+  return { hooks: { [event]: [group] } };
+}
+
+/**
+ * Per event, the kit scripts the existing settings already run through a command the user
+ * edited. Dispatching the stock hook of such a script would run it twice.
+ */
+function editedScriptsByEvent(settings: Settings): Map<string, Set<string>> {
+  const edited = new Map<string, Set<string>>();
+  for (const [event, groups] of Object.entries(settings.hooks ?? {})) {
+    for (const group of groups ?? []) {
+      for (const hook of group?.hooks ?? []) {
+        const script = kitScriptOf(hook);
+        if (script === undefined || isKitStockCommand(hook.command, script))
+          continue;
+        const scripts = edited.get(event) ?? new Set<string>();
+        scripts.add(script);
+        edited.set(event, scripts);
+      }
+    }
+  }
+  return edited;
+}
+
+/** Splits the modules' fragments into settings entries and dispatcher wiring. */
+function planHookDispatch(
+  fragments: SettingsFragment[],
+  existing: Settings,
+): HookDispatchPlan {
+  const events: Record<string, HookWiringEntry[]> = {};
+  const editedScripts = editedScriptsByEvent(existing);
+  const residual = fragments.map((fragment) =>
+    withoutDispatchedHooks(fragment, events, editedScripts),
+  );
+  const dispatchers = Object.entries(events).map(([event, entries]) =>
+    dispatcherFragment(event, entries),
+  );
+  return {
+    settingsFragments: [...residual, ...dispatchers],
+    wiring: Object.keys(events).length ? { version: 1, events } : null,
+  };
+}
+
+/** The generated write that puts the wiring where the dispatcher reads it. */
+function hookWiringAction(wiring: HookWiring): WriteAction {
+  return {
+    kind: 'write',
+    module: 'core',
+    dest: HOOK_WIRING_PATH,
+    content: `${JSON.stringify(wiring, null, 2)}\n`,
+    reason: 'the hooks each event dispatcher runs',
+  };
+}
+
+function hookLabel(event: string, group: HookGroup, script: string): string {
+  return `${event}${group.matcher ? `(${group.matcher})` : ''}: ${script}`;
+}
+
+/**
+ * Drops a per-script entry the dispatcher now runs for the same event, so an install wired
+ * before dispatch does not run the hook twice. Only a command houserules itself would emit
+ * is dropped. A user's edited variant stays, and a group or event nothing was dropped from
+ * keeps its exact shape.
+ */
+function dropDispatchedStockHooks(
+  settings: Settings,
+  wiring: HookWiring,
+  changes: SettingsChange[],
+): void {
+  for (const [event, groups] of Object.entries(settings.hooks ?? {})) {
+    const dispatched = new Set(
+      (wiring.events[event] ?? []).map((entry) => entry.script),
+    );
+    if (!dispatched.size) continue;
+    let hasDroppedAny = false;
+    const keptGroups: HookGroup[] = [];
+    for (const group of groups ?? []) {
+      const kept = (group?.hooks ?? []).filter((hook) => {
+        const script = kitScriptOf(hook);
+        if (script === undefined || !dispatched.has(script)) return true;
+        if (!isKitStockCommand(hook.command, script)) return true;
+        changes.push({
+          kind: 'remove-hook',
+          detail: `${hookLabel(event, group, script)} (now dispatched)`,
+        });
+        hasDroppedAny = true;
+        return false;
+      });
+      if (kept.length === (group?.hooks ?? []).length) keptGroups.push(group);
+      else if (kept.length) keptGroups.push({ ...group, hooks: kept });
+    }
+    if (!hasDroppedAny) continue;
+    if (keptGroups.length) settings.hooks![event] = keptGroups;
+    else delete settings.hooks![event];
+  }
+  if (settings.hooks && !Object.keys(settings.hooks).length)
+    delete settings.hooks;
+}
+
+function isDispatcherHook(hook: HookEntry): boolean {
+  return isKitStockCommand(hook.command, HOOK_DISPATCH_SCRIPT);
+}
+
+/**
+ * Moves an existing dispatcher entry onto the matcher its event's hooks now need. The
+ * command does not change with the matcher, so `mergeSettings` would read the entry as
+ * present and leave a hook whose tool the old matcher misses unrun. A group holding only the
+ * dispatcher is rewritten in place. One shared with other hooks loses the dispatcher, and
+ * the merge then adds it under the right matcher.
+ */
+function alignDispatcherMatchers(
+  settings: Settings,
+  wiring: HookWiring,
+  changes: SettingsChange[],
+): void {
+  for (const [event, entries] of Object.entries(wiring.events)) {
+    const desired = dispatcherMatcher(entries);
+    const groups = settings.hooks?.[event] ?? [];
+    groups.forEach((group, index) => {
+      if (!group?.hooks?.some(isDispatcherHook)) return;
+      if ((group.matcher ?? null) === desired) return;
+      if (group.hooks.length > 1) {
+        group.hooks = group.hooks.filter((hook) => !isDispatcherHook(hook));
+        return;
+      }
+      const rest: HookGroup = { ...group };
+      delete rest.matcher;
+      groups[index] = desired === null ? rest : { matcher: desired, ...rest };
+      changes.push({
+        kind: 'hook',
+        detail: `${event}: ${HOOK_DISPATCH_SCRIPT} matcher ${group.matcher ?? '(every input)'} → ${desired ?? '(every input)'}`,
+      });
+    });
+  }
+}
+
+/**
+ * The existing `.claude/settings.json`, or an empty one when absent.
+ *
+ * @throws HouseError when the file is not valid JSON, since houserules refuses to rewrite a
+ *   file it cannot parse.
+ */
+function readExistingSettings(root: string): {
+  settings: Settings;
+  existedBefore: boolean;
+} {
+  const settingsPath = join(root, '.claude', 'settings.json');
+  if (!existsSync(settingsPath)) return { settings: {}, existedBefore: false };
+  try {
+    return {
+      settings: parseSettingsText(readFileSync(settingsPath, 'utf8')),
+      existedBefore: true,
+    };
+  } catch (e) {
+    throw new HouseError(
+      `.claude/settings.json is not valid JSON (${(e as Error).message}). ` +
+        'Fix it by hand first. houserules will not rewrite a file it cannot parse.',
+      { cause: e },
+    );
+  }
+}
+
+/**
  * All modules' settings fragments merged into one pass over the real file.
  *
+ * @param wiring The dispatched hooks, whose pre-dispatch per-script entries are dropped and
+ *   whose dispatcher entries are moved onto the current matcher before the merge.
  * @throws HouseError when the existing `.claude/settings.json` is not valid JSON, since the
  *   houserules refuses to rewrite a file it cannot parse.
  */
 function computeSettingsPlan(
-  root: string,
   fragments: SettingsFragment[],
+  wiring: HookWiring | null,
+  current: Settings,
+  existedBefore: boolean,
 ): SettingsPlan | null {
   if (!fragments.length) return null;
-  const settingsPath = join(root, '.claude', 'settings.json');
-  const existedBefore = existsSync(settingsPath);
-  let current: Settings = {};
-  if (existedBefore) {
-    const text = readFileSync(settingsPath, 'utf8');
-    try {
-      current = parseSettingsText(text);
-    } catch (e) {
-      throw new HouseError(
-        `.claude/settings.json is not valid JSON (${(e as Error).message}). ` +
-          'Fix it by hand first. houserules will not rewrite a file it cannot parse.',
-        { cause: e },
-      );
-    }
-  }
   const allChanges: SettingsChange[] = [];
   let merged = current;
+  if (wiring) {
+    dropDispatchedStockHooks(merged, wiring, allChanges);
+    alignDispatcherMatchers(merged, wiring, allChanges);
+  }
   for (const fragment of fragments) {
     const result = mergeSettings(merged, fragment);
     merged = result.merged;
@@ -747,6 +1104,40 @@ function computeSettingsPlan(
     changes: allChanges,
     text: renderSettings(merged),
   };
+}
+
+interface HookWiringEffectContext {
+  manifest: HouseManifest | null;
+  force: boolean;
+  ejected: ReadonlySet<string>;
+  plugins: PluginSource[] | undefined;
+  broken: Map<string, string[]>;
+  brokenDests: Set<string>;
+  seenCopySrc: Map<string, string>;
+  generatedDirs: string[];
+}
+
+/** The effect that writes the dispatcher wiring file, judged as any other kit-owned write is. */
+function hookWiringEffectFor(
+  wiring: HookWiring,
+  root: string,
+  context: HookWiringEffectContext,
+): Effect | null {
+  const isEjected = context.ejected.has(HOOK_WIRING_PATH);
+  return effectForCopyOrWrite(
+    hookWiringAction(wiring),
+    root,
+    join(root, HOOK_WIRING_PATH),
+    existsSync(join(root, HOOK_WIRING_PATH)),
+    context.manifest,
+    context.force && !isEjected,
+    isEjected,
+    context.plugins,
+    context.broken,
+    context.brokenDests,
+    context.seenCopySrc,
+    context.generatedDirs,
+  );
 }
 
 /**
@@ -841,11 +1232,37 @@ export function computeEffects(
     if (effect) effects.push(effect);
   }
 
-  const settingsPlan = computeSettingsPlan(root, fragments);
+  const existing = fragments.length
+    ? readExistingSettings(root)
+    : { settings: {}, existedBefore: false };
+  const { settingsFragments, wiring } = planHookDispatch(
+    fragments,
+    existing.settings,
+  );
+  if (wiring) {
+    const wiringEffect = hookWiringEffectFor(wiring, root, {
+      manifest,
+      force,
+      ejected,
+      plugins,
+      broken,
+      brokenDests,
+      seenCopySrc,
+      generatedDirs,
+    });
+    if (wiringEffect) effects.push(wiringEffect);
+  }
+
+  const settingsPlan = computeSettingsPlan(
+    settingsFragments,
+    wiring,
+    existing.settings,
+    existing.existedBefore,
+  );
 
   // houserules' settings signature is recorded even on a no-change run (the fragments
   // describe houserules' contribution regardless of what's already merged in).
-  const signature = settingsSignature(fragments);
+  const signature = settingsSignature(settingsFragments);
 
   // `region` and `body` are included so a retired one stops being pruned as an orphan.
   // brokenDests too: a broken plugin's already-installed file did not get an effect this
@@ -872,7 +1289,7 @@ export function computeEffects(
     ...(shouldPlanPrepare && { prepareScript: planPrepareScript(root) }),
     advisories,
     signature,
-    fragments,
+    fragments: settingsFragments,
     plannedDests,
     brokenPlugins,
   };

@@ -191,7 +191,22 @@ function mergeReleases(existing: Release[], incoming: Release[]): Release[] {
   return [...byName.values()];
 }
 
-async function main(): Promise<void> {
+interface WriteOptions {
+  pkgArgs: string[];
+  summaryArg: string | undefined;
+  defaultLevel: string;
+  isEmpty: boolean;
+  amend: string | undefined;
+  absorb: string[];
+  chat: string | undefined;
+}
+
+interface Amendment {
+  amendTarget: string | undefined;
+  absorbTargets: string[];
+}
+
+function parseOptions(argv: string[]): WriteOptions {
   let values: {
     pkg?: string[];
     summary?: string;
@@ -203,7 +218,7 @@ async function main(): Promise<void> {
   };
   try {
     ({ values } = parseArgs({
-      args: process.argv.slice(2),
+      args: argv,
       options: {
         pkg: { type: 'string', multiple: true },
         summary: { type: 'string' },
@@ -221,16 +236,23 @@ async function main(): Promise<void> {
     usage(`Unknown argument "${bad}".`);
   }
 
-  const pkgArgs = values.pkg ?? [];
-  const summaryArg = values.summary;
   const defaultLevel = values.level ?? 'patch';
-  const empty = values.empty ?? false;
   if (!LEVELS.has(defaultLevel))
     usage(`Invalid --level "${defaultLevel}" (patch|minor|major).`);
+  return {
+    pkgArgs: values.pkg ?? [],
+    summaryArg: values.summary,
+    defaultLevel,
+    isEmpty: values.empty ?? false,
+    amend: values.amend,
+    absorb: values.absorb ?? [],
+    chat: values.chat,
+  };
+}
 
-  let root: string;
+function gitRoot(): string {
   try {
-    root = execSync('git rev-parse --show-toplevel', {
+    return execSync('git rev-parse --show-toplevel', {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
       .toString()
@@ -239,7 +261,10 @@ async function main(): Promise<void> {
     console.error('Not inside a git work tree.');
     process.exit(1);
   }
+}
 
+/** The changelog summary from --summary or piped stdin, exiting 1 when it cannot be published. */
+function readValidSummary(summaryArg: string | undefined): string {
   let summary = summaryArg;
   if (summary === undefined && !process.stdin.isTTY) {
     try {
@@ -271,7 +296,10 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
+  return summary;
+}
 
+function prepareChangesetDir(root: string): string {
   const dir = join(root, '.changeset');
   mkdirSync(dir, { recursive: true });
   if (!existsSync(join(dir, 'config.json'))) {
@@ -279,23 +307,26 @@ async function main(): Promise<void> {
       'note: .changeset/config.json is missing — run `npx @changesets/cli init` before release time.',
     );
   }
+  return dir;
+}
 
-  const amendTarget = values.amend
-    ? resolveAmendTarget(dir, values.amend)
+/** The pending file --amend rewrites and the files --absorb folds into it, exiting on a bad pair. */
+function resolveAmendment(dir: string, options: WriteOptions): Amendment {
+  const amendTarget = options.amend
+    ? resolveAmendTarget(dir, options.amend)
     : undefined;
 
-  const absorbArgs = values.absorb ?? [];
-  if (absorbArgs.length && !amendTarget)
+  if (options.absorb.length && !amendTarget)
     usage(
       '--absorb requires --amend <id> to name the changeset that survives.',
     );
-  if (absorbArgs.length && empty)
+  if (options.absorb.length && options.isEmpty)
     usage(
       '--empty cannot be combined with --absorb. The absorbed bumps would be discarded.',
     );
 
   const absorbTargets: string[] = [];
-  for (const raw of absorbArgs) {
+  for (const raw of options.absorb) {
     const file = resolveAmendTarget(dir, raw);
     if (file === amendTarget) {
       console.error(`Cannot absorb "${raw}" into itself.`);
@@ -303,78 +334,90 @@ async function main(): Promise<void> {
     }
     absorbTargets.push(file);
   }
+  return { amendTarget, absorbTargets };
+}
 
-  let entries: Release[] = [];
-  if (!empty) {
-    const valid = listPublishablePackageNames(root);
-    if (!valid.length) {
-      console.error(
-        'No packages found (no workspace members and no named root package.json).',
-      );
-      process.exit(1);
-    }
-    entries = pkgArgs.map((raw) => {
-      if (!raw) usage('--pkg needs a value.');
-      const at = raw.lastIndexOf(':');
-      const hasLevel = at > 0 && LEVELS.has(raw.slice(at + 1));
-      const name = hasLevel ? raw.slice(0, at) : raw;
-      const level = hasLevel ? raw.slice(at + 1) : defaultLevel;
-      return { name, level };
-    });
-    if (amendTarget) {
-      let merged = readReleases(amendTarget);
-      for (const file of absorbTargets)
-        merged = mergeReleases(merged, readReleases(file));
-      entries = mergeReleases(merged, entries);
-    }
-    if (!entries.length) {
-      if (amendTarget) {
-        if (!absorbTargets.length)
-          usage(
-            'The amended changeset declares no packages. Pass --pkg, or --empty to keep it release-free.',
-          );
-      } else if (valid.length === 1)
-        // valid.length === 1 guarantees valid[0] is present.
-        entries = [{ name: valid[0]!, level: defaultLevel }];
-      else usage(`Specify --pkg. Valid packages: ${valid.join(', ')}`);
-    }
-    for (const entry of entries) {
-      if (!valid.includes(entry.name)) {
-        console.error(
-          `Unknown package "${entry.name}". Valid packages: ${valid.join(', ')}`,
-        );
-        process.exit(1);
-      }
-    }
-  }
+function parsePkgArgs(pkgArgs: string[], defaultLevel: string): Release[] {
+  return pkgArgs.map((raw) => {
+    if (!raw) usage('--pkg needs a value.');
+    const at = raw.lastIndexOf(':');
+    const hasLevel = at > 0 && LEVELS.has(raw.slice(at + 1));
+    const name = hasLevel ? raw.slice(0, at) : raw;
+    const level = hasLevel ? raw.slice(at + 1) : defaultLevel;
+    return { name, level };
+  });
+}
 
-  const officialWrite = await loadOfficialWrite(root);
-  if (!officialWrite) {
+/** The releases to write: --pkg merged over any amended and absorbed bumps, each validated. */
+function resolveReleases(
+  root: string,
+  options: WriteOptions,
+  { amendTarget, absorbTargets }: Amendment,
+): Release[] {
+  if (options.isEmpty) return [];
+  const valid = listPublishablePackageNames(root);
+  if (!valid.length) {
     console.error(
-      [
-        'Cannot author a changeset: @changesets/write is not resolvable from this repo.',
-        'houserules writes changesets only with the official changesets library — no fallback.',
-        'Fix: install the CLI as a root devDependency, then rerun:',
-        '  pnpm add -D -w @changesets/cli   # npm: npm install -D @changesets/cli',
-        'Notes: a pnpx/npx-only root script is not enough (nothing is resolvable from',
-        'the repo root); pnpm catalogMode strict needs a catalog entry for it first.',
-      ].join('\n'),
+      'No packages found (no workspace members and no named root package.json).',
     );
     process.exit(1);
   }
+  let entries = parsePkgArgs(options.pkgArgs, options.defaultLevel);
+  if (amendTarget) {
+    let merged = readReleases(amendTarget);
+    for (const file of absorbTargets)
+      merged = mergeReleases(merged, readReleases(file));
+    entries = mergeReleases(merged, entries);
+  }
+  if (!entries.length) {
+    if (amendTarget) {
+      if (!absorbTargets.length)
+        usage(
+          'The amended changeset declares no packages. Pass --pkg, or --empty to keep it release-free.',
+        );
+    } else if (valid.length === 1)
+      // valid.length === 1 guarantees valid[0] is present.
+      entries = [{ name: valid[0]!, level: options.defaultLevel }];
+    else usage(`Specify --pkg. Valid packages: ${valid.join(', ')}`);
+  }
+  for (const entry of entries) {
+    if (!valid.includes(entry.name)) {
+      console.error(
+        `Unknown package "${entry.name}". Valid packages: ${valid.join(', ')}`,
+      );
+      process.exit(1);
+    }
+  }
+  return entries;
+}
 
+async function requireOfficialWrite(root: string): Promise<ChangesetWriter> {
+  const officialWrite = await loadOfficialWrite(root);
+  if (officialWrite) return officialWrite;
+  console.error(
+    [
+      'Cannot author a changeset: @changesets/write is not resolvable from this repo.',
+      'houserules writes changesets only with the official changesets library — no fallback.',
+      'Fix: install the CLI as a root devDependency, then rerun:',
+      '  pnpm add -D -w @changesets/cli   # npm: npm install -D @changesets/cli',
+      'Notes: a pnpx/npx-only root script is not enough (nothing is resolvable from',
+      'the repo root); pnpm catalogMode strict needs a catalog entry for it first.',
+    ].join('\n'),
+  );
+  process.exit(1);
+}
+
+/** Writes with the official writer, moves an amendment onto its pending file, and prints the path. */
+async function writeChangeset(
+  root: string,
+  dir: string,
+  changeset: Changeset,
+  { amendTarget, absorbTargets }: Amendment,
+): Promise<string> {
+  const officialWrite = await requireOfficialWrite(root);
   let id: string;
   try {
-    id = await officialWrite(
-      {
-        summary,
-        releases: entries.map((entry) => ({
-          name: entry.name,
-          type: entry.level,
-        })),
-      },
-      root,
-    );
+    id = await officialWrite(changeset, root);
   } catch (e) {
     console.error(`@changesets/write failed: ${(e as Error)?.message ?? e}`);
     process.exit(1);
@@ -383,19 +426,38 @@ async function main(): Promise<void> {
   // The official writer always mints its own human-id filename. Amending moves that output
   // onto the pending file, so the feature keeps one changeset at one stable path and the
   // rewrite reads as a modification rather than an add plus a delete.
-  if (amendTarget) {
-    renameSync(join(dir, `${id}.md`), amendTarget);
-    for (const file of absorbTargets) unlinkSync(file);
-    console.log(`.changeset/${basename(amendTarget)}`);
-  } else {
+  if (!amendTarget) {
     console.log(`.changeset/${id}.md`);
+    return `${id}.md`;
   }
+  renameSync(join(dir, `${id}.md`), amendTarget);
+  for (const file of absorbTargets) unlinkSync(file);
+  console.log(`.changeset/${basename(amendTarget)}`);
+  return basename(amendTarget);
+}
 
+async function main(): Promise<void> {
+  const options = parseOptions(process.argv.slice(2));
+  const root = gitRoot();
+  const summary = readValidSummary(options.summaryArg);
+  const dir = prepareChangesetDir(root);
+  const amendment = resolveAmendment(dir, options);
+  const releases = resolveReleases(root, options, amendment).map((entry) => ({
+    name: entry.name,
+    type: entry.level,
+  }));
+
+  const file = await writeChangeset(
+    root,
+    dir,
+    { summary, releases },
+    amendment,
+  );
   recordOutcome(
     root,
-    amendTarget ? basename(amendTarget) : `${id}.md`,
-    values.chat,
-    amendTarget ? 'amend' : 'add',
+    file,
+    options.chat,
+    amendment.amendTarget ? 'amend' : 'add',
   );
 }
 

@@ -7,12 +7,16 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { hookCommand } from '@houserules/api';
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn, type RunResult } from '#test/run';
 import {
   editHouseConfig,
+  HOOK_WIRING_RELATIVE_PATH,
   type HouseManifestShape,
+  dispatchedScriptsFor,
   hookCommandsFor,
+  hookWiringOf,
   manifestOf,
   readJson,
   type Settings,
@@ -25,6 +29,20 @@ import {
   KIT_VERSION,
   makeLintScriptStale,
 } from './update-test-support.js';
+
+/** Plants a per-script PreToolUse guard-bash entry, the pre-dispatch wiring an older install carried. */
+function plantGuardBashEntry(root: string, command: string): void {
+  const settings = settingsOf(root);
+  settings.hooks ??= {};
+  settings.hooks.PreToolUse = [
+    ...(settings.hooks.PreToolUse ?? []),
+    { matcher: 'Bash', hooks: [{ type: 'command', command }] },
+  ];
+  writeFileSync(
+    join(root, '.claude/settings.json'),
+    `${JSON.stringify(settings, null, 2)}\n`,
+  );
+}
 
 /**
  * The manifest shape as these tests read it, where a body-owned rule's `files` entry is a
@@ -183,44 +201,34 @@ describe('update on a repo with no prior houserules install', () => {
 });
 
 describe('migrating a prior houserules hook entry', () => {
-  it('upgrades the historical unguarded stock command to the guarded form', () => {
+  it('migrates the historical unguarded stock command onto the dispatcher', () => {
     const root = useInstalledRepo('npm-single');
-
-    const path = join(root, '.claude/settings.json');
-    const settings = settingsOf(root);
-    for (const group of settings.hooks?.PreToolUse ?? []) {
-      for (const hook of group.hooks ?? []) {
-        if (hook.command?.includes('guard-bash.mjs')) {
-          hook.command =
-            'node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs"';
-        }
-      }
-    }
-    writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`);
+    plantGuardBashEntry(
+      root,
+      'node "$CLAUDE_PROJECT_DIR/.claude/scripts/guard-bash.mjs"',
+    );
 
     expect(runCli(['update', root]).status).toBe(0);
-    const after = hookCommandsFor(settingsOf(root), 'PreToolUse').filter((c) =>
+    const direct = hookCommandsFor(settingsOf(root), 'PreToolUse').filter((c) =>
       c.includes('guard-bash.mjs'),
     );
-    expect(after, 'exactly one guard-bash entry').toHaveLength(1);
-    expect(after[0], 'the entry must now be the guarded form').toMatch(
-      /^\[ -f /,
+    expect(direct, 'no per-script guard-bash entry left in settings').toEqual(
+      [],
     );
+    expect(
+      dispatchedScriptsFor(root, 'PreToolUse').filter(
+        (script) => script === 'guard-bash.mjs',
+      ),
+      'exactly one dispatched guard-bash',
+    ).toHaveLength(1);
   });
 
   it('preserves a user-edited variant of a houserules hook rather than duplicating it', () => {
     const root = useInstalledRepo('npm-single');
-
-    const path = join(root, '.claude/settings.json');
-    const settings = settingsOf(root);
-    for (const group of settings.hooks?.PreToolUse ?? []) {
-      for (const hook of group.hooks ?? []) {
-        if (hook.command?.includes('guard-bash.mjs')) {
-          hook.command = `${hook.command} --my-extra-flag`;
-        }
-      }
-    }
-    writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`);
+    plantGuardBashEntry(
+      root,
+      `${hookCommand('guard-bash.mjs', 'guard')} --my-extra-flag`,
+    );
 
     expect(runCli(['update', root]).status).toBe(0);
     const after = hookCommandsFor(settingsOf(root), 'PreToolUse').filter((c) =>
@@ -228,9 +236,17 @@ describe('migrating a prior houserules hook entry', () => {
     );
     expect(
       after,
-      'exactly one guard-bash entry, and it is the edited one',
+      'exactly one guard-bash entry in settings, and it is the edited one',
     ).toHaveLength(1);
     expect(after[0]).toMatch(/--my-extra-flag/);
+    expect(
+      dispatchedScriptsFor(root, 'PreToolUse'),
+      'the stock guard-bash is not dispatched beside the edited entry',
+    ).not.toContain('guard-bash.mjs');
+    expect(
+      Object.keys(hookWiringOf(root).events),
+      'hooks of other events are still dispatched',
+    ).toContain('SessionStart');
   });
 });
 
@@ -244,9 +260,7 @@ function plantStaleSignatureEntry(
 
   const settingsPath = join(root, '.claude/settings.json');
   const settings = settingsOf(root);
-  const stockCommand = hookCommandsFor(settings, event).find((c) =>
-    c.includes(script),
-  )!;
+  const stockCommand = hookCommand(script, 'guard');
   settings.hooks![event] = [
     ...(settings.hooks![event] ?? []),
     {
@@ -331,10 +345,11 @@ describe('update reconciling a stale but still-recognizable hook entry no curren
 
     expect(runCli(['update', root]).status).toBe(0);
 
-    const after = hookCommandsFor(settingsOf(root), 'PreToolUse').filter((c) =>
-      c.includes('guard-bash.mjs'),
-    );
-    expect(after).toHaveLength(1);
+    expect(
+      dispatchedScriptsFor(root, 'PreToolUse').filter(
+        (script) => script === 'guard-bash.mjs',
+      ),
+    ).toHaveLength(1);
   });
 
   it('preserves a user-added hook with a non-kit command', () => {
@@ -763,5 +778,111 @@ describe('update on an edited, ignored houserules file', () => {
 
       expect(result.stdout).not.toContain('run houserules doctor');
     });
+  });
+});
+
+describe('update over an install wired with one settings entry per script', () => {
+  const USER_HOOK = { type: 'command', command: 'node ./my-own-hook.js' };
+  const EDITED_VARIANT = {
+    type: 'command',
+    command: 'node .claude/scripts/session-context.mjs --verbose',
+  };
+  let root: string;
+
+  function plantLegacyPerScriptWiring(repoRoot: string): void {
+    const legacySettings = {
+      ...settingsOf(repoRoot),
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Bash',
+            hooks: [
+              USER_HOOK,
+              {
+                type: 'command',
+                command: hookCommand('guard-bash.mjs', 'guard'),
+                onFailure: 'block',
+              },
+            ],
+          },
+        ],
+        SessionStart: [
+          {
+            hooks: [
+              {
+                type: 'command',
+                command: hookCommand('payload-sync.mjs', 'bootstrap'),
+              },
+              EDITED_VARIANT,
+            ],
+          },
+        ],
+      },
+    };
+    writeFileSync(
+      join(repoRoot, '.claude/settings.json'),
+      `${JSON.stringify(legacySettings, null, 2)}\n`,
+    );
+  }
+
+  beforeEach(() => {
+    root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    plantLegacyPerScriptWiring(root);
+
+    expect(runCli(['update', root]).status).toBe(0);
+  });
+
+  it('removes the per-script entries houserules wrote', () => {
+    const scripts = Object.keys(settingsOf(root).hooks ?? {}).flatMap((event) =>
+      hookCommandsFor(settingsOf(root), event)
+        .filter((command) => command.includes('[ -f '))
+        .map((command) => /[\w-]+\.mjs/.exec(command)?.[0]),
+    );
+
+    expect(scripts.filter((script) => script !== 'hook-dispatch.mjs')).toEqual(
+      [],
+    );
+  });
+
+  it('keeps the user’s own hook first in its group', () => {
+    const group = (settingsOf(root).hooks?.PreToolUse ?? []).find(
+      (g) => g.matcher === 'Bash',
+    );
+
+    expect(group?.hooks?.[0]).toEqual(USER_HOOK);
+  });
+
+  it('keeps a user’s edited variant of a dispatched script’s command', () => {
+    expect(hookCommandsFor(settingsOf(root), 'SessionStart')).toContain(
+      EDITED_VARIANT.command,
+    );
+  });
+
+  it('writes the SessionStart dispatcher with the bootstrap fallback', () => {
+    expect(hookCommandsFor(settingsOf(root), 'SessionStart')).toContain(
+      hookCommand('hook-dispatch.mjs', 'bootstrap'),
+    );
+  });
+});
+
+describe('update --sync over a stale hook-wiring.json', () => {
+  it('rewrites the wiring the plan produces', () => {
+    const root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    const canonical = readFileSync(
+      join(root, HOOK_WIRING_RELATIVE_PATH),
+      'utf8',
+    );
+    writeFileSync(
+      join(root, HOOK_WIRING_RELATIVE_PATH),
+      '{ "version": 1, "events": {} }\n',
+    );
+
+    expect(runCli(['update', '--sync', root]).status).toBe(0);
+
+    expect(readFileSync(join(root, HOOK_WIRING_RELATIVE_PATH), 'utf8')).toBe(
+      canonical,
+    );
   });
 });

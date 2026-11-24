@@ -78,8 +78,25 @@ describe('every lib module loads on bare node', () => {
       );
     }
 
-    it('has lib files to check', () => {
-      expect(libFiles.length).toBe(26);
+    it('installs every lib the github scripts import', () => {
+      const required = [
+        'gh.mjs',
+        'sync-gate.mjs',
+        'project-shape.mjs',
+        'bootstrap-plan.mjs',
+        'push-queue.mjs',
+        'item-fields.mjs',
+        'ledger-compaction.mjs',
+        'board-projection.mjs',
+        'backfill-plan.mjs',
+        'surface-orphans.mjs',
+        'push-outcome.mjs',
+        'push-lock.mjs',
+      ];
+
+      const missing = required.filter((file) => !libFiles.includes(file));
+
+      expect(missing).toEqual([]);
     });
 
     it.each(libFiles)('%s imports and exits 0', (file) => {

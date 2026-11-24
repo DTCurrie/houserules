@@ -80,6 +80,14 @@ need under `Requests`, and you write it at the barrier. If its acceptance cannot
 write, it returns `NEEDS_RULING` naming the path, and nested.md "The ruling round trip" carries
 the owner's answer.
 
+**A shared package builds once, in the seam.** A build whose clean step empties its outputs empties `dist/` and
+`payload-dist/` before each build, so an item's sibling that imports from them fails mid-step. The
+build also compiles every other item's work in progress in that package's graph. Build the
+package once in the seam, tell every item not to run a `build`, `check`, or `test` script of it
+until the step's `Close`, and let only the item that holds the build resource rebuild, in place,
+with bare `tsc`. Put the ban on each item's `Constraint:` line. This binds readers and holder
+alike, so the `Uses` line declares only the holder.
+
 ## The brief per item
 
 nested.md "The brief, going down", with these lines set per item:
@@ -138,16 +146,17 @@ each member's `Verify` is scoped to that member's packages. Run them in this ord
    after `Close`. Snapshot the barrier per `closing.md`, which sets the path and label.
 2. Run each member's `Verify` command from the `## Members` table, one member at a time. These
    stand in for nested.md's `/verify-changed` run and for each item's §8 verify.
-3. Run the step's `Close` alone. Alone means no phase-orchestrator is live, none owes a report
+3. Run the step's `Close` alone. The item ban on script runs of a shared package ends at this
+   `Close`, and every item is done by now. Alone means no phase-orchestrator is live, none owes a report
    after a residue message, and no background task of this session is running.
 4. Write the held paths: the lockfile and other listed paths the step's `Requests` named, the
    changeset, and the ledger entries.
 5. Set the step `DONE (<date>)` with its `## Log` line and lint.
 6. Stop, as "Step boundary and `--auto`" says.
 
-A wireit cache hit on declared inputs that a verify this session passed is the pass, for each
-member's `Verify` and for `Close`. Delete wireit state only at the milestone's final step, or after
-a change to any block's `files` or `dependencies`, and that run is the one cold run.
+A build-cache hit on declared inputs that a verify this session passed is the pass, for each
+member's `Verify` and for `Close`. Delete the build cache only at the milestone's final step, or after
+a change to any script's declared inputs or dependencies, and that run is the one cold run.
 
 After any fix, rerun the barrier from its first check, because a fix in one member can break
 another member's `Verify`.

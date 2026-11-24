@@ -29,6 +29,8 @@ const RULE = '.claude/rules/code-cleanliness.md';
 const RULE_ID = 'code-cleanliness';
 const MANIFEST = '.claude/houserules.manifest.json';
 const VERSION_CHECK_CACHE = '.claude/state/version-check.json';
+const HOOK_RUNS_LOG = '.claude/state/hook-runs.jsonl';
+const HOOK_RUNS_ROTATED = '.claude/state/hook-runs.1.jsonl';
 const CONFIG = '.claude/houserules.config.json';
 const GITIGNORE = '.claude/.gitignore';
 const SETTINGS = '.claude/settings.json';
@@ -106,7 +108,9 @@ function editedCommittedInstall(config: Record<string, unknown> = {}): {
     (dest) =>
       dest !== MANIFEST &&
       dest !== EDITED_SKILL &&
-      dest !== VERSION_CHECK_CACHE,
+      dest !== VERSION_CHECK_CACHE &&
+      dest !== HOOK_RUNS_LOG &&
+      dest !== HOOK_RUNS_ROTATED,
   );
   commitInstall(root);
   return { root, editedSkill, trimmedFrontmatter, classified };
@@ -294,7 +298,21 @@ describe('update with payload.commit: true on an install that committed its payl
     expect(config.modules).toEqual(expect.arrayContaining(['core', 'ready']));
     expect(config.ejected).toBeUndefined();
     expect(config.rules).toBeUndefined();
-    expect(existsSync(join(root, GITIGNORE))).toBe(false);
+  });
+
+  it('ignores only the script-written paths, so no committed payload file goes untracked', () => {
+    const root = committedPayload();
+
+    updateOk(root);
+
+    const ignored = read(root, GITIGNORE)
+      .split('\n')
+      .filter((line) => line.startsWith('/'));
+    expect(ignored).toEqual([
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
+      VERSION_CHECK_CACHE.replace('.claude', ''),
+    ]);
   });
 
   it('keeps the payload and the manifest tracked and still untracks the scripts', () => {

@@ -1,0 +1,19 @@
+/plan-project this should probably become a milestone with `ignored-payload`
+
+this package has grown quite a bit and in that time I think some quality standards have started to slip. the biggest things I want to focus are efficiency, performance, reliability, and quality. those are already 4 huge pillars, so let me discuss what I want to accomplish in this milestone. 
+
+1. efficiency: we have a bunch of open backlog issues surrounding some of the issues we have observed, but it seems like our goal of confirm -> execute -> verify has become a little muddy and overburdened to where we are losing efficiency and wasting wall-clock time on pointless and expensive endeavors. we need to identify the causes for those and really understand what the root issue is. 
+
+2. performance: we need to do a debug-session style analysis on our code. this should be able to be done almost entirely through orchestrated scripting. we need to audit the codebase, understand how we can efficiently run accurate performance benchmarks on our code, do so, and record the output.
+
+3. reliability: things should work as expected. if a model decides to kick off a subagent, the agent and subagent need to be able to quickly and efficiently communicate status and events so that neither is left waiting on the other. documents that are generated should be done so consistently so our rules, practices, and norms are consistently applied. basically, we need to look at areas where things are not very well defined, identify what is missing between intention and messaging, and catalog those
+
+4. quality: I think we are doing pretty ok on this one but we do need to check in on it. this is the most ambiguous and difficult one to test, but the most succinct way to put it is are ours working as expected and advertised. we may need to come up with a proper testing strategy for this, and that may be difficult to construct so we should really start small/basic and we can evolve things from there
+
+all of the above don't have much to do with code-writing or testing quality. that is ok for now. I will want to make a pass on those later, but I want to start that out with me refactoring a portion of the codebase and you learning from what I did to improve our rules and sharpen then on what is intended. then we can work outward from there
+
+we should have test coverage to let us be confident changes didn't break anything. and we shouldn't be changing behavior unless it goes against any of the above; otherwise we should just be improving it
+
+this will probably need to start with a pretty broad sweep of the codebase, issues, the `ignored-payload` plan, maybe a report on this system to get a current baseline. we have been working in this repo a lot so itself should provide some insight
+
+are the goals of this clear?

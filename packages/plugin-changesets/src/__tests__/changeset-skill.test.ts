@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
-import { manifestOf, settingsOf, sha256 } from '#test/installed-tree';
+import { allHookCommands, manifestOf, sha256 } from '#test/installed-tree';
 
 const PLUGIN_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const PLUGINS = [{ name: PLUGIN_ROOT, alias: 'cs' }];
@@ -98,13 +98,7 @@ describe('changeset skill condense section', () => {
   it('adds nothing to the always-loaded surface', () => {
     const root = installed();
 
-    const settings = settingsOf(root);
-    const commands = Object.values(settings.hooks ?? {}).flatMap(
-      (groups: any) =>
-        groups.flatMap((group: any) =>
-          group.hooks.map((hook: any) => hook.command),
-        ),
-    );
+    const commands = allHookCommands(root);
     expect(
       commands.some((c: string) => c.includes('changeset-condense')),
       `hook commands ${JSON.stringify(commands)} exclude changeset-condense`,

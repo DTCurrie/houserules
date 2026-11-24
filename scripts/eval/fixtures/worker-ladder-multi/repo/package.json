@@ -1,0 +1,11 @@
+{
+  "name": "worker-ladder-multi-repo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/invoice.test.js test/invoice-format.test.js",
+    "lint:fix": "node -e 0",
+    "format:fix": "node -e 0"
+  }
+}

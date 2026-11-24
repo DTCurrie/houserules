@@ -28,20 +28,17 @@
  */
 
 import {
-  closeSync,
   existsSync,
   mkdirSync,
-  openSync,
   readFileSync,
   renameSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { loadConfigSafe, repoRoot } from '@houserules/payload/config';
+import { loadConfigSafe, requireRepoRoot } from '@houserules/payload/config';
 import {
   appendEvent,
   encodeBody,
@@ -103,6 +100,11 @@ import type { LedgerRecord, PushOp } from './lib/push-queue.mjs';
 import { recordPushOutcomeOnExit } from './lib/push-outcome.mjs';
 import type { PendingCounts } from './lib/push-outcome.mjs';
 import {
+  pushLockPath,
+  readLockOwner,
+  takePushLockFile,
+} from './lib/push-lock.mjs';
+import {
   backfillFieldValue,
   fieldValueLiteral,
   fieldValuesFor,
@@ -128,7 +130,7 @@ import type { BackfillOp, LocalEntry } from './lib/backfill-plan.mjs';
 import { findSurfaceOrphans, surfaceEntries } from './lib/surface-orphans.mjs';
 import type { SurfaceEntry } from './lib/surface-orphans.mjs';
 
-const REPO_ROOT = repoRoot();
+const REPO_ROOT = requireRepoRoot();
 const CONFIG = loadConfigSafe();
 const LEDGER_DIRECTORY = ledgerDir(REPO_ROOT, CONFIG.ledgers?.dir);
 const LEDGER_KINDS: readonly LedgerKind[] = ['backlog', 'decisions'];
@@ -1663,105 +1665,23 @@ function countPending(): PendingCounts {
   };
 }
 
-/**
- * The lock a live push holds, so a burst of `SessionEnd` hooks drains the queue once instead of
- * once per hook. The hook reads the same file, so its path and the stale bound are repeated in
- * `projects-sync-hook.mts`.
- */
-const PUSH_LOCK_PATH = resolve(REPO_ROOT, '.claude/state/projects-sync.lock');
-
-/**
- * A lock older than this is taken over even when its pid is alive, which covers a recycled pid.
- * The bound comes from `.claude/state/projects-sync.log`. The slowest push it records ran from
- * 16:50:30 to 16:50:58 on 2026-11-22, about 28 seconds, so five minutes is over ten times that
- * and under the ten minute cap.
- */
-const PUSH_LOCK_STALE_MS = 5 * 60 * 1000;
-
-interface PushLockOwner {
-  pid: number;
-  startedAt: number;
-}
-
-function readLockOwner(): PushLockOwner | null {
-  try {
-    const parsed = JSON.parse(
-      readFileSync(PUSH_LOCK_PATH, 'utf8'),
-    ) as Partial<PushLockOwner>;
-    if (typeof parsed.pid === 'number' && typeof parsed.startedAt === 'number')
-      return { pid: parsed.pid, startedAt: parsed.startedAt };
-  } catch {
-    // A missing or half written lock falls through to the file's own age.
-  }
-  return null;
-}
-
-function pidIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM';
-  }
-}
-
-function pushLockIsStale(): boolean {
-  const owner = readLockOwner();
-  if (owner) {
-    return (
-      !pidIsAlive(owner.pid) ||
-      Date.now() - owner.startedAt > PUSH_LOCK_STALE_MS
-    );
-  }
-  try {
-    return Date.now() - statSync(PUSH_LOCK_PATH).mtimeMs > PUSH_LOCK_STALE_MS;
-  } catch {
-    return true;
-  }
-}
+const PUSH_LOCK_PATH = pushLockPath(REPO_ROOT);
 
 /**
  * Takes the exclusive push lock and arranges its release on every exit path. Returns false
- * when a live, fresh lock is held. The `wx` open is the atomic step. A stale lock is removed
- * and the open retried once, and two runs taking over the same stale lock at once can still
- * race, which the unique `wx` create settles for all but one of them.
+ * when a live, fresh lock is held or another run won the takeover of a stale one.
  */
-// One create, then one more after removing a stale lock.
-const LOCK_TAKE_ATTEMPTS = 2;
-
 function takePushLock(): boolean {
   mkdirSync(resolve(PUSH_LOCK_PATH, '..'), { recursive: true });
-  for (let attempt = 0; attempt < LOCK_TAKE_ATTEMPTS; attempt++) {
-    try {
-      const fd = openSync(PUSH_LOCK_PATH, 'wx');
-      try {
-        const owner: PushLockOwner = {
-          pid: process.pid,
-          startedAt: Date.now(),
-        };
-        writeFileSync(fd, JSON.stringify(owner));
-      } finally {
-        closeSync(fd);
-      }
-      process.on('exit', releasePushLock);
-      for (const signal of ['SIGINT', 'SIGTERM'] as const)
-        process.on(signal, () => process.exit(1));
-      return true;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      if (!pushLockIsStale()) return false;
-      try {
-        unlinkSync(PUSH_LOCK_PATH);
-      } catch {
-        // Another run already took it over.
-      }
-    }
-  }
-  return false;
+  if (!takePushLockFile(PUSH_LOCK_PATH)) return false;
+  process.on('exit', releasePushLock);
+  for (const signal of ['SIGINT', 'SIGTERM'] as const)
+    process.on(signal, () => process.exit(1));
+  return true;
 }
 
 function releasePushLock(): void {
-  if (readLockOwner()?.pid !== process.pid) return;
+  if (readLockOwner(PUSH_LOCK_PATH)?.pid !== process.pid) return;
   try {
     unlinkSync(PUSH_LOCK_PATH);
   } catch {

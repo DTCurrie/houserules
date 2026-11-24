@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 import { globToRe } from '@houserules/payload/proc';
@@ -32,7 +33,8 @@ const ALWAYS_PACKED =
  * True for a package-root file the published tarball cannot contain.
  *
  * npm packs a root file only when `files` names it (the CLI ships CONVENTIONS.md that way) or
- * when npm always includes it (README, LICENSE, CHANGELOG and their variants, and package.json).
+ * when npm always includes it (README, LICENSE, CHANGELOG and their variants, package.json, and
+ * the files `main` and `bin` name).
  * Anything else at the package root, such as a CLAUDE.md or an eslint.config.js, is repo
  * tooling or documentation: it ships no bytes, so it owes no changeset entry. A `files` entry
  * is matched by exact name. A glob that happens to cover the file is the same rare false
@@ -50,7 +52,26 @@ function unshippedRootFile(
   if (name.includes('/') || name === 'package.json' || ALWAYS_PACKED.test(name))
     return false;
   const entries = filesEntries(root, relDir);
-  return entries !== null && !entries.includes(name);
+  return (
+    entries !== null &&
+    !entries.includes(name) &&
+    !entryPoints(root, relDir).includes(name)
+  );
+}
+
+/**
+ * The paths the manifest's `main` and `bin` name, without a leading `./`. npm packs each of
+ * them whether or not `files` lists it.
+ */
+function entryPoints(root: string, relDir: string): string[] {
+  const pkg = readPackageJson(root, relDir);
+  const bin =
+    typeof pkg?.bin === 'object' && pkg.bin !== null
+      ? Object.values(pkg.bin)
+      : [pkg?.bin];
+  return [pkg?.main, ...bin]
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.replace(/^\.\//, ''));
 }
 
 const TOP_LEVEL_TEST_DIRECTORY = /^(tests?)\//;
@@ -96,14 +117,18 @@ function filesEntries(root: string, relDir: string): string[] | null {
     .map((entry) => entry.replace(/^\.\//, '').replace(/\/$/, ''));
 }
 
-function readPackageJson(
-  root: string,
-  relDir: string,
-): { files?: unknown; private?: unknown } | null {
+interface PackageManifest {
+  files?: unknown;
+  private?: unknown;
+  main?: unknown;
+  bin?: unknown;
+}
+
+function readPackageJson(root: string, relDir: string): PackageManifest | null {
   try {
     return JSON.parse(
       readFileSync(join(root, relDir, 'package.json'), 'utf8'),
-    ) as { files?: unknown; private?: unknown };
+    ) as PackageManifest;
   } catch {
     return null;
   }
@@ -125,6 +150,120 @@ function changesetsIgnore(root: string): string[] {
   }
 }
 
+/** Thrown when the changesets `ignore` list has entries but changesets' own matcher cannot be loaded. */
+export class IgnoreMatcherUnavailableError extends Error {
+  constructor(missing: string, options?: ErrorOptions) {
+    super(
+      [
+        `Cannot match the changesets "ignore" list in .changeset/config.json: ${missing} is not resolvable from this repo.`,
+        'The gate matches that list only with the matcher changesets itself uses, with no fallback.',
+        'Fix: install the CLI as a root devDependency, then rerun:',
+        '  pnpm add -D -w @changesets/cli   # npm: npm install -D @changesets/cli',
+      ].join('\n'),
+      options,
+    );
+    this.name = 'IgnoreMatcherUnavailableError';
+  }
+}
+
+type IgnoreFilter = (names: string[], patterns: string[]) => string[];
+
+interface PicomatchMatcher {
+  (input: string): boolean;
+  state: { negated: boolean };
+}
+
+type Picomatch = (
+  glob: string,
+  options: undefined,
+  returnState: true,
+) => PicomatchMatcher;
+
+/**
+ * The installed @changesets/config manifest path. A strict layout like pnpm's does not hoist it
+ * to the repo root, so the lookup falls back to @changesets/cli's own module context.
+ */
+function changesetsConfigManifest(root: string): string {
+  const fromRoot = createRequire(join(root, 'package.json'));
+  try {
+    return fromRoot.resolve('@changesets/config/package.json');
+  } catch {
+    try {
+      return createRequire(
+        fromRoot.resolve('@changesets/cli/package.json'),
+      ).resolve('@changesets/config/package.json');
+    } catch (err) {
+      throw new IgnoreMatcherUnavailableError('@changesets/config', {
+        cause: err,
+      });
+    }
+  }
+}
+
+/**
+ * Mirrors `globMatch` in @changesets/config 4.x: a name passes on the first positive pattern
+ * that matches, and a later negated pattern it fails takes it back out.
+ */
+function picomatchFilter(picomatch: Picomatch): IgnoreFilter {
+  return (names, patterns) => {
+    const matchers = patterns.map((pattern) =>
+      picomatch(pattern, undefined, true),
+    );
+    return names.filter((name) => {
+      let isPassed = false;
+      for (const matcher of matchers) {
+        if (!isPassed) isPassed = !matcher.state.negated && matcher(name);
+        else if (matcher.state.negated && !matcher(name)) isPassed = false;
+      }
+      return isPassed;
+    });
+  };
+}
+
+/**
+ * The function the installed @changesets/config applies to its `ignore` list. 4.x calls
+ * picomatch through its own `globMatch`, 3.x calls `micromatch(packageNames, ignore)`, so the
+ * config package's declared dependency picks which one to load from its own module context.
+ */
+function loadIgnoreFilter(root: string): IgnoreFilter {
+  const manifestPath = changesetsConfigManifest(root);
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    dependencies?: Record<string, string>;
+  };
+  const matcherName =
+    'picomatch' in (manifest.dependencies ?? {}) ? 'picomatch' : 'micromatch';
+  let matcher: unknown;
+  try {
+    matcher = createRequire(manifestPath)(matcherName);
+  } catch (err) {
+    throw new IgnoreMatcherUnavailableError(matcherName, { cause: err });
+  }
+  return matcherName === 'picomatch'
+    ? picomatchFilter(matcher as Picomatch)
+    : (matcher as IgnoreFilter);
+}
+
+/**
+ * The workspace package names changesets ignores, matched with changesets' own matcher.
+ * Resolves nothing when the `ignore` list is empty.
+ *
+ * @throws {IgnoreMatcherUnavailableError} When the list has entries and the matcher cannot load.
+ */
+function ignoredPackageNames(
+  root: string,
+  pkgs: WorkspacePackage[],
+): Set<string> {
+  const ignore = changesetsIgnore(root);
+  if (ignore.length === 0) return new Set();
+  const filter = loadIgnoreFilter(root);
+  return new Set(
+    filter(
+      pkgs.map((pkg) => pkg.name),
+      ignore,
+    ),
+  );
+}
+
 /**
  * The name of the package owning `path` when its edit owes a changeset, or null when no
  * package owns it, changesets ignores the owner, the owner is private, or the path ships nothing.
@@ -133,12 +272,12 @@ function gatedOwnerName(
   root: string,
   path: string,
   pkgs: WorkspacePackage[],
-  ignoredPackage: RegExp[],
+  ignoredPackages: Set<string>,
 ): string | null {
   const owner = pkgs.find(
     (pkg) => path === pkg.relDir || path.startsWith(`${pkg.relDir}/`),
   );
-  if (!owner || ignoredPackage.some((re) => re.test(owner.name))) return null;
+  if (!owner || ignoredPackages.has(owner.name)) return null;
   if (readPackageJson(root, owner.relDir)?.private === true) return null;
   const isUnshipped =
     unshippedRootFile(root, path, owner.relDir) ||
@@ -156,6 +295,8 @@ function gatedOwnerName(
  * owner does not ship.
  *
  * @param gateIgnore The `changesets.gateIgnore` globs from the repo's houserules config.
+ * @throws {IgnoreMatcherUnavailableError} When `.changeset/config.json` has `ignore` entries and
+ *   changesets' own matcher is not resolvable from `root`.
  */
 export function createGatedOwnerResolver(
   root: string,
@@ -163,10 +304,10 @@ export function createGatedOwnerResolver(
   gateIgnore: string[],
 ): (path: string) => string | null {
   const ignoredPath = gateIgnore.map(globToRe);
-  const ignoredPackage = changesetsIgnore(root).map(globToRe);
+  const ignoredPackages = ignoredPackageNames(root, pkgs);
   return (path) => {
     if (ignoredPath.some((re) => re.test(path)) || shipsNothing(path))
       return null;
-    return gatedOwnerName(root, path, pkgs, ignoredPackage);
+    return gatedOwnerName(root, path, pkgs, ignoredPackages);
   };
 }

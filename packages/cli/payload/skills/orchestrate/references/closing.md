@@ -81,3 +81,12 @@ knows that half of the review never happened.
 ## The PR description
 
 `/pr-description` hands the text over. The user still creates the PR.
+
+## Workflows and ultracode
+
+`/orchestrate` starts no Workflow. When the Workflow tool or ultracode is on, the §5 to §8 gates
+are the review, so no review workflow runs between phases. The §8 `/accessibility-review` and
+`/design-review` still run, because a "no extra reviews" memory does not cover them. When the user
+asks for a workflow, every agent in it names an installed agent type or an explicit `model`. The
+gates already review the same diff, and a bare workflow agent inherits the session model and
+effort, which under ultracode means a full-effort Opus agent per reviewer.

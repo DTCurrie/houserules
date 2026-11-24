@@ -101,11 +101,24 @@ describe('child invocation', () => {
       '1',
     ];
 
-    assert.deepEqual(childArgv({ ...common, isNetworkAllowed: false }), [
-      ...prefix,
+    const closed = childArgv({ ...common, isNetworkAllowed: false });
+    const settingsAt = closed.indexOf('--settings');
+    assert.deepEqual(closed.slice(0, prefix.length), prefix);
+    assert.deepEqual(closed.slice(prefix.length, prefix.length + 2), [
       '--disallowedTools',
       'WebFetch,WebSearch',
     ]);
+    assert.equal(settingsAt, prefix.length + 2);
+    assert.equal(closed.length, settingsAt + 2);
+    assert.deepEqual(JSON.parse(closed[settingsAt + 1]), {
+      sandbox: {
+        enabled: true,
+        failIfUnavailable: true,
+        allowUnsandboxedCommands: false,
+        network: { allowedDomains: [] },
+      },
+    });
+    assert.ok(!prefix.includes('--settings'));
     assert.deepEqual(childArgv({ ...common, isNetworkAllowed: true }), prefix);
     assert.deepEqual(childArgv(common), prefix);
   });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Classifies the tool calls in Claude Code transcripts into seven waste kinds and prints one
+ * Classifies the tool calls in Claude Code transcripts into eight waste kinds and prints one
  * `waste-audit@4` JSON object on stdout.
  *
  * Usage: node waste-audit.mjs [--ablate] [--sessions <sessions.txt>] [<transcript.jsonl> ...]
@@ -60,6 +60,10 @@ const WIREIT_FOLLOW_WINDOW = 3;
 const SMALL_AGENT_MAX_CALLS = 5;
 /** Non-writing calls between the plan-project fire and the first plan write that count as waste. */
 const PLAN_READ_MIN_CALLS = 10;
+/** Bash calls after an empty recursive grep in which a same-pattern grep with matches counts as a retry. */
+const EMPTY_GREP_RETRY_WINDOW = 5;
+const EXIT_OK = 0;
+const EXIT_NO_INPUT = 2;
 /** A command shorter than this is too generic to match verbatim inside a report. */
 const MIN_VERBATIM_COMMAND_LENGTH = 12;
 const MILLISECONDS_PER_SECOND = 1000;
@@ -81,9 +85,20 @@ const FAILED_RESULT =
   /ℹ fail [1-9]|✖|^\s*not ok|\bFAIL\b|\b[1-9]\d* failed\b|error TS\d+|Exit code [1-9]|AssertionError/m;
 /** A line that names the failing test, so a rerun is not needed to find it. */
 const NAMED_FAILURE = /^\s*not ok|✖|\bFAIL\b/m;
+/** A Bash result with nothing in it, or Claude Code's placeholder for that. */
+const EMPTY_OUTPUT = /^\s*(?:\(Bash completed with no output\))?\s*$/;
+const GREP_TOKEN = /"[^"]*"|'[^']*'|\S+/g;
 const WIREIT_SKIP = /Already fresh|Restored from cache/;
 const LOG_READ_COMMAND = /\b(?:grep|rg|tail|cat|head)\b/;
-const LOG_TARGET = /\.log\b|\.output\b|\/tmp\/|\/tasks\//;
+const LOG_TARGET = /\.log\b|\/tmp\//;
+/** A background task's output file, rewritten as the task runs, so reading it is not a re-check. */
+const TASK_OUTPUT_TARGET = /\.output\b|\/tasks\//;
+/** A command whose result can hold a wireit skip line. */
+const WIREIT_RUN_COMMAND =
+  /\bpnpm\b[^|;&\n]*\b(?:check|test|build|lint)\b|\bnpm run\b|\bwireit\b|verify-changed/;
+/** A Bash command that writes a file: in-place sed or perl, a redirect, tee, mv, cp, or a python or node heredoc that writes. */
+const BASH_EDIT =
+  /\bsed\s+(?:\S+\s+)*?-\S*i|\bperl\s+-\S*i|(?<![0-9&>])>>?\s*(?!&|\/dev\/null)[^\s>&]|\btee\b|(?:^|[\s;&|(])(?:mv|cp)\s+\S|\b(?:python3?|node)\b[^\n]*<<-?\s*['"]?\w+['"]?[\s\S]*(?:\.write|write_text|writeFile|appendFile|open\([^)]*['"][wa]\+?['"])/;
 const CHECK_COMMAND =
   /(?:^|[\s&;|(])(?:pnpm|npx|vitest|tsc|eslint|prettier)(?:\s|$)|\bnpm run\b|\bnode --test\b|plan-lint|prose-lint/;
 const MUTATING_BASH =
@@ -99,14 +114,15 @@ const TASK_OUTPUT_PATH = /\/tasks\/[^/]+\.output$/;
 
 const KIND_RULES = {
   'rerun-unchanged':
-    "A Bash check command whose normalized text equals an earlier one in the same transcript, with no Write, Edit, or NotebookEdit call between them. A call whose result opens with the auto mode classifier's no-verdict text never ran and counts as neither run, and a keepalive launched with run_in_background never counts.",
+    "A Bash check command whose normalized text equals an earlier one in the same transcript, with no Write, Edit, or NotebookEdit call and no non-check Bash call that edits a file (sed -i, perl -i, a > or >> redirect, tee, mv, cp, or a python3 or node heredoc that writes) between them. A call whose result opens with the auto mode classifier's no-verdict text never ran and counts as neither run, and a keepalive launched with run_in_background never counts.",
   'reread-unchanged':
     'A Read of a file_path already Read with the same offset and limit, with no Write, Edit, or NotebookEdit to that path between them. A compaction boundary clears the Read history, and a path matching /tasks/*.output never counts, since a background task rewrites it.',
   'ask-to-act-gap': `In a main transcript, the calls between a user text message that asks for a change and the first Write, Edit, git commit or push, or gh pr or issue create, edit, or comment after it, when there are at least ${ASK_TO_ACT_MIN_CALLS} of them and no other user text message or compaction arrives first. A compaction summary or continuation message is not an ask.`,
   'acceptance-rerun-after-report': `A Bash command whose text before its first pipe is at least ${MIN_VERBATIM_COMMAND_LENGTH} characters and appears verbatim in the last worker report, run after the report arrived and before the next Agent dispatch. A worker report is an Agent, Task, or SendMessage result, a task notification, or a ${HANDBACK_MARKER} message. Also a rerun of a check command, compared on its text before its first pipe, with no Write, Edit, or NotebookEdit since a failing run of it whose output held no not ok, ✖, or FAIL line.`,
-  'grep-after-wireit-skip': `A Bash grep, rg, tail, cat, or head over a log path within ${WIREIT_FOLLOW_WINDOW} calls after a Bash result that held a wireit skip line.`,
+  'grep-after-wireit-skip': `A Bash grep, rg, tail, cat, or head over a log path within ${WIREIT_FOLLOW_WINDOW} calls after the result of a check command (pnpm check, test, build, or lint, npm run, wireit, verify-changed) that held a wireit skip line. A read of a path holding .output or /tasks/ never counts.`,
   'small-agent': `A subagent transcript that made fewer than ${SMALL_AGENT_MAX_CALLS} tool calls, not counting a final SubagentHandback or StructuredOutput call. Each episode carries the agentType from the .meta.json beside the transcript, or null.`,
   'plan-read-before-write': `In a transcript where plan-project hasPlanProjectFired, the non-writing calls between that fire and the first Write or Edit under ${PLANS_PATH}, when there are at least ${PLAN_READ_MIN_CALLS} of them.`,
+  'empty-grep-retry': `A recursive Bash grep, or any rg, whose output was empty, followed within ${EMPTY_GREP_RETRY_WINDOW} Bash calls by a grep or rg for the same pattern that returned output. Claude Code's grep honors ignore files and returns nothing when the search starts at or above a gitignored directory. The call counted is the empty one.`,
 };
 
 export const KIND_NAMES = Object.keys(KIND_RULES);
@@ -169,19 +185,7 @@ function requestCost(usage, model, unpriced) {
  * record also goes to `bashCollector`.
  */
 function parseTranscript(text, off, bashCollector) {
-  const isClockOn = !off.has('span-clock');
-  const isAskResetOn = !off.has('compaction-ask');
-  const readsCompaction = isAskResetOn || !off.has('reread-reset');
-  const keepsHandback = !off.has('acceptance-claims');
-  const calls = [];
-  const events = [];
-  const requests = new Map();
-  const callById = new Map();
-  let previousTimestampMs;
-  let lastUserTimestampMs;
-  let lastApiRequestTimestampMs;
-  let firstTimestampMs;
-  let lastTimestampMs;
+  const state = createParseState(off, bashCollector);
   const lines = text.split('\n');
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     if (!lines[lineIndex].trim()) continue;
@@ -191,112 +195,161 @@ function parseTranscript(text, off, bashCollector) {
     } catch {
       continue;
     }
-    bashCollector.add(record);
-    const lineNumber = lineIndex + 1;
-    const timestampMs = Date.parse(record.timestamp ?? '');
-    const message = record.message;
-    const isCompaction = readsCompaction && isCompactionRecord(record);
-    if (isCompaction) events.push({ type: 'compaction', line: lineNumber });
-    // With compaction-ask off, a compaction record also parses as the message it was before.
-    const isMessage = !isCompaction || !isAskResetOn;
-    if (isMessage && record.type === 'assistant' && message) {
-      const key = message.id ?? `line:${lineNumber}`;
-      let request = requests.get(key);
-      if (!request) {
-        request = {
-          startTimestampMs:
-            (isClockOn ? lastApiRequestTimestampMs : undefined) ??
-            lastUserTimestampMs ??
-            previousTimestampMs ??
-            timestampMs,
-          endTimestampMs: undefined,
-          lastAssistantTimestampMs: timestampMs,
-          usage: undefined,
-          model: undefined,
-          callIndexes: [],
-          firstLine: lineNumber,
-        };
-        requests.set(key, request);
-      }
-      if (!request.usage && message.usage) {
-        request.usage = message.usage;
-        request.model = message.model;
-      }
-      if (Number.isFinite(timestampMs))
-        request.lastAssistantTimestampMs = timestampMs;
-      for (const block of Array.isArray(message.content)
-        ? message.content
-        : []) {
-        if (block?.type !== 'tool_use' || typeof block.id !== 'string')
-          continue;
-        const call = {
-          index: calls.length,
-          line: lineNumber,
-          id: block.id,
-          name: block.name ?? '',
-          input: block.input ?? {},
-          request,
-        };
-        request.callIndexes.push(call.index);
-        calls.push(call);
-        callById.set(call.id, call);
-        events.push({ type: 'call', call });
-      }
-    } else if (isMessage && record.type === 'user' && message) {
-      const content = message.content;
-      const texts = [];
-      if (typeof content === 'string') texts.push(content);
-      for (const block of Array.isArray(content) ? content : []) {
-        if (block?.type === 'tool_result') {
-          const call = callById.get(block.tool_use_id);
-          if (!call) continue;
-          if (Number.isFinite(timestampMs))
-            call.request.endTimestampMs = Math.max(
-              call.request.endTimestampMs ?? timestampMs,
-              timestampMs,
-            );
-          events.push({
-            type: 'result',
-            call,
-            text: resultText(block.content),
-            line: lineNumber,
-          });
-        } else if (block?.type === 'text' && typeof block.text === 'string') {
-          texts.push(block.text);
-        }
-      }
-      const text = texts.join('\n');
-      if (texts.length > 0 && record.isMeta !== true)
-        events.push({ type: 'user', text, line: lineNumber });
-      else if (
-        keepsHandback &&
-        texts.length > 0 &&
-        text.includes(HANDBACK_MARKER)
-      )
-        events.push({ type: 'handback', text, line: lineNumber });
-    }
-    if (Number.isFinite(timestampMs)) {
-      if (record.type === 'user') {
-        lastUserTimestampMs = timestampMs;
-        lastApiRequestTimestampMs = undefined;
-      } else if (record.type === 'api-request') {
-        lastApiRequestTimestampMs = timestampMs;
-      }
-      previousTimestampMs = timestampMs;
-      firstTimestampMs ??= timestampMs;
-      lastTimestampMs = timestampMs;
-    }
+    parseRecord(state, record, lineIndex + 1);
   }
-  return { calls, events, requests, firstTimestampMs, lastTimestampMs };
+  return {
+    calls: state.calls,
+    events: state.events,
+    requests: state.requests,
+    firstTimestampMilliseconds: state.firstTimestampMilliseconds,
+    lastTimestampMilliseconds: state.lastTimestampMilliseconds,
+  };
+}
+
+function createParseState(off, bashCollector) {
+  const isAskResetOn = !off.has('compaction-ask');
+  return {
+    bashCollector,
+    isClockOn: !off.has('span-clock'),
+    isAskResetOn,
+    readsCompaction: isAskResetOn || !off.has('reread-reset'),
+    keepsHandback: !off.has('acceptance-claims'),
+    calls: [],
+    events: [],
+    requests: new Map(),
+    callById: new Map(),
+    previousTimestampMilliseconds: undefined,
+    lastUserTimestampMilliseconds: undefined,
+    lastApiRequestTimestampMilliseconds: undefined,
+    firstTimestampMilliseconds: undefined,
+    lastTimestampMilliseconds: undefined,
+  };
+}
+
+function parseRecord(state, record, lineNumber) {
+  state.bashCollector.add(record);
+  const timestampMilliseconds = Date.parse(record.timestamp ?? '');
+  const message = record.message;
+  const isCompaction = state.readsCompaction && isCompactionRecord(record);
+  if (isCompaction) state.events.push({ type: 'compaction', line: lineNumber });
+  // With compaction-ask off, a compaction record also parses as the message it was before.
+  const isMessage = !isCompaction || !state.isAskResetOn;
+  if (isMessage && record.type === 'assistant' && message)
+    recordAssistant(state, message, lineNumber, timestampMilliseconds);
+  else if (isMessage && record.type === 'user' && message)
+    recordUser(state, record, lineNumber, timestampMilliseconds);
+  trackTimestamps(state, record, timestampMilliseconds);
+}
+
+function openRequest(state, lineNumber, timestampMilliseconds) {
+  return {
+    startTimestampMilliseconds:
+      (state.isClockOn
+        ? state.lastApiRequestTimestampMilliseconds
+        : undefined) ??
+      state.lastUserTimestampMilliseconds ??
+      state.previousTimestampMilliseconds ??
+      timestampMilliseconds,
+    endTimestampMilliseconds: undefined,
+    lastAssistantTimestampMilliseconds: timestampMilliseconds,
+    usage: undefined,
+    model: undefined,
+    callIndexes: [],
+    firstLine: lineNumber,
+  };
+}
+
+function recordAssistant(state, message, lineNumber, timestampMilliseconds) {
+  const key = message.id ?? `line:${lineNumber}`;
+  let request = state.requests.get(key);
+  if (!request) {
+    request = openRequest(state, lineNumber, timestampMilliseconds);
+    state.requests.set(key, request);
+  }
+  if (!request.usage && message.usage) {
+    request.usage = message.usage;
+    request.model = message.model;
+  }
+  if (Number.isFinite(timestampMilliseconds))
+    request.lastAssistantTimestampMilliseconds = timestampMilliseconds;
+  recordToolUses(state, request, message.content, lineNumber);
+}
+
+function recordToolUses(state, request, content, lineNumber) {
+  for (const block of Array.isArray(content) ? content : []) {
+    if (block?.type !== 'tool_use' || typeof block.id !== 'string') continue;
+    const call = {
+      index: state.calls.length,
+      line: lineNumber,
+      id: block.id,
+      name: block.name ?? '',
+      input: block.input ?? {},
+      request,
+    };
+    request.callIndexes.push(call.index);
+    state.calls.push(call);
+    state.callById.set(call.id, call);
+    state.events.push({ type: 'call', call });
+  }
+}
+
+function recordToolResult(state, block, lineNumber, timestampMilliseconds) {
+  const call = state.callById.get(block.tool_use_id);
+  if (!call) return;
+  if (Number.isFinite(timestampMilliseconds))
+    call.request.endTimestampMilliseconds = Math.max(
+      call.request.endTimestampMilliseconds ?? timestampMilliseconds,
+      timestampMilliseconds,
+    );
+  state.events.push({
+    type: 'result',
+    call,
+    text: resultText(block.content),
+    line: lineNumber,
+  });
+}
+
+function recordUser(state, record, lineNumber, timestampMilliseconds) {
+  const content = record.message.content;
+  const texts = [];
+  if (typeof content === 'string') texts.push(content);
+  for (const block of Array.isArray(content) ? content : []) {
+    if (block?.type === 'tool_result')
+      recordToolResult(state, block, lineNumber, timestampMilliseconds);
+    else if (block?.type === 'text' && typeof block.text === 'string')
+      texts.push(block.text);
+  }
+  if (texts.length === 0) return;
+  const text = texts.join('\n');
+  if (record.isMeta !== true)
+    state.events.push({ type: 'user', text, line: lineNumber });
+  else if (state.keepsHandback && text.includes(HANDBACK_MARKER))
+    state.events.push({ type: 'handback', text, line: lineNumber });
+}
+
+function trackTimestamps(state, record, timestampMilliseconds) {
+  if (!Number.isFinite(timestampMilliseconds)) return;
+  if (record.type === 'user') {
+    state.lastUserTimestampMilliseconds = timestampMilliseconds;
+    state.lastApiRequestTimestampMilliseconds = undefined;
+  } else if (record.type === 'api-request') {
+    state.lastApiRequestTimestampMilliseconds = timestampMilliseconds;
+  }
+  state.previousTimestampMilliseconds = timestampMilliseconds;
+  state.firstTimestampMilliseconds ??= timestampMilliseconds;
+  state.lastTimestampMilliseconds = timestampMilliseconds;
 }
 
 /** Fills every call's cost, tokens, and wall seconds from its request. */
 function attribute(parsed, unpriced) {
   for (const request of parsed.requests.values()) {
     const priced = requestCost(request.usage, request.model, unpriced);
-    const end = request.endTimestampMs ?? request.lastAssistantTimestampMs;
-    const span = Number.isFinite(end - request.startTimestampMs)
-      ? Math.max(0, end - request.startTimestampMs) / MILLISECONDS_PER_SECOND
+    const end =
+      request.endTimestampMilliseconds ??
+      request.lastAssistantTimestampMilliseconds;
+    const span = Number.isFinite(end - request.startTimestampMilliseconds)
+      ? Math.max(0, end - request.startTimestampMilliseconds) /
+        MILLISECONDS_PER_SECOND
       : 0;
     request.priced = priced;
     const shares = request.callIndexes.length;
@@ -348,7 +401,11 @@ function findRerunUnchanged({ parsed: { events }, off }) {
       continue;
     }
     const command = bashCommand(call);
-    if (command === undefined || !CHECK_COMMAND.test(command)) continue;
+    if (command === undefined) continue;
+    if (!CHECK_COMMAND.test(command)) {
+      if (BASH_EDIT.test(command)) firstRunOf.clear();
+      continue;
+    }
     if (isKeepaliveSkipOn && isKeepaliveLaunch(call)) continue;
     if (firstRunOf.has(command))
       episodes.push({ calls: [call], line: call.line });
@@ -448,12 +505,7 @@ function findAcceptanceRerun({ parsed: { events }, off }) {
       continue;
     }
     if (event.type === 'result') {
-      const command = bashCommand(event.call);
-      if (command !== undefined)
-        unnamedFailureSinceWrite.set(
-          withoutPipeFilters(command),
-          isUnnamedFailure(event.text),
-        );
+      recordRunOutcome(unnamedFailureSinceWrite, event);
       continue;
     }
     if (event.type !== 'call') continue;
@@ -467,20 +519,42 @@ function findAcceptanceRerun({ parsed: { events }, off }) {
       continue;
     }
     const command = bashCommand(call);
-    if (command === undefined) continue;
-    const stripped = isClaimsOn ? withoutPipeFilters(command) : command;
-    const isReportRerun =
-      report !== undefined &&
-      stripped.length >= MIN_VERBATIM_COMMAND_LENGTH &&
-      report.includes(stripped);
-    const isBlindRerun =
-      isClaimsOn &&
-      CHECK_COMMAND.test(stripped) &&
-      unnamedFailureSinceWrite.get(stripped) === true;
-    if (isReportRerun || isBlindRerun)
+    if (
+      command !== undefined &&
+      isAcceptanceRerun(command, report, unnamedFailureSinceWrite, isClaimsOn)
+    )
       episodes.push({ calls: [call], line: call.line });
   }
   return episodes;
+}
+
+/** Remembers whether a Bash command's latest run failed without naming a test. */
+function recordRunOutcome(unnamedFailureSinceWrite, event) {
+  const command = bashCommand(event.call);
+  if (command !== undefined)
+    unnamedFailureSinceWrite.set(
+      withoutPipeFilters(command),
+      isUnnamedFailure(event.text),
+    );
+}
+
+/** A command the last report quotes, or a check rerun after a failure that named no test. */
+function isAcceptanceRerun(
+  command,
+  report,
+  unnamedFailureSinceWrite,
+  isClaimsOn,
+) {
+  const stripped = isClaimsOn ? withoutPipeFilters(command) : command;
+  const isReportRerun =
+    report !== undefined &&
+    stripped.length >= MIN_VERBATIM_COMMAND_LENGTH &&
+    report.includes(stripped);
+  const isBlindRerun =
+    isClaimsOn &&
+    CHECK_COMMAND.test(stripped) &&
+    unnamedFailureSinceWrite.get(stripped) === true;
+  return isReportRerun || isBlindRerun;
 }
 
 function findGrepAfterWireitSkip({ parsed: { events } }) {
@@ -488,7 +562,12 @@ function findGrepAfterWireitSkip({ parsed: { events } }) {
   let sinceSkip = Infinity;
   for (const event of events) {
     if (event.type === 'result') {
-      if (event.call.name === 'Bash' && WIREIT_SKIP.test(event.text))
+      const skipCommand = bashCommand(event.call);
+      if (
+        skipCommand !== undefined &&
+        WIREIT_RUN_COMMAND.test(skipCommand) &&
+        WIREIT_SKIP.test(event.text)
+      )
         sinceSkip = 0;
     } else if (event.type === 'call') {
       if (sinceSkip === Infinity) continue;
@@ -501,13 +580,62 @@ function findGrepAfterWireitSkip({ parsed: { events } }) {
       if (
         command !== undefined &&
         LOG_READ_COMMAND.test(command) &&
-        LOG_TARGET.test(command)
+        LOG_TARGET.test(command) &&
+        !TASK_OUTPUT_TARGET.test(command)
       ) {
         episodes.push({ calls: [event.call], line: event.call.line });
         sinceSkip = Infinity;
       }
     }
   }
+  return episodes;
+}
+
+/** A grep or rg command's pattern and whether it searches directories, or undefined. */
+function parseGrepCommand(command) {
+  const tokens = command.match(GREP_TOKEN) ?? [];
+  const toolIndex = tokens.findIndex((token) => /^(?:grep|rg)$/.test(token));
+  if (toolIndex === -1) return undefined;
+  const isRipgrep = tokens[toolIndex] === 'rg';
+  const args = tokens.slice(toolIndex + 1);
+  const flags = args.filter((arg) => arg.startsWith('-'));
+  const pattern = args.find((arg) => !arg.startsWith('-'));
+  if (pattern === undefined) return undefined;
+  return {
+    pattern: pattern.replace(/^(["'])(.*)\1$/, '$2'),
+    isRecursive:
+      isRipgrep ||
+      flags.some((flag) => /^-[a-zA-Z]*[rR]|^--recursive$/.test(flag)),
+  };
+}
+
+function findEmptyGrepRetry({ parsed: { events } }) {
+  const outputOf = new Map();
+  const bashCalls = [];
+  for (const event of events) {
+    if (event.type === 'result' && event.call.name === 'Bash')
+      outputOf.set(event.call.index, event.text);
+    if (event.type === 'call' && bashCommand(event.call) !== undefined)
+      bashCalls.push(event.call);
+  }
+  const hasOutput = (call) =>
+    outputOf.has(call.index) && !EMPTY_OUTPUT.test(outputOf.get(call.index));
+  const episodes = [];
+  bashCalls.forEach((call, position) => {
+    const grep = parseGrepCommand(bashCommand(call));
+    if (!grep?.isRecursive || !outputOf.has(call.index) || hasOutput(call))
+      return;
+    const followers = bashCalls.slice(
+      position + 1,
+      position + 1 + EMPTY_GREP_RETRY_WINDOW,
+    );
+    const isRetried = followers.some(
+      (follower) =>
+        parseGrepCommand(bashCommand(follower))?.pattern === grep.pattern &&
+        hasOutput(follower),
+    );
+    if (isRetried) episodes.push({ calls: [call], line: call.line });
+  });
   return episodes;
 }
 
@@ -531,9 +659,9 @@ function findSmallAgent({ parsed, fileName, agentType, off }) {
     outputTokens += request.priced.outputTokens;
   }
   const wallSeconds =
-    parsed.firstTimestampMs !== undefined &&
-    parsed.lastTimestampMs !== undefined
-      ? (parsed.lastTimestampMs - parsed.firstTimestampMs) /
+    parsed.firstTimestampMilliseconds !== undefined &&
+    parsed.lastTimestampMilliseconds !== undefined
+      ? (parsed.lastTimestampMilliseconds - parsed.firstTimestampMilliseconds) /
         MILLISECONDS_PER_SECOND
       : 0;
   return [
@@ -581,6 +709,7 @@ const CLAIM_ORDER = [
   'rerun-unchanged',
   'reread-unchanged',
   'plan-read-before-write',
+  'empty-grep-retry',
   'ask-to-act-gap',
 ];
 
@@ -592,6 +721,7 @@ const FINDERS = {
   'grep-after-wireit-skip': findGrepAfterWireitSkip,
   'small-agent': findSmallAgent,
   'plan-read-before-write': findPlanReadBeforeWrite,
+  'empty-grep-retry': findEmptyGrepRetry,
 };
 
 /** The session a transcript belongs to: a subagent's parent directory, else the file's own id. */
@@ -599,6 +729,68 @@ function parentSessionId(fileName, isSubagent) {
   const parts = fileName.split(/[\\/]/);
   if (isSubagent) return parts[parts.lastIndexOf('subagents') - 1];
   return parts.at(-1).replace(/\.jsonl$/, '');
+}
+
+function sumTotals(calls) {
+  const totals = { calls: calls.length, wallSeconds: 0, costUsd: 0 };
+  for (const call of calls) {
+    totals.wallSeconds += call.wallSeconds;
+    totals.costUsd += call.cost;
+  }
+  return totals;
+}
+
+/** Drops the calls an earlier kind claimed, and the episodes left too small to count. */
+function keepUnclaimed(episodes, claimed) {
+  const kept = [];
+  for (const episode of episodes) {
+    const remaining = episode.calls.filter((call) => !claimed.has(call.index));
+    if (remaining.length === 0 || remaining.length < (episode.minCalls ?? 1))
+      continue;
+    kept.push({
+      ...episode,
+      calls: remaining,
+      line:
+        remaining.length === episode.calls.length
+          ? episode.line
+          : remaining[0].line,
+    });
+  }
+  return kept;
+}
+
+/** Runs every finder, claiming calls in CLAIM_ORDER, and returns the episodes per kind. */
+function findKinds(context) {
+  const claimed = new Set();
+  const found = {};
+  for (const kind of [
+    ...CLAIM_ORDER,
+    ...KIND_NAMES.filter((name) => !CLAIM_ORDER.includes(name)),
+  ]) {
+    const episodes = FINDERS[kind](context);
+    const claims = CLAIM_ORDER.includes(kind);
+    found[kind] = claims ? keepUnclaimed(episodes, claimed) : episodes;
+    if (claims)
+      for (const episode of found[kind])
+        for (const call of episode.calls) claimed.add(call.index);
+  }
+  return found;
+}
+
+/** One episode's pointer and summed figures. */
+function episodeFigures(kind, episode, fileName) {
+  const sum = (field) =>
+    episode.override?.[field] ??
+    episode.calls.reduce((total, call) => total + call[field], 0);
+  return {
+    pointer: `${fileName}:${episode.line}`,
+    calls: episode.calls.length,
+    wallSeconds: sum('wallSeconds'),
+    inputTokens: sum('inputTokens'),
+    outputTokens: sum('outputTokens'),
+    costUsd: sum('cost'),
+    ...(kind === 'small-agent' ? { agentType: episode.agentType } : {}),
+  };
 }
 
 /**
@@ -628,60 +820,19 @@ export function classify(
     .finish()
     .map((bashCall) => ({ ...bashCall, session }));
   attribute(parsed, unpriced);
-  const totals = { calls: parsed.calls.length, wallSeconds: 0, costUsd: 0 };
-  for (const call of parsed.calls) {
-    totals.wallSeconds += call.wallSeconds;
-    totals.costUsd += call.cost;
-  }
-  const claimed = new Set();
-  const found = {};
-  for (const kind of [
-    ...CLAIM_ORDER,
-    ...KIND_NAMES.filter((name) => !CLAIM_ORDER.includes(name)),
-  ]) {
-    const kept = [];
-    const claims = CLAIM_ORDER.includes(kind);
-    for (const episode of FINDERS[kind]({ parsed, fileName, agentType, off })) {
-      if (!claims) {
-        kept.push(episode);
-        continue;
-      }
-      const remaining = episode.calls.filter(
-        (call) => !claimed.has(call.index),
-      );
-      if (remaining.length === 0 || remaining.length < (episode.minCalls ?? 1))
-        continue;
-      kept.push({
-        ...episode,
-        calls: remaining,
-        line:
-          remaining.length === episode.calls.length
-            ? episode.line
-            : remaining[0].line,
-      });
-    }
-    for (const episode of kept)
-      if (claims) for (const call of episode.calls) claimed.add(call.index);
-    found[kind] = kept;
-  }
+  const found = findKinds({ parsed, fileName, agentType, off });
   const kinds = {};
-  for (const kind of KIND_NAMES) {
-    kinds[kind] = found[kind].map((episode) => {
-      const sum = (field) =>
-        episode.override?.[field] ??
-        episode.calls.reduce((total, call) => total + call[field], 0);
-      return {
-        pointer: `${fileName}:${episode.line}`,
-        calls: episode.calls.length,
-        wallSeconds: sum('wallSeconds'),
-        inputTokens: sum('inputTokens'),
-        outputTokens: sum('outputTokens'),
-        costUsd: sum('cost'),
-        ...(kind === 'small-agent' ? { agentType: episode.agentType } : {}),
-      };
-    });
-  }
-  return { fileName, totals, kinds, unpriced: [...unpriced], bashCalls };
+  for (const kind of KIND_NAMES)
+    kinds[kind] = found[kind].map((episode) =>
+      episodeFigures(kind, episode, fileName),
+    );
+  return {
+    fileName,
+    totals: sumTotals(parsed.calls),
+    kinds,
+    unpriced: [...unpriced],
+    bashCalls,
+  };
 }
 
 const round = (value, decimals) => {
@@ -716,6 +867,52 @@ function agentTypeShares(episodes) {
     .toSorted((left, right) => right.costUsd - left.costUsd);
 }
 
+const emptyAccumulator = () => ({
+  count: 0,
+  calls: 0,
+  wallSeconds: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  costUsd: 0,
+  files: new Set(),
+  episodes: [],
+});
+
+/** Adds one file's episodes of one kind to that kind's accumulator. */
+function addEpisodes(accumulator, result, kindEpisodes) {
+  for (const episode of kindEpisodes) {
+    accumulator.count += 1;
+    accumulator.calls += episode.calls;
+    accumulator.wallSeconds += episode.wallSeconds;
+    accumulator.inputTokens += episode.inputTokens;
+    accumulator.outputTokens += episode.outputTokens;
+    accumulator.costUsd += episode.costUsd;
+    accumulator.files.add(result.fileName);
+    accumulator.episodes.push(episode);
+  }
+}
+
+/** One element of the document's `kinds` list. */
+function kindEntry(kind, accumulator) {
+  return {
+    kind,
+    rule: KIND_RULES[kind],
+    count: accumulator.count,
+    calls: accumulator.calls,
+    wallSeconds: round(accumulator.wallSeconds, WALL_DECIMALS),
+    inputTokens: Math.round(accumulator.inputTokens),
+    outputTokens: Math.round(accumulator.outputTokens),
+    costUsd: round(accumulator.costUsd, COST_DECIMALS),
+    sessionsAffected: accumulator.files.size,
+    pointers: accumulator.episodes
+      .toSorted((left, right) => right.costUsd - left.costUsd)
+      .map((episode) => episode.pointer),
+    ...(kind === 'small-agent'
+      ? { agentTypes: agentTypeShares(accumulator.episodes) }
+      : {}),
+  };
+}
+
 /**
  * Folds per-file classifications into the `waste-audit@4` document. The `small-agent` kind
  * entry, and no other, carries `agentTypes`, one `{ agentType, count, calls, wallSeconds,
@@ -725,38 +922,15 @@ export function summarize(fileResults) {
   const totals = { calls: 0, wallSeconds: 0, costUsd: 0 };
   const unpriced = new Set();
   const accumulators = new Map(
-    KIND_NAMES.map((kind) => [
-      kind,
-      {
-        count: 0,
-        calls: 0,
-        wallSeconds: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        costUsd: 0,
-        files: new Set(),
-        episodes: [],
-      },
-    ]),
+    KIND_NAMES.map((kind) => [kind, emptyAccumulator()]),
   );
   for (const result of fileResults) {
     totals.calls += result.totals.calls;
     totals.wallSeconds += result.totals.wallSeconds;
     totals.costUsd += result.totals.costUsd;
     for (const model of result.unpriced) unpriced.add(model);
-    for (const kind of KIND_NAMES) {
-      const accumulator = accumulators.get(kind);
-      for (const episode of result.kinds[kind]) {
-        accumulator.count += 1;
-        accumulator.calls += episode.calls;
-        accumulator.wallSeconds += episode.wallSeconds;
-        accumulator.inputTokens += episode.inputTokens;
-        accumulator.outputTokens += episode.outputTokens;
-        accumulator.costUsd += episode.costUsd;
-        accumulator.files.add(result.fileName);
-        accumulator.episodes.push(episode);
-      }
-    }
+    for (const kind of KIND_NAMES)
+      addEpisodes(accumulators.get(kind), result, result.kinds[kind]);
   }
   return {
     schema: SCHEMA_VERSION,
@@ -770,26 +944,7 @@ export function summarize(fileResults) {
     bashWall: summarizeBashWall(
       fileResults.flatMap((result) => result.bashCalls),
     ),
-    kinds: KIND_NAMES.map((kind) => {
-      const accumulator = accumulators.get(kind);
-      return {
-        kind,
-        rule: KIND_RULES[kind],
-        count: accumulator.count,
-        calls: accumulator.calls,
-        wallSeconds: round(accumulator.wallSeconds, WALL_DECIMALS),
-        inputTokens: Math.round(accumulator.inputTokens),
-        outputTokens: Math.round(accumulator.outputTokens),
-        costUsd: round(accumulator.costUsd, COST_DECIMALS),
-        sessionsAffected: accumulator.files.size,
-        pointers: accumulator.episodes
-          .toSorted((left, right) => right.costUsd - left.costUsd)
-          .map((episode) => episode.pointer),
-        ...(kind === 'small-agent'
-          ? { agentTypes: agentTypeShares(accumulator.episodes) }
-          : {}),
-      };
-    }),
+    kinds: KIND_NAMES.map((kind) => kindEntry(kind, accumulators.get(kind))),
   };
 }
 
@@ -838,7 +993,8 @@ const ablatedFigures = (entry) => ({
 const USAGE =
   'Usage: node waste-audit.mjs [--ablate] [--sessions <sessions.txt>] [<transcript.jsonl> ...]';
 
-function main(argv) {
+/** Reads the flags and the transcript paths, or undefined when `--sessions` has no file. */
+function parseArguments(argv) {
   const paths = [];
   let isAblating = false;
   for (let i = 0; i < argv.length; i += 1) {
@@ -846,23 +1002,18 @@ function main(argv) {
       isAblating = true;
     } else if (argv[i] === '--sessions') {
       const listFile = argv[i + 1];
-      if (!listFile) {
-        console.error(USAGE);
-        return 2;
-      }
+      if (!listFile) return undefined;
       paths.push(...parseSessionsList(readFileSync(listFile, 'utf8')));
       i += 1;
     } else {
       paths.push(argv[i]);
     }
   }
-  const transcripts = paths.filter(
-    (path) => basename(path) !== 'journal.jsonl',
-  );
-  if (transcripts.length === 0) {
-    console.error(USAGE);
-    return 2;
-  }
+  return { paths, isAblating };
+}
+
+/** Classifies every readable transcript, once plain and once per ablated rule. */
+function auditTranscripts(transcripts, isAblating) {
   const results = [];
   const ablated = new Map(
     (isAblating ? ABLATION_IDS : []).map((rule) => [rule, []]),
@@ -880,6 +1031,20 @@ function main(argv) {
     for (const [rule, ruleResults] of ablated)
       ruleResults.push(classify(text, path, agentType, new Set([rule])));
   }
+  return { results, ablated };
+}
+
+function main(argv) {
+  const parsedArguments = parseArguments(argv);
+  const transcripts = (parsedArguments?.paths ?? []).filter(
+    (path) => basename(path) !== 'journal.jsonl',
+  );
+  if (transcripts.length === 0) {
+    console.error(USAGE);
+    return EXIT_NO_INPUT;
+  }
+  const { isAblating } = parsedArguments;
+  const { results, ablated } = auditTranscripts(transcripts, isAblating);
   const output = summarize(results);
   if (isAblating)
     output.ablation = [...ablated].map(([rule, ruleResults]) => ({
@@ -887,7 +1052,7 @@ function main(argv) {
       kinds: summarize(ruleResults).kinds.map(ablatedFigures),
     }));
   console.log(JSON.stringify(output, null, 2));
-  return 0;
+  return EXIT_OK;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url))

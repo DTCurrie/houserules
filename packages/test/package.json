@@ -53,6 +53,7 @@
       ],
       "files": [
         "src/**/*.ts",
+        "package.json",
         "!src/**/__tests__/**",
         "tsconfig.json"
       ],
@@ -67,7 +68,8 @@
       ],
       "files": [
         "src/**/*.ts",
-        "tsconfig.json"
+        "tsconfig.json",
+        "package.json"
       ],
       "output": []
     },

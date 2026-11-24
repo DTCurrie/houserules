@@ -56,6 +56,8 @@ const PHASE_ONE = /\bphase\s*1\b/i;
 const MARKDOWN_EMPHASIS = /[*_`]/g;
 const CD_PREFIX = /^cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*&&\s*/;
 const PHASE_ORCHESTRATOR = 'phase-orchestrator';
+/** The `validityAgent` of a fixture whose task spawns no subagent, so no spawn is required. */
+export const NO_VALIDITY_AGENT = 'none';
 const TASK_WORKER = 'task-worker';
 const EXIT_PASS = 0;
 const EXIT_FAIL = 1;
@@ -158,7 +160,7 @@ function countByType(event, type) {
  * @param {SampleArtifacts} sample
  * @param {string} [requiredAgent] The subagent type `subagent_stats.by_type` must count at
  *   least once. A fixture names its own, and the orchestrate-report check needs
- *   `phase-orchestrator`.
+ *   `phase-orchestrator`. `none` requires no spawn, for a task the main session does alone.
  * @returns {{ valid: boolean, line: string }}
  */
 export function judgeValidity(sample, requiredAgent = PHASE_ORCHESTRATOR) {
@@ -174,7 +176,10 @@ export function judgeValidity(sample, requiredAgent = PHASE_ORCHESTRATOR) {
     return voided(`result subtype ${result.subtype}`);
   if (result.is_error !== false)
     return voided(`result is_error ${result.is_error}`);
-  if (countByType(result, requiredAgent) < 1)
+  if (
+    requiredAgent !== NO_VALIDITY_AGENT &&
+    countByType(result, requiredAgent) < 1
+  )
     return voided(`no ${requiredAgent} spawned`);
   return { valid: true, line: `${sample.label}: valid` };
 }
@@ -481,6 +486,9 @@ function orch071(sample) {
   );
 }
 
+/** A reported command that runs through pnpm, after any `NAME=value` env assignments, whose own `$ <script>` echo opens its output. */
+const PNPM_COMMAND = /^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*pnpm(\s|$)/;
+
 /**
  * The `$ command` entries of an Acceptance section, each with a count of the output lines under it.
  *
@@ -488,7 +496,9 @@ function orch071(sample) {
  * stops before the next line starting `$ `. Joined with newlines and trimmed, the run must match
  * one of the worker's Bash calls through `commandMatches`. When no run of two or more lines
  * matches, the command is the `$` line alone. Each non-blank line after the command, up to the
- * next `$ ` line, is output. A line starting `$ ` always opens a new entry. The transcript marks
+ * next `$ ` line, is output. A line starting `$ ` opens a new entry, except pnpm's own echo: `pnpm run`
+ * prints the script it runs as `$ <script>`, so a `$ ` line that is the first line after a `pnpm`
+ * entry and matches no Bash call is output of that entry. The transcript marks
  * where the command ends because the report format reserves no continuation line form.
  *
  * @param {string[]} body
@@ -507,13 +517,37 @@ function acceptanceEntries(body, ranCommands) {
       continue;
     }
     const length = commandLineCount(body, index, ranCommands);
+    const previous = entries.at(-1);
+    const command = joinCommandLines(body, index, length);
+    if (isPnpmScriptEcho(previous, command, ranCommands)) {
+      previous.outputLineCount += 1;
+      index += 1;
+      continue;
+    }
     entries.push({
-      command: joinCommandLines(body, index, length),
+      command,
       outputLineCount: 0,
     });
     index += length;
   }
   return entries;
+}
+
+/**
+ * Whether a `$ ` line is pnpm's echo of the script the previous entry ran: the previous entry
+ * runs pnpm, has no output yet, and the line matches no Bash call.
+ *
+ * @param {{ command: string, outputLineCount: number } | undefined} previous
+ * @param {string} command
+ * @param {string[]} ranCommands
+ */
+function isPnpmScriptEcho(previous, command, ranCommands) {
+  return (
+    previous !== undefined &&
+    previous.outputLineCount === 0 &&
+    PNPM_COMMAND.test(previous.command) &&
+    !ranCommands.some((ran) => commandMatches(command, ran))
+  );
 }
 
 /** The fewest report lines a multi-line command spans. */

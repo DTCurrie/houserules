@@ -19,10 +19,35 @@ const CRASH_SIGNS = [
   "this install's generated files are not synced yet",
 ];
 
+const DISPATCH_FAILURE_LINE =
+  /^\[houserules] hook-dispatch: (\S+) (exited (\d+)|timed out after \d+s|failed to start|is missing|was killed by \w+)$/gm;
+
+const UNSTATED_EXIT_CODE = 1;
+
+/** One failed hook that `hook-dispatch.mjs` named on its own stderr line. */
+interface DispatchedFailure {
+  script: string;
+  /** The exit code the line states, or 1 for a form that states none. */
+  exitCode: number;
+  line: string;
+}
+
+/** The failures `hook-dispatch.mjs` attributed in a record's stderr, in order. */
+export function dispatchedFailures(stderr: string): DispatchedFailure[] {
+  return [...stderr.matchAll(DISPATCH_FAILURE_LINE)].map(
+    ([line, script, , statedExitCode]) => ({
+      script: script as string,
+      exitCode: statedExitCode ? Number(statedExitCode) : UNSTATED_EXIT_CODE,
+      line,
+    }),
+  );
+}
+
 /** Whether a non-zero hook exit was the hook crashing rather than blocking. */
 export function isCrash(
   fire: Pick<HookFire, 'stderr'> & { content?: string },
 ): boolean {
+  if (dispatchedFailures(fire.stderr).length) return true;
   const text = `${fire.stderr}\n${fire.content ?? ''}`;
   return CRASH_SIGNS.some((sign) => text.includes(sign));
 }
@@ -31,6 +56,8 @@ export function isCrash(
 export function crashSignature(
   fire: Pick<HookFire, 'stderr'> & { content?: string },
 ): string {
+  const dispatched = dispatchedFailures(fire.stderr)[0];
+  if (dispatched) return `dispatched hook: ${dispatched.script}`;
   const text = `${fire.stderr}\n${fire.content ?? ''}`;
   const match = text.match(/Cannot find module '([^']+)'/);
   if (match) return `Cannot find module '${match[1]}'`;

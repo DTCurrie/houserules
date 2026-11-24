@@ -398,7 +398,10 @@ comment states its shape, and a change to that shape bumps the version string in
   most 10 `{ family, command, seconds, session, startedAt, isSubagent }` rows, with `command` cut
   to 120 characters. A subagent's call carries its parent's session id. `unscopedCalls` counts
   the timed calls whose first real command is a package runner with no `--filter`, `-F`, `--dir`
-  or `-C`.
+  or `-C`. The `kinds` list also holds `empty-grep-retry`: a recursive Bash `grep` or `rg` whose
+  output was empty, followed within five Bash calls by a grep for the same pattern that returned
+  matches. The kind counts the empty call, which is the waste an ignore file causes when a search
+  starts at or above a gitignored directory.
 - `doc-conformance@1`, written to `--json` by `doc-conformance.mjs`.
 - `wait-timeline@2`, written to `--json` by `wait-timeline.mjs`. Each `waits[]` element keeps
   `endedBy`, the event that ended the wait, beside `awaited`, the event the waiter was blocked on.

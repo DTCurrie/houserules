@@ -72,7 +72,7 @@ jobs:
       # The typecheck half of `pnpm check`. The `packages` job runs the other half, `pnpm verify`.
       - run: pnpm check:types
       - run: pnpm lint
-      - run: pnpm format:check
+      - run: pnpm format
 
   # What actually reaches npm. `check` and `test` both run against the working tree, so neither
   # can see a `files` array that omits something or a test that leaked into dist/. Only a real

@@ -6,6 +6,7 @@ import { join, resolve, sep } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { ensureNewestBuild } from '../build.mjs';
 import { cases } from '../suites/scripts.mjs';
 
 const REPO_DIR = resolve(
@@ -15,9 +16,7 @@ const REPO_DIR = resolve(
   '..',
   '..',
 );
-const BUILT_MARKER = join(REPO_DIR, 'packages', 'cli', 'payload-dist');
-const IS_BUILT = existsSync(BUILT_MARKER);
-const SKIP_REASON = `${BUILT_MARKER} is missing, run pnpm build first`;
+const BUILD = ensureNewestBuild('HEAD', { repoDir: REPO_DIR });
 
 const EXPECTED_NAMES = [
   'plan-lint',
@@ -56,10 +55,10 @@ function runCase(benchCase) {
   return { ...result, wallMs };
 }
 
-describe('scripts suite', { skip: IS_BUILT ? false : SKIP_REASON }, () => {
+describe('scripts suite', () => {
   it('returns the five cases, each over fixtures under workDir', async () => {
     const workDir = freshWorkDir();
-    const list = await cases({ root: REPO_DIR, repoDir: REPO_DIR, workDir });
+    const list = await cases({ root: BUILD.root, repoDir: REPO_DIR, workDir });
     assert.deepEqual(
       list.map((benchCase) => benchCase.name),
       EXPECTED_NAMES,
@@ -73,7 +72,7 @@ describe('scripts suite', { skip: IS_BUILT ? false : SKIP_REASON }, () => {
 
   it('runs every case to an expected status twice in a row', async () => {
     const workDir = freshWorkDir();
-    const list = await cases({ root: REPO_DIR, repoDir: REPO_DIR, workDir });
+    const list = await cases({ root: BUILD.root, repoDir: REPO_DIR, workDir });
     const outputs = new Map();
     for (const benchCase of list) {
       const expected = benchCase.expectExit ?? [0];

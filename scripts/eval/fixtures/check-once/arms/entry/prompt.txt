@@ -1,0 +1,1 @@
+Write a prompt file at `prompt.md` that tells an engineer to run the report command of this repo's CLI.

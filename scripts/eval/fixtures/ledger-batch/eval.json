@@ -1,0 +1,21 @@
+{
+  "modules": "backlog/backlog,decisions/decisions",
+  "plugins": [
+    { "path": "packages/plugin-backlog", "alias": "backlog" },
+    { "path": "packages/plugin-decisions", "alias": "decisions" }
+  ],
+  "model": "haiku",
+  "validityAgent": "backlog-reviewer",
+  "collect": [".claude/ledgers"],
+  "network": false,
+  "arms": {
+    "per-entry": {
+      "prompt": "arms/per-entry/prompt.txt",
+      "overlay": "arms/per-entry/overlay"
+    },
+    "batch": {
+      "prompt": "arms/batch/prompt.txt",
+      "overlay": "arms/batch/overlay"
+    }
+  }
+}

@@ -213,6 +213,30 @@ describe('checkInstallHygiene', () => {
     );
   });
 
+  it('warns once about a script hook-wiring.json dispatches that is absent', () => {
+    const root = useRepo('pnpm-single');
+    writeScript(root, '.claude/scripts/guard-bash.mjs');
+    writeFileSync(
+      join(root, '.claude/scripts/hook-wiring.json'),
+      JSON.stringify({
+        version: 1,
+        events: {
+          PreToolUse: [{ script: 'guard-bash.mjs' }, { script: 'gone.mjs' }],
+          Stop: [{ script: 'gone.mjs' }],
+        },
+      }),
+    );
+
+    const result = checkInstallHygiene(root, makeCtx({ root }));
+
+    expect(result.findings).toEqual([
+      {
+        level: 'WARN',
+        msg: '.claude/scripts/hook-wiring.json wires missing script ".claude/scripts/gone.mjs" — run: npx houserules update',
+      },
+    ]);
+  });
+
   describe('exit-1 fallback on non-blocking events', () => {
     const SCRIPT = 'session-context.mjs';
     const OLD_STOCK_WRAPPER = `[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${SCRIPT}" || { echo "[houserules] ${SCRIPT} missing. Run: npx houserules update" >&2; exit 1; }`;

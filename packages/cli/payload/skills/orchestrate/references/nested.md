@@ -93,8 +93,10 @@ Never respawn for a ruling, because the same id keeps its context.
 interim. Wait for its final report, because reviewing the interim one judges a phase that has not
 finished. An interim notice after a delivered report may hide the next one. An orchestrator whose
 hand-back answers that nothing was sent sends the same report with `SendMessage` instead, so read
-the messages that arrived before you judge the phase still running. An interim notice needs no reply. When no message is owed to any orchestrator, end the turn with no
-text and no tool call.
+the messages that arrived before you judge the phase still running. When no message is owed to
+any orchestrator, reply with one line naming what is still running, and make no tool call. Never
+end that turn with no text, because Claude Code then asks for visible output and the turn runs
+twice. `notice-interim.mjs` adds this instruction to every turn an interim notice opens.
 
 **Preflight.** A `BLOCKED` report naming `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` means the depth limit
 withheld `Agent` from the orchestrator. Set the variable and spawn fresh with the same brief. A
@@ -102,7 +104,8 @@ re-brief changes nothing.
 
 **A phase that cannot nest.** Two causes put a phase here. Its sub-plan carries `flat` on the
 `**Signals:**` line, or its steps need a tool missing from the `tools:` line of
-`.claude/agents/phase-orchestrator.md`, such as an MCP server's. Before any spawn, read each
+`.claude/agents/phase-orchestrator.md`, such as an MCP server's. A missing plan slug is not a
+cause. `/orchestrate --auto` with no slug resolves the plan in §0 and still nests. Before any spawn, read each
 sub-plan's `**Signals:**` line for `flat`. Grep the sub-plan for `mcp__` and compare each name
 against that line. Hold that phase out of the spawn, and name it and the cause. Run the rest
 nested. When the last orchestrator in flight returns, run the held phase flat here, §1 to §8 as

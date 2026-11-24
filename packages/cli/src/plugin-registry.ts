@@ -1,5 +1,7 @@
 import type { HouseConfig, ModuleDef } from '@houserules/api';
 
+import { HouseError } from './house-error.js';
+
 export type { PluginSource } from '@houserules/api/internal';
 import type { PluginSource } from '@houserules/api/internal';
 
@@ -32,12 +34,12 @@ export interface Registry {
  * indistinguishable from a plugin that retired every file it ever installed. There is no safe
  * degraded mode, which is why this is an error and not a warning.
  */
-export class PluginResolutionError extends Error {
+export class PluginResolutionError extends HouseError {
   /** The `name` from config, so callers can name the package in a fix hint. */
   readonly pluginName: string;
 
-  constructor(pluginName: string, message: string) {
-    super(message);
+  constructor(pluginName: string, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'PluginResolutionError';
     this.pluginName = pluginName;
   }

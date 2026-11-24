@@ -5,11 +5,7 @@ import { join } from 'node:path';
 import { readGuardRefusalFor } from '../guard-read.mjs';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
-import {
-  editHouseConfig,
-  hookCommandsFor,
-  settingsOf,
-} from '#test/installed-tree';
+import { editHouseConfig, dispatchedScriptsFor } from '#test/installed-tree';
 import { readToolInput } from '#test/hook-input';
 
 const CONFIG = {
@@ -99,13 +95,10 @@ describe('guard-read.mjs', () => {
       existsSync(join(root, GUARD)),
       `${GUARD} exists after installing the read-guard module`,
     ).toBe(true);
-    const settings = settingsOf(root);
     expect(
-      hookCommandsFor(settings, 'PreToolUse').some((c) =>
-        c.includes('guard-read.mjs'),
-      ),
-      'a PreToolUse hook command references guard-read.mjs',
-    ).toBe(true);
+      dispatchedScriptsFor(root, 'PreToolUse'),
+      'the PreToolUse dispatch wiring lists guard-read.mjs',
+    ).toContain('guard-read.mjs');
   });
 
   it('blocks an unbounded read of a denylisted lockfile', () => {

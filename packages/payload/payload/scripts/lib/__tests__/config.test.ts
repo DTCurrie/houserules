@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { realpathSync } from 'node:fs';
 
-import { repoRoot, repoRootSafe } from '../config.mjs';
+import { loadExtensionsSafe, repoRoot, repoRootSafe } from '../config.mjs';
 
 function inDirectory<TResult>(directory: string, run: () => TResult): TResult {
   const previous = process.cwd();
@@ -30,12 +30,12 @@ describe('repoRootSafe', () => {
     expect(repoRootSafe()).toBe(repoRoot());
   });
 
-  it('returns null outside a work tree, where repoRoot throws', () => {
+  it('returns null outside a work tree, where repoRoot falls back to the cwd', () => {
     const directory = outsideAnyWorkTree();
 
     try {
       inDirectory(directory, () => {
-        expect(() => repoRoot()).toThrow();
+        expect(repoRoot()).toBe(process.cwd());
         expect(repoRootSafe()).toBeNull();
       });
     } finally {
@@ -271,7 +271,7 @@ function resolveIn({ cwd, env }: RootCase): string {
 function expectFailure({ cwd, env }: RootCase): void {
   stubEnvironment(env);
   inDirectory(cwd, () => {
-    expect(() => repoRoot()).toThrow();
+    expect(repoRoot()).toBe(process.cwd());
     expect(repoRootSafe()).toBeNull();
   });
 }
@@ -325,16 +325,22 @@ describe('repoRoot', () => {
     expect(resolveIn(rootCase)).toBe(rootCase.root);
   });
 
-  it.each(REFUSED_BY_GIT)('throws where git refuses: %s', (_, build) => {
-    expectFailure(build());
-  });
+  it.each(REFUSED_BY_GIT)(
+    'falls back to the cwd where git refuses: %s',
+    (_, build) => {
+      expectFailure(build());
+    },
+  );
 
-  it.each(DEFERRED_TO_GIT)('fails without git on PATH for %s', (_, build) => {
-    const rootCase = build();
-    withoutGitOnPath();
+  it.each(DEFERRED_TO_GIT)(
+    'falls back to the cwd without git on PATH for %s',
+    (_, build) => {
+      const rootCase = build();
+      withoutGitOnPath();
 
-    expectFailure(rootCase);
-  });
+      expectFailure(rootCase);
+    },
+  );
 
   it('resolves a repository to its root without git on PATH', () => {
     const rootCase = subdirectoryOfRepository();
@@ -349,5 +355,156 @@ describe('repoRoot', () => {
     vi.spyOn(process, 'getuid').mockReturnValue(process.getuid!() + 1);
 
     expectFailure(rootCase);
+  });
+});
+
+describe('loadExtensionsSafe', () => {
+  const roots: string[] = [];
+
+  function fixture(files: Record<string, string>): string {
+    const root = mkdtempSync(`${realpathSync(tmpdir())}/kit-extensions-`);
+    roots.push(root);
+    mkdirSync(`${root}/.claude/extensions`, { recursive: true });
+    for (const [name, content] of Object.entries(files)) {
+      writeFileSync(`${root}/.claude/extensions/${name}`, content);
+    }
+    return root;
+  }
+
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns both lists empty when the directory does not exist', () => {
+    const root = mkdtempSync(`${realpathSync(tmpdir())}/kit-extensions-`);
+    roots.push(root);
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: [],
+      manifestIgnoreKeys: [],
+    });
+  });
+
+  it('returns one fragment lists as written', () => {
+    const root = fixture({
+      'a.json': JSON.stringify({
+        shareVariables: ['NX_PARALLEL', 'TURBO_CONCURRENCY'],
+        manifestIgnoreKeys: ['nx'],
+      }),
+    });
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: ['NX_PARALLEL', 'TURBO_CONCURRENCY'],
+      manifestIgnoreKeys: ['nx'],
+    });
+  });
+
+  it('merges fragments in filename order and dedupes a shared entry', () => {
+    const root = fixture({
+      'b.json': JSON.stringify({
+        shareVariables: ['SECOND', 'SHARED'],
+        manifestIgnoreKeys: ['wireit'],
+      }),
+      'a.json': JSON.stringify({
+        shareVariables: ['FIRST', 'SHARED'],
+        manifestIgnoreKeys: ['nx'],
+      }),
+    });
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: ['FIRST', 'SHARED', 'SECOND'],
+      manifestIgnoreKeys: ['nx', 'wireit'],
+    });
+  });
+
+  it('skips a fragment that is not JSON and still loads its siblings', () => {
+    const root = fixture({
+      'a.json': '{not json',
+      'b.json': JSON.stringify({ shareVariables: ['KEPT'] }),
+    });
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: ['KEPT'],
+      manifestIgnoreKeys: [],
+    });
+  });
+
+  it('skips a fragment that is a JSON array and still loads its siblings', () => {
+    const root = fixture({
+      'a.json': JSON.stringify(['shareVariables']),
+      'b.json': JSON.stringify({ shareVariables: ['KEPT'] }),
+    });
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: ['KEPT'],
+      manifestIgnoreKeys: [],
+    });
+  });
+
+  it('skips a fragment that is null and still loads its siblings', () => {
+    const root = fixture({
+      'a.json': 'null',
+      'b.json': JSON.stringify({ manifestIgnoreKeys: ['kept'] }),
+    });
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: [],
+      manifestIgnoreKeys: ['kept'],
+    });
+  });
+
+  it('ignores a key that is not an array and still reads the other key', () => {
+    const root = fixture({
+      'a.json': JSON.stringify({
+        shareVariables: 'NX_PARALLEL',
+        manifestIgnoreKeys: ['nx'],
+      }),
+    });
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: [],
+      manifestIgnoreKeys: ['nx'],
+    });
+  });
+
+  it('drops non-string and empty-string items', () => {
+    const root = fixture({
+      'a.json': JSON.stringify({
+        shareVariables: ['KEPT', 1, null, '', { a: 1 }, ['x']],
+      }),
+    });
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: ['KEPT'],
+      manifestIgnoreKeys: [],
+    });
+  });
+
+  it('ignores a file without the .json extension', () => {
+    const root = fixture({
+      'a.txt': JSON.stringify({ shareVariables: ['IGNORED'] }),
+      'b.json.bak': JSON.stringify({ shareVariables: ['IGNORED'] }),
+    });
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: [],
+      manifestIgnoreKeys: [],
+    });
+  });
+
+  it('ignores unknown keys', () => {
+    const root = fixture({
+      'a.json': JSON.stringify({
+        somethingElse: ['IGNORED'],
+        shareVariables: ['KEPT'],
+      }),
+    });
+
+    expect(loadExtensionsSafe(root)).toEqual({
+      shareVariables: ['KEPT'],
+      manifestIgnoreKeys: [],
+    });
   });
 });

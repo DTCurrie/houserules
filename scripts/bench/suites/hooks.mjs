@@ -47,13 +47,13 @@ const SCOPE_TIMEOUT_MS = 300_000;
 // `off` runs this repo's whole-tree scripts, `on` the path-taking ones, and `on-dot` the whole-tree
 // scripts with `passPaths` on, which is the widening the schema warns of.
 const SCOPE_ARMS = [
-  { name: 'off', commands: ['lint:fix', 'format'], passPaths: false },
+  { name: 'off', commands: ['lint:fix', 'format:fix'], passPaths: false },
   {
     name: 'on',
     commands: ['lint:fix:paths', 'format:paths'],
     passPaths: true,
   },
-  { name: 'on-dot', commands: ['lint:fix', 'format'], passPaths: true },
+  { name: 'on-dot', commands: ['lint:fix', 'format:fix'], passPaths: true },
 ];
 
 const SCOPE_PATH_SCRIPTS = {
@@ -130,8 +130,14 @@ function git(cwd, args, env) {
     throw new Error(`git ${args.join(' ')} failed in ${cwd}: ${result.stderr}`);
 }
 
-/** Each wired hook command in `settings.hooks`, in settings order, with its event and script name. */
-function wiredHooks(settings) {
+const DISPATCHER_SCRIPT = 'hook-dispatch';
+
+/**
+ * Each hook to bench, in settings order, with its event and script name. A dispatcher entry
+ * expands to the scripts `wiring` lists for its event, each run directly, so the dispatcher is
+ * never a case. A direct entry keeps its own command.
+ */
+function wiredHooks(settings, wiring) {
   const out = [];
   for (const [event, groups] of Object.entries(settings.hooks ?? {})) {
     for (const group of groups) {
@@ -142,7 +148,18 @@ function wiredHooks(settings) {
           throw new Error(
             `hooks suite: no .claude/scripts/<name>.mjs in the ${event} command ${hook.command}`,
           );
-        out.push({ event, script: match[1], command: hook.command });
+        if (match[1] !== DISPATCHER_SCRIPT) {
+          out.push({ event, script: match[1], command: hook.command });
+          continue;
+        }
+        for (const entry of wiring.events[event] ?? []) {
+          const script = entry.script.replace(/\.mjs$/, '');
+          out.push({
+            event,
+            script,
+            command: `exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/${script}.mjs"`,
+          });
+        }
       }
     }
   }
@@ -314,27 +331,46 @@ function casesForHook(hook, { project, transcript, env }) {
 }
 
 /**
- * One case per hook command wired in `<repoDir>/.claude/settings.json`, each run through
+ * The build tree's own `.claude/settings.json` and `.claude/scripts/hook-wiring.json`, which its
+ * dogfood step wrote, so the wiring never names a script the build lacks. A tree with no
+ * dispatcher wiring file gets empty wiring, and a tree with no settings throws.
+ */
+function readBuildWiring(root) {
+  const settingsPath = join(root, '.claude', 'settings.json');
+  if (!existsSync(settingsPath))
+    throw new Error(
+      `hooks suite: ${settingsPath} is missing. The build's dogfood step writes it, so rebuild this tree.`,
+    );
+  const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+  const wiringPath = join(root, '.claude', 'scripts', 'hook-wiring.json');
+  const wiring = existsSync(wiringPath)
+    ? JSON.parse(readFileSync(wiringPath, 'utf8'))
+    : { events: {} };
+  return { settings, wiring };
+}
+
+/**
+ * One case per hook command wired in `<root>/.claude/settings.json`, each run through
  * `/bin/sh -c` with the exact command string, fed the stdin payload Claude Code sends for its
  * event, against a fixture project whose `.claude/scripts/` is assembled from the build tree's
- * `packages/*\/payload-dist/scripts/`. Stop hooks get two cases, a clean tree and one with an
- * uncommitted source edit. Every case resets the fixture in `beforeEach`, so no case depends
- * on run order or on what an earlier run wrote.
+ * `packages/*\/payload-dist/scripts/`. Settings, wiring, and scripts all come from `root`, so
+ * the wiring and the scripts it names are always one revision. Stop hooks get two cases, a
+ * clean tree and one with an uncommitted source edit. Every case resets the fixture in
+ * `beforeEach`, so no case depends on run order or on what an earlier run wrote.
  *
  * `HOME` points at a fixture directory, the GitHub tokens are blanked, corepack may not
  * download, and the fixture has no projects-sync enable token, so no case reaches `~/.claude`,
  * a real ledger, or the network.
  *
  * @param {{ root: string, repoDir: string, workDir: string }} context The build tree to read
- *   scripts from, the live repository to read settings from, and the directory to write under.
+ *   settings, wiring, and scripts from, the live repository to list the build commit's tracked
+ *   files from, and the directory to write under.
  * @returns {Promise<object[]>} The `BenchCase` list `scripts/bench/README.md` defines, in
  *   settings order.
  */
 export async function cases({ root, repoDir, workDir }) {
-  const settings = JSON.parse(
-    readFileSync(join(repoDir, '.claude', 'settings.json'), 'utf8'),
-  );
-  const hooks = wiredHooks(settings);
+  const { settings, wiring } = readBuildWiring(root);
+  const hooks = wiredHooks(settings, wiring);
   const fixture = prepareFixture({ root, workDir, hooks });
   const hookCases = hooks.flatMap((hook) => casesForHook(hook, fixture));
   if (root === repoDir) return hookCases;

@@ -557,12 +557,50 @@ export function commentsOf(source: string): string {
   return out;
 }
 
+const CSS_FILE = /\.css$/;
+
+/** Whether `file` is a stylesheet, whose prose lives only in its `/* *\/` comments. */
+function isCssFile(file: string): boolean {
+  return CSS_FILE.test(file);
+}
+
+/** A block comment, a quoted string that may hold `/*`, or any one other character. */
+const CSS_TOKEN = new RegExp(
+  [
+    String.raw`(?<block>/\*[\s\S]*?\*/)`,
+    String.raw`'(?:\\[\s\S]|[^'\\\n])*'`,
+    String.raw`"(?:\\[\s\S]|[^"\\\n])*"`,
+    String.raw`[\s\S]`,
+  ].join('|'),
+  'g',
+);
+
+/**
+ * The block comments of a stylesheet, line for line, with every declaration dropped. CSS has
+ * no `//` comment, so an unquoted `url(https://x.test/a.png)` is not one, which is why this
+ * is not `commentsOf`.
+ */
+function cssCommentsOf(source: string): string {
+  let out = '';
+  for (const match of source.matchAll(CSS_TOKEN)) {
+    const { block } = match.groups ?? {};
+    if (block !== undefined) out += blockCommentBody(block);
+    else out += newlinesIn(match[0]);
+  }
+  return out;
+}
+
+/** The part of `file` that is prose: its comments for code and stylesheets, all of it otherwise. */
+function proseOf(file: string, text: string): string {
+  if (isSourceFile(file)) return commentsOf(text);
+  if (isCssFile(file)) return cssCommentsOf(text);
+  return text;
+}
+
 /** Findings for one file, keyed to the clause rather than to this checker. */
 export function checkProse(file: string, markdown: string): Report {
   const report = emptyReport();
-  const prose = stripToProse(
-    isSourceFile(file) ? commentsOf(markdown) : markdown,
-  );
+  const prose = stripToProse(proseOf(file, markdown));
   report.findings.push(...checkSemicolons(file, prose));
   report.findings.push(...checkEmDashes(file, prose));
   report.findings.push(...checkSpelling(file, prose));

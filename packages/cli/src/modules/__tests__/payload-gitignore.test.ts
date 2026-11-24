@@ -73,12 +73,24 @@ describe('payloadGitignoreActions, the region it plans', () => {
     expect(lines.filter((line) => line.startsWith('#'))).toHaveLength(1);
   });
 
-  it('plans nothing when payload.commit is true', () => {
+  it('lists only the script-written paths when payload.commit is true', () => {
     const ctx = ctxWithConfig({ payload: { commit: true } });
 
-    expect(payloadGitignoreActions(ctx, [copy('.claude/rules/a.md')])).toEqual(
-      [],
-    );
+    expect(listedPaths([copy('.claude/rules/a.md')], ctx)).toEqual([
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
+      '/state/version-check.json',
+    ]);
+  });
+
+  it('keeps the manifest and payload dests in the block by default', () => {
+    expect(listedPaths([copy('.claude/rules/a.md')])).toEqual([
+      '/houserules.manifest.json',
+      '/rules/a.md',
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
+      '/state/version-check.json',
+    ]);
   });
 
   it('still plans the block when payload.commit is false', () => {
@@ -92,6 +104,8 @@ describe('payloadGitignoreActions, the paths it lists', () => {
   it('lists the manifest even when no module writes under .claude/', () => {
     expect(listedPaths([])).toEqual([
       '/houserules.manifest.json',
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
       '/state/version-check.json',
     ]);
   });
@@ -117,6 +131,8 @@ describe('payloadGitignoreActions, the paths it lists', () => {
       '/houserules.manifest.json',
       '/rules/b.md',
       '/skills/zeta/SKILL.md',
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
       '/state/version-check.json',
     ]);
   });
@@ -148,6 +164,8 @@ describe('payloadGitignoreActions, the paths it lists', () => {
 
     expect(listedPaths(actions)).toEqual([
       '/houserules.manifest.json',
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
       '/state/version-check.json',
     ]);
   });
@@ -171,6 +189,8 @@ describe('payloadGitignoreActions, the paths it lists', () => {
       '/houserules.manifest.json',
       '/rules/b.md',
       '/skills/other/SKILL.md',
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
       '/state/version-check.json',
     ]);
   });
@@ -178,7 +198,12 @@ describe('payloadGitignoreActions, the paths it lists', () => {
   it('leaves out dests outside .claude/', () => {
     expect(
       listedPaths([write('docs/guide.md'), write('.github/x.yml')]),
-    ).toEqual(['/houserules.manifest.json', '/state/version-check.json']);
+    ).toEqual([
+      '/houserules.manifest.json',
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
+      '/state/version-check.json',
+    ]);
   });
 
   it('leaves out every dest under a directory the plan self-ignores with a `*` line, including that .gitignore', () => {
@@ -191,6 +216,8 @@ describe('payloadGitignoreActions, the paths it lists', () => {
     ).toEqual([
       '/houserules.manifest.json',
       '/plansbook.md',
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
       '/state/version-check.json',
     ]);
   });
@@ -205,6 +232,8 @@ describe('payloadGitignoreActions, the paths it lists', () => {
       '/houserules.manifest.json',
       '/rules/.gitignore',
       '/rules/a.md',
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
       '/state/version-check.json',
     ]);
   });
@@ -226,6 +255,8 @@ describe('payloadGitignoreActions, the paths it lists', () => {
     ).toEqual([
       '/houserules.manifest.json',
       '/rules/a.md',
+      '/state/hook-runs.1.jsonl',
+      '/state/hook-runs.jsonl',
       '/state/version-check.json',
     ]);
   });

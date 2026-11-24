@@ -201,7 +201,9 @@ describe('doctor on a freshly initialized pnpm monorepo', () => {
 
     const r = runCli(['doctor', root]);
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/session-context\.mjs not wired/);
+    expect(r.stdout).toMatch(
+      /hook-wiring\.json wires SessionStart hooks but \.claude\/settings\.json has no hook-dispatch\.mjs entry for SessionStart/,
+    );
   });
 
   it('exits 0 with a warning when a package fix script drifts from houserules.config.json', () => {
@@ -220,18 +222,23 @@ describe('doctor on a freshly initialized pnpm monorepo', () => {
   });
 });
 
-describe('doctor resident-context budget', () => {
+describe('doctor resident-context limits', () => {
   let root: string;
 
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo');
   });
 
-  it('reports headroom when the seeded root CLAUDE.md is under budget', () => {
+  it('reports per-file lines when the seeded root CLAUDE.md is under the limit', () => {
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
-    expect(r.stdout).toMatch(/resident context.*headroom/);
-    expect(r.stdout).not.toMatch(/always-loaded context exceeds budget/);
+    expect(r.stdout).toMatch(
+      /resident context \(.*\): ~\d+ tokens \/ \d+ lines/,
+    );
+    expect(r.stdout).toMatch(
+      /CLAUDE\.md: \d+ lines \(documented limit 200 per file\)/,
+    );
+    expect(r.stdout).not.toMatch(/vs budget|exceeds budget|headroom/);
   });
 
   it('lists a huge nested package CLAUDE.md separately and never sums it into the resident total, since nested CLAUDE.md is the on-demand tier', () => {
@@ -239,18 +246,20 @@ describe('doctor resident-context budget', () => {
 
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
-    expect(r.stdout).toMatch(/resident context.*headroom/);
+    expect(r.stdout).toMatch(/resident context \(.*\): ~\d+ tokens/);
     expect(r.stdout).toMatch(/nested.*games\/cityville\/CLAUDE\.md/);
-    expect(r.stdout).not.toMatch(/always-loaded context exceeds budget/);
+    expect(r.stdout).not.toMatch(/over the 200-line per-file limit/);
   });
 
-  it('reports OVER budget once the root CLAUDE.md grows past it', () => {
+  it('warns naming CLAUDE.md once it grows past 200 lines', () => {
     growClaudeMdPastBudget(root);
 
     const r = runCli(['doctor', root]);
     expect(r.status, r.stdout).toBe(0);
-    expect(r.stdout).toMatch(/resident context.*OVER/);
-    expect(r.stdout).toMatch(/always-loaded context exceeds budget/);
+    expect(r.stdout).toMatch(
+      /CLAUDE\.md is \d+ lines, over the 200-line per-file limit/,
+    );
+    expect(r.stdout).not.toMatch(/vs budget|exceeds budget|OVER/);
   });
 });
 
@@ -282,7 +291,7 @@ describe('doctor resident-context — rules and .claude/CLAUDE.md', () => {
     expect(r.stdout).toMatch(/loaded on EVERY turn.*always\.md/);
   });
 
-  it('sums .claude/CLAUDE.md into the resident total and reports OVER once it grows past budget', () => {
+  it('reads .claude/CLAUDE.md as its own file and warns once it grows past 200 lines', () => {
     writeFileSync(join(root, '.claude/CLAUDE.md'), '# big\n'.repeat(250));
 
     const r = runCli(['doctor', root]);
@@ -290,8 +299,10 @@ describe('doctor resident-context — rules and .claude/CLAUDE.md', () => {
     expect(r.stdout).toMatch(
       /resident context \(CLAUDE\.md \+ \.claude\/CLAUDE\.md/,
     );
-    expect(r.stdout).toMatch(/resident context.*OVER/);
-    expect(r.stdout).toMatch(/always-loaded context exceeds budget/);
+    expect(r.stdout).toMatch(
+      /\.claude\/CLAUDE\.md is \d+ lines, over the 200-line per-file limit/,
+    );
+    expect(r.stdout).not.toMatch(/vs budget|exceeds budget|OVER/);
   });
 });
 

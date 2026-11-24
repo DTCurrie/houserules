@@ -122,6 +122,41 @@ export function hookFragment(
   return { hooks: { [event]: [group] } };
 }
 
+/**
+ * The payload script every dispatched event's single settings entry runs. It reads the event
+ * from stdin's `hook_event_name`, so its command takes no argument and stays the same for
+ * every event apart from the fallback.
+ */
+export const HOOK_DISPATCH_SCRIPT = 'hook-dispatch.mjs';
+
+/**
+ * Where the dispatcher reads its wiring, relative to the repo root. It sits in the generated
+ * payload, so a release that adds, drops, or rewires a hook changes this file and leaves the
+ * tracked `settings.json` alone.
+ */
+export const HOOK_WIRING_PATH = '.claude/scripts/hook-wiring.json';
+
+/** One dispatched hook: what a per-script settings entry carried before dispatch. */
+export interface HookWiringEntry {
+  /** A basename under `.claude/scripts/`, such as `guard-bash.mjs`. */
+  script: string;
+  /**
+   * Harness matcher syntax. Absent, empty, or `*` matches every input. A value of only
+   * letters, digits, `_`, and `|` is an exact list. Anything else is a JavaScript regex.
+   */
+  matcher?: string;
+  /** Seconds. The dispatcher kills the hook past it and counts that as a failure. */
+  timeout?: number;
+  onFailure?: 'block';
+  statusMessage?: string;
+}
+
+/** The file at {@link HOOK_WIRING_PATH}: each event's hooks, in plan order. */
+export interface HookWiring {
+  version: 1;
+  events: Record<string, HookWiringEntry[]>;
+}
+
 export function scriptPermission(scriptName: string): string {
   return `Bash(node .claude/scripts/${scriptName}:*)`;
 }

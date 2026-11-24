@@ -4,15 +4,15 @@ import { join } from 'node:path';
 
 import { useInstalledRepo } from '#test/repo';
 import { runCli } from '#test/run';
-import { settingsOf } from '#test/installed-tree';
+import {
+  allHookCommands,
+  hookWiringOf,
+  settingsOf,
+} from '#test/installed-tree';
 import { check } from '../tool-output-trim.js';
 import type { Ctx } from '../../detect.js';
 
 const SCRIPT = '.claude/scripts/tool-output-trim.mjs';
-
-function postToolUseGroups(root: string) {
-  return settingsOf(root).hooks?.['PostToolUse'] ?? [];
-}
 
 function ctxWithSettings(settings: unknown): Ctx {
   return { claude: { settings } } as unknown as Ctx;
@@ -24,11 +24,11 @@ describe('tool-output-trim module', () => {
       modules: 'tool-output-trim',
     });
 
-    const group = postToolUseGroups(root).find((g) =>
-      (g.hooks ?? []).some((h) => h.command?.includes('tool-output-trim.mjs')),
+    const entry = hookWiringOf(root).events['PostToolUse']?.find(
+      (e) => e.script === 'tool-output-trim.mjs',
     );
     expect(existsSync(join(root, SCRIPT))).toBe(true);
-    expect(group?.matcher).toBe('Bash|Read');
+    expect(entry?.matcher).toBe('Bash|Read');
     expect(settingsOf(root).permissions?.allow).toContain(
       'Bash(node .claude/scripts/tool-output-trim.mjs:*)',
     );
@@ -48,9 +48,7 @@ describe('tool-output-trim module', () => {
     const root = useInstalledRepo('pnpm-monorepo');
 
     expect(existsSync(join(root, SCRIPT))).toBe(false);
-    expect(JSON.stringify(postToolUseGroups(root))).not.toContain(
-      'tool-output-trim',
-    );
+    expect(allHookCommands(root).join('\n')).not.toContain('tool-output-trim');
   });
 });
 

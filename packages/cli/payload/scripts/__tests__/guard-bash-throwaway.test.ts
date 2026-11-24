@@ -478,6 +478,10 @@ describe('guardRefusalFor with a throwaway context', () => {
       'a git call without -C beside a -C commit',
       (f) => `git -C ${f} add -A && git commit -m x`,
     ],
+    [
+      'a nested shell commit beside a -C commit',
+      (f) => `${commitByC(f)}; bash -c 'git commit -m x'`,
+    ],
   ])('refuses the unrecognized form %s', (_, build) => {
     const base = useBase();
     const project = sharedProject;

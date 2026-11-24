@@ -40,6 +40,7 @@ const HOOKS_THAT_MUST_NEVER_CRASH = [
   'session-context.mjs',
   'statusline.mjs',
   'ledger-inject.mjs',
+  'notice-interim.mjs',
   'debug-session-check.mjs',
   'lint-format-fix.mjs',
   'regen-on-edit.mjs',

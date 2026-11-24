@@ -60,6 +60,9 @@ No slug given? In order:
 4. **Otherwise ask.** Guessing between half-finished plans is expensive. List the
    slugs with their status lines and let the user pick.
 
+Resolving the plan leaves the mode as is. A no-slug `/orchestrate --auto` still nests each phase
+(§4).
+
 Never infer a plan from mtime or sort order. Before the first spawn or slice, state in one line the
 plan slug and its ROADMAP `phase <N>`, such as `auth-rework phase 2`, never `phase-<N>`. A
 milestone's form is in `references/milestone.md`. The user can stop a wrong pick cheaply only then.
@@ -108,9 +111,7 @@ Then apply four rules to the set you drew:
   from the repo's fixer to a gitignored tool directory to an append-only ledger, then draw the slices
   so each one is owned once.
 
-Read `references/slicing.md` before you write the briefs. It carries acceptance wording, the
-file-level command a worker's loop runs, the test-ownership and carry-the-spec-by-path rules,
-lanes, multi-plan waves, and dropped-slice scope.
+Read `references/slicing.md` before you write the briefs.
 
 To check one phase before slicing it, dispatch `plan-reviewer` with the workspace path, a
 `Level: phase` line, and the sub-plan path, and carry its questions to the user.
@@ -156,7 +157,8 @@ By default, §1 through §8 run one layer down, one `phase-orchestrator` spawn p
 Send the wave as parallel `Agent` calls **in a single message**, up to the "Wave ceiling" in
 `references/slicing.md` and batched past it, each with
 `subagent_type: task-worker` plus the `model` and `effort` its shape earns, from the table in
-`references/slicing.md`. (No `task-worker` installed? The same file carries the fallback.)
+`references/slicing.md`. (No `task-worker` installed, or a spawn refused with `Agent type not found`
+for an agent installed this session? The same file carries the fallback.)
 
 Mark the slices `DISPATCHED` first.
 
@@ -204,8 +206,6 @@ in a worker. A lint or format finding inside a `DISPATCHED` slice's owned path i
 you do not act on it.
 
 Read `references/fixer-and-residue.md` when a hook or linter reports something while a wave is live.
-It carries why a worker-run fixer collides, the `fix.onSubagentStop` and `Stop` hook settings to
-check, and how to route residue at the barrier.
 
 ## 5. Review the report, not the diff
 
@@ -228,8 +228,11 @@ not the slice's status. `DONE_WITH_CONCERNS` says read the deviation before appr
 than reslicing. Mark the slice `IN REVIEW` and judge it against the brief:
 
 - **Acceptance evidence present and passing?** No evidence, no approval. An unrun acceptance is a
-  `REVISE`, always. A brief with two commands needs two tails.
-- **Did the acceptance actually RUN, or did an incremental runner report a cache hit as success?**
+  `REVISE`, always. A brief with two commands needs two tails. After the tree check, the report's
+  output is the evidence. Re-run only when it is missing, could be a cache skip outside the
+  script's declared inputs, or you can name the doubt.
+- **Did the acceptance RUN, or only hit a cache?** "The evidence catalog" in
+  `references/review-patterns.md` says when a skip stands.
 - **Could the evidence have come out any other way?** An observed value is evidence only if a broken
   implementation would have produced a different one.
 - **Did it satisfy the letter and worsen the artifact?** Ask what the change does to the shipped
@@ -242,11 +245,8 @@ than reslicing. Mark the slice `IN REVIEW` and judge it against the brief:
 Read `references/review-patterns.md` when a report reads green and you are deciding whether to
 believe it. It carries the worked failure for each check above.
 
-A stalled worker is marked failed, partial result attached, as is a report saying "stalled". Its
-slice is not approved. Run `git diff --name-only` against its `owns`, because its partial edits are on
-disk. Mark the slice `REVISING` or dispatch a fresh worker with what landed in the brief. A
-notification saying the worker awaits its own background work is interim, so wait for its final
-report. `references/review-patterns.md` has the recipe.
+A stalled worker's slice is not approved, and its partial edits are on disk. A notice that a worker
+awaits its own background work is interim. `references/review-patterns.md` has the recipe for both.
 
 Verdict, one per slice:
 
@@ -310,8 +310,10 @@ dispatcher (`references/nested.md`). Under `--flat` this layer runs them.
 **A phase that touched UI surfaces gets its reviews now.** When the diff reached UI code, or the
 sub-plan carries a `ui` signal, run `/accessibility-review` and `/design-review`, each skipped
 silently when not installed. A fix-worthy finding becomes one revise pass over the owning slice's
-paths, and the rest route per §5's out-of-scope rule. A stalled review re-dispatches once, then
-you run its deterministic checker in-context and report the judgment tier as not run.
+paths, and the rest route per §5's out-of-scope rule.
+
+This skill starts no Workflow. Under ultracode the §5 to §8 gates are the review, and the §8 reviews
+still run. "Workflows and ultracode" in `references/closing.md` has the detail.
 
 **The last phase also hands over the PR description** with `/pr-description`, if installed.
 

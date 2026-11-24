@@ -104,8 +104,8 @@ member's `Verify` and the step's `Close` over the same bytes. Check each phase a
 criterion by its narrowest command, and list one that needs a package-wide run under `Verify`
 for the barrier.
 
-A wireit cache hit on declared inputs that a verify this session passed is the pass, so do not clear
-wireit state to force a rerun. A hit as the only evidence for a slice whose changed files may sit
+A build-cache hit on declared inputs that a verify this session passed is the pass, so do not clear
+the cache to force a rerun. A hit as the only evidence for a slice whose changed files may sit
 outside the block's declared inputs still proves nothing.
 
 When `Siblings:` is not `none`, the §7 fixer and `/tidy` take your `Domain:` paths, and §7 step 3

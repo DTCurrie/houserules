@@ -16,23 +16,44 @@ import { dirname, join, resolve } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { findBuild } from '../build.mjs';
+import { ensureNewestBuild } from '../build.mjs';
 import { cases, hookCaseEnv, scopeCases } from '../suites/hooks.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const HAS_BUILD = existsSync(join(REPO, 'packages', 'cli', 'payload-dist'));
-const SKIP = HAS_BUILD
-  ? false
-  : `no build at ${REPO}/packages/cli/payload-dist. Run pnpm build first.`;
+const BUILD = ensureNewestBuild('HEAD', { repoDir: REPO });
 
-function wiredCommands() {
-  const settings = JSON.parse(
-    readFileSync(join(REPO, '.claude', 'settings.json'), 'utf8'),
-  );
+const SCOPE_CASE_NAMES = [
+  'stop-lint-format-fix-scope-off',
+  'stop-lint-format-fix-scope-on',
+  'stop-lint-format-fix-scope-on-dot',
+];
+const SCOPE_REFORMAT_CASE_NAMES = [
+  'stop-lint-format-fix-scope-on',
+  'stop-lint-format-fix-scope-on-dot',
+];
+
+const SETTINGS_SCRIPT_RE = /\.claude\/scripts\/([\w.-]+)\.mjs/;
+const CLEAN_AND_EDITED_STOP_CASES = 2;
+
+function readBuildJson(...segments) {
+  const path = join(BUILD.root, '.claude', ...segments);
+  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+}
+
+function wiredScripts() {
+  const settings = readBuildJson('settings.json');
+  const wiring = readBuildJson('scripts', 'hook-wiring.json');
   return Object.entries(settings.hooks).flatMap(([event, groups]) =>
-    groups.flatMap((group) =>
-      group.hooks.map((hook) => ({ event, command: hook.command })),
-    ),
+    groups
+      .flatMap((group) => group.hooks)
+      .flatMap((hook) => {
+        const script = SETTINGS_SCRIPT_RE.exec(hook.command)[1];
+        if (script !== 'hook-dispatch') return [{ event, script }];
+        return wiring.events[event].map((entry) => ({
+          event,
+          script: entry.script.replace(/\.mjs$/, ''),
+        }));
+      }),
   );
 }
 
@@ -44,57 +65,77 @@ describe('hookCaseEnv', () => {
   });
 });
 
-describe('hooks suite', { skip: SKIP }, () => {
+describe('hooks suite', () => {
   let workDir;
   let suite;
+  let scopeSuite;
 
   before(async () => {
     workDir = mkdtempSync(join(tmpdir(), 'bench-hooks-test-'));
-    suite = await cases({ root: REPO, repoDir: REPO, workDir });
+    const all = await cases({ root: BUILD.root, repoDir: REPO, workDir });
+    suite = all.filter(
+      (benchCase) => !SCOPE_CASE_NAMES.includes(benchCase.name),
+    );
+    scopeSuite = all.filter((benchCase) =>
+      SCOPE_CASE_NAMES.includes(benchCase.name),
+    );
   });
 
   after(() => {
     if (workDir) rmSync(workDir, { recursive: true, force: true });
   });
 
-  it('returns one case per wired hook, and two per Stop hook', () => {
-    const wired = wiredCommands();
-    const casesFor = (command) =>
-      suite.filter((benchCase) => benchCase.args[1] === command);
+  it('appends the three scope cases after the hook cases of a build tree', () => {
+    assert.deepEqual(
+      scopeSuite.map((benchCase) => benchCase.name),
+      SCOPE_CASE_NAMES,
+    );
+  });
+
+  it('returns one case per wired script, and two per Stop script', () => {
+    const wired = wiredScripts();
+    const casesFor = (script) =>
+      suite.filter((benchCase) => benchCase.args[1].includes(`/${script}`));
 
     const observed = wired.map(
-      ({ event, command }) => `${event} x${casesFor(command).length}`,
+      ({ event, script }) => `${event} ${script} x${casesFor(script).length}`,
     );
 
     assert.deepEqual(
       observed,
-      wired.map(({ event }) => `${event} x${event === 'Stop' ? 2 : 1}`),
+      wired.map(
+        ({ event, script }) =>
+          `${event} ${script} x${event === 'Stop' ? CLEAN_AND_EDITED_STOP_CASES : 1}`,
+      ),
     );
     assert.equal(
       suite.length,
       observed.length + wired.filter(({ event }) => event === 'Stop').length,
     );
+    assert.equal(
+      suite.filter((benchCase) => benchCase.args[1].includes('hook-dispatch'))
+        .length,
+      0,
+    );
   });
 
-  it('splits each Stop hook into a clean-tree and a dirty-tree case', () => {
-    const stopCommands = wiredCommands().filter(
-      ({ event }) => event === 'Stop',
-    );
+  it('splits each Stop script into a clean-tree and a dirty-tree case', () => {
+    const stopScripts = wiredScripts().filter(({ event }) => event === 'Stop');
 
-    const states = stopCommands.map(({ command }) =>
+    const states = stopScripts.map(({ script }) =>
       suite
-        .filter((benchCase) => benchCase.args[1] === command)
+        .filter((benchCase) => benchCase.args[1].includes(`/${script}`))
         .map((benchCase) => benchCase.name.split('-').pop()),
     );
 
     assert.notEqual(
-      stopCommands.length,
+      stopScripts.length,
       0,
-      'the settings wire no Stop hook, so this test checks nothing',
+      'the wiring lists no Stop script, so this test checks nothing',
     );
     assert.deepEqual(
       states,
-      stopCommands.map(() => ['clean', 'dirty']),
+      stopScripts.map(() => ['clean', 'dirty']),
     );
   });
 
@@ -150,20 +191,6 @@ describe('hooks suite', { skip: SKIP }, () => {
   });
 });
 
-const SCOPE_CASE_NAMES = [
-  'stop-lint-format-fix-scope-off',
-  'stop-lint-format-fix-scope-on',
-  'stop-lint-format-fix-scope-on-dot',
-];
-const SCOPE_REFORMAT_CASE_NAMES = [
-  'stop-lint-format-fix-scope-on',
-  'stop-lint-format-fix-scope-on-dot',
-];
-const SCOPE_BUILD = findBuild('HEAD', { repoDir: REPO });
-const SCOPE_SKIP = SCOPE_BUILD
-  ? false
-  : 'no bench build of HEAD. Run node scripts/bench/run.mjs --suite hooks --out <file> to build it.';
-
 function runGit(cwd, args) {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -185,7 +212,10 @@ function makeFakeBuild(dir, fixerSource) {
     join(root, 'package.json'),
     JSON.stringify({
       name: 'fake',
-      scripts: { 'lint:fix': 'eslint . --fix', format: 'prettier --write .' },
+      scripts: {
+        'lint:fix': 'eslint . --fix',
+        'format:fix': 'prettier --write .',
+      },
     }),
   );
   writeFileEnsuringDirectory(
@@ -246,6 +276,73 @@ function changedPaths(cwd) {
     .map((line) => line.slice(3));
 }
 
+const DISPATCH_COMMAND =
+  'exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/hook-dispatch.mjs"';
+
+function writeWiring(tree, scripts) {
+  writeFileEnsuringDirectory(
+    join(tree, '.claude/settings.json'),
+    JSON.stringify({
+      hooks: {
+        UserPromptSubmit: [
+          { hooks: [{ type: 'command', command: DISPATCH_COMMAND }] },
+        ],
+      },
+    }),
+  );
+  writeFileEnsuringDirectory(
+    join(tree, '.claude/scripts/hook-wiring.json'),
+    JSON.stringify({
+      version: 1,
+      events: { UserPromptSubmit: scripts.map((script) => ({ script })) },
+    }),
+  );
+}
+
+describe('hook wiring source', () => {
+  let dir;
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'bench-wiring-test-'));
+  });
+
+  after(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('takes the wiring from the build tree, so a script wired only in the live repo is not resolved', async () => {
+    const fake = makeFakeBuild(dir, 'process.exit(0);\n');
+    writeFileEnsuringDirectory(
+      join(fake.root, 'packages/cli/payload-dist/scripts/bench-probe.mjs'),
+      'process.exit(0);\n',
+    );
+    writeWiring(fake.root, ['bench-probe.mjs']);
+    writeWiring(fake.repoDir, ['bench-probe.mjs', 'notice-interim.mjs']);
+
+    const suite = await cases({
+      root: fake.root,
+      repoDir: fake.repoDir,
+      workDir: join(dir, 'work'),
+    });
+
+    assert.deepEqual(
+      suite.map((benchCase) => benchCase.name),
+      ['bench-probe', ...SCOPE_CASE_NAMES],
+      'the live wiring names notice-interim.mjs, which the build lacks, so reading it fails with "expected one built notice-interim.mjs"',
+    );
+  });
+
+  it('throws naming the missing settings file when the build tree has none', async () => {
+    const root = join(dir, 'bare-build');
+    mkdirSync(root, { recursive: true });
+
+    await assert.rejects(
+      cases({ root, repoDir: REPO, workDir: join(dir, 'bare-work') }),
+      /bare-build\/\.claude\/settings\.json is missing/,
+    );
+  });
+});
+
 describe('scope cases', () => {
   let dir;
   let fake;
@@ -299,13 +396,13 @@ describe('scope cases', () => {
     });
 
     assert.deepEqual(observed, [
-      ['stop-lint-format-fix-scope-off', ['lint:fix', 'format'], false],
+      ['stop-lint-format-fix-scope-off', ['lint:fix', 'format:fix'], false],
       [
         'stop-lint-format-fix-scope-on',
         ['lint:fix:paths', 'format:paths'],
         true,
       ],
-      ['stop-lint-format-fix-scope-on-dot', ['lint:fix', 'format'], true],
+      ['stop-lint-format-fix-scope-on-dot', ['lint:fix', 'format:fix'], true],
     ]);
   });
 
@@ -393,7 +490,7 @@ describe('scope cases', () => {
     if (!armSuite) {
       armWorkDir = mkdtempSync(join(tmpdir(), 'bench-scope-arm-test-'));
       armSuite = await cases({
-        root: SCOPE_BUILD.root,
+        root: BUILD.root,
         repoDir: REPO,
         workDir: armWorkDir,
       });
@@ -403,27 +500,23 @@ describe('scope cases', () => {
     return benchCase;
   };
 
-  it(
-    'stop-lint-format-fix-scope-off leaves the edit as written',
-    { skip: SCOPE_SKIP },
-    async () => {
-      const benchCase = await armCase('stop-lint-format-fix-scope-off');
+  it('stop-lint-format-fix-scope-off leaves the edit as written', async () => {
+    const benchCase = await armCase('stop-lint-format-fix-scope-off');
 
-      const result = runCase(benchCase);
-      const [edited] = changedPaths(benchCase.cwd);
-      const source = readFileSync(join(benchCase.cwd, edited), 'utf8');
+    const result = runCase(benchCase);
+    const [edited] = changedPaths(benchCase.cwd);
+    const source = readFileSync(join(benchCase.cwd, edited), 'utf8');
 
-      assert.equal(result.status, 0, result.stderr);
-      assert.match(
-        source,
-        /^export const {3}benchScope {2}= {2}1 ;$/m,
-        'a Stop with fix.passPaths off runs no fix step, so the dirty edit survives',
-      );
-    },
-  );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(
+      source,
+      /^export const {3}benchScope {2}= {2}1 ;$/m,
+      'a Stop with fix.passPaths off runs no fix step, so the dirty edit survives',
+    );
+  });
 
   for (const name of SCOPE_REFORMAT_CASE_NAMES) {
-    it(`${name} reformats the edit`, { skip: SCOPE_SKIP }, async () => {
+    it(`${name} reformats the edit`, async () => {
       const benchCase = await armCase(name);
 
       const result = runCase(benchCase);

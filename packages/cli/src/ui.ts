@@ -2,9 +2,9 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import type { AdviseAction } from '@houserules/api';
 import type { WrittenEntry } from './apply.js';
-import { BACKUP_DIR } from './core/fs-target.js';
+import { BACKUP_DIR, backupDestFor } from './core/fs-target.js';
 import type { ChangesetInvocation, Ctx, Target } from './detect.js';
-import type { SettingsPlan } from '@houserules/api/internal';
+import { MANIFEST_PATH, type SettingsPlan } from '@houserules/api/internal';
 import type {
   MigrationChoice,
   MigrationFinding,
@@ -553,7 +553,35 @@ export function renderPreview({
       );
     }
   }
+  lines.push(...bookkeepingLines(effects, settingsPlan, width));
   return lines.join('\n');
+}
+
+/**
+ * The bookkeeping apply writes beside the plan: the one-shot settings backup (with its
+ * self-gitignore) when settings merge into an existing file, and the manifest whenever
+ * anything else is written.
+ */
+function bookkeepingLines(
+  effects: Effect[],
+  settingsPlan: SettingsPlan | null,
+  width: number,
+): string[] {
+  const lines: string[] = [];
+  const hasSettingsChanges = Boolean(settingsPlan?.changes.length);
+  if (settingsPlan?.existedBefore && hasSettingsChanges) {
+    for (const dest of [
+      `${BACKUP_DIR}/.gitignore`,
+      backupDestFor(settingsPlan.dest),
+    ])
+      lines.push(...bullet(`+ ${dest} (backup)`, width, OP_STYLE.create[1]));
+  }
+  const hasWrites = effects.some(
+    (e) => e.op === 'create' || e.op === 'update' || e.op === 'merge',
+  );
+  if (hasWrites || hasSettingsChanges)
+    lines.push(...bullet(`± ${MANIFEST_PATH}`, width, OP_STYLE.merge[1]));
+  return lines;
 }
 
 /**
@@ -565,7 +593,7 @@ export function nextSteps(advisories: AdviseAction[]): void {
   const lines = advisories.map((a, i) =>
     labeled(`${String(i + 1).padStart(2)}. `, a.text, messageWidth()),
   );
-  const body = `${pc.bold('Next steps (yours — houserules does not do these):')}\n\n${lines.join('\n')}`;
+  const body = `${pc.bold('Next steps. Yours, houserules does not do these:')}\n\n${lines.join('\n')}`;
   if (isTTY()) p.log.message(body);
   else console.log(`\n${body}\n`);
 }

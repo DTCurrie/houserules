@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const EMITTED_SCRIPTS_DIR = fileURLToPath(
@@ -44,7 +44,15 @@ const topLevelScripts = readdirSync(EMITTED_SCRIPTS_DIR).filter((f) =>
 
 describe('the emitted payload script tree', () => {
   it('has scripts to check', () => {
-    expect(allScripts.length).toBe(14);
+    const names = allScripts.map((file) => basename(file));
+
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'projects-sync.mjs',
+        'projects-sync-hook.mjs',
+        'push-lock.mjs',
+      ]),
+    );
   });
 
   it.each(topLevelScripts)('%s keeps its shebang', (file) => {

@@ -1,0 +1,16 @@
+I just read through this cart library and found four things to record. Do not fix anything and do not edit any source file. Record them in this one turn, in this order.
+
+Backlog entries, with the backlog-add skill, prefix CART, area BACKLOG.md:
+
+1. `src/tax.js` rounds tax once per line item, so a cart of many cheap lines drifts from the tax on the whole subtotal.
+2. `src/coupon.js` stacks every coupon with no cap, so enough coupons take the total to zero or below.
+3. `src/money.js` `formatMoney` hardcodes a dollar sign and a period, so no other currency or locale formats correctly.
+
+Decision, with the decide skill, prefix CART, area DECISIONS.md: money stays integer cents end to end, and `addCents` throws on a non-integer.
+
+- Why: float sums drift by a cent on carts of a few dozen lines, and a total that disagrees with the receipt by a cent is a support ticket.
+- Rejected: storing dollars as floats and rounding at display time.
+- In the code: `src/money.js`, `src/cart.js`.
+- Revisit when: a currency with no minor unit, or one with a third decimal place, must be supported.
+
+Then reply with one line per item saying what was recorded.

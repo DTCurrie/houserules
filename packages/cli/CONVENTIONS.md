@@ -13,10 +13,12 @@ Auto-loaded context is paid on **every turn of every session**, before any work.
 `CLAUDE.md`, any globless `.claude/rules/*.md` (§6), the skill and agent `description:` frontmatter
 that the harness lists every turn, and the machine-local memory index (§5).
 
-`npx houserules doctor` measures the in-repo part of that and fails past **4000 tokens or 200 lines**
-(`RESIDENT_TOKEN_BUDGET` / `RESIDENT_LINE_BUDGET` in `src/commands/doctor/resident-surface.ts`). Skill and agent
+`npx houserules doctor` reports each in-repo surface against the limit Anthropic documents for it.
+Those are 200 lines per CLAUDE.md file, 1,536 characters per skill listing entry, and a warning at
+15,000 tokens of agent descriptions combined. Nothing is summed against a total. Skill and agent
 _bodies_ are excluded, because they load on invocation, not on every turn. The memory index lives
-outside the repo, so doctor cannot see it. Budget it by hand.
+outside the repo. Doctor reads it against its load limit of 200 lines or 25 KB only when it finds
+the file for this repo, so keep pruning it by hand.
 
 Before adding anything to an always-loaded file, ask: **is this true on every turn?** If it is
 scoped to a task type, such as a domain style guide, a feel or balance guardrail, or a workflow only
@@ -269,7 +271,7 @@ Each of these is a standing habit, not a script:
   - **A plugin ships its MCP config to `.claude/mcp/<server>.<transport>.json`**, through the
     `mcp()` payload builder. The server name is what keeps two plugins from colliding on one
     destination, which the planner treats as a bug rather than deduping.
-- **Keep the always-loaded surface under ~200 lines**, the same `RESIDENT_LINE_BUDGET` doctor checks
+- **Keep each always-loaded CLAUDE.md file under 200 lines**, the per-file limit doctor checks
   in §1. Everything task-scoped moves to a skill, a nested CLAUDE.md, or an on-demand doc (§1–§2).
 - **Subagents for high-volume operations** such as long test runs, log spelunking, and wide greps.
   The transcript stays in the subagent, and only the verdict returns.
