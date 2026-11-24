@@ -1,0 +1,19 @@
+Dispatch exactly one subagent with the Agent tool, subagent_type "task-worker". Pass no "model" and no "effort" parameter. Its prompt is the brief between the BRIEF lines below, verbatim. Do not read, write, or edit any file yourself, and run no other tool before or after the dispatch. When the worker hands back, print its report verbatim and stop.
+
+BRIEF START
+Slice 1: invoice builder.
+
+Objective: `src/invoice.js` exports `buildInvoice(order, options)` that meets the whole `BuildInvoice` contract in `src/invoice-contract.js`. The first pass at it is in the tree, and the acceptance fails on it.
+
+Owned paths: `src/invoice.js` only. Do not edit any other file, including the tests.
+
+Seam: `src/invoice-contract.js` is fixed. Implement against it, with the helpers it names in `src/money.js`, `src/catalog.js`, and `src/tax-rates.js`. If the seam is wrong, say so under Deviations instead of changing it.
+
+Context: `src/invoice-contract.js`, `src/invoice.js`, `src/money.js`, `src/catalog.js`, `src/tax-rates.js`, `src/invoice-format.js`, `test/`.
+
+Steps: run the acceptance, find why it fails, make `src/invoice.js` meet the contract, run the acceptance.
+
+Acceptance: `node --test test/invoice.test.js test/invoice-format.test.js` passes. Run it yourself after your last edit and report its output.
+
+Constraints: no dependencies, ESM, Node built-ins only.
+BRIEF END

@@ -75,12 +75,12 @@ function installStubTools(bin) {
   }
 }
 
-function fixtureConfig() {
+function fixtureConfig(runner) {
   return JSON.stringify({
     version: 2,
     packageManager: 'pnpm',
     fix: {
-      runner: 'pnpm',
+      runner,
       filterFlag: '',
       runScriptPrefix: ['run'],
       commands: ['lint:fix', 'format'],
@@ -96,7 +96,7 @@ function fixtureConfig() {
   });
 }
 
-function makeFixture({ scripts = SCRIPTS, origin } = {}) {
+function makeFixture({ scripts = SCRIPTS, origin, runner = 'pnpm' } = {}) {
   counter += 1;
   const base = join(work, `case-${counter}`);
   const root = join(base, 'repo');
@@ -105,7 +105,7 @@ function makeFixture({ scripts = SCRIPTS, origin } = {}) {
   mkdirSync(root, { recursive: true });
   runCommand(root, 'git', ['init', '-q']);
   if (origin) runCommand(root, 'git', ['remote', 'add', 'origin', origin]);
-  writeFile(root, '.claude/houserules.config.json', fixtureConfig());
+  writeFile(root, '.claude/houserules.config.json', fixtureConfig(runner));
   writeFile(root, 'package.json', JSON.stringify({ name: 'fx', scripts }));
   writeFile(root, '.gitignore', 'ignored.log\n');
   writeFile(root, 'ignored.log', 'ignored bytes\n');
@@ -282,6 +282,30 @@ describe('field-repro', () => {
       [['prettier', '--check', '.']],
     );
     assert.equal(calls(fixture.runnerLog).length, 1);
+  });
+
+  it('marks a spawn that fails as an error with no duration', () => {
+    const fixture = makeFixture({ runner: 'no-such-runner-command' });
+
+    const { timings } = reproduce(fixture, ['src/a.ts']);
+
+    assert.ok(timings.length > 0);
+    for (const timing of timings) {
+      assert.equal(timing.durationMs, null);
+      assert.match(timing.error, /ENOENT/);
+    }
+  });
+
+  it('writes error null and a numeric duration for a spawn that exits 0', () => {
+    const fixture = makeFixture();
+
+    const { timings } = reproduce(fixture, ['src/a.ts']);
+
+    assert.ok(timings.length > 0);
+    for (const timing of timings) {
+      assert.equal(timing.error, null);
+      assert.equal(typeof timing.durationMs, 'number');
+    }
   });
 
   it('plans no step for a path under no target', () => {

@@ -5,11 +5,14 @@ import { join } from 'node:path';
 import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn, runScript } from '#test/run';
 import {
+  dispatchedScriptsFor,
   editHouseConfig,
   hookCommandsFor,
   houseConfigPath,
+  manifestOf,
   readJson,
   settingsOf,
+  writeManifest,
 } from '#test/installed-tree';
 import { recordedCalls, stubRunner } from '#test/runner-stub';
 import { makeAnswers, makeCtx } from '#test/ctx-builder';
@@ -43,10 +46,12 @@ describe('lint-fix without a detected fix command', () => {
   });
 
   it('does not wire the script into the Stop hook, since it would run a nonexistent target', () => {
-    const settings = settingsOf(root);
-    const stopCmds = hookCommandsFor(settings, 'Stop');
+    const stopHookCommands = [
+      ...hookCommandsFor(settingsOf(root), 'Stop'),
+      ...dispatchedScriptsFor(root, 'Stop'),
+    ];
     expect(
-      stopCmds.some((c) => c.includes('lint-format-fix.mjs')),
+      stopHookCommands.some((c) => c.includes('lint-format-fix.mjs')),
       'not wired into the Stop hook',
     ).toBe(false);
   });
@@ -186,6 +191,18 @@ describe('update on an install carrying a SubagentStop group the config does not
       join(root, '.claude/settings.json'),
       JSON.stringify(settings, null, 2),
     );
+    // A pre-dispatch install recorded the per-script hook in its signature, which is how
+    // update recognizes the seeded group as its own.
+    const manifest = manifestOf(root);
+    const signature = manifest.settings as {
+      hooks: { event: string; matcher: string | null; script: string }[];
+    };
+    signature.hooks.push({
+      event: 'SubagentStop',
+      matcher: null,
+      script: FIX_SCRIPT,
+    });
+    writeManifest(root, manifest);
   });
 
   it('drops the lint-format-fix group and keeps the user hook', () => {
@@ -206,11 +223,9 @@ describe('update on an install carrying a SubagentStop group the config does not
 
     expect(result.status, result.stderr).toBe(0);
     expect(
-      hookCommandsFor(settingsOf(root), 'SubagentStop').some((command) =>
-        command.includes(FIX_SCRIPT),
-      ),
+      dispatchedScriptsFor(root, 'SubagentStop'),
       'a lint-format-fix SubagentStop hook is wired',
-    ).toBe(true);
+    ).toContain(FIX_SCRIPT);
   });
 });
 
@@ -371,11 +386,7 @@ describe('passPaths default: today', () => {
     const root = useRepo('pnpm-single');
     const result = runCli(['init', '--yes', '--modules=lint-fix', root]);
     expect(result.status, result.stderr).toBe(0);
-    expect(
-      hookCommandsFor(settingsOf(root), 'Stop').some((c) =>
-        c.includes('lint-format-fix.mjs'),
-      ),
-    ).toBe(true);
+    expect(dispatchedScriptsFor(root, 'Stop')).toContain('lint-format-fix.mjs');
     const config = readJson<{ targets: { fixCommands?: string[] }[] }>(
       houseConfigPath(root),
     );

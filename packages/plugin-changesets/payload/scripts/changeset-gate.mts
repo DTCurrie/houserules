@@ -5,8 +5,9 @@
  * h5 flags a newly-written pending changeset whose declared package set has drifted from
  * what the current diff actually touches ("the package set grew").
  *
- * Exit 2 with the report on stderr when the gate is violated. Every failure path exits 0,
- * because a nudge hook must never break a session. A turn whose transcript shows only
+ * Exit 2 with the report on stderr when the gate is violated, or when the changesets `ignore`
+ * list has entries and changesets' own matcher is not resolvable. Every other failure path
+ * exits 0, because a nudge hook must never break a session. A turn whose transcript shows only
  * read-only tool uses exits 0 before any git call, and a missing or unreadable transcript
  * runs the gate as usual. While the Stop payload's background_tasks is non-empty, h5 is
  * skipped, since background agents are still changing the diff it compares against.
@@ -16,7 +17,7 @@ import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { loadConfigSafe } from '@houserules/payload/config';
+import { loadConfigSafe, loadExtensionsSafe } from '@houserules/payload/config';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { git, readStdinJson, repoRoot } from '@houserules/payload/proc';
 import {
@@ -30,7 +31,10 @@ import {
   type Finding,
   type Report,
 } from '@houserules/payload/findings';
-import { createGatedOwnerResolver } from './lib/changeset-owner.mjs';
+import {
+  IgnoreMatcherUnavailableError,
+  createGatedOwnerResolver,
+} from './lib/changeset-owner.mjs';
 
 const DECLINED = [
   'whether two changesets describe the same feature — feature identity is a reading-comprehension judgment the changeset skill keeps',
@@ -169,17 +173,20 @@ function writtenSinceTurnStart(
 }
 
 /**
- * True when `path` is a package.json whose only difference from `ref` is its `wireit` block.
+ * True when `path` is a package.json whose only difference from `ref` lies under `ignoreKeys`.
  *
- * Wireit config (dependency graph, input globs) never changes what a consumer of the published
- * tarball observes, and a repo-wide glob rename otherwise reports every package as drift. A file
- * git cannot show at `ref`, or that does not parse on either side, counts as a real change.
+ * The keys come from the installed tool fragments. A build tool's config block in a manifest
+ * never changes what a consumer of the published tarball observes, and a repo-wide config edit
+ * otherwise reports every package as drift. An empty key list, a file git cannot show at `ref`,
+ * or one that does not parse on either side counts as a real change.
  */
-function wireitOnlyEdit(
+function ignoredKeysOnlyEdit(
   root: string,
   path: string,
   ref: string | null,
+  ignoreKeys: string[],
 ): boolean {
+  if (ignoreKeys.length === 0) return false;
   if (!ref || !/(^|\/)package\.json$/.test(path)) return false;
   const before = git(root, ['show', `${ref}:${path}`]);
   if (before === null) return false;
@@ -195,7 +202,9 @@ function wireitOnlyEdit(
   } catch {
     return false;
   }
-  for (const pkg of pair) delete pkg.wireit;
+  for (const manifest of pair) {
+    for (const key of ignoreKeys) delete manifest[key];
+  }
   return JSON.stringify(pair[0]) === JSON.stringify(pair[1]);
 }
 
@@ -226,10 +235,18 @@ function touchedPackages(root: string): string[] {
     pkgs,
     loadConfigSafe(root).changesets?.gateIgnore ?? [],
   );
+  const { manifestIgnoreKeys } = loadExtensionsSafe(root);
   const names = new Set<string>();
   for (const path of [...dirty, ...committed]) {
     if (isChangesetMd(path)) continue;
-    if (wireitOnlyEdit(root, path, committedSet.has(path) ? mergeBase : 'HEAD'))
+    if (
+      ignoredKeysOnlyEdit(
+        root,
+        path,
+        committedSet.has(path) ? mergeBase : 'HEAD',
+        manifestIgnoreKeys,
+      )
+    )
       continue;
     const name = gatedOwner(path);
     if (name) names.add(name);
@@ -264,11 +281,25 @@ function packageDriftFindings(
   const settled = [...branchIds]
     .filter((id) => !newIds.has(id) && pendingFiles.has(id))
     .map(toPending);
-  return checkPackageDrift(
-    pending,
-    pending.length > 0 ? touchedPackages(root) : [],
-    settled,
-  ).findings;
+  let touched: string[];
+  try {
+    touched = pending.length > 0 ? touchedPackages(root) : [];
+  } catch (err) {
+    if (!(err instanceof IgnoreMatcherUnavailableError)) throw err;
+    return [ignoreMatcherFinding(err)];
+  }
+  return checkPackageDrift(pending, touched, settled).findings;
+}
+
+/** The hard error for an `ignore` list the gate cannot match the way changesets does. */
+function ignoreMatcherFinding(err: IgnoreMatcherUnavailableError): Finding {
+  return {
+    rule: 'changeset-gate/ignore-matcher',
+    level: 'error',
+    file: '.changeset/config.json',
+    line: null,
+    msg: err.message,
+  };
 }
 
 async function main(): Promise<void> {

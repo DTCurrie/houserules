@@ -48,6 +48,7 @@ body:
         - '@houserules/plugin-testing'
         - '@houserules/plugin-three'
         - '@houserules/plugin-typescript'
+        - '@houserules/plugin-wireit'
         - '@houserules/test'
         - Not sure
     validations:

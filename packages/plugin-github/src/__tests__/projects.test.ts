@@ -106,11 +106,12 @@ describe('projects plugin', () => {
     ).toBe(false);
   });
 
-  it('plans the sync script, its eleven libs, the hook, both skills, the adopt checker, and both settings fragments', () => {
+  it('plans the sync script, its twelve libs, the hook, both skills, the adopt checker, and both settings fragments', () => {
     const [module] = plugin(buildApi());
     const actions = module?.plan(CTX, ANSWERS) ?? [];
 
     expect(actions.map((action) => action.kind)).toEqual([
+      'copy',
       'copy',
       'copy',
       'copy',
@@ -145,6 +146,7 @@ describe('projects plugin', () => {
       '.claude/scripts/lib/backfill-plan.mjs',
       '.claude/scripts/lib/surface-orphans.mjs',
       '.claude/scripts/lib/push-outcome.mjs',
+      '.claude/scripts/lib/push-lock.mjs',
       '.claude/scripts/projects-sync-hook.mjs',
       '.claude/skills/ledger-sync/SKILL.md',
       '.claude/skills/backlog-adopt/SKILL.md',

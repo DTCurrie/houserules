@@ -6,7 +6,7 @@ import {
   type Dirent,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 import { claudeProjectDir } from '@houserules/payload/entry-ledger';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
@@ -16,10 +16,12 @@ import { readCorpus } from '../report/transcript-events.js';
 import { frontmatterBlock, splitFrontmatter } from '../../core/frontmatter.js';
 import type { CheckResult, Finding } from '@houserules/api';
 
-// The always-loaded surface is paid on every turn (CONVENTIONS §1). ~3-4K tokens
-// is the sane target. Take the upper end as the ceiling and ~200 lines alongside.
-const RESIDENT_TOKEN_BUDGET = 4000;
-const RESIDENT_LINE_BUDGET = 200;
+// Each limit below is a figure Anthropic documents for one surface. None is a houserules
+// budget, and no limit is summed across surfaces.
+const CLAUDE_MD_LINE_LIMIT = 200; // memory docs: keep each CLAUDE.md under 200 lines
+const AGENT_DESCRIPTIONS_WARN_TOKENS = 15_000; // Claude Code warns past this for agent descriptions combined
+const MEMORY_MD_LINE_LIMIT = 200; // auto memory loads the first 200 lines of MEMORY.md
+const MEMORY_MD_BYTE_LIMIT = 25 * 1024; // or the first 25 KB, whichever comes first
 
 // Claude Code follows an @-import chain to a maximum depth of four hops.
 const MAX_IMPORT_DEPTH = 4;
@@ -136,6 +138,8 @@ export interface ResidentMeasurement {
   tokens: number;
   sources: string[];
   globless: string[];
+  /** Every file read, imports included, with its own line count. */
+  files: { rel: string; lines: number }[];
 }
 
 /**
@@ -150,6 +154,7 @@ export function measureResident(root: string): ResidentMeasurement | null {
   let chars = 0;
   let lines = 0;
   let imports = 0;
+  const files: { rel: string; lines: number }[] = [];
   const visit = (abs: string, depth: number) => {
     if (seen.has(abs) || depth > MAX_IMPORT_DEPTH) return;
     seen.add(abs);
@@ -161,6 +166,7 @@ export function measureResident(root: string): ResidentMeasurement | null {
     }
     chars += text.length;
     lines += countLines(text);
+    files.push({ rel: relative(root, abs), lines: countLines(text) });
     if (depth > 0) imports += 1;
     for (const spec of parseImports(text)) {
       const target = resolve(dirname(abs), spec);
@@ -179,6 +185,7 @@ export function measureResident(root: string): ResidentMeasurement | null {
     tokens: estimateTokens(chars),
     sources,
     globless,
+    files,
   };
 }
 
@@ -294,6 +301,10 @@ export interface SkillAgentMeasurement {
   tokens: number;
   skills: number;
   agents: number;
+  /** Estimated tokens of agent descriptions alone, the figure the 15,000-token warning counts. */
+  agentTokens: number;
+  /** Uncapped description plus `when_to_use` length of each listed skill. */
+  skillEntries: { rel: string; chars: number }[];
 }
 
 /**
@@ -369,8 +380,10 @@ export function measureSkillAgentDescriptions(
   root: string,
 ): SkillAgentMeasurement | null {
   let chars = 0;
+  let agentChars = 0;
   let skills = 0;
   let agents = 0;
+  const skillEntries: { rel: string; chars: number }[] = [];
   for (const file of findSkillFiles(join(root, '.claude', 'skills'))) {
     let text: string;
     try {
@@ -382,7 +395,9 @@ export function measureSkillAgentDescriptions(
     const desc = frontmatterDescription(text);
     if (desc) {
       const whenToUse = frontmatterField(text, 'when_to_use') ?? '';
-      chars += Math.min(desc.length + whenToUse.length, SKILL_LISTING_CHAR_CAP);
+      const entryChars = desc.length + whenToUse.length;
+      chars += Math.min(entryChars, SKILL_LISTING_CHAR_CAP);
+      skillEntries.push({ rel: relative(root, file), chars: entryChars });
       skills += 1;
     }
   }
@@ -399,6 +414,7 @@ export function measureSkillAgentDescriptions(
       const desc = frontmatterDescription(text);
       if (desc) {
         chars += desc.length;
+        agentChars += desc.length;
         agents += 1;
       }
     }
@@ -406,7 +422,52 @@ export function measureSkillAgentDescriptions(
     /* no agents dir */
   }
   if (!skills && !agents) return null;
-  return { chars, tokens: estimateTokens(chars), skills, agents };
+  return {
+    chars,
+    tokens: estimateTokens(chars),
+    skills,
+    agents,
+    agentTokens: estimateTokens(agentChars),
+    skillEntries,
+  };
+}
+
+interface MemoryIndexMeasurement {
+  path: string;
+  lines: number;
+  bytes: number;
+}
+
+/**
+ * The machine-local auto-memory index for this repo, which Claude Code loads on every
+ * session up to its own line and byte limit. Null when the file is absent.
+ */
+export function measureMemoryIndex(
+  root: string,
+  options: ResidentSurfaceOptions = {},
+): MemoryIndexMeasurement | null {
+  const top = repoTopOf(root, options);
+  const base =
+    options.claudeConfigDir ??
+    process.env.CLAUDE_CONFIG_DIR ??
+    join(homedir(), '.claude');
+  const projectsDir = join(base, 'projects');
+  const path = join(
+    projectsDir,
+    claudeProjectDir(top, projectsDir),
+    'memory',
+    'MEMORY.md',
+  );
+  try {
+    const text = readFileSync(path, 'utf8');
+    return {
+      path,
+      lines: countLines(text),
+      bytes: Buffer.byteLength(text, 'utf8'),
+    };
+  } catch {
+    return null;
+  }
 }
 
 interface OutputStyleSettings {
@@ -507,6 +568,12 @@ interface MeasuredResident {
 export interface ResidentSurfaceOptions {
   /** Directory holding `projects/<slug>`. Defaults to `CLAUDE_CONFIG_DIR`, else `~/.claude`. */
   claudeConfigDir?: string;
+  /** The git top of `root`, when the caller already ran `detect`. Detected here otherwise. */
+  repoTop?: string;
+}
+
+function repoTopOf(root: string, options: ResidentSurfaceOptions): string {
+  return options.repoTop ?? detect(root).git.top ?? root;
 }
 
 /**
@@ -517,7 +584,7 @@ function measureLatestResident(
   root: string,
   options: ResidentSurfaceOptions = {},
 ): MeasuredResident | null {
-  const top = detect(root).git.top ?? root;
+  const top = repoTopOf(root, options);
   const base =
     options.claudeConfigDir ??
     process.env.CLAUDE_CONFIG_DIR ??
@@ -540,55 +607,37 @@ function measureLatestResident(
 }
 
 /**
- * The resident-surface budget, which makes houserules' #1 lever measurable instead of only
- * prose. Read-only, and WARNs past budget rather than ERRORing.
+ * Reports each resident surface against the limit Anthropic documents for it. Read-only,
+ * and WARNs past a limit rather than ERRORing. Nothing is summed against a budget.
  */
 export function checkResidentSurface(
   root: string,
   options: ResidentSurfaceOptions = {},
 ): CheckResult {
+  // Both transcript-side measures need the git top. Detect it once, not once per measure.
+  const withTop = { ...options, repoTop: repoTopOf(root, options) };
   const findings: Finding[] = [];
   const readouts: string[] = [];
   const resident = measureResident(root);
   const skillsAgents = measureSkillAgentDescriptions(root);
   const style = measureActiveOutputStyle(root);
-  const skillAgentTokens = skillsAgents?.tokens ?? 0;
-  const styleTokens = style?.tokens ?? 0;
 
   if (resident) {
-    const over =
-      resident.tokens > RESIDENT_TOKEN_BUDGET ||
-      resident.lines > RESIDENT_LINE_BUDGET;
     const importNote = resident.imports
       ? ` + ${resident.imports} @-import(s)`
       : '';
     readouts.push(
-      `resident context (${resident.sources.join(' + ')}${importNote}): ~${resident.tokens} tokens / ${resident.lines} lines ` +
-        `vs budget ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}` +
-        (over
-          ? ` — OVER`
-          : ` — ${RESIDENT_TOKEN_BUDGET - resident.tokens} tokens, ${RESIDENT_LINE_BUDGET - resident.lines} lines headroom`),
+      `resident context (${resident.sources.join(' + ')}${importNote}): ~${resident.tokens} tokens / ${resident.lines} lines`,
     );
-    // The budget compares the repo-controlled estimate, never the measurement. The measured
-    // total includes the system prompt and user-level skills, so gating on it would WARN on
-    // every repo for things the repo cannot trim.
-    // Every always-loaded tier alone, or any combination, can push the total over.
-    const combinedTokens = resident.tokens + skillAgentTokens + styleTokens;
-    const combinedOver =
-      combinedTokens > RESIDENT_TOKEN_BUDGET ||
-      resident.lines > RESIDENT_LINE_BUDGET;
-    if (combinedOver) {
-      const memoryFile = resident.sources.includes('AGENTS.md')
-        ? 'AGENTS.md'
-        : 'CLAUDE.md';
-      const parts = [`root ${memoryFile}/rules (~${resident.tokens} tokens)`];
-      if (skillAgentTokens)
-        parts.push(`skill/agent descriptions (~${skillAgentTokens} tokens)`);
-      if (styleTokens) parts.push(`output style (~${styleTokens} tokens)`);
-      findings.push({
-        level: 'WARN',
-        msg: `always-loaded context exceeds budget (~${combinedTokens} tokens / ${resident.lines} lines vs ~${RESIDENT_TOKEN_BUDGET} / ${RESIDENT_LINE_BUDGET}). ${parts.join(' + ')}. Trim root ${memoryFile} to a one-line index + on-demand files (CONVENTIONS §1)`,
-      });
+    for (const file of resident.files) {
+      readouts.push(
+        `${file.rel}: ${file.lines} lines (documented limit ${CLAUDE_MD_LINE_LIMIT} per file)`,
+      );
+      if (file.lines > CLAUDE_MD_LINE_LIMIT)
+        findings.push({
+          level: 'WARN',
+          msg: `${file.rel} is ${file.lines} lines, over the ${CLAUDE_MD_LINE_LIMIT}-line per-file limit Claude Code documents for CLAUDE.md. Move task-scoped content to a skill, a nested CLAUDE.md, or an on-demand doc (CONVENTIONS §1)`,
+        });
     }
     // A globless rule loads every turn. Usually not intended, and invisible without
     // this line (CONVENTIONS §6).
@@ -613,10 +662,49 @@ export function checkResidentSurface(
   }
   // A second, distinct resident surface, reported on its own line so a budget move is
   // attributable to what caused it.
-  if (skillsAgents)
+  if (skillsAgents) {
     readouts.push(
       `resident skill/agent descriptions (${skillsAgents.skills} skill(s) + ${skillsAgents.agents} agent(s)): ~${skillsAgents.tokens} tokens`,
     );
+    if (skillsAgents.skills) {
+      const longest = Math.max(
+        ...skillsAgents.skillEntries.map((e) => e.chars),
+      );
+      readouts.push(
+        `skill listing entries: longest ${longest} chars (documented limit ${SKILL_LISTING_CHAR_CAP} per entry)`,
+      );
+    }
+    for (const entry of skillsAgents.skillEntries)
+      if (entry.chars > SKILL_LISTING_CHAR_CAP)
+        findings.push({
+          level: 'WARN',
+          msg: `${entry.rel} has ${entry.chars} characters of description and when_to_use, over the ${SKILL_LISTING_CHAR_CAP}-character per-entry limit of the skill listing. Claude Code truncates the rest`,
+        });
+    if (skillsAgents.agents) {
+      readouts.push(
+        `agent descriptions combined: ~${skillsAgents.agentTokens} tokens (documented warning at ${AGENT_DESCRIPTIONS_WARN_TOKENS})`,
+      );
+      if (skillsAgents.agentTokens > AGENT_DESCRIPTIONS_WARN_TOKENS)
+        findings.push({
+          level: 'WARN',
+          msg: `agent descriptions combined are ~${skillsAgents.agentTokens} tokens, over the ${AGENT_DESCRIPTIONS_WARN_TOKENS}-token point where Claude Code warns. Shorten the descriptions in .claude/agents/`,
+        });
+    }
+  }
+  const memoryIndex = measureMemoryIndex(root, withTop);
+  if (memoryIndex) {
+    readouts.push(
+      `MEMORY.md (${memoryIndex.path}): ${memoryIndex.lines} lines / ${memoryIndex.bytes} bytes (documented load limit ${MEMORY_MD_LINE_LIMIT} lines or ${MEMORY_MD_BYTE_LIMIT} bytes)`,
+    );
+    if (
+      memoryIndex.lines > MEMORY_MD_LINE_LIMIT ||
+      memoryIndex.bytes > MEMORY_MD_BYTE_LIMIT
+    )
+      findings.push({
+        level: 'WARN',
+        msg: `${memoryIndex.path} is ${memoryIndex.lines} lines / ${memoryIndex.bytes} bytes, past the load limit of ${MEMORY_MD_LINE_LIMIT} lines or ${MEMORY_MD_BYTE_LIMIT} bytes. Claude Code ignores the rest, so prune and merge entries`,
+      });
+  }
   if (style)
     readouts.push(
       `resident output style (${style.name}): ~${style.tokens} tokens`,
@@ -632,7 +720,7 @@ export function checkResidentSurface(
       `on-invoke skill/agent bodies (${onInvokeBodies.skills} skill(s) + ${onInvokeBodies.agents} agent(s)): ~${onInvokeBodies.tokens} tokens`,
     );
 
-  const measured = measureLatestResident(root, options);
+  const measured = measureLatestResident(root, withTop);
   if (measured) {
     readouts.push(
       `measured resident prompt (${measured.session}): ~${measured.estimatedTokens} tokens / ${measured.residentBytes} bytes = ` +

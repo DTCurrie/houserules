@@ -50,7 +50,8 @@
  *                   assembled sample `<k>`.
  *
  * `eval.json` may set `network` to a boolean (default false). Unless true, the child runs with
- * `--disallowedTools WebFetch,WebSearch`, which does not cover network access through Bash.
+ * `--disallowedTools WebFetch,WebSearch` and a `--settings` sandbox that blocks network access
+ * from Bash and fails the session when the platform cannot sandbox.
  *
  * Environment:
  *   HOUSERULES_EVAL_CLI  A prebuilt `cli.js` to install with in place of building `--rev`. The

@@ -49,6 +49,7 @@ function coreWiring(): Settings {
   return wiring(
     'node .claude/scripts/guard-bash.mjs',
     'node .claude/scripts/ledger-inject.mjs',
+    'node .claude/scripts/notice-interim.mjs',
   );
 }
 
@@ -254,6 +255,146 @@ describe('checkSettingsWiring', () => {
     });
 
     expect(checkSettingsWiring(root, ctx).findings).toEqual([]);
+  });
+});
+
+describe('checkSettingsWiring, given an install whose settings.json runs the hook dispatcher', () => {
+  const DISPATCHER = 'node .claude/scripts/hook-dispatch.mjs';
+
+  function dispatchedSettings(...events: string[]): Settings {
+    return {
+      hooks: Object.fromEntries(
+        events.map((event) => [
+          event,
+          [{ hooks: [{ type: 'command' as const, command: DISPATCHER }] }],
+        ]),
+      ),
+    };
+  }
+
+  function writeWiring(root: string, content: unknown): void {
+    mkdirSync(join(root, '.claude', 'scripts'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude', 'scripts', 'hook-wiring.json'),
+      typeof content === 'string' ? content : JSON.stringify(content),
+    );
+  }
+
+  const CORE_WIRING = {
+    version: 1,
+    events: {
+      PreToolUse: [{ script: 'guard-bash.mjs', matcher: 'Bash' }],
+      UserPromptSubmit: [
+        { script: 'ledger-inject.mjs' },
+        { script: 'notice-interim.mjs' },
+      ],
+    },
+  };
+
+  it('reports nothing when the wiring file runs every module hook script', () => {
+    const root = useRepo('pnpm-single');
+    writeWiring(root, CORE_WIRING);
+    const ctx = installedCtx({
+      modules: ['core'],
+      claude: {
+        settings: dispatchedSettings('PreToolUse', 'UserPromptSubmit'),
+      },
+    });
+
+    expect(checkSettingsWiring(root, ctx).findings).toEqual([]);
+  });
+
+  it('warns, naming the wiring file, when a module hook script is missing from it', () => {
+    const root = useRepo('pnpm-single');
+    writeWiring(root, {
+      version: 1,
+      events: {
+        PreToolUse: [{ script: 'guard-bash.mjs', matcher: 'Bash' }],
+        UserPromptSubmit: [{ script: 'notice-interim.mjs' }],
+      },
+    });
+    const ctx = installedCtx({
+      modules: ['core'],
+      claude: {
+        settings: dispatchedSettings('PreToolUse', 'UserPromptSubmit'),
+      },
+    });
+
+    expect(checkSettingsWiring(root, ctx).findings).toEqual([
+      {
+        level: 'WARN',
+        msg: 'module "core": hook script ledger-inject.mjs not wired in .claude/scripts/hook-wiring.json or .claude/settings.json',
+      },
+    ]);
+  });
+
+  it('warns when the wiring file is missing', () => {
+    const root = useRepo('pnpm-single');
+    const ctx = installedCtx({
+      modules: [],
+      claude: { settings: dispatchedSettings('PreToolUse') },
+    });
+
+    expect(checkSettingsWiring(root, ctx).findings).toEqual([
+      {
+        level: 'WARN',
+        msg: '.claude/scripts/hook-wiring.json is missing, so the hook-dispatch.mjs entries in .claude/settings.json run no hooks — run: npx houserules update',
+      },
+    ]);
+  });
+
+  it('warns when the wiring file is not JSON', () => {
+    const root = useRepo('pnpm-single');
+    writeWiring(root, '{ broken');
+    const ctx = installedCtx({
+      modules: [],
+      claude: { settings: dispatchedSettings('PreToolUse') },
+    });
+
+    expect(checkSettingsWiring(root, ctx).findings).toEqual([
+      expect.objectContaining({
+        level: 'WARN',
+        msg: expect.stringMatching(
+          /^\.claude\/scripts\/hook-wiring\.json unparseable \(/,
+        ),
+      }),
+    ]);
+  });
+
+  it('warns when the wiring file wires an event settings.json has no dispatcher entry for', () => {
+    const root = useRepo('pnpm-single');
+    writeWiring(root, CORE_WIRING);
+    const ctx = installedCtx({
+      modules: [],
+      claude: { settings: dispatchedSettings('PreToolUse') },
+    });
+
+    expect(checkSettingsWiring(root, ctx).findings).toEqual([
+      {
+        level: 'WARN',
+        msg: '.claude/scripts/hook-wiring.json wires UserPromptSubmit hooks but .claude/settings.json has no hook-dispatch.mjs entry for UserPromptSubmit, so they never run — run: npx houserules update',
+      },
+    ]);
+  });
+
+  it('warns when settings.local.json wires a script the dispatcher already runs', () => {
+    const root = useRepo('pnpm-single');
+    writeWiring(root, CORE_WIRING);
+    writeSettingsLocal(root, wiring('node .claude/scripts/guard-bash.mjs'));
+    const ctx = installedCtx({
+      modules: ['core'],
+      claude: {
+        settingsLocalExists: true,
+        settings: dispatchedSettings('PreToolUse', 'UserPromptSubmit'),
+      },
+    });
+
+    expect(checkSettingsWiring(root, ctx).findings).toEqual([
+      {
+        level: 'WARN',
+        msg: 'settings.local.json wires a houserules hook script with a command that differs from the managed one, so it runs beside it and drifts from updates',
+      },
+    ]);
   });
 });
 

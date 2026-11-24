@@ -6,7 +6,13 @@ import { isGuardedHookCommand } from '@houserules/api';
 import type { CheckResult, Finding, Settings } from '@houserules/api';
 import { isKitStockCommand } from '@houserules/api/internal';
 
-import { allHookCommands } from './settings-wiring.js';
+import { HOOK_WIRING_PATH } from '@houserules/api/internal';
+
+import {
+  allHookCommands,
+  readHookWiring,
+  wiredScripts,
+} from './settings-wiring.js';
 
 const KIT_SCRIPT_RE = /(\.claude\/scripts\/[^\s'"]+\.mjs)/;
 const KIT_SCRIPT_BASENAME_RE = /([\w-]+\.mjs)/;
@@ -63,6 +69,16 @@ function findMissingScriptFindings(
     }
   }
   return findings;
+}
+
+/** A script the dispatcher's wiring names that is absent, so that hook never runs. */
+function findMissingWiredScriptFindings(root: string): Finding[] {
+  return [...wiredScripts(readHookWiring(root))]
+    .filter((script) => !existsSync(join(root, '.claude', 'scripts', script)))
+    .map((script): Finding => ({
+      level: 'WARN',
+      msg: `${HOOK_WIRING_PATH} wires missing script ".claude/scripts/${script}" — run: npx houserules update`,
+    }));
 }
 
 function findExitOneFallbackFindings(settings: Settings): Finding[] {
@@ -139,6 +155,7 @@ export function checkInstallHygiene(root: string, ctx: Ctx): CheckResult {
   }
 
   findings.push(...findMissingScriptFindings(root, commands));
+  findings.push(...findMissingWiredScriptFindings(root));
   if (ctx.claude.settingsExists && ctx.claude.settings)
     findings.push(...findExitOneFallbackFindings(ctx.claude.settings));
 

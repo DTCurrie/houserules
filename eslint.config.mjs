@@ -10,6 +10,10 @@ const baseConfig = ts.config(
       '**/payload-dist/',
       '**/coverage/',
       '**/.wireit/',
+      // A gitignored checkout of an older commit, built and deleted around one eval run.
+      'scripts/eval/fixtures/plan-stop-rule/repo/',
+      // An eval fixture's stub repo. Its stubs keep unused parameters on purpose.
+      'scripts/eval/fixtures/keepalive-once/repo/',
     ],
   },
   js.configs.recommended,
@@ -136,6 +140,9 @@ export const changedFilesConfig = ts.config(...baseConfig, {
     'packages/*/payload/**/__tests__/**/*.ts',
     'packages/*/*.ts',
     '*.ts',
+    'scripts/**/*.mjs',
+    'packages/*/scripts/**/*.mjs',
+    'packages/*/payload/**/*.mjs',
   ],
   rules: {
     'max-lines-per-function': 'warn',

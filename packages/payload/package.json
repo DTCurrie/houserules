@@ -27,6 +27,7 @@
       "command": "tsc -p tsconfig.payload.json && publint",
       "files": [
         "payload/**",
+        "package.json",
         "!payload/**/__tests__/**",
         "tsconfig.payload.json"
       ],
@@ -43,7 +44,8 @@
         "payload/**/*.mts",
         "payload/**/__tests__/**/*.ts",
         "tsconfig.json",
-        "tsconfig.payload.json"
+        "tsconfig.payload.json",
+        "package.json"
       ],
       "output": []
     },
@@ -57,7 +59,9 @@
         "vitest.config.ts",
         "../*/payload/rules/**/*.md",
         "../*/payload/skills/**/*.md",
-        "../*/payload/agents/**/*.md"
+        "../*/payload/agents/**/*.md",
+        "package.json",
+        "tsconfig.json"
       ],
       "output": []
     }

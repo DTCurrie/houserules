@@ -257,3 +257,27 @@ describe('houserules report with flags that do not apply to an import', () => {
     expect(r.stderr).not.toMatch(/^ {4}at /m);
   });
 });
+
+describe('update with a plugin whose peer range excludes the running CLI', () => {
+  it('prints one line naming the plugin and the range, with no stack frame', () => {
+    const root = useInstalledRepo('npm-single');
+    const configPath = join(root, '.claude/houserules.config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+      plugins?: unknown[];
+    };
+    const pluginDir = join(
+      import.meta.dirname,
+      '../../test/plugin-fixture/peer-previous-minor',
+    );
+    config.plugins = [{ name: pluginDir, alias: 'stale' }];
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    const r = runCli(['update', root]);
+
+    expect(r.status).not.toBe(0);
+    expect(r.stderr.trimEnd().split('\n')).toHaveLength(1);
+    expect(r.stderr).toContain(`plugin "${pluginDir}"`);
+    expect(r.stderr).toContain('requires @houserules/cli "^0.7.0"');
+    expect(r.stderr).not.toContain('    at ');
+  });
+});

@@ -1,7 +1,7 @@
 import type { KnipConfig } from 'knip';
 
 const config: KnipConfig = {
-  // `includeEntryExports` is deliberately not set. `verify:knip:audit` passes the flag by hand
+  // `includeEntryExports` is deliberately not set. `audit:knip` passes the flag by hand
   // instead, because every `entry` below exists for a reason knip cannot see.
   workspaces: {
     '.': {
@@ -96,6 +96,9 @@ const config: KnipConfig = {
     },
     'packages/plugin-changesets': {
       entry: ['src/index.ts', 'payload/scripts/**/*.mts'],
+      // The matcher a changesets 3.x host carries, linked into a fixture by
+      // changeset-owner.test.ts through `createRequire`. knip cannot see that load.
+      ignoreDependencies: ['micromatch'],
     },
     'packages/plugin-decisions': {
       entry: ['src/index.ts', 'payload/scripts/**/*.mts'],

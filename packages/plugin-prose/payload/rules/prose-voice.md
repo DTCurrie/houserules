@@ -61,8 +61,8 @@ editing on the user's behalf in their voice.
 
 `prose-lint.mjs` enforces the semicolon clause, counts em dashes per paragraph, and flags
 British spellings from a fixed word list, each with its American form. Run it over a file
-before you call it done. Over a JavaScript or TypeScript file it reads only the comments,
-since the code is not prose. It never rules on whether a surviving em dash earns its keep, on
+before you call it done. Over a JavaScript, TypeScript, or CSS file it reads only the
+comments, since the code is not prose. It never rules on whether a surviving em dash earns its keep, on
 filler, asides, or concreteness, or on a spelling the list does not name. Those stay a
 human read.
 
@@ -73,7 +73,8 @@ the shaping. Classify the failure you are writing against before choosing a form
 
 - **The reader knows the rule and skips it under pressure.** Write a prohibition, and pair
   it with the observed excuses and their answers. Soft guidance reads as optional exactly
-  when it is needed most.
+  when it is needed most. A prohibition written against skipping a step also names when the
+  step is done, so the rule cannot ratchet toward repeating it.
 - **The reader complies, but the output has the wrong shape.** Write a recipe that states
   what the output IS, its parts in order. A prohibition list invites negotiating with each
   item, and the negotiation usually wins.

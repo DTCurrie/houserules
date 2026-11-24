@@ -6,11 +6,7 @@ import type { ConfigTarget } from '@houserules/payload/config';
 import { regenCommandsFor } from '../regen-on-edit.mjs';
 import { useInstalledRepo } from '#test/repo';
 import { runScript } from '#test/run';
-import {
-  editHouseConfig,
-  hookCommandsFor,
-  settingsOf,
-} from '#test/installed-tree';
+import { editHouseConfig, dispatchedScriptsFor } from '#test/installed-tree';
 import { readToolInput } from '#test/hook-input';
 
 describe('regenCommandsFor', () => {
@@ -71,14 +67,10 @@ describe('regen-on-edit.mjs', () => {
 
   it('installs the regen script and wires it into a PostToolUse hook', () => {
     expect(existsSync(join(root, REGEN)), `${REGEN} installed`).toBe(true);
-    const settings = settingsOf(root);
-    const wired = hookCommandsFor(settings, 'PostToolUse').some((c) =>
-      c.includes('regen-on-edit.mjs'),
-    );
     expect(
-      wired,
-      'a PostToolUse hook command references regen-on-edit.mjs',
-    ).toBe(true);
+      dispatchedScriptsFor(root, 'PostToolUse'),
+      'the PostToolUse dispatch wiring lists regen-on-edit.mjs',
+    ).toContain('regen-on-edit.mjs');
   });
 
   it('runs the target generator when an edited file matches its sourceGlob', () => {

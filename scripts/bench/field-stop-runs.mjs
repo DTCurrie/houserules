@@ -4,7 +4,7 @@
  * `git` commands.
  *
  * Usage, in both forms:
- *   node scripts/bench/field-stop-runs.mjs <repo>... [--projects-dir <dir>]
+ *   node scripts/bench/field-stop-runs.mjs <repo>... [--projects-dir <dir>] [--home <dir>]
  *   node --input-type=module - <repo>... < scripts/bench/field-stop-runs.mjs
  *
  * One self-contained file, Node built-ins only, so it pipes over ssh. Each `<repo>` is a
@@ -33,6 +33,11 @@ const MAX_HISTORY = 300;
 const GIT_MAX_BUFFER = 512 * 1024 * 1024;
 const NEWLINE_BYTE = 0x0a;
 const PROJECTS_DIR_FLAG = '--projects-dir=';
+const HOME_FLAG = '--home';
+const HOME_FLAG_EQUALS = '--home=';
+const USER_PLACEHOLDER = '<user>';
+const USER_PATH = /^\/(Users|home)\/[^/]+/;
+const USER_SLUG = /^-(Users|home)-[^-]+/;
 const ERROR_PREFIX_OPEN = '[';
 const ERROR_PREFIX_CLOSE = ']: ';
 
@@ -57,19 +62,41 @@ const CONFIG_PATH = '.claude/houserules.config.json';
 function parseArgs(argv) {
   const names = [];
   let projectsDir;
+  let home = homedir();
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '-') continue;
-    if (arg === '--projects-dir') projectsDir = argv[++i];
+    if (arg === HOME_FLAG) home = argv[++i];
+    else if (arg.startsWith(HOME_FLAG_EQUALS))
+      home = arg.slice(HOME_FLAG_EQUALS.length);
+    else if (arg === '--projects-dir') projectsDir = argv[++i];
     else if (arg.startsWith(PROJECTS_DIR_FLAG))
       projectsDir = arg.slice(PROJECTS_DIR_FLAG.length);
     else names.push(arg);
   }
   projectsDir ??= join(
-    process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'),
+    process.env.CLAUDE_CONFIG_DIR ?? join(home, '.claude'),
     'projects',
   );
-  return { names, projectsDir };
+  return { names, projectsDir, home };
+}
+
+/**
+ * Writes `~` for the home directory and a placeholder for the user segment of a path or of a
+ * Claude Code project directory name, so no output line names the machine's user.
+ */
+function redactor(home) {
+  const slugHome = slugify(home);
+  const slugParent = slugify(dirname(home));
+  return (text) => {
+    if (text === home || text.startsWith(home + sep))
+      return `~${text.slice(home.length)}`;
+    if (text === slugHome || text.startsWith(`${slugHome}-`))
+      return `${slugParent}-${USER_PLACEHOLDER}${text.slice(slugHome.length)}`;
+    return text
+      .replace(USER_PATH, `/$1/${USER_PLACEHOLDER}`)
+      .replace(USER_SLUG, `-$1-${USER_PLACEHOLDER}`);
+  };
 }
 
 const slugify = (text) => text.replace(/[^a-zA-Z0-9]/g, '-');
@@ -583,12 +610,12 @@ function groupByRoot(names, projectsDir) {
   return byRoot;
 }
 
-function repoLine(root, facts, sessions) {
+function repoLine(root, facts, sessions, redact) {
   return {
     kind: 'repo',
     schema: SCHEMA,
     repo: basename(root),
-    root,
+    root: redact(root),
     remote: facts.remote,
     sessions,
     trackedFiles: facts.trackedFiles,
@@ -620,19 +647,19 @@ function repoLine(root, facts, sessions) {
   };
 }
 
-function runLine(root, facts, run, overlappingRuns) {
+function runLine(root, facts, run, overlappingRuns, redact) {
   return {
     kind: 'run',
     schema: SCHEMA,
     repo: basename(root),
     remote: facts.remote,
-    file: run.file,
+    file: redact(run.file),
     ts: run.ts,
     durationMs: run.durationMs,
     bucket: bucketOf(run.durationMs),
     subagent: run.subagent,
     claudeVersion: run.claudeVersion,
-    editedPaths: run.editedPaths,
+    editedPaths: run.editedPaths.map(redact),
     targets: targetsOf(facts, run.editedPaths),
     transcriptBytes: run.transcriptBytes,
     bashChurn: run.bashChurn,
@@ -660,7 +687,8 @@ function metaLine(names, { transcripts, summaryRecords, oldestMs, newestMs }) {
 }
 
 function main() {
-  const { names, projectsDir } = parseArgs(process.argv.slice(2));
+  const { names, projectsDir, home } = parseArgs(process.argv.slice(2));
+  const redact = redactor(home);
   const byRoot = groupByRoot(names, projectsDir);
 
   const repoLines = [];
@@ -687,9 +715,9 @@ function main() {
       newestMs = Math.max(newestMs, transcript.newestMs);
     }
     const overlaps = overlapCounts(runs);
-    repoLines.push(repoLine(root, facts, byRoot.get(root).length));
+    repoLines.push(repoLine(root, facts, byRoot.get(root).length, redact));
     runs.forEach((run, i) => {
-      runLines.push(runLine(root, facts, run, overlaps[i]));
+      runLines.push(runLine(root, facts, run, overlaps[i], redact));
     });
   }
   runLines.sort((a, b) => (a.ts ?? '').localeCompare(b.ts ?? ''));

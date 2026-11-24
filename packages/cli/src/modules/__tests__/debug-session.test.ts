@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { useInstalledRepo } from '#test/repo';
 import { runCli, runScript } from '#test/run';
-import { hookCommandsFor, manifestOf, settingsOf } from '#test/installed-tree';
+import { dispatchedScriptsFor, manifestOf } from '#test/installed-tree';
 
 describe('debug-session', () => {
   describe('when enabled', () => {
@@ -37,11 +37,10 @@ describe('debug-session', () => {
     });
 
     it('wires the backstop hook into SessionStart', () => {
-      const cmds = hookCommandsFor(settingsOf(root), 'SessionStart');
       expect(
-        cmds.some((c) => c.includes('debug-session-check.mjs')),
+        dispatchedScriptsFor(root, 'SessionStart'),
         'debug-session-check.mjs wired into SessionStart',
-      ).toBe(true);
+      ).toContain('debug-session-check.mjs');
     });
 
     it('passes doctor validation', () => {

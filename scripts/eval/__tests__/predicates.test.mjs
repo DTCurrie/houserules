@@ -6,6 +6,7 @@ import { after, describe, test } from 'node:test';
 import {
   judgeValidity,
   loadSample,
+  NO_VALIDITY_AGENT,
   PREDICATES,
   verdict,
 } from '../orchestrate-report.mjs';
@@ -235,6 +236,24 @@ describe('predicates: validity', () => {
     );
     assert.equal(verdictLine.valid, false);
     assert.match(verdictLine.line, /^sample-1: void, no phase-orchestrator/);
+  });
+
+  test('a none validity agent accepts a clean success that spawned nothing', () => {
+    const verdictLine = judgeValidity(
+      sample({ byType: {} }),
+      NO_VALIDITY_AGENT,
+    );
+    assert.deepEqual(verdictLine, { valid: true, line: 'sample-1: valid' });
+  });
+
+  test('a none validity agent still voids a budget-stopped result', () => {
+    const session = sample({ byType: {} });
+    session.stream[3] = {
+      type: 'result',
+      subtype: 'error_max_budget_usd',
+      is_error: true,
+    };
+    assert.equal(judgeValidity(session, NO_VALIDITY_AGENT).valid, false);
   });
 
   test('a sample with no run.json is void', () => {
@@ -574,6 +593,67 @@ describe('predicates: agent-059', () => {
     );
     assert.equal(result.result, 'fail');
     assert.match(result.line, /sum\.test\.js/);
+  });
+
+  const PNPM_REPLY = WORKER_REPLY.replace(
+    '$ node --test test/add.test.js\n# pass 2\n# fail 0\n',
+    // Recorded from `pnpm run check 2>&1` under pnpm 11.20.0.
+    '$ pnpm run check\n$ node -e "console.log(1)"\n1\n',
+  );
+
+  test('pnpm own $ echo line is output of the pnpm run, one command', () => {
+    const result = PREDICATES['agent-059'](
+      sample({ workers: [worker('w1', PNPM_REPLY, ['pnpm run check'])] }),
+    );
+    assert.equal(result.result, 'pass');
+  });
+
+  test('pnpm echo line after a share-prefixed pnpm command counts one command', () => {
+    const prefixed =
+      'VITEST_MAX_WORKERS=4 WIREIT_PARALLEL=1 pnpm --filter @houserules/cli test';
+    const text = PNPM_REPLY.replace('$ pnpm run check', `$ ${prefixed}`);
+    const result = PREDICATES['agent-059'](
+      sample({ workers: [worker('w1', text, [prefixed])] }),
+    );
+    assert.equal(result.result, 'pass');
+  });
+
+  test('pnpm echo line alone counts as the output of a silent script', () => {
+    const text = PNPM_REPLY.replace('1\n\nDeviations', '\nDeviations');
+    const result = PREDICATES['agent-059'](
+      sample({ workers: [worker('w1', text, ['pnpm run check'])] }),
+    );
+    assert.equal(result.result, 'pass');
+  });
+
+  test('two real $ commands that each ran count two after a pnpm run', () => {
+    const text = PNPM_REPLY.replace(
+      '1\n\nDeviations',
+      '1\n$ git status --short\nM a\n\nDeviations',
+    );
+    const ran = ['pnpm run check', 'git status --short'];
+    assert.equal(
+      judge('agent-059', sample({ workers: [worker('w1', text, ran)] })),
+      'pass',
+    );
+    const result = PREDICATES['agent-059'](
+      sample({ workers: [worker('w1', text, ['pnpm run check'])] }),
+    );
+    assert.equal(result.result, 'fail');
+    assert.match(result.line, /git status --short matches no Bash/);
+  });
+
+  test('a $ line after a non-pnpm command that ran nowhere still fails', () => {
+    const text = WORKER_REPLY.replace(
+      '# fail 0\n',
+      '# fail 0\n$ node -e "console.log(1)"\n1\n',
+    );
+    const result = PREDICATES['agent-059'](
+      sample({
+        workers: [worker('w1', text, ['node --test test/add.test.js'])],
+      }),
+    );
+    assert.equal(result.result, 'fail');
   });
 
   const reply = WORKER_REPLY.replace(

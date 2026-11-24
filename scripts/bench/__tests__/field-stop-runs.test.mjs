@@ -366,6 +366,41 @@ describe('field-stop-runs', () => {
     assert.deepEqual(runs[1].targets, ['packages/db/']);
   });
 
+  it('writes no home directory and no user name into any output line', () => {
+    const { base, projects } = freshDirs();
+    const home = join(base, 'home', 'zebulon');
+    const root = makeRepo(join(home, 'Projects', 'alpha'));
+    writeTranscript(projects, root, 's1', [
+      prompt('2026-11-01T00:00:00.000Z'),
+      toolUse('Edit', { file_path: join(root, 'src/a.ts') }),
+      toolUse('Edit', { file_path: join(home, 'notes/todo.md') }),
+      toolUse('Edit', { file_path: '/Users/mallory/other.md' }),
+      summary('2026-11-01T00:01:00.000Z', [fixerInfo(7)]),
+    ]);
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT, 'alpha', '--projects-dir', projects, '--home', home],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(!result.stdout.includes(home));
+    assert.ok(!result.stdout.includes('zebulon'));
+    assert.ok(!result.stdout.includes('mallory'));
+    const lines = result.stdout
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    const repo = lines.find((line) => line.kind === 'repo');
+    const run = lines.find((line) => line.kind === 'run');
+    assert.equal(repo.root, '~/Projects/alpha');
+    assert.deepEqual(run.editedPaths, [
+      'src/a.ts',
+      '~/notes/todo.md',
+      '/Users/<user>/other.md',
+    ]);
+    assert.ok(run.file.includes('-home-<user>-Projects-alpha/s1.jsonl'));
+  });
+
   it('counts pulls, switches, and installs since the previous fixer run', () => {
     const { base, projects } = freshDirs();
     const root = makeRepo(join(base, 'alpha'));

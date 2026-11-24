@@ -11,6 +11,13 @@
  * forms (`-- <path>`, `.`, `<ref> <path>`) cannot be told from a branch switch without a
  * shell parser, and `git switch` covers the switch.
  *
+ * The git and gh rules match per simple command, after the command is tokenized the way
+ * the shell reads it. A quoted argument, a heredoc body, or a comment is data and never
+ * matches. A command inside `$(...)`, backticks, `<(...)`, `bash -c`, `sh -c`, or `eval`
+ * is matched as a command. A command with an unclosed quote, substitution, or heredoc is
+ * refused whenever the plain match would refuse it, or a reading that runs each open
+ * construct to the end of the command finds a guarded call.
+ *
  * Throwaway exemption: a commit or a discard is allowed in a throwaway fixture repo, and in
  * nothing else. The command must name its target as one absolute `-C <path>` on every git
  * call, or as one leading `cd <absolute path> &&`. That target's work tree, git dir, and
@@ -56,7 +63,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve, sep } from 'node:path';
+import { basename, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { GUARD_DEFAULTS, loadConfigSafe } from '@houserules/payload/config';
@@ -81,7 +88,7 @@ export interface ThrowawayContext {
 }
 
 // Matches only in COMMAND position, so the guard never fires on the same words inside
-// another command's argument. Not a shell parser: nested forms are not caught.
+// another command's argument. The git rules run per tokenized segment, see commandSegmentsOf.
 const CMD_START = String.raw`(?:^|[\n;&|])\s*`;
 // Tolerate flag/option arguments before a git subcommand: `git -C /path commit`,
 // `git -c k=v stash`, `git --no-pager push`.
@@ -94,21 +101,38 @@ const GIT_DISCARD = String.raw`(?:checkout\b|restore\b|clean\b|reset\b[^\n;&|]*\
 // flag or a separator after the word counts. `list` and `show` read only and pass.
 const STASH_MUTATING = String.raw`stash(?=\s*(?:$|[\n;&|])|\s+-|\s+(?:push|save|pop|apply|drop|clear|branch|create|store)\b)`;
 
+/**
+ * One guard rule. A `segment` rule is tested against each tokenized command segment, so a
+ * quoted mention never matches and a nested command still does. A `command` rule, the
+ * user's custom regex, is tested against the raw command string.
+ */
+interface DenyRule {
+  re: RegExp;
+  msg: string;
+  exemptable: boolean;
+  scope: 'segment' | 'command';
+}
+
 export function gitDenyRules(guard: {
   gitCommit: boolean;
   gitPush: boolean;
   gitStash: boolean;
   gitDiscard: boolean;
   prCreate: boolean;
-  custom?: { pattern: string; message?: string }[];
-}): { re: RegExp; msg: string; exemptable: boolean }[] {
-  const gitRule = (sub: string, msg: string, exemptable: boolean) => ({
+  custom?: { pattern: string; message: string }[];
+}): DenyRule[] {
+  const gitRule = (
+    sub: string,
+    msg: string,
+    exemptable: boolean,
+  ): DenyRule => ({
     re: new RegExp(`${CMD_START}git\\s+${GIT_FLAGS}${sub}\\b`),
     msg,
     exemptable,
+    scope: 'segment',
   });
 
-  const deny: { re: RegExp; msg: string; exemptable: boolean }[] = [];
+  const deny: DenyRule[] = [];
   if (guard.gitCommit) {
     deny.push(
       gitRule(
@@ -135,6 +159,7 @@ export function gitDenyRules(guard: {
       re: new RegExp(`${CMD_START}git\\s+${GIT_FLAGS}${GIT_DISCARD}`),
       msg: 'git checkout/restore/reset --hard/clean/switch -f discard uncommitted work, and a file reverted to HEAD loses every uncommitted edit in it, not only yours. Undo your own edit by applying its inverse with Edit. Switch branches with `git switch`. List untracked files with `git status --short`.',
       exemptable: true,
+      scope: 'segment',
     });
   }
   if (guard.prCreate) {
@@ -142,16 +167,16 @@ export function gitDenyRules(guard: {
       re: new RegExp(`${CMD_START}gh\\s+${GIT_FLAGS}(?:pr|issue)\\s+create\\b`),
       msg: "Opening PRs/issues is the user's call. Describe what's ready and stop.",
       exemptable: false,
+      scope: 'segment',
     });
   }
   for (const rule of guard.custom ?? []) {
     try {
       deny.push({
         re: new RegExp(rule.pattern),
-        msg:
-          rule.message ??
-          `Blocked by houserules.config.json guard rule: ${rule.pattern}`,
+        msg: rule.message,
         exemptable: false,
+        scope: 'command',
       });
     } catch {
       // Invalid user regex: skip the rule rather than break every Bash call.
@@ -165,23 +190,496 @@ export function gitDenyRules(guard: {
  * matches.
  *
  * @param throwaway When given, a matched commit or discard rule is skipped for a command
- * whose one named target is a throwaway fixture repo. Omitted, every match refuses.
+ * whose one named target is a throwaway fixture repo. Omitted, every match refuses. A match
+ * inside a nested command, or in a command that does not tokenize cleanly, is never skipped.
  */
 export function guardRefusalFor(
   cmd: string,
   throwaway?: ThrowawayContext,
 ): string | null {
   const guard = { ...GUARD_DEFAULTS, ...(loadConfigSafe().guard ?? {}) };
+  const tokenized = tokenizeCommand(cmd);
   let isExempt: boolean | undefined;
   for (const rule of gitDenyRules(guard)) {
-    if (!rule.re.test(cmd)) continue;
-    if (rule.exemptable && throwaway) {
+    const match = ruleMatchOf(rule, cmd, tokenized);
+    if (match === 'none') continue;
+    if (rule.exemptable && throwaway && match === 'top-level') {
       isExempt ??= isThrowawayCommand(cmd, throwaway);
       if (isExempt) continue;
     }
     return `Blocked by houserules guard: ${rule.msg}\n`;
   }
   return null;
+}
+
+/**
+ * Where `rule` matches `cmd`. A command that did not tokenize cleanly is also tested raw,
+ * the plain match the guard used before it tokenized, so a parse failure never allows more.
+ */
+function ruleMatchOf(
+  rule: DenyRule,
+  cmd: string,
+  tokenized: TokenizedCommand,
+): 'none' | 'top-level' | 'nested' | 'unparsed' {
+  if (rule.scope === 'command') return rule.re.test(cmd) ? 'top-level' : 'none';
+  const matched = tokenized.segments.filter((segment) =>
+    rule.re.test(segment.text),
+  );
+  if (!tokenized.isClean && (matched.length > 0 || rule.re.test(cmd))) {
+    return 'unparsed';
+  }
+  if (matched.length === 0) return 'none';
+  return matched.some((segment) => segment.isNested) ? 'nested' : 'top-level';
+}
+
+/** One simple command, its words after quote removal, joined for the segment rules. */
+interface CommandSegment {
+  text: string;
+  /** Whether it runs from a substitution, a heredoc expansion, `sh -c`, or `eval`. */
+  isNested: boolean;
+}
+
+interface TokenizedCommand {
+  segments: CommandSegment[];
+  /** False when a quote, substitution, or heredoc was left open, or nesting ran too deep. */
+  isClean: boolean;
+}
+
+class ShellSyntaxError extends Error {}
+
+// Deeper than any real command, shallow enough that recursion cannot exhaust the stack.
+const MAX_NESTING = 16;
+// Stands in for a substitution's output, so a substituted option value stays one word.
+const SUBSTITUTION_WORD = '$()';
+const SHELL_PROGRAMS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh']);
+const SHELL_COMMAND_FLAG_RE = /^-[A-Za-z]*c[A-Za-z]*$/;
+const COMMAND_PREFIX_WORDS = new Set([
+  '!',
+  '{',
+  '}',
+  'if',
+  'then',
+  'else',
+  'elif',
+  'do',
+  'while',
+  'until',
+  'time',
+]);
+const ASSIGNMENT_RE = /^[A-Za-z_]\w*\+?=/;
+const WORD_BREAK_RE = /[\s;&|]/g;
+const DOUBLE_QUOTE_ESCAPABLE = '$`"\\\n';
+const BACKTICK_ESCAPABLE = '$`\\';
+const HEREDOC_DELIMITER_END_RE = /[\s;&|<>()]/;
+
+/**
+ * Splits `cmd` into its simple commands the way the shell would: quotes and escapes are
+ * removed, a quoted argument or heredoc body stays data, and the commands inside `$(...)`,
+ * backticks, `<(...)`, an unquoted heredoc's expansions, `bash -c`, and `eval` become
+ * segments of their own. Fails closed: a command left open is read again with every open
+ * quote, substitution, and heredoc running to the end, and flagged unclean.
+ */
+function tokenizeCommand(cmd: string): TokenizedCommand {
+  for (const isLenient of [false, true]) {
+    const segments: CommandSegment[] = [];
+    try {
+      new ShellScanner(cmd, 0, segments, 0, isLenient).run(false);
+      return { segments, isClean: !isLenient };
+    } catch {
+      // A strict failure retries leniently. A lenient one falls through to the raw match.
+    }
+  }
+  return { segments: [], isClean: false };
+}
+
+interface PendingHeredoc {
+  delimiter: string;
+  isQuoted: boolean;
+  stripsTabs: boolean;
+}
+
+/** A single pass over shell source, appending each simple command it ends to `out`. */
+class ShellScanner {
+  private readonly source: string;
+  private readonly out: CommandSegment[];
+  private readonly depth: number;
+  private readonly isLenient: boolean;
+  private pos: number;
+  private words: string[] = [];
+  private word = '';
+  private hasWord = false;
+  private parenDepth = 0;
+  private heredocs: PendingHeredoc[] = [];
+
+  constructor(
+    source: string,
+    start: number,
+    out: CommandSegment[],
+    depth: number,
+    isLenient: boolean,
+  ) {
+    if (depth > MAX_NESTING) throw new ShellSyntaxError('nesting too deep');
+    this.source = source;
+    this.pos = start;
+    this.out = out;
+    this.depth = depth;
+    this.isLenient = isLenient;
+  }
+
+  /**
+   * Scans to the end of the source, or to the `)` closing a `$(` when `closesParen`.
+   *
+   * @returns The index just past the last character consumed.
+   */
+  run(closesParen: boolean): number {
+    while (this.pos < this.source.length) {
+      const char = this.source[this.pos] ?? '';
+      if (char === ')' && closesParen && this.parenDepth === 0) {
+        this.endSegment();
+        this.dropHeredocs();
+        return this.pos + 1;
+      }
+      this.step(char);
+    }
+    if (closesParen) this.fail('unclosed $(');
+    this.endSegment();
+    this.dropHeredocs();
+    return this.pos;
+  }
+
+  private step(char: string): void {
+    switch (char) {
+      case '\\':
+        return this.readEscape();
+      case "'":
+        return this.append(this.readSingleQuoted());
+      case '"':
+        this.pos++;
+        return this.readQuotedWord();
+      case '`':
+        return this.readBacktick();
+      case '$':
+        return this.readDollar();
+      case '\n':
+        this.endSegment();
+        this.pos++;
+        return this.readHeredocBodies();
+      case ';':
+      case '|':
+        return this.breakSegment();
+      case '(':
+        this.parenDepth++;
+        return this.breakSegment();
+      case ')':
+        this.parenDepth = Math.max(0, this.parenDepth - 1);
+        return this.breakSegment();
+      case ' ':
+      case '\t':
+        this.endWord();
+        this.pos++;
+        return;
+    }
+    if (char === '#' && !this.hasWord) return this.skipComment();
+    if (char === '&' && !this.isRedirectAmpersand()) return this.breakSegment();
+    if ((char === '<' || char === '>') && this.readRedirection(char)) return;
+    this.append(char);
+    this.pos++;
+  }
+
+  private fail(reason: string): void {
+    if (!this.isLenient) throw new ShellSyntaxError(reason);
+  }
+
+  private append(text: string): void {
+    this.word += text;
+    this.hasWord = true;
+  }
+
+  private endWord(): void {
+    if (this.hasWord) this.words.push(this.word);
+    this.word = '';
+    this.hasWord = false;
+  }
+
+  private breakSegment(): void {
+    this.endSegment();
+    this.pos++;
+  }
+
+  private endSegment(): void {
+    this.endWord();
+    const words = commandWordsOf(this.words);
+    this.words = [];
+    if (words.length === 0) return;
+    this.out.push({
+      text: words.map(segmentWord).join(' '),
+      isNested: this.depth > 0,
+    });
+    this.scanNestedShell(words);
+  }
+
+  /** Scans the script a `bash -c`, `sh -c`, or `eval` runs as commands of its own. */
+  private scanNestedShell(words: string[]): void {
+    const [program = '', ...args] = words;
+    if (program === 'eval') return this.scanNested(args.join(' '));
+    if (!SHELL_PROGRAMS.has(basename(program))) return;
+    const flagIndex = args.findIndex((arg) => SHELL_COMMAND_FLAG_RE.test(arg));
+    if (flagIndex === -1) return;
+    const script = args
+      .slice(flagIndex + 1)
+      .find((arg) => !arg.startsWith('-'));
+    if (script !== undefined) this.scanNested(script);
+  }
+
+  private scanNested(source: string): void {
+    new ShellScanner(source, 0, this.out, this.depth + 1, this.isLenient).run(
+      false,
+    );
+  }
+
+  private readEscape(): void {
+    const next = this.source[this.pos + 1];
+    if (next === undefined) {
+      this.append('\\');
+      this.pos++;
+      return;
+    }
+    this.pos += 2;
+    if (next === '\n') return;
+    this.append(next);
+  }
+
+  private readSingleQuoted(): string {
+    const end = this.source.indexOf("'", this.pos + 1);
+    if (end === -1) this.fail("unclosed '");
+    const stop = end === -1 ? this.source.length : end;
+    const text = this.source.slice(this.pos + 1, stop);
+    this.pos = stop + 1;
+    return text;
+  }
+
+  /** Reads one double-quoted word, up to its closing `"`. Substitutions inside still run. */
+  private readQuotedWord(): void {
+    this.hasWord = true;
+    while (this.pos < this.source.length) {
+      if (this.source[this.pos] === '"') {
+        this.pos++;
+        return;
+      }
+      this.readQuotedCharacter();
+    }
+    this.fail('unclosed "');
+  }
+
+  /** Reads an unquoted heredoc body to its end, as double-quoted text. Substitutions still run. */
+  private readUnquotedHeredocBody(): void {
+    this.hasWord = true;
+    while (this.pos < this.source.length) this.readQuotedCharacter();
+  }
+
+  private readQuotedCharacter(): void {
+    const char = this.source[this.pos] ?? '';
+    const next = this.source[this.pos + 1] ?? '';
+    if (char === '\\' && next !== '' && DOUBLE_QUOTE_ESCAPABLE.includes(next)) {
+      if (next !== '\n') this.append(next);
+      this.pos += 2;
+    } else if (char === '`') {
+      this.readBacktick();
+    } else if (char === '$' && next === '(') {
+      this.readSubstitution(this.pos + 2);
+    } else {
+      this.append(char);
+      this.pos++;
+    }
+  }
+
+  private readDollar(): void {
+    const next = this.source[this.pos + 1];
+    if (next === '(') return this.readSubstitution(this.pos + 2);
+    if (next === '"') {
+      this.pos += 2;
+      return this.readQuotedWord();
+    }
+    if (next === "'") {
+      this.pos++;
+      return this.append(this.readAnsiCQuoted());
+    }
+    this.append('$');
+    this.pos++;
+  }
+
+  private readAnsiCQuoted(): string {
+    let text = '';
+    let index = this.pos + 1;
+    while (index < this.source.length && this.source[index] !== "'") {
+      if (this.source[index] === '\\') index++;
+      text += this.source[index] ?? '';
+      index++;
+    }
+    if (index >= this.source.length) this.fail("unclosed $'");
+    this.pos = index + 1;
+    return text;
+  }
+
+  private readSubstitution(start: number): void {
+    const inner = new ShellScanner(
+      this.source,
+      start,
+      this.out,
+      this.depth + 1,
+      this.isLenient,
+    );
+    this.pos = inner.run(true);
+    this.append(SUBSTITUTION_WORD);
+  }
+
+  private readBacktick(): void {
+    let body = '';
+    let index = this.pos + 1;
+    while (index < this.source.length && this.source[index] !== '`') {
+      const char = this.source[index] ?? '';
+      const next = this.source[index + 1] ?? '';
+      if (char === '\\' && next !== '' && BACKTICK_ESCAPABLE.includes(next)) {
+        body += next;
+        index += 2;
+      } else {
+        body += char;
+        index++;
+      }
+    }
+    if (index >= this.source.length) this.fail('unclosed `');
+    this.pos = index + 1;
+    this.scanNested(body);
+    this.append(SUBSTITUTION_WORD);
+  }
+
+  private skipComment(): void {
+    const end = this.source.indexOf('\n', this.pos);
+    this.pos = end === -1 ? this.source.length : end;
+  }
+
+  /** Whether the `&` at the cursor belongs to a redirection such as `2>&1` or `&>file`. */
+  private isRedirectAmpersand(): boolean {
+    const previous = this.source[this.pos - 1];
+    const next = this.source[this.pos + 1];
+    return previous === '>' || previous === '<' || next === '>';
+  }
+
+  /** Reads a process substitution, here-string, or heredoc operator. False for any other. */
+  private readRedirection(char: string): boolean {
+    const next = this.source[this.pos + 1];
+    if (next === '(' && !this.hasWord) {
+      this.readSubstitution(this.pos + 2);
+      return true;
+    }
+    if (char !== '<' || next !== '<') return false;
+    if (this.source[this.pos + 2] === '<') {
+      this.append('<<<');
+      this.pos += 3;
+      return true;
+    }
+    this.endWord();
+    this.pos += 2;
+    this.readHeredocOperator();
+    return true;
+  }
+
+  private readHeredocOperator(): void {
+    const stripsTabs = this.source[this.pos] === '-';
+    if (stripsTabs) this.pos++;
+    while (this.source[this.pos] === ' ' || this.source[this.pos] === '\t') {
+      this.pos++;
+    }
+    let delimiter = '';
+    let isQuoted = false;
+    while (this.pos < this.source.length) {
+      const char = this.source[this.pos] ?? '';
+      if (HEREDOC_DELIMITER_END_RE.test(char)) break;
+      if (char === "'" || char === '"') {
+        isQuoted = true;
+        const end = this.source.indexOf(char, this.pos + 1);
+        if (end === -1) this.fail('unclosed heredoc delimiter');
+        const stop = end === -1 ? this.source.length : end;
+        delimiter += this.source.slice(this.pos + 1, stop);
+        this.pos = stop + 1;
+      } else if (char === '\\') {
+        isQuoted = true;
+        delimiter += this.source[this.pos + 1] ?? '';
+        this.pos += 2;
+      } else {
+        delimiter += char;
+        this.pos++;
+      }
+    }
+    if (delimiter === '') return this.fail('empty heredoc delimiter');
+    this.heredocs.push({ delimiter, isQuoted, stripsTabs });
+  }
+
+  /**
+   * Consumes the bodies of the heredocs opened on the line just ended. A quoted delimiter's
+   * body is data. An unquoted one's substitutions still run.
+   */
+  private readHeredocBodies(): void {
+    const pending = this.heredocs;
+    this.heredocs = [];
+    for (const heredoc of pending) {
+      const bodyStart = this.pos;
+      const bodyEnd = this.findHeredocEnd(heredoc);
+      if (bodyEnd === -1) {
+        this.fail('unterminated heredoc');
+        this.pos = bodyStart;
+        return;
+      }
+      if (heredoc.isQuoted) continue;
+      new ShellScanner(
+        this.source.slice(bodyStart, bodyEnd),
+        0,
+        this.out,
+        this.depth,
+        this.isLenient,
+      ).readUnquotedHeredocBody();
+    }
+  }
+
+  /**
+   * Moves the cursor past the line closing `heredoc`.
+   *
+   * @returns The index where the body ends, or -1 when no line closes it.
+   */
+  private findHeredocEnd(heredoc: PendingHeredoc): number {
+    while (this.pos < this.source.length) {
+      const newline = this.source.indexOf('\n', this.pos);
+      const lineEnd = newline === -1 ? this.source.length : newline;
+      const line = this.source.slice(this.pos, lineEnd);
+      const lineStart = this.pos;
+      this.pos = lineEnd + 1;
+      const candidate = heredoc.stripsTabs ? line.replace(/^\t+/, '') : line;
+      if (candidate === heredoc.delimiter) {
+        this.pos = Math.min(this.pos, this.source.length);
+        return lineStart;
+      }
+    }
+    return -1;
+  }
+
+  /** A heredoc opened on a line that never ended has no body. Strict mode refuses it. */
+  private dropHeredocs(): void {
+    if (this.heredocs.length > 0) this.fail('heredoc with no body');
+    this.heredocs = [];
+  }
+}
+
+/** `words` without the keywords and variable assignments that precede a command name. */
+function commandWordsOf(words: string[]): string[] {
+  const start = words.findIndex(
+    (word) => !COMMAND_PREFIX_WORDS.has(word) && !ASSIGNMENT_RE.test(word),
+  );
+  return start === -1 ? [] : words.slice(start);
+}
+
+/** One word as a single space-free token, so the segment rules see its boundaries. */
+function segmentWord(word: string): string {
+  return word === '' ? "''" : word.replace(WORD_BREAK_RE, '_');
 }
 
 // How many local-path remotes the resolver follows from the target before it refuses.

@@ -6,14 +6,11 @@ import { dirname, join, resolve } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { findBuild } from '../build.mjs';
+import { ensureNewestBuild } from '../build.mjs';
 import { cases } from '../suites/cli.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const BUILD = findBuild('HEAD', { repoDir: REPO });
-const SKIP = BUILD
-  ? false
-  : 'no bench build of HEAD. Run node scripts/bench/run.mjs --suite cli --out <file> to build it.';
+const BUILD = ensureNewestBuild('HEAD', { repoDir: REPO });
 
 const RUNS_PER_CASE = 2;
 const DEFAULT_CASE_TIMEOUT_MS = 60000;
@@ -38,7 +35,7 @@ function runOnce(benchCase) {
   return { ...result, wallMs };
 }
 
-describe('cli suite', { skip: SKIP }, () => {
+describe('cli suite', () => {
   let workDir;
   let suite;
 

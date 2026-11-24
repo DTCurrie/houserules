@@ -92,8 +92,13 @@ one. The free run assembles one sample and prints the child command on one line.
 numbers the assembled sample `k`.
 
 `eval.json` may set `network` to a boolean, default false. Unless it is true, the child runs
-with `--disallowedTools WebFetch,WebSearch`, and the dry run's printed command shows it. Bash's
-own network access is not covered.
+with `--disallowedTools WebFetch,WebSearch` and a `--settings` sandbox for Bash, and the dry
+run's printed command shows both. The sandbox turns on `sandbox.enabled`, allows no domains,
+and sets `sandbox.failIfUnavailable` and `sandbox.allowUnsandboxedCommands: false`, so the
+session stops at startup instead of running Bash unsandboxed. Native Windows cannot sandbox,
+and Linux and WSL2 need `bubblewrap` and `socat`. Claude Code documents the proxy's handling of
+unlisted hosts per permission mode, and the strict deny key is read only from user or managed
+settings, so a host-level refusal in every mode is not guaranteed.
 
 ## Actions
 
@@ -147,6 +152,10 @@ Each `--out` holds `spend.jsonl`, one line per started session, with the session
 
 Before each session the meter adds the ledger sum to `--per-run` times one plus `--margin`. It
 starts the session only when that total is at most `--budget`, and stops at the first refusal.
+A `--sample` run takes no `--budget`, so the meter holds the ledger sum to `--per-run` alone. A
+second `--sample` run on an `--out` that already holds spend is refused. To run arms one sample
+at a time against one ledger, raise `--samples` by one per call. Each call starts only the
+samples that are missing.
 
 The run holds `<out>/.lock`, which contains its pid. A second run on the same `--out` stops
 while that pid is alive. A lock whose pid is dead is removed and the run proceeds.

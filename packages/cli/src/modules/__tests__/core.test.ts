@@ -213,6 +213,8 @@ describe('core plan, the .claude/.gitignore block over a file the user already o
     expect(content.endsWith(USER_BELOW)).toBe(true);
     expect(content).not.toContain('/stale-entry.md');
     expect(content).toContain('/houserules.manifest.json');
+    expect(content).toContain('/state/hook-runs.jsonl');
+    expect(content).toContain('/state/hook-runs.1.jsonl');
     expect(content).toContain('/state/version-check.json');
   });
 

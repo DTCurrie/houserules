@@ -3,10 +3,12 @@ import {
   appendFileSync,
   mkdirSync,
   readFileSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { useInstalledRepo } from '#test/repo';
@@ -18,6 +20,9 @@ import {
 
 const SCRIPT = '.claude/scripts/changeset-gate.mjs';
 const PLUGIN_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const INSTALLED_CHANGESETS_CLI = dirname(
+  createRequire(import.meta.url).resolve('@changesets/cli/package.json'),
+);
 
 const PACKAGE_DIRS = ['games/cityville', 'apps/studio'];
 
@@ -46,6 +51,24 @@ function rewritePackageJson(
   const pkg = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
   mutate(pkg);
   writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
+function writeToolFragment(root: string, manifestIgnoreKeys: string[]): void {
+  mkdirSync(join(root, '.claude/extensions'), { recursive: true });
+  writeFileSync(
+    join(root, '.claude/extensions/wireit.json'),
+    JSON.stringify({ manifestIgnoreKeys }),
+  );
+}
+
+function linkInstalledChangesetsCli(root: string): void {
+  mkdirSync(join(root, 'node_modules/@changesets'), { recursive: true });
+  symlinkSync(
+    INSTALLED_CHANGESETS_CLI,
+    join(root, 'node_modules/@changesets/cli'),
+    'dir',
+  );
+  appendFileSync(join(root, '.git/info/exclude'), 'node_modules/\n');
 }
 
 function words(n: number): string {
@@ -215,6 +238,7 @@ describe('changeset-gate.mjs', () => {
 
   it('ignores a package whose only dirty diff is its package.json wireit block', () => {
     const root = installChangesets();
+    writeToolFragment(root, ['wireit']);
     rewritePackageJson(root, 'games/cityville', (pkg) => {
       pkg.wireit = { build: { files: ['src/**', '!**/__tests__/**'] } };
     });
@@ -235,6 +259,7 @@ describe('changeset-gate.mjs', () => {
   it('ignores a wireit-only package.json edit committed on a branch', () => {
     const root = installChangesets();
     runIn(root, 'git', ['checkout', '-qb', 'feature']);
+    writeToolFragment(root, ['wireit']);
     rewritePackageJson(root, 'games/cityville', (pkg) => {
       pkg.wireit = { build: { files: ['src/**'] } };
     });
@@ -256,9 +281,43 @@ describe('changeset-gate.mjs', () => {
 
   it('still counts a package.json edit that reaches past the wireit block', () => {
     const root = installChangesets();
+    writeToolFragment(root, ['wireit']);
     rewritePackageJson(root, 'games/cityville', (pkg) => {
       pkg.wireit = { build: { files: ['src/**'] } };
       pkg.version = '0.2.0';
+    });
+    writeFileSync(
+      join(root, '.changeset/kit-real.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('counts a wireit-only package.json edit when no tool fragment names the key', () => {
+    const root = installChangesets();
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.wireit = { build: { files: ['src/**'] } };
+    });
+    writeFileSync(
+      join(root, '.changeset/kit-real.md'),
+      '---\n"@fix/studio": patch\n---\n\nMore.\n',
+    );
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(/@fix\/cityville/);
+  });
+
+  it('counts a wireit-only package.json edit when the fragment names a different key', () => {
+    const root = installChangesets();
+    writeToolFragment(root, ['nx']);
+    rewritePackageJson(root, 'games/cityville', (pkg) => {
+      pkg.wireit = { build: { files: ['src/**'] } };
     });
     writeFileSync(
       join(root, '.changeset/kit-real.md'),
@@ -500,6 +559,11 @@ describe('changeset-gate.mjs, packages and files that ship nothing', () => {
   }
 
   function writeIgnore(root: string, ignore: string[]): void {
+    writeIgnoreWithoutChangesets(root, ignore);
+    linkInstalledChangesetsCli(root);
+  }
+
+  function writeIgnoreWithoutChangesets(root: string, ignore: string[]): void {
     writeFileSync(
       join(root, '.changeset/config.json'),
       JSON.stringify({ ignore }),
@@ -507,6 +571,20 @@ describe('changeset-gate.mjs, packages and files that ship nothing', () => {
     runIn(root, 'git', ['add', '-A']);
     runIn(root, 'git', ['commit', '-qm', 'chore: changesets config']);
   }
+
+  it('exits 2 naming the install fix when the ignore list has entries and changesets is not resolvable', () => {
+    const root = installChangesets();
+    writeIgnoreWithoutChangesets(root, ['@fix/cityville']);
+    touchCityville(root);
+    declareStudioOnly(root);
+
+    const r = runScript(root, SCRIPT, { input: '{}' });
+
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toMatch(
+      /@changesets\/config is not resolvable from this repo[\s\S]*pnpm add -D -w @changesets\/cli/,
+    );
+  });
 
   it('stays silent for a package the changesets ignore list names', () => {
     const root = installChangesets();

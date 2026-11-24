@@ -14,7 +14,7 @@ updates:
     # turning the rebase off is what stops the failures. Drop this once the bug is fixed.
     rebase-strategy: 'disabled'
     groups:
-      # group-by dependency-name collapses one bump across all thirteen
+      # group-by dependency-name collapses one bump across all eighteen
       # workspace packages into a single PR instead of one per directory.
       dev-dependencies:
         dependency-type: 'development'

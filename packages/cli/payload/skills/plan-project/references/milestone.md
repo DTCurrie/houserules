@@ -178,7 +178,11 @@ Fill each section from the ask and the code, in this order:
   seam of the step that raises it.
 - **Resources.** Exclusive things that are not files: a device, a shared dev stack, a repo-wide
   generator, a quiet machine for a timing test. An item that needs one names it on its step's
-  `Uses` line.
+  `Uses` line. A held build output counts too. A build whose clean step empties its outputs clears `dist/` and `payload-dist/`
+  first and compiles every in-progress item in that package's graph, so an item that imports a
+  held build's output races the holder. Name the build's package as the resource, and declare
+  only the holder. Readers need no line, because the run binds every item of the step alike
+  (orchestrate's `milestone.md`, "A shared package builds once").
 - **Gates.** Find them in the unknowns of the ask. A choice the owner makes is a `decision`. A
   question research answers is a `spike`. An act only a person does, such as issuing a credential or
   buying a device, is `human`. Each gate names the step it blocks, and that step lists the gate on its `Needs` line. `plan-lint` checks the two agree. A default you took without the owner is a closed decision

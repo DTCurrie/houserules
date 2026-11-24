@@ -150,6 +150,42 @@ const FIXTURES = {
     return { args: [], cwd: dir, stdin: '{}' };
   },
 
+  'wireit-lint.mjs'(dir) {
+    initGitFixture(dir);
+    writeFile(
+      dir,
+      'a/package.json',
+      JSON.stringify(
+        {
+          name: 'a',
+          scripts: { build: 'wireit', test: 'wireit' },
+          wireit: { build: { command: 'tsc', files: ['**/*.ts'] } },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFile(
+      dir,
+      'b/package.json',
+      JSON.stringify(
+        {
+          name: 'b',
+          scripts: { check: 'wireit' },
+          wireit: {
+            check: { command: 'tsc', dependencies: ['../a:missing'] },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    return {
+      args: [join(dir, 'a/package.json'), join(dir, 'b/package.json')],
+      cwd: dir,
+    };
+  },
+
   'decision-lint.mjs'(dir) {
     writeFile(
       dir,

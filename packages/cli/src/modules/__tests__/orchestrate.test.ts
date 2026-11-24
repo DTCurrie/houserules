@@ -94,7 +94,7 @@ describe('orchestrate', () => {
       expect(skillText).toMatch(/--auto/);
     });
 
-    it('writes the single-file acceptance form with -- so wireit forwards the path instead of dropping it', () => {
+    it('writes the single-file acceptance form with -- so the build orchestrator forwards the path instead of dropping it', () => {
       expect(skillText).toMatch(
         /`pnpm --filter <pkg> test -- <path\/to\/file\.test\.ts>`/,
       );
@@ -229,9 +229,9 @@ describe('orchestrate', () => {
       expect(nestedText).toContain(gate);
     });
 
-    it('treats a wireit hit on declared inputs a verify passed as the pass, in the orchestrator and the milestone reference', () => {
+    it('treats a build-cache hit on declared inputs a verify passed as the pass, in the orchestrator and the milestone reference', () => {
       const sentence =
-        'A wireit cache hit on declared inputs that a verify this session passed is the pass,';
+        'A build-cache hit on declared inputs that a verify this session passed is the pass,';
       const unwrapped = (text: string): string => text.replace(/\s+/g, ' ');
       const milestone = unwrapped(
         readFileSync(
@@ -242,7 +242,7 @@ describe('orchestrate', () => {
       expect(unwrapped(orchestratorText)).toContain(sentence);
       expect(milestone).toContain(sentence);
       expect(milestone).toContain(
-        "Delete wireit state only at the milestone's final step, or after a change to any block's `files` or `dependencies`",
+        "Delete the build cache only at the milestone's final step, or after a change to any script's declared inputs or dependencies",
       );
     });
 
@@ -453,7 +453,7 @@ describe('orchestrate', () => {
       );
 
       expect(slicing).toContain(
-        '`VITEST_MAX_WORKERS=<share> WIREIT_PARALLEL=1`',
+        '`VITEST_MAX_WORKERS=<share>`, plus each variable a `.claude/extensions/*.json` fragment lists',
       );
     });
 

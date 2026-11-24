@@ -24,6 +24,9 @@ that matter with `git diff <base>...HEAD -- <path>`, narrowing to the files whos
 cannot describe from the name alone. A description written from the session transcript
 describes what you meant to do. The diff is what you did.
 
+Write the description in-context from the diff and the changesets. Start no Workflow. If the
+user asks for one, every agent in it names an installed agent type or an explicit `model`.
+
 ## 2. Output format
 
 Return the finished description as raw markdown inside a fenced code block, so it pastes

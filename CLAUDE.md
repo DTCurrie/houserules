@@ -11,7 +11,7 @@ Interactive installer for portable Claude Code context discipline. Read
 
 ## Workspace
 
-A pnpm workspace of seventeen packages. Per-package conventions live in each package's own
+A pnpm workspace of eighteen packages. Per-package conventions live in each package's own
 CLAUDE.md (`cli`, `api`, `payload`, `test`), loaded when you touch that package.
 
 - `packages/cli` is `@houserules/cli`, the installer. It ships the binary **`houserules`**.
@@ -21,7 +21,7 @@ CLAUDE.md (`cli`, `api`, `payload`, `test`), loaded when you touch that package.
 - `packages/api` is `@houserules/api`, the plugin contract package: action types, module
   definitions, and the `houserules.config.json` schema plugin authors build against.
 - `packages/payload` is `@houserules/payload`, the shared payload libs.
-- Twelve first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved
+- Thirteen first-party plugins, each `packages/plugin-<name>`. Six hold modules that moved
   out of the core.
 - `packages/test` is `@houserules/test`, the shared testing modules, imported via `#test/*`.
 - The workspace root owns repo-wide concerns only: `prettier`, `eslint`, changesets, the
@@ -60,7 +60,7 @@ rules are in `docs/package-checks.md`.
 - `node packages/cli/dist/cli.js init --yes --dry-run <repo>`: safe manual probe against
   any repo.
 
-Gates, in order: `pnpm format`, `pnpm lint:fix`, `pnpm check`, `pnpm test`. Scope with
+Gates, in order: `pnpm format:fix`, `pnpm lint:fix`, `pnpm check`, `pnpm test`. Scope with
 `pnpm --filter <pkg>`. Prefer the full run when you are unsure what you touched.
 
 ## Release

@@ -9,6 +9,10 @@ import type {
 } from '@houserules/api';
 import { VERSION_CHECK_CACHE_PATH } from '@houserules/api/internal';
 import type { Ctx } from '../detect.js';
+import {
+  HOOK_RUNS_LOG_PATH,
+  HOOK_RUNS_ROTATED_PATH,
+} from '../hook-runs-log.js';
 
 /**
  * houserules' managed block in `.claude/.gitignore`. Exported so the tests find the block by the
@@ -97,6 +101,12 @@ export function ejectableDests(ctx: Ctx, actions: Action[]): Set<string> {
   return dests;
 }
 
+function scriptWrittenLines(): string[] {
+  return [VERSION_CHECK_CACHE_PATH, HOOK_RUNS_LOG_PATH, HOOK_RUNS_ROTATED_PATH]
+    .map((path) => `/${gitignoreLiteral(path.slice('.claude/'.length))}`)
+    .sort();
+}
+
 /**
  * The `.claude/` paths the block lists, relative to `.claude/` with a leading `/` so each
  * line is anchored to one file, sorted and deduplicated. An ejected dest is left out, so git
@@ -104,12 +114,14 @@ export function ejectableDests(ctx: Ctx, actions: Action[]): Set<string> {
  */
 function ignoredPaths(ctx: Ctx, actions: Action[]): string[] {
   const ejected = new Set(ctx.claude.houseConfig?.ejected ?? []);
-  // The cache is written by the checker, never by an action, so it is never ejectable.
+  // The cache and the hook run log are written by scripts, never by an action, so neither is ejectable.
   const dests = [
     ...[KIT_MANIFEST, ...ejectableDests(ctx, actions)].filter(
       (dest) => !ejected.has(dest),
     ),
     VERSION_CHECK_CACHE_PATH,
+    HOOK_RUNS_LOG_PATH,
+    HOOK_RUNS_ROTATED_PATH,
   ];
 
   return dests
@@ -125,10 +137,14 @@ function ignoredPaths(ctx: Ctx, actions: Action[]): string[] {
  * `actions` must be every enabled module's actions, for the same reason as the prettier
  * guard: a plugin's dests enter the block only if the caller has already collected them.
  *
- * With `payload.commit: true` the block is not written, and the payload is committed as before.
+ * With `payload.commit: true` the block lists only the version-check cache, which the sync hook
+ * writes and no action does, and the payload is committed as before.
  */
 export function payloadGitignoreActions(ctx: Ctx, actions: Action[]): Action[] {
-  if (ctx.claude.houseConfig?.payload?.commit === true) return [];
+  const isPayloadCommitted = ctx.claude.houseConfig?.payload?.commit === true;
+  const ignored = isPayloadCommitted
+    ? scriptWrittenLines()
+    : ignoredPaths(ctx, actions);
 
   return [
     {
@@ -136,7 +152,7 @@ export function payloadGitignoreActions(ctx: Ctx, actions: Action[]): Action[] {
       dest: PAYLOAD_GITIGNORE_DEST,
       body: [
         '# Installed by houserules and rebuilt by `npx houserules update`.',
-        ...ignoredPaths(ctx, actions),
+        ...ignored,
       ].join('\n'),
       region: PAYLOAD_GITIGNORE_REGION,
       module: 'core',

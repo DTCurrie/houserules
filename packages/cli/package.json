@@ -119,6 +119,7 @@
       "files": [
         "src/**/*.ts",
         "test/**/*.ts",
+        "package.json",
         "!test/**/node_modules/**",
         "payload/**/__tests__/**/*.ts",
         "tsconfig.json",
@@ -128,7 +129,8 @@
       "output": []
     },
     "test": {
-      "command": "vitest run",
+      "//": "with-build-locks.mjs holds wireit's lock on every upstream build for vitest's lifetime, so a concurrent run cannot rebuild dist/ or payload-dist/ under it.",
+      "command": "node scripts/with-build-locks.mjs test vitest run",
       "dependencies": [
         "build:ts",
         "build:payload",
@@ -142,9 +144,11 @@
       "files": [
         "src/**/*.ts",
         "test/**",
+        "tsconfig.json",
         "!test/**/node_modules/**",
         "payload/**",
         "vitest.config.ts",
+        "scripts/with-build-locks.mjs",
         "houserules.config.example.json",
         "package.json",
         "bin/**",
@@ -175,7 +179,8 @@
         "../plugin-testing:build",
         "../plugin-github:build",
         "../plugin-three:build",
-        "../plugin-typescript:build"
+        "../plugin-typescript:build",
+        "../plugin-wireit:build"
       ],
       "files": [
         "scripts/dogfood-link.mjs",

@@ -14,16 +14,17 @@ import { runCli, type RunResult } from '#test/run';
 import {
   REGION_END,
   REGION_START,
-  allHookCommands,
   claudeMdPath,
   editHouseConfig,
   hookCommandsFor,
+  hookWiringOf,
   houseConfigPath,
   manifestOf,
   readClaudeMd,
   readJson,
   settingsOf,
 } from '#test/installed-tree';
+import { validateHouseConfig } from '@houserules/api/internal';
 import { selectModuleOptions } from '../../ui.js';
 import type { ModuleDef } from '@houserules/api';
 import * as ui from '../../ui.js';
@@ -41,6 +42,20 @@ function optionlessModule(id: string): RegisteredModule {
     plan: () => [],
   };
   return { id, def, source: null };
+}
+
+/** Turns on the fixture plugin's extra Stop hook, then re-runs init so it lands in the wiring. */
+function enableExtraStopHook(root: string): void {
+  editHouseConfig(root, (config) => {
+    (config as Record<string, unknown>).plugins = [
+      {
+        name: FIXTURE_PLUGIN,
+        alias: 'fixture',
+        config: { extraStopHook: true },
+      },
+    ];
+  });
+  expect(runCli(['init', '--yes', root]).status).toBe(0);
 }
 
 function seedUserSettings(root: string): void {
@@ -175,14 +190,39 @@ describe('init --yes on a pnpm monorepo', () => {
     expect(cityville?.changelogPath).toBe(undefined);
   });
 
-  it('wires every houserules script into a settings.json hook', () => {
-    const allCommands = allHookCommands(root).join('\n');
-    const hookScripts = ['guard-bash', 'lint-format-fix', 'session-context'];
+  it('wires every houserules hook script into hook-wiring.json', () => {
+    const wired = Object.values(hookWiringOf(root).events)
+      .flat()
+      .map((entry) => entry.script);
+    const hookScripts = [
+      'guard-bash.mjs',
+      'lint-format-fix.mjs',
+      'session-context.mjs',
+    ];
 
     expect(
-      hookScripts.filter((script) => !allCommands.includes(script)),
-      'not wired into any settings.json hook',
+      hookScripts.filter((script) => !wired.includes(script)),
+      'not wired into hook-wiring.json',
     ).toEqual([]);
+  });
+
+  it('writes exactly one settings.json hook entry per event, each the dispatcher', () => {
+    const settings = settingsOf(root);
+    const commandsByEvent = Object.fromEntries(
+      Object.keys(settings.hooks ?? {}).map((event) => [
+        event,
+        hookCommandsFor(settings, event).map(
+          (command) => /[\w-]+\.mjs/.exec(command)?.[0],
+        ),
+      ]),
+    );
+
+    expect(commandsByEvent).toEqual({
+      PreToolUse: ['hook-dispatch.mjs'],
+      UserPromptSubmit: ['hook-dispatch.mjs'],
+      SessionStart: ['hook-dispatch.mjs'],
+      Stop: ['hook-dispatch.mjs'],
+    });
   });
 
   it('does not create a backup when settings.json did not pre-exist', () => {
@@ -306,9 +346,9 @@ describe('init --yes on an npm-single repo with pre-existing config', () => {
     );
     expect(
       hookCommandsFor(settings, 'PreToolUse').some((command) =>
-        command.includes('guard-bash.mjs'),
+        command.includes('hook-dispatch.mjs'),
       ),
-      'guard-bash hook wired',
+      'PreToolUse dispatcher wired',
     ).toBe(true);
   });
 
@@ -469,6 +509,44 @@ describe('init on a repo with AGENTS.md and no CLAUDE.md', () => {
 
     expect(readFileSync(agentsPath, 'utf8')).toContain(REGION_START);
     expect(readClaudeMd(root)).toBe(claudeBefore);
+  });
+});
+
+describe('init with a partial pre-seeded config', () => {
+  function seedConfig(root: string, config: object): void {
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(houseConfigPath(root), `${JSON.stringify(config)}\n`);
+  }
+
+  it('fills the missing required keys and keeps the keys the user set', () => {
+    const root = useRepo('npm-single');
+    writeFileSync(join(root, 'AGENTS.md'), '# agents\n');
+    seedConfig(root, { instructionsFile: 'AGENTS.md' });
+
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+
+    const written = readFileSync(houseConfigPath(root), 'utf8');
+    expect(validateHouseConfig(written)).toEqual([]);
+    const config = JSON.parse(written) as Record<string, unknown>;
+    expect(config.instructionsFile).toBe('AGENTS.md');
+    expect(config.version).toBe(2);
+    expect(config.packageManager).toBe('npm');
+    expect(readFileSync(join(root, 'AGENTS.md'), 'utf8')).toContain(
+      REGION_START,
+    );
+  });
+
+  it('still exits 2 when a key the user set has an invalid value', () => {
+    const root = useRepo('npm-single');
+    const seeded = { instructionsFile: 'AGENTS.md', version: 7 };
+    seedConfig(root, seeded);
+
+    const result = runCli(['init', '--yes', root]);
+
+    expect(result.status).toBe(2);
+    expect(JSON.parse(readFileSync(houseConfigPath(root), 'utf8'))).toEqual(
+      seeded,
+    );
   });
 });
 
@@ -641,12 +719,16 @@ describe('init settings signature recorded in the manifest', () => {
     root = useInstalledRepo('pnpm-monorepo');
   });
 
-  it('signs the wired guard-bash hook', () => {
+  it('signs the PreToolUse dispatcher entry rather than the scripts it runs', () => {
     const manifest = manifestOf(root);
     const settings = manifest.settings as {
-      hooks: Array<{ script?: string }>;
+      hooks: Array<{ event: string; script?: string }>;
     };
-    expect(settings.hooks.map((h) => h.script)).toContain('guard-bash.mjs');
+    expect(
+      settings.hooks
+        .filter((h) => h.event === 'PreToolUse')
+        .map((h) => h.script),
+    ).toEqual(['hook-dispatch.mjs']);
   });
 
   it('signs the core module permission it always contributes', () => {
@@ -727,6 +809,37 @@ describe('init --module-option against a houserules.config.json that already exi
       existsSync(join(root, '.claude/fixture-lang-beta.md')),
       'fixture-lang-beta.md kept',
     ).toBe(true);
+  });
+});
+
+describe('init --yes after a plugin adds a hook to an event already dispatched', () => {
+  let root: string;
+  let settingsBefore: string;
+
+  beforeEach(() => {
+    ensureFixtureSelfLink();
+    root = useRepo('npm-single');
+    runCli(['init', '--yes', root]);
+    editHouseConfig(root, (config) => {
+      (config as Record<string, unknown>).plugins = [
+        { name: FIXTURE_PLUGIN, alias: 'fixture' },
+      ];
+    });
+    expect(runCli(['init', '--yes', root]).status).toBe(0);
+    settingsBefore = readFileSync(join(root, '.claude/settings.json'), 'utf8');
+    enableExtraStopHook(root);
+  });
+
+  it('leaves settings.json byte-identical', () => {
+    expect(readFileSync(join(root, '.claude/settings.json'), 'utf8')).toBe(
+      settingsBefore,
+    );
+  });
+
+  it('adds the hook to the Stop entries of hook-wiring.json', () => {
+    expect(
+      (hookWiringOf(root).events.Stop ?? []).map((entry) => entry.script),
+    ).toContain('fixture-extra-hook.mjs');
   });
 });
 

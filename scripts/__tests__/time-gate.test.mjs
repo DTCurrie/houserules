@@ -115,6 +115,16 @@ describe('pnpmSpawnOptions', () => {
   });
 });
 
+const PRINTED_SECONDS_TOLERANCE = 0.01;
+
+function assertPrinted(stdout, pattern, expectedSeconds) {
+  const printed = Number(stdout.match(pattern)?.[1]);
+  assert.ok(
+    Math.abs(printed - expectedSeconds) <= PRINTED_SECONDS_TOLERANCE,
+    `printed ${printed}, row ${expectedSeconds}`,
+  );
+}
+
 describe('--out', () => {
   it('writes one jsonl row per script and exits with pnpm status', () => {
     const dir = mkdtempSync(join(tmpdir(), 'time-gate-'));
@@ -154,7 +164,11 @@ describe('--out', () => {
     assert.ok(rows[0].seconds >= 0.9 && rows[0].seconds < 3);
     assert.equal(rows[1].script, 's:two');
     assert.equal(rows[1].seconds, 0);
-    assert.match(result.stdout, /s:one\s+ran\s+1\./);
-    assert.match(result.stdout, /\ntotal\s+1\.\d\d\n/);
+    assertPrinted(result.stdout, /s:one\s+ran\s+(\d+\.\d\d)/, rows[0].seconds);
+    assertPrinted(
+      result.stdout,
+      /\ntotal\s+(\d+\.\d\d)\n/,
+      rows[0].wallSeconds,
+    );
   });
 });

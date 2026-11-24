@@ -7,6 +7,7 @@ import { HouseConfigError } from '@houserules/api/internal';
 import type { Flags } from './cli-contract.js';
 import { EXIT } from './cli-contract.js';
 import { HouseError } from './house-error.js';
+import { PluginResolutionError } from './plugin-registry.js';
 
 const require = createRequire(import.meta.url);
 const { version: KIT_VERSION } = require('../package.json') as {
@@ -336,6 +337,10 @@ try {
   if (error instanceof HouseConfigError) {
     console.error(error.message);
     process.exit(EXIT.badConfig);
+  }
+  if (error instanceof PluginResolutionError) {
+    console.error(`plugin "${error.pluginName}": ${error.message}`);
+    process.exit(EXIT.error);
   }
   if (error instanceof HouseError) {
     console.error(error.message);

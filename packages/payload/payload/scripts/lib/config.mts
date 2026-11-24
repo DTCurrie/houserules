@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
-import { findRepoRoot } from './proc.mjs';
+import { findRepoRoot, repoRoot } from './proc.mjs';
 
 export interface RunnerBlock {
   runner?: string | undefined;
@@ -22,6 +22,8 @@ export interface RunnerBlock {
   relatedCommand?: string | undefined;
   /** `verify` only: `false` runs the `--run` jobs one at a time. Unset or `true` runs independent packages together. */
   concurrent?: boolean | undefined;
+  /** `verify` only: root `package.json` scripts run at the repo root after every package job when a monorepo scope is non-empty. */
+  rootCommands?: string[] | undefined;
 }
 
 export interface ConfigTarget {
@@ -119,20 +121,26 @@ export function runsAtRepoRoot(block: RunnerBlock | undefined): boolean {
   return !(block?.filterFlag ?? DEFAULT_FILTER_FLAG);
 }
 
+export { repoRoot };
+
 /**
- * The work tree root, throwing outside one. Resolved through `findRepoRoot()` in
- * `proc.mts`, which walks up from the cwd to the first valid `.git` entry and spawns
- * `git rev-parse --show-toplevel` only on the edges it lists, such as a `GIT_DIR` in the
- * environment or a cwd inside `.git`.
+ * `repoRoot()` without the cwd fallback. Returns null outside a git work tree, or when `git`
+ * is absent, so a script can tell a missing repo apart from a repo rooted at the cwd.
  *
- * That resolver memoizes a successful answer per cwd, shared with `proc.mts`'s own
- * `repoRoot()`, so a hook that resolves the root and then calls `loadConfigSafe()` resolves
- * it once. A null answer is never memoized, so a throw stays a throw and `repoRootSafe()`
- * keeps reporting null outside a work tree.
+ * A runtime-invoked payload script is required to exit 0 on every failure path. Such a
+ * script resolves its root through this and exits cleanly on null.
+ */
+export function repoRootSafe(): string | null {
+  return findRepoRoot();
+}
+
+/**
+ * `repoRoot()` for a script that must refuse to run outside a git work tree, such as one that
+ * writes ledgers or changelogs keyed to the repo.
  *
  * @throws Error naming the cwd when it is outside every work tree or git cannot answer.
  */
-export function repoRoot(): string {
+export function requireRepoRoot(): string {
   const root = findRepoRoot();
   if (root === null) {
     throw new Error(
@@ -140,22 +148,6 @@ export function repoRoot(): string {
     );
   }
   return root;
-}
-
-/**
- * `repoRoot()` for a script that must not crash. Returns null outside a git work tree, or
- * when `git` is absent, rather than throwing.
- *
- * A runtime-invoked payload script is required to exit 0 on every failure path, and a
- * throw at module load defeats that before any handler can run. Such a script resolves its
- * root through this and exits cleanly on null.
- */
-export function repoRootSafe(): string | null {
-  try {
-    return repoRoot() || null;
-  } catch {
-    return null;
-  }
 }
 
 export const GUARD_DEFAULTS = {
@@ -248,4 +240,68 @@ export function loadConfigSafe(root?: string): HouseConfig {
   } catch {
     return EMPTY;
   }
+}
+
+/**
+ * Repo-relative directory a plugin writes its tool fragments into, one
+ * `<plugin>.json` file each. The core scripts read every fragment there, so a build tool's
+ * specifics ship with the plugin for that tool and no core script names one.
+ */
+export const EXTENSIONS_DIR = '.claude/extensions';
+
+/** What the installed tool fragments declare, merged across every fragment. */
+export interface ToolExtensions {
+  /**
+   * Environment variables `verify-changed` sets to each job's outer fan-out, beside
+   * `pnpm_config_workspace_concurrency`, such as a build orchestrator's parallelism cap.
+   */
+  shareVariables: string[];
+  /**
+   * Top-level `package.json` keys the changeset gate ignores. A manifest whose only
+   * difference from the base is in these keys does not count as a package change.
+   */
+  manifestIgnoreKeys: string[];
+}
+
+const EXTENSION_LIST_KEYS = ['shareVariables', 'manifestIgnoreKeys'] as const;
+
+function stringsIn(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is string => typeof item === 'string' && item !== '',
+  );
+}
+
+/**
+ * Merges every `*.json` fragment under {@link EXTENSIONS_DIR}, in filename order, with each
+ * list deduplicated. Never throws: a missing directory, an unreadable file, a fragment that
+ * is not JSON, or a key that is not a string array contributes nothing.
+ */
+export function loadExtensionsSafe(root: string): ToolExtensions {
+  const merged: ToolExtensions = { shareVariables: [], manifestIgnoreKeys: [] };
+  let names: string[];
+  try {
+    names = readdirSync(join(root, EXTENSIONS_DIR))
+      .filter((name) => name.endsWith('.json'))
+      .sort();
+  } catch {
+    return merged;
+  }
+  for (const name of names) {
+    let fragment: Record<string, unknown>;
+    try {
+      fragment = JSON.parse(
+        readFileSync(join(root, EXTENSIONS_DIR, name), 'utf8'),
+      ) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (fragment === null || typeof fragment !== 'object') continue;
+    for (const key of EXTENSION_LIST_KEYS) {
+      for (const item of stringsIn(fragment[key])) {
+        if (!merged[key].includes(item)) merged[key].push(item);
+      }
+    }
+  }
+  return merged;
 }

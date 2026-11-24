@@ -1,6 +1,6 @@
 # Gather scripts
 
-Eight scripts and `SCHEMA.md`, with every pass-specific path and label turned into an argument.
+Ten scripts and `SCHEMA.md`, with every pass-specific path and label turned into an argument.
 Node builtins only, except `waste-audit.mjs`, which imports the report command's price table from
 `packages/cli/dist/` and so needs `pnpm build` first. `compaction.mjs` and `keepalive.mjs` hold the
 record tests `waste-audit.mjs` and `wait-timeline.mjs` share, and neither runs on its own. Each
@@ -32,6 +32,14 @@ capture's start time, so changesets committed during the pass stay out of the hi
 
 `extract-exports.mjs <document> <machine> <out-dir>` writes one `<machine>--<repo>.json` file per
 fenced json block of a usage document's `## Exports` section, so a pass does not hand-copy them.
+
+Two scripts read one plan's sessions rather than a pass's baseline:
+
+- `context-per-slice.mjs --plan <slug> --plan-dir <dir> <main.jsonl>...` reports main-context
+  growth per `phase-orchestrator` spawn and resume, divided by the phase's slice rows.
+- `plan-doc-writes.mjs --landed <iso-date> <main.jsonl>...` counts, per plan doc, the writes after
+  its first one and the `plan-lint` findings that follow a write, split at `--landed`. It reads
+  each main transcript's `subagents/` directory too.
 
 On a work machine, run `agent-ledger.mjs` alone with `--machine work`. It reads `~/.claude`, or
 `CLAUDE_CONFIG_DIR`, and writes only `--out`. It keeps no prompt text, file content, URL, title, or

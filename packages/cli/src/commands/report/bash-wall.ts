@@ -103,7 +103,7 @@ const SLOW_COMMAND_MAX_CHARS = 120;
  * the subcommand, with `git -C <dir>` dropped. Anything else gives its first word.
  */
 export function bashFamily(command: string): string {
-  const [first, ...args] = firstCommandWords(command);
+  const [first, ...args] = namedCommandWords(command);
   if (first === undefined) return '';
   if (PACKAGE_RUNNERS.has(first)) return runnerFamily(first, args);
   if (first === 'node') return nodeFamily(args);
@@ -113,24 +113,80 @@ export function bashFamily(command: string): string {
   return first;
 }
 
-/** The words of the first real command in a chain, the one {@link bashFamily} reads. */
-function firstCommandWords(command: string): string[] {
-  const segments = splitChain(command).map(tokenize).map(commandWords);
-  // A bare assignment statement, `S=/tmp/x; ls $S`, is an env prefix too, so it never names the family.
-  const firstReal = segments.find((tokens) => {
-    const [head] = tokens;
-    return head !== undefined && head !== 'cd';
-  });
-  return firstReal ?? segments[0] ?? [];
+const LEADING_KEYWORDS = new Set([
+  'do',
+  'then',
+  'else',
+  'elif',
+  'if',
+  'while',
+  'until',
+  '!',
+  '{',
+  '(',
+]);
+const SKIPPED_HEADS = new Set(['for', 'case', 'done', 'fi', 'esac', 'cd']);
+const KNOWN_FAMILY_HEADS = new Set([
+  'pnpm',
+  'npm',
+  'yarn',
+  'bun',
+  'npx',
+  'node',
+  'git',
+  'gh',
+]);
+
+/** Marks the `||` between two commands, so the fallback after it can be dropped. */
+const FALLBACK_MARKER = '||';
+
+/**
+ * The commands a chain runs, in order. Shell keywords before a command, loop and branch
+ * headers, `cd`, bare assignments, and the fallback after `||` are not commands.
+ */
+function chainCommands(command: string): string[][] {
+  const commands: string[][] = [];
+  let isFallback = false;
+  for (const segment of splitChain(command)) {
+    if (segment === FALLBACK_MARKER) {
+      isFallback = true;
+      continue;
+    }
+    const wasFallback = isFallback;
+    isFallback = false;
+    const words = segmentWords(segment);
+    const [head] = words;
+    if (wasFallback || head === undefined || SKIPPED_HEADS.has(head)) continue;
+    commands.push(words);
+  }
+  return commands;
+}
+
+function segmentWords(segment: string): string[] {
+  const tokens = tokenize(segment);
+  let start = 0;
+  while (start < tokens.length && LEADING_KEYWORDS.has(tokens[start] ?? ''))
+    start += 1;
+  return commandWords(tokens.slice(start));
 }
 
 /**
- * Whether the command's first real command is a package runner with no scope flag:
+ * The words of the command {@link bashFamily} names: the first one whose family is known,
+ * else the first command of any kind.
+ */
+function namedCommandWords(command: string): string[] {
+  const commands = chainCommands(command);
+  const known = commands.find(([head]) => KNOWN_FAMILY_HEADS.has(head ?? ''));
+  return known ?? commands[0] ?? [];
+}
+
+/**
+ * Whether the command {@link bashFamily} names is a package runner with no scope flag:
  * `--filter`, `-F`, `--dir`, or `-C`, spaced or `=`-joined. A `cd` is not a scope flag.
  * Any other command is not unscoped.
  */
 export function isUnscopedRunnerCall(command: string): boolean {
-  const [first, ...args] = firstCommandWords(command);
+  const [first, ...args] = namedCommandWords(command);
   if (first === undefined || !PACKAGE_RUNNERS.has(first)) return false;
   return !args.some((arg) =>
     RUNNER_VALUE_FLAGS.some(
@@ -185,9 +241,15 @@ function splitChain(command: string): string[] {
   let current = '';
   let quote = '';
   let substitutionDepth = 0;
+  let previousChar = '';
   for (const char of command) {
     substitutionDepth = nextSubstitutionDepth(substitutionDepth, char, current);
-    if (quote) {
+    const isOrOperator =
+      !quote && substitutionDepth === 0 && char === '|' && previousChar === '|';
+    previousChar = char;
+    if (isOrOperator) {
+      segments.push(FALLBACK_MARKER);
+    } else if (quote) {
       if (char === quote) quote = '';
       current += char;
     } else if (char === '"' || char === "'") {

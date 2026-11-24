@@ -88,12 +88,15 @@ interactive and may skip the profile that puts `node` on the PATH. If the remote
 `command not found: node`, name node by the full path `command -v node` prints on that machine.
 
 - `scripts/bench/field-stop-runs.mjs` reads Claude Code transcripts and writes every
-  `lint-format-fix` Stop run as `stop-runs@1` JSON Lines on stdout. It changes nothing.
-  - `node scripts/bench/field-stop-runs.mjs <repo>... [--projects-dir <dir>]`
+  `lint-format-fix` Stop run as `stop-runs@1` JSON Lines on stdout. It changes nothing. Paths
+  in the output show the home directory as `~` and the user name as `<user>`, so a run piped
+  from another machine carries no username. `--home <dir>` overrides the home directory.
+  - `node scripts/bench/field-stop-runs.mjs <repo>... [--projects-dir <dir>] [--home <dir>]`
   - `node --input-type=module - <repo>... < scripts/bench/field-stop-runs.mjs`
 - `scripts/bench/field-repro.mjs` times the steps the fixer would plan for a dirty set, once each,
   in check mode, and writes `fix-repro@1` JSON Lines. It changes no file in the checkout. Run it
-  from the checkout's root.
+  from the checkout's root. A step whose spawn fails, is killed, or exits non-zero writes
+  `durationMs: null` and an `error` string. Count only lines with `error: null` as timed runs.
   - `node scripts/bench/field-repro.mjs <path>...`
   - `node --input-type=module - <path>... < scripts/bench/field-repro.mjs`
 
@@ -217,32 +220,55 @@ All times are milliseconds, unrounded.
 
 ## Modules
 
-| File                   | Exports                                                      |
-| ---------------------- | ------------------------------------------------------------ |
-| `run.mjs`              | the command above                                            |
-| `build.mjs`            | `ensureBuild`, `findBuild`, `defaultCacheDir`, `BUILD_STEPS` |
-| `stats.mjs`            | `GATE`, `summarize`, `gateVerdict`                           |
-| `machine.mjs`          | `machineFacts`                                               |
-| `timing.mjs`           | `measureCase`, `CaseError`                                   |
-| `profile.mjs`          | `profileCase`, `mergeProfiles`, `selfTimeByFrame`            |
-| `verify-jobs.mjs`      | the verify jobs probe above                                  |
-| `suites/index.mjs`     | `SUITES`, a map from suite name to a lazy import             |
-| `suites/<name>.mjs`    | `cases`                                                      |
-| `fixtures/<name>/`     | static fixture files for that suite only                     |
-| `__tests__/*.test.mjs` | one test file per module, run by `test:scripts`              |
+| File                   | Exports                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| `run.mjs`              | the command above                                                                                    |
+| `build.mjs`            | `ensureBuild`, `findBuild`, `findNewestBuild`, `ensureNewestBuild`, `defaultCacheDir`, `BUILD_STEPS` |
+| `stats.mjs`            | `GATE`, `summarize`, `gateVerdict`                                                                   |
+| `machine.mjs`          | `machineFacts`                                                                                       |
+| `timing.mjs`           | `measureCase`, `CaseError`                                                                           |
+| `profile.mjs`          | `profileCase`, `mergeProfiles`, `selfTimeByFrame`                                                    |
+| `verify-jobs.mjs`      | the verify jobs probe above                                                                          |
+| `suites/index.mjs`     | `SUITES`, a map from suite name to a lazy import                                                     |
+| `suites/<name>.mjs`    | `cases`                                                                                              |
+| `fixtures/<name>/`     | static fixture files for that suite only                                                             |
+| `__tests__/*.test.mjs` | one test file per module, run by `test:scripts`                                                      |
 
 ### `build.mjs`
 
-- `ensureBuild(rev, { repoDir, cacheDir = defaultCacheDir(), steps = BUILD_STEPS })` resolves `rev`
-  to a full sha in `repoDir`. On a cache hit it returns `{ commit, root, cached: true }` and runs
-  nothing. On a miss it adds a git worktree of that sha under `os.tmpdir()`, runs each step in it,
-  moves the built tree to `<cacheDir>/<sha>`, prunes the worktree registration, writes a completion
-  marker last, and returns `cached: false`. A failed step removes the worktree and throws.
-- `findBuild(rev, { repoDir, cacheDir = defaultCacheDir() })` resolves `rev` the same way and
-  returns `{ commit, root }` when the completion marker exists, otherwise null. It never builds,
-  adds a worktree, or writes under `cacheDir`, and `ensureBuild` uses it for its cache-hit check.
-- `defaultCacheDir()` returns `<os.tmpdir()>/houserules-bench/builds`.
-- `BUILD_STEPS` is `[[command, args], ...]`: install from the lockfile, then `pnpm build`.
+- `ensureBuild(rev, { repoDir, cacheDir = defaultCacheDir(repoDir), steps = BUILD_STEPS })`
+  resolves `rev` to a full sha in `repoDir`. On a cache hit it returns
+  `{ commit, root, cached: true }` and runs nothing. On a miss it takes the lock
+  `<cacheDir>/<sha>.lock`, adds a git worktree of that sha under `<cacheDir>/.worktrees/`, runs
+  each step in it, moves the built tree to `<cacheDir>/<sha>`, prunes the worktree registration,
+  writes a completion marker last, and returns `cached: false`. A second caller for the same sha
+  waits on the lock and then reuses the build. A lock whose holder has exited is taken over. A
+  failed step removes the worktree, releases the lock, and throws.
+- `findBuild(rev, { repoDir, cacheDir = defaultCacheDir(repoDir) })` resolves `rev` the same way
+  and returns `{ commit, root }` when the completion marker exists, otherwise null. It never
+  builds, adds a worktree, or writes under `cacheDir`, and `ensureBuild` uses it for its cache-hit
+  check.
+- `findNewestBuild({ cacheDir })` returns `{ commit, root }` for the finished build whose marker
+  records the latest `finishedAt`, otherwise null. It reads only the markers.
+- `ensureNewestBuild(rev, { repoDir, cacheDir, steps })` returns `findNewestBuild`'s build, or
+  builds `rev` with `ensureBuild` when none has finished. It never returns null.
+- `defaultCacheDir(repoDir)` returns `<repoDir>/node_modules/.cache/houserules-bench/builds`.
+- `BUILD_STEPS` is `[[command, args], ...]`: install from the lockfile, `pnpm build`, then
+  `pnpm dogfood`, which writes the build's own `.claude/settings.json` and
+  `.claude/scripts/hook-wiring.json`.
+
+### The build the tests read
+
+The suite tests in `__tests__/` run against a bench build, never against this checkout's
+`packages/*/payload-dist`, which a concurrent build can rewrite. Each takes the build from
+`ensureNewestBuild('HEAD', { repoDir })`: the newest finished build in the cache, or a fresh build
+of `HEAD` when the cache holds none. A missing build is a build, not a skipped test.
+
+The cache sits inside the repository, under the gitignored `node_modules/`, so a wireit script can
+declare `node_modules/.cache/houserules-bench/builds/*/.bench-build.json` as inputs. The tests pick
+their build from those markers alone, so a wireit cache hit means the same build is still there.
+The build may be of an older commit than `HEAD`. Uncommitted edits never reach it, as for any
+bench run.
 
 ### `stats.mjs`
 
@@ -269,9 +295,11 @@ All times are milliseconds, unrounded.
 `cases(context)` in each suite returns `Promise<BenchCase[]>`. The `context` is
 `{ root, repoDir, workDir }`:
 
-- `root`: the build tree from `ensureBuild`. Read it, never write it.
-- `repoDir`: the live repository, for files the build tree lacks, such as `.claude/settings.json`.
-  Read it, never write it.
+- `root`: the build tree from `ensureBuild`. Read it, never write it. The `hooks` suite reads its
+  hook settings, its dispatcher wiring, and the scripts the wiring names all from here, so the
+  wiring never names a script the build lacks.
+- `repoDir`: the live repository, for git history the build tree lacks, such as the build
+  commit's tracked files. Read it, never write it.
 - `workDir`: an empty temporary directory this suite may write fixtures under. `run.mjs` creates it
   and removes it after the suite.
 

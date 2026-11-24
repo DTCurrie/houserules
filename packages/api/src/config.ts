@@ -174,6 +174,12 @@ const HouseConfigSchema = z.strictObject({
         .describe(
           'Whether `--run` starts the jobs of packages with no dependency edge between them together, within the resource budget. Unset or true runs them together, and a dependent still waits for the package it depends on. False runs every job one at a time in scope order.',
         ),
+      rootCommands: z
+        .array(z.string().min(1))
+        .optional()
+        .describe(
+          'Workspace-root package.json scripts, e.g. ["verify"], run at the repo root with no filter flag whenever a monorepo verify scope is non-empty, after every package job. Holds repo-wide checks, such as an unused-export scan, that a package-scoped run never reaches. Unset runs none.',
+        ),
     })
     .optional()
     .describe('Only present when the verify-changed module is enabled.'),

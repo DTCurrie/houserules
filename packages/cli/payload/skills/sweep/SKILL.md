@@ -73,8 +73,9 @@ matches`, or `blocked: <reason>`. It must **not** paste diffs, file contents, or
 
 ## 4. Collect counts + verify
 
-Tally the one-liners into a single table of package → count. Then verify the touched packages. If
-`/verify-changed` is installed, run it, because it scopes to exactly what changed plus dependents.
+Tally the one-liners into a single table of package → count. Then you, the sweep's dispatcher, verify
+the touched packages. A shard writer never does, per the "Who verifies" table in the `verify-changed`
+skill. If `/verify-changed` is installed, run it, because it scopes to exactly what changed plus dependents.
 Otherwise run the repo's verify on the affected packages. Report the total as `edited N files across M
 packages` along with the verify verdict. If a writer reported `blocked`, surface just that shard for a
 closer look.

@@ -54,6 +54,7 @@ and running `pnpm houserules init` lands in the same place.
 | `packages/plugin-svelte`          | `@houserules/plugin-svelte`          | Svelte 5 conventions, an opt-in SvelteKit guide, and the Svelte MCP server config.                                                   |
 | `packages/plugin-design`          | `@houserules/plugin-design`          | A DTCG design system an agent queries by name, or `design-tailwind` for a Tailwind repo.                                             |
 | `packages/plugin-github`          | `@houserules/plugin-github`          | Syncs the backlog and decision ledgers to GitHub Projects, with adopt and sync skills.                                               |
+| `packages/plugin-wireit`          | `@houserules/plugin-wireit`          | A path-scoped wireit rule, a wireit lint check, and setup. Hands wireit's specifics to the core scripts.                             |
 | `packages/test`                   | `@houserules/test`                   | Shared testing modules for driving the CLI against synthetic repos. For plugin authors.                                              |
 
 Every package has its own README. Plugins are independent, so install only the ones a repo

@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 import { emptyCorpus, ingestTranscript } from '../transcript-events.js';
 import { computeHookHealth, renderHookHealth } from '../hook-health.js';
@@ -48,6 +52,8 @@ function assistantReadLine(id: string): string {
   });
 }
 
+const NO_LOG_ROOT = mkdtempSync(join(tmpdir(), 'hook-health-empty-'));
+
 describe('computeHookHealth', () => {
   it('aggregates fires, nonZero, crashes, blocks, and durations per hook', () => {
     const corpus = emptyCorpus(['slug']);
@@ -82,7 +88,7 @@ describe('computeHookHealth', () => {
     ];
 
     ingestTranscript(corpus, 'crashy-session.jsonl', lines.join('\n'));
-    const report = computeHookHealth(corpus);
+    const report = computeHookHealth(corpus, NO_LOG_ROOT);
 
     const guardBash = report.rows.find((row) => row.hook === 'guard-bash');
 
@@ -129,7 +135,7 @@ describe('computeHookHealth', () => {
     ];
 
     ingestTranscript(corpus, 'sorted.jsonl', lines.join('\n'));
-    const report = computeHookHealth(corpus);
+    const report = computeHookHealth(corpus, NO_LOG_ROOT);
 
     expect(report.rows.map((row) => row.hook)).toEqual([
       'guard-bash',
@@ -161,7 +167,7 @@ describe('computeHookHealth', () => {
     ];
 
     ingestTranscript(corpus, 'crashes.jsonl', lines.join('\n'));
-    const report = computeHookHealth(corpus);
+    const report = computeHookHealth(corpus, NO_LOG_ROOT);
 
     expect(report.crashSignatures).toEqual([
       { signature: "Cannot find module '/x/y.mjs'", count: 2 },
@@ -189,7 +195,7 @@ describe('computeHookHealth', () => {
     ];
 
     ingestTranscript(corpus, 'missing-script.jsonl', lines.join('\n'));
-    const report = computeHookHealth(corpus);
+    const report = computeHookHealth(corpus, NO_LOG_ROOT);
 
     const stop = report.rows.find((row) => row.hook === 'Stop');
     expect(stop).toMatchObject({ nonZero: 2, crashes: 2, blocks: 0 });
@@ -207,7 +213,7 @@ describe('computeHookHealth', () => {
     ];
 
     ingestTranscript(corpus, 'bash-calls.jsonl', lines.join('\n'));
-    const report = computeHookHealth(corpus);
+    const report = computeHookHealth(corpus, NO_LOG_ROOT);
 
     expect(report.bashCalls).toBe(2);
   });
@@ -251,7 +257,7 @@ describe('renderHookHealth', () => {
     ];
 
     ingestTranscript(corpus, 'render.jsonl', lines.join('\n'));
-    const report = computeHookHealth(corpus);
+    const report = computeHookHealth(corpus, NO_LOG_ROOT);
     const rendered = renderHookHealth(report);
 
     expect(rendered).toEqual([
@@ -283,7 +289,7 @@ describe('renderHookHealth', () => {
     ];
 
     ingestTranscript(corpus, 'no-crashes.jsonl', lines.join('\n'));
-    const report = computeHookHealth(corpus);
+    const report = computeHookHealth(corpus, NO_LOG_ROOT);
     const rendered = renderHookHealth(report);
 
     expect(rendered.at(-1)).toBe('  Stop hooks: no Stop runs were recorded.');
@@ -337,7 +343,7 @@ describe('computeHookHealth from error tool_results', () => {
       ].join('\n'),
     );
 
-    const report = computeHookHealth(corpus);
+    const report = computeHookHealth(corpus, NO_LOG_ROOT);
 
     expect(report.rows).toEqual([
       {
@@ -401,7 +407,7 @@ describe('Stop hook timing from stop_hook_summary records', () => {
       stopSummaryLine('2.1.327', [{ command: CHECK_COMMAND, durationMs: 40 }]),
     ].join('\n'),
   );
-  const report = computeHookHealth(corpus);
+  const report = computeHookHealth(corpus, NO_LOG_ROOT);
 
   it('names runs by script and computes percentiles on an uneven set', () => {
     expect(report.stopHooks).toEqual([
@@ -476,7 +482,7 @@ describe('Stop hook tail share', () => {
   const render = (lines: string[]) => {
     const corpus = emptyCorpus(['slug']);
     ingestTranscript(corpus, 'tail.jsonl', lines.join('\n'));
-    return computeHookHealth(corpus);
+    return computeHookHealth(corpus, NO_LOG_ROOT);
   };
 
   it('counts 1001 ms as slow and 1000 ms as not', () => {
@@ -524,5 +530,199 @@ describe('Stop hook tail share', () => {
       ],
     }).join('\n');
     expect(rendered).toMatch(/a\.mjs\s+4\s+1\s+2\s+-\s+3\s+0/);
+  });
+});
+
+describe('hook failures attributed through hook-dispatch.mjs', () => {
+  function report(stderr: string) {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'a.jsonl',
+      attachmentLine({
+        hookName: 'PreToolUse:Bash',
+        exitCode: 1,
+        stderr,
+        sessionId: 'sess-1',
+      }),
+    );
+    return computeHookHealth(corpus, NO_LOG_ROOT);
+  }
+
+  it('names the underlying script for one attribution line', () => {
+    const result = report(
+      '[houserules] hook-dispatch: guard-bash.mjs exited 1\nError: boom\n',
+    );
+    expect(result.rows.map((row) => [row.hook, row.crashes])).toEqual([
+      ['guard-bash.mjs', 1],
+    ]);
+    expect(result.crashSignatures).toEqual([
+      { signature: 'dispatched hook: guard-bash.mjs', count: 1 },
+    ]);
+  });
+
+  it('counts two attribution lines in one record as two failures', () => {
+    const result = report(
+      [
+        '[houserules] hook-dispatch: guard-bash.mjs exited 1',
+        'first stderr',
+        '[houserules] hook-dispatch: read-guard.mjs timed out after 5s',
+        '',
+      ].join('\n'),
+    );
+    expect(
+      result.rows
+        .map((row) => [row.hook, row.nonZero, row.crashes])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    ).toEqual([
+      ['guard-bash.mjs', 1, 1],
+      ['read-guard.mjs', 1, 1],
+    ]);
+  });
+
+  it('reads each of the five attribution forms', () => {
+    const forms = [
+      'a.mjs exited 3',
+      'b.mjs timed out after 9s',
+      'c.mjs failed to start',
+      'd.mjs is missing',
+      'e.mjs was killed by SIGKILL',
+    ];
+    const result = report(
+      forms.map((form) => `[houserules] hook-dispatch: ${form}`).join('\n'),
+    );
+    expect(result.rows.map((row) => row.hook).sort()).toEqual([
+      'a.mjs',
+      'b.mjs',
+      'c.mjs',
+      'd.mjs',
+      'e.mjs',
+    ]);
+  });
+
+  it('leaves a record without attribution lines under its own hook name', () => {
+    const result = report('plain failure');
+    expect(result.rows.map((row) => row.hook)).toEqual(['PreToolUse:Bash']);
+  });
+});
+
+describe('computeHookHealth from the dispatcher run log', () => {
+  function run(
+    at: string,
+    script: string,
+    event: string,
+    fields: {
+      exitCode?: number | null;
+      hasOutput?: boolean;
+      durationMilliseconds: number;
+    },
+  ): string {
+    return JSON.stringify({
+      at,
+      event,
+      script,
+      exitCode: fields.exitCode ?? 0,
+      hasOutput: fields.hasOutput ?? false,
+      durationMilliseconds: fields.durationMilliseconds,
+    });
+  }
+
+  function rootWithLogs(current: string[], rotated: string[]): string {
+    const root = mkdtempSync(join(tmpdir(), 'hook-health-log-'));
+    mkdirSync(join(root, '.claude/state'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude/state/hook-runs.jsonl'),
+      current.join('\n') + '\n',
+    );
+    writeFileSync(
+      join(root, '.claude/state/hook-runs.1.jsonl'),
+      rotated.join('\n') + '\n',
+    );
+    return root;
+  }
+
+  function windowedCorpus() {
+    const corpus = emptyCorpus(['slug']);
+    corpus.firstTs = Date.parse('2026-11-01T00:00:00.000Z');
+    corpus.lastTs = Date.parse('2026-11-10T00:00:00.000Z');
+    return corpus;
+  }
+
+  const root = rootWithLogs(
+    [
+      run('2026-11-02T10:00:00.000Z', 'changeset-check.mjs', 'Stop', {
+        durationMilliseconds: 100,
+      }),
+      run('2026-11-02T10:01:00.000Z', 'changeset-check.mjs', 'Stop', {
+        durationMilliseconds: 300,
+      }),
+      run('2026-11-02T10:02:00.000Z', 'changeset-check.mjs', 'Stop', {
+        durationMilliseconds: 200,
+      }),
+      run('2026-11-02T10:03:00.000Z', 'changeset-check.mjs', 'Stop', {
+        exitCode: 2,
+        hasOutput: true,
+        durationMilliseconds: 1000,
+      }),
+      'not json {',
+      run('2026-10-01T10:00:00.000Z', 'changeset-check.mjs', 'Stop', {
+        durationMilliseconds: 9999,
+      }),
+      ...[10, 20, 30, 40].map((ms, index) =>
+        run(`2026-11-03T10:0${index}:00.000Z`, 'guard-bash.mjs', 'PreToolUse', {
+          durationMilliseconds: ms,
+        }),
+      ),
+    ],
+    [
+      run('2026-11-02T09:00:00.000Z', 'changeset-check.mjs', 'Stop', {
+        exitCode: 0,
+        hasOutput: true,
+        durationMilliseconds: 3000,
+      }),
+    ],
+  );
+
+  it('yields two Stop path rows and one guard row, dropping malformed and out-of-window lines', () => {
+    const report = computeHookHealth(windowedCorpus(), root);
+
+    expect(report.runLog).toEqual({
+      stopPaths: [
+        {
+          script: 'changeset-check.mjs',
+          path: 'clean',
+          runs: 3,
+          medianMilliseconds: 200,
+          totalSeconds: 0.6,
+        },
+        {
+          script: 'changeset-check.mjs',
+          path: 'dirty',
+          runs: 2,
+          medianMilliseconds: 1000,
+          totalSeconds: 4,
+        },
+      ],
+      guard: { runs: 4, medianMilliseconds: 20, totalSeconds: 0.1 },
+    });
+  });
+
+  it('renders the Stop path table and the guard duration table', () => {
+    const text = renderHookHealth(
+      computeHookHealth(windowedCorpus(), root),
+    ).join('\n');
+
+    expect(text).toContain('Stop hook paths:');
+    expect(text).toContain('Bash guard duration:');
+    expect(text).toMatch(/changeset-check\.mjs\s+dirty\s+2\s+1000\s+4/);
+  });
+
+  it('omits runLog when the root has no log', () => {
+    const report = computeHookHealth(windowedCorpus(), NO_LOG_ROOT);
+
+    expect('runLog' in report).toBe(false);
+    expect(renderHookHealth(report).join('\n')).not.toContain(
+      'Stop hook paths:',
+    );
   });
 });

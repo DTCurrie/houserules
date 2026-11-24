@@ -23,7 +23,7 @@ import { dirname, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
-import { loadConfig, repoRoot } from '@houserules/payload/config';
+import { loadConfig, requireRepoRoot } from '@houserules/payload/config';
 import { BACKLOG_ID } from '@houserules/payload/backlog-id';
 import {
   appendEvent,
@@ -31,7 +31,7 @@ import {
   SEPARATOR,
 } from '@houserules/payload/entry-ledger';
 
-const REPO_ROOT = repoRoot();
+const REPO_ROOT = requireRepoRoot();
 const MAX_INLINE_FILES = 6;
 
 interface Target {

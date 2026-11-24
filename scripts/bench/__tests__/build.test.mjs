@@ -17,7 +17,9 @@ import {
   BUILD_STEPS,
   defaultCacheDir,
   ensureBuild,
+  ensureNewestBuild,
   findBuild,
+  findNewestBuild,
 } from '../build.mjs';
 
 const tmp = mkdtempSync(join(tmpdir(), 'bench-build-test-'));
@@ -96,15 +98,94 @@ describe('ensureBuild', () => {
     assert.equal(existsSync(join(result.root, 'stale.txt')), false);
     assert.equal(existsSync(join(result.root, 'built.txt')), true);
   });
+
+  it('takes over a lock left by a process that has exited, then releases it', () => {
+    const { repoDir, cacheDir, steps } = fixture('abandoned-lock');
+    const sha = git(repoDir, 'rev-parse', 'HEAD').trim();
+    const exitedPid = spawnSync(process.execPath, ['-e', '0']).pid;
+    mkdirSync(join(cacheDir, `${sha}.lock`), { recursive: true });
+    writeFileSync(join(cacheDir, `${sha}.lock`, 'pid'), String(exitedPid));
+
+    const result = ensureBuild('HEAD', { repoDir, cacheDir, steps });
+
+    assert.equal(result.cached, false);
+    assert.equal(existsSync(join(cacheDir, `${sha}.lock`)), false);
+  });
 });
 
 describe('constants', () => {
   it('defaults', () => {
-    assert.ok(defaultCacheDir().endsWith(join('houserules-bench', 'builds')));
+    assert.equal(
+      defaultCacheDir('/repo'),
+      join('/repo', 'node_modules', '.cache', 'houserules-bench', 'builds'),
+    );
     assert.deepEqual(
       BUILD_STEPS.map(([c, a]) => [c, ...a].join(' ')),
-      ['pnpm install --frozen-lockfile', 'pnpm build'],
+      ['pnpm install --frozen-lockfile', 'pnpm build', 'pnpm dogfood'],
     );
+  });
+});
+
+function writeMarker(cacheDir, name, marker) {
+  mkdirSync(join(cacheDir, name), { recursive: true });
+  writeFileSync(
+    join(cacheDir, name, '.bench-build.json'),
+    JSON.stringify(marker),
+  );
+}
+
+describe('findNewestBuild', () => {
+  it('returns the build whose marker finished last, ignoring a directory with no marker', () => {
+    const cacheDir = join(tmp, 'newest', 'cache');
+    writeMarker(cacheDir, 'aaa', {
+      commit: 'aaa',
+      finishedAt: '2026-11-02T00:00:00.000Z',
+    });
+    writeMarker(cacheDir, 'bbb', {
+      commit: 'bbb',
+      finishedAt: '2026-11-01T00:00:00.000Z',
+    });
+    mkdirSync(join(cacheDir, 'ccc'), { recursive: true });
+
+    assert.deepEqual(findNewestBuild({ cacheDir }), {
+      commit: 'aaa',
+      root: join(cacheDir, 'aaa'),
+    });
+  });
+
+  it('returns null when the cache directory does not exist', () => {
+    assert.equal(
+      findNewestBuild({ cacheDir: join(tmp, 'newest-missing') }),
+      null,
+    );
+  });
+});
+
+describe('ensureNewestBuild', () => {
+  it('builds rev when no build has finished', () => {
+    const { repoDir, cacheDir, counter, steps } = fixture('newest-build');
+    const sha = git(repoDir, 'rev-parse', 'HEAD').trim();
+
+    const result = ensureNewestBuild('HEAD', { repoDir, cacheDir, steps });
+
+    assert.deepEqual(result, { commit: sha, root: join(cacheDir, sha) });
+    assert.equal(readFileSync(counter, 'utf8'), 'x\n');
+  });
+
+  it('returns a finished build of another commit without building rev', () => {
+    const { repoDir, cacheDir, counter, steps } = fixture('newest-reuse');
+    writeMarker(cacheDir, 'older', {
+      commit: 'older',
+      finishedAt: '2026-11-01T00:00:00.000Z',
+    });
+
+    const result = ensureNewestBuild('HEAD', { repoDir, cacheDir, steps });
+
+    assert.deepEqual(result, {
+      commit: 'older',
+      root: join(cacheDir, 'older'),
+    });
+    assert.equal(existsSync(counter), false, 'no build step ran');
   });
 });
 

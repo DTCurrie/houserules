@@ -1,0 +1,1 @@
+/plan-project with fable 5.2 and opus 5.5 out, plus whatever new model updates and features, I think it is time for another health-check and quality pass on the repo

@@ -1,11 +1,19 @@
-import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import {
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import { appendFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Flags } from '../../cli-contract.js';
 import type { MigrationChoice } from '../../core/migration-preverify.js';
 import { editHouseConfig } from '#test/installed-tree';
-import { useInstalledRepo } from '#test/repo';
+import { prepareInstalledRepo, useInstalledRepo } from '#test/repo';
 import { runIn } from '#test/run';
 import * as ui from '../../ui.js';
 import { update } from '../update.js';
@@ -40,10 +48,11 @@ function snapshot(root: string): Snapshot {
   };
 }
 
+const INSTALL_SHAPE = 'npm-single';
+const INSTALL_OPTIONS = { modules: 'code-cleanliness,ready,orchestrate' };
+
 function committedInstall(): string {
-  const root = useInstalledRepo('npm-single', {
-    modules: 'code-cleanliness,ready,orchestrate',
-  });
+  const root = useInstalledRepo(INSTALL_SHAPE, INSTALL_OPTIONS);
   editHouseConfig(root, (current) => {
     delete current.modules;
   });
@@ -116,6 +125,10 @@ function output(): string {
     .map((call) => call.join(' '))
     .join('\n');
 }
+
+beforeAll(() => {
+  prepareInstalledRepo(INSTALL_SHAPE, INSTALL_OPTIONS);
+});
 
 beforeEach(() => {
   chooseMock.mockReset();

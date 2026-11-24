@@ -23,7 +23,7 @@
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-import { loadConfigSafe, repoRoot } from '@houserules/payload/config';
+import { loadConfigSafe, requireRepoRoot } from '@houserules/payload/config';
 import type { ConfigTarget } from '@houserules/payload/config';
 import {
   ledgerDir,
@@ -217,7 +217,7 @@ export function checkTargetPathPrefixOverlap(
 }
 
 function main(): void {
-  const root = repoRoot();
+  const root = requireRepoRoot();
   const config = loadConfigSafe();
   const directory = ledgerDir(root, config.ledgers?.dir);
   const backlogFile = ledgerPath(root, 'backlog', config.ledgers?.dir);

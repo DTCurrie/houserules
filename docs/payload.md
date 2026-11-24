@@ -45,6 +45,10 @@ from `packages/cli` and every plugin. Read this before touching any file under a
   (`packages/api/src/config.ts`), and the payload reads it defensively and
   **dependency-free** (`loadConfigSafe()`). They share only the inferred `HouseConfig` type.
   Never make the payload import zod. `payload/__tests__/dependencies.test.ts` enforces this.
+- A plugin hands a tool's specifics to the core scripts through a `.claude/extensions/<plugin>.json`
+  fragment that a `write` action installs. `loadExtensionsSafe()` merges every fragment.
+  `shareVariables` feeds `verify-changed`'s budget env, and `manifestIgnoreKeys` feeds the
+  changeset gate. No core script names a build tool.
 
 ## Prose
 

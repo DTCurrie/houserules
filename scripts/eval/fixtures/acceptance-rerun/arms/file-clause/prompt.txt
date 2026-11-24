@@ -1,0 +1,14 @@
+Spawn exactly one subagent with the Agent tool: subagent_type task-worker. Its prompt is the text between the two marker lines below, byte for byte, with the marker lines themselves left out. Do nothing else yourself. When the subagent finishes, reply with its report.
+
+----- BRIEF START -----
+**Slice 1: rating.** Objective: `node --test --test-reporter=./test/summary-reporter.mjs test/cartons.test.mjs test/depots.test.mjs test/duties.test.mjs test/fuel.test.mjs test/hazards.test.mjs test/rates.test.mjs test/tiers.test.mjs test/volume.test.mjs test/zones.test.mjs` exits 0.
+You own **only** these paths: `src/`. Do not edit anything outside them.
+Context you need: the `src/` and `test/` directories.
+Reference: none.
+Steps: 1. Run the acceptance command. 2. Change files under `src/` until it exits 0.
+Acceptance: `node --test --test-reporter=./test/summary-reporter.mjs test/cartons.test.mjs test/depots.test.mjs test/duties.test.mjs test/fuel.test.mjs test/hazards.test.mjs test/rates.test.mjs test/tiers.test.mjs test/volume.test.mjs test/zones.test.mjs` is your iteration loop. Run it, fix what is
+red, run it again, and stop the moment it goes green. Include the last ~10 lines of each in your
+report.
+Run the acceptance with its full output saved to a file, report the tail of that file, and read a failing test's name from the file instead of running the command again.
+Constraints: none beyond your owned paths.
+----- BRIEF END -----

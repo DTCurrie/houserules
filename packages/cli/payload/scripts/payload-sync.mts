@@ -149,7 +149,8 @@ function isStale(projectDir: string, cliVersion: string): boolean {
 /**
  * update-notifier's skip conditions, as doctor's `isUpdateCheckSkipped` applies them, plus the
  * config's `versionCheck: false`. CI is `CI`, `CONTINUOUS_INTEGRATION`, or any `CI_*` key,
- * unless `CI` is `0` or `false`.
+ * unless `CI` is `0` or `false`. `__tests__/update-check-cases.ts` holds the cases this and
+ * doctor must agree on.
  */
 export function isVersionCheckSkipped(
   env: Record<string, string | undefined>,
@@ -192,8 +193,28 @@ export function isNewer(latest: string, installed: string): boolean {
   return match?.[2] !== undefined;
 }
 
-/** The project's package manager by lockfile, in `detect.ts`'s order, npm when none. */
+/**
+ * The manager `package.json`'s `packageManager` field names, as `detect.ts` parses it: the text
+ * before the last `@` of a value such as `pnpm@9.1.0`. Undefined when the field is absent or holds
+ * no `name@version`.
+ */
+function declaredManager(projectDir: string): string | undefined {
+  const parsed = readJson(join(projectDir, 'package.json')) as
+    { packageManager?: unknown } | undefined;
+  const field = parsed?.packageManager;
+  if (typeof field !== 'string') return undefined;
+  const at = field.lastIndexOf('@');
+  return at > 0 ? field.slice(0, at) : undefined;
+}
+
+/**
+ * The project's package manager in `detect.ts`'s order: the `package.json` `packageManager`
+ * field, then the lockfile, npm when neither names one. Doctor's `cliUpgradeCommand` reads the
+ * same order from `Ctx`, held to it by `__tests__/update-check-cases.ts`.
+ */
 export function localManager(projectDir: string): string {
+  const declared = declaredManager(projectDir);
+  if (declared) return declared;
   if (existsSync(join(projectDir, 'pnpm-lock.yaml'))) return 'pnpm';
   if (existsSync(join(projectDir, 'yarn.lock'))) return 'yarn';
   if (

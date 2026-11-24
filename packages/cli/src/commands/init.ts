@@ -28,13 +28,17 @@ import { HouseError } from '../house-error.js';
 import { buildRegistry } from '../plugin-resolver.js';
 import { validateHouseConfig } from '@houserules/api/internal';
 import { apply } from '../apply.js';
+import {
+  onlyMissingTopLevelKeys,
+  planConfigFill,
+} from '../core/config-fill.js';
 import { settingsParseErrorMessage } from '../core/settings-guard.js';
 import * as ui from '../ui.js';
 import { EXIT } from '../cli-contract.js';
 import { MIN_NODE_MAJOR } from './doctor/environment.js';
 import type { Flags } from '../cli-contract.js';
 import type { Ctx } from '../detect.js';
-import type { Answers } from '@houserules/api';
+import type { Action, Answers, SeedAction } from '@houserules/api';
 import type { PlanResult } from '../plan.js';
 import type { Registry } from '../plugin-registry.js';
 
@@ -76,11 +80,10 @@ function preflight(root: string, ctx: Ctx): void {
   if (settingsError) throw new HouseError(settingsError);
 }
 
-/** Prints the schema problems of an existing config, with a recovery hint, and returns their count. */
-function reportConfigProblems(root: string): number {
-  const configPath = join(root, '.claude', 'houserules.config.json');
-  if (!existsSync(configPath)) return 0;
-  const problems = validateHouseConfig(readFileSync(configPath, 'utf8'));
+const CONFIG_DEST = '.claude/houserules.config.json';
+
+/** Prints schema problems of an existing config, with a recovery hint, and returns their count. */
+function printConfigProblems(problems: string[]): number {
   for (const problem of problems)
     console.error(`houserules.config.json: ${problem}`);
   if (problems.length)
@@ -90,15 +93,85 @@ function reportConfigProblems(root: string): number {
   return problems.length;
 }
 
+/**
+ * Reads the schema problems of an existing config. Returns the file text and its problems, or
+ * null when there is no file.
+ */
+function readConfigProblems(
+  root: string,
+): { text: string; problems: string[] } | null {
+  const configPath = join(root, ...CONFIG_DEST.split('/'));
+  if (!existsSync(configPath)) return null;
+  const text = readFileSync(configPath, 'utf8');
+  return { text, problems: validateHouseConfig(text) };
+}
+
+/** The existing config when the schema rejects it, or null when it is absent, valid, or unreadable. */
+function readRejectedConfig(
+  root: string,
+): { text: string; problems: string[] } | null {
+  try {
+    const existing = readConfigProblems(root);
+    return existing && existing.problems.length > 0 ? existing : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the seed can repair a rejected config: it must be a JSON object, and every problem
+ * must be a top-level key it leaves unset.
+ */
+function isFillable(
+  rejected: { text: string; problems: string[] },
+  ctx: Ctx,
+): boolean {
+  return (
+    ctx.claude.houseConfig != null &&
+    onlyMissingTopLevelKeys(rejected.text, rejected.problems)
+  );
+}
+
+/**
+ * Lets the seed fill the keys a partial config leaves unset. Returns the plan with the config
+ * seed's `managedKeys` widened to those keys, or null after printing the problems that remain.
+ */
+function fillPartialConfig(
+  actions: Action[],
+  existing: { text: string; problems: string[] },
+): Action[] | null {
+  const seed = actions.find(
+    (action): action is SeedAction =>
+      action.kind === 'seed' && action.dest === CONFIG_DEST,
+  );
+  const fill = seed ? planConfigFill(existing.text, seed.content) : null;
+  if (!seed || !fill || fill.problems.length > 0) {
+    printConfigProblems(fill?.problems ?? existing.problems);
+    return null;
+  }
+  return actions.map((action) =>
+    action === seed
+      ? {
+          ...seed,
+          managedKeys: [...(seed.managedKeys ?? []), ...fill.missingKeys],
+        }
+      : action,
+  );
+}
+
 /** Runs the full install: detect, choose, plan, preview, apply. */
 export async function init(dir: string, flags: Flags): Promise<number> {
   const root = resolve(dir);
   let ctx: Ctx;
   let registry: Registry;
+  const partialConfig = readRejectedConfig(root);
   try {
     ctx = detect(root);
     preflight(root, ctx);
-    if (reportConfigProblems(root) > 0) return EXIT.badConfig;
+    if (partialConfig && !isFillable(partialConfig, ctx)) {
+      printConfigProblems(partialConfig.problems);
+      return EXIT.badConfig;
+    }
     registry = buildRegistry(root, ctx.claude.houseConfig, MODULES);
   } catch (e) {
     if (e instanceof HouseError) {
@@ -206,7 +279,13 @@ export async function init(dir: string, flags: Flags): Promise<number> {
 
   let planResult: PlanResult;
   try {
-    planResult = computeEffects(root, buildPlan(ctx, answers, registry), {
+    let actions = buildPlan(ctx, answers, registry);
+    if (partialConfig) {
+      const filled = fillPartialConfig(actions, partialConfig);
+      if (filled === null) return EXIT.badConfig;
+      actions = filled;
+    }
+    planResult = computeEffects(root, actions, {
       manifest: installed,
       plugins: registry.plugins,
       shouldPlanPrepare: true,

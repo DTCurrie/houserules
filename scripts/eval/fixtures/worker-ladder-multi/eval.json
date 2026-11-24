@@ -1,0 +1,21 @@
+{
+  "modules": "plans,orchestrate",
+  "plugins": [],
+  "model": "sonnet",
+  "validityAgent": "task-worker",
+  "collect": ["src", "test"],
+  "arms": {
+    "haiku": {
+      "prompt": "arms/haiku/prompt.txt",
+      "overlay": "arms/haiku/overlay"
+    },
+    "sonnet": {
+      "prompt": "arms/sonnet/prompt.txt",
+      "overlay": "arms/sonnet/overlay"
+    },
+    "opus": {
+      "prompt": "arms/opus/prompt.txt",
+      "overlay": "arms/opus/overlay"
+    }
+  }
+}

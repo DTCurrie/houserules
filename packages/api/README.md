@@ -67,7 +67,7 @@ const module: ModuleDef = {
     ],
   },
   skillTriggers: (answers) =>
-    answers.moduleIds.includes(`${api.alias}/design`)
+    answers.moduleIds.some((id) => id === 'design' || id.endsWith('/design'))
       ? ['- Building UI? Take tokens from the design module.']
       : [],
 };
@@ -100,8 +100,31 @@ author, you declare your own.
 
 `skillTriggers(answers)` returns bullet lines the module adds to the "Skill triggers" section of
 the managed CLAUDE.md region. The CLI calls it only when the module is selected. Read a sibling
-module from `answers.moduleIds` as `${api.alias}/<id>`. `answers.contributedSkillTriggers` holds
-the collected lines. The CLI fills it, and a module never sets it.
+module in `answers.moduleIds` by its bare id or by the suffix `/<id>`. A module from another plugin
+arrives as `<alias>/<id>` under the alias the installing repo chose, so `${api.alias}/<id>` only
+matches your own plugin's modules. `answers.contributedSkillTriggers` holds the collected lines. The CLI fills it, and a module never sets it.
+
+## Handing a tool's specifics to the core scripts
+
+A plugin never edits a core script to teach it about a tool. It installs a fragment at
+`.claude/extensions/<plugin>.json` with a `write` action. The core scripts merge every fragment
+through `loadExtensionsSafe()`. `shareVariables` names env variables that `verify-changed` sets to
+a job's share of the script budget. `manifestIgnoreKeys` names `package.json` keys the changeset
+gate skips when they are the only diff. No core script names a build tool.
+
+```ts
+plan(): Action[] {
+  return [
+    {
+      kind: 'write',
+      dest: '.claude/extensions/my-tool.json',
+      content: `${JSON.stringify({ shareVariables: ['MY_TOOL_PARALLEL'], manifestIgnoreKeys: ['myTool'] }, null, 2)}\n`,
+      module: 'my-tool',
+      reason: 'hands MY_TOOL_PARALLEL and the myTool key to the core scripts',
+    },
+  ];
+}
+```
 
 ## What it deliberately does not give you
 

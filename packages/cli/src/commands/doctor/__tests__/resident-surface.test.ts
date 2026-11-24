@@ -11,6 +11,7 @@ import {
   checkResidentSurface,
   frontmatterDescription,
   measureActiveOutputStyle,
+  measureMemoryIndex,
   measureOnInvokeBodies,
   measurePathScopedRules,
   measureResident,
@@ -582,50 +583,190 @@ describe('measureOnInvokeBodies', () => {
 });
 
 describe('checkResidentSurface', () => {
-  it('reports headroom when the resident surface is under budget', () => {
+  it('reads each CLAUDE.md file against the 200-line limit with no summed budget', () => {
     const root = useRepo('pnpm-single');
-    write(root, 'CLAUDE.md', 'a'.repeat(400));
+    write(root, 'CLAUDE.md', lines(150));
 
-    expect(checkResidentSurface(root).readouts[0]).toContain('headroom');
-  });
+    const result = checkResidentSurface(root);
 
-  it('warns once the resident surface exceeds the token budget', () => {
-    const root = useRepo('pnpm-single');
-    write(root, 'CLAUDE.md', 'a'.repeat(20_000));
-
-    expect(checkResidentSurface(root).findings).toContainEqual(
-      expect.objectContaining({
-        level: 'WARN',
-        msg: expect.stringContaining('always-loaded context exceeds budget'),
-      }),
+    expect(result.readouts).toContainEqual(
+      'CLAUDE.md: 150 lines (documented limit 200 per file)',
     );
+    expect(result.findings).toEqual([]);
+    for (const line of result.readouts) {
+      expect(line).not.toMatch(/vs budget|exceeds budget|headroom|OVER/);
+    }
   });
 
-  it('warns once the resident surface exceeds the line budget while under the token budget', () => {
+  it('warns naming the file once one CLAUDE.md passes 200 lines', () => {
     const root = useRepo('pnpm-single');
     write(root, 'CLAUDE.md', lines(250));
 
     expect(checkResidentSurface(root).findings).toContainEqual(
       expect.objectContaining({
-        msg: expect.stringContaining('always-loaded context exceeds budget'),
+        level: 'WARN',
+        msg: expect.stringContaining(
+          'CLAUDE.md is 250 lines, over the 200-line per-file limit',
+        ),
       }),
     );
   });
 
-  it('pushes a skill/agent tier over budget that neither tier exceeds alone', () => {
+  it('measures an imported file on its own, so two files under 200 lines do not warn together', () => {
     const root = useRepo('pnpm-single');
-    write(root, 'CLAUDE.md', 'a'.repeat(15_000));
+    write(root, 'CLAUDE.md', `@big.md\n${lines(150)}`);
+    write(root, 'big.md', lines(150));
+
+    expect(checkResidentSurface(root).findings).toEqual([]);
+  });
+
+  it('does not warn on a large character count under the line limit', () => {
+    const root = useRepo('pnpm-single');
+    write(root, 'CLAUDE.md', 'a'.repeat(20_000));
+
+    expect(checkResidentSurface(root).findings).toEqual([]);
+  });
+
+  it('warns on a skill entry past 1,536 characters and not on one under it', () => {
+    const root = useRepo('pnpm-single');
     write(
       root,
-      '.claude/skills/a/SKILL.md',
+      '.claude/skills/long/SKILL.md',
       `---\ndescription: ${'d'.repeat(2000)}\n---\n`,
     );
+    write(
+      root,
+      '.claude/skills/short/SKILL.md',
+      `---\ndescription: ${'d'.repeat(1000)}\n---\n`,
+    );
 
-    expect(checkResidentSurface(root).findings).toContainEqual(
+    const result = checkResidentSurface(root);
+
+    expect(result.readouts).toContainEqual(
+      'skill listing entries: longest 2000 chars (documented limit 1536 per entry)',
+    );
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toMatchObject({
+      level: 'WARN',
+      msg: expect.stringContaining('.claude/skills/long/SKILL.md has 2000'),
+    });
+  });
+
+  it('warns once agent descriptions combined pass 15,000 tokens and not under it', () => {
+    const root = useRepo('pnpm-single');
+    write(
+      root,
+      '.claude/agents/a.md',
+      `---\ndescription: ${'d'.repeat(40_000)}\n---\n`,
+    );
+    expect(checkResidentSurface(root).findings).toEqual([]);
+
+    write(
+      root,
+      '.claude/agents/b.md',
+      `---\ndescription: ${'d'.repeat(30_000)}\n---\n`,
+    );
+    const result = checkResidentSurface(root);
+
+    expect(result.readouts).toContainEqual(
+      'agent descriptions combined: ~17500 tokens (documented warning at 15000)',
+    );
+    expect(result.findings).toContainEqual(
       expect.objectContaining({
-        msg: expect.stringContaining('skill/agent descriptions'),
+        level: 'WARN',
+        msg: expect.stringContaining('over the 15000-token'),
       }),
     );
+  });
+
+  describe('MEMORY.md', () => {
+    function writeMemory(root: string, text: string): string {
+      const claudeConfigDir = mkdtempSync(join(tmpdir(), 'hr-memory-'));
+      const top = detect(root).git.top ?? root;
+      const projectsDir = join(claudeConfigDir, 'projects');
+      write(
+        join(projectsDir, claudeProjectDir(top, projectsDir)),
+        'memory/MEMORY.md',
+        text,
+      );
+      return claudeConfigDir;
+    }
+
+    it('reads MEMORY.md from under the config dir and ignores a cwd-relative copy', () => {
+      const root = useRepo('pnpm-single');
+      const claudeConfigDir = writeMemory(root, lines(50));
+      const emptyConfigDir = mkdtempSync(join(tmpdir(), 'hr-memory-'));
+
+      const found = measureMemoryIndex(root, { claudeConfigDir });
+
+      expect(found?.path.startsWith(join(claudeConfigDir, 'projects'))).toBe(
+        true,
+      );
+      expect(found?.lines).toBe(50);
+      expect(
+        measureMemoryIndex(root, { claudeConfigDir: emptyConfigDir }),
+      ).toBeNull();
+    });
+
+    it('reads the MEMORY.md of a caller-given repoTop instead of detecting one', () => {
+      const root = useRepo('pnpm-single');
+      const otherTop = mkdtempSync(join(tmpdir(), 'hr-other-top-'));
+      const claudeConfigDir = mkdtempSync(join(tmpdir(), 'hr-memory-'));
+      const projectsDir = join(claudeConfigDir, 'projects');
+      write(
+        join(projectsDir, claudeProjectDir(otherTop, projectsDir)),
+        'memory/MEMORY.md',
+        lines(7),
+      );
+
+      const found = measureMemoryIndex(root, {
+        claudeConfigDir,
+        repoTop: otherTop,
+      });
+
+      expect(found?.lines).toBe(7);
+    });
+
+    it('reads a MEMORY.md under both limits without a finding', () => {
+      const root = useRepo('pnpm-single');
+      const claudeConfigDir = writeMemory(root, lines(50));
+
+      const result = checkResidentSurface(root, { claudeConfigDir });
+
+      expect(result.readouts).toContainEqual(
+        expect.stringMatching(
+          /^MEMORY\.md \(.*\): 50 lines \/ \d+ bytes \(documented load limit 200 lines or 25600 bytes\)$/,
+        ),
+      );
+      expect(result.findings).toEqual([]);
+    });
+
+    it('warns past 200 lines', () => {
+      const root = useRepo('pnpm-single');
+      const claudeConfigDir = writeMemory(root, lines(250));
+
+      expect(
+        checkResidentSurface(root, { claudeConfigDir }).findings,
+      ).toContainEqual(
+        expect.objectContaining({
+          level: 'WARN',
+          msg: expect.stringContaining('250 lines'),
+        }),
+      );
+    });
+
+    it('warns past 25 KB with few lines', () => {
+      const root = useRepo('pnpm-single');
+      const claudeConfigDir = writeMemory(root, 'a'.repeat(30_000));
+
+      expect(
+        checkResidentSurface(root, { claudeConfigDir }).findings,
+      ).toContainEqual(
+        expect.objectContaining({
+          msg: expect.stringContaining('30000 bytes'),
+        }),
+      );
+    });
   });
 
   it('warns that a globless rule loads on every turn', () => {

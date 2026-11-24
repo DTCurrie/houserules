@@ -30,9 +30,11 @@ interface PluginPackageJson {
 }
 
 function fail(pluginName: string, message: string, cause?: unknown): never {
-  const error = new PluginResolutionError(pluginName, message);
-  if (cause !== undefined) error.cause = cause;
-  throw error;
+  throw new PluginResolutionError(
+    pluginName,
+    message,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** Renders the install command for `root`'s detected package manager, defaulting to npm. */

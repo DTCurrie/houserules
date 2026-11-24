@@ -238,6 +238,14 @@ function runnerArgv(step, tokens, settings) {
   return [...filter, ...exec, ...tokens];
 }
 
+/** Why a spawn does not count as a timed run, or null when it exited 0. */
+function failureOf(result) {
+  if (result.error) return String(result.error);
+  if (result.signal) return `killed by ${result.signal}`;
+  if (result.status !== 0) return `exit ${result.status}`;
+  return null;
+}
+
 function timeStep(argv, root, settings) {
   const started = process.hrtime.bigint();
   const result = spawnSync(settings.runner, argv, {
@@ -252,8 +260,10 @@ function timeStep(argv, root, settings) {
     Number(process.hrtime.bigint() - started) / NANOSECONDS_PER_MILLISECOND,
   );
   const stderr = `${result.stderr ?? ''}${result.error ? String(result.error) : ''}`;
+  const error = failureOf(result);
   return {
-    durationMs,
+    durationMs: error === null ? durationMs : null,
+    error,
     status: result.status,
     signal: result.signal,
     stderr: stderr.slice(0, STDERR_EXCERPT),
@@ -285,6 +295,7 @@ function timingLine(step, { root, settings, remote, cacheDir }) {
       ...base,
       argv: null,
       durationMs: null,
+      error: null,
       status: null,
       signal: null,
       stderr: null,

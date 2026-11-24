@@ -132,8 +132,9 @@ the ceiling, close it at a barrier like any wave, then send the next batch.
 
 Read `share` from the same line. It is how many test workers each slice in the wave may start.
 When the wave holds more than one worker, the share prefix on every acceptance command that boots a
-test runner is `VITEST_MAX_WORKERS=<share> WIREIT_PARALLEL=1`. A repo on another runner sets that
-runner's worker variable instead. A wave of one worker takes no prefix, so a run alone keeps its
+test runner is `VITEST_MAX_WORKERS=<share>`, plus each variable a `.claude/extensions/*.json` fragment lists
+under `shareVariables`, set to 1. A repo on another runner sets that runner's worker variable
+instead. A wave of one worker takes no prefix, so a run alone keeps its
 default pool. For a wave under the ceiling, rerun the script with `--workers <n>` and read `share`
 again. The reason is measured: nine concurrent suites on 18 cores passed in 313 s at a share of 4,
 and with no prefix they took 1721 s and timed out about 110 tests each.
@@ -171,6 +172,14 @@ every worker pays a cold acceptance boot.
   `research-spike` or `closeout-worker`, dispatch that agent with the brief. When that agent's file
   is absent from `.claude/agents/`, dispatch `task-worker` with the same brief, as `/plan-project`
   already has the implementer take an absent `research-spike`'s work.
+- **A spawn refused with `Agent type not found` right after an install.** The predicate is two
+  facts: the spawn fails with that error, and the agent's file exists under `.claude/agents/`
+  because an install ran this session. A new agent type can take a few minutes to become
+  spawnable, and one run saw it appear after about three. Wait 60 seconds and retry, up to five
+  times. When the fifth retry fails, dispatch `general-purpose` with the same brief, told to read
+  and follow the installed agent file at `.claude/agents/<type>.md`, the same shape as the
+  missing-`task-worker` fallback above. If the file is absent, the install did not run, so this
+  bullet does not apply.
 - **A refused report-file `Write`.** The harness refuses a subagent's `Write` of a report-named
   file, such as `REPORT.md`, at every depth and in every directory. When a worker reports that
   refusal, its standing rules in `agents/task-worker.md` have it hand back a draft under a name

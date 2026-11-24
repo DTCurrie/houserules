@@ -195,7 +195,7 @@ function buildTargets() {
 
 /**
  * The plugins this repo actually loads, by relative path, and their alias. The authority
- * for which of the ten payload docs are reachable and which of the eighteen rules install:
+ * for which of the ten payload docs are reachable and which of the nineteen rules install:
  * a plugin absent here contributes nothing, no matter what it ships.
  */
 const PLUGINS = [
@@ -210,6 +210,7 @@ const PLUGINS = [
   { name: './packages/plugin-svelte', alias: 'svelte' },
   { name: './packages/plugin-design', alias: 'design' },
   { name: './packages/plugin-github', alias: 'github' },
+  { name: './packages/plugin-wireit', alias: 'wireit' },
 ];
 
 /**
@@ -234,7 +235,7 @@ const PLUGINS = [
  * `task-worker-low` and `task-worker-xhigh` variants.
  *
  * Every other entry installs one plugin's rule/reference set for real, chosen so the
- * eighteen rules this repo's CLAUDE.md says it carries all actually install, and so the
+ * nineteen rules this repo's CLAUDE.md says it carries all actually install, and so the
  * option-gated reference docs (design-game-*, design-tailwind-theming, three-performance)
  * get a real, reachable install to prove the appendBody routing tails work end to end.
  */
@@ -262,6 +263,9 @@ const MODULES = [
   'backlog/backlog',
   'decisions/decisions',
   'github/projects',
+  'wireit/wireit',
+  'wireit/wireit-lint',
+  'wireit/wireit-setup',
 ];
 
 /**
@@ -295,7 +299,7 @@ const houseConfig = {
     runner: 'pnpm',
     filterFlag: '',
     runScriptPrefix: ['run'],
-    commands: ['lint:fix:paths', 'format:paths'],
+    commands: ['lint:fix:paths', 'format:fix:paths'],
     passPaths: true,
   },
   // Fixed seam (brief step 5): `verify-changed.mjs` scopes this per changed package with
@@ -306,6 +310,7 @@ const houseConfig = {
     filterFlag: '--filter',
     runScriptPrefix: ['run'],
     commands: ['check', 'test'],
+    rootCommands: ['verify'],
   },
   lintableExtensions: [
     'ts',

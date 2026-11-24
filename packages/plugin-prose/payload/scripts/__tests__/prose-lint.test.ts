@@ -259,6 +259,73 @@ describe('prose-lint.mjs over a source file', () => {
   });
 });
 
+describe('prose-lint.mjs over a CSS file', () => {
+  it('reports nothing for declarations alone', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/repro.css',
+      '/* Brand tokens. */\n:root {\n  --color-brand: #0a0a0a;\n  --space-1: 0.25rem;\n}\n',
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).toContain('No findings.');
+  });
+
+  it('reports only the semicolon in the comment, on the comment line', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/theme.css',
+      'a{color:red;margin:0}\n\n/* Tokens; keep sorted. */\nb {\n  top: 1px;\n}\n',
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.stdout.match(/no-semicolons/g)?.length).toBe(1);
+    expect(r.stdout).toContain('theme.css:3');
+  });
+
+  it('does not read an unquoted url() as a line comment', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/img.css',
+      '.a { background: url(https://example.com/x.png); color: blue; }\n',
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.status, r.stdout).toBe(0);
+    expect(r.stdout).toContain('No findings.');
+  });
+
+  it('keeps line numbers across a multi-line comment and a comment sharing a line with a declaration', () => {
+    const root = stage();
+    const rel = writeMarkdown(
+      root,
+      'src/multi.css',
+      [
+        '/*',
+        ' * First line.',
+        ' * Second; line.',
+        ' */',
+        '.a { color: red; } /* trailing; note */',
+        '.b { content: "/* not a comment; */"; }',
+        '',
+      ].join('\n'),
+    );
+
+    const r = lint(root, rel);
+
+    expect(r.stdout.match(/no-semicolons/g)?.length).toBe(2);
+    expect(r.stdout).toContain('multi.css:3');
+    expect(r.stdout).toContain('multi.css:5');
+  });
+});
+
 describe('commentsOf', () => {
   it('keeps the line count of the source so findings map back to it', () => {
     const source =

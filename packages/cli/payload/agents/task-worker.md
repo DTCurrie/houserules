@@ -131,7 +131,9 @@ iterate against and then run the real acceptance separately at the end. That is 
 was asked for, and a green proxy proves nothing about the command the brief actually named. Once the
 real acceptance is green, report the last ~10 lines of that untailed run and finish. A failing run gets each failing test and its error instead. Do not run it again to confirm, do not re-run
 it after an unrelated edit, and do not alternate between two commands looking for reassurance. A
-second green run costs the same as the first and tells you nothing the first did not. This is the
+second green run costs the same as the first and tells you nothing the first did not. When the
+output ends on a progress line, such as a build orchestrator's ` 88% [`, read the exit code and any output file
+the call names. Run it again only after you name what the output lacked. This is the
 single largest source of waste in a fan out, because every worker pays it in parallel. Iterating
 while a command is still RED is the job. Iterating after it turns green is not.
 

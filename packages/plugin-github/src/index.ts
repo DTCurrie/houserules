@@ -66,6 +66,7 @@ function projectsModule(api: PluginApi): ModuleDef {
         api.payload.lib(id, 'backfill-plan.mjs'),
         api.payload.lib(id, 'surface-orphans.mjs'),
         api.payload.lib(id, 'push-outcome.mjs'),
+        api.payload.lib(id, 'push-lock.mjs'),
         api.payload.script(
           id,
           'projects-sync-hook.mjs',

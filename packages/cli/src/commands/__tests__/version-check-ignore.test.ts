@@ -14,6 +14,8 @@ describe('init and the version-check cache', () => {
 
     const gitignore = readFileSync(join(root, '.claude/.gitignore'), 'utf8');
     expect(gitignore).toContain('/state/version-check.json');
+    expect(gitignore).toContain('/state/hook-runs.jsonl');
+    expect(gitignore).toContain('/state/hook-runs.1.jsonl');
 
     const check = spawnSync(
       'git',
@@ -21,5 +23,19 @@ describe('init and the version-check cache', () => {
       { cwd: root },
     );
     expect(check.status).toBe(0);
+
+    const logCheck = spawnSync(
+      'git',
+      ['check-ignore', '-q', '.claude/state/hook-runs.jsonl'],
+      { cwd: root },
+    );
+    expect(logCheck.status).toBe(0);
+
+    const rotatedCheck = spawnSync(
+      'git',
+      ['check-ignore', '-q', '.claude/state/hook-runs.1.jsonl'],
+      { cwd: root },
+    );
+    expect(rotatedCheck.status).toBe(0);
   });
 });

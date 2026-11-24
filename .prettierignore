@@ -11,11 +11,14 @@ CHANGELOG.md
 # Its acceptance is that regenerating produces a byte-identical file, so a formatter pass over
 # it would silently break reproducibility the next time the generator changes.
 packages/plugin-accessibility/payload/reference/wcag22.md
+# A gitignored checkout of an older commit, built and deleted around one eval run.
+scripts/eval/fixtures/plan-stop-rule/repo/
 
 # houserules:prettierignore start
 # Installed by houserules and tracked by content hash. Formatting these rewrites
 # bytes houserules owns, which makes `npx houserules update` skip them as your edits.
 .claude/agents/
+.claude/extensions/
 .claude/houserules.config.json
 .claude/houserules.manifest.json
 .claude/houserules.md

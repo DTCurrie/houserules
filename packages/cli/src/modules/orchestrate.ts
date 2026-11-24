@@ -46,6 +46,7 @@ export const requires: ModuleRequirement[] = [{ id: 'sweep' }, { id: 'plans' }];
 // when not. Read by the root `verify:module-references` check.
 export const uses: ModuleRequirement[] = [
   { id: 'code-cleanliness' },
+  { id: 'core' },
   { id: 'ready' },
   { id: 'research' },
   { id: 'reviewers' },

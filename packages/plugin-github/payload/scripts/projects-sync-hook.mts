@@ -29,6 +29,7 @@ import { ledgerDir, readLog } from '@houserules/payload/entry-ledger';
 import { ENABLE_TOKEN_BASENAME } from './lib/sync-gate.mjs';
 import { buildPushQueue, summarizeQueue } from './lib/push-queue.mjs';
 import type { LedgerRecord } from './lib/push-queue.mjs';
+import { pushLockIsHeld, pushLockPath } from './lib/push-lock.mjs';
 
 const BACKLOG_LEDGER_BASENAME = 'backlog.jsonl';
 const DECISIONS_LEDGER_BASENAME = 'decisions.jsonl';
@@ -36,52 +37,10 @@ const STATE_DIR = '.claude/state';
 const LOG_BASENAME = 'projects-sync.log';
 const MAX_LOG_BYTES = 256 * 1024;
 const KEPT_LOG_BYTES = 64 * 1024;
-const LOCK_BASENAME = 'projects-sync.lock';
-// Matches PUSH_LOCK_STALE_MS in projects-sync.mts, which cannot be imported without running it.
-const LOCK_STALE_MS = 5 * 60 * 1000;
-
-interface PushLockOwner {
-  pid: number;
-  startedAt: number;
-}
-
-function readLockOwner(lockFile: string): PushLockOwner | null {
-  try {
-    const parsed = JSON.parse(
-      readFileSync(lockFile, 'utf8'),
-    ) as Partial<PushLockOwner>;
-    if (typeof parsed.pid === 'number' && typeof parsed.startedAt === 'number')
-      return { pid: parsed.pid, startedAt: parsed.startedAt };
-  } catch {
-    // A missing or half written lock falls through to the file's own age.
-  }
-  return null;
-}
-
-function pidIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM';
-  }
-}
-
-function lockFileIsFresh(lockFile: string): boolean {
-  try {
-    return Date.now() - statSync(lockFile).mtimeMs <= LOCK_STALE_MS;
-  } catch {
-    return false;
-  }
-}
 
 /** Whether a live, fresh push lock exists, so a burst of hooks spawns one push. */
 function pushLockHeld(root: string): boolean {
-  const lockFile = resolve(root, STATE_DIR, LOCK_BASENAME);
-  if (!existsSync(lockFile)) return false;
-  const owner = readLockOwner(lockFile);
-  if (!owner) return lockFileIsFresh(lockFile);
-  return pidIsAlive(owner.pid) && Date.now() - owner.startedAt <= LOCK_STALE_MS;
+  return pushLockIsHeld(pushLockPath(root));
 }
 
 function hasSyncToken(ledgerDirectory: string): boolean {

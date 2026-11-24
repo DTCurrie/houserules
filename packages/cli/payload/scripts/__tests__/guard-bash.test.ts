@@ -109,23 +109,9 @@ describe('gitDenyRules', () => {
       gitStash: false,
       gitDiscard: false,
       prCreate: false,
-      custom: [{ pattern: '(unclosed' }],
+      custom: [{ pattern: '(unclosed', message: 'never shown' }],
     });
     expect(rules).toEqual([]);
-  });
-
-  it('falls back to a generated message for a custom rule with no message', () => {
-    const rules = gitDenyRules({
-      gitCommit: false,
-      gitPush: false,
-      gitStash: false,
-      gitDiscard: false,
-      prCreate: false,
-      custom: [{ pattern: 'docker system prune' }],
-    });
-    expect(rules[0]?.msg).toBe(
-      'Blocked by houserules.config.json guard rule: docker system prune',
-    );
   });
 });
 
@@ -217,6 +203,108 @@ describe('guardRefusalFor', () => {
     'returns null for "%s", since flags and quoted arguments must not be mistaken for the guarded subcommand',
     (cmd) => {
       expect(guardRefusalFor(cmd)).toBeNull();
+    },
+  );
+
+  const SPACED_GLOBAL_OPTIONS = [
+    'git -C $(echo x)',
+    'git -C `x`',
+    'git -C `echo x`',
+    'git -c k="a b"',
+    "git -c k='a b'",
+    'git -C "/a path/with spaces"',
+  ];
+
+  it.each(SPACED_GLOBAL_OPTIONS.map((options) => `${options} commit -m x`))(
+    'refuses the commit "%s", whose global option value is substituted or holds a space',
+    (cmd) => {
+      expect(guardRefusalFor(cmd)).toMatch(
+        /Blocked by houserules guard: git commit/,
+      );
+    },
+  );
+
+  it.each(
+    SPACED_GLOBAL_OPTIONS.flatMap((options) => [
+      `${options} checkout -- src/world.py`,
+      `${options} restore src/world.py`,
+      `${options} reset --hard`,
+      `${options} clean -fd`,
+      `${options} switch -f main`,
+    ]),
+  )(
+    'refuses the discard "%s", whose global option value is substituted or holds a space',
+    (cmd) => {
+      expect(guardRefusalFor(cmd)).toMatch(
+        /discard uncommitted work.*inverse with Edit/,
+      );
+    },
+  );
+
+  it.each([
+    "printf '%s\\n' 'missed form: make; git commit -m x' >> notes.log",
+    'printf "%s\\n" "missed form: make; git commit -m x" >> notes.log',
+    'echo "make; git commit -m x"',
+    "echo 'pnpm test && git checkout -- src/world.py'",
+    'echo "a | git stash"',
+    'git log --grep "fix; git push"',
+    "cat <<'EOF' >> notes.md\nran: make; git commit -m x\ngit checkout -- src/world.py\nEOF",
+    'cat <<EOF >> notes.md\nran: make; git commit -m x\nEOF',
+    'cat <<-"EOF"\n\tgit commit -m x\n\tEOF\necho done',
+    'echo hi # then; git commit',
+    "echo $'it\\'s; git commit'",
+  ])(
+    'returns null for "%s", since a quoted argument, a heredoc body, or a comment only mentions the command',
+    (cmd) => {
+      expect(guardRefusalFor(cmd)).toBeNull();
+    },
+  );
+
+  it.each([
+    'echo $(git commit -m x)',
+    'echo "$(git commit -m x)"',
+    'echo `git commit -m x`',
+    'echo "`git commit -m x`"',
+    'echo $(echo $(git commit -m x))',
+    "bash -c 'git commit -m x'",
+    'sh -c "make && git commit -m x"',
+    "bash -lc 'git -C /repo commit'",
+    '/bin/bash -c "git commit"',
+    "eval 'git commit -m x'",
+    'eval git commit -m x',
+    'diff <(git commit -m x) out.txt',
+    'cat <<EOF\n$(git commit -m x)\nEOF',
+    '(git commit -m x)',
+    '{ git commit -m x; }',
+    'if true; then git commit -m x; fi',
+    'FOO=1 git commit -m x',
+    '"git" commit -m x',
+    "g'i't commit -m x",
+    'git "commit" -m x',
+    'g\\it commit -m x',
+    'make \\\n  && git commit -m x',
+    "cat <<'EOF'\nbody\nEOF\ngit commit -m x",
+    'echo "x" | git stash',
+    'git -C $(echo x) stash',
+    'git -c k="a b" push origin main',
+  ])(
+    'refuses "%s", since a command substitution, a nested shell, or quoting still runs the command',
+    (cmd) => {
+      expect(guardRefusalFor(cmd)).toMatch(/Blocked by houserules guard/);
+    },
+  );
+
+  it.each([
+    'git commit -m "unbalanced',
+    'git -c k="a b" commit -m x\necho "unbalanced',
+    'echo $(git commit -m x',
+    'echo `git commit -m x',
+    'cat <<EOF\ngit commit -m x',
+    'git -c k="a b" commit -m x <<EOF',
+  ])(
+    'refuses "%s", which the tokenizer cannot parse, by reading every unclosed quote, substitution, and heredoc as running to the end',
+    (cmd) => {
+      expect(guardRefusalFor(cmd)).toMatch(/Blocked by houserules guard/);
     },
   );
 });

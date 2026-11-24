@@ -13,15 +13,30 @@ import { join } from 'node:path';
 import { STDERR, STREAM, TRANSCRIPTS } from './layout.mjs';
 
 const MS_PER_MINUTE = 60_000;
-/** The built-in tools that reach the network. Bash's own network access is not covered. */
+/** The built-in tools that reach the network. Bash is covered by `NETWORK_SANDBOX`. */
 const NETWORK_TOOLS = 'WebFetch,WebSearch';
+/**
+ * The `--settings` JSON that sandboxes Bash with no allowed network domains. `failIfUnavailable`
+ * makes a platform that cannot sandbox (Linux without bubblewrap and socat) abort the session
+ * instead of running Bash unsandboxed, and `allowUnsandboxedCommands: false` removes the retry
+ * outside the sandbox. `--settings` sits above the project and local files that
+ * `--setting-sources project,local` loads, so the sample repo cannot turn it off.
+ */
+const NETWORK_SANDBOX = {
+  sandbox: {
+    enabled: true,
+    failIfUnavailable: true,
+    allowUnsandboxedCommands: false,
+    network: { allowedDomains: [] },
+  },
+};
 
 /**
  * The argv after `claude` for one child session, prompt right after `-p`.
  *
  * @param {{ prompt: string, model: string, perRun: number, tools?: string, isNetworkAllowed?: boolean }} options
  *   `tools`, when set, adds `--tools <value>`, as preflight probe (a) passes `""`. `isNetworkAllowed`
- *   `false` adds `--disallowedTools WebFetch,WebSearch`. `true` or absent adds nothing, so the
+ *   `false` adds `--disallowedTools WebFetch,WebSearch` and `--settings` with `NETWORK_SANDBOX`. `true` or absent adds nothing, so the
  *   preflight calls, which pass none, keep their argv.
  * @returns {string[]}
  */
@@ -44,6 +59,7 @@ export function childArgv(options) {
   if (options.tools !== undefined) argv.push('--tools', options.tools);
   if (options.isNetworkAllowed === false) {
     argv.push('--disallowedTools', NETWORK_TOOLS);
+    argv.push('--settings', JSON.stringify(NETWORK_SANDBOX));
   }
   return argv;
 }

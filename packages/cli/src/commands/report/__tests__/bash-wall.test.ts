@@ -74,6 +74,22 @@ describe('bashFamily', () => {
     { command: 'echo "a && b" && ls', family: 'echo' },
     { command: 'false || pnpm test', family: 'false' },
     { command: 'pnpm', family: 'pnpm' },
+    {
+      command: 'for p in a b; do pnpm --filter $p check; done',
+      family: 'pnpm check',
+    },
+    { command: 'ls dist && pnpm test', family: 'pnpm test' },
+    { command: 'cat log | node scripts/x.mjs', family: 'x.mjs' },
+    { command: 'pnpm test 2>&1 | tail -5', family: 'pnpm test' },
+    { command: 'while true; do git status; done', family: 'git status' },
+    {
+      command: 'if ! git diff --quiet; then echo dirty; fi',
+      family: 'git diff',
+    },
+    { command: 'if pnpm test; then echo ok; fi', family: 'pnpm test' },
+    { command: 'until git fetch; do sleep 1; done', family: 'git fetch' },
+    { command: 'echo hi | grep h', family: 'echo' },
+    { command: 'cd /repo && cd src', family: '' },
   ])('maps $command to $family', ({ command, family }) => {
     expect(bashFamily(command)).toBe(family);
   });

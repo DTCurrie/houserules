@@ -1,0 +1,6 @@
+{
+  "dataDir": "data",
+  "extensions": [".txt"],
+  "ignore": [],
+  "wordPattern": "\\s+"
+}

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -43,11 +43,45 @@ export function hookCommandsFor(settings: Settings, event: string): string[] {
   );
 }
 
+/** The shape of `.claude/scripts/hook-wiring.json`, the file the hook dispatcher reads. */
+interface HookWiringShape {
+  version: number;
+  events: Record<
+    string,
+    { script: string; matcher?: string; timeout?: number; onFailure?: string }[]
+  >;
+}
+
+const SCRIPTS_RELATIVE_DIR = '.claude/scripts/';
+export const HOOK_WIRING_RELATIVE_PATH = `${SCRIPTS_RELATIVE_DIR}hook-wiring.json`;
+const EMPTY_WIRING_VERSION = 1;
+
+/** The installed hook wiring, or one with no events when the install wrote none. */
+export function hookWiringOf(root: string): HookWiringShape {
+  const path = join(root, HOOK_WIRING_RELATIVE_PATH);
+  if (!existsSync(path)) return { version: EMPTY_WIRING_VERSION, events: {} };
+  return readJson<HookWiringShape>(path);
+}
+
+/** Every script the dispatcher runs for one event, in wiring order. */
+export function dispatchedScriptsFor(root: string, event: string): string[] {
+  return (hookWiringOf(root).events[event] ?? []).map((entry) => entry.script);
+}
+
+/**
+ * Every hook command in settings, plus `.claude/scripts/<script>` for each script the
+ * dispatcher runs, so an assertion that no hook names a module still sees dispatched hooks.
+ */
 export function allHookCommands(root: string): string[] {
   const settings = settingsOf(root);
-  return Object.keys(settings.hooks ?? {}).flatMap((event) =>
+  const settingsCommands = Object.keys(settings.hooks ?? {}).flatMap((event) =>
     hookCommandsFor(settings, event),
   );
+  const dispatchedPaths = Object.values(hookWiringOf(root).events).flatMap(
+    (entries) =>
+      entries.map((entry) => `${SCRIPTS_RELATIVE_DIR}${entry.script}`),
+  );
+  return [...settingsCommands, ...dispatchedPaths];
 }
 
 export interface HouseManifestShape {

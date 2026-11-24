@@ -1,0 +1,21 @@
+{
+  "modules": "plans,orchestrate",
+  "plugins": [],
+  "model": "haiku",
+  "validityAgent": "task-worker",
+  "collect": [],
+  "arms": {
+    "control": {
+      "prompt": "arms/control/prompt.txt",
+      "overlay": "arms/control/overlay"
+    },
+    "file-clause": {
+      "prompt": "arms/file-clause/prompt.txt",
+      "overlay": "arms/file-clause/overlay"
+    },
+    "names-report": {
+      "prompt": "arms/names-report/prompt.txt",
+      "overlay": "arms/names-report/overlay"
+    }
+  }
+}

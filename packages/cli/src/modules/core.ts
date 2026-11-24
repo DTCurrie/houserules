@@ -23,6 +23,7 @@ import type {
 import type { Ctx } from '../detect.js';
 import { lib, script, selfGitignoreAction, template } from './copy-actions.js';
 import { hookFragment } from '@houserules/api';
+import { HOOK_DISPATCH_SCRIPT } from '@houserules/api/internal';
 
 // Staged by their owning opt-in module rather than by core's blanket walk, so a repo
 // that never enables that module does not carry its pattern.
@@ -94,6 +95,14 @@ function libActions(): Action[] {
       'UserPromptSubmit: inject a referenced backlog or decision entry from the log',
     ),
   );
+  // Prints only when the prompt is an agent's interim notice, so every other prompt is inert.
+  actions.push(
+    script(
+      id,
+      'notice-interim.mjs',
+      'UserPromptSubmit: tell the turn an interim agent notice opens how to answer it',
+    ),
+  );
   actions.push(
     script(
       id,
@@ -104,6 +113,11 @@ function libActions(): Action[] {
       id,
       'version-check.mjs',
       'spawned by payload-sync for the daily registry check, so a newer CLI is noticed',
+    ),
+    script(
+      id,
+      HOOK_DISPATCH_SCRIPT,
+      'every hook event: run the hooks .claude/scripts/hook-wiring.json lists for it',
     ),
   );
   return actions;
@@ -252,7 +266,7 @@ function instructionsFileActions(ctx: Ctx, answers: Answers): Action[] {
   return actions;
 }
 
-/** The two settings fragments core contributes: the Bash guard, and the ledger injector. */
+/** The settings fragments core contributes: the Bash guard, the two prompt hooks, and payload sync. */
 function settingsActions(): Action[] {
   return [
     {
@@ -277,6 +291,11 @@ function settingsActions(): Action[] {
       kind: 'merge-settings',
       module: id,
       fragment: hookFragment('UserPromptSubmit', null, 'ledger-inject.mjs'),
+    },
+    {
+      kind: 'merge-settings',
+      module: id,
+      fragment: hookFragment('UserPromptSubmit', null, 'notice-interim.mjs'),
     },
     {
       kind: 'merge-settings',

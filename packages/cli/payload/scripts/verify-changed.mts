@@ -26,25 +26,31 @@
  *              package it depends on to exit. Verdict lines print in scope order, each
  *              once every job ahead of it has exited. Residue tails print after all jobs,
  *              in scope order. Each child gets its job's share of the budget in
- *              WIREIT_PARALLEL and pnpm_config_workspace_concurrency, plus
- *              VITEST_MAX_WORKERS when that share is under vitest's default pool. Jobs run
- *              one at a time when the caller already set any of those three variables,
- *              which then pass through unchanged, or when the budget signals cannot be read.
+ *              pnpm_config_workspace_concurrency and each variable a .claude/extensions/*.json
+ *              fragment lists under shareVariables, plus VITEST_MAX_WORKERS when that share
+ *              is under vitest's default pool. Jobs run one at a time when the caller
+ *              already set any of those variables, which then pass through unchanged, or
+ *              when the budget signals cannot be read.
  *
  * Config (houserules.config.json, verify block, mirroring fix): verify.runner / filterFlag /
  * runScriptPrefix / commands, verify.baseBranch (else changesets.baseBranch, else
  * "main"), verify.relatedCommand (whitespace-split template used with --paths),
- * verify.concurrent (false runs the --run jobs one at a time in scope order). Per-target
+ * verify.concurrent (false runs the --run jobs one at a time in scope order),
+ * verify.rootCommands (monorepo only: workspace-root scripts appended as a final "root"
+ * entry, run from the repo root with no filter flag after every package job, whenever the
+ * scope holds a package or a changed path lies outside every package). Per-target
  * verifyCommands overrides commands for that package. A target resolving to no verify
  * commands is reported as skipped, never as passing.
  */
 
 import { spawn } from 'node:child_process';
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
   loadConfigSafe,
+  loadExtensionsSafe,
   repoRoot,
   resolveTargetCommands,
   type ConfigTarget,
@@ -69,7 +75,6 @@ const MILLISECONDS_PER_SECOND = 1000;
 
 const SHARE_VARIABLES = [
   'VITEST_MAX_WORKERS',
-  'WIREIT_PARALLEL',
   'pnpm_config_workspace_concurrency',
 ] as const;
 
@@ -78,7 +83,7 @@ export type ScopeSource = 'git' | 'paths' | 'full';
 
 export interface ScopeEntry {
   package: string;
-  reason: 'changed' | 'dependent' | 'full-scope';
+  reason: 'changed' | 'dependent' | 'full-scope' | 'root';
   single?: boolean;
   commands?: string[];
   argv?: string[][];
@@ -88,7 +93,8 @@ export interface ScopeEntry {
 // resolves. This is the same baseline the changeset nudge uses.
 function changedPaths(root: string, base: string): string[] {
   const out = new Set<string>();
-  const status = git(root, ['status', '--porcelain']) ?? '';
+  const status = git(root, ['status', '--porcelain']);
+  if (status === null) throw new Error('git status failed');
   for (const line of status.split('\n').filter(Boolean))
     out.add(
       line
@@ -103,8 +109,8 @@ function changedPaths(root: string, base: string): string[] {
     branch !== base &&
     git(root, ['rev-parse', '--verify', '--quiet', base]) !== null
   ) {
-    const committed =
-      git(root, ['diff', '--name-only', `${base}...HEAD`]) ?? '';
+    const committed = git(root, ['diff', '--name-only', `${base}...HEAD`]);
+    if (committed === null) throw new Error('git diff failed');
     for (const p of committed.split('\n').filter(Boolean)) out.add(p);
   }
   return [...out];
@@ -348,6 +354,43 @@ function usesRelatedCommand(
   );
 }
 
+/** The root entry's identity and scripts, from the root `package.json` name and `verify.rootCommands`. */
+interface RootEntrySpec {
+  name: string;
+  commands: string[];
+}
+
+/** The workspace root's `package.json` name, else `'.'`. Never throws. */
+function rootPackageName(root: string): string {
+  try {
+    const manifest: unknown = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    );
+    const name = (manifest as { name?: unknown } | null)?.name;
+    return typeof name === 'string' && name ? name : '.';
+  } catch {
+    return '.';
+  }
+}
+
+/**
+ * `scope` with the root entry appended, so repo-wide checks run after the package jobs. A
+ * single-package repo or an empty `rootEntry.commands` leaves `scope` as it is, and so does a
+ * scope with no package when every changed path lies inside a package.
+ */
+function withRootEntry(
+  scope: ScopeEntry[],
+  changed: string[],
+  packages: WorkspacePackage[],
+  targets: ConfigTarget[],
+  rootEntry: RootEntrySpec,
+): ScopeEntry[] {
+  if (!packages.length || !rootEntry.commands.length) return scope;
+  const hasOutsidePath = pathsByPackage(changed, targets).outside.length > 0;
+  if (!scope.length && !hasOutsidePath) return scope;
+  return [...scope, { package: rootEntry.name, reason: 'root' }];
+}
+
 /**
  * The scope for `source`, plus each package's `--paths` selection. A `--paths` entry outside
  * every package exits 1. Any other failure degrades to full scope, since a verify helper
@@ -360,14 +403,21 @@ function selectScope(
   baseBranch: string,
   packages: WorkspacePackage[],
   targets: ConfigTarget[],
+  rootEntry: RootEntrySpec,
 ): {
   scope: ScopeEntry[];
   degraded: boolean;
   selected: Map<string, string[]>;
 } {
   const selected = new Map<string, string[]>();
+  const withRoot = (scope: ScopeEntry[], changed: string[]): ScopeEntry[] =>
+    withRootEntry(scope, changed, packages, targets, rootEntry);
   if (source === 'full')
-    return { scope: fullScopeEntries(packages), degraded: false, selected };
+    return {
+      scope: withRoot(fullScopeEntries(packages), []),
+      degraded: false,
+      selected,
+    };
   try {
     if (paths) {
       const split = pathsByPackage(paths, targets);
@@ -382,18 +432,23 @@ function selectScope(
         process.exit(1);
       }
       return {
-        scope: resolveScope(paths, packages, targets),
+        scope: withRoot(resolveScope(paths, packages, targets), paths),
         degraded: false,
         selected: split.byPackage,
       };
     }
+    const changed = changedPaths(root, baseBranch);
     return {
-      scope: resolveScope(changedPaths(root, baseBranch), packages, targets),
+      scope: withRoot(resolveScope(changed, packages, targets), changed),
       degraded: false,
       selected,
     };
   } catch {
-    return { scope: fullScopeEntries(packages), degraded: true, selected };
+    return {
+      scope: withRoot(fullScopeEntries(packages), []),
+      degraded: true,
+      selected,
+    };
   }
 }
 
@@ -416,15 +471,11 @@ async function main() {
     verify.baseBranch ?? config.changesets?.baseBranch ?? 'main';
   const targets = config.targets ?? [];
 
-  let root: string;
-  try {
-    root = repoRoot();
-  } catch {
-    root = process.cwd();
-  }
+  const root = repoRoot();
 
   const packages = listWorkspacePackages(root);
 
+  const rootCommands = verify.rootCommands ?? [];
   const source: ScopeSource = isFullScope ? 'full' : paths ? 'paths' : 'git';
   const { scope, degraded, selected } = selectScope(
     source,
@@ -433,9 +484,15 @@ async function main() {
     baseBranch,
     packages,
     targets,
+    { name: rootPackageName(root), commands: rootCommands },
   );
 
   for (const s of scope) {
+    if (s.reason === 'root') {
+      s.commands = rootCommands;
+      s.argv = rootCommands.map((script) => [...runPrefix, script]);
+      continue;
+    }
     s.commands = resolveVerifyCommands(s.package, targets, commands);
     s.argv = s.commands.map((script) =>
       usesRelatedCommand(script, source, s, verify.relatedCommand)
@@ -483,7 +540,12 @@ async function main() {
     jobEdges(scope, packages),
     root,
     runner,
-    jobPlan(process.env, readSignals, verify.concurrent !== false),
+    jobPlan(
+      process.env,
+      readSignals,
+      verify.concurrent !== false,
+      loadExtensionsSafe(root).shareVariables,
+    ),
     verify.timeoutMs,
   );
   for (const r of residues) {
@@ -498,11 +560,13 @@ async function main() {
  * alone, whose share is the whole budget. That share never falls under vitest's default
  * pool, so `VITEST_MAX_WORKERS` is left to the caller. A variable the caller already set
  * passes through unchanged, so a run inside a wave keeps the wave's share. Signals that
- * cannot be read return `parentEnv` as it is.
+ * cannot be read return `parentEnv` as it is. `toolShareVariables` are the variables the
+ * installed tool fragments declare, each set to the outer fan-out like the pnpm one.
  */
 export function budgetShareEnv(
   parentEnv: NodeJS.ProcessEnv,
   readBudgetSignals: () => BudgetSignals,
+  toolShareVariables: string[],
 ): NodeJS.ProcessEnv {
   let signals: BudgetSignals;
   try {
@@ -513,7 +577,7 @@ export function budgetShareEnv(
   const share = budgetFor({ ncpu: signals.ncpu, load1: signals.load1 });
   const { outer } = divideShare(share, vitestDefaultPool(signals.ncpu));
   const env = { ...parentEnv };
-  env.WIREIT_PARALLEL ??= String(outer);
+  for (const name of toolShareVariables) env[name] ??= String(outer);
   env.pnpm_config_workspace_concurrency ??= String(outer);
   return env;
 }
@@ -537,6 +601,7 @@ export function jobPlan(
   parentEnv: NodeJS.ProcessEnv,
   readBudgetSignals: () => BudgetSignals,
   isConcurrent: boolean,
+  toolShareVariables: string[],
 ): JobPlan {
   let signals: BudgetSignals;
   try {
@@ -544,20 +609,23 @@ export function jobPlan(
   } catch {
     return { limit: 1, childEnv: parentEnv };
   }
-  const isInsideCallerBudget = SHARE_VARIABLES.some(
+  const isInsideCallerBudget = [...SHARE_VARIABLES, ...toolShareVariables].some(
     (name) => parentEnv[name] !== undefined,
   );
   if (!isConcurrent || isInsideCallerBudget)
-    return { limit: 1, childEnv: budgetShareEnv(parentEnv, () => signals) };
+    return {
+      limit: 1,
+      childEnv: budgetShareEnv(parentEnv, () => signals, toolShareVariables),
+    };
   const budget = budgetFor({ ncpu: signals.ncpu, load1: signals.load1 });
   const pool = vitestDefaultPool(signals.ncpu);
   const limit = divideShare(budget, pool).outer;
   const { outer } = divideShare(shareFor(budget, limit), pool);
   const childEnv: NodeJS.ProcessEnv = {
     ...parentEnv,
-    WIREIT_PARALLEL: String(outer),
     pnpm_config_workspace_concurrency: String(outer),
   };
+  for (const name of toolShareVariables) childEnv[name] = String(outer);
   return { limit, childEnv };
 }
 
@@ -574,6 +642,11 @@ export function jobEdges(
   const byName = new Map(packages.map((p) => [p.name, p]));
   return new Map(
     scope.map((s) => {
+      if (s.reason === 'root')
+        return [
+          s.package,
+          scope.filter((other) => other !== s).map((other) => other.package),
+        ];
       const manifest = byName.get(s.package);
       const deps = manifest
         ? manifestDependencyNames(manifest).filter(

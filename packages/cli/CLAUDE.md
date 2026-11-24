@@ -13,9 +13,9 @@ are relative to `packages/cli/`.
   `reviewers`, `debug-session`, `plans`, `orchestrate`, `verify-changed`, `ready`, `sweep`,
   `read-guard`, `regen`, `statusline`, `code-cleanliness`, `ci-settings`, `research`, `tool-output-trim`.
 - Six plugins hold modules that moved out of the core: `plugin-prose`, `plugin-testing`,
-  `plugin-changesets`, `plugin-backlog`, `plugin-decisions`, `plugin-persona-auditor`. Six
+  `plugin-changesets`, `plugin-backlog`, `plugin-decisions`, `plugin-persona-auditor`. Seven
   were authored as plugins and were never in the core: `plugin-accessibility`,
-  `plugin-typescript`, `plugin-three`, `plugin-svelte`, `plugin-design`, `plugin-github`.
+  `plugin-typescript`, `plugin-three`, `plugin-svelte`, `plugin-design`, `plugin-github`, `plugin-wireit`.
   `src/retired-modules.ts`'s `RETIRED_MODULES` maps every retired built-in id to the package
   that now ships it.
 - **`.claude/` stays at the workspace root**, because that is where Claude Code looks, while

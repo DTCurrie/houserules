@@ -109,7 +109,13 @@ describe('design layout and performance references', () => {
 
     expect(reference).toMatch(/^## Dedicated handles drag on movement/m);
     expect(ruleText).toContain('design-interaction.md');
-    expect(ruleText).not.toMatch(/^### Press and drag$/m);
+    const flatRule = ruleText.replace(/\s+/g, ' ');
+    expect(flatRule).not.toContain('Dedicated handles drag on movement');
+    expect(flatRule).not.toContain('never on a timer');
+    expect(flatRule).not.toContain(
+      'starts the drag on pointer-down plus movement',
+    );
+    expect(flatRule).not.toContain('A time threshold is not');
   });
 
   it('pairs every mention of 44 as a target size with WCAG 2.5.5, never presenting it as a floor', () => {

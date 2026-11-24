@@ -1,5 +1,18 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  HOOK_RUNS_LOG_PATH,
+  HOOK_RUNS_ROTATED_PATH,
+  hookRunPath,
+  type HookRunRecord,
+} from '../../hook-runs-log.js';
 import type { Corpus, HookFire, HookOutcome } from './transcript-events.js';
-import { crashSignature, isCrash, uncoveredOutcomes } from './hook-crash.js';
+import {
+  crashSignature,
+  dispatchedFailures,
+  isCrash,
+  uncoveredOutcomes,
+} from './hook-crash.js';
 import { renderTable } from './render-table.js';
 
 interface HookHealthRow {
@@ -40,12 +53,140 @@ interface StopHookRow {
   timedOutRuns?: { date?: string; session: string }[];
 }
 
+/** One group of dispatcher runs: how many, the median wall time, and the total wall time. */
+interface RunLogTiming {
+  /** Runs in the group. */
+  runs: number;
+  /** Median wall time of the group, in milliseconds. */
+  medianMilliseconds: number;
+  /** Summed wall time of the group, in seconds, rounded to one decimal. */
+  totalSeconds: number;
+}
+
+/** One path a Stop script took, read from the dispatcher run log. */
+interface StopPathRow extends RunLogTiming {
+  /** The Stop script's basename. */
+  script: string;
+  /** `clean` exited 0 and printed nothing. `dirty` is any other run, the one that costs a turn. */
+  path: 'clean' | 'dirty';
+}
+
+/** What the dispatcher run log recorded inside the corpus window. */
+interface RunLogReport {
+  /** One row per Stop script and path that ran, sorted by script then clean before dirty. */
+  stopPaths: StopPathRow[];
+  /** Timing of every `guard-bash.mjs` run. Absent when the log holds none. */
+  guard?: RunLogTiming;
+}
+
 export interface HookHealthReport {
   rows: HookHealthRow[];
   crashSignatures: { signature: string; count: number }[];
   bashCalls: number;
   /** Absent in a document exported before Stop runs were read, and rendered as absent, not zero. */
   stopHooks?: StopHookRow[];
+  /** Absent when the repo has no dispatcher run log, and in a document exported before it was read. */
+  runLog?: RunLogReport;
+}
+
+const GUARD_SCRIPT = 'guard-bash.mjs';
+const STOP_EVENT = 'Stop';
+const TOTAL_SECONDS_DECIMALS = 1;
+const MEDIAN_PERCENTILE = 50;
+
+function isRunRecord(value: unknown): value is HookRunRecord {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.at === 'string' &&
+    typeof record.event === 'string' &&
+    typeof record.script === 'string' &&
+    typeof record.hasOutput === 'boolean' &&
+    typeof record.durationMilliseconds === 'number' &&
+    (record.exitCode === null || typeof record.exitCode === 'number')
+  );
+}
+
+/** Reads one log file's records, skipping unparseable lines. A missing file is no records. */
+function readRunFile(path: string): HookRunRecord[] {
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    return [];
+  }
+  const records: HookRunRecord[] = [];
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const parsed: unknown = JSON.parse(line);
+      if (isRunRecord(parsed)) records.push(parsed);
+    } catch {
+      continue;
+    }
+  }
+  return records;
+}
+
+function timing(durations: number[]): RunLogTiming {
+  const sorted = [...durations].sort((a, b) => a - b);
+  const total = sorted.reduce((sum, duration) => sum + duration, 0);
+  return {
+    runs: sorted.length,
+    medianMilliseconds: percentile(sorted, MEDIAN_PERCENTILE),
+    totalSeconds: Number(
+      (total / MS_PER_SECOND).toFixed(TOTAL_SECONDS_DECIMALS),
+    ),
+  };
+}
+
+function computeRunLog(corpus: Corpus, root: string): RunLogReport | undefined {
+  const files = [
+    join(root, HOOK_RUNS_ROTATED_PATH),
+    join(root, HOOK_RUNS_LOG_PATH),
+  ];
+  if (!files.some((file) => existsSync(file))) return undefined;
+  const { firstTs, lastTs } = corpus;
+  const records = files.flatMap(readRunFile).filter((record) => {
+    if (firstTs === undefined || lastTs === undefined) return true;
+    const at = Date.parse(record.at);
+    return at >= firstTs && at <= lastTs;
+  });
+  const guardDurations = records
+    .filter((record) => record.script === GUARD_SCRIPT)
+    .map((record) => record.durationMilliseconds);
+  return {
+    stopPaths: groupStopPaths(
+      records.filter((record) => record.event === STOP_EVENT),
+    ),
+    ...(guardDurations.length ? { guard: timing(guardDurations) } : {}),
+  };
+}
+
+/** One row per Stop script and path it took, sorted by script then path. */
+function groupStopPaths(records: HookRunRecord[]): StopPathRow[] {
+  const byScript = new Map<string, Map<StopPathRow['path'], number[]>>();
+  for (const record of records) {
+    const byPath = byScript.get(record.script) ?? new Map();
+    const path = hookRunPath(record);
+    byPath.set(path, [
+      ...(byPath.get(path) ?? []),
+      record.durationMilliseconds,
+    ]);
+    byScript.set(record.script, byPath);
+  }
+  return [...byScript.entries()]
+    .flatMap(([script, byPath]) =>
+      [...byPath.entries()].map(([path, durations]): StopPathRow => ({
+        script,
+        path,
+        ...timing(durations),
+      })),
+    )
+    .sort(
+      (a, b) =>
+        a.script.localeCompare(b.script) || a.path.localeCompare(b.path),
+    );
 }
 
 interface HookAccumulator {
@@ -195,13 +336,29 @@ function countCrashSignature(
   );
 }
 
-export function computeHookHealth(corpus: Corpus): HookHealthReport {
+/** A dispatched record becomes one fire per failed script it names, other records pass through. */
+function splitDispatched(fire: HookFire): HookFire[] {
+  const failures = dispatchedFailures(fire.stderr);
+  if (!failures.length) return [fire];
+  return failures.map((failure) => ({
+    ...fire,
+    hookName: failure.script,
+    exitCode: failure.exitCode,
+    stderr: failure.line,
+  }));
+}
+
+/** `root` is the repo root holding the dispatcher run log under `.claude/state/`. */
+export function computeHookHealth(
+  corpus: Corpus,
+  root: string,
+): HookHealthReport {
   const byHook = new Map<string, HookAccumulator>();
   const crashSignatureCounts = new Map<string, number>();
   let bashCalls = 0;
   for (const session of corpus.sessions.values()) {
     const fires = [
-      ...session.hookFires,
+      ...session.hookFires.flatMap(splitDispatched),
       ...uncoveredOutcomes(session).map(fireFromOutcome),
     ];
     for (const fire of fires) {
@@ -231,11 +388,13 @@ export function computeHookHealth(corpus: Corpus): HookHealthReport {
     .map(([signature, count]) => ({ signature, count }))
     .sort((a, b) => b.count - a.count);
 
+  const runLog = computeRunLog(corpus, root);
   return {
     rows,
     crashSignatures,
     bashCalls,
     stopHooks: computeStopHooks(corpus),
+    ...(runLog ? { runLog } : {}),
   };
 }
 
@@ -276,6 +435,43 @@ export function renderHookHealth(report: HookHealthReport): string[] {
       lines.push(`    ${String(count).padStart(4)}  ${signature}`);
   }
   if (report.stopHooks) lines.push(...renderStopHooks(report.stopHooks));
+  if (report.runLog) lines.push(...renderRunLog(report.runLog));
+  return lines;
+}
+
+function renderRunLog(runLog: RunLogReport): string[] {
+  const lines: string[] = [];
+  if (runLog.stopPaths.length)
+    lines.push(
+      '',
+      '  Stop hook paths:',
+      ...renderTable(
+        ['script', 'path', 'runs', 'median ms', 'total s'],
+        runLog.stopPaths.map((row) => [
+          row.script,
+          row.path,
+          row.runs,
+          row.medianMilliseconds,
+          row.totalSeconds,
+        ]),
+      ),
+    );
+  if (runLog.guard)
+    lines.push(
+      '',
+      '  Bash guard duration:',
+      ...renderTable(
+        ['script', 'runs', 'median ms', 'total s'],
+        [
+          [
+            GUARD_SCRIPT,
+            runLog.guard.runs,
+            runLog.guard.medianMilliseconds,
+            runLog.guard.totalSeconds,
+          ],
+        ],
+      ),
+    );
   return lines;
 }
 

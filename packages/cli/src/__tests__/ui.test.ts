@@ -3,6 +3,7 @@ import * as clack from '@clack/prompts';
 
 import {
   chooseMigrationOption,
+  nextSteps,
   optionPromptMessage,
   renderPreview,
   selectModules,
@@ -117,7 +118,9 @@ describe('renderPreview, given a region effect', () => {
       ...(previousBody === undefined ? {} : { previousBody }),
     }) as unknown as Effect;
   const render = (effect: Effect) =>
-    plain(renderPreview({ effects: [effect], settingsPlan: null })).split('\n');
+    plain(renderPreview({ effects: [effect], settingsPlan: null }))
+      .split('\n')
+      .filter((line) => !line.includes('houserules.manifest.json'));
   const numbered = (lineCount: number, prefix: string) =>
     Array.from({ length: lineCount }, (_, i) => `${prefix}${i}`).join('\n');
 
@@ -258,5 +261,50 @@ describe('chooseMigrationOption', () => {
 
     expect(exit).toHaveBeenCalledWith(1);
     vi.restoreAllMocks();
+  });
+});
+
+describe('nextSteps', () => {
+  it('prints the header without an em dash', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    nextSteps([
+      { kind: 'advise', module: 'core', text: 'Do a thing.' },
+    ] as never);
+    const out = plain(log.mock.calls.map((c) => c.join(' ')).join('\n'));
+    log.mockRestore();
+    expect(out).toContain('Next steps. Yours, houserules does not do these:');
+    expect(out).not.toContain('\u2014');
+  });
+});
+
+describe('renderPreview, bookkeeping files', () => {
+  const settingsPlan = (existedBefore: boolean, changes: number) =>
+    ({
+      dest: '.claude/settings.json',
+      existedBefore,
+      changes: Array.from({ length: changes }, () => ({
+        kind: 'hook',
+        detail: 'x',
+      })),
+    }) as never;
+  const render = (existedBefore: boolean, changes: number) =>
+    plain(
+      renderPreview({
+        effects: [],
+        settingsPlan: settingsPlan(existedBefore, changes),
+      }),
+    );
+
+  it('names the backup, its gitignore and the manifest when settings merge into an existing file', () => {
+    const out = render(true, 1);
+    expect(out).toContain('.claude/backups/.gitignore');
+    expect(out).toContain('.claude/backups/settings.json.bak');
+    expect(out).toContain('.claude/houserules.manifest.json');
+  });
+
+  it('omits the backup for a new settings file and everything when nothing changes', () => {
+    expect(render(false, 1)).not.toContain('backups/');
+    expect(render(false, 1)).toContain('.claude/houserules.manifest.json');
+    expect(render(true, 0)).not.toContain('houserules.manifest.json');
   });
 });

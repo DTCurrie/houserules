@@ -215,7 +215,7 @@ export function buildReportDocument(
       generatedAt: (options.now ?? new Date()).toISOString(),
     },
     tokens: serializeTokenUsage(computeTokenUsage(corpus)),
-    hooks: computeHookHealth(corpus),
+    hooks: computeHookHealth(corpus, top),
     guard: computeGuardBlocks(corpus),
     skills: computeSkillAdoption(corpus, join(top, '.claude', 'skills')),
     outcomes: {

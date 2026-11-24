@@ -385,7 +385,10 @@ describe('svelte', () => {
       'utf8',
     );
 
-    expect(ruleText).toMatch(/## Context Providers[\s\S]{0,300}`provide\*`/);
+    expect(ruleText).toMatch(/## Context Providers[\s\S]{0,600}`provide\*`/);
+    expect(ruleText).toMatch(
+      /## Context Providers[\s\S]{0,300}5\.40[\s\S]{0,100}`createContext`/,
+    );
   });
 
   it('carves authorization out of the layout-fetching guidance', () => {

@@ -16,23 +16,19 @@
   },
   "scripts": {
     "build": "wireit",
+    "schema": "pnpm --filter @houserules/cli schema",
     "check": "wireit",
     "check:types": "wireit",
-    "verify": "wireit",
     "test": "node scripts/capped-wireit.mjs test:all",
     "test:all": "wireit",
+    "test:scripts": "wireit",
     "lint": "wireit",
     "lint:fix": "eslint . --fix",
     "lint:fix:paths": "eslint --fix",
-    "schema": "pnpm --filter @houserules/cli schema",
-    "format": "prettier --cache --write .",
-    "format:paths": "prettier --cache --write",
-    "format:check": "prettier --cache --check .",
-    "change": "changeset",
-    "version-packages": "changeset version",
-    "release": "pnpm build && node scripts/verify-package-manifests.mjs && node scripts/verify-tarballs.mjs && changeset publish",
-    "dogfood": "pnpm --filter @houserules/cli dogfood",
-    "dogfood:watch": "pnpm --filter @houserules/cli dogfood:watch",
+    "format": "prettier --cache --check .",
+    "format:fix": "prettier --cache --write .",
+    "format:fix:paths": "prettier --cache --write",
+    "verify": "wireit",
     "attw": "wireit",
     "verify:package-manifests": "wireit",
     "verify:tarballs": "wireit",
@@ -43,9 +39,14 @@
     "verify:checker-determinism": "wireit",
     "verify:payload-prose": "wireit",
     "verify:knip": "wireit",
-    "test:scripts": "wireit",
-    "verify:knip:audit": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles --include-entry-exports",
-    "time-gate": "node scripts/time-gate.mjs"
+    "change": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && node scripts/verify-package-manifests.mjs && node scripts/verify-tarballs.mjs && changeset publish",
+    "dogfood": "pnpm --filter @houserules/cli dogfood",
+    "dogfood:watch": "pnpm --filter @houserules/cli dogfood:watch",
+    "audit:knip": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,namespaceMembers,duplicates,cycles --include-entry-exports",
+    "time-gate": "node scripts/time-gate.mjs",
+    "prepare": "houserules update --sync"
   },
   "wireit": {
     "lint": {
@@ -86,6 +87,7 @@
         "./packages/plugin-testing:build",
         "./packages/plugin-three:build",
         "./packages/plugin-typescript:build",
+        "./packages/plugin-wireit:build",
         "./packages/test:build"
       ]
     },
@@ -226,6 +228,10 @@
         "package.json",
         "pnpm-workspace.yaml",
         "packages/*/package.json",
+        "packages/*/tsconfig.json",
+        "eslint.config.mjs",
+        ".github/workflows/*.yml",
+        ".changeset/config.json",
         "packages/*/src/**/*.ts",
         "packages/*/test/**/*.ts",
         "packages/*/payload/**/*.mts",
@@ -254,11 +260,12 @@
         "./packages/plugin-testing:check",
         "./packages/plugin-three:check",
         "./packages/plugin-typescript:check",
+        "./packages/plugin-wireit:check",
         "./packages/test:check"
       ]
     },
     "test:all": {
-      "//": "Sixteen entries: fifteen packages plus the root scripts suite, not seventeen. @houserules/test ships no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
+      "//": "Seventeen entries: sixteen packages plus the root scripts suite, not eighteen. @houserules/test ships no test script, and naming a script that does not exist is a wireit error, not a no-op the way `pnpm -r test` skipped them.",
       "dependencies": [
         "./packages/api:test",
         "./packages/cli:test",
@@ -275,6 +282,7 @@
         "./packages/plugin-testing:test",
         "./packages/plugin-three:test",
         "./packages/plugin-typescript:test",
+        "./packages/plugin-wireit:test",
         "test:scripts"
       ]
     },
@@ -296,6 +304,8 @@
         "scripts/bench/**/*.mjs",
         "scripts/eval/**/*.mjs",
         "scripts/time-gate.mjs",
+        "scripts/capped-wireit.mjs",
+        "node_modules/.cache/houserules-bench/builds/*/.bench-build.json",
         "scripts/health-kit/gather/SCHEMA.md",
         "scripts/bench/fixtures/**",
         "scripts/eval/fixtures/**",
@@ -323,6 +333,7 @@
         "./packages/plugin-testing:attw",
         "./packages/plugin-three:attw",
         "./packages/plugin-typescript:attw",
+        "./packages/plugin-wireit:attw",
         "./packages/test:attw"
       ]
     }
@@ -330,6 +341,7 @@
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
+    "@houserules/cli": "workspace:*",
     "eslint": "^10.15.0",
     "globals": "^17.14.0",
     "knip": "^6.45.1",

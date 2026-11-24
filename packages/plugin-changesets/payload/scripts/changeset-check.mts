@@ -4,7 +4,8 @@
  *
  * Exit 2 with stderr asks Claude to write the changeset, or to record --empty saying why
  * not. Exit 0 stays silent, and every failure path exits 0, because a nudge hook must
- * never break a session. A turn whose transcript shows only read-only tool uses exits 0
+ * never break a session. The one exception exits 2: a changesets `ignore` list whose matcher
+ * is not resolvable from the repo, since the check cannot tell which packages it covers. A turn whose transcript shows only read-only tool uses exits 0
  * before any git call, and a missing or unreadable transcript runs the check as usual.
  * A Stop payload whose background_tasks is non-empty exits 0 the same way, since background
  * agents are still changing the tree. The nudge lands on the first stop after they finish.
@@ -28,7 +29,10 @@ import { loadConfigSafe, repoRootSafe } from '@houserules/payload/config';
 import { listWorkspacePackages } from '@houserules/payload/workspaces';
 import { git, readStdinJson } from '@houserules/payload/proc';
 import { turnTouchedFiles } from '@houserules/payload/transcript-turn';
-import { createGatedOwnerResolver } from './lib/changeset-owner.mjs';
+import {
+  IgnoreMatcherUnavailableError,
+  createGatedOwnerResolver,
+} from './lib/changeset-owner.mjs';
 
 const STATE_DIR = '.claude/state';
 const STATE_FILE = 'changeset-check.json';
@@ -244,6 +248,8 @@ try {
   );
   writeLastSignature(root, signature);
   process.exit(2);
-} catch {
-  process.exit(0);
+} catch (err) {
+  if (!(err instanceof IgnoreMatcherUnavailableError)) process.exit(0);
+  process.stderr.write(`${err.message}\n`);
+  process.exit(2);
 }

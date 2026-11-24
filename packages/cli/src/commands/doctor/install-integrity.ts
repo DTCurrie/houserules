@@ -24,7 +24,11 @@ import { MODULES } from '../../plan.js';
 import type { Registry } from '../../plugin-registry.js';
 import type { CheckResult, Finding } from '@houserules/api';
 import { compareSemver, parseSemver } from './semver.js';
-import { allHookCommands } from './settings-wiring.js';
+import {
+  allHookCommands,
+  readHookWiring,
+  wiredScripts,
+} from './settings-wiring.js';
 
 /** Every `.mjs` script name shipped across a set of built payload directories. */
 function shippedScripts(dirs: string[]): Set<string> {
@@ -123,7 +127,8 @@ function freshCachedLatest(
 /**
  * update-notifier's skip conditions: `NO_UPDATE_NOTIFIER` set to anything, `NODE_ENV=test`,
  * or a CI environment as `is-in-ci` detects one (`CI`, `CONTINUOUS_INTEGRATION`, or any
- * `CI_*` variable, unless `CI` is `0` or `false`).
+ * `CI_*` variable, unless `CI` is `0` or `false`). The session hook `payload-sync.mts` keeps
+ * a twin, and both suites assert `payload/scripts/__tests__/update-check-cases.ts`.
  */
 function isUpdateCheckSkipped(env: NodeJS.ProcessEnv): boolean {
   if ('NO_UPDATE_NOTIFIER' in env) return true;
@@ -136,7 +141,10 @@ function isUpdateCheckSkipped(env: NodeJS.ProcessEnv): boolean {
   );
 }
 
-/** The command that moves the repo's devDependency CLI to `latest`, in the repo's package manager. */
+/**
+ * The command that moves the repo's devDependency CLI to `latest`, in the repo's package manager.
+ * Held to the session hook's `upgradeCommand` by `payload/scripts/__tests__/update-check-cases.ts`.
+ */
 function cliUpgradeCommand(ctx: Ctx): string {
   const manager = ctx.packageManager?.name ?? 'npm';
   if (manager === 'npm') return `npm install -D ${CLI_PACKAGE}@latest`;
@@ -304,9 +312,12 @@ export function checkInstallIntegrity(
   const wiredCommands = ctx.claude.settings
     ? allHookCommands(ctx.claude.settings)
     : [];
+  // A dispatched script's settings.json command names hook-dispatch.mjs, not the script.
+  const dispatched = wiredScripts(readHookWiring(root));
   for (const base of suspects) {
     if (currentScripts.has(base)) continue; // still shipped — fine
-    const wired = wiredCommands.some((c) => c.includes(base));
+    const wired =
+      dispatched.has(base) || wiredCommands.some((c) => c.includes(base));
     findings.push({
       level: 'WARN',
       msg: `retired houserules hook script ${base} is no longer shipped by houserules${wired ? ' but is still wired (a dead node process on every trigger)' : ''} — prune it: npx houserules update`,

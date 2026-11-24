@@ -10,22 +10,26 @@ const NOT_CAPTURED = 'not captured';
 const USAGE =
   'usage: node scripts/health-kit/closeout/metrics-table.mjs <before-doctor> <after-doctor> [<before-report> <after-report>]';
 
-const RESIDENT_PATTERNS = [
+const REQUIRED_RESIDENT_PATTERNS = [
   /resident context \(CLAUDE\.md\): ~(\d+) tokens/,
   /resident skill\/agent descriptions[^:\n]*: ~(\d+) tokens/,
-  /resident output style[^:\n]*: ~(\d+) tokens/,
 ];
+const OUTPUT_STYLE_PATTERN = /resident output style[^:\n]*: ~(\d+) tokens/;
 
-/** Sum of the three resident lines, or null when any one is missing. */
+/**
+ * Sum of the resident lines, or null when the CLAUDE.md or descriptions line is
+ * missing. An absent output style line counts as 0.
+ */
 function parseAlwaysLoaded(doctorText) {
   if (doctorText == null) return null;
   let total = 0;
-  for (const pattern of RESIDENT_PATTERNS) {
+  for (const pattern of REQUIRED_RESIDENT_PATTERNS) {
     const match = pattern.exec(doctorText);
     if (!match) return null;
     total += Number(match[1]);
   }
-  return total;
+  const style = OUTPUT_STYLE_PATTERN.exec(doctorText);
+  return style ? total + Number(style[1]) : total;
 }
 
 function parseLargestSkill(doctorText) {

@@ -286,14 +286,6 @@ describe('redactDocument', () => {
       );
     });
 
-    it('masks the pattern of a config guard rule', () => {
-      expect(
-        reasonAfterRedaction(
-          'Blocked by houserules.config.json guard rule: \\bsecret-tool\\b',
-        ),
-      ).toBe('Blocked by houserules.config.json guard rule: <pattern>');
-    });
-
     it('replaces an unknown reason with a placeholder', () => {
       expect(reasonAfterRedaction(`see ${SECRET_PATH}`)).toBe(
         '(reason redacted)',
@@ -308,7 +300,9 @@ describe('redactDocument', () => {
   describe('against the real guard output', () => {
     const CONFIG = {
       version: 2,
-      guard: { custom: [{ pattern: '\\bsecret-tool\\b' }] },
+      guard: {
+        custom: [{ pattern: '\\bsecret-tool\\b', message: 'ask Dana' }],
+      },
       readGuard: { enabled: true, maxBytes: 1024, denyGlobs: ['*.lock'] },
       targets: [],
     };
@@ -404,14 +398,6 @@ describe('redactDocument', () => {
 
       expect(redacted(reason)).toBe(
         "houserules read guard: <path> matches a generated/denylisted pattern (<pattern>). Don't read it whole — grep for what you need (`grep -n '<pattern>' <path>`) then Read with offset+limit, or re-run this Read with an explicit limit if you truly need a window.",
-      );
-    });
-
-    it('masks only the pattern of the real custom rule message', () => {
-      const reason = bash('secret-tool --dump');
-
-      expect(redacted(reason)).toBe(
-        'Blocked by houserules.config.json guard rule: <pattern>',
       );
     });
 
