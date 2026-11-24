@@ -92,6 +92,8 @@ describe('every lib module loads on bare node', () => {
         'surface-orphans.mjs',
         'push-outcome.mjs',
         'push-lock.mjs',
+        'rejected-turns.mjs',
+        'sync-holds.mjs',
       ];
 
       const missing = required.filter((file) => !libFiles.includes(file));

@@ -94,11 +94,7 @@ function resolveCount({
   return fullDefault;
 }
 
-/**
- * Turn argv into run options. Throws UsageError on a missing `--out` or a bad value.
- * @param {string[]} argv
- */
-export function parseOptions(argv) {
+function parseRunArgs(argv) {
   const { values } = parseArgs({
     args: argv,
     options: {
@@ -114,6 +110,15 @@ export function parseOptions(argv) {
     },
     strict: true,
   });
+  return values;
+}
+
+/**
+ * Turn argv into run options. Throws UsageError on a missing `--out` or a bad value.
+ * @param {string[]} argv
+ */
+export function parseOptions(argv) {
+  const values = parseRunArgs(argv);
   const isSmoke = values.smoke;
   if (values.profile !== undefined) {
     return {

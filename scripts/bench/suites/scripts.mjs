@@ -219,6 +219,18 @@ function resetChangesets(project) {
   rmSync(join(project, '.claude/state'), { recursive: true, force: true });
 }
 
+/** Builds a `BenchCase` that runs `.claude/scripts/<script>.mjs` under `env`. */
+function scriptCaseIn(env) {
+  return ({ cwd, name, script, args = [], ...extra }) => ({
+    name,
+    command: process.execPath,
+    args: [join('.claude', 'scripts', `${script}.mjs`), ...args],
+    cwd,
+    env,
+    ...extra,
+  });
+}
+
 /**
  * Five cases over the payload scripts a skill calls, each run as `node .claude/scripts/<name>.mjs`
  * from a fixture project, the way its skill does. `plan-lint`, `prose-lint`, `closeout`, and
@@ -245,14 +257,7 @@ export async function cases({ root, workDir }) {
   buildProject({ root, project, env });
   buildVerifyProject({ root, project: verifyProject, env });
 
-  const caseIn = ({ cwd, name, script, args = [], ...extra }) => ({
-    name,
-    command: process.execPath,
-    args: [join('.claude', 'scripts', `${script}.mjs`), ...args],
-    cwd,
-    env,
-    ...extra,
-  });
+  const caseIn = scriptCaseIn(env);
 
   return [
     caseIn({

@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
+import { hasModule } from '../index.js';
 import type {
   Answers,
   ModuleDef,
@@ -69,5 +70,19 @@ describe('module requirement types', () => {
       string[] | undefined
     >();
     expect(answers.contributedSkillTriggers).toBeUndefined();
+  });
+});
+
+describe('hasModule', () => {
+  it('matches a bare id', () => {
+    expect(hasModule(['core', 'design'], 'design')).toBe(true);
+  });
+
+  it('matches an id selected under an alias', () => {
+    expect(hasModule(['core', 'ui-kit/design'], 'design')).toBe(true);
+  });
+
+  it('does not match a longer id that merely ends with the bare id', () => {
+    expect(hasModule(['core', 'ui-kit/designer'], 'design')).toBe(false);
   });
 });

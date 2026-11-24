@@ -726,3 +726,44 @@ describe('computeHookHealth from the dispatcher run log', () => {
     );
   });
 });
+
+describe('a dispatched Stop hook attributed through the run log', () => {
+  const root = mkdtempSync(join(tmpdir(), 'hook-health-dispatch-'));
+  mkdirSync(join(root, '.claude/state'), { recursive: true });
+  writeFileSync(
+    join(root, '.claude/state/hook-runs.jsonl'),
+    JSON.stringify({
+      at: '2026-11-02T10:00:00.000Z',
+      event: 'Stop',
+      script: 'stop-check.mjs',
+      exitCode: 0,
+      hasOutput: false,
+      durationMilliseconds: 50,
+    }) + '\n',
+  );
+  const dispatcherCommand =
+    '[ -f "$CLAUDE_PROJECT_DIR/.claude/scripts/hook-dispatch.mjs" ] && exec node "$CLAUDE_PROJECT_DIR/.claude/scripts/hook-dispatch.mjs" Stop || exit 0';
+
+  function report() {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'stop.jsonl',
+      stopSummaryLine('2.1.327', [
+        { command: dispatcherCommand, durationMs: 60 },
+      ]),
+    );
+    return computeHookHealth(corpus, root);
+  }
+
+  it('names stop-check.mjs, not the dispatcher, in the Stop hooks table', () => {
+    const rendered = renderHookHealth(report()).join('\n');
+
+    expect(report().stopHooks?.map((row) => row.hook)).toEqual([
+      'stop-check.mjs',
+      '(per Stop total)',
+    ]);
+    expect(rendered).toContain('stop-check.mjs');
+    expect(rendered).not.toContain('hook-dispatch.mjs');
+  });
+});

@@ -577,23 +577,39 @@ function detectPnpmCatalogModeStrict(root: string): boolean {
 }
 
 /**
+ * One `git rev-parse` answers a repo with commits. It fails when `HEAD` is unborn or the
+ * directory is no repo, and only then does a second spawn tell those two apart.
+ */
+function detectGitState(root: string): Ctx['git'] {
+  const [top = null, branch = null] = (
+    git(root, ['rev-parse', '--show-toplevel', '--abbrev-ref', 'HEAD']) ?? ''
+  )
+    .split('\n')
+    .map((line) => line.trim() || null);
+  if (top && branch) return { isRepo: true, top, hasCommits: true, branch };
+
+  const fallbackTop = git(root, ['rev-parse', '--show-toplevel']) || null;
+  return {
+    isRepo: Boolean(fallbackTop),
+    top: fallbackTop,
+    hasCommits: false,
+    branch: null,
+  };
+}
+
+/**
  * Profiles a repo into the `ctx` every module's `defaultEnabled()` and `plan()` decides
  * from. Read-only: nothing in this file may write.
  */
 export function detect(root: string): Ctx {
-  const gitTop = git(root, ['rev-parse', '--show-toplevel']);
+  const gitState = detectGitState(root);
   const rootPkg = readJson(join(root, 'package.json'));
   const packages = listWorkspacePackages(root);
   const changesets = detectChangesets(root, rootPkg);
 
   return {
     root,
-    git: {
-      isRepo: Boolean(gitTop),
-      top: gitTop,
-      hasCommits: git(root, ['rev-parse', '--verify', 'HEAD']) !== null,
-      branch: git(root, ['rev-parse', '--abbrev-ref', 'HEAD']),
-    },
+    git: gitState,
     packageManager: detectPackageManager(root, rootPkg),
     rootPkg,
     isMonorepo: packages.length > 0,

@@ -91,6 +91,15 @@ one. The free run assembles one sample and prints the child command on one line.
 `--margin` over `--out`'s own ledger, and it is refused when that directory exists. A free run
 numbers the assembled sample `k`.
 
+`eval.json` may set `permissionMode` to `auto` or `default`, absent meaning `auto`. It becomes the
+child's `--permission-mode`, and any other value stops the run naming the field. An arm may set
+`settings` to a JSON object file, a path relative to `<dir>`. The runner replaces every
+`{{fixtureDir}}` inside its string values with the fixture's absolute directory and passes one
+`--settings`: the object alone when `network` is true, or the object merged over the sandbox
+below when it is not. A `settings` file with a `sandbox` key stops a network-false run, since the
+runner owns that key. `validityAgent` may be `null`, which skips only the agent test, so a sample
+is still void without a successful result or with a rewritten overlay.
+
 `eval.json` may set `network` to a boolean, default false. Unless it is true, the child runs
 with `--disallowedTools WebFetch,WebSearch` and a `--settings` sandbox for Bash, and the dry
 run's printed command shows both. The sandbox turns on `sandbox.enabled`, allows no domains,

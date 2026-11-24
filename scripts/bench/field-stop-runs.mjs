@@ -321,6 +321,62 @@ function matchAttachments(runs, attachments) {
   }
 }
 
+/** Adds each edited path and counts each churn command in one assistant record into `state`. */
+function collectTurnActivity(record, state) {
+  for (const block of record.message.content) {
+    if (block?.type !== 'tool_use') continue;
+    const field = EDIT_TOOLS.get(block.name);
+    if (field) {
+      const path = block.input?.[field];
+      if (typeof path === 'string' && path) state.turnPaths.add(path);
+    } else if (
+      block.name === 'Bash' &&
+      typeof block.input?.command === 'string' &&
+      CHURN_COMMAND.test(block.input.command)
+    ) {
+      state.churn += 1;
+    }
+  }
+}
+
+/** Queues a Stop fixer attachment record for `matchAttachments`. */
+function collectAttachment(record, tsMs, attachments) {
+  const attachment = record.attachment;
+  const isStop =
+    attachment.hookEvent === 'Stop' ||
+    (typeof attachment.hookName === 'string' &&
+      attachment.hookName.startsWith('Stop'));
+  if (isStop && isFixerEntry(attachment) && !Number.isNaN(tsMs))
+    attachments.push({ tsMs, attachment, isUsed: false });
+}
+
+/** The run a `stop_hook_summary` record describes, or null when no fixer ran. */
+function runFromSummary({ record, lineStart, tsMs, info, root, state }) {
+  const infos = Array.isArray(record.hookInfos) ? record.hookInfos : [];
+  const fixer = infos.find(isFixerEntry);
+  if (!fixer) return null;
+  const durationMs =
+    typeof fixer.durationMs === 'number' ? fixer.durationMs : null;
+  const paths = [...state.turnPaths].map((editedPath) =>
+    editedPath.startsWith(root + sep)
+      ? editedPath.slice(root.length + 1)
+      : editedPath,
+  );
+  return {
+    file: info.label,
+    session: info.session,
+    tsMs: Number.isNaN(tsMs) ? null : tsMs,
+    ts: Number.isNaN(tsMs) ? null : new Date(tsMs).toISOString(),
+    durationMs,
+    subagent: info.subagent || record.isSidechain === true,
+    claudeVersion: typeof record.version === 'string' ? record.version : null,
+    editedPaths: paths,
+    transcriptBytes: lineStart,
+    bashChurn: state.churn,
+    hookErrors: hookErrorsOf(record, fixer),
+  };
+}
+
 /**
  * Parses one transcript into its Stop runs. Offsets are byte positions of each line, so a
  * run's `transcriptBytes` is the file size before its record.
@@ -328,11 +384,10 @@ function matchAttachments(runs, attachments) {
 function parseTranscript(info, root) {
   const runs = [];
   const attachments = [];
+  const state = { turnPaths: new Set(), churn: 0 };
   let oldestMs = Infinity;
   let newestMs = -Infinity;
   let summaryRecords = 0;
-  let turnPaths = new Set();
-  let churn = 0;
   for (const { record, lineStart } of readRecords(info.path)) {
     const tsMs = Date.parse(record.timestamp ?? '');
     if (!Number.isNaN(tsMs)) {
@@ -341,63 +396,24 @@ function parseTranscript(info, root) {
     }
 
     if (isPrompt(record)) {
-      turnPaths = new Set();
+      state.turnPaths = new Set();
       continue;
     }
     if (record.type === 'assistant' && Array.isArray(record.message?.content)) {
-      for (const block of record.message.content) {
-        if (block?.type !== 'tool_use') continue;
-        const field = EDIT_TOOLS.get(block.name);
-        if (field) {
-          const path = block.input?.[field];
-          if (typeof path === 'string' && path) turnPaths.add(path);
-        } else if (
-          block.name === 'Bash' &&
-          typeof block.input?.command === 'string' &&
-          CHURN_COMMAND.test(block.input.command)
-        ) {
-          churn += 1;
-        }
-      }
+      collectTurnActivity(record, state);
       continue;
     }
     if (record.type === 'attachment' && record.attachment) {
-      const attachment = record.attachment;
-      const isStop =
-        attachment.hookEvent === 'Stop' ||
-        (typeof attachment.hookName === 'string' &&
-          attachment.hookName.startsWith('Stop'));
-      if (isStop && isFixerEntry(attachment) && !Number.isNaN(tsMs))
-        attachments.push({ tsMs, attachment, isUsed: false });
+      collectAttachment(record, tsMs, attachments);
       continue;
     }
     if (record.type !== 'system' || record.subtype !== 'stop_hook_summary')
       continue;
     summaryRecords += 1;
-    const infos = Array.isArray(record.hookInfos) ? record.hookInfos : [];
-    const fixer = infos.find(isFixerEntry);
-    if (!fixer) continue;
-    const durationMs =
-      typeof fixer.durationMs === 'number' ? fixer.durationMs : null;
-    const paths = [...turnPaths].map((editedPath) =>
-      editedPath.startsWith(root + sep)
-        ? editedPath.slice(root.length + 1)
-        : editedPath,
-    );
-    runs.push({
-      file: info.label,
-      session: info.session,
-      tsMs: Number.isNaN(tsMs) ? null : tsMs,
-      ts: Number.isNaN(tsMs) ? null : new Date(tsMs).toISOString(),
-      durationMs,
-      subagent: info.subagent || record.isSidechain === true,
-      claudeVersion: typeof record.version === 'string' ? record.version : null,
-      editedPaths: paths,
-      transcriptBytes: lineStart,
-      bashChurn: churn,
-      hookErrors: hookErrorsOf(record, fixer),
-    });
-    churn = 0;
+    const run = runFromSummary({ record, lineStart, tsMs, info, root, state });
+    if (!run) continue;
+    runs.push(run);
+    state.churn = 0;
   }
   matchAttachments(runs, attachments);
   return { runs, summaryRecords, oldestMs, newestMs };

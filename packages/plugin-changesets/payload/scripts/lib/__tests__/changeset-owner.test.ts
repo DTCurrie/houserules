@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
+import { linkInstalledChangesetsCli } from '#test/changesets-cli';
 import { useRepo } from '#test/repo';
 import { createGatedOwnerResolver } from '../changeset-owner.mjs';
 
@@ -63,15 +64,6 @@ function writeChangesetsIgnore(root: string, ignore: string[]): void {
   );
 }
 
-function linkInstalledChangesetsCli(root: string): void {
-  mkdirSync(join(root, 'node_modules/@changesets'), { recursive: true });
-  symlinkSync(
-    INSTALLED_CHANGESETS_CLI,
-    join(root, 'node_modules/@changesets/cli'),
-    'dir',
-  );
-}
-
 function installChangesetsConfigV3(root: string): void {
   const configDir = join(root, 'node_modules/@changesets/config');
   mkdirSync(configDir, { recursive: true });
@@ -92,7 +84,8 @@ function installChangesetsConfigV3(root: string): void {
 
 function ignoredPackagesFor(
   ignore: string[],
-  installChangesets: (root: string) => void = linkInstalledChangesetsCli,
+  installChangesets: (root: string) => void = (root) =>
+    linkInstalledChangesetsCli(root, INSTALLED_CHANGESETS_CLI),
 ): string[] {
   const root = useRepo('pnpm-monorepo');
   for (const { relDir } of PACKAGES) publishManifest(root, relDir, {});

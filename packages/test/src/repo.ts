@@ -7,6 +7,7 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { onTestFinished } from 'vitest';
@@ -278,8 +279,79 @@ export function prepareInstalledRepo(
 
   // On disk, not a module-level Map: vitest gives every test FILE a fresh module registry, so
   // an in-memory cache never survives across files and each would clobber the shared snapshot.
-  if (!existsSync(snapshot)) buildSnapshot(shape, opts, snapshot, key);
+  if (!existsSync(snapshot)) {
+    withSnapshotLock(snapshot, () => {
+      // Another worker may have published while this one waited for the lock.
+      if (!existsSync(snapshot)) buildSnapshot(shape, opts, snapshot, key);
+    });
+  }
   return snapshot;
+}
+
+const LOCK_POLL_MS = 100;
+const LOCK_STALE_MS = 10 * 60_000;
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/** A lock is stale when its holder process is gone or it is older than {@link LOCK_STALE_MS}. */
+function isLockStale(lock: string): boolean {
+  try {
+    const holder = Number(readFileSync(join(lock, 'pid'), 'utf8'));
+    if (Number.isInteger(holder) && holder > 0 && !isProcessAlive(holder)) {
+      return true;
+    }
+  } catch {
+    // The holder has not written its pid yet, so age alone decides.
+  }
+  try {
+    return Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Runs `build` while holding a cross-process lock beside `snapshot`, so a second worker that
+ * misses the same key waits for the first one's snapshot instead of running its own cold
+ * `init`. The lock is an atomic `mkdir`. A lock whose holder died, or that outlived
+ * {@link LOCK_STALE_MS}, is taken over.
+ */
+function withSnapshotLock(snapshot: string, build: () => void): void {
+  const lock = `${snapshot}.lock`;
+  mkdirSync(dirname(lock), { recursive: true });
+  for (;;) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+    // Waiters poll sync because `useInstalledRepo` is sync. A published snapshot ends the wait
+    // without taking the lock.
+    if (existsSync(snapshot)) return;
+    if (isLockStale(lock)) {
+      rmSync(lock, { recursive: true, force: true });
+      continue;
+    }
+    sleepSync(LOCK_POLL_MS);
+  }
+  try {
+    writeFileSync(join(lock, 'pid'), String(process.pid));
+    build();
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
 }
 
 interface InstalledRepoOptions {

@@ -27,13 +27,14 @@
   },
   "wireit": {
     "build": {
-      "command": "tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && houserules-payload && publint",
+      "command": "node ../../scripts/with-build-locks.mjs build sh -c 'tsc -p tsconfig.build.json && tsc -p tsconfig.payload.json && houserules-payload' && publint",
       "dependencies": [
         "../cli:build:ts",
         "../api:build",
         "../payload:build"
       ],
       "files": [
+        "../../scripts/with-build-locks.mjs",
         "src/**/*.ts",
         "package.json",
         "!src/**/__tests__/**",
@@ -69,12 +70,13 @@
       "output": []
     },
     "test": {
-      "command": "vitest run",
+      "command": "node ../../scripts/with-build-locks.mjs test vitest run",
       "dependencies": [
         "build",
         "../test:build"
       ],
       "files": [
+        "../../scripts/with-build-locks.mjs",
         "src/**/*.ts",
         "test/**",
         "package.json",

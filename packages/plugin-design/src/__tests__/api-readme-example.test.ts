@@ -11,8 +11,11 @@ const API_README = fileURLToPath(
   new URL('../../../api/README.md', import.meta.url),
 );
 
-const README_TRIGGER_EXPRESSION =
-  "answers.moduleIds.some((id) => id === 'design' || id.endsWith('/design'))";
+const API_ENTRY = fileURLToPath(
+  new URL('../../../api/dist/index.js', import.meta.url),
+);
+
+const README_TRIGGER_EXPRESSION = "hasModule(answers.moduleIds, 'design')";
 const TRIGGER_LINE = '- Building UI? Take tokens from the design module.';
 
 function writeFixturePlugin(triggerExpression: string): string {
@@ -28,7 +31,9 @@ function writeFixturePlugin(triggerExpression: string): string {
   );
   writeFileSync(
     join(dir, 'index.cjs'),
-    `module.exports = function readmeExample(api) {
+    `const { hasModule } = require(${JSON.stringify(API_ENTRY)});
+
+module.exports = function readmeExample(api) {
   return [
     {
       id: 'my-rule',

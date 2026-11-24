@@ -13,6 +13,7 @@ const CATALOG = new Map([
   ['BOOK-7', { name: 'Brewing guide', category: 'reduced' }],
   ['MUG-01', { name: 'Stoneware mug', category: 'standard' }],
   ['KETTLE', { name: 'Gooseneck kettle', category: 'standard' }],
+  ['MUG-2ND', { name: 'Stoneware mug, seconds', category: 'clearance' }],
   ['GIFT-25', { name: 'Gift card', category: 'voucher' }],
 ]);
 

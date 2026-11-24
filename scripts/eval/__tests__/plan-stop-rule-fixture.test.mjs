@@ -28,7 +28,23 @@ const ARMS = {
   'after-p1': { prompt: 'prompts/p1.txt', overlay: 'overlays/after' },
   'before-p2': { prompt: 'prompts/p2.txt', overlay: 'overlays/before' },
   'after-p2': { prompt: 'prompts/p2.txt', overlay: 'overlays/after' },
+  'landed-p3': { prompt: 'prompts/p3.txt', overlay: 'overlays/after' },
+  'fix2-p3': { prompt: 'prompts/p3.txt', overlay: 'overlays/fix2' },
+  'fix3-p3': {
+    prompt: 'prompts/p3.txt',
+    overlay: 'overlays/fix2',
+    settings: 'settings/fix3.json',
+  },
 };
+const FIX2_ANCHOR = 'then write the files.';
+const FIX2_SENTENCES = [
+  'A few means at most five calls beyond the named inputs.',
+  "A sweep, audit, or verification the request asks for is the plan's first phase, not grounding.",
+];
+const HOOK = join(FIXTURE, 'hooks', 'plan-write-reminder.mjs');
+const EPISODE = join('episodes', 'health-plan.jsonl');
+const REMINDER =
+  'plan-project: ten calls since the skill fired and no plan file written. Write the plan files now and turn open questions into phase steps.';
 const SKILL_RULE_LINES = [
   '',
   "**Grounding stops at the first write.** Read the inputs the request names and this skill's",
@@ -46,7 +62,7 @@ const MILESTONE_AFTER_LINES = [
   'List each phase you expect, with its write roots, from what you already know. Grounding stops at',
   'the first write, as `SKILL.md` section 2 says. Count hub files among them: a shared test file,',
 ];
-/** sha256 of each file as recorded: overlays from the git blobs, prompts from the transcripts. */
+/** sha256 of each file as recorded: overlays from the git blobs, prompts from the transcripts, except p1, which adds the headless answers. */
 const SHA256 = {
   'overlays/before/skills/plan-project/SKILL.md':
     '273d3f4914549369acc4c9929444a7fb983063e5aa63cb199680eea2e5771698',
@@ -57,9 +73,11 @@ const SHA256 = {
   'overlays/after/skills/plan-project/references/milestone.md':
     '65e7d99aaa0e898a9da32d20b60288bfae110558b513b9acd7d0c6ec6a64826b',
   'prompts/p1.txt':
-    'dc1713b5de91c34f5d2392765000b713d52b0edc5db49c638b7e7971261278a9',
+    '6fee4a636e103fa8cbb2073356d600f6eebe30792d4056e6ed5e55393f6b88ce',
   'prompts/p2.txt':
     '4c4513ce203e18d413f3b1ce4d90e5eb2a4e58e86900bd7355e627228032794b',
+  'prompts/p3.txt':
+    '6d1d72ece9ac57a4df9be1cd661082c9eb5a6a76b4c58ef8c14a92619219e5c2',
 };
 const temps = [];
 
@@ -141,6 +159,55 @@ function writeSample(out, arm, sample, { stream, run, tree }) {
   }
 }
 
+const episodeRecords = () => readFixture(EPISODE).trimEnd().split('\n');
+
+/** The main thread's tool_use blocks of the recorded episode, each id once, in order. */
+function episodeCalls(records) {
+  const calls = [];
+  for (const line of records) {
+    const record = JSON.parse(line);
+    if (record.type !== 'assistant') continue;
+    for (const block of record.message.content)
+      if (!calls.some((call) => call.id === block.id)) calls.push(block);
+  }
+  return calls;
+}
+
+const indexOfCall = (records, id) =>
+  records.findIndex(
+    (line) =>
+      JSON.parse(line).type === 'assistant' && line.includes(`"id":"${id}"`),
+  );
+
+const indexOfFire = (records) =>
+  records.findIndex((line) => line.includes('<command-name>/plan-project'));
+
+/** Runs the hook on a transcript of `records` with `call` as the PostToolUse payload's call. */
+function runHook(records, call) {
+  const dir = tempDir('hr-plan-stop-rule-hook-');
+  const transcript = join(dir, 'transcript.jsonl');
+  writeFileSync(transcript, `${records.join('\n')}\n`);
+  const result = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({
+      hook_event_name: 'PostToolUse',
+      transcript_path: transcript,
+      tool_use_id: call.id,
+      tool_name: call.name,
+      tool_input: call.input,
+    }),
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout;
+}
+
+const reminderOutput = `${JSON.stringify({
+  hookSpecificOutput: {
+    hookEventName: 'PostToolUse',
+    additionalContext: REMINDER,
+  },
+})}\n`;
+
 describe('plan-stop-rule fixture', () => {
   after(() => {
     for (const dir of temps) rmSync(dir, { recursive: true, force: true });
@@ -204,6 +271,183 @@ describe('plan-stop-rule fixture', () => {
           'ROADMAP.md',
         ),
       ),
+    );
+  });
+
+  it('runs the recorded p3 request against the landed, fix 2, and fix 3 arms', () => {
+    const sides = Object.entries(ARMS)
+      .filter(([, arm]) => arm.prompt === 'prompts/p3.txt')
+      .map(([name]) => name);
+    const text = readFixture('prompts/p3.txt');
+
+    assert.deepEqual(sides, ['landed-p3', 'fix2-p3', 'fix3-p3']);
+    assert.ok(text.startsWith('/plan-project '), text.slice(0, 40));
+    assert.ok(!text.endsWith('\n'), 'p3 ends without a newline');
+  });
+
+  it('differs from the after overlay by exactly the two fix 2 sentences', () => {
+    const after = readFixture(join('overlays', 'after', SKILL));
+    const anchorAt = after.indexOf(FIX2_ANCHOR) + FIX2_ANCHOR.length;
+    const collapse = (text) => text.replace(/\s+/g, ' ');
+
+    const fix2 = readFixture(join('overlays', 'fix2', SKILL));
+
+    assert.equal(
+      collapse(fix2),
+      collapse(
+        `${after.slice(0, anchorAt)} ${FIX2_SENTENCES.join(' ')}${after.slice(anchorAt)}`,
+      ),
+    );
+    const afterLines = after.split('\n');
+    const fix2Lines = fix2.split('\n');
+    const ruleAt = afterLines.findIndex((line) =>
+      line.startsWith('**Grounding stops at the first write.**'),
+    );
+    assert.deepEqual(fix2Lines.slice(0, ruleAt), afterLines.slice(0, ruleAt));
+    assert.deepEqual(
+      fix2Lines.slice(fix2Lines.length - (afterLines.length - ruleAt - 4)),
+      afterLines.slice(ruleAt + 4),
+      'only the four-line stop-rule paragraph rewraps',
+    );
+    assert.equal(
+      readFixture(join('overlays', 'fix2', MILESTONE)),
+      readFixture(join('overlays', 'after', MILESTONE)),
+    );
+  });
+
+  it('wires the fix 3 settings to a PostToolUse hook that exists', () => {
+    const settings = JSON.parse(
+      readFixture('settings/fix3.json').replaceAll('{{fixtureDir}}', FIXTURE),
+    );
+
+    const [entry] = settings.hooks.PostToolUse;
+    const [command] = entry.hooks;
+
+    assert.deepEqual(Object.keys(settings), ['hooks']);
+    assert.equal(command.type, 'command');
+    assert.equal(command.command, `node "${HOOK}"`);
+    assert.ok(existsSync(HOOK), HOOK);
+  });
+
+  it('reminds at the tenth non-writing call after the fire and at no other', () => {
+    const records = episodeRecords();
+    const calls = episodeCalls(records);
+    const fired = [];
+
+    for (const [index, call] of calls.slice(0, 21).entries()) {
+      const through = records.slice(0, indexOfCall(records, call.id) + 1);
+      if (runHook(through, call) !== '') fired.push(index);
+    }
+
+    assert.equal(calls[0].input.command.startsWith('wc -c .notes'), true);
+    assert.ok(indexOfCall(records, calls[0].id) < indexOfFire(records));
+    assert.deepEqual(
+      fired,
+      [10],
+      'call 0 precedes the fire, calls 1 to 20 follow it',
+    );
+  });
+
+  it('prints the one-line reminder for the tenth call', () => {
+    const records = episodeRecords();
+    const tenth = episodeCalls(records)[10];
+
+    const output = runHook(
+      records.slice(0, indexOfCall(records, tenth.id) + 1),
+      tenth,
+    );
+
+    assert.equal(output, reminderOutput);
+  });
+
+  it('counts the payload call when the transcript does not hold it yet', () => {
+    const records = episodeRecords();
+    const calls = episodeCalls(records);
+
+    const output = runHook(
+      records.slice(0, indexOfCall(records, calls[10].id)),
+      calls[10],
+    );
+
+    assert.equal(output, reminderOutput);
+  });
+
+  it('ignores calls the transcript holds after the payload call', () => {
+    const records = episodeRecords();
+    const calls = episodeCalls(records);
+
+    const outputs = [9, 10, 11].map((index) => runHook(records, calls[index]));
+
+    assert.deepEqual(outputs, ['', reminderOutput, '']);
+  });
+
+  it('stays silent on the tenth call after a plan write', () => {
+    const records = episodeRecords();
+    const calls = episodeCalls(records);
+    const write = calls[21];
+    const afterWrite = calls[22];
+    const ninth = indexOfCall(records, calls[9].id);
+    const withoutWrite = [
+      ...records.slice(0, ninth + 1),
+      records[indexOfCall(records, afterWrite.id)],
+    ];
+    const withWrite = [
+      ...records.slice(0, ninth + 1),
+      records[indexOfCall(records, write.id)],
+      records[indexOfCall(records, afterWrite.id)],
+    ];
+
+    const outputs = [withoutWrite, withWrite].map((transcript) =>
+      runHook(transcript, afterWrite),
+    );
+
+    assert.equal(write.name, 'Write');
+    assert.ok(
+      write.input.file_path.includes('.claude/plans/'),
+      write.input.file_path,
+    );
+    assert.deepEqual(outputs, [reminderOutput, '']);
+  });
+
+  it('stays silent when plan-project never fired', () => {
+    const records = episodeRecords();
+    const calls = episodeCalls(records);
+    const unfired = records.toSpliced(indexOfFire(records), 1);
+
+    const output = runHook(unfired, calls[11]);
+
+    assert.equal(output, '');
+  });
+
+  it('fires on a plan-project Skill call as well as the slash command', () => {
+    const records = episodeRecords();
+    const calls = episodeCalls(records);
+    const skill = JSON.stringify(
+      assistant([['skill-1', 'Skill', { skill: 'houserules:plan-project' }]]),
+    );
+    const viaSkill = records.toSpliced(indexOfFire(records), 1, skill);
+
+    const output = runHook(
+      viaSkill.slice(0, indexOfCall(viaSkill, calls[10].id) + 1),
+      calls[10],
+    );
+
+    assert.equal(output, reminderOutput);
+  });
+
+  it('exits 0 and prints nothing on a missing transcript or a bad payload', () => {
+    const missing = spawnSync(process.execPath, [HOOK], {
+      input: JSON.stringify({ transcript_path: '/nonexistent/t.jsonl' }),
+      encoding: 'utf8',
+    });
+    const garbage = spawnSync(process.execPath, [HOOK], {
+      input: 'not json',
+      encoding: 'utf8',
+    });
+
+    assert.deepEqual(
+      [missing.status, missing.stdout, garbage.status, garbage.stdout],
+      [0, '', 0, ''],
     );
   });
 

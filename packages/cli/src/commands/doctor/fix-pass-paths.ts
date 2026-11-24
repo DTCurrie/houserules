@@ -5,7 +5,7 @@ import type { CheckResult, Finding } from '@houserules/api';
 import type { Ctx } from '../../detect.js';
 import { installedModuleIds } from '../../installed-modules.js';
 import { passPathsDefault } from '../../path-taking-scripts.js';
-import { hasModule } from '../../plugin-registry.js';
+import { hasModule } from '@houserules/api';
 
 const PATH_TAKING_FORM = '`eslint --fix` and `prettier --write`';
 

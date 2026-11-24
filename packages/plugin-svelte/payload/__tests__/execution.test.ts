@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -52,39 +52,6 @@ function runStaged(script: string) {
     env: envWithoutVitestNodePath(),
   });
 }
-
-describe('every lib module loads on bare node', () => {
-  const libDir = join(SCRIPTS, 'lib');
-  const hasLibDir = existsSync(libDir);
-
-  const libFiles = hasLibDir
-    ? readdirSync(libDir).filter((f) => f.endsWith('.mjs'))
-    : [];
-
-  describe.runIf(hasLibDir)('scripts/lib', () => {
-    function importLibInChildProcess(file: string) {
-      const fileUrl = pathToFileURL(join(libDir, file)).href;
-      return spawnSync(
-        process.execPath,
-        ['--input-type=module', '-e', `await import('${fileUrl}')`],
-        {
-          cwd: dependencyFreeDir,
-          encoding: 'utf8',
-          env: envWithoutVitestNodePath(),
-        },
-      );
-    }
-
-    it('has lib files to check', () => {
-      expect(libFiles.length).toBe(0);
-    });
-
-    it.each(libFiles)('%s imports and exits 0', (file) => {
-      const r = importLibInChildProcess(file);
-      expect(r.status, `${file} exited ${r.status}: ${r.stderr}`).toBe(0);
-    });
-  });
-});
 
 describe('svelte-lint.mjs invoked with no arguments', () => {
   it('exits 0 and reports no findings, since no files were passed on argv', () => {

@@ -1,0 +1,6 @@
+{"type": "system", "subtype": "init", "session_id": "s", "model": "claude-sonnet-5-5", "permissionMode": "default", "tools": ["Agent", "AskUserQuestion", "Bash", "Skill"]}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Skill", "input": {"skill": "orchestrate", "args": "greet 1"}}]}, "session_id": "s"}
+{"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "Launching skill: orchestrate"}]}, "session_id": "s"}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t3", "name": "Agent", "input": {"subagent_type": "phase-orchestrator", "description": "Phase 1", "prompt": "Run phase 1 of greet"}}]}, "session_id": "s"}
+{"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t3", "content": "done"}]}, "session_id": "s"}
+{"type": "result", "subtype": "success", "is_error": false, "total_cost_usd": 0.1, "session_id": "s"}

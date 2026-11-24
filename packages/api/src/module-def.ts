@@ -57,6 +57,18 @@ export interface ModuleOptions {
   defaults: string[];
 }
 
+/**
+ * Whether `moduleIds` selects the module `bareId` under any alias. A module a plugin ships is
+ * selected as `<alias>/<id>`, and the alias is the installing repo's choice, so a plain
+ * `includes(bareId)` answers false for every plugin-sourced module. Pass `answers.moduleIds`.
+ */
+export function hasModule(
+  moduleIds: readonly string[],
+  bareId: string,
+): boolean {
+  return moduleIds.some((id) => id === bareId || id.endsWith(`/${bareId}`));
+}
+
 /** What the user chose (interactively or via flags). The second module input. */
 export interface Answers {
   moduleIds: string[];

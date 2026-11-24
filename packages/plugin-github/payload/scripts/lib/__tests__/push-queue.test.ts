@@ -6,6 +6,7 @@ import {
   resolveMarkSupersededItemId,
   summarizeQueue,
   syncedRecord,
+  withoutHeldEntries,
 } from '../push-queue.mjs';
 import type { LedgerRecord, PushOp } from '../push-queue.mjs';
 
@@ -1068,5 +1069,42 @@ describe('an entry present in BOTH the index and the queue', () => {
     ];
 
     expect(buildPushQueue([backlogBirth], [], index, [])).toEqual([]);
+  });
+});
+
+describe('withoutHeldEntries', () => {
+  it('drops the op for a held entry and keeps the op for an unheld one', () => {
+    const queue = buildPushQueue(
+      [backlogAdd('HOUSERULES-held01'), backlogAdd('HOUSERULES-free01')],
+      [],
+    );
+
+    const ops = withoutHeldEntries(queue, new Set(['HOUSERULES-held01']));
+
+    expect(ops.map((op) => `${op.op} ${op.entryId}`)).toEqual([
+      'create-issue HOUSERULES-free01',
+    ]);
+  });
+
+  it('drops the mark-superseded flip a held successor would have sent', () => {
+    const queue = buildPushQueue(
+      [],
+      [
+        decide('D-old'),
+        decide('D-new', { action: 'supersede', supersedes: ['D-old'] }),
+      ],
+    );
+
+    const ops = withoutHeldEntries(queue, new Set(['D-new']));
+
+    expect(ops.map((op) => `${op.op} ${op.entryId}`)).toEqual([
+      'create-draft D-old',
+    ]);
+  });
+
+  it('leaves the queue whole when nothing is held', () => {
+    const queue = buildPushQueue([backlogAdd('HOUSERULES-free01')], []);
+
+    expect(withoutHeldEntries(queue, new Set())).toEqual(queue);
   });
 });

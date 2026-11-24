@@ -40,6 +40,11 @@ Do not read plan files other than those named, such as sub-plans, `PLAN.md`, `RO
 `designs.md`, or another thread's report, unless the brief's question names the file. The plan
 describes the roles, not the subject, and it steers findings toward the plan's own answer.
 
+Do not read another thread's `<thread>-pages/` directory. You may `grep` `records.jsonl` for what
+other threads hold. When you need a page another thread fetched, fetch it again into your own
+directory. Pages are that thread's working set, and reading them spends calls the records already
+summarize.
+
 - "I need the phase file to pick a destination": the `Destinations:` line in BRIEF.md is the
   whole set. A phase file adds nothing to it.
 - "I need the plan to know what matters": the brief's question is the scope. The plan's
@@ -60,6 +65,8 @@ describes the roles, not the subject, and it steers findings toward the plan's o
 - Every claim about this codebase cites `path:line`. Every external claim cites a URL you
   actually fetched. Prefer primary sources (official docs, upstream repos, SDK source) over
   blog posts. Fetch, do not recall: version-specific API facts from memory are the top error.
+- A quote ends where the copied text ends. Never add a period, comma, or other punctuation the
+  source lacks, because the quote check matches the text byte for byte after normalizing.
 - Distinguish verified (fetched or read) from inferred. Inferred goes under `## Open questions`.
 - Cover every version the brief names and flag each API that differs between them.
 - Use the exact required section headings from your brief, in order. Add subsections freely.

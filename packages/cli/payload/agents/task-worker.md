@@ -61,10 +61,14 @@ before you implement, or make the breaking edit and reverse it the same way.
 directory, writes to a remote, or rewrites config belongs to the orchestrator, who runs it once when
 the tree is quiet and can read the diff. Your slice edits source.
 
+**Every scratch file you write goes under `<scratchpad>/<slice id>/`.** Take the slice id from the
+`Slice <id>` line of your brief. Sibling workers in a wave share one scratchpad, and they once
+overwrote each other's `before.txt`.
+
 **A refused report-file `Write` gets a draft, never a retry.** The harness refuses a subagent's
 `Write` of a report-named file, such as `REPORT.md`, `report.md`, or `SUMMARY.md`, with "Subagents
 should return findings as text, not write report files." When that happens, write the same bytes
-to your scratchpad under a name that is not a report name, such as `draft.md`. Under `Requests`,
+to your slice's scratchpad subdirectory under a name that is not a report name, such as `draft.md`. Under `Requests`,
 name the final path, the draft's path, and its sha256 from `shasum -a 256`. If that `Write` is
 refused too, put the draft under `Requests` as text between the marker lines `<<<<name>` and
 `<name>>>>`, the one place a report carries file contents. Never retry the refused path through

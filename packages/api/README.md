@@ -50,6 +50,9 @@ A requirement names another module by its bare id. It is met under any alias, be
 is the installing repo's choice.
 
 ```ts
+import { hasModule } from '@houserules/api';
+import type { ModuleDef } from '@houserules/api';
+
 const module: ModuleDef = {
   id: 'my-rule',
   // ...
@@ -67,11 +70,13 @@ const module: ModuleDef = {
     ],
   },
   skillTriggers: (answers) =>
-    answers.moduleIds.some((id) => id === 'design' || id.endsWith('/design'))
+    hasModule(answers.moduleIds, 'design')
       ? ['- Building UI? Take tokens from the design module.']
       : [],
 };
 ```
+
+`hasModule` answers whether a module is selected under any alias, so `'design'` matches both `design` and `ui-kit/design`.
 
 `requires` is for a module this one cannot do its job without. Selecting the module installs each
 requirement, transitively, in `init`, the interactive picker, `update`, and `modules`. The picker

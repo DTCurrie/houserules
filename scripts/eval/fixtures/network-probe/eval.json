@@ -1,0 +1,14 @@
+{
+  "modules": "core",
+  "plugins": [],
+  "model": "haiku",
+  "network": false,
+  "validityAgent": null,
+  "collect": [],
+  "arms": {
+    "probe": {
+      "prompt": "arms/probe/prompt.txt",
+      "overlay": "arms/probe/overlay"
+    }
+  }
+}

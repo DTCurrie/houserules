@@ -37,6 +37,7 @@ function runHook(script: string, input = '{}') {
 const HOOKS_THAT_MUST_NEVER_CRASH = [
   'guard-bash.mjs',
   'guard-read.mjs',
+  'guard-mods.mjs',
   'session-context.mjs',
   'statusline.mjs',
   'ledger-inject.mjs',

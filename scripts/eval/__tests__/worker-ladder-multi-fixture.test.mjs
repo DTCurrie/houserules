@@ -25,6 +25,7 @@ const HIDDEN = 'node --test --test-reporter=tap test/invoice.hidden.test.js';
 const FAILING_AT_START = [
   'prints the receipt for a discounted two-line order',
   'splits a coupon so the line discounts sum to the invoice discount',
+  'holds a clearance line at its cap and spends the rest of the coupon',
   'taxes a line on its price after the discount',
 ];
 const temps = [];
@@ -153,36 +154,34 @@ describe('worker-ladder-multi fixture', () => {
     assert.equal(status, 0, output);
   });
 
+  it('fails the hidden tests on the starting repo', () => {
+    const { status, output } = run(sampleRoot(null), HIDDEN);
+
+    assert.equal(status, 1, output);
+  });
+
   it('passes the hidden tests with the reference solution', () => {
     const { status, output } = run(sampleRoot('solution'), HIDDEN);
 
     assert.equal(status, 0, failingLeaves(output).join('\n') || output);
   });
 
-  it('passes the visible acceptance with the test-only fix', () => {
+  it('passes the visible acceptance with the shallow fix', () => {
     const { status, output } = run(sampleRoot('wrong'), ACCEPTANCE);
 
     assert.equal(status, 0, output);
   });
 
-  it('fails the hidden tests with the test-only fix, across the contract rules', () => {
+  it('fails the hidden tests with the shallow fix only on the cap cascade and the cap rounding', () => {
     const { status, output } = run(sampleRoot('wrong'), HIDDEN);
 
     assert.equal(status, 1, output);
     assert.deepEqual(failingLeaves(output), [
-      'rejects qty 0',
-      'rejects qty 1.5',
-      'rejects qty 2',
-      'rejects unitCents 1000',
-      'merges repeated skus into the first line, summing qty',
-      'rejects one sku at two unit prices',
-      'gives a gift card no share of the coupon',
-      'caps the coupon at the discountable gross',
-      'applies no discount to an order of gift cards only',
-      'splits by gross after merging repeated skus',
-      'rounds an exact half cent down to even',
-      'rounds tax per line, not on the total',
-      'totals a mixed order with a coupon and a gift card',
+      'keeps re-splitting until no line is over its cap',
+      'holds a line the second split pushes over its cap',
+      'rounds a cap on an exact half cent up to even',
+      'holds for 1xMUG-2ND,1xTEA-01,1xMUG-01 with coupon 1500',
+      'holds for 1xKETTLE,2xBOOK-7,1xMUG-2ND with coupon 1400',
     ]);
   });
 

@@ -11,7 +11,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { git, sha256 } from './assemble.mjs';
-import { judgeValidity } from './orchestrate-report.mjs';
+import { NO_VALIDITY_AGENT, judgeValidity } from './orchestrate-report.mjs';
 import { sessionDirName } from './layout.mjs';
 
 const EVAL_JSON = 'eval.json';
@@ -41,7 +41,11 @@ const CLI_DIR_DEPTH = 3;
  * @property {string} modules The `init --yes --modules` list, plugin modules as `<alias>/<id>`.
  * @property {Array<{ path: string, alias: string }>} plugins `path` relative to the built root.
  * @property {string} model The child's `--model`: the arm's `model` when set, else the fixture's.
- * @property {string} validityAgent The subagent type a valid sample's `by_type` must count.
+ * @property {string | null} validityAgent The subagent type a valid sample's `by_type` must count,
+ *   or null to skip that test.
+ * @property {'auto' | 'default'} permissionMode The child's `--permission-mode`, from `eval.json`.
+ * @property {Record<string, unknown> | undefined} settings The arm's settings object, with
+ *   `{{fixtureDir}}` replaced, merged into the child's `--settings`.
  * @property {string[]} collect Paths relative to the sample root, copied into `tree/` on exit.
  * @property {string} prompt The arm's prompt file, verbatim, which becomes the `-p` text.
  * @property {string} overlayDir The arm's overlay directory, absolute.
@@ -165,6 +169,74 @@ function requireEntry(path, kind) {
   if (!isKind) throw new Error(`--fixture ${path} is not a ${kind}`);
 }
 
+const FIXTURE_DIR_TOKEN = '{{fixtureDir}}';
+const PERMISSION_MODES = ['auto', 'default'];
+
+/**
+ * @param {unknown} value
+ * @param {string} dir
+ * @returns {unknown} `value` with the token replaced in every string, however deep.
+ */
+function substituteFixtureDir(value, dir) {
+  if (typeof value === 'string')
+    return value.replaceAll(FIXTURE_DIR_TOKEN, dir);
+  if (Array.isArray(value))
+    return value.map((item) => substituteFixtureDir(item, dir));
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        substituteFixtureDir(item, dir),
+      ]),
+    );
+  }
+  return value;
+}
+
+/**
+ * @param {string} dir
+ * @param {Record<string, unknown>} arm
+ * @param {string} armWhere
+ * @param {boolean} isNetworkAllowed
+ * @returns {Record<string, unknown> | undefined}
+ */
+function readArmSettings(dir, arm, armWhere, isNetworkAllowed) {
+  if (arm.settings === undefined) return undefined;
+  const relativePath = requireString(arm, 'settings', armWhere);
+  if (!isInsideRelative(relativePath)) {
+    throw new Error(
+      `${armWhere} settings must be a path inside the fixture, got ${JSON.stringify(relativePath)}`,
+    );
+  }
+  const parsed = readJsonFile(join(dir, relativePath));
+  if (!isRecord(parsed)) {
+    throw new Error(
+      `${armWhere} settings ${relativePath} is not a JSON object`,
+    );
+  }
+  if (!isNetworkAllowed && 'sandbox' in parsed) {
+    throw new Error(
+      `${armWhere} settings ${relativePath} sets "sandbox", which a network-false fixture owns`,
+    );
+  }
+  return substituteFixtureDir(parsed, dir);
+}
+
+/**
+ * The fixture's `permissionMode`, `auto` when absent. Throws on any other value.
+ *
+ * @param {Record<string, unknown>} spec
+ * @param {string} where
+ * @returns {string}
+ */
+function readPermissionMode(spec, where) {
+  if (spec.permissionMode === undefined) return 'auto';
+  if (!PERMISSION_MODES.includes(spec.permissionMode)) {
+    throw new Error(`${where} "permissionMode" must be "auto" or "default"`);
+  }
+  return spec.permissionMode;
+}
+
 /**
  * Reads `<fixtureDir>/eval.json` and picks `arms.<armName>`. Throws, naming the field or path,
  * on a missing file, a malformed field, an unknown arm, or a prompt or overlay that is absent.
@@ -197,6 +269,9 @@ export function loadArmFixture(fixtureDir, armName) {
   if (spec.network !== undefined && typeof spec.network !== 'boolean') {
     throw new Error(`${where} "network" must be a boolean`);
   }
+  const permissionMode = readPermissionMode(spec, where);
+  const isNetworkAllowed = spec.network === true;
+  const settings = readArmSettings(dir, arm, armWhere, isNetworkAllowed);
   requireEntry(join(dir, REPO_DIR), 'directory');
   requireEntry(promptPath, 'file');
   requireEntry(overlayDir, 'directory');
@@ -206,11 +281,16 @@ export function loadArmFixture(fixtureDir, armName) {
     modules: requireString(spec, 'modules', where),
     plugins: readPlugins(spec.plugins, where),
     model: arm.model ?? requireString(spec, 'model', where),
-    validityAgent: requireString(spec, 'validityAgent', where),
+    validityAgent:
+      spec.validityAgent === null
+        ? null
+        : requireString(spec, 'validityAgent', where),
+    permissionMode,
+    settings,
     collect: readCollect(spec.collect, where),
     prompt: readFileSync(promptPath, 'utf8'),
     overlayDir,
-    isNetworkAllowed: spec.network === true,
+    isNetworkAllowed,
   };
 }
 
@@ -382,11 +462,11 @@ export function copyCollect(root, collect, outDir) {
  * `validityAgent`, and every overlaid file still holds the overlay's bytes at exit.
  *
  * @param {import('./orchestrate-report.mjs').SampleArtifacts} sample
- * @param {string} validityAgent
+ * @param {string | null} validityAgent Null skips the agent test.
  * @returns {{ valid: boolean, line: string }}
  */
 export function judgeArmValidity(sample, validityAgent) {
-  const judged = judgeValidity(sample, validityAgent);
+  const judged = judgeValidity(sample, validityAgent ?? NO_VALIDITY_AGENT);
   if (!judged.valid) return judged;
   const overlays = sample.run?.overlays;
   if (!Array.isArray(overlays)) {

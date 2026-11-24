@@ -8,7 +8,8 @@
  * The wiring is read from `$CLAUDE_PROJECT_DIR`, else from the repo root.
  *
  * Exit codes:
- * - 2 when any hook exited 2. Those hooks' stderr is written in wiring order.
+ * - 2 when any hook exited 2. Those hooks' stderr is written in wiring order. The JSON on their
+ *   stdout and on every successful hook's merges onto stdout, since the harness reads it on exit 2.
  * - 1 when a hook marked `onFailure: 'block'` failed (non-zero exit, timeout, spawn error,
  *   or absent script), with its stderr or a one-line notice.
  * - A hook not marked `onFailure: 'block'` that exits with a code other than 0 or 2 and writes
@@ -124,6 +125,14 @@ const MATCH_FIELDS: Readonly<Record<string, string>> = {
 };
 
 const EXACT_LIST_RE = /^[A-Za-z0-9_|]+$/;
+
+/** The events on which the harness adds a hook's plain-text stdout to Claude's context. */
+const PLAIN_STDOUT_CONTEXT_EVENTS: ReadonlySet<string> = new Set([
+  'UserPromptSubmit',
+  'UserPromptExpansion',
+  'SessionStart',
+  'PostModelSwitch',
+]);
 
 /** Restrictiveness of a `permissionDecision`. Higher wins a merge. */
 const DECISION_RANK: Readonly<Record<string, number>> = {
@@ -390,7 +399,16 @@ export function verdictFor(
       .filter((result) => result.stderr !== '')
       .map((result) => endWithNewline(result.stderr))
       .join('');
-    return { code: BLOCKING_EXIT, stdout: '', stderr };
+    // The harness still reads JSON on exit 2, and a blocking decision's reason replaces stderr.
+    // Plain text it ignores there, so only JSON objects are kept.
+    const stdout = mergeStdout(
+      results
+        .filter((result) => refusals.includes(result) || hasSucceeded(result))
+        .map((result) => result.stdout)
+        .filter((output) => parseObject(output) !== null),
+      event,
+    );
+    return { code: BLOCKING_EXIT, stdout, stderr };
   }
   const failed = results.filter((result) => !hasSucceeded(result));
   const blockFailures = failed.filter(
@@ -548,7 +566,9 @@ function appendText(merged: JsonObject, text: string, event: string): void {
 /**
  * The dispatcher's stdout from the successful hooks' stdout, in wiring order. One non-empty
  * output passes through byte for byte. Several JSON objects merge. Several texts join with a
- * newline. A mix merges the JSON and appends the text to its `additionalContext`.
+ * newline. A mix merges the JSON, and appends the text to its `additionalContext` only on an
+ * event whose plain stdout the harness reads as context. Elsewhere the text is dropped, as the
+ * harness would never show it to Claude.
  */
 export function mergeStdout(outputs: string[], event: string): string {
   const parts = outputs.filter((output) => output.trim() !== '');
@@ -564,7 +584,9 @@ export function mergeStdout(outputs: string[], event: string): string {
   const text = texts.join('\n');
   if (objects.length === 0) return `${text}\n`;
   const merged = mergeObjects(objects);
-  if (texts.length > 0) appendText(merged, text, event);
+  if (texts.length > 0 && PLAIN_STDOUT_CONTEXT_EVENTS.has(event)) {
+    appendText(merged, text, event);
+  }
   return `${JSON.stringify(merged)}\n`;
 }
 

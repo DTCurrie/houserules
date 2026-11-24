@@ -110,6 +110,11 @@ that covers it is part of the change, not a follow-up.
   them in a plainly named `test/` directory. The distinction is worth holding: the test
   directory means tests live here, `test/` means testing infrastructure lives here. A test
   directory containing no tests misleads every reader who greps it.
+- **A fixture only the specs beside it use goes in a `fixtures/` subdirectory of the test
+  directory.** A wrapper component one spec mounts, or a data file one suite reads, belongs
+  to that suite, so it stays beside it without sitting among the tests. Once a second test
+  directory needs it, it is shared and moves to `test/`. Checked mechanically: the
+  directory-contents check skips `<test-dir>/fixtures/`.
 
 ### What to test, and at which level
 

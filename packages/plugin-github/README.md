@@ -111,6 +111,12 @@ per CLI process. It is silent on every opt-out path: no sync token, `autoSync: f
 push queue all return with no output and no log line. A spawned push's own output lands in
 `.claude/state/projects-sync.log`.
 
+Before it checks the queue, the hook holds back any ledger row the ending session wrote in a
+turn where you rejected a tool use, since that row may record a change you turned down. A held
+entry stays in the queue, and every push skips it, the hook's and a manual one alike. The holds
+live in `.claude/state/projects-sync-holds.json`. `projects-sync.mjs status` lists them, and
+`projects-sync.mjs release <id>` clears one so the next push sends it.
+
 ## Two local artifacts, and what each is for
 
 The board is the durable record. Locally there are two files per ledger and neither is a

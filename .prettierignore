@@ -13,6 +13,8 @@ CHANGELOG.md
 packages/plugin-accessibility/payload/reference/wcag22.md
 # A gitignored checkout of an older commit, built and deleted around one eval run.
 scripts/eval/fixtures/plan-stop-rule/repo/
+# A byte copy of the built manual-mode notice, pinned by the fixture's test.
+scripts/eval/fixtures/manual-mode/arms/notice-on/overlay/
 
 # houserules:prettierignore start
 # Installed by houserules and tracked by content hash. Formatting these rewrites

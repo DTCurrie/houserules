@@ -504,7 +504,7 @@ describe('check-findings.mjs --verify-urls', () => {
     ]);
 
     expect(result.stdout).toContain(
-      `${path}: AB-01: quote not found at ${base}/a\n`,
+      `${path}: AB-01: quote not found at ${base}/a: "hidden words"\n`,
     );
     expect(result.stdout).toContain('1 not found');
     expect(result.status).toBe(1);
@@ -709,6 +709,95 @@ describe('check-findings.mjs --verify-urls', () => {
     }
   });
 
+  it('cuts a long not-found quote to its first 60 characters and an ellipsis', async () => {
+    const quote = 'zebra '.repeat(20).trim();
+    const path = writeReport(`${base}/a → "${quote}"`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain(
+      `${path}: AB-01: quote not found at ${base}/a: "${quote.slice(0, 60)}..."\n`,
+    );
+  });
+
+  it('names a quote that ends with punctuation the source lacks', async () => {
+    serve('text/html', '<p>Agents drift without a plan</p>');
+    const path = writeReport(`${base}/a → "Agents drift without a plan."`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain(
+      `${path}: AB-01: quote ends with punctuation the source lacks at ${base}/a: "Agents drift without a plan."\n`,
+    );
+    expect(result.stdout).not.toContain('quote not found');
+    expect(result.stdout).toContain('1 not found');
+    expect(result.status).toBe(1);
+  });
+
+  it('passes a quote whose closing period is in the source', async () => {
+    serve('text/html', '<p>Agents drift without a plan.</p>');
+    const path = writeReport(`${base}/a → "Agents drift without a plan."`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain('1 quote(s) checked, 0 not found');
+    expect(result.status).toBe(0);
+  });
+
+  it('still reports plain not found when trimming punctuation does not help', async () => {
+    serve('text/html', '<p>Agents drift without a plan</p>');
+    const path = writeReport(`${base}/a → "Agents never drift."`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain(
+      `${path}: AB-01: quote not found at ${base}/a: "Agents never drift."\n`,
+    );
+  });
+
+  it('finds a quote across a footnote reference in the source', async () => {
+    serve(
+      'text/html',
+      '<p>Models forget<sup><a href="#fn1">1</a></sup> earlier turns.</p>',
+    );
+    const path = writeReport(`${base}/a → "Models forget earlier turns."`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain('1 quote(s) checked, 0 not found');
+  });
+
+  it('finds a quote across a LaTeXML math span in the source', async () => {
+    serve(
+      'text/html',
+      '<p>The loss <span class="ltx_Math"><math alttext="L=0" display="inline"><semantics><mi>L</mi><annotation encoding="application/x-tex">L=0</annotation></semantics></math></span> converges.</p>',
+    );
+    const path = writeReport(`${base}/a → "The loss L=0 converges."`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain('1 quote(s) checked, 0 not found');
+  });
+
+  it('finds a quote across zero-width and invisible-operator characters in the source', async () => {
+    serve('text/html', '<p>alpha​ beta⁡⁢⁣⁤ gamma</p>');
+    const path = writeReport(`${base}/a → "alpha beta gamma"`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain('1 quote(s) checked, 0 not found');
+  });
+
+  it('still reports not found for a quote that skips an exponent the page keeps', async () => {
+    serve('text/html', '<p>area is x<sup>2</sup> units</p>');
+    const path = writeReport(`${base}/a → "area is x units"`);
+
+    const result = await verify(path);
+
+    expect(result.stdout).toContain('1 not found');
+    expect(result.status).toBe(1);
+  });
+
   it('makes no request without the flag', async () => {
     const path = writeReport(`${base}/a → "Tom & Jerry"`);
 
@@ -751,6 +840,32 @@ describe('pageText', () => {
         convert,
       ),
     ).toBe('alpha beta gamma');
+  });
+
+  it('drops a footnote sup reference but keeps an exponent', () => {
+    expect(
+      pageText(
+        '<p>a<sup><a href="#fn1">1</a></sup> b x<sup>2</sup></p>',
+        'text/html',
+        convert,
+      ),
+    ).toBe('a b x2');
+  });
+
+  it('replaces a LaTeXML math element with its alttext', () => {
+    expect(
+      pageText(
+        '<p>so <math alttext="x^{2}"><mi>x</mi></math> holds</p>',
+        'text/html',
+        convert,
+      ),
+    ).toBe('so x^{2} holds');
+  });
+
+  it('strips U+200B and U+2061 to U+2064 from page text', () => {
+    expect(pageText('a\u200bb\u2061c\u2064d', 'text/plain', convert)).toBe(
+      'abcd',
+    );
   });
 
   it('unwraps links and drops heading markers', () => {

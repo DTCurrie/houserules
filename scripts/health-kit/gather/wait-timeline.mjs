@@ -71,6 +71,12 @@ import { isKeepaliveCommand } from './keepalive.mjs';
 const SCHEMA_VERSION = 'wait-timeline@2';
 const DEFAULT_MIN_SECONDS = 30;
 const OTHER_WORK_SLACK_SECONDS = 5;
+/**
+ * A human prompt counts as re-sent when the next human prompt, compared after lowercasing and
+ * collapsing whitespace, is identical, or both are at least EDIT_PREFIX_CHARS long and share that
+ * prefix. A shorter prompt matches only exactly. Two prompts that diverge sooner are separate work.
+ */
+const EDIT_PREFIX_CHARS = 20;
 const MILLISECONDS_PER_SECOND = 1000;
 const MILLISECONDS_PER_TENTH = 100;
 const TENTHS_PER_SECOND = 10;
@@ -280,14 +286,62 @@ function indexCommandsAndSends(timed) {
 
 function collectInputs(timed, isMain, commands) {
   const inputs = [];
+  let assistantCount = 0;
   for (const record of timed) {
+    if (record.type === 'assistant') assistantCount++;
     if (record.type !== 'user' || isToolResult(record)) continue;
     if (isCompactionRecord(record)) continue;
     const input = classifyInput(record, isMain, commands);
     if (input)
-      inputs.push({ ...input, at: Date.parse(record.timestamp), record });
+      inputs.push({
+        ...input,
+        at: Date.parse(record.timestamp),
+        record,
+        assistantCount,
+      });
   }
+  markResentPrompts(inputs);
   return inputs;
+}
+
+const normalizePrompt = (record) =>
+  contentText(record).toLowerCase().replace(/\s+/g, ' ').trim();
+
+function isResend(earlier, later) {
+  if (earlier.length === 0 || later.length === 0) return false;
+  if (earlier === later) return true;
+  const shorter = Math.min(earlier.length, later.length);
+  if (shorter < EDIT_PREFIX_CHARS) return false;
+  return (
+    earlier.slice(0, EDIT_PREFIX_CHARS) === later.slice(0, EDIT_PREFIX_CHARS)
+  );
+}
+
+/**
+ * The later prompt replaces the earlier one when it branches from the same parent record, or
+ * when no assistant record lies between them, so the earlier one was never answered.
+ */
+function replacesUnanswered(earlier, later) {
+  const parent = earlier.record.parentUuid;
+  if (parent !== undefined && parent === later.record.parentUuid) return true;
+  return earlier.assistantCount === later.assistantCount;
+}
+
+/**
+ * Sets `isResent` on each `user` input that the next `user` input repeats or edits.
+ */
+function markResentPrompts(inputs) {
+  const prompts = inputs.filter((input) => input.kind === 'user');
+  for (let index = 0; index + 1 < prompts.length; index++) {
+    if (
+      replacesUnanswered(prompts[index], prompts[index + 1]) &&
+      isResend(
+        normalizePrompt(prompts[index].record),
+        normalizePrompt(prompts[index + 1].record),
+      )
+    )
+      prompts[index].isResent = true;
+  }
 }
 
 /**
@@ -311,10 +365,12 @@ function makeMessageOwedCheck(sends, inputs) {
 }
 
 function makeActionableCheck(isMessageOwed) {
-  return (input) =>
-    input.kind === 'finished'
-      ? isMessageOwed(input.subject, input.at)
-      : !NOT_ACTIONABLE.has(input.kind);
+  return (input) => {
+    if (input.isResent) return false;
+    if (input.kind === 'finished')
+      return isMessageOwed(input.subject, input.at);
+    return !NOT_ACTIONABLE.has(input.kind);
+  };
 }
 
 function makeEmitter({ waits, session, waiter, owed, isActionable }) {
@@ -343,6 +399,35 @@ function makeEmitter({ waits, session, waiter, owed, isActionable }) {
   };
 }
 
+/** Registers each tool call of an assistant record as outstanding. */
+function recordToolUses(record, at, outstanding, owed) {
+  for (const block of contentBlocks(record)) {
+    if (block.type !== 'tool_use') continue;
+    outstanding.set(block.id, { at, block });
+    if (block.name === 'SendMessage' && block.input?.to)
+      owed.resumed(block.input.to);
+  }
+}
+
+/**
+ * Closes the outstanding calls a tool-result record answers, emitting a wait for each blocking one.
+ * @returns Whether one of them was the turn-ending tool.
+ */
+function settleToolResults(record, at, outstanding, owed, emit, pending) {
+  let endsTurn = false;
+  for (const block of contentBlocks(record)) {
+    if (block.type !== 'tool_result') continue;
+    const call = outstanding.get(block.tool_use_id);
+    if (!call) continue;
+    outstanding.delete(block.tool_use_id);
+    if (call.block.name === TURN_ENDING_TOOL) endsTurn = true;
+    owed.started(call.block, record.toolUseResult);
+    const endedBy = blockingLabel(call.block, record);
+    if (endedBy) emit(call.at, at, endedBy, pending, null);
+  }
+  return endsTurn;
+}
+
 /**
  * Walks the party's records in file order and emits each wait it finds.
  */
@@ -363,26 +448,18 @@ function walkRecords(timed, inputs, owed, emit) {
         const waking = pending[pending.length - 1];
         emit(lastActivity, waking.at, label(waking), pending, waking);
       }
-      for (const block of contentBlocks(record)) {
-        if (block.type !== 'tool_use') continue;
-        outstanding.set(block.id, { at, block });
-        if (block.name === 'SendMessage' && block.input?.to)
-          owed.resumed(block.input.to);
-      }
+      recordToolUses(record, at, outstanding, owed);
       lastActivity = at;
       pending = [];
     } else if (record.type === 'user' && isToolResult(record)) {
-      let endsTurn = false;
-      for (const block of contentBlocks(record)) {
-        if (block.type !== 'tool_result') continue;
-        const call = outstanding.get(block.tool_use_id);
-        if (!call) continue;
-        outstanding.delete(block.tool_use_id);
-        if (call.block.name === TURN_ENDING_TOOL) endsTurn = true;
-        owed.started(call.block, record.toolUseResult);
-        const endedBy = blockingLabel(call.block, record);
-        if (endedBy) emit(call.at, at, endedBy, pending, null);
-      }
+      const endsTurn = settleToolResults(
+        record,
+        at,
+        outstanding,
+        owed,
+        emit,
+        pending,
+      );
       lastActivity = endsTurn ? at : null;
       pending = [];
     } else if (record.type === 'user') {

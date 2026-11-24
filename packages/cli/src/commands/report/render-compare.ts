@@ -1,6 +1,7 @@
 import { computeListPrice } from './model-prices.js';
 import { entrypointMedians } from './resident-context.js';
 import {
+  GUARD_SCRIPT,
   SLOW_STOP_LABEL,
   STOP_TOTAL_LABEL,
   formatTailShare,
@@ -138,6 +139,43 @@ function hookRows(documents: ReportDocument[]): Row[] {
       documents,
       (doc) => new Map(doc.hooks.rows.map((hook) => [hook.hook, hook.fires])),
       (hook) => `fires: ${hook}`,
+    ),
+    ...runLogRows(documents),
+  ];
+}
+
+/** Run-log rows: a document without `runLog` shows `-`, since it never recorded the figure. */
+function runLogRows(documents: ReportDocument[]): Row[] {
+  const stopFigures =
+    (pick: 'runs' | 'medianMilliseconds') => (doc: ReportDocument) =>
+      doc.hooks.runLog
+        ? new Map(
+            doc.hooks.runLog.stopPaths.map((path) => [
+              `${path.script} ${path.path}`,
+              path[pick],
+            ]),
+          )
+        : new Map<string, number>();
+  return [
+    ...unionRows(
+      documents,
+      stopFigures('runs'),
+      (name) => `run log runs: ${name}`,
+    ),
+    ...unionRows(
+      documents,
+      stopFigures('medianMilliseconds'),
+      (name) => `run log median ms: ${name}`,
+    ),
+    optionalRow(
+      `run log runs: ${GUARD_SCRIPT}`,
+      documents,
+      (doc) => doc.hooks.runLog?.guard?.runs,
+    ),
+    optionalRow(
+      `run log median ms: ${GUARD_SCRIPT}`,
+      documents,
+      (doc) => doc.hooks.runLog?.guard?.medianMilliseconds,
     ),
   ];
 }

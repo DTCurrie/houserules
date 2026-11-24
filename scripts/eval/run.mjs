@@ -483,6 +483,8 @@ function fixtureDryRun(options, work, fixture) {
     model: fixture.model,
     perRun: options.perRun ?? DRY_RUN_PER_RUN,
     isNetworkAllowed: fixture.isNetworkAllowed,
+    permissionMode: fixture.permissionMode,
+    settings: fixture.settings,
   });
   console.log(`sample root ${root}`);
   console.log(['claude', ...argv].map(shellQuote).join(' '));
@@ -850,6 +852,8 @@ async function runArmSession(context, key) {
       model: fixture.model,
       perRun: context.options.perRun,
       isNetworkAllowed: fixture.isNetworkAllowed,
+      permissionMode: fixture.permissionMode,
+      settings: fixture.settings,
     }),
     env: context.env,
     timeoutMinutes: context.options.timeoutMinutes,

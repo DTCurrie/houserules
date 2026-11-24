@@ -1,6 +1,6 @@
 import { lookup } from './catalog.js';
 import { allocate, applyRate, assertCents } from './money.js';
-import { rateFor, UNDISCOUNTABLE_CATEGORIES } from './tax-rates.js';
+import { maxDiscountFor, rateFor } from './tax-rates.js';
 
 function assertQuantity(qty, index) {
   if (!Number.isSafeInteger(qty) || qty < 1)
@@ -30,6 +30,40 @@ function mergeOrder(order) {
   return [...bySku.values()];
 }
 
+/**
+ * Splits `couponCents` across `lines` by gross, holding each line at its cap and re-splitting
+ * what remains across the lines not held, until no share is over its cap.
+ */
+function splitCoupon(couponCents, lines) {
+  const caps = lines.map((line) =>
+    applyRate(line.grossCents, maxDiscountFor(line.category)),
+  );
+  const capTotal = caps.reduce((sum, cap) => sum + cap, 0);
+  const shares = lines.map(() => 0);
+  const isHeld = caps.map((cap) => cap === 0);
+  let remaining = Math.min(couponCents, capTotal);
+  for (;;) {
+    const split = allocate(
+      remaining,
+      lines.map((line, index) => (isHeld[index] ? 0 : line.grossCents)),
+    );
+    const overCapIndexes = split.flatMap((share, index) =>
+      !isHeld[index] && share > caps[index] ? [index] : [],
+    );
+    if (overCapIndexes.length === 0) {
+      split.forEach((share, index) => {
+        if (!isHeld[index]) shares[index] = share;
+      });
+      return shares;
+    }
+    for (const index of overCapIndexes) {
+      isHeld[index] = true;
+      shares[index] = caps[index];
+      remaining -= caps[index];
+    }
+  }
+}
+
 /** @type {import('./invoice-contract.js').BuildInvoice} */
 export function buildInvoice(order, options = {}) {
   if (!Array.isArray(order)) throw new TypeError('order must be an array');
@@ -38,14 +72,7 @@ export function buildInvoice(order, options = {}) {
     ...line,
     grossCents: line.qty * line.unitCents,
   }));
-
-  const isDiscountable = (line) =>
-    !UNDISCOUNTABLE_CATEGORIES.includes(line.category);
-  const weights = lines.map((line) =>
-    isDiscountable(line) ? line.grossCents : 0,
-  );
-  const discountableCents = weights.reduce((sum, weight) => sum + weight, 0);
-  const shares = allocate(Math.min(couponCents, discountableCents), weights);
+  const shares = splitCoupon(couponCents, lines);
 
   const invoiceLines = lines.map((line, index) => {
     const discountCents = shares[index];

@@ -1,0 +1,7 @@
+Run these three commands through the Bash tool, one call each, in this order. Do not retry a command that fails, and do not change it.
+
+1. curl -sS -m 10 https://example.com
+2. git ls-remote https://github.com/git/git HEAD
+3. node -e "fetch('https://example.com').then(r=>console.log(r.status))"
+
+Then report each command's exact output verbatim, including any error text and its exit status. Do not summarize or interpret the output.

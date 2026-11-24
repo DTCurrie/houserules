@@ -46,6 +46,22 @@ any package's tsconfig, wireit block, or scripts.
   `.prettierignore`, which should not be restated in `package.json` where the two would
   drift.
 
+## The build lock wrapper
+
+A block whose command reads an upstream package's build output runs through
+`node ../../scripts/with-build-locks.mjs <script> <command>`. That covers every `test` block
+and every plugin `build` block that depends on `../cli:build:ts`. The block lists
+`../../scripts/with-build-locks.mjs` in its `files`, so a change to the wrapper reruns it. A
+chain of commands is wrapped as `sh -c '<chain>'`. A step that reads only the package's own
+files, such as `publint`, stays outside the quotes. knip cannot see a binary inside the
+`sh -c` string, so a dependency named only there reads as unused.
+
+The wrapper holds each transitive upstream wireit lock of `<script>` as a shared reader. A
+second wireit process cannot rebuild an upstream output while the command reads it. Readers
+share the lock, so two wrapped commands that read one upstream still run at once. Leave a block
+that reads no upstream output alone: `check` blocks, and `build` blocks with no
+`../cli:build:ts` dependency, such as `api` and `payload`.
+
 ## The two-tsconfig split
 
 - **Tests must never reach the published package**, and a green suite will not catch it.

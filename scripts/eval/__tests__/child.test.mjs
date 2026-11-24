@@ -123,6 +123,63 @@ describe('child invocation', () => {
     assert.deepEqual(childArgv(common), prefix);
   });
 
+  it('passes --permission-mode default when asked and auto otherwise', () => {
+    const common = { prompt: 'x', model: 'haiku', perRun: 1 };
+    const modeOf = (argv) => argv[argv.indexOf('--permission-mode') + 1];
+    assert.equal(modeOf(childArgv(common)), 'auto');
+    assert.equal(
+      modeOf(childArgv({ ...common, permissionMode: 'auto' })),
+      'auto',
+    );
+    assert.equal(
+      modeOf(childArgv({ ...common, permissionMode: 'default' })),
+      'default',
+    );
+  });
+
+  it('merges arm settings over the sandbox when network is closed, and emits them alone when open', () => {
+    const common = { prompt: 'x', model: 'haiku', perRun: 1 };
+    const settings = {
+      permissions: { allow: ['Bash(curl:*)'] },
+      env: { A: '1' },
+    };
+    const settingsOf = (argv) => {
+      assert.equal(argv.filter((arg) => arg === '--settings').length, 1);
+      return JSON.parse(argv[argv.indexOf('--settings') + 1]);
+    };
+    assert.deepEqual(
+      settingsOf(childArgv({ ...common, isNetworkAllowed: false, settings })),
+      {
+        sandbox: {
+          enabled: true,
+          failIfUnavailable: true,
+          allowUnsandboxedCommands: false,
+          network: { allowedDomains: [] },
+        },
+        ...settings,
+      },
+    );
+    assert.deepEqual(
+      settingsOf(childArgv({ ...common, isNetworkAllowed: true, settings })),
+      settings,
+    );
+    assert.deepEqual(settingsOf(childArgv({ ...common, settings })), settings);
+  });
+
+  it('refuses a sandbox key in arm settings when network is closed', () => {
+    assert.throws(
+      () =>
+        childArgv({
+          prompt: 'x',
+          model: 'haiku',
+          perRun: 1,
+          isNetworkAllowed: false,
+          settings: { sandbox: { enabled: false } },
+        }),
+      /sandbox/,
+    );
+  });
+
   it('removes every CLAUDE variable and gives the child an empty stdin', async () => {
     const record = await runRecording(SAMPLE_PROMPT);
     assert.deepEqual(

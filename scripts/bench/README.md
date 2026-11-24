@@ -62,6 +62,13 @@ Each sample is charged the time until the next sample, so the startup gap before
 is not counted. Profiler overhead inflates every share a little, so read the shares and ignore the
 absolute milliseconds.
 
+## Dispatcher cases
+
+For each event whose settings entry runs `hook-dispatch.mjs`, the `hooks` suite also has one
+`<event>-hook-dispatch` case that runs the dispatcher itself, so its row shows the spawn and merge
+cost of the wired scripts next to their per-script rows. A build that lacks `hook-dispatch.mjs`, or
+whose wiring lists no scripts for the event, gets no dispatcher case.
+
 ## Scope cases
 
 The `hooks` suite also holds three cases that time the build's own `lint-format-fix` over a real

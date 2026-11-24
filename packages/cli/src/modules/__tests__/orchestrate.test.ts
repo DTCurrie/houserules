@@ -622,6 +622,12 @@ describe('renderTaskWorkerVariant', () => {
   });
 });
 
+describe('task-worker source', () => {
+  it('requires scratch files under a path carrying the slice id', () => {
+    expect(SOURCE).toContain('goes under `<scratchpad>/<slice id>/`');
+  });
+});
+
 describe('renderTaskWorkerBase', () => {
   it('appends extra tools to the base agent, leaving name and effort as the source', () => {
     const rendered = renderTaskWorkerBase([

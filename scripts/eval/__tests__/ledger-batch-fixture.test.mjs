@@ -45,15 +45,21 @@ function syntheticRun() {
   mkdirSync(ledgers, { recursive: true });
   writeFileSync(join(sample, 'run.json'), '{}\n');
   const records = [
-    agentCall('toolu_1', 'backlog-reviewer'),
+    {
+      ...agentCall('toolu_1', 'backlog-reviewer'),
+      timestamp: '2026-11-24T02:00:00.000Z',
+    },
     agentCall('toolu_1', 'backlog-reviewer'),
     agentCall('toolu_2', 'decision-reviewer'),
-    agentCall('toolu_3', 'Explore'),
+    {
+      ...agentCall('toolu_3', 'Explore'),
+      timestamp: '2026-11-24T02:00:12.500Z',
+    },
     {
       type: 'result',
       subtype: 'success',
       total_cost_usd: 0.1234,
-      duration_ms: 12500,
+      duration_ms: 40,
     },
   ];
   writeFileSync(

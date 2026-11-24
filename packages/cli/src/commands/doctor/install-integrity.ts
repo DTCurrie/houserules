@@ -1,6 +1,6 @@
 import { installedModuleIds } from '../../installed-modules.js';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ledgerDirFor } from '../../core/ledger-dir.js';
@@ -144,11 +144,16 @@ function isUpdateCheckSkipped(env: NodeJS.ProcessEnv): boolean {
 /**
  * The command that moves the repo's devDependency CLI to `latest`, in the repo's package manager.
  * Held to the session hook's `upgradeCommand` by `payload/scripts/__tests__/update-check-cases.ts`.
+ * `-w` follows `payload-sync.mts`'s rule: a `pnpm-workspace.yaml` at the root, even with
+ * `packages: []`. pnpm rejects `-w` without one.
  */
-function cliUpgradeCommand(ctx: Ctx): string {
+function cliUpgradeCommand(root: string, ctx: Ctx): string {
   const manager = ctx.packageManager?.name ?? 'npm';
   if (manager === 'npm') return `npm install -D ${CLI_PACKAGE}@latest`;
-  const workspaceRoot = manager === 'pnpm' && ctx.isMonorepo ? ' -w' : '';
+  const workspaceRoot =
+    manager === 'pnpm' && existsSync(join(root, 'pnpm-workspace.yaml'))
+      ? ' -w'
+      : '';
   return `${manager} add -D${workspaceRoot} ${CLI_PACKAGE}@latest`;
 }
 
@@ -178,7 +183,7 @@ function publishedVersionReadout(
   if (compareSemver(installedSemver, latestSemver) >= 0) return [];
   if (compareSemver(runningSemver, latestSemver) >= 0) return [];
   return [
-    `installed houserules v${installed}, latest published is v${latest}. Update the CLI, then the install: ${cliUpgradeCommand(ctx)} && npx houserules update`,
+    `installed houserules v${installed}, latest published is v${latest}. Update the CLI, then the install: ${cliUpgradeCommand(root, ctx)} && npx houserules update`,
   ];
 }
 

@@ -477,6 +477,71 @@ describe('wait-timeline', () => {
     });
   });
 
+  const otherWorkOfFirstPrompt = (secondPrompt) => {
+    const { root, mainPath } = writeMainFixture([
+      assistantText('2026-11-20T10:00:00.000Z'),
+      userInput(
+        '2026-11-20T10:01:00.000Z',
+        { kind: 'human' },
+        'refactor the parser to stream tokens',
+      ),
+      userInput('2026-11-20T10:05:00.000Z', { kind: 'human' }, secondPrompt),
+      assistantText('2026-11-20T10:05:02.000Z'),
+    ]);
+    const { json } = run([mainPath], root);
+    assert.equal(json.waits.length, 1);
+    return json.waits[0].otherWork;
+  };
+
+  it('counts no actionable input for a human prompt re-sent unchanged', () => {
+    assert.equal(
+      otherWorkOfFirstPrompt('refactor the parser to stream tokens'),
+      'no',
+    );
+  });
+
+  it('counts no actionable input for a human prompt re-sent with an edit after the shared prefix', () => {
+    assert.equal(
+      otherWorkOfFirstPrompt(
+        'Refactor the parser to stream tokens, and keep the old API',
+      ),
+      'no',
+    );
+  });
+
+  it('counts two actionable inputs for two different consecutive human prompts', () => {
+    assert.equal(
+      otherWorkOfFirstPrompt('now update the changelog for the release'),
+      'yes',
+    );
+  });
+
+  const otherWorkAcrossReply = (first, second) => {
+    const { root, mainPath } = writeMainFixture([
+      assistantToolUse('2026-11-20T10:00:00.000Z', 'toolu_slow', 'Bash', {
+        command: 'sleep 100',
+      }),
+      userInput('2026-11-20T10:01:00.000Z', { kind: 'human' }, first),
+      toolResult('2026-11-20T10:03:00.000Z', 'toolu_slow'),
+      assistantText('2026-11-20T10:03:05.000Z'),
+      userInput('2026-11-20T10:05:00.000Z', { kind: 'human' }, second),
+      assistantText('2026-11-20T10:05:02.000Z'),
+    ]);
+    const { json } = run([mainPath], root);
+    return json.waits[0].otherWork;
+  };
+
+  it('counts two actionable inputs for the same prompt sent again after an assistant reply', () => {
+    assert.equal(otherWorkAcrossReply('continue', 'continue'), 'yes');
+  });
+
+  it('counts a short prompt and a longer one it prefixes as two inputs', () => {
+    assert.equal(
+      otherWorkAcrossReply('yes', 'yes, and also fix the lexer'),
+      'yes',
+    );
+  });
+
   it('prints no row for the gap after a tool_result, which is a model call in flight', () => {
     const { root, mainPath } = writeMainFixture([
       assistantToolUse('2026-11-20T10:00:00.000Z', 'toolu_run', 'Bash', {

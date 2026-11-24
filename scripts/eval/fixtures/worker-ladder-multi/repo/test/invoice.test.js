@@ -41,6 +41,22 @@ test('splits a coupon so the line discounts sum to the invoice discount', () => 
   );
 });
 
+test('holds a clearance line at its cap and spends the rest of the coupon', () => {
+  const invoice = buildInvoice(
+    [
+      { sku: 'MUG-2ND', qty: 1, unitCents: 1000 },
+      { sku: 'MUG-01', qty: 1, unitCents: 1000 },
+    ],
+    { couponCents: 600 },
+  );
+  assert.deepEqual(checkInvoice(invoice), []);
+  assert.deepEqual(
+    invoice.lines.map((line) => line.discountCents),
+    [200, 400],
+  );
+  assert.equal(invoice.discountCents, 600);
+});
+
 test('taxes a line on its price after the discount', () => {
   const invoice = buildInvoice([{ sku: 'MUG-01', qty: 1, unitCents: 1000 }], {
     couponCents: 200,

@@ -45,6 +45,8 @@ import { stageChecker } from './lib/stage-checker.mjs';
 const repoRoot = join(import.meta.dirname, '..');
 const packagesDir = join(repoRoot, 'packages');
 const FINDINGS_IMPORT = /from\s+['"]\.\/lib\/findings\.mjs['"]/;
+// Reversing the argument list changes the order only when there are at least two inputs.
+const MIN_ARGS_TO_REVERSE = 2;
 
 /** Every top-level `.mjs` under a package's `payload-dist/scripts/`, skipping `lib/`. */
 function scriptFilesOf(packageDir) {
@@ -306,6 +308,55 @@ function rebuildFixture(fixtureRoot, buildFixture) {
     : { args: [], cwd: fixtureRoot };
 }
 
+/**
+ * Runs the staged checker twice on identical fixtures, then once with the input order
+ * reversed, and returns the problems found plus whether any run reported a real finding.
+ */
+function runDeterminismProbes(stagedScript, fixtureRoot, buildFixture) {
+  const fixtureA = rebuildFixture(fixtureRoot, buildFixture);
+  const outputFirst = runChecker(stagedScript, fixtureA);
+
+  // Rebuilt at the same path, so a checker that writes anything (adopt-lint's ledger
+  // migration, for instance) starts the repeat from the same fixture state, not from its
+  // own first run's side effect.
+  const fixtureB = rebuildFixture(fixtureRoot, buildFixture);
+  const outputSecond = runChecker(stagedScript, fixtureB);
+
+  const problems = [];
+  const hasRealFinding = hasFindings(outputFirst) || hasFindings(outputSecond);
+
+  if (outputFirst !== outputSecond) {
+    problems.push(
+      'two fresh-process runs on the same input produced different output',
+      firstDifference(outputFirst, outputSecond),
+    );
+  }
+
+  if (!buildFixture) {
+    problems.push(
+      'no fixture is defined for this checker in this script, so it ran with empty input only',
+    );
+  }
+
+  if (
+    Array.isArray(fixtureA.args) &&
+    fixtureA.args.length >= MIN_ARGS_TO_REVERSE
+  ) {
+    const fixtureC = rebuildFixture(fixtureRoot, buildFixture);
+    fixtureC.args = [...fixtureC.args].reverse();
+    const outputReversed = runChecker(stagedScript, fixtureC);
+    if (outputReversed !== outputFirst) {
+      problems.push(
+        'reversing the input file order changed the output, which points at ' +
+          'enumeration- or insertion-order dependence',
+        firstDifference(outputFirst, outputReversed),
+      );
+    }
+  }
+
+  return { problems, hasRealFinding };
+}
+
 function problemsFor(checker) {
   const basename = checker.scriptPath.split('/').pop();
   const buildFixture = FIXTURES[basename];
@@ -316,50 +367,11 @@ function problemsFor(checker) {
 
   try {
     const stagedScript = stageChecker(checker, stagingRoot);
-
-    const fixtureA = rebuildFixture(fixtureRoot, buildFixture);
-    const outputFirst = runChecker(stagedScript, fixtureA);
-
-    // Rebuilt at the same path, so a checker that writes anything (adopt-lint's ledger
-    // migration, for instance) starts the repeat from the same fixture state, not from its
-    // own first run's side effect.
-    const fixtureB = rebuildFixture(fixtureRoot, buildFixture);
-    const outputSecond = runChecker(stagedScript, fixtureB);
-
-    const problems = [];
-    const foundReal = hasFindings(outputFirst) || hasFindings(outputSecond);
-
-    if (outputFirst !== outputSecond) {
-      problems.push(
-        'two fresh-process runs on the same input produced different output',
-        firstDifference(outputFirst, outputSecond),
-      );
-    }
-
-    if (!buildFixture) {
-      problems.push(
-        'no fixture is defined for this checker in this script, so it ran with empty input only',
-      );
-    }
-
-    if (Array.isArray(fixtureA.args) && fixtureA.args.length >= 2) {
-      const fixtureC = rebuildFixture(fixtureRoot, buildFixture);
-      fixtureC.args = [...fixtureC.args].reverse();
-      const outputReversed = runChecker(stagedScript, fixtureC);
-      if (outputReversed !== outputFirst) {
-        problems.push(
-          'reversing the input file order changed the output, which points at ' +
-            'enumeration- or insertion-order dependence',
-          firstDifference(outputFirst, outputReversed),
-        );
-      }
-    }
-
-    return { problems, foundReal };
+    return runDeterminismProbes(stagedScript, fixtureRoot, buildFixture);
   } catch (err) {
     return {
       problems: [`could not run this checker: ${err.message}`],
-      foundReal: false,
+      hasRealFinding: false,
     };
   } finally {
     rmSync(stagingRoot, { recursive: true, force: true });
@@ -387,9 +399,9 @@ function main() {
 
   for (const checker of checkers) {
     const label = `${checker.packageName}/${checker.scriptPath.split('/').pop()}`;
-    const { problems, foundReal } = problemsFor(checker);
+    const { problems, hasRealFinding } = problemsFor(checker);
 
-    if (!foundReal) {
+    if (!hasRealFinding) {
       zeroFindingsCount += 1;
       zeroFindingsNames.push(label);
     }

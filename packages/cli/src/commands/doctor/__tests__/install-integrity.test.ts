@@ -183,9 +183,12 @@ describe('checkInstallIntegrity, published version check', () => {
       packageManager: { name: 'pnpm', source: 'lockfile' },
       isMonorepo: true,
     });
+    const root = repoWith({
+      'pnpm-workspace.yaml': 'packages:\n  - packages/*\n',
+    });
 
     const result = checkInstallIntegrity(
-      '/repo',
+      root,
       ctx,
       '1.0.0',
       null,

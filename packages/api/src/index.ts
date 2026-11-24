@@ -21,6 +21,7 @@ export type {
   ModuleOptions,
   ModuleRequirement,
 } from './module-def.js';
+export { hasModule } from './module-def.js';
 export type {
   HookEntry,
   HookGroup,

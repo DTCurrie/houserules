@@ -67,23 +67,31 @@ export function checkColocation(file: string, testDir = '__tests__'): Report {
   return report;
 }
 
+const FIXTURES_DIR = 'fixtures';
+
 /**
- * The configured test directory holds tests, not fixtures or setup. `__snapshots__` is
- * excluded, since Vitest writes that subdirectory itself rather than an author placing a
- * fixture there.
+ * The configured test directory holds tests, not shared setup. Two subdirectories are
+ * excluded. `__snapshots__` is written by Vitest itself, and `fixtures/` holds the
+ * fixtures only the specs in that test directory use.
  */
 export function checkDirContents(file: string, testDir = '__tests__'): Report {
   const report = emptyReport();
   const segments = file.split('/');
-  if (!segments.includes(testDir)) return report;
+  const testDirIndex = segments.lastIndexOf(testDir);
+  if (testDirIndex === -1) return report;
   if (segments.includes('__snapshots__')) return report;
+  const fixturesIndex = testDirIndex + 1;
+  const isInsideFixturesDir =
+    segments[fixturesIndex] === FIXTURES_DIR &&
+    segments.length > fixturesIndex + 1;
+  if (isInsideFixturesDir) return report;
   if (TEST_SUFFIX.test(file) || SPEC_SUFFIX.test(file)) return report;
   report.findings.push({
     rule: 'testing/test-dir-contents',
     level: 'error',
     file,
     line: null,
-    msg: `Non-test file inside a ${testDir} directory. Shared fixtures and setup belong in a plainly named test/ directory, not ${testDir}/.`,
+    msg: `Non-test file inside a ${testDir} directory. A fixture only these specs use belongs in ${testDir}/${FIXTURES_DIR}/, and shared fixtures and setup in a plainly named test/ directory.`,
   });
   return report;
 }

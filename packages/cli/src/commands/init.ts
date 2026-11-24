@@ -16,7 +16,7 @@ import {
   withdrawnModuleIds,
 } from '../module-requires.js';
 import type { RequirementClosure } from '../module-requires.js';
-import { hasModule } from '../plugin-registry.js';
+import { hasModule } from '@houserules/api';
 import {
   MODULES,
   buildPlan,

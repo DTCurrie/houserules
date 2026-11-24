@@ -186,6 +186,40 @@ function parseSessions(bodyLines) {
   return sessions;
 }
 
+function parseNotPriced(text) {
+  const notPricedMatch = /^\s*not priced, no list price for: (.+?)\s*$/m.exec(
+    text,
+  );
+  const notPriced = [];
+  if (!notPricedMatch) return notPriced;
+  for (const part of notPricedMatch[1].split(
+    /, (?=\S+ \(\d+% of weighted input\))/,
+  )) {
+    const entryMatch = /^(\S+) \((\d+)% of weighted input\)$/.exec(part);
+    if (!entryMatch) fail(`unparsed not-priced entry: ${part.slice(0, 80)}`);
+    notPriced.push({
+      model: entryMatch[1],
+      weightedPct: Number(entryMatch[2]),
+    });
+  }
+  return notPriced;
+}
+
+function parseListPrice(text) {
+  const listPriceMatch =
+    /^\s*list price: \$([\d,.]+) \(fresh \$([\d,.]+), cache read \$([\d,.]+), cache write \$([\d,.]+), output \$([\d,.]+)\)\s*$/m.exec(
+      text,
+    );
+  if (!listPriceMatch) return null;
+  return {
+    total: num(listPriceMatch[1]),
+    fresh: num(listPriceMatch[2]),
+    cacheRead: num(listPriceMatch[3]),
+    cacheWrite: num(listPriceMatch[4]),
+    output: num(listPriceMatch[5]),
+  };
+}
+
 function parseTotals(sec) {
   const text = sec.join('\n');
   const req = (re, what) => {
@@ -213,26 +247,6 @@ function parseTotals(sec) {
     text,
   );
   const ph = /^\s*(\S+) .*record\(s\).*placeholder/m.exec(text);
-  const listPriceMatch =
-    /^\s*list price: \$([\d,.]+) \(fresh \$([\d,.]+), cache read \$([\d,.]+), cache write \$([\d,.]+), output \$([\d,.]+)\)\s*$/m.exec(
-      text,
-    );
-  const notPricedMatch = /^\s*not priced, no list price for: (.+?)\s*$/m.exec(
-    text,
-  );
-  const notPriced = [];
-  if (notPricedMatch) {
-    for (const part of notPricedMatch[1].split(
-      /, (?=\S+ \(\d+% of weighted input\))/,
-    )) {
-      const entryMatch = /^(\S+) \((\d+)% of weighted input\)$/.exec(part);
-      if (!entryMatch) fail(`unparsed not-priced entry: ${part.slice(0, 80)}`);
-      notPriced.push({
-        model: entryMatch[1],
-        weightedPct: Number(entryMatch[2]),
-      });
-    }
-  }
   return {
     turns: num(a[1]),
     input: num(a[2]),
@@ -245,16 +259,8 @@ function parseTotals(sec) {
     models: mod ? mod[1].split(', ').filter((s) => s.length) : [],
     sidechainPct: mod && mod[2] !== undefined ? Number(mod[2]) : null,
     placeholderRecords: ph ? num(ph[1]) : 0,
-    listPrice: listPriceMatch
-      ? {
-          total: num(listPriceMatch[1]),
-          fresh: num(listPriceMatch[2]),
-          cacheRead: num(listPriceMatch[3]),
-          cacheWrite: num(listPriceMatch[4]),
-          output: num(listPriceMatch[5]),
-        }
-      : null,
-    notPriced,
+    listPrice: parseListPrice(text),
+    notPriced: parseNotPriced(text),
   };
 }
 
@@ -291,16 +297,7 @@ function parseGuard(sec) {
   return body.length ? body.join(' ') : null;
 }
 
-function parseSkills(sec) {
-  const rows = tableRows(sec, /^\s*skill\s+model\s+user\s+total\s*$/).map(
-    (t) => ({
-      skill: t[0],
-      model: num(t[1]),
-      user: num(t[2]),
-      total: num(t[3]),
-    }),
-  );
-  const ta = /toolset-active sessions: (\d+) of (\d+)/.exec(sec.join('\n'));
+function parseUnusedSkills(sec) {
   let unusedLabel = null;
   let unused = [];
   for (const l of sec) {
@@ -313,12 +310,43 @@ function parseSkills(sec) {
       unused = m[2].split(', ').filter((s) => s.length);
     }
   }
+  return { unusedLabel, unused };
+}
+
+/** Fills the matched counts of one outcome from the text after `fired N,`. */
+function readOutcomeDetail(outcome, detail, line) {
+  if (outcome.skill === 'changeset') {
+    const c =
+      /^matched (\d+) via the outcome record and (\d+) via the \d+h git window \((\d+) record entries, (\d+) files added across history\)/.exec(
+        detail,
+      );
+    if (!c)
+      fail(`unparsed changeset outcome line: ${line.trim().slice(0, 100)}`);
+    outcome.matched = Number(c[1]);
+    outcome.matchedGit = Number(c[2]);
+    outcome.recordEntries = Number(c[3]);
+    outcome.filesAdded = Number(c[4]);
+    return;
+  }
+  const c =
+    /^matched a ledger add for (\d+) \((\d+) adds? in the local ledger\)/.exec(
+      detail,
+    );
+  if (!c)
+    fail(
+      `unparsed ${outcome.skill} outcome line: ${line.trim().slice(0, 100)}`,
+    );
+  outcome.matched = Number(c[1]);
+  outcome.ledgerAdds = Number(c[2]);
+}
+
+function parseSkillOutcomes(sec) {
   const outcomes = [];
   for (const l of sec) {
     const m =
       /^\s*\/(changeset|backlog-add|decide):\s+fired (\d+),\s*(.*)$/.exec(l);
     if (!m) continue;
-    const o = {
+    const outcome = {
       skill: m[1],
       fired: Number(m[2]),
       matched: 0,
@@ -327,55 +355,45 @@ function parseSkills(sec) {
       filesAdded: null,
       ledgerAdds: null,
     };
-    if (m[1] === 'changeset') {
-      const c =
-        /^matched (\d+) via the outcome record and (\d+) via the \d+h git window \((\d+) record entries, (\d+) files added across history\)/.exec(
-          m[3],
-        );
-      if (!c)
-        fail(`unparsed changeset outcome line: ${l.trim().slice(0, 100)}`);
-      o.matched = Number(c[1]);
-      o.matchedGit = Number(c[2]);
-      o.recordEntries = Number(c[3]);
-      o.filesAdded = Number(c[4]);
-    } else {
-      const c =
-        /^matched a ledger add for (\d+) \((\d+) adds? in the local ledger\)/.exec(
-          m[3],
-        );
-      if (!c) fail(`unparsed ${m[1]} outcome line: ${l.trim().slice(0, 100)}`);
-      o.matched = Number(c[1]);
-      o.ledgerAdds = Number(c[2]);
-    }
-    outcomes.push(o);
+    readOutcomeDetail(outcome, m[3], l);
+    outcomes.push(outcome);
   }
+  return outcomes;
+}
+
+function parseSkills(sec) {
+  const rows = tableRows(sec, /^\s*skill\s+model\s+user\s+total\s*$/).map(
+    (t) => ({
+      skill: t[0],
+      model: num(t[1]),
+      user: num(t[2]),
+      total: num(t[3]),
+    }),
+  );
+  const ta = /toolset-active sessions: (\d+) of (\d+)/.exec(sec.join('\n'));
+  const { unusedLabel, unused } = parseUnusedSkills(sec);
   return {
     rows,
     toolsetActive: ta ? { active: Number(ta[1]), total: Number(ta[2]) } : null,
     unusedLabel,
     unused,
-    outcomes,
+    outcomes: parseSkillOutcomes(sec),
   };
 }
 
-function parseFriction(sec) {
-  const text = sec.join('\n');
+function parseCompaction(text) {
   const comp =
     /compaction: (\d+) session\(s\) resumed from auto-compact(?: \(([^)]*)\))?/.exec(
       text,
     );
-  const compaction = {
+  return {
     count: comp ? Number(comp[1]) : 0,
     sessions:
       comp && comp[2] ? comp[2].split(', ').filter((s) => s.length) : [],
   };
-  const toolResultBulk = tableRows(sec, /^\s*tool\s+results\s+bytes\s*$/).map(
-    (t) => ({
-      tool: t[0],
-      results: num(t[1]),
-      bytes: num(t[2]),
-    }),
-  );
+}
+
+function parseBashRetries(sec, text) {
   const br = /bash retries \(.*?\): (\d+) runs, (\d+) repeated calls/.exec(
     text,
   );
@@ -388,6 +406,14 @@ function parseFriction(sec) {
       top.push({ session: m[1], count: Number(m[2]), command: m[3] });
     }
   }
+  return {
+    runs: br ? Number(br[1]) : 0,
+    repeatedCalls: br ? Number(br[2]) : 0,
+    top,
+  };
+}
+
+function parseDenials(sec, text) {
   const dn =
     /denials: (\d+) tool use\(s\) rejected by the user, (\d+) interrupted mid-call/.exec(
       text,
@@ -402,67 +428,73 @@ function parseFriction(sec) {
     }
   }
   return {
-    compaction,
-    toolResultBulk,
-    bashRetries: {
-      runs: br ? Number(br[1]) : 0,
-      repeatedCalls: br ? Number(br[2]) : 0,
-      top,
-    },
-    denials: {
-      rejected: dn ? Number(dn[1]) : 0,
-      interrupted: dn ? Number(dn[2]) : 0,
-      samples,
-    },
+    rejected: dn ? Number(dn[1]) : 0,
+    interrupted: dn ? Number(dn[2]) : 0,
+    samples,
   };
 }
 
-function parseResident(sec) {
-  const rec = /recorded (\d+) of (\d+) session\(s\)/.exec(sec.join('\n'));
-  if (!rec) fail('resident context section lacks the "recorded A of T" line');
-  const rows = [];
-  for (const t of tableRows(sec, /^\s*session\s+entrypoint\s/)) {
-    const session = t[0];
-    if (t.slice(1).join(' ').startsWith('not recorded')) {
-      rows.push({
-        session,
-        recorded: false,
-        entrypoint: null,
-        system: null,
-        instructions: null,
-        skills: null,
-        agents: null,
-        style: null,
-        total: null,
-        tokens: null,
-        nestedLoads: null,
-        nestedBytes: null,
-      });
-      continue;
-    }
-    let rest = t.slice(1);
-    let entrypoint = null;
-    if (!/^[\d,]+$/.test(rest[0])) entrypoint = rest.shift();
-    if (rest.length !== 9)
-      fail(`resident row ${session} has ${rest.length} numeric cells`);
-    const nested = /^\(([\d,]+)\)$/.exec(rest[8]);
-    if (!nested)
-      fail(`resident row ${session} has a malformed nested loads cell`);
-    rows.push({
+function parseFriction(sec) {
+  const text = sec.join('\n');
+  const compaction = parseCompaction(text);
+  const toolResultBulk = tableRows(sec, /^\s*tool\s+results\s+bytes\s*$/).map(
+    (t) => ({
+      tool: t[0],
+      results: num(t[1]),
+      bytes: num(t[2]),
+    }),
+  );
+  return {
+    compaction,
+    toolResultBulk,
+    bashRetries: parseBashRetries(sec, text),
+    denials: parseDenials(sec, text),
+  };
+}
+
+function parseResidentRow(t) {
+  const session = t[0];
+  if (t.slice(1).join(' ').startsWith('not recorded')) {
+    return {
       session,
-      recorded: true,
-      entrypoint,
-      system: num(rest[0]),
-      instructions: num(rest[1]),
-      skills: num(rest[2]),
-      agents: num(rest[3]),
-      style: num(rest[4]),
-      total: num(rest[5]),
-      tokens: num(rest[6]),
-      nestedLoads: num(rest[7]),
-      nestedBytes: num(nested[1]),
-    });
+      recorded: false,
+      entrypoint: null,
+      system: null,
+      instructions: null,
+      skills: null,
+      agents: null,
+      style: null,
+      total: null,
+      tokens: null,
+      nestedLoads: null,
+      nestedBytes: null,
+    };
   }
+  let rest = t.slice(1);
+  let entrypoint = null;
+  if (!/^[\d,]+$/.test(rest[0])) entrypoint = rest.shift();
+  if (rest.length !== 9)
+    fail(`resident row ${session} has ${rest.length} numeric cells`);
+  const nested = /^\(([\d,]+)\)$/.exec(rest[8]);
+  if (!nested)
+    fail(`resident row ${session} has a malformed nested loads cell`);
+  return {
+    session,
+    recorded: true,
+    entrypoint,
+    system: num(rest[0]),
+    instructions: num(rest[1]),
+    skills: num(rest[2]),
+    agents: num(rest[3]),
+    style: num(rest[4]),
+    total: num(rest[5]),
+    tokens: num(rest[6]),
+    nestedLoads: num(rest[7]),
+    nestedBytes: num(nested[1]),
+  };
+}
+
+function parseResidentMedians(sec) {
   const medians = [];
   for (const l of sec) {
     const m = /^medians \((.+?)\): total ([\d,]+) bytes, ~tokens ([\d,]+)/.exec(
@@ -477,6 +509,10 @@ function parseResident(sec) {
       tokens: num(m[3]),
     });
   }
+  return medians;
+}
+
+function parseNestedLoads(sec) {
   const nested = [];
   let cur = null;
   for (const l of sec) {
@@ -508,12 +544,21 @@ function parseResident(sec) {
     } else
       cur.rules.push({ path: m[1], loads: Number(m[2]), bytes: num(m[3]) });
   }
+  return nested;
+}
+
+function parseResident(sec) {
+  const rec = /recorded (\d+) of (\d+) session\(s\)/.exec(sec.join('\n'));
+  if (!rec) fail('resident context section lacks the "recorded A of T" line');
+  const rows = tableRows(sec, /^\s*session\s+entrypoint\s/).map(
+    parseResidentRow,
+  );
   return {
     recorded: Number(rec[1]),
     total: Number(rec[2]),
     rows,
-    medians,
-    nested,
+    medians: parseResidentMedians(sec),
+    nested: parseNestedLoads(sec),
   };
 }
 
@@ -650,17 +695,22 @@ function parseArtifactEpisodes(sec) {
   return { none: /No Artifact calls were recorded/.test(text), rows };
 }
 
-function parseProject(name, sectionLines) {
+/** Splits a project's lines into the parsed header above the first fence and the fenced report body. */
+function splitReportBlock(name, sectionLines) {
   const fenceStart = sectionLines.findIndex((l) => /^```/.test(l));
   if (fenceStart < 0) fail(`${name}: no fenced report block`);
   let fenceEnd = sectionLines.findIndex(
     (l, i) => i > fenceStart && /^```\s*$/.test(l),
   );
   if (fenceEnd < 0) fenceEnd = sectionLines.length;
-  const header = parseHeader(sectionLines.slice(0, fenceStart));
-  const body = sectionLines.slice(fenceStart + 1, fenceEnd);
+  return {
+    header: parseHeader(sectionLines.slice(0, fenceStart)),
+    body: sectionLines.slice(fenceStart + 1, fenceEnd),
+  };
+}
 
-  const project = {
+function emptyProject(name, header) {
+  return {
     name,
     render: 'current',
     header,
@@ -679,30 +729,23 @@ function parseProject(name, sectionLines) {
     installHealth: null,
     guardReasons: [],
   };
+}
 
-  if (
-    body.some((l) =>
-      /^(No \.jsonl transcripts in |No transcripts found \(looked in )/.test(l),
-    )
-  ) {
-    project.render = 'empty';
-    return project;
-  }
-
+function assignRange(project, body, header) {
   const rangeMatch = body
     .map((l) => /^sessions: (\d+), from (\S+) to (\S+)\s*$/.exec(l))
     .find(Boolean);
-  if (rangeMatch) project.range = { from: rangeMatch[2], to: rangeMatch[3] };
-  else {
-    // A render with no range line is an older one. Label it with the CLI version it states.
-    const stated = /^(\d+\.\d+\.\d+\S*)/.exec(header.reportCli ?? '');
-    project.render = stated ? stated[1] : 'unknown';
+  if (rangeMatch) {
+    project.range = { from: rangeMatch[2], to: rangeMatch[3] };
+    return;
   }
+  // A render with no range line is an older one. Label it with the CLI version it states.
+  const stated = /^(\d+\.\d+\.\d+\S*)/.exec(header.reportCli ?? '');
+  project.render = stated ? stated[1] : 'unknown';
+}
 
-  const statedIdx = body.findIndex((l) => /^\d+ session\(s\):\s*$/.test(l));
-  if (statedIdx < 0) fail(`${name}: no "N session(s):" line`);
-  project.sessionsStated = Number(/^(\d+)/.exec(body[statedIdx])[1]);
-
+/** Groups the body's lines under their `-- name --` markers. */
+function splitSections(body) {
   const sections = new Map();
   let firstMarker = body.length;
   let currentName = null;
@@ -714,8 +757,10 @@ function parseProject(name, sectionLines) {
       sections.set(currentName, []);
     } else if (currentName) sections.get(currentName).push(l);
   });
+  return { sections, firstMarker };
+}
 
-  project.sessions = parseSessions(body.slice(statedIdx + 1, firstMarker));
+function assignSections(project, sections) {
   if (sections.has('totals'))
     project.totals = parseTotals(sections.get('totals'));
   if (sections.has('hook health')) {
@@ -737,6 +782,30 @@ function parseProject(name, sectionLines) {
   if (sections.has('resident context')) {
     project.resident = parseResident(sections.get('resident context'));
   }
+}
+
+function parseProject(name, sectionLines) {
+  const { header, body } = splitReportBlock(name, sectionLines);
+  const project = emptyProject(name, header);
+
+  if (
+    body.some((l) =>
+      /^(No \.jsonl transcripts in |No transcripts found \(looked in )/.test(l),
+    )
+  ) {
+    project.render = 'empty';
+    return project;
+  }
+
+  assignRange(project, body, header);
+
+  const statedIdx = body.findIndex((l) => /^\d+ session\(s\):\s*$/.test(l));
+  if (statedIdx < 0) fail(`${name}: no "N session(s):" line`);
+  project.sessionsStated = Number(/^(\d+)/.exec(body[statedIdx])[1]);
+
+  const { sections, firstMarker } = splitSections(body);
+  project.sessions = parseSessions(body.slice(statedIdx + 1, firstMarker));
+  assignSections(project, sections);
   return project;
 }
 

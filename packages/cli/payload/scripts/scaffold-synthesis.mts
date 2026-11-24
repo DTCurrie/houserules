@@ -21,7 +21,8 @@
  * backticks removed, each `null` when absent. `report` is the path as given. In this mode
  * nothing is printed to stdout and a duplicate id is not an error, so two reports that
  * disagree on one id yield two records that both carry it. Reports must still pass the block
- * checks. Topic and thread come from the report's path: a report at
+ * checks. Topic and thread come from the report's path resolved against the working
+ * directory, so the result does not depend on where the command runs: a report at
  * `<domain>/research/<topic>/<thread>.md` has `topic` = `<topic>` and `thread` = `<thread>`,
  * the file stem. Any other report has `topic` = its file stem and `thread` = `null`.
  *
@@ -30,7 +31,7 @@
  * unreadable, 2 on a usage error.
  */
 import { realpathSync, writeFileSync } from 'node:fs';
-import { basename, extname } from 'node:path';
+import { basename, extname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { readCheckerInputs } from '@houserules/payload/checker-input';
@@ -109,7 +110,7 @@ function topicAndThread(path: string): {
   topic: string;
   thread: string | null;
 } {
-  const [researchSegment, topicSegment, fileSegment] = path
+  const [researchSegment, topicSegment, fileSegment] = resolve(path)
     .replace(/\\/g, '/')
     .split('/')
     .slice(-3);

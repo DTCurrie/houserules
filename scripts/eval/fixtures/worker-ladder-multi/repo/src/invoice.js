@@ -1,7 +1,14 @@
 import { lookup } from './catalog.js';
-import { rateFor } from './tax-rates.js';
+import { maxDiscountFor, rateFor } from './tax-rates.js';
 
 const BASIS_POINTS_PER_WHOLE = 10000;
+
+/** The most a coupon may take of `line`. */
+function discountCap(line) {
+  return Math.floor(
+    (line.grossCents * maxDiscountFor(line.category)) / BASIS_POINTS_PER_WHOLE,
+  );
+}
 
 /** @type {import('./invoice-contract.js').BuildInvoice} */
 export function buildInvoice(order, options = {}) {
@@ -12,21 +19,26 @@ export function buildInvoice(order, options = {}) {
   });
   const subtotalCents = lines.reduce((sum, line) => sum + line.grossCents, 0);
   for (const line of lines) {
-    line.discountCents =
+    const share =
       subtotalCents === 0
         ? 0
         : Math.round((couponCents * line.grossCents) / subtotalCents);
+    line.discountCents = Math.min(share, discountCap(line));
     line.taxCents = Math.round(
       (line.grossCents * rateFor(line.category)) / BASIS_POINTS_PER_WHOLE,
     );
     line.netCents = line.grossCents - line.discountCents + line.taxCents;
   }
+  const discountCents = lines.reduce(
+    (sum, line) => sum + line.discountCents,
+    0,
+  );
   const taxCents = lines.reduce((sum, line) => sum + line.taxCents, 0);
   return {
     lines,
     subtotalCents,
-    discountCents: couponCents,
+    discountCents,
     taxCents,
-    totalCents: subtotalCents - couponCents + taxCents,
+    totalCents: subtotalCents - discountCents + taxCents,
   };
 }

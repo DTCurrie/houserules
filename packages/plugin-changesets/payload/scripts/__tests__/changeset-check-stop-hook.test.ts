@@ -5,7 +5,6 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -14,6 +13,7 @@ import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { linkInstalledChangesetsCli } from '#test/changesets-cli';
 import { useInstalledRepo } from '#test/repo';
 import { runIn } from '#test/run';
 import {
@@ -26,16 +26,6 @@ const PLUGIN_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const INSTALLED_CHANGESETS_CLI = dirname(
   createRequire(import.meta.url).resolve('@changesets/cli/package.json'),
 );
-
-function linkInstalledChangesetsCli(root: string): void {
-  mkdirSync(join(root, 'node_modules/@changesets'), { recursive: true });
-  symlinkSync(
-    INSTALLED_CHANGESETS_CLI,
-    join(root, 'node_modules/@changesets/cli'),
-    'dir',
-  );
-  appendFileSync(join(root, '.git/info/exclude'), 'node_modules/\n');
-}
 
 function rewritePackageJson(
   root: string,
@@ -384,7 +374,7 @@ describe('changeset-check.mjs, packages the gate would not gate', () => {
       JSON.stringify({ ignore }),
     );
     commitAll(root, 'chore: changesets ignore');
-    linkInstalledChangesetsCli(root);
+    linkInstalledChangesetsCli(root, INSTALLED_CHANGESETS_CLI);
   }
 
   function touchSource(root: string, dir: string, file: string): void {

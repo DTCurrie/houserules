@@ -8,21 +8,20 @@
  * Columns: `reviewers` counts the Agent calls naming `backlog-reviewer` or `decision-reviewer`
  * (`backlogReviewers` and `decisionReviewers` split them), `rows` the non-blank lines of the
  * collected `tree/.claude/ledgers/*.jsonl`, `cost` the result event's `total_cost_usd` (the
- * `spend.jsonl` line when the stream has none), and `wall` the result event's `duration_ms` in
- * seconds. A batched sample holds two reviewers, one per ledger. A per-entry sample holds four.
+ * `spend.jsonl` line when the stream has none), and `wall` the seconds from the first to the last
+ * timestamp in the transcripts, null with fewer than two. A batched sample holds two reviewers, one per ledger. A per-entry sample holds four.
  *
  * Exit codes: 0 when every sample was scored, 2 on a usage error.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { loadSample } from '../../orchestrate-report.mjs';
+import { loadSample, wallSeconds } from '../../orchestrate-report.mjs';
 
 const BACKLOG_REVIEWER = 'backlog-reviewer';
 const DECISION_REVIEWER = 'decision-reviewer';
 const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const EXIT_USAGE = 2;
-const MS_PER_SECOND = 1000;
 const COST_DECIMAL_PLACES = 4;
 const WALL_DECIMAL_PLACES = 1;
 
@@ -91,10 +90,7 @@ function scoreSample(out, arm, dir) {
       typeof result?.total_cost_usd === 'number'
         ? result.total_cost_usd
         : ledgerCost(out, arm, sampleNumber),
-    wall:
-      typeof result?.duration_ms === 'number'
-        ? result.duration_ms / MS_PER_SECOND
-        : null,
+    wall: wallSeconds(sample),
   };
 }
 

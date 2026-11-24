@@ -366,6 +366,31 @@ describe('mergeStdout', () => {
   it('treats a JSON array as text, not as an object to merge', () => {
     expect(mergeStdout(['[1]', 'two'], 'Stop')).toBe('[1]\ntwo\n');
   });
+
+  it.each(['UserPromptExpansion', 'PostModelSwitch'])(
+    'appends text to additionalContext on %s, where the harness reads plain stdout as context',
+    (event) => {
+      const merged = JSON.parse(
+        mergeStdout(['{"suppressOutput":true}', 'text'], event),
+      );
+      expect(merged.hookSpecificOutput).toEqual({
+        hookEventName: event,
+        additionalContext: 'text',
+      });
+    },
+  );
+
+  it.each(['Stop', 'PreToolUse', 'PostToolUse', 'PreCompact', 'SessionEnd'])(
+    'drops text beside JSON on %s, where the harness never reads plain stdout as context',
+    (event) => {
+      expect(
+        mergeStdout(
+          ['plain line\n', '{"decision":"block","reason":"r"}'],
+          event,
+        ),
+      ).toBe('{"decision":"block","reason":"r"}\n');
+    },
+  );
 });
 
 describe('verdictFor', () => {
@@ -435,6 +460,60 @@ describe('verdictFor', () => {
       code: 2,
       stdout: '',
       stderr: 'a says no\nc says no\n',
+    });
+  });
+
+  it('passes the JSON a refusing hook wrote through on exit 2, since the harness reads its reason', () => {
+    const deny =
+      '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"use git switch"}}\n';
+
+    const verdict = verdictFor(
+      [
+        result(
+          'a.mjs',
+          { kind: 'exited', code: 2 },
+          { stdout: deny, stderr: 'no' },
+        ),
+      ],
+      'PreToolUse',
+      false,
+    );
+
+    expect(verdict).toEqual({ code: 2, stdout: deny, stderr: 'no\n' });
+  });
+
+  it('merges a successful sibling JSON into the exit 2 stdout and leaves a failed one out', () => {
+    const verdict = verdictFor(
+      [
+        result(
+          'a.mjs',
+          { kind: 'exited', code: 2 },
+          {
+            stdout: '{"decision":"block","reason":"keep going"}',
+            stderr: 'no',
+          },
+        ),
+        result('b.mjs', ok, {
+          stdout:
+            '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"lint ran"}}',
+        }),
+        result(
+          'c.mjs',
+          { kind: 'exited', code: 1 },
+          { stdout: 'broken text', stderr: 'c broke' },
+        ),
+      ],
+      'Stop',
+      false,
+    );
+
+    expect(JSON.parse(verdict.stdout)).toEqual({
+      decision: 'block',
+      reason: 'keep going',
+      hookSpecificOutput: {
+        hookEventName: 'Stop',
+        additionalContext: 'lint ran',
+      },
     });
   });
 

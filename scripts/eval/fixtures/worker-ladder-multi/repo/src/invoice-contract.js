@@ -1,3 +1,6 @@
+import { applyRate } from './money.js';
+import { maxDiscountFor } from './tax-rates.js';
+
 /**
  * One line of an order, as checkout sends it.
  *
@@ -44,9 +47,14 @@
  *    `src/catalog.js`, unwrapped. The order objects are never mutated.
  * 2. Merging. Order lines with the same SKU become one invoice line, at the position of the first,
  *    with their quantities summed. The same SKU at two different `unitCents` throws a `RangeError`.
- * 3. Coupon. Lines whose category is in `UNDISCOUNTABLE_CATEGORIES` (`src/tax-rates.js`) get no
- *    share. The coupon is capped at the sum of the other lines' `grossCents`, and that capped
- *    amount is split across them by `allocate` from `src/money.js`, weighted by `grossCents`.
+ * 3. Coupon. Each line's cap is `applyRate(grossCents, maxDiscountFor(category))`, with
+ *    `maxDiscountFor` from `src/tax-rates.js`. The coupon is capped at the sum of the line caps,
+ *    and the capped amount is spent in full: the invoice `discountCents` equals it, and no line's
+ *    `discountCents` exceeds that line's cap. The split is `allocate` from `src/money.js` across
+ *    the lines with a nonzero cap, weighted by `grossCents`. A line whose share is over its cap
+ *    is held at its cap, and the capped coupon less the held lines' caps is split again by
+ *    `allocate` across the lines not held, weighted by `grossCents`. The split is done only when
+ *    no line's share is over its cap.
  * 4. Tax. Each line's `taxCents` is `applyRate(grossCents - discountCents, rateFor(category))`,
  *    with `applyRate` from `src/money.js` and `rateFor` from `src/tax-rates.js`. Tax is figured
  *    per line, never on a total.
@@ -95,8 +103,13 @@ export function checkInvoice(invoice) {
     }
     if (line.grossCents !== line.qty * line.unitCents)
       broken.push(`lines[${index}].grossCents is not qty * unitCents`);
-    if (line.discountCents > line.grossCents)
-      broken.push(`lines[${index}].discountCents exceeds its grossCents`);
+    if (
+      Number.isSafeInteger(line.grossCents) &&
+      line.grossCents >= 0 &&
+      line.discountCents >
+        applyRate(line.grossCents, maxDiscountFor(line.category))
+    )
+      broken.push(`lines[${index}].discountCents exceeds its cap`);
     if (line.netCents !== line.grossCents - line.discountCents + line.taxCents)
       broken.push(`lines[${index}].netCents is not gross - discount + tax`);
   });
