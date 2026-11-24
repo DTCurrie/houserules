@@ -1,5 +1,11 @@
 # @houserules/plugin-accessibility
 
+## 0.3.3
+
+### Patch Changes
+
+- ff260b8: Internal build lock wiring and a build script split, with no change to installed files.
+
 ## 0.3.2
 
 ### Patch Changes

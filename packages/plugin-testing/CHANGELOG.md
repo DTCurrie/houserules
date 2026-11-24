@@ -1,5 +1,11 @@
 # @houserules/plugin-testing
 
+## 0.3.7
+
+### Patch Changes
+
+- ff260b8: test-layout accepts a fixtures/ subdirectory of the test directory.
+
 ## 0.3.6
 
 ### Patch Changes

@@ -1,5 +1,27 @@
 # @houserules/cli
 
+## 0.20.0
+
+### Minor Changes
+
+- ff260b8: New mod guard refuses agent writes into Claude Code mod directories in modes that do not prompt.
+
+### Patch Changes
+
+- ff260b8: Research briefs carry the synthesis id prefix, spikes skip sibling pages directories, and each task-worker uses its own scratch directory.
+- ff260b8: verify-changed labels its root entry `<root>`, so a package named like the root no longer collides.
+- ff260b8: Doctor's upgrade command adds `-w` whenever pnpm-workspace.yaml exists, matching the session hook.
+- ff260b8: detect() runs one git spawn on a repo with commits.
+- ff260b8: Bash guard refuses git commit, push, stash and discard behind wrapper commands or a computed `git $(...)`.
+- ff260b8: The synthesis scaffold resolves a report path from any working directory.
+- ff260b8: A guard.custom rule without a message refuses with a default reason naming the missing field.
+- ff260b8: report names the scripts behind a dispatched Stop hook, and compare mode shows hook run-log rows.
+- ff260b8: check-findings --verify-urls finds quotes across footnotes, math and invisible characters, and flags added trailing punctuation.
+- ff260b8: Hook dispatch keeps JSON on exit 2 and adds plain-text context only on events that read it.
+- Updated dependencies [ff260b8]
+  - @houserules/api@0.12.0
+  - @houserules/payload@0.8.1
+
 ## 0.19.0
 
 ### Minor Changes

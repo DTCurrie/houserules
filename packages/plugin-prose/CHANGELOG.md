@@ -1,5 +1,11 @@
 # @houserules/plugin-prose
 
+## 0.2.6
+
+### Patch Changes
+
+- ff260b8: prose-lint reads only the comments of .scss and .pcss files.
+
 ## 0.2.5
 
 ### Patch Changes
