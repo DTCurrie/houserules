@@ -1,5 +1,17 @@
 # @houserules/cli
 
+## 0.19.0
+
+### Minor Changes
+
+- dc02aae: Manual mode support: hooks, skills, and agents ignore rejected edits, stop rewriting files unprompted, and warn before subagent fan-out.
+
+### Patch Changes
+
+- Updated dependencies [dc02aae]
+  - @houserules/payload@0.8.1
+  - @houserules/api@0.11.1
+
 ## 0.18.0
 
 ### Minor Changes

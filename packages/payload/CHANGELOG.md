@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.8.1
+
+### Patch Changes
+
+- dc02aae: Manual mode support: hooks, skills, and agents ignore rejected edits, stop rewriting files unprompted, and warn before subagent fan-out.
+
 ## 0.8.0
 
 ### Minor Changes

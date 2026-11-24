@@ -1,5 +1,11 @@
 # @houserules/plugin-decisions
 
+## 0.2.5
+
+### Patch Changes
+
+- dc02aae: Manual mode support: hooks, skills, and agents ignore rejected edits, stop rewriting files unprompted, and warn before subagent fan-out.
+
 ## 0.2.4
 
 ### Patch Changes
