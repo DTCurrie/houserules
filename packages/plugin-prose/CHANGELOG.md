@@ -1,5 +1,12 @@
 # @houserules/plugin-prose
 
+## 0.2.5
+
+### Patch Changes
+
+- 7ac34e1: The pr-description skill starts no Workflow, and prose-voice says a prohibition names when its step is done.
+- 7ac34e1: `prose-lint` reads only the comments of a `.css` file.
+
 ## 0.2.4
 
 ### Patch Changes

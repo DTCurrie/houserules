@@ -1,6 +1,6 @@
 {
   "name": "@houserules/plugin-wireit",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "houserules plugin: a wireit rule, the wireit-lint checker, the /wireit-setup skill, and wireit's parallelism and manifest hints for the core scripts.",
   "type": "module",
   "publishConfig": {

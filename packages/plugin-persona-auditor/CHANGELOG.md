@@ -1,5 +1,11 @@
 # @houserules/plugin-persona-auditor
 
+## 0.1.3
+
+### Patch Changes
+
+- 7ac34e1: Add @houserules/plugin-wireit, and move wireit specifics out of core scripts into plugin-written extension fragments.
+
 ## 0.1.2
 
 ### Patch Changes

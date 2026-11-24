@@ -1,5 +1,11 @@
 # @houserules/plugin-svelte
 
+## 0.3.1
+
+### Patch Changes
+
+- 7ac34e1: The Context Providers rule prefers `createContext` from Svelte 5.40.
+
 ## 0.3.0
 
 ### Minor Changes

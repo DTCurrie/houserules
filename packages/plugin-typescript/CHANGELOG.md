@@ -1,5 +1,11 @@
 # @houserules/plugin-typescript
 
+## 0.1.5
+
+### Patch Changes
+
+- 7ac34e1: Add @houserules/plugin-wireit, and move wireit specifics out of core scripts into plugin-written extension fragments.
+
 ## 0.1.4
 
 ### Patch Changes

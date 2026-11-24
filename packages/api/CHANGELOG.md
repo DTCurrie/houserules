@@ -1,5 +1,20 @@
 # @houserules/api
 
+## 0.11.0
+
+### Minor Changes
+
+- 7ac34e1: Add `verify.rootCommands`, root scripts that `verify-changed` runs after every package job.
+
+### Patch Changes
+
+- 7ac34e1: Settings hold one hook dispatcher entry per event, with the hook wiring in `.claude/scripts/hook-wiring.json`.
+- 7ac34e1: The README `skillTriggers` example matches a required module under any alias.
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+  - @houserules/payload@0.8.0
+
 ## 0.10.0
 
 ### Minor Changes

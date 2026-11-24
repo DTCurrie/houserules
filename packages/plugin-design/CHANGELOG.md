@@ -1,5 +1,11 @@
 # @houserules/plugin-design
 
+## 0.5.2
+
+### Patch Changes
+
+- 7ac34e1: Add @houserules/plugin-wireit, and move wireit specifics out of core scripts into plugin-written extension fragments.
+
 ## 0.5.1
 
 ### Patch Changes

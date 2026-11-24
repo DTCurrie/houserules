@@ -1,5 +1,39 @@
 # @houserules/cli
 
+## 0.18.0
+
+### Minor Changes
+
+- 7ac34e1: `doctor` reports each resident surface against its documented limit, with no summed budget.
+- 7ac34e1: A `notice-interim` hook tells the session to answer an interim subagent notice in one line.
+- 7ac34e1: `report` compare mode shows Bash wall time and kit versions.
+- 7ac34e1: Add @houserules/plugin-wireit, and move wireit specifics out of core scripts into plugin-written extension fragments.
+- 7ac34e1: Add `verify.rootCommands`, root scripts that `verify-changed` runs after every package job.
+- 7ac34e1: Settings hold one hook dispatcher entry per event, with the hook wiring in `.claude/scripts/hook-wiring.json`.
+- 7ac34e1: The hook dispatcher keeps a local run log, and `report` reads Stop hook paths and Bash guard duration from it.
+
+### Patch Changes
+
+- 7ac34e1: `report` files a Bash loop, chain or pipe under the command it ran.
+- 7ac34e1: Orchestrate and plan-project references cover agent-type retries, milestone build readers and the `DROPPED` status.
+- 7ac34e1: The dry-run preview lists the backup and manifest files, under a clearer next-steps header.
+- 7ac34e1: The Bash guard parses commands as a shell does, catching substituted commits and allowing quoted mentions.
+- 7ac34e1: The version-check cache stays ignored when `payload.commit` is true.
+- 7ac34e1: `init` fills a config's absent top-level keys from the seed.
+- 7ac34e1: The verification rules say when a check is done and when a draft needs none.
+- 7ac34e1: A plugin that fails to resolve prints one line and no stack.
+- 7ac34e1: The hook dispatcher ranks `defer`, keeps JSON from a failed hook, uses per-event timeouts, and stops waiting on held pipes.
+- 7ac34e1: The sync hook and `doctor` agree on when to skip the update check and which upgrade command to print.
+- 7ac34e1: `update` and `doctor` read the git index once per run.
+- 7ac34e1: `verify-changed` degrades to full scope when git status or diff fails.
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+- Updated dependencies [7ac34e1]
+  - @houserules/payload@0.8.0
+  - @houserules/api@0.11.0
+
 ## 0.17.0
 
 ### Minor Changes
