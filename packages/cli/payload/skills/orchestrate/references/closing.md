@@ -36,12 +36,16 @@ any other file.
 At every wave close, after the status table, run:
 
 ```
-node .claude/scripts/diff-size.mjs --base <Base: sha> [--lines <n>] [--files <n>]
+node .claude/scripts/diff-size.mjs --base <Base: sha> [--lines <n>] [--files <n>] [--paths <root,root>]
 ```
 
 When the sub-plan header carries `**Budget:** <lines> lines, <files> files`, pass those values as
 `--lines` and `--files`. Without it, the script's defaults apply, 600 lines and 50 files. Print its
 one line under the status table.
+
+When the sub-plan header carries a `**Domain:**` line, pass its roots as `--paths`, comma-separated
+and without the backticks. The figure is then the phase's own diff. Without `--paths` the whole
+tree counts, so a sibling phase on the same base spends this phase's budget.
 
 - **Exit 0** is a clean wave. Go on without a pause.
 - **Exit 1** means the phase passed a limit, and the run stops for the owner's ruling. Never open
@@ -54,6 +58,19 @@ one line under the status table.
 
   A new budget the owner states goes in the sub-plan's `## Notes & decisions`, and later wave
   closes in this phase pass it. The §8 UI-review condition never does.
+
+- **Past two thirds, with steps remaining** is an exit 0 that still stops the run. When either
+  printed count is more than two thirds of its limit and the sub-plan has an unticked step, the
+  budget will break before the phase ends. Stop at this wave close and return one recommendation,
+  never a menu. In a nested run it is `PHASE <slug>/<N>: NEEDS_RULING`, and in a flat run the
+  dispatcher tells the owner. The recommendation is these parts, in order:
+  1. The printed `diff-size` line and the remaining steps, each named.
+  2. One of two actions. When a remaining step writes a path this phase already changed, the
+     action is "commit now, then run the remaining steps as further waves with a commit between
+     each". When none does, it is "commit now and cut the remaining steps into a new phase".
+  3. The commit command from "The commit command" below.
+
+  A phase whose every step is ticked goes on to its close, whatever the figure.
 
 - **Exit 2** prints no count, and stderr names the cause, such as a `Base:` sha that does not
   resolve. Print that message under the status table and surface it to the owner. Never pick a new

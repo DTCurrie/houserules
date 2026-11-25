@@ -44,7 +44,7 @@ cap stay nested, because they are the orchestrator's own calls, not the user's.
 | `needs-context` | §5, a worker's `NEEDS_CONTEXT` the plan on disk cannot answer | `NEEDS_RULING`                                                                                              |
 | `context-size`  | §8, past 300,000 tokens, before compaction near 364,000       | `PARTIAL`, after the current wave closes                                                                    |
 | `depth-limit`   | preflight, `Agent` withheld from the orchestrator             | `BLOCKED`, naming `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`                                                    |
-| `diff-budget`   | §7, `diff-size` exits 1 at a wave close                       | `NEEDS_RULING`, three options under `Ruling needed`                                                         |
+| `diff-budget`   | §7, `diff-size` exits 1 or passes two thirds at a wave close  | `NEEDS_RULING`, three options under `Ruling needed`                                                         |
 
 ## The main conversation
 

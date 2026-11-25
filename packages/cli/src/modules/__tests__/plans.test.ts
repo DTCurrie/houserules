@@ -335,6 +335,18 @@ describe('plans', () => {
         /The phase-close report lists each departure from a ruling under `Departures from Standing rulings`/,
       );
     });
+
+    it('stops a wave close past two thirds of the diff budget with one recommendation', () => {
+      expect(installed('references/closing.md')).toMatch(
+        /more than two thirds of its limit and the sub-plan has an unticked step[\s\S]*return one recommendation,\s+never a menu/,
+      );
+    });
+
+    it('measures a phase with a Domain by its own roots', () => {
+      expect(installed('references/closing.md')).toMatch(
+        /carries a `\*\*Domain:\*\*` line, pass its roots as `--paths`/,
+      );
+    });
   });
 
   describe('by default', () => {
