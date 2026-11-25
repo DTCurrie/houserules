@@ -1,5 +1,11 @@
 # @houserules/payload
 
+## 0.8.2
+
+### Patch Changes
+
+- 3732f6a: Stop hooks no longer count edits the user rejected at the permission prompt as changes made in the turn.
+
 ## 0.8.1
 
 ### Patch Changes

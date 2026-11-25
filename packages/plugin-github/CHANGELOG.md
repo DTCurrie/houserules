@@ -1,5 +1,11 @@
 # @houserules/plugin-github
 
+## 0.3.1
+
+### Patch Changes
+
+- 3732f6a: SessionEnd sync now pushes only the ending session's ledger rows, releasing other sessions' rows after 24 hours.
+
 ## 0.3.0
 
 ### Minor Changes
