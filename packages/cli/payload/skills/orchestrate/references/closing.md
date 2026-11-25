@@ -87,6 +87,14 @@ Before flipping the phase to DONE, read the sub-plan's `## Review Focus` section
 pinned test exists in the tree. A missing one is an unmet acceptance, so the phase stays open until
 the test lands or the item is removed with a recorded reason.
 
+## Departures from the Standing rulings
+
+Before the phase is reported done, read its output against the sub-plan's `## Standing rulings`.
+The phase-close report lists each departure from a ruling under `Departures from Standing rulings`:
+the ruling's number, what landed instead, and who accepted it. Write `none` when nothing departed.
+A ruling here is the owner's, recorded in the plan. It is not the mid-run ruling in "What a ruling
+is" below. A phase file with no `## Standing rulings` section skips this.
+
 ## Promoting decisions and rulings
 
 Run `/decide` on anything that clears its bar: not obvious from the code, a competent person could

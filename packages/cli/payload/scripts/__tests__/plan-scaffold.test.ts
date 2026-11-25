@@ -147,6 +147,10 @@ describe('plan-scaffold output', () => {
 
 <Relative links to any spec, format, or standard this phase's work must conform to, or "none".>
 
+## Standing rulings
+
+none
+
 ## Steps
 
 - [ ] <step: the decision made, plus the acceptance that shows it holds. Never a code block>
@@ -154,9 +158,22 @@ describe('plan-scaffold output', () => {
 
 ## Notes & decisions
 
-<Captured as you implement: what you chose, what you ruled out, surprises. This is the durable
-memory that survives the transcript.>
+<A log of how a decision was reached: what you weighed, what you ruled out, surprises. The decision
+itself lands in \`## Steps\` or \`## Standing rulings\`.>
 `);
+  });
+
+  it('places a Standing rulings section above Steps in a generated phase file', () => {
+    const root = installedRepo();
+    scaffold(root, ...CALL);
+
+    const phase = read(root, `${DIR}/phase-1-alpha.md`);
+
+    expect(phase).toContain('## Standing rulings\n\nnone\n');
+    expect(phase.indexOf('## Standing rulings')).toBeGreaterThan(-1);
+    expect(phase.indexOf('## Standing rulings')).toBeLessThan(
+      phase.indexOf('## Steps'),
+    );
   });
 
   it('reads back through plan-state show as TODO with no mismatch', () => {

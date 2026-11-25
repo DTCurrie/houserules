@@ -191,6 +191,10 @@ line below. A list such as `After: 2, 3` names the phases that must be `DONE` fi
 
 <Relative links to any spec, format, or standard this phase's work must conform to, or "none".>
 
+## Standing rulings
+
+1. <a short numbered list of each owner decision this phase must respect, or "none">
+
 ## Steps
 
 - [ ] <step: the decision made, plus the acceptance that shows it holds. Never a code block>
@@ -210,14 +214,23 @@ warns above that share.
 
 ## Notes & decisions
 
-<Captured as you implement: what you chose, what you ruled out, surprises. This is the durable
-memory that survives the transcript.>
+<A log of how a decision was reached: what you weighed, what you ruled out, surprises. The decision
+itself lands in `## Steps` or `## Standing rulings`.>
 ```
 
 `## Review Focus` lists the inputs and failure modes the spec implies but no step's tests exercise,
 so a reviewer knows where to look. Five items is the cap. Each item names the test file that pins it
 in backticks, in the step that owns the code. `plan-lint` warns past five items and on an item that
 names no test path. Omit the section when every case the spec implies already has a test.
+
+**A decision that changes a step edits that step in the same edit.** Add it to
+`## Standing rulings`, or to `PLAN.md`'s Approach when it spans phases, and log the step's old text
+in the note. The step is done when it reads as the ruling says. The excuses, and their answers:
+
+- "The note records it, so the plan is updated." The steps are what the next reader builds from. A
+  note below them is not an update.
+- "Rewriting the steps loses history." Edit the step and log the old text in the note.
+- "The step is only slightly out of date." A reader cannot tell which steps are slightly out of date.
 
 The optional `**Signals:**` line is read by `/orchestrate` where that skill is installed: `wide`
 turns on its pre-slicing `/blast-radius` map and `ui` its close-of-phase accessibility and design

@@ -46,6 +46,11 @@ intended.
   step 5 of the spec. The worker pushed back with line numbers and the second pass approved,
   a full round spent on the reviewer's own extraction. Grep locates. Before a deviation verdict,
   `Read` the step you are judging against, in full.
+- **Does it hold to the phase's `## Standing rulings`?** Judge the report against that list as well
+  as the brief, because a ruling the brief's `Constraints:` line missed still binds the slice. A
+  departure from a ruling is a `REVISE`, unless the report flags it and you accept it. An accepted
+  departure goes on the phase-close report, per "Departures from the Standing rulings" in
+  `references/closing.md`.
 
 ## Revise rounds and what comes after the cap
 

@@ -71,6 +71,49 @@ describe('plans', () => {
       );
     });
 
+    it('templates a phase doc with a Standing rulings list between Reference and Steps', () => {
+      const text = readFileSync(
+        join(root, '.claude/skills/plan-project/SKILL.md'),
+        'utf8',
+      );
+      expect(text).toMatch(
+        /## Reference\n[\s\S]*\n## Standing rulings\n\n1\. <[^>]*owner decision[^>]*>\n\n## Steps\n/,
+      );
+    });
+
+    it('describes Notes & decisions as a log of how a decision was reached', () => {
+      const text = readFileSync(
+        join(root, '.claude/skills/plan-project/SKILL.md'),
+        'utf8',
+      );
+      expect(text).toMatch(
+        /## Notes & decisions\n\n<A log of how a decision was reached:[^>]*The decision\s+itself lands in `## Steps` or `## Standing rulings`\.>/,
+      );
+    });
+
+    it('forbids a ruling that leaves its step unedited, with the three excuses answered', () => {
+      const text = readFileSync(
+        join(root, '.claude/skills/plan-project/SKILL.md'),
+        'utf8',
+      );
+      expect(text).toContain(
+        '**A decision that changes a step edits that step in the same edit.**',
+      );
+      expect(text).toMatch(/log the step's old text\s+in the note/);
+      expect(text).toContain(
+        'The step is done when it reads as the ruling says.',
+      );
+      expect(text).toMatch(
+        /"The note records it, so the plan is updated\." The steps are what the next reader builds from\. A\s+note below them is not an update\./,
+      );
+      expect(text).toContain(
+        '"Rewriting the steps loses history." Edit the step and log the old text in the note.',
+      );
+      expect(text).toContain(
+        '"The step is only slightly out of date." A reader cannot tell which steps are slightly out of date.',
+      );
+    });
+
     it('templates the Domain line and the After segment', () => {
       const text = readFileSync(
         join(root, '.claude/skills/plan-project/SKILL.md'),
@@ -224,6 +267,73 @@ describe('plans', () => {
 
     it('passes doctor validation', () => {
       expect(runCli(['doctor', root]).status).toBe(0);
+    });
+  });
+
+  describe('enabled together with the orchestrate module', () => {
+    let root: string;
+
+    beforeEach(() => {
+      root = useInstalledRepo('pnpm-monorepo', {
+        modules: 'plans,orchestrate',
+      });
+    });
+
+    function installed(path: string): string {
+      return readFileSync(
+        join(root, '.claude/skills/orchestrate', path),
+        'utf8',
+      );
+    }
+
+    it('sends the orchestrator to slicing.md before a slice is drawn', () => {
+      expect(installed('SKILL.md')).toContain(
+        'Read `references/slicing.md` before you draw a slice.',
+      );
+    });
+
+    it('reconciles the steps with the rulings and later notes once, before any slice', () => {
+      const slicing = installed('references/slicing.md');
+
+      expect(slicing).toContain(
+        '## Reconcile the steps with the rulings, before any slice',
+      );
+      expect(slicing).toMatch(
+        /Run this once, at the start of a run, before you\s+draw a slice:/,
+      );
+      expect(slicing).toMatch(
+        /On a step that a ruling or a later note contradicts, stop and report the contradiction to the\s+user: the step, the ruling or note, and what each says\. Never pick one\./,
+      );
+      expect(slicing).toMatch(
+        /It is done when each ruling and each note dated after the phase's last run has been read against the\s+steps/,
+      );
+    });
+
+    it('never takes a brief Constraints line from the notes', () => {
+      expect(installed('references/slicing.md')).toMatch(
+        /The notes are never the source of a brief's `Constraints:`\. That line comes from the phase's\s+`## Standing rulings` and `PLAN\.md`'s Approach\./,
+      );
+    });
+
+    it("fills the brief's Constraints line from the Standing rulings and PLAN.md's Approach", () => {
+      const constraints =
+        installed('SKILL.md').match(/^> Constraints: .*$/m)?.[0];
+
+      expect(constraints).toBe(
+        "> Constraints: `<the phase's Standing rulings and PLAN.md's Approach this slice must respect>`.",
+      );
+    });
+
+    it('judges a slice report against the Standing rulings', () => {
+      expect(installed('references/review-patterns.md')).toMatch(
+        /\*\*Does it hold to the phase's `## Standing rulings`\?\*\* Judge the report against that list as well\s+as the brief/,
+      );
+    });
+
+    it('lists each departure from a Standing ruling in the phase-close report', () => {
+      expect(installed('references/closing.md')).toMatch(
+        /The phase-close report lists each departure from a ruling under `Departures from Standing rulings`/,
+      );
     });
   });
 

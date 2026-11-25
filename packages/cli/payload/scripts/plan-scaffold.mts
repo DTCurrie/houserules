@@ -157,6 +157,10 @@ function subplanDoc(number: number, phase: string): string {
 
 <Relative links to any spec, format, or standard this phase's work must conform to, or "none".>
 
+## Standing rulings
+
+none
+
 ## Steps
 
 - [ ] <step: the decision made, plus the acceptance that shows it holds. Never a code block>
@@ -164,8 +168,8 @@ function subplanDoc(number: number, phase: string): string {
 
 ## Notes & decisions
 
-<Captured as you implement: what you chose, what you ruled out, surprises. This is the durable
-memory that survives the transcript.>
+<A log of how a decision was reached: what you weighed, what you ruled out, surprises. The decision
+itself lands in \`## Steps\` or \`## Standing rulings\`.>
 `;
 }
 
