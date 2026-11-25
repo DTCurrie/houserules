@@ -9,6 +9,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import {
   childArgv,
@@ -20,6 +21,27 @@ import { NO_SLUG_PROMPT, SAMPLE_MODEL, SAMPLE_PROMPT } from '../layout.mjs';
 import { writeStubClaude } from './stub-claude.mjs';
 
 const PER_RUN = 7.5;
+
+const GROUP_REAP_WAIT_MS = 5000;
+const GROUP_POLL_MS = 50;
+
+/**
+ * The error code `kill(-groupLeader, 0)` settles on within `waitMs`, or null while the group
+ * still answers. A killed process stays in its group until its parent reaps it, so the group can
+ * outlive the kill by a moment.
+ */
+async function groupErrorWithin(groupLeader, waitMs) {
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(-groupLeader, 0);
+    } catch (error) {
+      return error.code;
+    }
+    await delay(GROUP_POLL_MS);
+  }
+  return null;
+}
 
 function scratch() {
   return mkdtempSync(join(tmpdir(), 'hr-eval-child-'));
@@ -318,6 +340,10 @@ setTimeout(() => {}, 60000);
     });
     assert.equal(result.timedOut, true);
     const groupLeader = Number(readFileSync(pidFile, 'utf8').trim());
-    assert.throws(() => process.kill(-groupLeader, 0), { code: 'ESRCH' });
+    assert.equal(
+      await groupErrorWithin(groupLeader, GROUP_REAP_WAIT_MS),
+      'ESRCH',
+      'the process group outlived the timeout kill',
+    );
   });
 });
