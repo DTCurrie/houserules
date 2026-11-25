@@ -1,5 +1,20 @@
 # @houserules/cli
 
+## 0.21.1
+
+### Patch Changes
+
+- 3029818: Orchestrate sizes each phase before spawning an orchestrator, and waits on a subagent by ending the turn, never by sleeping.
+- 3732f6a: Hook dispatcher honors SessionEnd's 1.5-second budget and raises it when a SessionEnd hook sets a longer timeout.
+- 161dcd3: PreToolUse refusals reach Claude as a JSON deny, without the hook command prefixed to the reason.
+- c1d7791: Plans gain a Standing rulings section, a ruling edits the step it changes, and orchestrate stops on a contradicted step.
+- 4914ce7: diff-size takes --paths to measure a phase's own roots, and orchestrate recommends a commit past two thirds of budget.
+- 3732f6a: Bash and mod guards refuse mod writes via sed -i, dd, -t copies, variables, and new mods lacking hooks.json.
+- 3732f6a: Plan reviewer tags items as facts or owner decisions, planners work the list, and nested relays catch misfiled removals.
+- Updated dependencies [3732f6a]
+  - @houserules/payload@0.8.2
+  - @houserules/api@0.12.1
+
 ## 0.21.0
 
 ### Minor Changes

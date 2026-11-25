@@ -1,5 +1,11 @@
 # @houserules/plugin-changesets
 
+## 0.6.2
+
+### Patch Changes
+
+- 3732f6a: The changeset gate no longer demands an entry for a path outside a package's files and wireit build inputs.
+
 ## 0.6.1
 
 ### Patch Changes
