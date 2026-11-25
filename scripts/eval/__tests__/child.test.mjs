@@ -1,10 +1,21 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { childArgv, childEnv, runSession } from '../child.mjs';
+import {
+  childArgv,
+  childEnv,
+  runSession,
+  writeTrustedConfig,
+} from '../child.mjs';
 import { NO_SLUG_PROMPT, SAMPLE_MODEL, SAMPLE_PROMPT } from '../layout.mjs';
 import { writeStubClaude } from './stub-claude.mjs';
 
@@ -229,6 +240,58 @@ console.log(JSON.stringify({ type: 'result', session_id: sid, total_cost_usd: 1.
     );
     assert.ok(existsSync(join(outDir, 'stream.jsonl')));
     assert.ok(existsSync(join(outDir, 'stderr.txt')));
+  });
+
+  it('accepts the trust dialog for the root and its real path in a config directory', () => {
+    const dir = scratch();
+    const root = join(dir, 'root');
+    mkdirSync(root);
+
+    const configDir = writeTrustedConfig(join(dir, 'config'), root);
+
+    const config = JSON.parse(
+      readFileSync(join(configDir, '.claude.json'), 'utf8'),
+    );
+    assert.deepEqual(config.projects[root], { hasTrustDialogAccepted: true });
+    assert.deepEqual(config.projects[realpathSync(root)], {
+      hasTrustDialogAccepted: true,
+    });
+  });
+
+  it('runs the child under configDir and reads its transcripts from there', async () => {
+    const dir = scratch();
+    const configDir = join(dir, 'config');
+    const recordPath = join(dir, 'config-dir.txt');
+    const stub = writeStubClaude(`
+import { mkdirSync, writeFileSync } from 'node:fs';
+const sid = 'sid-456';
+const base = process.env.CLAUDE_CONFIG_DIR + '/projects/-tmp-proj';
+mkdirSync(base, { recursive: true });
+writeFileSync(base + '/' + sid + '.jsonl', '{}\\n');
+writeFileSync(process.env.EVAL_STUB_RECORD, process.env.CLAUDE_CONFIG_DIR);
+console.log(JSON.stringify({ type: 'result', session_id: sid, total_cost_usd: 0 }));
+`);
+    const outDir = join(dir, 'out');
+
+    await runSession({
+      cwd: dir,
+      outDir,
+      argv: childArgv({
+        prompt: SAMPLE_PROMPT,
+        model: SAMPLE_MODEL,
+        perRun: PER_RUN,
+      }),
+      env: { PATH: stub.path, EVAL_STUB_RECORD: recordPath },
+      timeoutMinutes: 1,
+      home: join(dir, 'empty-home'),
+      configDir,
+    });
+
+    assert.equal(readFileSync(recordPath, 'utf8'), configDir);
+    assert.ok(
+      existsSync(join(outDir, 'transcripts', 'sid-456.jsonl')),
+      'the transcript under configDir/projects was not copied',
+    );
   });
 
   it('kills the whole process group at the timeout', async () => {

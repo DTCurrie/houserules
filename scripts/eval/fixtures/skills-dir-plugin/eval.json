@@ -1,0 +1,19 @@
+{
+  "modules": "core",
+  "plugins": [],
+  "model": "haiku",
+  "network": false,
+  "validityAgent": null,
+  "collect": [],
+  "arms": {
+    "trusted": {
+      "prompt": "arms/trusted/prompt.txt",
+      "overlay": "arms/trusted/overlay",
+      "trustRunRoot": true
+    },
+    "untrusted": {
+      "prompt": "arms/untrusted/prompt.txt",
+      "overlay": "arms/untrusted/overlay"
+    }
+  }
+}

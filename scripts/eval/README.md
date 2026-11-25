@@ -91,6 +91,13 @@ one. The free run assembles one sample and prints the child command on one line.
 `--margin` over `--out`'s own ledger, and it is refused when that directory exists. A free run
 numbers the assembled sample `k`.
 
+An arm may set `trustRunRoot` to `true`. Its child then runs under its own config directory,
+`<sample root>-config`, as `CLAUDE_CONFIG_DIR`, with the trust dialog accepted for the sample root.
+A trusted child loads the project's skills-directory plugins and keeps its `permissions.allow`
+entries, which an untrusted headless session drops. It also reads none of your own user-level
+state, and its transcripts are copied from that directory. Absent or `false`, the child runs under
+your own config as before. Any other value stops the run naming the field.
+
 `eval.json` may set `permissionMode` to `auto` or `default`, absent meaning `auto`. It becomes the
 child's `--permission-mode`, and any other value stops the run naming the field. An arm may set
 `settings` to a JSON object file, a path relative to `<dir>`. The runner replaces every

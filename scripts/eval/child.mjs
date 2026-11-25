@@ -7,12 +7,16 @@ import {
   openSync,
   readFileSync,
   readdirSync,
+  realpathSync,
+  writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 
 import { STDERR, STREAM, TRANSCRIPTS } from './layout.mjs';
 
 const MS_PER_MINUTE = 60_000;
+/** The file under a Claude Code config directory that holds per-project state. */
+const CONFIG_FILE = '.claude.json';
 /** The built-in tools that reach the network. Bash is covered by `NETWORK_SANDBOX`. */
 const NETWORK_TOOLS = 'WebFetch,WebSearch';
 /**
@@ -127,8 +131,7 @@ function readStream(streamPath) {
   return events;
 }
 
-function copyTranscripts(home, sessionId, outDir) {
-  const projectsDir = join(home, '.claude', 'projects');
+function copyTranscripts(projectsDir, sessionId, outDir) {
   if (!existsSync(projectsDir)) return;
   const target = join(outDir, TRANSCRIPTS);
   for (const slug of readdirSync(projectsDir)) {
@@ -139,6 +142,28 @@ function copyTranscripts(home, sessionId, outDir) {
       cpSync(source, join(target, name), { recursive: true });
     }
   }
+}
+
+/**
+ * Writes a Claude Code config directory whose only content is the trust dialog accepted for
+ * `root`. A child given it as `CLAUDE_CONFIG_DIR` loads the project's skills-directory plugins
+ * and keeps its `permissions.allow` entries, which an untrusted headless session drops. The key is
+ * written for `root` and for its real path, since a temp dir is often reached through a symlink.
+ * `root` must be a main checkout: in a git worktree the lookup reads the main repository's path.
+ *
+ * @param {string} configDir Created if missing.
+ * @param {string} root The sample root the child runs in.
+ * @returns {string} `configDir`.
+ */
+export function writeTrustedConfig(configDir, root) {
+  mkdirSync(configDir, { recursive: true });
+  const trusted = { hasTrustDialogAccepted: true };
+  const projects = { [root]: trusted, [realpathSync(root)]: trusted };
+  writeFileSync(
+    join(configDir, CONFIG_FILE),
+    `${JSON.stringify({ projects }, null, 2)}\n`,
+  );
+  return configDir;
 }
 
 /**
@@ -184,12 +209,22 @@ function spawnWithTimeout(options) {
  *   env: NodeJS.ProcessEnv,
  *   timeoutMinutes: number,
  *   home: string,
- * }} options `env` is used as given, so the caller passes `childEnv(...)`.
+ *   configDir?: string,
+ * }} options `env` is used as given, so the caller passes `childEnv(...)`. With `configDir`,
+ *   the child gets it as `CLAUDE_CONFIG_DIR` and its transcripts are read from there, not `home`.
  * @returns {Promise<{ exitCode: number | null, timedOut: boolean, sessionId: string | null, resultEvent: object | null }>}
  *   `resultEvent` is the last `type: "result"` line of the stream, parsed.
  */
 export async function runSession(options) {
-  const { cwd, outDir, argv, env, timeoutMinutes, home } = options;
+  const { cwd, outDir, argv, timeoutMinutes, home, configDir } = options;
+  const env =
+    configDir === undefined
+      ? options.env
+      : { ...options.env, CLAUDE_CONFIG_DIR: configDir };
+  const projectsDir =
+    configDir === undefined
+      ? join(home, '.claude', 'projects')
+      : join(configDir, 'projects');
   mkdirSync(outDir, { recursive: true });
   const streamPath = join(outDir, STREAM);
   const stdinFd = openSync('/dev/null', 'r');
@@ -218,6 +253,6 @@ export async function runSession(options) {
       ?.session_id ?? null;
   const resultEvent =
     events.findLast((event) => event.type === 'result') ?? null;
-  if (sessionId !== null) copyTranscripts(home, sessionId, outDir);
+  if (sessionId !== null) copyTranscripts(projectsDir, sessionId, outDir);
   return { exitCode, timedOut, sessionId, resultEvent };
 }

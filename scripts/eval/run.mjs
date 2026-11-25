@@ -91,7 +91,13 @@ import {
   judgeArmValidity,
   loadArmFixture,
 } from './fixture-arm.mjs';
-import { childArgv, childEnv, claudeVersion, runSession } from './child.mjs';
+import {
+  childArgv,
+  childEnv,
+  claudeVersion,
+  runSession,
+  writeTrustedConfig,
+} from './child.mjs';
 import {
   CLAIM_IDS,
   NO_SLUG_PROMPT,
@@ -127,6 +133,8 @@ const EXIT_OK = 0;
 const EXIT_FAILED = 1;
 const EXIT_NOT_STARTED = 2;
 const DEFAULT_REV = 'HEAD';
+/** Appended to a sample root to name the config directory a trusted arm's child runs under. */
+const TRUSTED_CONFIG_SUFFIX = '-config';
 const DEFAULT_TIMEOUT_MINUTES = 20;
 const DEFAULT_SAMPLES = 0;
 /** The cap the free dry run prints when no `--per-run` is given: the plan's opus sample cap. */
@@ -858,6 +866,12 @@ async function runArmSession(context, key) {
     env: context.env,
     timeoutMinutes: context.options.timeoutMinutes,
     home: process.env.HOME ?? homedir(),
+    configDir: fixture.isRunRootTrusted
+      ? writeTrustedConfig(
+          `${assembled.root}${TRUSTED_CONFIG_SUFFIX}`,
+          assembled.root,
+        )
+      : undefined,
   });
   const overlays = exitOverlayHashes(assembled.root, assembled.overlays);
   copyCollect(assembled.root, fixture.collect, outDir);

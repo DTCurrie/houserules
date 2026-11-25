@@ -639,6 +639,29 @@ describe('eval.json seam keys', () => {
     },
   });
 
+  it('trusts the run root only for an arm that sets trustRunRoot', () => {
+    const fixture = writeFixture(scratch('fixture'), {
+      arms: {
+        ...armWith({ trustRunRoot: true }),
+        b: { prompt: 'arms/a/prompt.txt', overlay: 'arms/a/overlay' },
+      },
+    });
+
+    assert.equal(loadArmFixture(fixture, 'a').isRunRootTrusted, true);
+    assert.equal(loadArmFixture(fixture, 'b').isRunRootTrusted, false);
+  });
+
+  it('refuses a trustRunRoot that is not a boolean, naming the arm', () => {
+    const fixture = writeFixture(scratch('fixture'), {
+      arms: armWith({ trustRunRoot: 'yes' }),
+    });
+
+    assert.throws(
+      () => loadArmFixture(fixture, 'a'),
+      /arms\.a "trustRunRoot" must be a boolean/,
+    );
+  });
+
   it('returns permissionMode, auto when absent, and refuses other values naming the field', () => {
     const plain = writeFixture(scratch('fixture'));
     assert.equal(loadArmFixture(plain, 'a').permissionMode, 'auto');
