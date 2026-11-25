@@ -74,7 +74,10 @@ not phases. Each phase must:
 
 - land independently and leave the tree in a working state, and
 - have a **falsifiable "done"**, the acceptance you could actually check (a test passes, a route
-  returns 200, a flag flips).
+  returns 200, a flag flips), and
+- fit a **budget**: 600 changed lines and 50 touched files by default, measured against the phase's
+  base. An optional sub-plan header line `**Budget:** <lines> lines, <files> files` sets other
+  values, and the phase's Notes give the reason for them.
 
 Cut the phases **vertically**, so each one is a thin end-to-end path someone can actually touch,
 rather than a layer of the stack. The default pull is horizontal, a schema phase then a service
@@ -178,6 +181,7 @@ line below. A list such as `After: 2, 3` names the phases that must be `DONE` fi
 **Signals:** <optional, comma-separated: `wide` for a big footprint, `ui` for user-facing surfaces, `live` for checks against a running server, `flat` for a phase that runs in the dispatcher's own context, else omit the line>
 **Domain:** <optional: comma-separated path roots this phase may write, each in backticks, never a glob. Omit the line for `all`>
 **Closes:** <optional: comma-separated issues this phase resolves, each `#` plus digits, as `#12, #15`. A duplicate closed by comment is not listed>
+**Budget:** <optional: `<lines> lines, <files> files`, as `900 lines, 70 files`. Omit the line for the default 600 and 50>
 
 ## Objective
 
@@ -191,6 +195,8 @@ line below. A list such as `After: 2, 3` names the phases that must be `DONE` fi
 
 - [ ] <step: the decision made, plus the acceptance that shows it holds. Never a code block>
 - [ ] <step>
+
+A step that deletes names each path it deletes.
 
 Self-check before handing off: if fenced code is more than a tenth of a phase file's lines, the
 plan is implementing. Move the code into a "decisions" bullet as prose, or drop it. `plan-lint`

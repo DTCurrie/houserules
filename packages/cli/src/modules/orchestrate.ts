@@ -155,7 +155,8 @@ function phaseOrchestratorAgent(extraTools: string[]): Action {
  * O(slices x report), and no worker accumulates another slice's context.
  *
  * Its scripts only read: `plan-lint.mjs` checks a workspace, `wave-ceiling.mjs` sizes a wave,
- * and `closeout.mjs` prints a closeout's checklist and `Closes` lines and checks a report's
+ * `removal-check.mjs` lists deletions no `--allow` path covers, `diff-size.mjs` counts a phase's
+ * changed lines and files against limits, and `closeout.mjs` prints a closeout's checklist and `Closes` lines and checks a report's
  * `Source:` paths. It requires `plans`, which scaffolds the workspaces it drives.
  */
 export function plan(ctx: Ctx, answers: Answers): Action[] {
@@ -200,6 +201,16 @@ export function plan(ctx: Ctx, answers: Answers): Action[] {
       id,
       'plan-lint.mjs',
       'validate a .claude/plans/ workspace: slice status vocabulary, ROADMAP/sub-plan sync, fix.onSubagentStop, blast-radius artifact shape',
+    ),
+    script(
+      id,
+      'removal-check.mjs',
+      'list working-tree deletions no --allow path covers, so a phase closes only with the removals its brief named',
+    ),
+    script(
+      id,
+      'diff-size.mjs',
+      "print a phase's changed lines and touched files against a base ref, and exit 1 past either limit",
     ),
     script(
       id,

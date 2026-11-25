@@ -386,9 +386,10 @@ const GIT_TIMEOUT_MS = 15_000;
 /**
  * Total milliseconds the script may spend in fix spawns. The lint-fix module wires the hook
  * with a 120s timeout, and a spawn that runs to that limit is killed by the harness before
- * it can report. This plus the git spawn stays under it, so the script ends the hook itself.
+ * it can report. The slowest of 685 path-taking runs in houserules took 6,817 ms, so 30 s is
+ * over four times that while this plus the git spawn stays under the hook's timeout.
  */
-export const FIX_BUDGET_MS = 90_000;
+export const FIX_BUDGET_MS = 30_000;
 
 /** The paths `git status --porcelain` lists, with a rename reduced to its new path. */
 export function pathsFromPorcelain(stdout: string): string[] {

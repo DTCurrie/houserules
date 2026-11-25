@@ -43,7 +43,7 @@ interface FamilyWall {
   calls: number;
   /** Timed calls that ran in a subagent. */
   subagentCalls: number;
-  /** Timed calls whose first real command is a package runner with no scope flag, see {@link isUnscopedRunnerCall}. */
+  /** Timed calls whose first real command is a package runner with no scope flag and no path argument, see {@link isUnscopedRunnerCall}. */
   unscopedCalls: number;
   /** Sum of `seconds`, to 3 decimals. */
   seconds: number;
@@ -181,23 +181,43 @@ function namedCommandWords(command: string): string[] {
 }
 
 /**
- * Whether the command {@link bashFamily} names is a package runner with no scope flag:
- * `--filter`, `-F`, `--dir`, or `-C`, spaced or `=`-joined. A `cd` is not a scope flag.
- * Any other command is not unscoped.
+ * Whether the command {@link bashFamily} names is a package runner with no scope flag
+ * (`--filter`, `-F`, `--dir`, or `-C`, spaced or `=`-joined) and no path argument after its
+ * script word, where a path contains `/` or ends in a file extension and a lone `.` is the
+ * whole tree. A `cd` is not a scope. Any other command is not unscoped.
  */
 export function isUnscopedRunnerCall(command: string): boolean {
   const [first, ...args] = namedCommandWords(command);
   if (first === undefined || !PACKAGE_RUNNERS.has(first)) return false;
-  return !args.some((arg) =>
+  const hasScopeFlag = args.some((arg) =>
     RUNNER_VALUE_FLAGS.some(
       (flag) =>
         arg === flag || (flag.startsWith('--') && arg.startsWith(`${flag}=`)),
     ),
   );
+  return !hasScopeFlag && !scriptArguments(args).some(isPathArgument);
 }
 
 const PACKAGE_RUNNERS = new Set(['pnpm', 'npm', 'yarn', 'bun', 'npx']);
 const RUNNER_VALUE_FLAGS = ['--filter', '-F', '--dir', '-C'];
+const FILE_EXTENSION = /\.[A-Za-z0-9]+$/;
+
+function isPathArgument(arg: string): boolean {
+  return arg.includes('/') || FILE_EXTENSION.test(arg);
+}
+
+/** The positional words after the script word, with a leading `run` or `exec` skipped. */
+function scriptArguments(args: string[]): string[] {
+  const positionals: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i] ?? '';
+    if (RUNNER_VALUE_FLAGS.includes(arg)) i += 1;
+    else if (!arg.startsWith('-')) positionals.push(arg);
+  }
+  const [head] = positionals;
+  const scriptIndex = head === 'run' || head === 'exec' ? 1 : 0;
+  return positionals.slice(scriptIndex + 1);
+}
 const GIT_VALUE_FLAGS = ['-C', '-c', '--git-dir', '--work-tree'];
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const REDIRECTION = /^\d*[<>]/;
@@ -497,12 +517,15 @@ function familyWall(family: string, group: SessionBashCall[]): FamilyWall {
   };
 }
 
+const UNSCOPED_FOOTNOTE =
+  '  unscoped calls: package-runner calls with no --filter, -F, --dir, or -C and no path argument, where a lone . is the whole tree.';
+
 /**
  * The "Bash wall time" report section. Its first line under the heading says that parallel
  * calls overlap, so family totals can exceed a session's wall, and whether subagent
  * transcripts are counted. Then the per-family table, whose last column counts package-runner
- * calls with no scope flag, then the slowest calls with session
- * and timestamp. An empty report renders no lines.
+ * calls with no scope flag and no path argument, a footnote stating that rule, then the
+ * slowest calls with session and timestamp. An empty report renders no lines.
  */
 export function renderBashWall(report: BashWallReport | undefined): string[] {
   if (!report || report.calls === 0) return [];
@@ -534,6 +557,7 @@ export function renderBashWall(report: BashWallReport | undefined): string[] {
         row.unscopedCalls,
       ]),
     ),
+    UNSCOPED_FOOTNOTE,
     '',
     '  slowest calls:',
     ...report.slowest.map(

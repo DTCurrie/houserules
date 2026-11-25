@@ -100,6 +100,57 @@ describe('passPathsDefault', () => {
     });
   });
 
+  it('is off for a root target running eslint . --fix --concurrency auto and prettier --write .', () => {
+    const ctx = makeCtx({
+      rootPkg: {
+        name: 'x',
+        scripts: {
+          'lint:fix': 'eslint . --fix --concurrency auto',
+          'format:fix': 'prettier --write .',
+        },
+      },
+    });
+    const targets = [makeTarget({ fixCommands: ['lint:fix', 'format:fix'] })];
+    expect(passPathsDefault(ctx, targets, { filterFlag: '' })).toEqual({
+      isOn: false,
+      rejectedScripts: ['lint:fix', 'format:fix'],
+    });
+  });
+
+  it('is off for a workspace package whose own scripts target the whole tree', () => {
+    const ctx = makeCtx({
+      isMonorepo: true,
+      rootPkg: {
+        name: 'root',
+        scripts: { 'lint:fix': 'pnpm -r run --if-present lint:fix' },
+      },
+      packages: [
+        {
+          name: 'a',
+          dir: '/repo/packages/a',
+          relDir: 'packages/a',
+          pkg: {
+            name: 'a',
+            scripts: {
+              'lint:fix': 'eslint . --fix',
+              'format:fix': 'prettier --write .',
+            },
+          },
+        },
+      ],
+    });
+    const targets = [
+      makeTarget({
+        pathPrefix: 'packages/a/',
+        fixCommands: ['lint:fix', 'format:fix'],
+      }),
+    ];
+    expect(passPathsDefault(ctx, targets, { filterFlag: '--filter' })).toEqual({
+      isOn: false,
+      rejectedScripts: ['lint:fix', 'format:fix'],
+    });
+  });
+
   it('is off for a mixed set and names the whole-tree script', () => {
     const ctx = makeCtx({
       rootPkg: {

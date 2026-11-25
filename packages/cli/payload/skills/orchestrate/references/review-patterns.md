@@ -36,6 +36,10 @@ intended.
 - **Did it satisfy the letter and worsen the artifact?** One slice satisfied "the tarball must not
   carry these files" by excluding them in `files` while leaving a package `exports` entry pointing
   at them, which passes the check and publishes a package resolving to nothing.
+  Another read "composites become recipes" as license to delete the controls inside them, and 208
+  shipped UI files went in four waves. The misreading took a restructuring instruction for a
+  removal instruction. The question that catches it: "What did the user lose that the plan did not
+  name?" Anything a user could see or touch before and cannot now is a `Removed beyond plan` entry.
 - **Is the deviation real, or an artifact of how you read the spec?** One orchestrator listed a
   sub-plan's steps with a first-line-only grep (`grep -nE '^\s+[0-9]+\.'`), which drops the
   continuation lines of wrapped list items, then sent a `REVISE` flagging a change that was

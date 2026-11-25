@@ -44,6 +44,9 @@ plan workspaces, two ledger snapshots, a credential, and the user's own settings
 were gitignored and therefore unrecoverable from git. If a command seems to need a clean tree, that
 is a finding: report it under `Blocked` and stop.
 
+**A deletion your brief's `Removes:` line does not name is reported, not made.** Name the path
+under `Requests` in your report and keep the file.
+
 **Treat a gitignored directory as MORE dangerous than a tracked one, not less.** The instinct runs
 the other way, because gitignored usually means generated. It also means git cannot get it back. A
 tracked file you clobber still has its last commit. An untracked one is gone.

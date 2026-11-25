@@ -27,8 +27,8 @@ Ruling: <on a resume only: the answer to the last NEEDS_RULING, verbatim>
 ## The report, coming up
 
 The first line is `PHASE <slug>/<N>: WAVE_CLOSED <n>/<total> | DONE | NEEDS_RULING | BLOCKED | PARTIAL`.
-The sections follow in this order: `Status table`, `Landed`, `Verify`, `Ruling needed`,
-`Rulings made`, `Backlogged`, `Out of scope`, `Requests`, `Decide candidates`, `Resume`. The format itself closes
+The sections follow in this order: `Status table`, `Diff size`, `Landed`, `Verify`, `Ruling needed`,
+`Removed beyond plan`, `Rulings made`, `Backlogged`, `Out of scope`, `Requests`, `Decide candidates`, `Resume`. The format itself closes
 `agents/phase-orchestrator.md`.
 
 ## Gates, one layer down
@@ -44,6 +44,7 @@ cap stay nested, because they are the orchestrator's own calls, not the user's.
 | `needs-context` | §5, a worker's `NEEDS_CONTEXT` the plan on disk cannot answer | `NEEDS_RULING`                                                                                              |
 | `context-size`  | §8, past 300,000 tokens, before compaction near 364,000       | `PARTIAL`, after the current wave closes                                                                    |
 | `depth-limit`   | preflight, `Agent` withheld from the orchestrator             | `BLOCKED`, naming `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`                                                    |
+| `diff-budget`   | §7, `diff-size` exits 1 at a wave close                       | `NEEDS_RULING`, three options under `Ruling needed`                                                         |
 
 ## The main conversation
 
@@ -51,8 +52,15 @@ cap stay nested, because they are the orchestrator's own calls, not the user's.
 the brief above. One phase per spawn. The agent id comes from the dispatcher's own `Agent` result.
 Every later message to this orchestrator goes to that id with `SendMessage`.
 
-**Relay.** Print `Status table` verbatim, with no prose over it. Put one line under it for anything
-the columns cannot carry. Then act on the first line of the report:
+**Relay.** Print `Status table` verbatim, with no prose over it, and print `Diff size` directly
+under it. Put one line under them for anything the columns cannot carry. Never send `continue` to
+an orchestrator whose `Diff size` line ends `over budget` without the owner's answer to its
+`Ruling needed`, which offers stopping and committing, splitting a new phase, or continuing at a
+new budget. The wave-close procedure is in `SKILL.md` §7. Read `Removed beyond plan` before any `continue`. When it is not `none`,
+ask the owner whether to restore or keep each removal, whatever the first line says. Never send
+`continue` past it on the excuse that "the cost-if-wrong line says it comes back from git". Git
+holds the deleted files, but the owner never saw the removal, and each later wave builds on the
+loss. Done means the owner has answered each removal. Then act on the first line of the report:
 
 - `WAVE_CLOSED`: send `continue` with `SendMessage` once the orchestrator's `finished` notice has
   arrived. Waiting for `finished`, below, says how to wait.

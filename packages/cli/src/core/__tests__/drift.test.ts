@@ -14,7 +14,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useInstalledRepo } from '#test/repo';
 import { runCli } from '#test/run';
 import { driftFor, runDoctorJson } from '#test/doctor-report';
-import { manifestOf, sha256, writeManifest } from '#test/installed-tree';
+import {
+  givePathTakingFixScripts,
+  manifestOf,
+  sha256,
+  writeManifest,
+} from '#test/installed-tree';
 
 import {
   classifyEffect,
@@ -685,6 +690,7 @@ describe('a file edited locally (`yours`)', () => {
 
   beforeEach(() => {
     root = useInstalledRepo('npm-single', { modules: 'ready' });
+    givePathTakingFixScripts(root);
     skill = join(root, EDITED_SKILL);
     appendFileSync(skill, '// my tweak\n');
   });
@@ -711,6 +717,7 @@ describe('a file edited locally that houserules has since changed (`conflict`)',
 
   beforeEach(() => {
     root = useInstalledRepo('npm-single', { modules: 'ready' });
+    givePathTakingFixScripts(root);
     simulateEditOnTopOfAnOlderKitVersion(root, EDITED_SKILL);
   });
 

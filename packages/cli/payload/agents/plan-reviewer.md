@@ -52,6 +52,9 @@ For each phase, ask what the builder would have to guess:
 - A term the plan uses in two senses, or two terms for one thing.
 - A step whose files fall outside its phase's `**Domain:**` roots when the line is present, and a phase whose `After` says it can run beside another while a step reads that other phase's output.
 
+- A phase likely to pass its budget, which is 600 changed lines and 50 touched files unless its `**Budget:**` line says otherwise.
+- A phase whose next phase re-slices its output by path. Suggest cutting this phase by that path instead.
+
 A question must point at the text that forced the guess. If you cannot name the line, drop it.
 
 ## Report format

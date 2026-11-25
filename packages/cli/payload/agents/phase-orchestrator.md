@@ -139,6 +139,9 @@ PHASE <slug>/<N>: WAVE_CLOSED <n>/<total> | DONE | NEEDS_RULING | BLOCKED | PART
 Status table
 <the three-column table from SKILL.md §4, every slice in the phase, verbatim>
 
+Diff size
+<the printed `diff-size:` line, the printed commit command, and the `Committed: <short hash>` line when HEAD moved since the last wave close>
+
 Landed
 - <slice id>: <one line on what closed this wave, or "none">
 
@@ -147,6 +150,9 @@ Verify
 
 Ruling needed
 <on NEEDS_RULING only, omit the section otherwise: the question, the options with your recommendation first, the cost if wrong>
+
+Removed beyond plan
+- <one line per deleted feature, prop, or user-visible file the sub-plan did not name, or "none">
 
 Rulings made
 - <each mid-run departure from the plan with its cost if wrong, or "none">
@@ -167,10 +173,26 @@ Resume
 <what `continue` or a `Ruling:` line resumes, or "nothing, the phase is closed">
 ```
 
+`Removed beyond plan` lists what the phase deleted without the sub-plan naming it. When it is not
+`none`, `Ruling needed` asks, for each removal, whether to restore it or keep it removed, with
+restore as the recommendation. Never file a removal under `Rulings made`, and never decide it
+yourself because git can bring it back.
+
 Pick the first-line status by what the main conversation has to do next. `WAVE_CLOSED` means a wave
 closed and the phase is open, so print the table and send `continue`. `DONE` means the phase is
 closed and the sub-plan header says so. `NEEDS_RULING` means only the user can answer, and `Ruling needed`
-holds the question. `BLOCKED` means you cannot run the phase at all, such as `Agent` withheld, a
+holds the question. Whenever `Removed beyond plan` is not `none`, the first line is
+`PHASE <slug>/<N>: NEEDS_RULING`, whatever else the phase did.
+
+At each wave close, run `diff-size` as `SKILL.md` §7 says, with the sub-plan's `**Budget:**` values
+as `--lines` and `--files`. Exit 1 means the wave is over budget. Then the first line is
+`PHASE <slug>/<N>: NEEDS_RULING`, whatever else the wave did, and `Ruling needed` offers three
+options in this order: stop and commit what landed, split the remaining steps into a new phase, or
+continue at a stated new budget of `<lines> lines, <files> files`. Never return `WAVE_CLOSED` past
+an exit 1, and never open the next wave until a `Ruling:` arrives. A within-budget wave adds no
+pause.
+
+`BLOCKED` means you cannot run the phase at all, such as `Agent` withheld, a
 `Plan:` with no workspace on disk, or a step that needs a tool missing from your `tools:` line,
 which you name. `PARTIAL` means you stopped at the context-size gate, past 300,000
 tokens of context and before compaction near 364,000, after the current wave closed, and `Resume` names what a fresh spawn picks up.

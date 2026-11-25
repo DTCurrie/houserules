@@ -8,8 +8,7 @@ allowed-tools: Read, Edit, Write, Grep, Glob, Bash, Agent, SendMessage
 Drive planned work to done as **planner → orchestrator → reviewer**: **$ARGUMENTS**
 
 You stay expensive and small. Implementation happens in cheap, scoped `task-worker`
-subagents, whose reads and writes cost their own context, which dies with its slice. What comes
-back to you is a **report**, not a diff. Your context holds the plan, the seam you write yourself,
+subagents. What comes back to you is a **report**, not a diff. Your context holds the plan, the seam you write yourself,
 and N one-screen reports. It never holds worker diffs, file dumps, per-file logs, or match sets.
 Reading implementation here means you've stopped orchestrating.
 
@@ -52,13 +51,11 @@ the first `TODO`.
 
 No slug given? In order:
 
-1. **One workspace under `.claude/plans/`** → that's it. (Ignore `blast-radius-*` impact maps. They
-   are archives, not plans.)
+1. **One workspace under `.claude/plans/`** → that's it. (Ignore `blast-radius-*` impact maps.)
 2. **The conversation names one.** The user just planned it, or you're resuming work you were already
    doing on it.
 3. **Exactly one has `Status: IN PROGRESS`** → that one.
-4. **Otherwise ask.** Guessing between half-finished plans is expensive. List the
-   slugs with their status lines and let the user pick.
+4. **Otherwise ask.** List the slugs with their status lines and let the user pick.
 
 Resolving the plan leaves the mode as is. A no-slug `/orchestrate --auto` still nests each phase
 (§4).
@@ -83,8 +80,7 @@ owns end to end.
 Two pre-slicing moments:
 
 - **Wide or risky phase → `/blast-radius` first.** When the phase touches several packages, or its
-  sub-plan carries a `wide` signal on its `**Signals:**` line, run it before drawing slices and let
-  the impact map inform the `owns` sets and wave boundaries.
+  sub-plan carries a `wide` signal on its `**Signals:**` line, run it before drawing slices.
 - **Codemod-shaped step → `/sweep`, not slices.** A rote, rule-based, repo-wide step goes to `/sweep`
   as one unit. Judgment-scoped work still slices.
 
@@ -109,17 +105,13 @@ Then apply four rules to the set you drew:
 - **File ownership is the parallelism constraint.** Two slices may run in the same wave **iff their
   `owns` sets are disjoint**. A slice also owns the tests asserting its files' behavior.
 - **Slice by shared mutable resource, not by feature.** Name everything two slices might both write,
-  from the repo's fixer to a gitignored tool directory to an append-only ledger, then draw the slices
-  so each one is owned once.
+  then draw the slices so each one is owned once.
 
-Read `references/slicing.md` before you write the briefs.
+Read `references/slicing.md` before you write the briefs. It also says which files are
+orchestrator-owned and never appear in a worker's `owns`.
 
 To check one phase before slicing it, dispatch `plan-reviewer` with the workspace path, a
 `Level: phase` line, and the sub-plan path, and carry its questions to the user.
-
-**Orchestrator-owned files** never appear in any worker's `owns`: lockfiles, generated indexes,
-barrel/export files, shared type modules, migrations, config. You edit those (§2). Workers that need a
-change there **request it in their report**. They don't reach for it.
 
 ## 2. Write the seam yourself, before any fan-out
 
@@ -134,6 +126,8 @@ Append to the phase sub-plan, so a dead session resumes by grepping instead of r
 ```markdown
 ## Slices
 
+Base: <full sha of HEAD>
+
 | id  | owns                     | depends | wave | status |
 | --- | ------------------------ | ------- | ---- | ------ |
 | 1a  | `src/auth/session*.ts`   | none    | 1    | TODO   |
@@ -141,14 +135,15 @@ Append to the phase sub-plan, so a dead session resumes by grepping instead of r
 | 2a  | `src/api/routes/auth.ts` | 1a,1b   | 2    | TODO   |
 ```
 
+Whoever sets the phase `IN PROGRESS` writes the `Base:` line, noting a dirty tree beside it.
+
 Status vocabulary is fixed and greppable, extending the ROADMAP's:
 **`TODO` · `DISPATCHED` · `IN REVIEW` · `REVISING` · `DONE` · `BLOCKED`**.
 
 Update it **in place** at every transition. A lagging table is worse than none.
 
-Run `node .claude/scripts/plan-lint.mjs`, if installed, after writing or updating the table. It
-checks the status vocabulary and the ROADMAP cross-link, so a typo'd status does not silently break
-the resume grep in §9.
+Run `node .claude/scripts/plan-lint.mjs`, if installed, after writing or updating the table, so a
+typo'd status or ROADMAP cross-link cannot silently break the §9 resume grep.
 
 ## 4. Dispatch a wave: one message, one worker per slice
 
@@ -166,27 +161,29 @@ Mark the slices `DISPATCHED` first.
 A slice that must fetch a page or search the web takes `task-worker-research`, or the same fallback.
 
 Before dispatching, check whether a rule scoped to the wave's paths needs an MCP tool the worker's
-`tools:` line lacks. The fix is `orchestrate.workerTools`, with its recipe in `references/slicing.md`.
+`tools:` line lacks. `references/slicing.md` has the `orchestrate.workerTools` fix.
 
 `task-worker.md` carries the standing rules. Each brief adds only what's specific to this slice,
 and **never restates or overrides a standing rule**.
 
 > **Slice `<id>` — `<name>`.** Objective: `<the falsifiable done>`.
 > You own **only** these paths: `<owns>`. Do not edit anything outside them.
+> Removes: `<the paths the sub-plan's steps say to delete, or none>`. Anything else you would delete,
+> keep and report.
 > Context you need: `<the seam file(s) + the 2–3 files worth reading first>`.
 > Reference: `<the plan doc(s) this slice's output is judged against, by path, or "none">`.
 > Steps: `<the ≤8 steps>`.
-> Acceptance: `<share prefix> <command(s), scoped to your owned paths>` is your iteration loop. Run it, fix what is
-> red, run it again, and stop the moment it goes green. Run each command in its own Bash call,
-> untailed, report it as run, and name each failing test and its error.
+> Acceptance: `<share prefix> <command(s), scoped to your owned paths>` is your iteration loop. Run
+> it, fix what is red, run it again, and stop the moment it goes green. Run each command in its own
+> Bash call, untailed, report it as run, and name each failing test and its error.
 > Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
 
 Hand a worker its slice, seam, and constraints, not the plan.
 
 ### The status table: the one shape you print between waves
 
-This is the user-facing projection of the slice table (§3). Emit it **once when the
-wave goes out and once when it closes**, and nowhere else. Same three columns:
+It projects the slice table (§3) for the user. Emit it **once when the wave goes
+out and once when it closes**, and nowhere else:
 
 ```markdown
 | Slice            | Owns                     | State      |
@@ -202,27 +199,26 @@ Collapse the on-disk vocabulary into four display states: `DONE` prints `✅ don
 `IN REVIEW` `REVISING` print `🔄 running`, `TODO` prints `⬜ pending`, and `BLOCKED` prints
 `⛔ blocked`. No prose duplicating the table. One line under it for anything the columns can't carry.
 
-**Formatting is orchestrator work, not worker work.** The fixer runs once at the barrier (§7), never
-in a worker. A lint or format finding inside a `DISPATCHED` slice's owned path is not residue, and
-you do not act on it.
+**Formatting is orchestrator work.** The fixer runs once at the barrier (§7), never
+in a worker. A lint or format finding inside a `DISPATCHED` slice's owned path is not residue. Leave it.
 
 Read `references/fixer-and-residue.md` when a hook or linter reports something while a wave is live.
 
 ## 5. Review the report, not the diff
 
-**Check the tree before you read the report.** The report is the worker's claim about what it did.
-The tree is what it did. Run this first, every slice, before forming any opinion:
+**Check the tree before you read the report.** The report is the worker's claim. The tree is what
+it did. Run this first, every slice:
 
 ```
-git status --short | grep '^ T\|^T '   # typechanges: a file replaced by a symlink
-git status --short | grep '^ D\|^D '   # deletions: every one must be intentional
-ls .claude/plans/<slug>/               # plan state still there
+git status --short | grep '^ T\|^T '  # typechange: file became a symlink
+node .claude/scripts/removal-check.mjs --allow <Removes value>...  # unnamed deletions
+ls .claude/plans/<slug>/ # plan state still there
 ```
 
-A deletion outside `owns` is a defect whatever the report says. If plan state is gone, stop and recover.
+A deletion the slice's `Removes:` line does not name is a defect whatever the report says, in
+`owns` or out. If plan state is gone, stop and recover.
 
-Each worker returns a report: files touched, the acceptance command and its output tail, decisions
-and deviations, and anything blocked or out of scope. Its first line is one of
+A worker's report opens with one of
 **`DONE` · `DONE_WITH_CONCERNS` · `NEEDS_CONTEXT` · `BLOCKED`**, which is the worker's own claim and
 not the slice's status. `DONE_WITH_CONCERNS` says read the deviation before approving,
 `NEEDS_CONTEXT` says the brief was missing something only you have, so answer it and resend rather
@@ -262,12 +258,10 @@ sub-plan when no backlog skill is installed. Never drop one silently.
 
 ## 6. Revise in place, capped at 2 rounds
 
-Send the fix back to **the same worker** via `SendMessage` with its agent ID, whose context is
-intact. Mark the slice `REVISING`.
+Send the fix back to **the same worker** via `SendMessage` with its agent ID. Mark the slice `REVISING`.
 Name the specific defect and the acceptance to re-run, never "please improve this."
 
-**Cap: 2 revise rounds.** A third failure is evidence the _brief_ was wrong, not that the model is too
-weak. `RESLICE` it, or take that one slice in-context yourself. `references/review-patterns.md` has
+**Cap: 2 revise rounds.** A third failure is evidence the _brief_ was wrong, not the model. `RESLICE` it, or take that one slice in-context yourself. `references/review-patterns.md` has
 the escalation order and the fallback for a harness with no `SendMessage`.
 
 ## 7. Close the wave
@@ -277,12 +271,16 @@ where the tree is quiet enough to touch globally:
 
 1. **Fix once.** Run the repo's auto-fix (`lint:fix` / `format:fix`, or the `fix.commands` in
    `.claude/houserules.config.json`) across the packages the wave touched, in one pass.
-2. **Tidy once.** Run `/tidy` over the wave's diff, if that skill is installed, after the fixer
-   and before step 3, so step 3 proves its edits. Never inside a worker, for the same reason as
-   the fixer.
+2. **Tidy once.** Run `/tidy` over the wave's diff, if installed, so step 3 proves its edits.
+   Never inside a worker.
 3. **Recheck the wave.** Rerun each slice's acceptance, then typecheck the packages the wave
    touched. The full verify runs once, at §8, never per wave.
 4. **Update the slice table** in place, then print the status table (§4), the wave-close printing.
+   Under it, print the `diff-size.mjs --base <Base:>` line, run with any `**Budget:**` values.
+   Exit 1 stops the run for the owner's ruling. Print, never run,
+   `git add <owned paths>` and `git commit -m "<plan slug> phase <N> wave <n>"`, then go on. When
+   `git rev-parse HEAD` matches neither `Base:` nor `Committed:`, print its short hash and update
+   `Committed:`. `references/closing.md` has the options and the form.
 5. **Snapshot the state nothing can regenerate**: the plan workspace and anything else gitignored that
    no command can rebuild. `references/closing.md` says what to copy and where.
 6. **Then** open the next wave.
@@ -291,7 +289,7 @@ where the tree is quiet enough to touch globally:
 "The diff reviewer" in `references/review-patterns.md` has the trigger and the brief.
 
 **Residue** is what auto-fix couldn't fix, and it's yours by default. Never send it back to the slice
-workers, whose briefs are spent. `references/fixer-and-residue.md` has the routing table for when it
+workers. `references/fixer-and-residue.md` has the routing table for when it
 is bulk work.
 
 A `BLOCKED` slice stops the phase. Record why in the sub-plan and surface it to the user. `--auto`
@@ -310,8 +308,9 @@ dispatcher (`references/nested.md`). Under `--flat` this layer runs them.
 
 **A phase that touched UI surfaces gets its reviews now.** When the diff reached UI code, or the
 sub-plan carries a `ui` signal, run `/accessibility-review` and `/design-review`, each skipped
-silently when not installed. A fix-worthy finding becomes one revise pass over the owning slice's
-paths, and the rest route per §5's out-of-scope rule.
+silently when not installed. When `diff-size` at the phase's own budget, never a raised one,
+exits 1, split them by `Domain` root or skip them, and say which in the phase-close message. A
+fix-worthy finding becomes one revise pass over the owning slice's paths, and the rest route per §5's out-of-scope rule.
 
 This skill starts no Workflow. Under ultracode the §5 to §8 gates are the review, and the §8 reviews
 still run. "Workflows and ultracode" in `references/closing.md` has the detail.
@@ -323,8 +322,7 @@ absent. Re-read the phase's `## Notes & decisions` and every report's deviations
 on anything that clears its bar.
 
 **An autonomous run collects its rulings.** Under `--auto`, list each mid-run departure from the
-plan with its cost if wrong. `references/closing.md` carries the bar for `/decide`, what a ruling is,
-the stalled-review fallback, and what the §7 snapshot protects.
+plan with its cost if wrong. `references/closing.md` carries the bar for `/decide` and what a ruling is.
 
 Then report to the user: slices run, what landed, the verify verdict, anything backlogged. **Stop
 here** unless the invocation was `all --auto`, in which case continue to the next phase's §1.
@@ -345,8 +343,8 @@ A session that dies mid-wave leaves the truth on disk:
 grep -n 'DISPATCHED\|IN REVIEW\|REVISING\|BLOCKED' .claude/plans/<slug>/phase-*.md
 ```
 
-Those slices' workers are gone and their edits are not. Check `git diff --name-only`, reconcile the
-table, and redispatch what's unfinished. Never assume a `DISPATCHED` slice did nothing: a stalled
+Check `git diff --name-only`, reconcile the table, and redispatch what's unfinished. Read `Base:`
+and never rewrite it. Never assume a `DISPATCHED` slice did nothing: a stalled
 worker is the same case, edits on disk, marked failed.
 
 ## Notes
@@ -354,3 +352,4 @@ worker is the same case, edits on disk, marked failed.
 - **Worktree isolation** is for waves that cannot be made disjoint. Default to not using it, and read
   `references/slicing.md` first.
 - **Design decisions belong in `/plan-project`**, where the user is in the loop.
+- **Never schedule a step added mid-run** before the check in `references/slicing.md`.

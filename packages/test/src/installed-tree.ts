@@ -126,6 +126,35 @@ export function editHouseConfig(
   writeFileSync(houseConfigPath(root), JSON.stringify(config, null, 2));
 }
 
+interface FixTargetShape {
+  pathPrefix?: string;
+  fixCommands?: string[] | null;
+}
+
+/**
+ * Rewrites every fix script the installed config names, in each target's own package.json, to
+ * the path-taking `eslint --fix`, and turns `fix.passPaths` on. `doctor` then has nothing to
+ * say about the Stop fix step, so a suite about another concern can assert a warning-free run.
+ */
+export function givePathTakingFixScripts(root: string): void {
+  const config = readJson<InstalledHouseConfig>(houseConfigPath(root));
+  const fix = (config.fix ?? {}) as Record<string, unknown>;
+  const fallbackCommands = (fix.commands ?? []) as string[];
+  for (const target of (config.targets ?? []) as FixTargetShape[]) {
+    const packageJsonPath = join(root, target.pathPrefix ?? '', 'package.json');
+    const packageJson = readJson<{ scripts?: Record<string, string> }>(
+      packageJsonPath,
+    );
+    for (const name of target.fixCommands ?? fallbackCommands) {
+      packageJson.scripts = { ...packageJson.scripts, [name]: 'eslint --fix' };
+    }
+    writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+  }
+  editHouseConfig(root, (edited) => {
+    edited.fix = { ...fix, passPaths: true };
+  });
+}
+
 export const REGION_START = '<!-- houserules:claude-md start -->';
 export const REGION_END = '<!-- houserules:claude-md end -->';
 

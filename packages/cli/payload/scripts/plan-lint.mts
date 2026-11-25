@@ -166,6 +166,24 @@ export function parseSignals(markdown: string): string[] {
     .filter((signal) => signal !== '');
 }
 
+/** Warns on a `**Budget:**` line whose value is not `<n> lines, <n> files` with two positive integers. */
+export function checkBudget(file: string, markdown: string): Report {
+  const report = emptyReport();
+  const line = markdown.match(/^\*\*Budget:\*\*(.*)$/m);
+  if (!line) return report;
+  const value = (line[1] ?? '').replace(/`/g, '').trim();
+  const match = value.match(/^(\d+) lines, (\d+) files$/);
+  if (match && Number(match[1]) > 0 && Number(match[2]) > 0) return report;
+  report.findings.push({
+    rule: 'plan-lint/malformed-budget',
+    level: 'warn',
+    file,
+    line: null,
+    msg: `malformed budget \`${value}\`, use \`<n> lines, <n> files\` with positive integers`,
+  });
+  return report;
+}
+
 /** The `**Signals:**` values a phase may carry. `none` reads as no signal. */
 const KNOWN_SIGNALS = new Set(['wide', 'ui', 'live', 'owner', 'flat']);
 
@@ -1765,6 +1783,7 @@ function lintPhaseFile(
     ...checkFencedCodeShare(relativeFile, markdown).findings,
     ...checkReviewFocus(relativeFile, markdown).findings,
     ...checkSignals(relativeFile, markdown).findings,
+    ...checkBudget(relativeFile, markdown).findings,
   ];
   if (!shouldSkipPathChecks && !isClosedPhaseStatus(status)) {
     findings.push(

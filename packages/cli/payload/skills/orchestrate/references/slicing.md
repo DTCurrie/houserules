@@ -30,6 +30,12 @@ phase close. §8 checks the same list at phase close, and that is the backstop r
 Two "unrelated" features that both edit a barrel export are not parallel. They serialize, or one of
 them gives that file up.
 
+## The `Removes:` value
+
+Derive each slice's `Removes:` value while slicing, from the paths the sub-plan's steps say to
+delete. Write each as an exact file path or a directory prefix ending in `/`, with no globs. Write
+`none` when no step names a deletion. §5 passes these values to `removal-check` as `--allow` flags.
+
 ## Acceptance design
 
 **A whole-suite run is not a valid slice acceptance.** Workers in a wave run in parallel, so when one
@@ -84,6 +90,10 @@ standard, or a criteria doc that a slice's output has to conform to, name it on 
 is measured by. A worker left to infer a format invents one, and that surfaces at the barrier, in the
 most expensive context you have, after the worker who could have gotten it right is gone.
 
+**Orchestrator-owned files** never appear in any worker's `owns`: lockfiles, generated indexes,
+barrel/export files, shared type modules, migrations, config. You edit those (§2). Workers that need
+a change there **request it in their report**. They don't reach for it.
+
 ## Shared resources and lanes
 
 **Slice by shared mutable resource, not by feature.** File ownership is the usual expression of
@@ -121,6 +131,24 @@ plan's status and the wave's when it lands.
 **When you drop a slice, re-home its scope.** A slice canceled mid-program usually carried more
 than the reason it was canceled for. Read its brief before deleting it and move whatever is still
 wanted into another slice, or you will rediscover the orphaned half several slices later.
+
+## A step added mid-run
+
+**Never schedule a step added mid-run before you compare its paths with the `Domain` of every later
+phase.** A step the owner asks for mid-run lands in whatever phase is open. A later phase that slices
+its work by path then works on the tree that step left behind. When the step's paths overlap a later
+phase's `Domain`, ask the owner where the step belongs before you schedule it, and record the answer
+in the sub-plan's `## Notes & decisions`.
+
+The case behind this rule: mid-run, the owner asked for a folder rename as its own pull request at
+the top of a stack. The dispatcher scheduled it as the last step of the current phase. The next phase
+re-sliced that phase's output by path, so every later change sat on renamed paths, and the rename
+could no longer ship on its own.
+
+- "It is one small step, so it fits the open phase." Size is not the test. The overlap with a later
+  `Domain` is.
+- "The owner already said what they want." The owner named the change, not where it sits in the
+  plan. That placement is the question to ask.
 
 ## Wave ceiling
 

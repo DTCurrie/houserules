@@ -7,7 +7,16 @@ import { installedModuleIds } from '../../installed-modules.js';
 import { passPathsDefault } from '../../path-taking-scripts.js';
 import { hasModule } from '@houserules/api';
 
-const PATH_TAKING_FORM = '`eslint --fix` and `prettier --write`';
+const PATH_TAKING_SCRIPTS =
+  '`"lint:fix:paths": "eslint --fix"` and `"format:fix:paths": "prettier --write"`';
+
+function isScriptDefined(ctx: Ctx, script: string): boolean {
+  const scriptSets = [
+    ctx.rootPkg?.scripts,
+    ...ctx.packages.map((workspace) => workspace.pkg.scripts),
+  ];
+  return scriptSets.some((scripts) => scripts?.[script] !== undefined);
+}
 
 function quoted(scripts: readonly string[]): string {
   return scripts.map((script) => `"${script}"`).join(', ');
@@ -22,11 +31,10 @@ function quoted(scripts: readonly string[]): string {
  */
 export function checkFixPassPaths(ctx: Ctx): CheckResult {
   const findings: Finding[] = [];
-  const readouts: string[] = [];
   const config = ctx.claude.houseConfig;
   const installed = installedModuleIds(config, ctx.claude.manifest) ?? [];
   if (!config || !hasModule(installed, 'lint-fix'))
-    return { findings, readouts };
+    return { findings, readouts: [] };
 
   const fix: RunnerBlock = config.fix ?? {};
   const targets = (config.targets ?? [])
@@ -51,10 +59,16 @@ export function checkFixPassPaths(ctx: Ctx): CheckResult {
       level: 'WARN',
       msg: `fix.passPaths is on, but these fix scripts do not take paths: ${quoted(rejectedScripts)}. A Stop appends the turn's changed paths to each, so a script that targets \`.\` fixes the whole tree. Name scripts that take paths, such as \`eslint --fix\` and \`prettier --write\`, in \`fixCommands\`.`,
     });
-  } else if (!keyIsOn && rejectedScripts.length > 0) {
-    readouts.push(
-      `A Stop fixes nothing while fix.passPaths is off, and these fix scripts do not take paths: ${quoted(rejectedScripts)}. Scripts that do, such as ${PATH_TAKING_FORM}, let you turn it on.`,
+  } else if (!keyIsOn) {
+    const definedRejected = rejectedScripts.filter((script) =>
+      isScriptDefined(ctx, script),
     );
+    if (definedRejected.length > 0)
+      findings.push({
+        level: 'WARN',
+        msg: `The Stop fix step runs nothing while fix.passPaths is off, and these fix scripts do not take paths: ${quoted(definedRejected)}. To turn it on, add scripts that take paths, such as ${PATH_TAKING_SCRIPTS}, name them in \`fixCommands\`, and set \`passPaths\` to \`true\` in the \`fix\` block of .claude/houserules.config.json.`,
+      });
   }
-  return { findings, readouts };
+  // CheckResult requires readouts. This check reports only findings.
+  return { findings, readouts: [] };
 }

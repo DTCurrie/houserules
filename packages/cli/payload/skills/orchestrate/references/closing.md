@@ -26,6 +26,55 @@ A wave 1 barrier of phase 1 in member `device` of milestone `tetherbox-mvp` writ
 `.../tetherbox-mvp/device/phase-1-wave-1/`. The barrier of step `sign-up` writes to
 `.../tetherbox-mvp/step-sign-up/`. No other nesting is valid.
 
+## The diff budget at a wave close
+
+A phase's diff has a budget, measured against the phase base. The base is the `Base:` line above
+the slice table in the sub-plan's `## Slices` section, written once when the phase went
+`IN PROGRESS`. A commit between waves does not reset the figure. Lock and generated files count like
+any other file.
+
+At every wave close, after the status table, run:
+
+```
+node .claude/scripts/diff-size.mjs --base <Base: sha> [--lines <n>] [--files <n>]
+```
+
+When the sub-plan header carries `**Budget:** <lines> lines, <files> files`, pass those values as
+`--lines` and `--files`. Without it, the script's defaults apply, 600 lines and 50 files. Print its
+one line under the status table.
+
+- **Exit 0** is a clean wave. Go on without a pause.
+- **Exit 1** means the phase passed a limit, and the run stops for the owner's ruling. Never open
+  the next wave on an over-budget figure without that answer, under `--auto` too. In a nested run
+  the phase-orchestrator returns `PHASE <slug>/<N>: NEEDS_RULING`, as `nested.md` says. In a flat
+  run the dispatcher asks the owner. Both offer the same three options, in this order:
+  1. Stop and commit what landed.
+  2. Split the remaining steps into a new phase.
+  3. Continue at a stated new budget of `<lines> lines, <files> files`.
+
+  A new budget the owner states goes in the sub-plan's `## Notes & decisions`, and later wave
+  closes in this phase pass it. The §8 UI-review condition never does.
+
+- **Exit 2** prints no count, and stderr names the cause, such as a `Base:` sha that does not
+  resolve. Print that message under the status table and surface it to the owner. Never pick a new
+  base yourself.
+
+## The commit command
+
+At every wave close, print a commit command under the status table and go on without waiting:
+
+```
+git add <each path the wave's slices own>
+git commit -m "<plan slug> phase <N> wave <n>"
+```
+
+Never run it yourself, at any depth. The owner commits, or does not.
+
+At the next wave close, compare `git rev-parse HEAD` with the `Base:` sha and with the
+`Committed: <short hash>` line under `Base:`. HEAD moved when it matches neither. Then print its
+short hash on a line under the status table, and write that hash into the `Committed:` line in
+place, adding the line under `Base:` the first time. The slice table gains no column for it.
+
 ## Why plan-lint runs at phase close
 
 `node .claude/scripts/plan-lint.mjs` confirms the status update actually landed on both files. It has
@@ -57,6 +106,10 @@ A ruling is a judgment call you made mid-run that departed from the plan or fill
 open. Under `--auto` the transcript is the only place it lives, because the user was not there to be
 asked. Listing it with a one-line cost if wrong, and recording the durable ones with `/decide`, puts
 a ruling that outlives the phase on disk instead of in a report read once.
+
+A ruling that removes behavior is never reported under `Rulings made`. It goes under
+`Removed beyond plan`, which forces `NEEDS_RULING`, because a ruling listed with a cost if wrong is
+read once and never answered.
 
 ## Why `/clear` beats `/compact` at the context-size gate
 

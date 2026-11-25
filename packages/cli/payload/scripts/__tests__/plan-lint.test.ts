@@ -13,6 +13,7 @@ import {
   derivePathRoots,
   checkReviewFocus,
   checkRoadmapSync,
+  checkBudget,
   checkSignals,
   checkSliceRowsAfterDone,
   checkSliceStatuses,
@@ -1548,6 +1549,25 @@ describe('checkSignals', () => {
       'unknown signal `wdie`, use wide, ui, live, owner, flat, or none',
     );
   });
+});
+
+describe('checkBudget', () => {
+  it.each([
+    '**Budget:** 900 lines, 70 files\n',
+    '# Phase\n\n**Status:** TODO\n',
+  ])('finds nothing on a valid or absent line', (markdown) => {
+    expect(checkBudget('p.md', markdown).findings).toEqual([]);
+  });
+
+  it.each(['0 lines, 50 files', '600 lines', '600 lines, 0 files', 'big'])(
+    'warns once on `%s`',
+    (value) => {
+      const findings = checkBudget('p.md', `**Budget:** ${value}\n`).findings;
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.rule).toBe('plan-lint/malformed-budget');
+      expect(findings[0]?.level).toBe('warn');
+    },
+  );
 });
 
 describe('checkWorkspacePhaseFlat', () => {

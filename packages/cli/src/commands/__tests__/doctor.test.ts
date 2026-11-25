@@ -15,6 +15,7 @@ import { useInstalledRepo, useRepo } from '#test/repo';
 import { runCli, runIn } from '#test/run';
 import {
   editHouseConfig,
+  givePathTakingFixScripts,
   type HouseManifestShape,
   manifestOf,
   readJson,
@@ -144,6 +145,7 @@ describe('doctor on a freshly initialized pnpm monorepo', () => {
 
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo', { modules: 'ready' });
+    givePathTakingFixScripts(root);
   });
 
   it('exits 0 and reports healthy', () => {
@@ -842,6 +844,7 @@ describe('doctor on an edited houserules file, by who owns it', () => {
 
   beforeEach(() => {
     root = useInstalledRepo('pnpm-monorepo', { modules: 'ready' });
+    givePathTakingFixScripts(root);
   });
 
   it('offers eject to keep an edited ignored file and a delete-then-update to discard it', () => {

@@ -718,6 +718,26 @@ describe('orchestrate plan(), variant selection', () => {
   });
 });
 
+describe('orchestrate plan(), removal-check', () => {
+  it('installs removal-check.mjs under .claude/scripts', () => {
+    const dests = plan({} as Ctx, baseAnswers()).map((action) =>
+      'dest' in action ? action.dest : '',
+    );
+
+    expect(dests).toContain('.claude/scripts/removal-check.mjs');
+  });
+});
+
+describe('orchestrate plan(), diff-size', () => {
+  it('installs diff-size.mjs under .claude/scripts', () => {
+    const dests = plan({} as Ctx, baseAnswers()).map((action) =>
+      'dest' in action ? action.dest : '',
+    );
+
+    expect(dests).toContain('.claude/scripts/diff-size.mjs');
+  });
+});
+
 describe('orchestrate plan(), phase-orchestrator', () => {
   const withTools = {
     claude: {

@@ -107,6 +107,19 @@ describe('isUnscopedRunnerCall', () => {
     { command: 'pnpm --dir=d test', unscoped: false },
     { command: 'pnpm -C d test', unscoped: false },
     { command: 'git status', unscoped: false },
+    { command: 'pnpm vitest run src/a.test.ts', unscoped: false },
+    {
+      command: 'pnpm test -- payload/scripts/__tests__/a.test.ts',
+      unscoped: false,
+    },
+    { command: 'pnpm prettier --write src/', unscoped: false },
+    { command: 'npx eslint --fix a.ts', unscoped: false },
+    { command: 'pnpm vitest', unscoped: true },
+    { command: 'pnpm vitest run', unscoped: true },
+    { command: 'pnpm prettier --write .', unscoped: true },
+    { command: 'pnpm lint:fix', unscoped: true },
+    { command: 'npx eslint --fix', unscoped: true },
+    { command: 'npx @scope/pkg', unscoped: true },
   ])('reads "$command" as unscoped $unscoped', ({ command, unscoped }) => {
     expect(isUnscopedRunnerCall(command)).toBe(unscoped);
   });
@@ -411,6 +424,15 @@ describe('renderBashWall', () => {
     expect(lines.at(-1)).toBe(
       '    10.00s  pnpm test  abcdef12  2026-11-22T10:00:00.000Z  pnpm test',
     );
+  });
+
+  it('states the unscoped rule in a footnote under the table', () => {
+    const lines = renderBashWall(report);
+
+    expect(lines[7]).toBe(
+      '  unscoped calls: package-runner calls with no --filter, -F, --dir, or -C and no path argument, where a lone . is the whole tree.',
+    );
+    expect(lines[9]).toBe('  slowest calls:');
   });
 
   it('renders no lines for an undefined or empty report', () => {
