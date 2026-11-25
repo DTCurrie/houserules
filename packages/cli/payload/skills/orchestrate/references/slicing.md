@@ -1,8 +1,29 @@
 # Slicing and the seam, in depth
 
-Open this while you are drawing a phase's slices, before you dispatch. `SKILL.md` §1 carries the
-rules a run always needs. This carries the cases that decide how a slice's acceptance is worded,
-which slices may share a wave, and what to do when a resource cannot be partitioned.
+Open this before you draw a phase's slices. `SKILL.md` §1 carries the rules a run always needs.
+This carries the cases that decide how a slice's acceptance is worded, which slices may share a
+wave, and what to do when a resource cannot be partitioned.
+
+## Reconcile the steps with the rulings, before any slice
+
+A ruling recorded as a note while its step stayed unedited leaves a stale step, and a slice built
+from it produces work the owner already ruled out. Run this once, at the start of a run, before you
+draw a slice:
+
+1. Read the sub-plan's `## Standing rulings`, its `## Notes & decisions`, and its `## Steps`, each
+   in full. A phase file with no `## Standing rulings` section has notes and steps only.
+2. Find the phase's last run: the latest `## Log` line in `ROADMAP.md` that names this phase. With
+   none, every note counts as later.
+3. Read each step against each ruling and against each note dated after that run.
+4. On a step that a ruling or a later note contradicts, stop and report the contradiction to the
+   user: the step, the ruling or note, and what each says. Never pick one. `--auto` does not
+   override this.
+
+It is done when each ruling and each note dated after the phase's last run has been read against the
+steps, and no contradiction is left open.
+
+The notes are never the source of a brief's `Constraints:`. That line comes from the phase's
+`## Standing rulings` and `PLAN.md`'s Approach.
 
 ## Why the seam is yours to write
 

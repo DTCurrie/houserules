@@ -2,14 +2,17 @@
 /**
  * Prints how many lines and files the working tree changes against a base ref, and fails past a limit.
  *
- * Usage: diff-size.mjs --base <ref> [--lines <n>] [--files <n>]
+ * Usage: diff-size.mjs --base <ref> [--lines <n>] [--files <n>] [--paths <root,root>]
  *
  * `--base` is required. `--lines` defaults to 600 and `--files` to 50, and each must be a
- * positive integer. Lines are added plus deleted from `git diff --numstat -z -M <base>`, which
+ * positive integer. `--paths` takes a comma-separated list of path roots, relative to the
+ * repository root, and counts only changes under them. A root nothing changed under counts 0.
+ * Without it the whole tree counts. Lines are added plus deleted from `git diff --numstat -z -M <base>`, which
  * compares the working tree to the base, staged or not. A pure rename is 0 lines and one file.
  * A binary file adds 0 lines. Each untracked file that is not ignored counts as one file, and
  * its line count counts as additions, or 0 when it holds a NUL byte. Lock and generated files
- * count like any other, with no exclusion list.
+ * count like any other, with no exclusion list. Under `--paths`, a file renamed into a root
+ * from outside it counts as a new file.
  *
  * Prints exactly one line to stdout: `diff-size: <L> of <lines> lines, <F> of <files> files,
  * within budget`, or ending `over budget`. Exit 0 is within both limits, 1 is past either one,
@@ -26,7 +29,9 @@ import { pathToFileURL } from 'node:url';
 const GIT_MAX_BYTES = 256 * 1024 * 1024;
 const DEFAULT_LINE_LIMIT = 600;
 const DEFAULT_FILE_LIMIT = 50;
-const USAGE = 'usage: diff-size.mjs --base <ref> [--lines <n>] [--files <n>]';
+const USAGE =
+  'usage: diff-size.mjs --base <ref> [--lines <n>] [--files <n>] [--paths <root,root>]';
+const FLAGS = ['--base', '--lines', '--files', '--paths'];
 const NEWLINE_BYTE = 0x0a;
 /** A rename entry's old and new paths follow its counts as two more NUL-separated fields. */
 const RENAME_PATH_FIELDS = 2;
@@ -41,6 +46,8 @@ interface Options {
   base: string;
   lines: number;
   files: number;
+  /** Path roots the count is limited to. Empty counts the whole tree. */
+  paths: string[];
 }
 
 interface Size {
@@ -55,11 +62,12 @@ function parseArgs(args: string[]): Options | string {
   let base: string | undefined;
   let lines = DEFAULT_LINE_LIMIT;
   let files = DEFAULT_FILE_LIMIT;
+  let paths: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? '';
     const equalsIndex = arg.indexOf('=');
     const flag = equalsIndex === -1 ? arg : arg.slice(0, equalsIndex);
-    if (flag !== '--base' && flag !== '--lines' && flag !== '--files') {
+    if (!FLAGS.includes(flag)) {
       return `unknown argument: ${arg}\n${USAGE}`;
     }
     let value: string | undefined;
@@ -76,6 +84,10 @@ function parseArgs(args: string[]): Options | string {
       base = value;
       continue;
     }
+    if (flag === '--paths') {
+      paths = value.split(',').filter((root) => root !== '');
+      continue;
+    }
     if (!POSITIVE_INTEGER.test(value)) {
       return `${flag} must be a positive integer\n${USAGE}`;
     }
@@ -83,7 +95,7 @@ function parseArgs(args: string[]): Options | string {
     else files = Number(value);
   }
   if (base === undefined) return `--base is required\n${USAGE}`;
-  return { base, lines, files };
+  return { base, lines, files, paths };
 }
 
 /**
@@ -166,9 +178,14 @@ function run(args: string[], cwd: string): RunResult {
   if (resolved.status !== 0) {
     return fail(`diff-size: base ${options.base} does not resolve`);
   }
-  const numstat = git(['diff', '--numstat', '-z', '-M', options.base], root);
+  // `:(top,literal)` reads a root from the repository root and never as a glob.
+  const scope = options.paths.map((path) => `:(top,literal)${path}`);
+  const numstat = git(
+    ['diff', '--numstat', '-z', '-M', options.base, '--', ...scope],
+    root,
+  );
   const untracked = git(
-    ['ls-files', '--others', '--exclude-standard', '-z'],
+    ['ls-files', '--others', '--exclude-standard', '-z', '--', ...scope],
     root,
   );
   if (numstat.status !== 0 || untracked.status !== 0) {

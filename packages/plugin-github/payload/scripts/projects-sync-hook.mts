@@ -13,6 +13,12 @@
  * user rejected a tool use, read from the `session_id` and `transcript_path` on stdin. Held ids
  * go to `.claude/state/projects-sync-holds.json`, which `projects-sync.mjs status` lists and
  * `projects-sync.mjs release <id>` clears. The hook never writes a ledger.
+ *
+ * The push it spawns gets `--session <session_id>`, so it sends this session's rows and leaves
+ * an entry queued while it holds a row another session wrote less than 24 hours ago. That other
+ * session's own end pushes it, or any session's end once the row is a day old. The empty check
+ * applies the same rule, so a session whose queue is only another live session's rows spawns
+ * nothing.
  */
 
 import {
@@ -34,6 +40,7 @@ import { ledgerDir, readLog } from '@houserules/payload/entry-ledger';
 import { ENABLE_TOKEN_BASENAME } from './lib/sync-gate.mjs';
 import {
   buildPushQueue,
+  entriesLeftForOtherSessions,
   summarizeQueue,
   withoutHeldEntries,
 } from './lib/push-queue.mjs';
@@ -101,12 +108,28 @@ function ledgerFilesExist(ledgerDirectory: string): boolean {
 function pushQueueEmpty(
   backlog: readonly LedgerRecord[],
   decisions: readonly LedgerRecord[],
-  held: ReadonlySet<string>,
+  skipped: ReadonlySet<string>,
 ): boolean {
   const summary = summarizeQueue(
-    withoutHeldEntries(buildPushQueue(backlog, decisions), held),
+    withoutHeldEntries(buildPushQueue(backlog, decisions), skipped),
   );
   return summary.backlogPending + summary.decisionsPending === 0;
+}
+
+/**
+ * Every entry this session's push leaves queued: the held ones, plus each one that holds a row
+ * another session wrote less than a day ago. With no session id, only the held ones.
+ */
+function entriesToSkip(
+  records: readonly LedgerRecord[],
+  held: ReadonlySet<string>,
+  sessionId: string | undefined,
+): ReadonlySet<string> {
+  if (!sessionId) return held;
+  return new Set([
+    ...held,
+    ...entriesLeftForOtherSessions(records, sessionId, new Date()),
+  ]);
 }
 
 /**
@@ -172,15 +195,17 @@ function syncScriptPath(): string {
   return resolve(scriptDir, 'projects-sync.mjs');
 }
 
-function spawnPush(root: string): void {
+function spawnPush(root: string, sessionId: string | undefined): void {
   const stateDir = resolve(root, STATE_DIR);
   mkdirSync(stateDir, { recursive: true });
   const logFile = resolve(stateDir, LOG_BASENAME);
   capLogFile(logFile);
 
+  const args = [syncScriptPath(), 'push'];
+  if (sessionId) args.push('--session', sessionId);
   const logFd = openSync(logFile, 'a');
   try {
-    const child = spawn(process.execPath, [syncScriptPath(), 'push'], {
+    const child = spawn(process.execPath, args, {
       detached: true,
       stdio: ['ignore', logFd, logFd],
       cwd: root,
@@ -210,12 +235,14 @@ function run(input: HookInput): void {
   );
   // Any failure here throws to the catch below and spawns no push, so a rejected row is never
   // pushed because the hold could not be recorded.
-  const held = recordHolds(root, [...backlog, ...decisions], input);
+  const records = [...backlog, ...decisions];
+  const held = recordHolds(root, records, input);
+  const skipped = entriesToSkip(records, held, input.session_id);
 
-  if (pushQueueEmpty(backlog, decisions, held)) return;
+  if (pushQueueEmpty(backlog, decisions, skipped)) return;
   if (pushLockHeld(root)) return;
 
-  spawnPush(root);
+  spawnPush(root, input.session_id);
 }
 
 try {

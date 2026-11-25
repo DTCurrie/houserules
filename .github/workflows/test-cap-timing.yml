@@ -1,0 +1,68 @@
+name: Test cap timing
+
+# Times the root test step with and without the WIREIT_PARALLEL cap that scripts/capped-wireit.mjs
+# applies, on one commit and one runner. The owner runs it by hand and reads the job summary to
+# decide whether MIN_PARALLEL in that script should rise.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  timing:
+    # The runner ci.yml's test job uses. One job, so all four runs share one runner and none
+    # overlaps another job's load.
+    runs-on: ubuntu-latest
+    env:
+      CHROME_NO_SANDBOX: '1'
+      # No shared wireit cache. A cache hit would restore a test script instead of running it.
+      WIREIT_CACHE: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Built once, outside the timed runs, so each run times tests and not compilation.
+      - run: pnpm build
+      - run: pnpm dogfood
+      # A plain loop, never a matrix, so the four runs go one after another. The arms alternate
+      # so drift across the job falls on both. The uncapped arm sets wireit's own default,
+      # twice the cores, which capped-wireit.mjs leaves alone because the caller set it.
+      - name: Time the root test step, two arms, two runs each
+        run: |
+          cores=$(nproc)
+          {
+            echo "## Root test step on ${cores} cores"
+            echo
+            echo "| run | arm | WIREIT_PARALLEL | seconds | exit |"
+            echo "| --- | --- | --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          run=0
+          for arm in capped uncapped capped uncapped; do
+            run=$((run + 1))
+            # Wireit keeps each script's freshness state in .wireit/<hex of the script name>.
+            # 74657374 is "test", so this clears test, test:all, and test:scripts and keeps
+            # the builds fresh. Without it, every run after the first is skipped as fresh.
+            find . -path ./node_modules -prune -o -type d -path '*/.wireit/74657374*' -prune \
+              -exec rm -rf {} +
+            if [ "$arm" = capped ]; then
+              parallel='unset, capped-wireit.mjs sets it'
+              start=$(date +%s)
+              status=0
+              env -u WIREIT_PARALLEL pnpm test || status=$?
+            else
+              parallel=$((cores * 2))
+              start=$(date +%s)
+              status=0
+              WIREIT_PARALLEL=$parallel pnpm test || status=$?
+            fi
+            seconds=$(($(date +%s) - start))
+            echo "| ${run} | ${arm} | ${parallel} | ${seconds} | ${status} |" >> "$GITHUB_STEP_SUMMARY"
+            [ "$status" -eq 0 ] || failed=1
+          done
+          exit "$failed"

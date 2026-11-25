@@ -1,0 +1,2 @@
+Handoff 8 of 10. Old and mostly stale. The one live pointer is
+packages/create/notes/aster.txt, a package with no source of its own.

@@ -185,12 +185,13 @@ holds the question. Whenever `Removed beyond plan` is not `none`, the first line
 `PHASE <slug>/<N>: NEEDS_RULING`, whatever else the phase did.
 
 At each wave close, run `diff-size` as `SKILL.md` §7 says, with the sub-plan's `**Budget:**` values
-as `--lines` and `--files`. Exit 1 means the wave is over budget. Then the first line is
+as `--lines` and `--files`, and your `Domain:` roots as `--paths` unless `Domain:` is `all`. Exit 1 means the wave is over budget. Then the first line is
 `PHASE <slug>/<N>: NEEDS_RULING`, whatever else the wave did, and `Ruling needed` offers three
 options in this order: stop and commit what landed, split the remaining steps into a new phase, or
 continue at a stated new budget of `<lines> lines, <files> files`. Never return `WAVE_CLOSED` past
-an exit 1, and never open the next wave until a `Ruling:` arrives. A within-budget wave adds no
-pause.
+an exit 1, and never open the next wave until a `Ruling:` arrives. A within-budget wave past two
+thirds of a limit, with steps remaining, also returns `NEEDS_RULING`, and `Ruling needed` holds the
+one recommendation `references/closing.md` specifies. Any other within-budget wave adds no pause.
 
 `BLOCKED` means you cannot run the phase at all, such as `Agent` withheld, a
 `Plan:` with no workspace on disk, or a step that needs a tool missing from your `tools:` line,
@@ -206,6 +207,10 @@ each edit.
 Hard rules for the report: **no diffs, no file contents, no per-file logs, no narration.** Print the
 status table verbatim, with every slice in the phase. One line per slice under `Landed`. If a ruling
 needs explaining, it goes under `Rulings made` or `Ruling needed`, not in prose around the report.
+
+When the phase closes and you dispatched no `task-worker` in it, add the line
+`Workers dispatched: none` under `Rulings made`. The dispatcher sizes a phase before it spawns
+you, and this line is how it counts the phases its sizing should have kept.
 
 ## Terse report prose
 

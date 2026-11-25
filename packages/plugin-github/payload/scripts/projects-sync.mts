@@ -4,7 +4,7 @@
  *
  * Usage:
  *   bootstrap [--dry-run]  # create or adopt one project per (backlog, decisions)
- *   push [--dry-run]       # drain the push queue to the live boards, then compact
+ *   push [--dry-run] [--session <id>]  # drain the push queue to the live boards, then compact
  *   pull [--dry-run]       # rebuild the local index from the boards
  *   backfill [--dry-run]   # bring an existing board up to the current field schema
  *   compact [--dry-run]    # shrink the local ledgers to what a push still owes
@@ -15,6 +15,10 @@
  * status also lists each held entry, one the SessionEnd hook kept out of the push because a row
  * for it was written in a turn where the user rejected a tool use. push skips held entries.
  * release needs no token and no network.
+ *
+ * push --session <id> is what the SessionEnd hook spawns. It also skips each entry holding a row
+ * that a session other than <id> wrote less than 24 hours ago. A push without it skips only held
+ * entries.
  *
  * bootstrap, push, and backfill need the local enable token (<ledger dir>/.projects.json) and
  * maintain or admin on the repository. pull needs neither. status prints the current gate state.
@@ -97,6 +101,7 @@ import type { FieldSpec, LedgerKind } from './lib/project-shape.mjs';
 import {
   buildPushQueue,
   describeOp,
+  entriesLeftForOtherSessions,
   resolveMarkSupersededItemId,
   summarizeQueue,
   syncedRecord,
@@ -674,18 +679,37 @@ function readDecodedLog(path: string): LedgerRecord[] {
  * Without it, emptying the queue would silently make every synced entry uneditable.
  *
  * Leaves out every entry the `SessionEnd` hook held, the same filter the hook's own empty check
- * applies, so the two never disagree about what is pending.
+ * applies, so the two never disagree about what is pending. With `endingSession` set, also
+ * leaves out each entry holding a row another session wrote less than a day ago.
  */
-function readPushQueue(): PushOp[] {
+function readPushQueue(endingSession: string | null): PushOp[] {
+  const backlog = readDecodedLog(backlogLedgerPath());
+  const decisions = readDecodedLog(decisionsLedgerPath());
   return withoutHeldEntries(
     buildPushQueue(
-      readDecodedLog(backlogLedgerPath()),
-      readDecodedLog(decisionsLedgerPath()),
+      backlog,
+      decisions,
       loadIndex(LEDGER_DIRECTORY, 'backlog')?.entries ?? [],
       loadIndex(LEDGER_DIRECTORY, 'decisions')?.entries ?? [],
     ),
-    heldIds(readHolds(HOLDS_PATH)),
+    entriesToSkip([...backlog, ...decisions], endingSession),
   );
+}
+
+/** Every held entry, plus, with `endingSession` set, each entry another live session may still be editing. */
+function entriesToSkip(
+  records: readonly LedgerRecord[],
+  endingSession: string | null,
+): Set<string> {
+  const skipped = new Set(heldIds(readHolds(HOLDS_PATH)));
+  if (endingSession === null) return skipped;
+  for (const id of entriesLeftForOtherSessions(
+    records,
+    endingSession,
+    new Date(),
+  ))
+    skipped.add(id);
+  return skipped;
 }
 
 /**
@@ -861,7 +885,7 @@ function printGateState(): void {
 }
 
 function printPendingCounts(): void {
-  const summary = summarizeQueue(readPushQueue());
+  const summary = summarizeQueue(readPushQueue(null));
   console.log(
     `pending: backlog ${summary.backlogPending}, decisions ${summary.decisionsPending}`,
   );
@@ -1707,8 +1731,8 @@ function executePushQueue(
   }
 }
 
-function countPending(): PendingCounts {
-  const summary = summarizeQueue(readPushQueue());
+function countPending(endingSession: string | null): PendingCounts {
+  const summary = summarizeQueue(readPushQueue(endingSession));
   return {
     backlog: summary.backlogPending,
     decisions: summary.decisionsPending,
@@ -1739,7 +1763,11 @@ function releasePushLock(): void {
   }
 }
 
-function runPush(dryRun: boolean): void {
+/**
+ * @param endingSession The session whose end triggered this push, from `--session`, or null for
+ *   a manual push, which sends every queued entry that is not held.
+ */
+function runPush(dryRun: boolean, endingSession: string | null): void {
   // Before the outcome line is registered, so a skipped run leaves the last real outcome as
   // the one doctor reads. A held lock loses nothing, since the queue stays on disk.
   if (!dryRun && !takePushLock()) {
@@ -1748,7 +1776,7 @@ function runPush(dryRun: boolean): void {
   }
   // Registered before preflight, since a missing scope or token is the failure doctor most
   // needs to see, and preflight is where it exits.
-  if (!dryRun) recordPushOutcomeOnExit(countPending);
+  if (!dryRun) recordPushOutcomeOnExit(() => countPending(endingSession));
   const { owner, repo } = preflight();
   checkGate('push', owner, repo);
 
@@ -1758,7 +1786,7 @@ function runPush(dryRun: boolean): void {
     process.exit(1);
   }
 
-  const queue = readPushQueue();
+  const queue = readPushQueue(endingSession);
   if (queue.length === 0) console.log('Nothing to push.');
   else if (dryRun) for (const op of queue) console.log(describeOp(op));
   else executePushQueue(queue, resolved, owner, repo);
@@ -2103,7 +2131,7 @@ function usage(): void {
     [
       'Usage:',
       '  projects-sync.mjs bootstrap [--dry-run]',
-      '  projects-sync.mjs push [--dry-run]',
+      '  projects-sync.mjs push [--dry-run] [--session <id>]',
       '  projects-sync.mjs compact [--dry-run]',
       '  projects-sync.mjs backfill [--dry-run]',
       '  projects-sync.mjs pull [--dry-run]',
@@ -2115,7 +2143,8 @@ function usage(): void {
       'and writes the resolved project numbers to <ledger dir>/.projects.json. That file',
       'is the local token that enables pushing entries to the board.',
       'push drains the queue of ledger entries that have not reached the board yet, then',
-      'compacts.',
+      'compacts. --session <id> is what the SessionEnd hook passes: it also leaves queued an',
+      'entry holding a row another session wrote less than 24 hours ago.',
       'compact shrinks the local ledgers to what a push still owes the board: entries the',
       'index confirms landed are dropped, and so are entries removed before they ever',
       'landed. It runs at the end of every push, and needs no network.',
@@ -2142,13 +2171,20 @@ const argv = process.argv.slice(2);
 const dryRun = argv.includes('--dry-run');
 const [action] = argv.filter((arg) => arg !== '--dry-run');
 
+/** The id after `--session`, or null when the flag is absent or names nothing. */
+function sessionArgument(): string | null {
+  const flagIndex = argv.indexOf('--session');
+  if (flagIndex === -1) return null;
+  return argv[flagIndex + 1] || null;
+}
+
 switch (action) {
   case 'bootstrap':
     runBootstrap(dryRun);
     break;
 
   case 'push':
-    runPush(dryRun);
+    runPush(dryRun, sessionArgument());
     break;
 
   // No preflight and no gate. Compaction is a local rewrite that never reaches GitHub, and the

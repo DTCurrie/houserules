@@ -10,10 +10,9 @@ const baseConfig = ts.config(
       '**/payload-dist/',
       '**/coverage/',
       '**/.wireit/',
-      // A gitignored checkout of an older commit, built and deleted around one eval run.
-      'scripts/eval/fixtures/plan-stop-rule/repo/',
-      // An eval fixture's stub repo. Its stubs keep unused parameters on purpose.
-      'scripts/eval/fixtures/keepalive-once/repo/',
+      // Eval fixtures' stub repos and gitignored checkouts. Their code is the eval's input,
+      // and stubs keep unused parameters on purpose.
+      'scripts/eval/fixtures/*/repo/',
     ],
   },
   js.configs.recommended,

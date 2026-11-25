@@ -1584,6 +1584,46 @@ export function checkReviewFocus(file: string, markdown: string): Report {
   return report;
 }
 
+const NOTE_REPLACES_KEYWORD =
+  /\b(replaces|supersedes)\b|\bno longer applies\b/i;
+const NOTE_STEP_NUMBER = /\bstep\s+\d+/i;
+
+/**
+ * Warns on a `## Notes & decisions` line that says it replaces a numbered step. The step text may
+ * already be edited, so this is a prompt to check it, never an error. Backticked text and fenced
+ * code never count.
+ */
+export function checkNotesReplaceStep(file: string, markdown: string): Report {
+  const report = emptyReport();
+  const lines = markdown.split('\n');
+  let inFence = false;
+  let inNotes = false;
+  lines.forEach((line, index) => {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      return;
+    }
+    if (inFence) return;
+    if (/^##\s/.test(line)) {
+      inNotes = /^##\s+Notes & decisions\s*$/.test(line);
+      return;
+    }
+    if (!inNotes) return;
+    const prose = line.replace(/`[^`]*`/g, '');
+    if (!NOTE_REPLACES_KEYWORD.test(prose) || !NOTE_STEP_NUMBER.test(prose)) {
+      return;
+    }
+    report.findings.push({
+      rule: 'plan-lint/note-replaces-step',
+      level: 'warn',
+      file,
+      line: index + 1,
+      msg: `Note on line ${index + 1} says it replaces a numbered step. Check that step against the note and edit the step if it is stale`,
+    });
+  });
+  return report;
+}
+
 const PATH_ROOT_FLOOR = ['packages/', '.claude/', 'scripts/'];
 const PATH_ROOT_EXCLUDED = new Set(['node_modules', '.git', 'dist']);
 const PATH_EXEMPT_CHARS = /[*?<>{}|$…]/;
@@ -1782,6 +1822,7 @@ function lintPhaseFile(
     ...checkSliceRowsAfterDone(relativeFile, markdown).findings,
     ...checkFencedCodeShare(relativeFile, markdown).findings,
     ...checkReviewFocus(relativeFile, markdown).findings,
+    ...checkNotesReplaceStep(relativeFile, markdown).findings,
     ...checkSignals(relativeFile, markdown).findings,
     ...checkBudget(relativeFile, markdown).findings,
   ];

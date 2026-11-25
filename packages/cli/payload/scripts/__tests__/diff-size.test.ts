@@ -285,4 +285,76 @@ describe('diff-size', () => {
       expect(result.stderr).toMatch(/usage: diff-size\.mjs/);
     });
   });
+
+  describe('--paths', () => {
+    function twoPackagesEdited(): string {
+      const dir = repo({
+        'packages/a/one.txt': numbered(10),
+        'packages/b/two.txt': numbered(10),
+        'docs/guide.md': numbered(10),
+      });
+      write(join(dir, 'packages/a/one.txt'), `${numbered(10)}extra\n`);
+      write(join(dir, 'packages/a/new.txt'), numbered(5));
+      write(join(dir, 'packages/b/two.txt'), `${numbered(10)}x\ny\nz\n`);
+      write(join(dir, 'docs/guide.md'), numbered(2));
+      return dir;
+    }
+
+    it('counts the whole tree without it', () => {
+      const result = diffSize(['--base', 'HEAD'], twoPackagesEdited());
+
+      expect(result.stdout).toBe(line(17, 4));
+    });
+
+    it('counts only tracked and untracked changes under one root', () => {
+      const result = diffSize(
+        ['--base', 'HEAD', '--paths', 'packages/a'],
+        twoPackagesEdited(),
+      );
+
+      expect(result).toEqual({ status: 0, stdout: line(6, 2), stderr: '' });
+    });
+
+    it('sums the changes under two comma-separated roots', () => {
+      const result = diffSize(
+        ['--base', 'HEAD', '--paths=packages/a,packages/b'],
+        twoPackagesEdited(),
+      );
+
+      expect(result.stdout).toBe(line(9, 3));
+    });
+
+    it('counts 0 lines and 0 files for a root nothing changed under', () => {
+      const result = diffSize(
+        ['--base', 'HEAD', '--paths', 'packages/missing'],
+        twoPackagesEdited(),
+      );
+
+      expect(result).toEqual({ status: 0, stdout: line(0, 0), stderr: '' });
+    });
+
+    it('stays within budget when only a sibling root is over it', () => {
+      const result = diffSize(
+        ['--base', 'HEAD', '--lines', '8', '--paths', 'packages/a'],
+        twoPackagesEdited(),
+      );
+
+      expect(result).toEqual({
+        status: 0,
+        stdout: line(6, 2, '8 lines, 50 files'),
+        stderr: '',
+      });
+    });
+
+    it('counts from the repository root when run from a subdirectory', () => {
+      const dir = twoPackagesEdited();
+
+      const result = diffSize(
+        ['--base', 'HEAD', '--paths', 'packages/b'],
+        join(dir, 'packages/a'),
+      );
+
+      expect(result.stdout).toBe(line(3, 1));
+    });
+  });
 });

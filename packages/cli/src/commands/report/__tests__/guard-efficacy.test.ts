@@ -397,6 +397,54 @@ describe('computeGuardBlocks from error tool_results', () => {
     ]);
   });
 
+  it('reads the same reason from a JSON deny, which carries no echoed command, as from an exit-2 refusal', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'j.jsonl',
+      [
+        toolUseLine('t7', 'Bash', { command: 'git stash' }),
+        JSON.stringify({
+          type: 'user',
+          sessionId: 'session-aaaaaaaa-bbbb',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 't7',
+                is_error: true,
+                content:
+                  'PreToolUse:Bash hook error: Blocked by houserules guard: git stash [x]: dumps the list.',
+              },
+            ],
+          },
+        }),
+        toolUseLine('t8', 'Bash', { command: 'git stash' }),
+        hookErrorLine(
+          't8',
+          'Bash',
+          'Blocked by houserules guard: git stash [x]: dumps the list.\n',
+        ),
+      ].join('\n'),
+    );
+
+    expect(computeGuardBlocks(corpus)).toEqual([
+      {
+        session: 'session-',
+        blockedCommand: 'git stash',
+        guard: 'PreToolUse:Bash',
+        reason: 'git stash [x]: dumps the list.',
+      },
+      {
+        session: 'session-',
+        blockedCommand: 'git stash',
+        guard: 'PreToolUse:Bash',
+        reason: 'git stash [x]: dumps the list.',
+      },
+    ]);
+  });
+
   it('counts a subagent write-gate refusal and names the tool', () => {
     const corpus = emptyCorpus(['slug']);
     const parent = { file: 'parent.jsonl' } as never;

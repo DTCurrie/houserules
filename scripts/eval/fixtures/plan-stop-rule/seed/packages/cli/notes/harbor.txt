@@ -1,0 +1,2 @@
+Handoff 4 of 10. The installer side raised nothing alone. It sent the review
+on to ops/handoff/archive/tern.txt, filed there when the folder was tidied.

@@ -1,0 +1,21 @@
+{
+  "modules": "plans,orchestrate",
+  "plugins": [],
+  "model": "opus",
+  "validityAgent": null,
+  "collect": ["src", "test", ".claude/plans/eval-fixture"],
+  "arms": {
+    "nested": {
+      "prompt": "arms/nested/prompt.txt",
+      "overlay": "arms/nested/overlay"
+    },
+    "flat": {
+      "prompt": "arms/flat/prompt.txt",
+      "overlay": "arms/flat/overlay"
+    },
+    "sized": {
+      "prompt": "arms/sized/prompt.txt",
+      "overlay": "arms/sized/overlay"
+    }
+  }
+}

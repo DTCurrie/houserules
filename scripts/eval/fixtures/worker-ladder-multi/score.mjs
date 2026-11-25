@@ -23,6 +23,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -136,7 +137,7 @@ function acceptanceRanAfterLastEdit(calls) {
 }
 
 /** Names of the leaf tests that failed in TAP output `stdout`. */
-function parseFailingLeaves(stdout) {
+export function parseFailingLeaves(stdout) {
   const lines = stdout.split('\n');
   const failing = [];
   lines.forEach((line, index) => {
@@ -228,7 +229,7 @@ function outsideEdits(treeSrc) {
 }
 
 /** The result event's `total_cost_usd`, else the ledger line, else null. */
-function resolveCost(sample, out, arm, sampleNumber) {
+export function resolveCost(sample, out, arm, sampleNumber) {
   const result = sample.stream
     .filter((event) => event?.type === 'result')
     .at(-1);
@@ -332,8 +333,11 @@ function sampleDirs(out) {
   );
 }
 
+const IS_MAIN_MODULE =
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === realpathSync(process.argv[1]);
 const out = process.argv[2];
-if (!out || !existsSync(out)) {
+if (IS_MAIN_MODULE && (!out || !existsSync(out))) {
   console.error('usage: node score.mjs <out-dir>');
   process.exit(EXIT_USAGE);
 }
@@ -350,8 +354,8 @@ const COLUMNS = [
   'outsideEdits',
   'holds',
 ];
-console.log(COLUMNS.join('\t'));
-for (const [arm, dir] of sampleDirs(out)) {
+if (IS_MAIN_MODULE) console.log(COLUMNS.join('\t'));
+for (const [arm, dir] of IS_MAIN_MODULE ? sampleDirs(out) : []) {
   const row = scoreSample(out, arm, dir);
   const cost = row.cost === null ? '-' : row.cost.toFixed(COST_DECIMAL_PLACES);
   const outside =

@@ -171,6 +171,8 @@ describe('timeoutSecondsFor', () => {
     [{ script: 'a.mjs' }, 'PreModelSwitch', 28],
     [{ script: 'a.mjs' }, 'PostModelSwitch', 28],
     [{ script: 'a.mjs' }, 'MessageDisplay', 8],
+    [{ script: 'a.mjs' }, 'SessionEnd', 1.5],
+    [{ script: 'a.mjs', timeout: 30 }, 'SessionEnd', 30],
     [{ script: 'a.mjs', timeout: 60 }, 'UserPromptSubmit', 60],
   ])('gives %j on %s a timeout of %i seconds', (entry, event, seconds) => {
     expect(timeoutSecondsFor(entry, event)).toBe(seconds);
@@ -453,7 +455,7 @@ describe('verdictFor', () => {
         ),
         result('c.mjs', { kind: 'exited', code: 2 }, { stderr: 'c says no\n' }),
       ],
-      'PreToolUse',
+      'PostToolUse',
       true,
     );
     expect(verdict).toEqual({
@@ -463,7 +465,70 @@ describe('verdictFor', () => {
     });
   });
 
-  it('passes the JSON a refusing hook wrote through on exit 2, since the harness reads its reason', () => {
+  it('turns a PreToolUse refusal into a JSON deny on exit 0, with the refusing hook stderr as its reason', () => {
+    const verdict = verdictFor(
+      [
+        result('a.mjs', ok, { stdout: 'fine' }),
+        result(
+          'guard.mjs',
+          { kind: 'exited', code: 2 },
+          { stderr: 'refused touch\n' },
+        ),
+      ],
+      'PreToolUse',
+      false,
+    );
+
+    expect(verdict).toEqual({
+      code: 0,
+      stdout:
+        '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"refused touch"}}\n',
+      stderr: '',
+    });
+  });
+
+  it('joins every PreToolUse refusing hook stderr into one deny reason, in wiring order', () => {
+    const verdict = verdictFor(
+      [
+        result('a.mjs', { kind: 'exited', code: 2 }, { stderr: 'a says no' }),
+        result('c.mjs', { kind: 'exited', code: 2 }, { stderr: 'c says no\n' }),
+      ],
+      'PreToolUse',
+      false,
+    );
+
+    expect(JSON.parse(verdict.stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: 'a says no\nc says no',
+      },
+    });
+  });
+
+  it('keeps a successful sibling PreToolUse allow from overriding the refusal deny', () => {
+    const verdict = verdictFor(
+      [
+        result('a.mjs', ok, {
+          stdout:
+            '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"looks fine"}}',
+        }),
+        result('guard.mjs', { kind: 'exited', code: 2 }, { stderr: 'no' }),
+      ],
+      'PreToolUse',
+      false,
+    );
+
+    expect(JSON.parse(verdict.stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: 'no',
+      },
+    });
+  });
+
+  it('lets the deny reason a refusing PreToolUse hook wrote as JSON replace its stderr, as the harness does', () => {
     const deny =
       '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"use git switch"}}\n';
 
@@ -479,7 +544,25 @@ describe('verdictFor', () => {
       false,
     );
 
-    expect(verdict).toEqual({ code: 2, stdout: deny, stderr: 'no\n' });
+    expect(verdict).toEqual({ code: 0, stdout: deny, stderr: '' });
+  });
+
+  it('passes the JSON a refusing hook wrote through on exit 2 outside PreToolUse, since the harness reads its reason', () => {
+    const block = '{"decision":"block","reason":"lint first"}\n';
+
+    const verdict = verdictFor(
+      [
+        result(
+          'a.mjs',
+          { kind: 'exited', code: 2 },
+          { stdout: block, stderr: 'no' },
+        ),
+      ],
+      'Stop',
+      false,
+    );
+
+    expect(verdict).toEqual({ code: 2, stdout: block, stderr: 'no\n' });
   });
 
   it('merges a successful sibling JSON into the exit 2 stdout and leaves a failed one out', () => {
@@ -723,7 +806,7 @@ describe('hook-dispatch.mjs (built script, real execution)', () => {
     );
   });
 
-  it('exits 2 with the refusing hook stderr', () => {
+  it('exits 0 with a PreToolUse JSON deny carrying the refusing hook stderr', () => {
     const root = useStagedRepo();
     writeHook(root, 'allow.mjs', exitingHook(0, { stdout: 'fine' }));
     writeHook(root, 'deny.mjs', exitingHook(2, { stderr: 'refused\n' }));
@@ -740,9 +823,12 @@ describe('hook-dispatch.mjs (built script, real execution)', () => {
         projectDir: root,
       },
     );
-    expect(r.status).toBe(2);
-    expect(r.stdout).toBe('');
-    expect(r.stderr).toBe('refused\n');
+    expect({ status: r.status, stdout: r.stdout, stderr: r.stderr }).toEqual({
+      status: 0,
+      stdout:
+        '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"refused"}}\n',
+      stderr: '',
+    });
   });
 
   it('exits 1 with a notice when a blocking hook script is absent', () => {
@@ -979,12 +1065,15 @@ describe('the installed PreToolUse settings command', () => {
     });
   }
 
-  it('exits 2 through guard-bash for a git commit', () => {
+  it('denies a git commit through guard-bash as PreToolUse JSON on exit 0', () => {
     const root = useInstalledRepo('pnpm-monorepo');
 
     const r = runPreToolUseBash(root, 'git commit -m "x"');
 
-    expect(r.status, r.stderr).toBe(2);
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision).toBe(
+      'deny',
+    );
   });
 
   it('exits 0 for a Bash ls', () => {

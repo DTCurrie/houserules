@@ -318,6 +318,39 @@ describe('orchestrate', () => {
       expect(nestedText).toMatch(/orchestrate\.orchestratorTools/);
     });
 
+    it('sizes each ready phase before the spawn and keeps a small one out of it', () => {
+      expect(nestedText).toMatch(/Three causes put a phase here/);
+      expect(nestedText).toMatch(
+        /\*\*Size before the spawn\.\*\*[\s\S]*three slices or fewer and its steps write twelve files or\s+fewer/,
+      );
+      expect(nestedText).toMatch(/runs nested`, or ending `runs here`/);
+    });
+
+    it('lets a phase run in the main conversation hand a mechanical slice to a worker', () => {
+      expect(nestedText).toMatch(
+        /Dispatch a `task-worker` for a slice that is mechanical[\s\S]*"The brief" in `direct-dispatch\.md`/,
+      );
+    });
+
+    it('waits for a finished notice by ending the turn, with one background fallback timer', () => {
+      expect(nestedText).toMatch(
+        /The notice is the wait\.[\s\S]*end the\s+turn with one line naming what is still running, and make no tool call/,
+      );
+      expect(nestedText).toMatch(
+        /`sleep 1800` with\s+`run_in_background: true`, once per wait and never repeated/,
+      );
+      expect(nestedText).toMatch(
+        /When the notice arrives first, stop\s+that command with `TaskStop` before any other call/,
+      );
+      expect(nestedText).not.toMatch(/foreground `sleep 20`/);
+    });
+
+    it('asks an orchestrator that dispatched no worker to say so', () => {
+      expect(orchestratorText).toMatch(
+        /`Workers dispatched: none` under `Rulings made`/,
+      );
+    });
+
     it('runs a phase that carries the live signal alone', () => {
       expect(nestedText).toMatch(
         /`live`(?: or `flat`)? on its `\*\*Signals:\*\*`\s+line, runs alone/,

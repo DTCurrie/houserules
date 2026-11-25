@@ -41,7 +41,10 @@ export interface TurnRecord {
   timestamp?: string;
   message?: { content?: unknown };
   permissionDecision?: { decision?: string };
+  toolDenialKind?: string;
 }
+
+const USER_REJECTED_DENIAL_KIND = 'user-rejected';
 
 /**
  * Whether a `user` record carries a human prompt rather than a tool result. A meta record
@@ -64,7 +67,10 @@ function isHumanPrompt(record: TurnRecord): boolean {
 
 function rejectedToolUseIds(record: TurnRecord): string[] {
   if (record.type !== 'user') return [];
-  if (record.permissionDecision?.decision !== 'reject') return [];
+  const isRejected =
+    record.permissionDecision?.decision === 'reject' ||
+    record.toolDenialKind === USER_REJECTED_DENIAL_KIND;
+  if (!isRejected) return [];
   const content = record.message?.content;
   if (!Array.isArray(content)) return [];
   const ids: string[] = [];

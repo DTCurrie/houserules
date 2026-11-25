@@ -1,0 +1,2 @@
+Handoff 9 of 10. The initializer has nothing to report. The last page is
+ops/handoff/final/wren.txt and it holds the one fact the health check needs.

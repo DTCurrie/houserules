@@ -8,6 +8,7 @@ import {
   checkFencedCodeShare,
   checkFixOnSubagentStop,
   checkNoPlanWorkspace,
+  checkNotesReplaceStep,
   checkPhaseSchedule,
   checkPlanPaths,
   derivePathRoots,
@@ -303,6 +304,87 @@ describe('checkFencedCodeShare', () => {
     const report = checkFencedCodeShare('phase-1.md', markdown);
 
     expect(report.findings).toHaveLength(1);
+  });
+});
+
+describe('checkNotesReplaceStep', () => {
+  const phase = (note: string, omitsStandingRulings = false) =>
+    [
+      '# Phase 1: Demo',
+      '',
+      ...(omitsStandingRulings ? [] : ['## Standing rulings', '', 'none', '']),
+      '## Steps',
+      '',
+      '- [ ] a step',
+      '',
+      '## Notes & decisions',
+      '',
+      note,
+    ].join('\n');
+
+  it.each([
+    'This replaces Step 3 entirely.',
+    'The new flag supersedes step 12.',
+    'The old rule no longer applies to STEP 2.',
+  ])('warns on a note that says %s', (note) => {
+    const report = checkNotesReplaceStep('phase-1.md', phase(note));
+
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]?.rule).toBe('plan-lint/note-replaces-step');
+    expect(report.findings[0]?.level).toBe('warn');
+    expect(report.findings[0]?.line).toBe(13);
+  });
+
+  it('stays silent on a keyword with no step number', () => {
+    const report = checkNotesReplaceStep(
+      'phase-1.md',
+      phase('This replaces the old parser.'),
+    );
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('stays silent on the same words outside the notes section', () => {
+    const markdown = [
+      '# Phase 1: Demo',
+      '',
+      '## Steps',
+      '',
+      '- [ ] this replaces step 3',
+      '',
+      '## Notes & decisions',
+      '',
+      'nothing here',
+    ].join('\n');
+
+    expect(checkNotesReplaceStep('phase-1.md', markdown).findings).toEqual([]);
+  });
+
+  it('stays silent on a keyword inside backticks', () => {
+    const report = checkNotesReplaceStep(
+      'phase-1.md',
+      phase('The text `replaces step 3` is quoted.'),
+    );
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('stays silent on a keyword inside a code fence', () => {
+    const report = checkNotesReplaceStep(
+      'phase-1.md',
+      phase('```\nthis replaces step 3\n```'),
+    );
+
+    expect(report.findings).toEqual([]);
+  });
+
+  it('lints clean on a phase file with no Standing rulings section', () => {
+    const report = checkNotesReplaceStep(
+      'phase-1.md',
+      phase('A plain decision.', true),
+    );
+
+    expect(report.findings).toEqual([]);
   });
 });
 

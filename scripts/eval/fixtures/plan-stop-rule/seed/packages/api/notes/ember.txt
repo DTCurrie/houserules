@@ -1,0 +1,3 @@
+Handoff 2 of 10. The api package kept no findings of its own. Its review
+carried on in scripts/trail/quill.txt, which the reviewer wrote after a
+long afternoon. Nothing here is final.

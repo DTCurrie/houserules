@@ -107,11 +107,11 @@ Then apply four rules to the set you drew:
 - **Slice by shared mutable resource, not by feature.** Name everything two slices might both write,
   then draw the slices so each one is owned once.
 
-Read `references/slicing.md` before you write the briefs. It also says which files are
+Read `references/slicing.md` before you draw a slice. It also says which files are
 orchestrator-owned and never appear in a worker's `owns`.
 
 To check one phase before slicing it, dispatch `plan-reviewer` with the workspace path, a
-`Level: phase` line, and the sub-plan path, and carry its questions to the user.
+`Level: phase` line, and the sub-plan path, and work its items as `/plan-project` section 4 says.
 
 ## 2. Write the seam yourself, before any fan-out
 
@@ -176,7 +176,7 @@ and **never restates or overrides a standing rule**.
 > Acceptance: `<share prefix> <command(s), scoped to your owned paths>` is your iteration loop. Run
 > it, fix what is red, run it again, and stop the moment it goes green. Run each command in its own
 > Bash call, untailed, report it as run, and name each failing test and its error.
-> Constraints: `<the architectural decisions from PLAN.md this slice must respect>`.
+> Constraints: `<the phase's Standing rulings and PLAN.md's Approach this slice must respect>`.
 
 Hand a worker its slice, seam, and constraints, not the plan.
 

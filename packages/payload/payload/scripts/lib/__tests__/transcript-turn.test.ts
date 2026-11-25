@@ -247,6 +247,24 @@ function toolResultRecord(id: string, decision?: string): TurnRecord {
   };
 }
 
+function userRejectedResultRecord(id: string): TurnRecord {
+  return {
+    type: 'user',
+    toolDenialKind: 'user-rejected',
+    toolUseResult: 'User rejected tool use',
+    message: {
+      content: [
+        {
+          type: 'tool_result',
+          content: "The user doesn't want to proceed with this tool use.",
+          is_error: true,
+          tool_use_id: id,
+        },
+      ],
+    },
+  } as TurnRecord;
+}
+
 function blobNoise(id: string, name: string): TurnRecord {
   return {
     type: 'api-request-blob',
@@ -314,6 +332,41 @@ describe('toolUsesSinceLastPrompt with permission decisions', () => {
       },
     ];
     expect(toolUsesSinceLastPrompt(records)).toEqual([]);
+  });
+});
+
+describe('toolUsesSinceLastPrompt with a toolDenialKind rejection', () => {
+  it('omits the user-rejected Edit and keeps the accepted one', () => {
+    const records = [
+      prompt(),
+      toolUseRecord('a', 'Edit'),
+      toolResultRecord('a', 'accept'),
+      toolUseRecord('b', 'Edit'),
+      userRejectedResultRecord('b'),
+    ];
+    expect(toolUsesSinceLastPrompt(records)).toEqual(['Edit']);
+  });
+});
+
+describe('turnTouchedFiles with a toolDenialKind rejection', () => {
+  it('is false when the only writing use was user-rejected', () => {
+    const path = transcript([
+      prompt(),
+      toolUseRecord('a', 'Edit'),
+      userRejectedResultRecord('a'),
+    ]);
+    expect(turnTouchedFiles(path)).toBe(false);
+  });
+
+  it('is true when one Edit was kept and another was user-rejected', () => {
+    const path = transcript([
+      prompt(),
+      toolUseRecord('a', 'Edit'),
+      toolResultRecord('a'),
+      toolUseRecord('b', 'Edit'),
+      userRejectedResultRecord('b'),
+    ]);
+    expect(turnTouchedFiles(path)).toBe(true);
   });
 });
 

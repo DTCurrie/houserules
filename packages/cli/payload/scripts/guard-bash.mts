@@ -278,6 +278,8 @@ interface CommandSegment {
   isNested: boolean;
   /** The targets of its output redirections (`>`, `>>`, `>|`, `&>`), after quote removal. */
   redirectTargets: string[];
+  /** Every `NAME=value` assignment made up to and including this command, in the same scan. */
+  assignments: string[];
 }
 
 interface TokenizedCommand {
@@ -355,6 +357,7 @@ class ShellScanner {
   private redirectStart: number | null = null;
   private isRedirectTargetNext = false;
   private redirectTargets: string[] = [];
+  private assignments: string[] = [];
 
   constructor(
     source: string,
@@ -484,7 +487,13 @@ class ShellScanner {
 
   private endSegment(separator = END_SEPARATOR): void {
     this.endWord();
-    const words = unwrapCommand(commandWordsOf(this.words));
+    const commandWords = commandWordsOf(this.words);
+    this.assignments.push(
+      ...this.words
+        .slice(0, this.words.length - commandWords.length)
+        .filter((word) => ASSIGNMENT_RE.test(word)),
+    );
+    const words = unwrapCommand(commandWords);
     const redirectTargets = this.redirectTargets;
     this.words = [];
     this.redirectTargets = [];
@@ -496,6 +505,7 @@ class ShellScanner {
       separator,
       isNested: this.depth > 0,
       redirectTargets,
+      assignments: [...this.assignments],
     });
     this.scanNestedShell(words);
   }
@@ -1252,13 +1262,92 @@ function operandsOf(words: string[]): string[] {
   return operands.filter((operand) => !operand.startsWith('-'));
 }
 
-/** The paths one simple command writes: its redirection targets, `tee`'s files, a copy's destination. */
+const SED_VALUE_OPTIONS = new Set(['-e', '-f', '--expression', '--file']);
+const SED_IN_PLACE_RE = /^(?:-[A-Za-z]*i|--in-place)/;
+const SED_BARE_IN_PLACE_RE = /^-[A-Za-z]*i$/;
+const SED_SCRIPT_FLAG_RE = /^-[A-Za-z]*[ef]$/;
+const TARGET_DIRECTORY_FLAG_RE = /^-[A-Za-z]*t$/;
+const TARGET_DIRECTORY_LONG = '--target-directory';
+const DD_OUTPUT_PREFIX = 'of=';
+
+/** The files `sed -i` edits, or an empty list when `args` do not edit in place. */
+function sedInPlaceFiles(args: string[]): string[] {
+  let isInPlace = false;
+  let hasScriptOption = false;
+  const operands: string[] = [];
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index] ?? '';
+    if (arg === '--') {
+      operands.push(...args.slice(index + 1));
+      break;
+    }
+    if (SED_VALUE_OPTIONS.has(arg)) {
+      hasScriptOption = true;
+      index++;
+    } else if (arg.startsWith('--expression=') || arg.startsWith('--file=')) {
+      hasScriptOption = true;
+    } else if (SED_IN_PLACE_RE.test(arg)) {
+      isInPlace = true;
+      // BSD sed takes its backup suffix as the next word, which is empty for no backup.
+      if (SED_BARE_IN_PLACE_RE.test(arg) && args[index + 1] === '') index++;
+    } else if (SED_SCRIPT_FLAG_RE.test(arg)) {
+      hasScriptOption = true;
+      index++;
+    } else if (!arg.startsWith('-') || arg === '-') {
+      operands.push(arg);
+    }
+  }
+  if (!isInPlace) return [];
+  return hasScriptOption ? operands : operands.slice(1);
+}
+
+/** The directory `-t` or `--target-directory` names, and `args` without that option. */
+function takeTargetDirectory(args: string[]): {
+  directory: string | null;
+  remaining: string[];
+} {
+  const remaining: string[] = [];
+  let directory: string | null = null;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index] ?? '';
+    if (arg.startsWith(`${TARGET_DIRECTORY_LONG}=`)) {
+      directory = arg.slice(TARGET_DIRECTORY_LONG.length + 1);
+    } else if (
+      arg === TARGET_DIRECTORY_LONG ||
+      TARGET_DIRECTORY_FLAG_RE.test(arg)
+    ) {
+      directory = args[index + 1] ?? null;
+      index++;
+    } else {
+      remaining.push(arg);
+    }
+  }
+  return { directory, remaining };
+}
+
+/** The paths one simple command writes: its redirection targets, `tee`'s files, `sed -i`'s files, `dd`'s `of=`, a copy's destination. */
 function writeTargetsOf(segment: CommandSegment): string[] {
   const [program = '', ...rest] = segment.words;
   const name = basename(program);
   if (name === 'tee') return [...segment.redirectTargets, ...operandsOf(rest)];
+  if (name === 'sed') {
+    return [...segment.redirectTargets, ...sedInPlaceFiles(rest)];
+  }
+  if (name === 'dd') {
+    const outputs = rest
+      .filter((word) => word.startsWith(DD_OUTPUT_PREFIX))
+      .map((word) => word.slice(DD_OUTPUT_PREFIX.length));
+    return [...segment.redirectTargets, ...outputs];
+  }
   if (!COPY_PROGRAMS.has(name)) return segment.redirectTargets;
-  const operands = operandsOf(rest);
+  const { directory, remaining } = takeTargetDirectory(rest);
+  const operands = operandsOf(remaining);
+  if (directory !== null) {
+    const landings = operands.map((source) =>
+      join(directory, basename(source)),
+    );
+    return [...segment.redirectTargets, directory, ...landings];
+  }
   const destination = operands[operands.length - 1];
   const sources = operands.slice(0, -1);
   if (sources.length === 0 || destination === undefined) {
@@ -1268,8 +1357,45 @@ function writeTargetsOf(segment: CommandSegment): string[] {
   return [...segment.redirectTargets, destination, ...landings];
 }
 
+const VARIABLE_RE = /\$(?:([A-Za-z_]\w*)|\{([A-Za-z_]\w*)\})/g;
+const VARIABLE_SIGIL = '$';
+/** The `NAME+=value` append form, which the guard does not follow. */
+const SHELL_APPEND_SUFFIX = '+';
+
+function hasUnresolvedVariable(path: string): boolean {
+  return path.includes(VARIABLE_SIGIL);
+}
+
 function expandHome(path: string): string {
   return path.replace(HOME_PREFIX_RE, () => homedir());
+}
+
+/** `path` with each `$NAME` and `${NAME}` that `env` defines replaced by its value. */
+function expandVariables(
+  path: string,
+  env: Record<string, string | undefined>,
+): string {
+  return path.replace(VARIABLE_RE, (match, bare?: string, braced?: string) => {
+    return env[bare ?? braced ?? ''] ?? match;
+  });
+}
+
+/** The process environment with the `NAME=value` words applied in order. */
+function environmentAfter(
+  assignments: string[],
+): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = { ...process.env };
+  for (const assignment of assignments) {
+    const equalsIndex = assignment.indexOf('=');
+    const name = assignment.slice(0, equalsIndex);
+    const isAppend = name.endsWith(SHELL_APPEND_SUFFIX);
+    if (isAppend) continue;
+    env[name] = expandVariables(
+      expandHome(assignment.slice(equalsIndex + 1)),
+      env,
+    );
+  }
+  return env;
 }
 
 /**
@@ -1288,12 +1414,21 @@ export function modWriteRefusalFor(
   let base = cwd;
   for (const segment of tokenizeCommand(cmd).segments) {
     const [program, directory] = segment.words;
+    const env = environmentAfter(segment.assignments);
+    const expand = (path: string): string =>
+      expandVariables(expandHome(path), env);
     if (program === 'cd') {
-      if (directory !== '-') base = resolve(base, expandHome(directory ?? '~'));
+      if (directory !== '-') {
+        const destination = expand(directory ?? '~');
+        if (!hasUnresolvedVariable(destination))
+          base = resolve(base, destination);
+      }
       continue;
     }
     for (const path of writeTargetsOf(segment)) {
-      const target = realPathOf(resolve(base, expandHome(path)));
+      const expanded = expand(path);
+      if (hasUnresolvedVariable(expanded)) continue;
+      const target = realPathOf(resolve(base, expanded));
       const modDir = modDirHolding(target, locations);
       if (!modDir) continue;
       return (

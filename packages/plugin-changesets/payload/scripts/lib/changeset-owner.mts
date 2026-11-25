@@ -106,6 +106,92 @@ function unshippedTestDirectory(
 }
 
 /**
+ * True for a path below the package root that neither the published tarball nor the package's
+ * build can read.
+ *
+ * `files` names build outputs, so a source path is unpublished and still ships through `dist`.
+ * The build's declared inputs say which sources those are. A maintenance script beside them,
+ * such as a generator run by hand, is in neither set and owes no changeset entry. This holds
+ * only for a package that declares both. One with no `files` list packs everything, and one
+ * whose build declares no inputs could read any path, so every path there still counts.
+ */
+function unshippedOutsideBuildInputs(
+  root: string,
+  path: string,
+  relDir: string,
+): boolean {
+  const name = path.startsWith(`${relDir}/`)
+    ? path.slice(relDir.length + 1)
+    : path;
+  // A package-root file is `unshippedRootFile`'s to judge.
+  if (!name.includes('/')) return false;
+  const entries = filesEntries(root, relDir);
+  if (entries === null) return false;
+  const isUnder = (entry: string) =>
+    name === entry || name.startsWith(`${entry}/`);
+  if (entries.some(isUnder) || entryPoints(root, relDir).includes(name))
+    return false;
+  const inputs = buildInputs(readPackageJson(root, relDir));
+  if (inputs === null) return false;
+  const matches = (glob: string) => isUnder(glob) || globToRe(glob).test(name);
+  const isExcluded = inputs
+    .filter((glob) => glob.startsWith('!'))
+    .some((glob) => matches(glob.slice(1)));
+  const isIncluded = inputs
+    .filter((glob) => !glob.startsWith('!'))
+    .some(matches);
+  return isExcluded || !isIncluded;
+}
+
+const BUILD_SCRIPT = 'build';
+
+/**
+ * The input globs the package's build declares, or null when it declares none.
+ *
+ * The build is the wireit script named `build` plus the same-package scripts it depends on.
+ * Another package's script is not followed, because its inputs are that package's paths. A
+ * build that does not run through wireit, or a wireit script in the chain with no `files`
+ * list, has undeclared inputs, and the answer is null.
+ */
+function buildInputs(pkg: PackageManifest | null): string[] | null {
+  const scripts = isRecord(pkg?.scripts) ? pkg.scripts : {};
+  const wireit = isRecord(pkg?.wireit) ? pkg.wireit : {};
+  const inputs: string[] = [];
+  const seen = new Set<string>();
+  const pending = [BUILD_SCRIPT];
+  while (pending.length > 0) {
+    const script = pending.pop()!;
+    if (seen.has(script)) continue;
+    seen.add(script);
+    const block = wireit[script];
+    if (scripts[script] !== 'wireit' || !isRecord(block)) return null;
+    if (!Array.isArray(block.files)) return null;
+    inputs.push(
+      ...block.files.filter((glob): glob is string => typeof glob === 'string'),
+    );
+    pending.push(...samePackageDependencies(block.dependencies));
+  }
+  return inputs;
+}
+
+/** The dependency entries that name a script in the same package, in either wireit form. */
+function samePackageDependencies(dependencies: unknown): string[] {
+  if (!Array.isArray(dependencies)) return [];
+  return dependencies
+    .map((dependency: unknown) =>
+      isRecord(dependency) ? dependency.script : dependency,
+    )
+    .filter(
+      (script): script is string =>
+        typeof script === 'string' && !script.startsWith('.'),
+    );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
  * The package's `files` entries without a leading `./` or a trailing `/`, or null when it has no
  * `files` list and so packs everything.
  */
@@ -122,6 +208,8 @@ interface PackageManifest {
   private?: unknown;
   main?: unknown;
   bin?: unknown;
+  scripts?: unknown;
+  wireit?: unknown;
 }
 
 function readPackageJson(root: string, relDir: string): PackageManifest | null {
@@ -281,7 +369,8 @@ function gatedOwnerName(
   if (readPackageJson(root, owner.relDir)?.private === true) return null;
   const isUnshipped =
     unshippedRootFile(root, path, owner.relDir) ||
-    unshippedTestDirectory(root, path, owner.relDir);
+    unshippedTestDirectory(root, path, owner.relDir) ||
+    unshippedOutsideBuildInputs(root, path, owner.relDir);
   return isUnshipped ? null : owner.name;
 }
 
@@ -291,8 +380,8 @@ function gatedOwnerName(
  *
  * The returned function yields the owning package's name, or null when a `gateIgnore` glob
  * matches the path, the path ships nothing, no package owns it, changesets ignores the owner,
- * the owner is private, or the path is a package-root file or a top-level `test/` directory the
- * owner does not ship.
+ * the owner is private, or the path is one the owner does not ship: a package-root file, a
+ * top-level `test/` directory, or a path outside both `files` and the build's declared inputs.
  *
  * @param gateIgnore The `changesets.gateIgnore` globs from the repo's houserules config.
  * @throws {IgnoreMatcherUnavailableError} When `.changeset/config.json` has `ignore` entries and

@@ -10,6 +10,8 @@
  * Exit codes:
  * - 2 when any hook exited 2. Those hooks' stderr is written in wiring order. The JSON on their
  *   stdout and on every successful hook's merges onto stdout, since the harness reads it on exit 2.
+ * - 0 instead of 2 on PreToolUse, with that stderr as a JSON `permissionDecision: "deny"` reason
+ *   merged ahead of the same JSON, since the harness prefixes an exit-2 reason with the command.
  * - 1 when a hook marked `onFailure: 'block'` failed (non-zero exit, timeout, spawn error,
  *   or absent script), with its stderr or a one-line notice.
  * - A hook not marked `onFailure: 'block'` that exits with a code other than 0 or 2 and writes
@@ -60,6 +62,7 @@ const EVENT_TIMEOUT_SECONDS: Readonly<Record<string, number>> = {
   PreModelSwitch: 30,
   PostModelSwitch: 30,
   MessageDisplay: 10,
+  SessionEnd: 1.5,
 };
 /**
  * Seconds a hook's default stops short of the harness's, so the dispatcher can still merge and
@@ -215,7 +218,9 @@ export function timeoutSecondsFor(entry: WiringEntry, event: string): number {
   const harnessDefault = Object.hasOwn(EVENT_TIMEOUT_SECONDS, event)
     ? EVENT_TIMEOUT_SECONDS[event]!
     : DEFAULT_TIMEOUT_SECONDS;
-  return harnessDefault - TIMEOUT_MARGIN_SECONDS;
+  const withMargin = harnessDefault - TIMEOUT_MARGIN_SECONDS;
+  // SessionEnd's shared budget is shorter than the margin, so the margin would go negative.
+  return withMargin > 0 ? withMargin : harnessDefault;
 }
 
 /**
@@ -401,13 +406,20 @@ export function verdictFor(
       .join('');
     // The harness still reads JSON on exit 2, and a blocking decision's reason replaces stderr.
     // Plain text it ignores there, so only JSON objects are kept.
-    const stdout = mergeStdout(
-      results
-        .filter((result) => refusals.includes(result) || hasSucceeded(result))
-        .map((result) => result.stdout)
-        .filter((output) => parseObject(output) !== null),
-      event,
-    );
+    const objectOutputs = results
+      .filter((result) => refusals.includes(result) || hasSucceeded(result))
+      .map((result) => result.stdout)
+      .filter((output) => parseObject(output) !== null);
+    if (event === 'PreToolUse') {
+      // The harness prefixes an exit-2 reason with the whole settings command, a JSON deny it does not.
+      const deny = denyOutput(stripTrailingNewline(stderr));
+      return {
+        code: 0,
+        stdout: mergeStdout([deny, ...objectOutputs], event),
+        stderr: '',
+      };
+    }
+    const stdout = mergeStdout(objectOutputs, event);
     return { code: BLOCKING_EXIT, stdout, stderr };
   }
   const failed = results.filter((result) => !hasSucceeded(result));
@@ -432,6 +444,19 @@ export function verdictFor(
     return { code: FAILURE_EXIT, stdout: '', stderr };
   }
   return { code: 0, stdout, stderr };
+}
+
+/**
+ * A PreToolUse `deny` carrying `reason`, the refusing hooks' stderr. It is merged ahead of any
+ * hook's own JSON, so a hook's deny reason replaces it, as the harness does on exit 2.
+ */
+function denyOutput(reason: string): string {
+  const specific: JsonObject = {
+    hookEventName: 'PreToolUse',
+    permissionDecision: 'deny',
+  };
+  if (reason !== '') specific['permissionDecisionReason'] = reason;
+  return `${JSON.stringify({ hookSpecificOutput: specific })}\n`;
 }
 
 function parseObject(text: string): JsonObject | null {

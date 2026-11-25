@@ -633,6 +633,52 @@ export function withoutHeldEntries(
 }
 
 /**
+ * How old a queued row written by another session must be before a session's end pushes it.
+ *
+ * A younger row may belong to a session that is still editing the entry, so it waits for that
+ * session's own end. The age is the release for a session that never ends cleanly.
+ */
+const OTHER_SESSION_ROW_RELEASE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a session ending at `now` may push this row.
+ *
+ * A row with no `chat` counts as pushable. It was written outside any Claude Code session, by
+ * hand or with `--chat=none`, so no live session can still be editing it and waiting a day for
+ * one would only delay it. An unparseable `ts` never ages out.
+ */
+function isPushableAtSessionEnd(
+  record: LedgerRecord,
+  endingSession: string,
+  now: Date,
+): boolean {
+  if (!record.chat || record.chat === endingSession) return true;
+  return now.getTime() - Date.parse(record.ts) > OTHER_SESSION_ROW_RELEASE_MS;
+}
+
+/**
+ * The ids of every entry a session ending at `now` must leave queued.
+ *
+ * An entry is left queued when any row written after its last `synced` record fails
+ * {@link isPushableAtSessionEnd}. A push sends an entry's folded state, never one row, so one
+ * unpushable row holds the whole entry. A row before a `synced` record already reached the board.
+ * Feed the result to {@link withoutHeldEntries}.
+ */
+export function entriesLeftForOtherSessions(
+  records: readonly LedgerRecord[],
+  endingSession: string,
+  now: Date,
+): Set<string> {
+  const leftQueued = new Set<string>();
+  for (const record of records) {
+    if (record.action === 'synced') leftQueued.delete(record.id);
+    else if (!isPushableAtSessionEnd(record, endingSession, now))
+      leftQueued.add(record.id);
+  }
+  return leftQueued;
+}
+
+/**
  * The board item id a `mark-superseded` op should flip, given what earlier ops in the same run
  * have created.
  *
