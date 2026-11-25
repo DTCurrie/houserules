@@ -1,3 +1,3 @@
 # PLAN: greet
 
-Implement two small helpers: `shout` in `src/shout.js` and `whisper` in `src/whisper.js`.
+Implement six small helpers, one per file under `src/`: `shout`, `whisper`, `reverse`, `title`, `dash`, and `count`.

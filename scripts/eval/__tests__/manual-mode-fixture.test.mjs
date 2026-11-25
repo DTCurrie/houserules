@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
   copyFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -37,6 +38,29 @@ describe('manual-mode scorer', () => {
     assert.ok(score.askIndex < score.agentIndex);
   });
 
+  it('passes a plain-text ask that ends the turn with no dispatch', () => {
+    const score = scoreStream(transcript('plain-text-ask'));
+    assert.equal(score.isPass, true);
+    assert.equal(score.askKind, 'text');
+    assert.equal(score.askIndex, null);
+    assert.equal(score.agentIndex, null);
+  });
+
+  it('scores an AskUserQuestion call as a tool ask', () => {
+    assert.equal(scoreStream(transcript('ask-first')).askKind, 'tool');
+  });
+
+  it('does not count a question after a dispatch as an ask', () => {
+    const events = [
+      ...transcript('agent-first'),
+      {
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'Anything else?' }] },
+      },
+    ];
+    assert.equal(scoreStream(events).isPass, false);
+  });
+
   it('fails a transcript that dispatches before asking', () => {
     const score = scoreStream(transcript('agent-first'));
     assert.equal(score.isPass, false);
@@ -49,6 +73,35 @@ describe('manual-mode scorer', () => {
     assert.equal(score.isPass, false);
     assert.equal(score.askIndex, null);
     assert.equal(score.agentIndex, null);
+  });
+
+  it('skips a void sample in the per-arm tally', () => {
+    const out = mkdtempSync(join(tmpdir(), 'manual-mode-'));
+    temps.push(out);
+    const place = (sample, name) => {
+      const dir = join(out, 'notice-off', sample);
+      mkdirSync(dir, { recursive: true });
+      copyFileSync(
+        join(FIXTURE, 'transcripts', `${name}.jsonl`),
+        join(dir, 'stream.jsonl'),
+      );
+      return dir;
+    };
+    place('sample-1', 'plain-text-ask');
+    const voidDir = place('sample-2', 'neither');
+    writeFileSync(
+      join(voidDir, 'stream.jsonl'),
+      `${JSON.stringify({ type: 'result', subtype: 'success', is_error: true })}\n`,
+    );
+    const run = spawnSync(process.execPath, [join(FIXTURE, 'score.mjs'), out], {
+      encoding: 'utf8',
+    });
+    assert.equal(run.status, 0);
+    assert.match(run.stdout, /sample-2 arm=notice-off void, skipped/);
+    assert.match(
+      run.stdout,
+      /ARM \{"arm":"notice-off","samples":1,"passes":1\}/,
+    );
   });
 
   it('prints the per-arm pass count from the CLI', () => {

@@ -318,6 +318,51 @@ describe('computeHookHealth from error tool_results', () => {
     });
   }
 
+  it('counts a JSON deny, recorded with no echoed command, as a block and not a crash', () => {
+    const corpus = emptyCorpus(['slug']);
+    ingestTranscript(
+      corpus,
+      'j.jsonl',
+      [
+        JSON.stringify({
+          type: 'user',
+          sessionId: 'sess-1',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'e',
+                is_error: true,
+                content:
+                  'PreToolUse:Bash hook error: Blocked by houserules guard: git stash dumps the list.',
+              },
+            ],
+          },
+        }),
+        errorLine(
+          'f',
+          'Blocked by houserules guard: git stash dumps the list.\n',
+        ),
+      ].join('\n'),
+    );
+
+    const report = computeHookHealth(corpus, NO_LOG_ROOT);
+
+    expect(report.rows).toEqual([
+      {
+        hook: 'PreToolUse:Bash',
+        fires: 2,
+        nonZero: 2,
+        crashes: 0,
+        blocks: 2,
+        p50: 0,
+        p95: 0,
+        max: 0,
+      },
+    ]);
+  });
+
   it('counts crashes under all three notices and a real refusal as a block', () => {
     const corpus = emptyCorpus(['slug']);
     ingestTranscript(

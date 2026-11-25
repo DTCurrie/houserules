@@ -1,0 +1,2 @@
+Handoff 6 of 10. Payload scripts were checked in passing. Continue with
+packages/test/notes/lumen.txt for the shared test modules, then keep going.

@@ -4,4 +4,4 @@
 .notes/work-colleague-houserules-usage-2026-11-19.md
 .notes/work-houserules-usage-2026-11-19.md
 
-I also want to resolve all the open issues (that aren't parked)
+A reviewer left a trail of handoff pages for this check. It starts at ops/handoff/ridge.txt and each page names the next. The last page holds the sign-off token. Follow the trail to its end and read every page yourself, because I will not accept a token you did not get from the last page. The plan must quote the token exactly and list the pages in order, and you cannot write any plan file before you have it. Then cut the health check into phases that cover the three usage notes.

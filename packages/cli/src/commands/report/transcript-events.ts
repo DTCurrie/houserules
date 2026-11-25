@@ -917,11 +917,26 @@ function scanUserCommands(
         });
 }
 
-// The harness echoes the hook command in brackets before the stderr, and the wrapper's own
-// fallback text sits inside that command, so only the text after this marker is the stderr.
+const HOOK_ERROR_PATTERN = /^PreToolUse:(\w+) hook error: ?/;
+// On an exit-2 refusal the harness echoes the hook command in brackets before the stderr, and
+// the wrapper's own fallback text sits inside that command, so only the text after this marker
+// is the stderr. A JSON deny's reason follows the label with no command.
+const HOOK_COMMAND_START = '[';
 const HOOK_COMMAND_END = ']: ';
 
-/** Records a PreToolUse refusal that reached the transcript as an error tool_result. */
+/** The refusal text after the label, without the echoed command an exit-2 refusal carries. */
+function refusalReasonOf(afterLabel: string): string {
+  if (!afterLabel.startsWith(HOOK_COMMAND_START)) return afterLabel;
+  const commandEnd = afterLabel.indexOf(HOOK_COMMAND_END);
+  return commandEnd >= 0
+    ? afterLabel.slice(commandEnd + HOOK_COMMAND_END.length)
+    : afterLabel;
+}
+
+/**
+ * Records a PreToolUse refusal that reached the transcript as an error tool_result, either an
+ * exit-2 refusal or a JSON `permissionDecision: "deny"`. Neither leaves a hook attachment.
+ */
 function recordHookOutcome(
   session: SessionEvents,
   block: ContentBlock,
@@ -929,14 +944,12 @@ function recordHookOutcome(
   isSubagent: boolean,
 ): void {
   if (block.is_error !== true) return;
-  const hookError = /^PreToolUse:(\w+) hook error:/.exec(text);
+  const hookError = HOOK_ERROR_PATTERN.exec(text);
   if (!hookError?.[1]) return;
-  const commandEnd = text.indexOf(HOOK_COMMAND_END);
   session.hookOutcomes.push({
     tool: hookError[1],
     toolUseId: block.tool_use_id,
-    stderr:
-      commandEnd >= 0 ? text.slice(commandEnd + HOOK_COMMAND_END.length) : text,
+    stderr: refusalReasonOf(text.slice(hookError[0].length)),
     isSubagent,
   });
 }

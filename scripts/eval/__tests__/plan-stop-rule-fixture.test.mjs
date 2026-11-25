@@ -62,7 +62,7 @@ const MILESTONE_AFTER_LINES = [
   'List each phase you expect, with its write roots, from what you already know. Grounding stops at',
   'the first write, as `SKILL.md` section 2 says. Count hub files among them: a shared test file,',
 ];
-/** sha256 of each file as recorded: overlays from the git blobs, prompts from the transcripts, except p1, which adds the headless answers. */
+/** sha256 of each file as recorded: overlays from the git blobs, prompts from the transcripts, except p1, which adds the headless answers, and p3, which is rewritten. */
 const SHA256 = {
   'overlays/before/skills/plan-project/SKILL.md':
     '273d3f4914549369acc4c9929444a7fb983063e5aa63cb199680eea2e5771698',
@@ -77,7 +77,7 @@ const SHA256 = {
   'prompts/p2.txt':
     '4c4513ce203e18d413f3b1ce4d90e5eb2a4e58e86900bd7355e627228032794b',
   'prompts/p3.txt':
-    '6d1d72ece9ac57a4df9be1cd661082c9eb5a6a76b4c58ef8c14a92619219e5c2',
+    '0eb83044c3ec5b388f562dad4e5adf6dbc62486c5a3d501c69d78b987f426eef',
 };
 const temps = [];
 
@@ -274,7 +274,7 @@ describe('plan-stop-rule fixture', () => {
     );
   });
 
-  it('runs the recorded p3 request against the landed, fix 2, and fix 3 arms', () => {
+  it('runs the rewritten p3 request against the landed, fix 2, and fix 3 arms', () => {
     const sides = Object.entries(ARMS)
       .filter(([, arm]) => arm.prompt === 'prompts/p3.txt')
       .map(([name]) => name);
@@ -283,6 +283,31 @@ describe('plan-stop-rule fixture', () => {
     assert.deepEqual(sides, ['landed-p3', 'fix2-p3', 'fix3-p3']);
     assert.ok(text.startsWith('/plan-project '), text.slice(0, 40));
     assert.ok(!text.endsWith('\n'), 'p3 ends without a newline');
+    for (const note of [
+      '.notes/houserules-usage-2026-11-19.md',
+      '.notes/work-colleague-houserules-usage-2026-11-19.md',
+      '.notes/work-houserules-usage-2026-11-19.md',
+    ])
+      assert.ok(text.includes(note), note);
+    assert.ok(text.includes('ops/handoff/ridge.txt'), 'trail start');
+    assert.ok(text.includes('sign-off token'), 'trail end');
+    assert.ok(!text.includes('open issues'), 'no gh issue list dependency');
+  });
+
+  it('seeds a ten-page handoff trail that ends at the sign-off token', () => {
+    let path = 'ops/handoff/ridge.txt';
+    const visited = [];
+
+    while (path) {
+      visited.push(path);
+      const text = readFixture(join('seed', path));
+      const [, next] =
+        text.match(/\b((?:ops|packages|scripts)\/[\w/.-]+\.txt)/) ?? [];
+      path = next;
+      if (!next) assert.ok(text.includes('MARLIN-4471'), visited.at(-1));
+    }
+
+    assert.equal(visited.length, 10);
   });
 
   it('differs from the after overlay by exactly the two fix 2 sentences', () => {
