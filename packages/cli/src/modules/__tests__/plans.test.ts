@@ -135,6 +135,31 @@ describe('plans', () => {
       expect(agentText).toMatch(/^- `phase`: the brief names one sub-plan/m);
     });
 
+    it('has the plan-reviewer tag each item as a fact or a decision with no target count', () => {
+      const agentText = readFileSync(
+        join(root, '.claude/agents/plan-reviewer.md'),
+        'utf8',
+      );
+      expect(agentText).toMatch(/^1\. \[fact\] /m);
+      expect(agentText).toMatch(
+        /^2\. \[decision\] .*Issue: .*Question: <[^>]*question mark>$/m,
+      );
+      expect(agentText).toContain('There is no target count');
+      expect(agentText).not.toContain('Between 0 and 10');
+    });
+
+    it('has the planner work the reviewer list instead of relaying it raw', () => {
+      const skill = readFileSync(
+        join(root, '.claude/skills/plan-project/SKILL.md'),
+        'utf8',
+      );
+      expect(skill).toContain('Never relay the list raw.');
+      expect(skill).toMatch(
+        /the issue, the question as a\s+sentence ending in a question mark, and your recommendation with its reason/,
+      );
+      expect(skill).not.toMatch(/Do not edit the plan to\s+answer a question/);
+    });
+
     it('puts a Level line in every plan-reviewer dispatch the skill writes', () => {
       const docs = [
         '.claude/skills/plan-project/SKILL.md',

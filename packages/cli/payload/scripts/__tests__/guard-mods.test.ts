@@ -151,12 +151,45 @@ describe('modGuardRefusalFor', () => {
     ).toBeNull();
   });
 
+  it('refuses the first write into a directory holding only .claude-plugin/plugin.json', () => {
+    const modDir = join(repo, 'tools/new-mod');
+    mkdirSync(join(modDir, '.claude-plugin'), { recursive: true });
+    writeFileSync(
+      join(modDir, '.claude-plugin', 'plugin.json'),
+      '{"name":"m"}',
+    );
+
+    const refusal = modGuardRefusalFor(
+      'tools/new-mod/hooks/hooks.json',
+      'bypassPermissions',
+      repo,
+      { configDir, pluginDirs: [] },
+    );
+
+    expect(refusal).toContain(`mod directory ${modDir}`);
+  });
+
   it('lets a write into a plugin whose hooks.json declares no modules through', () => {
     layOutMod(join(repo, 'tools/plain-plugin'), { hooks: {} });
 
     expect(
       modGuardRefusalFor(
         'tools/plain-plugin/hooks/hooks.json',
+        'bypassPermissions',
+        repo,
+        { configDir, pluginDirs: [] },
+      ),
+    ).toBeNull();
+  });
+
+  it('lets a write into a directory holding only hooks/hooks.json through', () => {
+    const dir = join(repo, 'tools/half-mod');
+    mkdirSync(join(dir, 'hooks'), { recursive: true });
+    writeFileSync(join(dir, 'hooks', 'hooks.json'), '{"modules":[]}');
+
+    expect(
+      modGuardRefusalFor(
+        'tools/half-mod/hooks/register.js',
         'bypassPermissions',
         repo,
         { configDir, pluginDirs: [] },

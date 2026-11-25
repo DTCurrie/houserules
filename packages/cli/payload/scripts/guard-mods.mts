@@ -93,13 +93,18 @@ function declaresModules(hooksJson: string): boolean {
   }
 }
 
-/** The nearest ancestor of `target` laid out as a mod, or null when none is. */
+/**
+ * The nearest ancestor of `target` laid out as a mod, or null when none is. A directory is a mod
+ * when it holds `.claude-plugin/plugin.json` and either has no `hooks/hooks.json` yet, as a new
+ * mod does before its first write, or that file declares a `modules` array.
+ */
 function enclosingModDir(target: string): string | null {
   let dir = dirname(target);
   for (;;) {
+    const hooksJson = join(dir, 'hooks', 'hooks.json');
     if (
       existsSync(join(dir, '.claude-plugin', 'plugin.json')) &&
-      declaresModules(join(dir, 'hooks', 'hooks.json'))
+      (!existsSync(hooksJson) || declaresModules(hooksJson))
     ) {
       return dir;
     }

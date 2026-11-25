@@ -57,7 +57,9 @@ under it. Put one line under them for anything the columns cannot carry. Never s
 an orchestrator whose `Diff size` line ends `over budget` without the owner's answer to its
 `Ruling needed`, which offers stopping and committing, splitting a new phase, or continuing at a
 new budget. The wave-close procedure is in `SKILL.md` §7. Read `Removed beyond plan` before any `continue`. When it is not `none`,
-ask the owner whether to restore or keep each removal, whatever the first line says. Never send
+ask the owner whether to restore or keep each removal, whatever the first line says. Scan
+`Rulings made` too, and treat an entry there that deletes a feature, prop, or user-visible file as
+a `Removed beyond plan` entry, because an orchestrator can file a removal in the wrong section. Never send
 `continue` past it on the excuse that "the cost-if-wrong line says it comes back from git". Git
 holds the deleted files, but the owner never saw the removal, and each later wave builds on the
 loss. Done means the owner has answered each removal. Then act on the first line of the report:

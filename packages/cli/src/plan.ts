@@ -868,6 +868,7 @@ const EVENT_TIMEOUT_SECONDS: Readonly<Record<string, number>> = {
   PreModelSwitch: 30,
   PostModelSwitch: 30,
   MessageDisplay: 10,
+  SessionEnd: 1.5,
 };
 /** Seconds the dispatcher gets past its slowest hook to merge the outputs and exit. */
 const DISPATCH_MARGIN_SECONDS = 2;
@@ -881,6 +882,7 @@ function dispatcherTimeout(
   entries: HookWiringEntry[],
 ): number | null {
   const slowest = Math.max(0, ...entries.map((entry) => entry.timeout ?? 0));
+  if (slowest === 0) return null;
   const harnessDefault = Object.hasOwn(EVENT_TIMEOUT_SECONDS, event)
     ? EVENT_TIMEOUT_SECONDS[event]!
     : HARNESS_TIMEOUT_SECONDS;

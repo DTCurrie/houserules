@@ -1585,6 +1585,24 @@ describe('computeEffects, given merge-settings actions carrying hooks', () => {
     ).not.toHaveProperty('timeout');
   });
 
+  it('leaves the SessionEnd dispatcher timeout unset when no wired hook sets one', () => {
+    const settings = plannedSettings(tempDir(), [
+      hookAction('SessionEnd', null, 'bye.mjs'),
+    ]);
+
+    expect(settings.hooks?.SessionEnd?.[0]?.hooks?.[0]).not.toHaveProperty(
+      'timeout',
+    );
+  });
+
+  it('raises the SessionEnd dispatcher timeout past a wired hook timeout above the SessionEnd default', () => {
+    const settings = plannedSettings(tempDir(), [
+      hookAction('SessionEnd', null, 'bye.mjs', { timeout: 20 }),
+    ]);
+
+    expect(settings.hooks?.SessionEnd?.[0]?.hooks?.[0]?.timeout).toBe(22);
+  });
+
   it('gives the SessionStart dispatcher the bootstrap fallback when payload-sync is among its hooks', () => {
     const settings = plannedSettings(tempDir(), [
       hookAction('SessionStart', null, 'session-context.mjs'),

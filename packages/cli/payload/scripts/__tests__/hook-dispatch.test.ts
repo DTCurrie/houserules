@@ -171,6 +171,8 @@ describe('timeoutSecondsFor', () => {
     [{ script: 'a.mjs' }, 'PreModelSwitch', 28],
     [{ script: 'a.mjs' }, 'PostModelSwitch', 28],
     [{ script: 'a.mjs' }, 'MessageDisplay', 8],
+    [{ script: 'a.mjs' }, 'SessionEnd', 1.5],
+    [{ script: 'a.mjs', timeout: 30 }, 'SessionEnd', 30],
     [{ script: 'a.mjs', timeout: 60 }, 'UserPromptSubmit', 60],
   ])('gives %j on %s a timeout of %i seconds', (entry, event, seconds) => {
     expect(timeoutSecondsFor(entry, event)).toBe(seconds);

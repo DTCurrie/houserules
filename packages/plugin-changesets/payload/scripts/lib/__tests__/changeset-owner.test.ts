@@ -156,6 +156,109 @@ describe('createGatedOwnerResolver', () => {
   });
 });
 
+describe('createGatedOwnerResolver, paths outside files and the build inputs', () => {
+  const WIREIT_BUILD = {
+    files: ['dist', 'payload-dist'],
+    scripts: { build: 'wireit', 'build:ts': 'wireit' },
+    wireit: {
+      build: {
+        command: 'assemble',
+        dependencies: ['build:ts', '../studio:build'],
+        files: [
+          '../../scripts/with-build-locks.mjs',
+          'payload/**',
+          '!payload/drafts/**',
+          'package.json',
+        ],
+      },
+      'build:ts': {
+        command: 'tsc',
+        files: ['src/**/*.ts', 'templates'],
+      },
+    },
+  };
+
+  it.each([
+    { path: 'games/cityville/scripts/build-reference.mjs', owner: null },
+    { path: 'games/cityville/payload/drafts/note.md', owner: null },
+    { path: 'games/cityville/scripts/with-build-locks.mjs', owner: null },
+    { path: 'games/cityville/src/game.ts', owner: '@fix/cityville' },
+    { path: 'games/cityville/payload/rules/a.md', owner: '@fix/cityville' },
+    { path: 'games/cityville/templates/page.html', owner: '@fix/cityville' },
+    { path: 'games/cityville/dist/index.js', owner: '@fix/cityville' },
+    { path: 'games/cityville/package.json', owner: '@fix/cityville' },
+  ])('resolves $path to $owner under a wireit build', ({ path, owner }) => {
+    const resolveOwner = publishableCityvilleResolver(WIREIT_BUILD, []);
+
+    expect(resolveOwner(path)).toBe(owner);
+  });
+
+  it.each([
+    {
+      build: 'a plain tsc build',
+      fields: { files: ['dist'], scripts: { build: 'tsc -p .' } },
+    },
+    { build: 'no build script', fields: { files: ['dist'] } },
+    {
+      build: 'a wireit build that declares no files',
+      fields: {
+        files: ['dist'],
+        scripts: { build: 'wireit' },
+        wireit: { build: { command: 'tsc' } },
+      },
+    },
+    {
+      build: 'a wireit build whose own dependency declares no files',
+      fields: {
+        files: ['dist'],
+        scripts: { build: 'wireit', codegen: 'wireit' },
+        wireit: {
+          build: {
+            command: 'tsc',
+            dependencies: ['codegen'],
+            files: ['src/**'],
+          },
+          codegen: { command: 'node scripts/codegen.mjs' },
+        },
+      },
+    },
+    {
+      build: 'no files list',
+      fields: {
+        scripts: { build: 'wireit' },
+        wireit: { build: { command: 'tsc', files: ['src/**'] } },
+      },
+    },
+  ])('owes a changeset for a scripts path with $build', ({ fields }) => {
+    const resolveOwner = publishableCityvilleResolver(fields, []);
+
+    expect(resolveOwner('games/cityville/scripts/tool.mjs')).toBe(
+      '@fix/cityville',
+    );
+  });
+
+  it('follows a same-package dependency written in object form', () => {
+    const resolveOwner = publishableCityvilleResolver(
+      {
+        files: ['dist'],
+        scripts: { build: 'wireit', 'build:ts': 'wireit' },
+        wireit: {
+          build: {
+            command: 'assemble',
+            dependencies: [{ script: 'build:ts', cascade: false }],
+            files: [],
+          },
+          'build:ts': { command: 'tsc', files: ['src/**'] },
+        },
+      },
+      [],
+    );
+
+    expect(resolveOwner('games/cityville/src/game.ts')).toBe('@fix/cityville');
+    expect(resolveOwner('games/cityville/scripts/tool.mjs')).toBe(null);
+  });
+});
+
 describe('createGatedOwnerResolver, root files npm packs regardless of files', () => {
   it.each([
     { entry: 'main', fields: { main: './cli.js' } },

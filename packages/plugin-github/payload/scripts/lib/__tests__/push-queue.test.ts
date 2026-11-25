@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPushQueue,
   describeOp,
+  entriesLeftForOtherSessions,
   resolveMarkSupersededItemId,
   summarizeQueue,
   syncedRecord,
@@ -1106,5 +1107,92 @@ describe('withoutHeldEntries', () => {
     const queue = buildPushQueue([backlogAdd('HOUSERULES-free01')], []);
 
     expect(withoutHeldEntries(queue, new Set())).toEqual(queue);
+  });
+});
+
+describe('entriesLeftForOtherSessions', () => {
+  const SESSION_A = 'session-a';
+  const SESSION_B = 'session-b';
+  const NOW = new Date('2026-11-25T12:00:00.000Z');
+
+  function pushedAtSessionEnd(
+    records: readonly LedgerRecord[],
+    endingSession: string,
+  ): string[] {
+    return withoutHeldEntries(
+      buildPushQueue(records, []),
+      entriesLeftForOtherSessions(records, endingSession, NOW),
+    ).map((op) => op.entryId);
+  }
+
+  it('pushes the ending session its own rows and the other live session its own at its end', () => {
+    const records = [
+      backlogAdd('BL-a', { ts: '2026-11-25T11:00:00.000Z', chat: SESSION_A }),
+      backlogAdd('BL-b', { ts: '2026-11-25T11:30:00.000Z', chat: SESSION_B }),
+    ];
+
+    const pushedAtFirstEnd = pushedAtSessionEnd(records, SESSION_A);
+
+    expect(pushedAtFirstEnd, 'session A ends first').toEqual(['BL-a']);
+
+    const afterFirstPush = [...records, synced('BL-a', { issue: 7 })];
+    const pushedAtSecondEnd = pushedAtSessionEnd(afterFirstPush, SESSION_B);
+
+    expect(pushedAtSecondEnd, 'session B ends second').toEqual(['BL-b']);
+  });
+
+  it('pushes a row another session wrote 25 hours ago', () => {
+    const records = [
+      backlogAdd('BL-b', { ts: '2026-11-24T11:00:00.000Z', chat: SESSION_B }),
+    ];
+
+    expect(pushedAtSessionEnd(records, SESSION_A)).toEqual(['BL-b']);
+  });
+
+  it('leaves queued a row another session wrote 23 hours ago', () => {
+    const records = [
+      backlogAdd('BL-b', { ts: '2026-11-24T13:00:00.000Z', chat: SESSION_B }),
+    ];
+
+    expect(pushedAtSessionEnd(records, SESSION_A)).toEqual([]);
+  });
+
+  it('pushes a row written with no session', () => {
+    const records = [
+      backlogAdd('BL-none', { ts: '2026-11-25T11:00:00.000Z', chat: null }),
+    ];
+
+    expect(pushedAtSessionEnd(records, SESSION_A)).toEqual(['BL-none']);
+  });
+
+  it('leaves an entry of the ending session queued when another live session updated it', () => {
+    const records = [
+      backlogAdd('BL-a', { ts: '2026-11-25T10:00:00.000Z', chat: SESSION_A }),
+      {
+        ts: '2026-11-25T11:00:00.000Z',
+        id: 'BL-a',
+        action: 'update',
+        content: 'edited by B',
+        chat: SESSION_B,
+      },
+    ];
+
+    expect(pushedAtSessionEnd(records, SESSION_A)).toEqual([]);
+  });
+
+  it('pushes an entry whose row from another live session a synced record already covers', () => {
+    const records = [
+      backlogAdd('BL-b', { ts: '2026-11-25T10:00:00.000Z', chat: SESSION_B }),
+      synced('BL-b', { issue: 9 }),
+      {
+        ts: '2026-11-25T11:00:00.000Z',
+        id: 'BL-b',
+        action: 'update',
+        content: 'edited by A',
+        chat: SESSION_A,
+      },
+    ];
+
+    expect(pushedAtSessionEnd(records, SESSION_A)).toEqual(['BL-b']);
   });
 });

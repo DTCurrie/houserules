@@ -111,7 +111,7 @@ Read `references/slicing.md` before you write the briefs. It also says which fil
 orchestrator-owned and never appear in a worker's `owns`.
 
 To check one phase before slicing it, dispatch `plan-reviewer` with the workspace path, a
-`Level: phase` line, and the sub-plan path, and carry its questions to the user.
+`Level: phase` line, and the sub-plan path, and work its items as `/plan-project` section 4 says.
 
 ## 2. Write the seam yourself, before any fan-out
 

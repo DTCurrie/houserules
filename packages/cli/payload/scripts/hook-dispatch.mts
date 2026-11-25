@@ -60,6 +60,7 @@ const EVENT_TIMEOUT_SECONDS: Readonly<Record<string, number>> = {
   PreModelSwitch: 30,
   PostModelSwitch: 30,
   MessageDisplay: 10,
+  SessionEnd: 1.5,
 };
 /**
  * Seconds a hook's default stops short of the harness's, so the dispatcher can still merge and
@@ -215,7 +216,9 @@ export function timeoutSecondsFor(entry: WiringEntry, event: string): number {
   const harnessDefault = Object.hasOwn(EVENT_TIMEOUT_SECONDS, event)
     ? EVENT_TIMEOUT_SECONDS[event]!
     : DEFAULT_TIMEOUT_SECONDS;
-  return harnessDefault - TIMEOUT_MARGIN_SECONDS;
+  const withMargin = harnessDefault - TIMEOUT_MARGIN_SECONDS;
+  // SessionEnd's shared budget is shorter than the margin, so the margin would go negative.
+  return withMargin > 0 ? withMargin : harnessDefault;
 }
 
 /**

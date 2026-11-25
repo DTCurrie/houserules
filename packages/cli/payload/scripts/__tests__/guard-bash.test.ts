@@ -1,4 +1,4 @@
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import {
   mkdirSync,
@@ -460,6 +460,178 @@ describe('modWriteRefusalFor', () => {
       configDir: join(home, '.claude'),
       pluginDirs: [],
     });
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  const writeForms: Array<{
+    form: string;
+    isDirectory: boolean;
+    build: (path: string) => string;
+  }> = [
+    {
+      form: 'sed -i without a suffix',
+      isDirectory: false,
+      build: (path) => `sed -i s/a/b/ ${path}`,
+    },
+    {
+      form: 'sed -i with a suffix',
+      isDirectory: false,
+      build: (path) => `sed -i.bak -e s/a/b/ ${path}`,
+    },
+    {
+      form: 'sed -i with the BSD empty suffix',
+      isDirectory: false,
+      build: (path) => `sed -i '' s/a/b/ ${path}`,
+    },
+    {
+      form: 'dd of=',
+      isDirectory: false,
+      build: (path) => `dd if=/dev/zero of=${path} count=1`,
+    },
+    {
+      form: 'cp -t',
+      isDirectory: true,
+      build: (path) => `cp -t ${path} ./a.js`,
+    },
+    {
+      form: 'cp --target-directory=',
+      isDirectory: true,
+      build: (path) => `cp --target-directory=${path} ./a.js`,
+    },
+    {
+      form: 'mv -t',
+      isDirectory: true,
+      build: (path) => `mv -t ${path} ./a.js`,
+    },
+  ];
+  const quotings: Array<[string, (path: string) => string]> = [
+    ['bare', (path) => path],
+    ['single-quoted', (path) => `'${path}'`],
+    ['double-quoted', (path) => `"${path}"`],
+  ];
+  const depths: Array<[string, string]> = [
+    ['directly in the directory', ''],
+    ['two levels down', '/x/y'],
+  ];
+  const writeCases = writeForms.flatMap(({ form, isDirectory, build }) =>
+    quotings.flatMap(([quoting, quote]) =>
+      depths.map(([depth, suffix]) => ({
+        name: `${form}, ${quoting} path ${depth}`,
+        build: (root: string) =>
+          build(
+            quote(isDirectory ? `${root}${suffix}` : `${root}${suffix}/a.js`),
+          ),
+      })),
+    ),
+  );
+
+  it.each(writeCases)('refuses $name inside a mod directory', ({ build }) => {
+    const { home, modDir } = useModLocations();
+
+    const refusal = modWriteRefusalFor(build(modDir), 'auto', home, {
+      configDir: join(home, '.claude'),
+      pluginDirs: [],
+    });
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  it.each(writeCases)('allows $name outside a mod directory', ({ build }) => {
+    const { home } = useModLocations();
+    const elsewhere = join(home, 'elsewhere');
+    mkdirSync(join(elsewhere, 'x', 'y'), { recursive: true });
+
+    const refusal = modWriteRefusalFor(build(elsewhere), 'auto', home, {
+      configDir: join(home, '.claude'),
+      pluginDirs: [],
+    });
+
+    expect(refusal).toBeNull();
+  });
+
+  it('refuses a path held in an environment variable of the hook process', () => {
+    const { home, modDir } = useModLocations();
+    vi.stubEnv('HOUSERULES_TEST_MOD_TARGET', modDir);
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
+
+    const refusal = modWriteRefusalFor(
+      'sed -i s/a/b/ "$HOUSERULES_TEST_MOD_TARGET/a.js"',
+      'auto',
+      home,
+      { configDir: join(home, '.claude'), pluginDirs: [] },
+    );
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  it('refuses a braced environment variable naming the mod directory', () => {
+    const { home, modDir } = useModLocations();
+    vi.stubEnv('HOUSERULES_TEST_MOD_TARGET', modDir);
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
+
+    const refusal = modWriteRefusalFor(
+      'echo x > ${HOUSERULES_TEST_MOD_TARGET}/a.js',
+      'auto',
+      home,
+      { configDir: join(home, '.claude'), pluginDirs: [] },
+    );
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  it('refuses a path held in a variable assigned earlier in the same command', () => {
+    const { home, modDir } = useModLocations();
+
+    const refusal = modWriteRefusalFor(
+      `D=${modDir}; sed -i s/a/b/ "$D/a.js"`,
+      'auto',
+      home,
+      { configDir: join(home, '.claude'), pluginDirs: [] },
+    );
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  it('refuses a path held in a prefix assignment', () => {
+    const { home, modDir } = useModLocations();
+
+    const refusal = modWriteRefusalFor(
+      `D=${modDir} dd of="$D/a.js" if=/dev/zero`,
+      'auto',
+      home,
+      { configDir: join(home, '.claude'), pluginDirs: [] },
+    );
+
+    expect(refusal).toMatch(refuses);
+  });
+
+  it('allows a path held in a variable nothing defines', () => {
+    const { home } = useModLocations();
+
+    const refusal = modWriteRefusalFor(
+      'sed -i s/a/b/ "$HOUSERULES_TEST_UNDEFINED/a.js"',
+      'auto',
+      home,
+      { configDir: join(home, '.claude'), pluginDirs: [] },
+    );
+
+    expect(refusal).toBeNull();
+  });
+
+  it('refuses a chain whose first write is allowed and whose second is inside a mod directory', () => {
+    const { home, modDir } = useModLocations();
+
+    const refusal = modWriteRefusalFor(
+      `cp ./a.js ${home}/elsewhere.js && sed -i s/a/b/ ${modDir}/a.js`,
+      'auto',
+      home,
+      { configDir: join(home, '.claude'), pluginDirs: [] },
+    );
 
     expect(refusal).toMatch(refuses);
   });

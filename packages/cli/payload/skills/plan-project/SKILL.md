@@ -249,10 +249,19 @@ takes that away. A phase that looks small enough to just do is still the user's 
 
 Before the report, dispatch one `plan-reviewer` on the workspace path with
 `subagent_type: "plan-reviewer"` and a `Level: plan` line in the brief, and wait for its list. It reads the finished plan as the person who
-would build it and returns what that person would still have to ask. Carry each question into the
-handoff under the assumptions line, or say the list was empty. It costs one `plan-reviewer` run
-and catches a mis-specified slice before a worker spends a run on it. Do not edit the plan to
-answer a question. The user decides.
+would build it and returns what that person would still have to ask, each item tagged `fact` or
+`decision`. It costs one `plan-reviewer` run and catches a mis-specified slice before a worker
+spends a run on it. Never relay the list raw. Work it in this order:
+
+1. For each `fact`, run the lookup it names and correct the plan file it cites. A correction that
+   changes a step's scope or acceptance gets one line in the handoff. A clerical fix, such as a typo
+   or a stale line number, gets none.
+2. A `fact` no lookup settles becomes a `decision`.
+3. Present each `decision` under the assumptions line in three parts: the issue, the question as a
+   sentence ending in a question mark, and your recommendation with its reason. Leave the plan as
+   it stands on a decision, because the owner answers it.
+
+With an empty list, say the list was empty.
 
 A milestone gets one handoff for the whole milestone, never one per member. List the first step's
 items as `<member>/<phase-slug>`, and give `/orchestrate <milestone>` as the next command (needs the
