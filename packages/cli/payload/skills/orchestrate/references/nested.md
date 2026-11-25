@@ -89,8 +89,10 @@ to wake me". The answer is that on Claude Code 2.1.332 a hand-back that landed a
 ended started the next turn every time it was tried.
 
 Set one fallback before you end that turn: a Bash call of `sleep 1800` with
-`run_in_background: true`, once per wait and never repeated. When it reports before the notice
-does, stop waiting and tell the user which orchestrator reported and never finished.
+`run_in_background: true`, once per wait and never repeated. When the notice arrives first, stop
+that command with `TaskStop` before any other call, because a headless run stays open until every
+background command exits. When the timer reports before the notice does, stop waiting and tell
+the user which orchestrator reported and never finished.
 
 **The ruling round trip.** Before you open `AskUserQuestion`, send each message already owed to
 another orchestrator whose `finished` notice has arrived, because the question blocks you until the
@@ -134,9 +136,9 @@ the sub-plan you already opened for the `Signals` and `mcp__` checks:
 1. List the paths the steps write.
 2. Count the slices those steps would make. A slice is a group of steps whose written paths are
    disjoint from every other group's.
-3. The phase is small when it has fewer than two slices and its steps write six files or fewer
-   across the whole phase. Every other phase nests. That includes one slice over six files,
-   because that phase needs an orchestrator to split it.
+3. The phase is small when it has three slices or fewer and its steps write twelve files or
+   fewer across the whole phase. Every other phase nests. That includes one slice over twelve
+   files, because that phase needs an orchestrator to split it.
 4. Print one line per ready phase before the spawn: `<slug> phase <N>: <count> slices, <count>
 files, runs nested`, or ending `runs here`.
 

@@ -321,7 +321,7 @@ describe('orchestrate', () => {
     it('sizes each ready phase before the spawn and keeps a small one out of it', () => {
       expect(nestedText).toMatch(/Three causes put a phase here/);
       expect(nestedText).toMatch(
-        /\*\*Size before the spawn\.\*\*[\s\S]*fewer than two slices and its steps write six files or fewer/,
+        /\*\*Size before the spawn\.\*\*[\s\S]*three slices or fewer and its steps write twelve files or\s+fewer/,
       );
       expect(nestedText).toMatch(/runs nested`, or ending `runs here`/);
     });
@@ -338,6 +338,9 @@ describe('orchestrate', () => {
       );
       expect(nestedText).toMatch(
         /`sleep 1800` with\s+`run_in_background: true`, once per wait and never repeated/,
+      );
+      expect(nestedText).toMatch(
+        /When the notice arrives first, stop\s+that command with `TaskStop` before any other call/,
       );
       expect(nestedText).not.toMatch(/foreground `sleep 20`/);
     });
