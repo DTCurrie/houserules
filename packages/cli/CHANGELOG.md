@@ -1,5 +1,19 @@
 # @houserules/cli
 
+## 0.21.0
+
+### Minor Changes
+
+- 7455714: Orchestrate checks a per-phase diff budget and prints a commit command at each wave close.
+- 7455714: Orchestrate stops for a ruling when a wave deletes a path the plan did not name.
+
+### Patch Changes
+
+- 7455714: `report` counts a package-runner call that names a path as scoped in its unscoped-calls column.
+- 7455714: The Stop fix step has a 30 s budget and `doctor` warns when it would run nothing.
+- @houserules/api@0.12.0
+  - @houserules/payload@0.8.1
+
 ## 0.20.0
 
 ### Minor Changes

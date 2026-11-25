@@ -1,5 +1,11 @@
 # @houserules/test
 
+## 0.4.0
+
+### Minor Changes
+
+- 7455714: Adds `givePathTakingFixScripts`, which gives an installed fixture path-taking fix scripts with `fix.passPaths` on.
+
 ## 0.3.0
 
 ### Minor Changes
