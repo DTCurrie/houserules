@@ -50,6 +50,8 @@ const CLI_DIR_DEPTH = 3;
  * @property {string} prompt The arm's prompt file, verbatim, which becomes the `-p` text.
  * @property {string} overlayDir The arm's overlay directory, absolute.
  * @property {boolean} isNetworkAllowed Whether the child's tools may reach the network, from `eval.json`.
+ * @property {boolean} isRunRootTrusted Whether the child runs under its own config directory with
+ *   the trust dialog accepted for the sample root, from the arm's `trustRunRoot`.
  */
 
 /**
@@ -269,6 +271,9 @@ export function loadArmFixture(fixtureDir, armName) {
   if (spec.network !== undefined && typeof spec.network !== 'boolean') {
     throw new Error(`${where} "network" must be a boolean`);
   }
+  if (arm.trustRunRoot !== undefined && typeof arm.trustRunRoot !== 'boolean') {
+    throw new Error(`${armWhere} "trustRunRoot" must be a boolean`);
+  }
   const permissionMode = readPermissionMode(spec, where);
   const isNetworkAllowed = spec.network === true;
   const settings = readArmSettings(dir, arm, armWhere, isNetworkAllowed);
@@ -291,6 +296,7 @@ export function loadArmFixture(fixtureDir, armName) {
     prompt: readFileSync(promptPath, 'utf8'),
     overlayDir,
     isNetworkAllowed,
+    isRunRootTrusted: arm.trustRunRoot === true,
   };
 }
 

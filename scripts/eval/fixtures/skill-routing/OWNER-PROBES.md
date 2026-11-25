@@ -29,12 +29,13 @@ Four probes need a person, a browser, or a harness change. Each assumes a fixtur
 
 ## P8: eval harness
 
-- Action: needs a `scripts/eval` fixture arm that installs path D, and `run.mjs` setting
-  `projects["<run root>"].hasTrustDialogAccepted` in the child's config. `run.mjs` does not set
-  that key today, so add it first. When the run root is a git worktree, set the key on the main
-  repository's path, because the lookup for a skills-directory plugin reads that path and ignores
-  the worktree's own. Then run one paid session at the smallest budget, for example
-  `node scripts/eval/run.mjs --paid --fixture <fixture> --arm <arm> --samples 1 --api-key-file ~/.config/houserules/eval-api-key --budget 1 --per-run 0.5 --margin 0.2 --out <dir>`.
+- Action: the `skills-dir-plugin` fixture holds path D, and an arm that sets `trustRunRoot` in
+  `eval.json` gets its own config directory with `projects["<run root>"].hasTrustDialogAccepted`
+  set. The sample root is a main checkout, so the key goes on its own path. A run root that is
+  a git worktree would need the key on the main repository's path, because the lookup reads that
+  path and ignores the worktree's own. Run one paid sample of each arm, `trusted` and
+  `untrusted`, at the smallest budget, for example
+  `node scripts/eval/run.mjs --paid --fixture scripts/eval/fixtures/skills-dir-plugin --arm trusted --samples 1 --api-key-file ~/.config/houserules/eval-api-key --budget 1 --per-run 0.5 --margin 0.2 --out <dir>`.
 - Decides it: the child's `system/init` line in `stream.jsonl` lists the plugin under `plugins`
   with source `hr-probe@skills-dir`, and `plugin_errors` is null. Without the trust key the plugin
   is absent, which is the failure.
