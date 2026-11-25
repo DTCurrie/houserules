@@ -81,14 +81,16 @@ after `DONE`. A message sent before the notice appears to stay inside the result
 reported, and the orchestrator's next hand-back is refused. Send each message once per hand-back,
 and fold a seam note into the `continue` it travels with.
 
-A notice that lands while none of your tool calls is running does not wake you once the turn ends.
-So never end a turn while such a message is owed. Wait with foreground `sleep 20` calls instead,
-because a notice that lands during one arrives with its result. Claude Code refuses a long
-standalone foreground sleep, so the wait is short calls repeated. After each one, check every
-orchestrator that is owed a message. After 30 minutes with a
-message still owed, stop waiting and tell the user which orchestrator reported and never
-finished. The excuse is "the notice will wake me". The answer is that one did not, and an
-`--auto` run sat idle until the user typed.
+The notice is the wait. When a message is owed and its `finished` notice has not arrived, end the
+turn with one line naming what is still running, and make no tool call. The notice starts the next
+turn. Never fill the wait with `sleep` calls or a polling loop, because each one holds the turn
+open for its full length after the orchestrator has finished. The excuse is "a notice once failed
+to wake me". The answer is that on Claude Code 2.1.332 a hand-back that landed after the turn
+ended started the next turn every time it was tried.
+
+Set one fallback before you end that turn: a Bash call of `sleep 1800` with
+`run_in_background: true`, once per wait and never repeated. When it reports before the notice
+does, stop waiting and tell the user which orchestrator reported and never finished.
 
 **The ruling round trip.** Before you open `AskUserQuestion`, send each message already owed to
 another orchestrator whose `finished` notice has arrived, because the question blocks you until the
@@ -112,9 +114,10 @@ twice. `notice-interim.mjs` adds this instruction to every turn an interim notic
 withheld `Agent` from the orchestrator. Set the variable and spawn fresh with the same brief. A
 re-brief changes nothing.
 
-**A phase that cannot nest.** Two causes put a phase here. Its sub-plan carries `flat` on the
-`**Signals:**` line, or its steps need a tool missing from the `tools:` line of
-`.claude/agents/phase-orchestrator.md`, such as an MCP server's. A missing plan slug is not a
+**A phase that cannot nest.** Three causes put a phase here. Its sub-plan carries `flat` on the
+`**Signals:**` line, its steps need a tool missing from the `tools:` line of
+`.claude/agents/phase-orchestrator.md`, such as an MCP server's, or the phase is small, as the
+next paragraph sizes it. A missing plan slug is not a
 cause. `/orchestrate --auto` with no slug resolves the plan in §0 and still nests. Before any spawn, read each
 sub-plan's `**Signals:**` line for `flat`. Grep the sub-plan for `mcp__` and compare each name
 against that line. Hold that phase out of the spawn, and name it and the cause. Run the rest
@@ -123,6 +126,27 @@ nested. When the last orchestrator in flight returns, run the held phase flat he
 relays are live, and its checks away from siblings' edits. A `BLOCKED` report naming a missing tool
 is the same case found late, and takes the same route instead of stopping the run.
 `orchestrate.orchestratorTools` in `.claude/houserules.config.json` lets a phase held for a missing tool nest after `npx houserules update`.
+
+**Size before the spawn.** An orchestrator costs a full context before it does any work, and a
+phase with nothing to fan out never earns that back. Before any spawn, size each ready phase from
+the sub-plan you already opened for the `Signals` and `mcp__` checks:
+
+1. List the paths the steps write.
+2. Count the slices those steps would make. A slice is a group of steps whose written paths are
+   disjoint from every other group's.
+3. The phase is small when it has fewer than two slices and its steps write six files or fewer
+   across the whole phase. Every other phase nests. That includes one slice over six files,
+   because that phase needs an orchestrator to split it.
+4. Print one line per ready phase before the spawn: `<slug> phase <N>: <count> slices, <count>
+files, runs nested`, or ending `runs here`.
+
+A small phase is held out and run here after the orchestrators in flight return, as a `flat`
+phase is.
+
+A phase run here may still hand work down. Dispatch a `task-worker` for a slice that is mechanical
+and has a narrow acceptance, with the model and effort from the table under "Dispatch details:
+model, tools, worktrees" in `slicing.md` and the brief from "The brief" in `direct-dispatch.md`.
+Do the rest yourself.
 
 The `flat` cause holds these rules. Two flat phases run one at a time. A comma list holds a flat
 phase out as it does a `live` one. `/orchestrate <slug> <n>` on a flat phase runs it here with no

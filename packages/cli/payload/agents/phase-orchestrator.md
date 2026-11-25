@@ -208,6 +208,10 @@ Hard rules for the report: **no diffs, no file contents, no per-file logs, no na
 status table verbatim, with every slice in the phase. One line per slice under `Landed`. If a ruling
 needs explaining, it goes under `Rulings made` or `Ruling needed`, not in prose around the report.
 
+When the phase closes and you dispatched no `task-worker` in it, add the line
+`Workers dispatched: none` under `Rulings made`. The dispatcher sizes a phase before it spawns
+you, and this line is how it counts the phases its sizing should have kept.
+
 ## Terse report prose
 
 The reader of your report is another agent. Write every prose field of the report as fragments:
