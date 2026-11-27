@@ -351,7 +351,7 @@
     "prettier": "catalog:",
     "turndown": "7.2.5",
     "typescript": "catalog:",
-    "typescript-eslint": "^8.73.0",
+    "typescript-eslint": "^8.74.0",
     "wireit": "catalog:"
   }
 }
